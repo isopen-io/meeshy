@@ -1,9 +1,9 @@
-# Tête instruite pour le cycle 97 — la famille POST a rejoint la famille message au niveau de l'OCTET ; le reste de sa chaîne de destruction, lui, n'existe toujours pas
+# Tête instruite pour le cycle 98 — la chaîne de destruction ne détruit plus ce qu'elle ne devait pas ; reste ce qu'elle ne détruit toujours pas
 
-*Le cycle 96 a fait ce que la tête du cycle 95 demandait — porter à Story/Post la question posée
-quatre fois à la famille message — et la réponse était la plus nette de la série : **personne**.
-Ce que le cycle 96 a établi EN PLUS, et qui commande le cycle 97, c'est que fermer les octets a
-mis à nu un trou plus large que lui.*
+*Le cycle 97 devait porter à la famille CALL la question posée cinq fois de suite. Il ne l'a pas
+fait, et pour une bonne raison : en instrumentant la passe qu'il s'apprêtait à étendre, il a
+trouvé qu'elle DÉTRUISAIT du contenu permanent. Fermer une fuite d'octets sur un balayage qui
+efface des posts qu'il n'a jamais eu le droit d'effacer aurait été bâtir sur du sable.*
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
 >
@@ -17,115 +17,147 @@ mis à nu un trou plus large que lui.*
 > Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
 > COUVERTURE, pas l'intitulé.**
 
-> ## La leçon que le cycle 96 ajoute : le commentaire qui NOMME un suivi est une promesse, au même
-> titre qu'un champ de schéma
+> ## La leçon que le cycle 97 ajoute, jumelle exacte de celle du cycle 96
 >
-> Le défaut du cycle 96 n'a pas été trouvé en lisant `schema.prisma` : il était **écrit en toutes
-> lettres dans le code**, depuis des mois, au futur — « *Disk-file reclamation is a separate
-> follow-up (fileUrl→path resolution, prod caution)* ». Un suivi nommé dans un commentaire se lit
-> exactement comme un champ qui promet un comportement : *qui, côté serveur, le fait respecter ?*
-> Ici, personne — et le commentaire tenait lieu de fermeture depuis si longtemps qu'aucun audit ne
-> le relisait comme une dette ouverte.
+> Le cycle 96 avait retenu : *un commentaire qui NOMME un suivi est une promesse, au même titre
+> qu'un champ de schéma.* Le cycle 97 trouve l'autre moitié :
 >
-> **Le corollaire, plus dur** : le suivi annoncé était sous-dimensionné par son propre auteur. Il
-> disait « le balayage laisse des fichiers » ; il en laissait aussi **par l'édition d'un post**,
-> un chemin bien plus fréquent que le balayage, et que le commentaire ne mentionnait pas. Ne pas
-> prendre le périmètre d'un TODO pour le périmètre du défaut : chercher TOUS les écrivains de la
-> destruction, comme la leçon du cycle 95 le demandait déjà pour les lecteurs.
-
-> ## La méthode, validée cinq fois : chercher la PROMESSE, pas l'événement
+> **Un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE — et une prémisse peut
+> périmer sans que personne ne réécrive la phrase.**
 >
-> Cinq pour cinq : `expiresAt` (92), `isViewOnce`/`maxViewOnceCount` (93), le transfert (94), les
-> OCTETS de message (95), les OCTETS de post (96). Poser la question au DERNIER maillon, celui qui
-> rend le fichier — c'est là qu'elle n'est jamais tenue.
+> Ici, la cascade qui détruisait les reposts d'un contenu éphémère était accompagnée de sa raison,
+> écrite noir sur blanc : « *a repost of a story dead for 7+ days has no value (stories are
+> ephemeral)* ». Elle était VRAIE le jour de son écriture — un repost ne faisait alors que
+> RÉFÉRENCER sa source, et privé d'elle il n'affichait plus rien. Une fonctionnalité postérieure,
+> l'INSTANTANÉ (`repostPost` duplique médias, audio, effets et texte de toute source éphémère), l'a
+> rendue fausse — et son propre commentaire annonce exactement pourquoi : *« so a repost that merely
+> referenced it via repostOfId would render EMPTY once the source is gone »*. Les deux commentaires
+> se contredisent, à trois cents lignes l'un de l'autre, dans le même dépôt, depuis des mois. **La
+> destructrice gagnait.**
+>
+> **La méthode qui en découle, et qu'il faut appliquer au cycle 98 :** relire la JUSTIFICATION de
+> chaque suppression comme on relit un champ de schéma — *cette phrase est-elle encore vraie
+> aujourd'hui ?* Une prémisse périmée ne lève aucune alerte, ne casse aucun test, et n'apparaît
+> dans aucun audit : elle a l'air d'une décision.
 
-## Livré au cycle 95 — **mergé sur `main`**. Détail complet : section « Cycle 95 » plus bas — elle contient l'analyse de l'URL-capacité `/attachments/file/*`, qui reste le dossier de référence sur ce compromis.
+> ## La méthode, validée cinq fois, et son angle mort
+>
+> Cinq pour cinq en cherchant la PROMESSE au DERNIER maillon : `expiresAt` (92),
+> `isViewOnce`/`maxViewOnceCount` (93), le transfert (94), les OCTETS de message (95), les OCTETS
+> de post (96). Le cycle 97 montre que la question symétrique n'avait jamais été posée : non pas
+> « *qui fait respecter la promesse ?* » mais « **qui vérifie que ce qu'on détruit méritait de
+> l'être ?** ». Le premier filtre trouve les fuites. Le second trouve les PERTES.
 
-## Livré au cycle 96
+## Livré au cycle 97 — **le balayage détruisait des posts permanents**
 
-1. **`reclaimPostMediaBytes` / `reclaimMediaRowBytes`** (`services/posts/reclaimPostMediaBytes.ts`)
-   — les octets d'un média de post suivent la destruction de sa ligne, sur les DEUX chemins qui
-   détruisent des lignes `PostMedia` :
-   - `ExpiredStoriesCleanupService` (balayage du contenu éphémère), qui annonçait la récupération
-     disque comme un suivi et l'a attendue depuis ;
-   - `PostService.updatePost` (retrait d'un média par l'édition), que le suivi annoncé ne
-     mentionnait même pas — et qui est le chemin le plus fréquent des deux.
-2. **Une seule garde, et elle est nécessaire** : un fichier encore référencé par un `Sound` vivant
-   n'est pas effacé. L'audio d'un son est COPIÉ dans son propre dossier par `SoundCaptureService`,
-   donc il ne partage aucun octet — mais `coverUrl` est **dénormalisé** à la capture depuis
-   `PostMedia.thumbnailUrl ?? fileUrl`, et le son SURVIT au post dont il est né.
-3. **Deux ordres opposés, chacun forcé par son chemin, aucun choisi** :
-   - balayage → octets AVANT lignes (la ligne est le seul chemin vers le fichier), et **rejet** sur
-     requête en échec, comme ses voisins `deactivatePostTrackingLinks` et `releasePosts` ;
-   - édition → octets APRÈS le commit (la transaction peut encore échouer), et **absorption** des
-     échecs (les lignes sont déjà parties ; rejeter ferait un 500 sans rien récupérer).
-4. **Un `unlink` récalcitrant est toujours absorbé**, dans les deux sens : rejeter dessus bloquerait
-   la MÊME fournée à chaque passe, indéfiniment — le piège que la borne de fournée documente déjà.
-5. **Coût nul en requêtes sur le chemin d'édition** : `fileUrl`/`thumbnailUrl` sont ajoutés au
-   `select` du `post.findFirst` qui partait de toute façon.
+1. **Filtre de type sur la cascade des reposts** (`ExpiredStoriesCleanupService`). La passe
+   emportait, avec chaque statut périmé, TOUT post le repostant : `where: { repostOfId: { in: ids } }`,
+   sans filtre. L'API expose `targetType` (`POST | REEL | STORY | STATUS`,
+   `routes/posts/types.ts`), donc « reposter un STATUS en POST PERMANENT » — le chemin
+   `status→post` que le commentaire de l'instantané nomme lui-même — est un geste ordinaire et
+   supporté. Quatorze jours plus tard (1 h d'échéance + 7 j de masquage + 7 j de grâce), le
+   balayage détruisait ce post permanent, ses commentaires, ses notifications, ses liens de
+   partage, ses lignes média — et, **depuis le cycle 96**, ses OCTETS. La cascade ne porte plus
+   que sur les reposts eux-mêmes éphémères (`SWEPT_POST_TYPES`), dont l'échéance propre est
+   périmée depuis aussi longtemps que celle de leur source.
+2. **`detachReposts`** (`services/posts/detachReposts.ts`) — le repost qui survit survit
+   DÉTACHÉ. `repostOfId` et `originalRepostOfId` de tout post visant la fournée sont coupés AVANT
+   sa destruction. Sans cela, le correctif n'aurait fait que déplacer le défaut sur le motif que
+   cette famille poursuit depuis trois cycles (`TrackingLink.targetId`,
+   `Notification.context.postId`) : une référence dénormalisée que plus aucun chemin ne rattrape.
+3. **Trois choses fermées d'un seul geste par la coupure** : le pointeur pendant ; le routage des
+   réactions (`originalRepostOfId ?? repostOfId` — un post VIVANT aurait envoyé ses réactions vers
+   un id disparu) ; et la **profondeur** des chaînes de reposts, que la cascade d'un seul niveau
+   ignorait. `Post.repostOf` est en `onDelete: NoAction` — la MÊME construction que la
+   self-relation `CommentReplies` dont l'émulation MongoDB de Prisma refuse la suppression (P2014,
+   régression de production 2026-06-01). Le remède était écrit **trois lignes plus haut dans la
+   même passe** pour les réponses, et n'avait jamais été appliqué à son jumeau.
+4. **Deux pointeurs, deux requêtes, jamais fondues.** Un repost de repost les porte vers deux posts
+   DIFFÉRENTS : quand seule la racine est détruite, la source immédiate est vivante et doit rester.
+   Un `updateMany` unique aurait coupé un lien parfaitement valide.
+5. **Régime d'échec REJETTE**, comme ses quatre voisines de bloc.
 
-Tests : 14 sur le module (`reclaimPostMediaBytes.test.ts`), 4 sur le balayage
-(`ExpiredStoriesCleanupService.mediaBytes.test.ts`), 7 sur l'édition
-(`PostService.mediaByteReclamation.test.ts`). RED prouvé sur le chemin d'édition (3 rouges avec la
-récupération désactivée, les 4 gardes négatives restant vertes — elles doivent l'être).
+Tests : 7 sur le module (`detachReposts.test.ts`), 9 sur la passe
+(`ExpiredStoriesCleanupService.repostSurvival.test.ts`). **RED prouvé : 7 des 9 gardes de passe
+rouges avant correctif**, les 2 vertes étant celles qui ancrent le comportement CONSERVÉ (le
+repost éphémère reste emporté par sa source). Le double de la passe applique lui-même le filtre de
+type qu'on lui envoie — sans quoi la garde « le repost permanent survit » serait verte par
+construction du double plutôt que par le correctif.
 
-## Ce que le cycle 96 a VÉRIFIÉ et qui corrige le dossier
+## Ce que le cycle 97 a VÉRIFIÉ et qui débloque le cycle 98
 
-### 1. La récupération disque était le SEUL chemin de retour ; il n'y a pas de filet
+### 1. La suppression d'un post n'est PAS réversible — la question bloquante du cycle 97 est tranchée
 
-Vérifié avant d'écrire une ligne : une fois la ligne `PostMedia` détruite, **aucun** balayage ne
-retrouve le fichier. `MaintenanceService.cleanupOrphanedAttachments` ne ramasse que les
-`MessageAttachment` sans `messageId` — jamais un `PostMedia`. `OrphanMediaCleanupService` ne
-connaît que sa propre boîte d'envoi (`OrphanMediaCleanup`), alimentée par les uploads en échec, et
-ne balaie pas le volume. Le fichier n'était donc pas « en retard de nettoyage » : il était
-**définitivement hors de portée**, et servi par une route sans authentification.
+Le cycle 96 n'avait « trouvé aucune route de restauration » et demandait de revérifier. Vérifié
+autrement, et de façon concluante : **aucun chemin du gateway n'écrit `deletedAt: null` sur un
+`Post`**. Toutes les occurrences de ce littéral dans `services/gateway/src` sont des `where` de
+lecture (`MessageReadStatusService`, `MentionService`, `NotificationService`, `broadcast-sender`,
+`messageRemovalEffects`…) ou des commentaires ; aucune n'est un `data`. Il n'existe donc pas de
+corbeille, et la rétention illimitée des posts supprimés ne sert **personne**.
 
-### 2. Aucun `PostMedia` ne partage son fichier avec un autre `PostMedia`
+**L'item 1 du cycle 97 est donc entièrement débloqué pour le cycle 98** (détail ci-dessous).
 
-`postMedia.create` n'a qu'UN site (`routes/uploads/tus-handler.ts`) et les reposts de source
-éphémère **dupliquent** l'octet (`MediaService.duplicate`, fichier neuf sous `snapshots/`). Le
-motif qui gâte la famille message — `copyForwardedAttachments` copie `filePath` VERBATIM, cf.
-cycle 94, suivi 4 — **n'existe pas** côté post. C'est ce qui rend la récupération sûre sans
-compteur de références.
+### 2. Un seul destructeur de lignes `Post` dans tout le gateway
 
-### 3. Ce que le cycle 96 n'a PAS fait, et qui n'est pas un oubli
+`post.delete` / `post.deleteMany` n'ont que **deux** sites, tous deux dans
+`ExpiredStoriesCleanupService`. La chaîne de destruction corrigée au cycle 97 est donc la totalité
+de la surface : une passe de rétention (item 1) qui réutilise ce chemin hérite mécaniquement de
+toutes ses gardes, et n'a aucune seconde implémentation à rattraper.
 
-**Un post supprimé par son auteur ne perd toujours pas ses octets** — parce qu'il ne perd pas non
-plus ses lignes : `deletePost` pose `deletedAt`, et le hard-delete ne balaie que
-`SWEPT_POST_TYPES` (STATUS depuis le 2026-08-12) avec une échéance. Un POST/REEL supprimé garde
-donc ses lignes `PostMedia` ET ses fichiers **pour toujours**. Y toucher n'est pas une extension
-du cycle 96 : c'est décider une rétention, et il faut d'abord répondre à la question ci-dessous.
+### 3. Ce que le cycle 97 a commencé à prospecter côté CALL, sans le traiter
 
-## Ce que le cycle 97 doit faire
+Trois constats bruts, à instruire au cycle 98 (item 2) :
 
-### 1. La rétention des posts supprimés — le trou que le cycle 96 a mis à nu, et le plus large
+- **`recordingEnabled` n'a ni écrivain ni lecteur.** Le champ est annoncé par le commentaire de
+  `CallSession.metadata` (« `{ maxParticipants, recordingEnabled, etc. }` ») et déclaré dans
+  `packages/shared/types/video-call.ts:104`. Aucune autre occurrence dans tout le dépôt —
+  gateway, web, iOS, Android. Même famille que `MessageAttachment.isViewOnce` : soit le retirer,
+  soit le câbler.
+- **`CallSession.transcriptionEnabled` n'a aucun écrivain** dans le gateway (les occurrences du
+  nom appartiennent toutes aux préférences audio de l'utilisateur, un champ homonyme et distinct).
+- **Le modèle `Transcription` n'a aucun écrivain.** Le schéma l'annonce « prepared for future »,
+  ce qui est une dette DÉCLARÉE et non une promesse trahie — mais la conséquence est qu'il n'y a
+  aujourd'hui, côté appel, **aucun octet à protéger**. La famille CALL doit donc être prospectée
+  sur ses MÉTADONNÉES (rétention des `CallSession`/`CallParticipant`/`analytics`), pas sur ses
+  fichiers.
+
+## Ce que le cycle 98 doit faire
+
+### 1. La rétention des posts supprimés — désormais SANS question préalable
 
 Un `Message` supprimé perd ses octets IMMÉDIATEMENT (`deleteAttachment` sur les quatre écrivains
 de `deletedAt`). Un `Post` supprimé ne perd rien, jamais : ni lignes, ni fichiers. L'asymétrie
 n'est écrite nulle part comme une décision — elle est le résidu d'un balayage dont le périmètre
 s'est rétréci aux STATUS.
 
-**La question à trancher AVANT d'écrire du code** : la suppression d'un post est-elle réversible ?
-Aucune route de restauration n'a été trouvée au cycle 96 (à revérifier), ce qui rendrait la
-rétention illimitée sans objet. Si elle ne l'est pas, le geste juste est une **passe de rétention
-générique** — soft-delete + N jours → destruction des lignes, `reclaimPostMediaBytes` étant déjà
-écrit et déjà branché sur ce motif. Attention : un repost SIMPLE d'un post permanent ne duplique
-rien et rend le média de l'original par la relation `repostOf` (aucun filtre `deletedAt` possible
-sur une relation to-one) — détruire l'original casserait l'affichage du repost. C'est la garde
-qu'il faudra ajouter, jumelle de la garde `Sound`.
+La question bloquante est tranchée (ci-dessus §1) : la suppression est **irréversible**, donc la
+rétention illimitée ne protège rien. Le geste juste est une **passe de rétention générique** —
+soft-delete + N jours → destruction complète par le chemin corrigé au cycle 97.
 
-### 2. La famille CALL — jamais prospectée
+**Ce que le cycle 97 change dans la difficulté de cet item :** la garde qu'il annonçait comme
+« à ajouter » — *un repost simple rend le média de l'original par la relation `repostOf`, détruire
+l'original casserait l'affichage du repost* — **est déjà écrite**. `detachReposts` coupe le
+pointeur avant la destruction, et le repost, autoporteur par l'instantané, continue de s'afficher.
+Il reste à vérifier UN cas que le cycle 97 n'a pas eu à traiter : un repost simple d'un post
+**PERMANENT** ne duplique rien (l'instantané ne se déclenche que sur source ÉPHÉMÈRE) — il n'a donc
+aucun contenu propre, et le détacher le viderait au lieu de le sauver. C'est la vraie décision de
+l'item 1, et elle n'a que deux issues honnêtes : soit la rétention épargne un post encore reposté
+(rétention conditionnelle, à documenter comme telle), soit l'instantané est étendu au repost de
+source permanente à la CRÉATION. Trancher avant d'écrire.
 
-Story et Post viennent d'être instruits. `Call` ne l'a jamais été : enregistrements, médias
-d'appel, métadonnées de session. Même filtre, mêmes deux questions (qui fait respecter la
-promesse ? et au niveau de l'octet ?).
+### 2. La famille CALL — prospectée à moitié, jamais instruite
+
+Voir §3 ci-dessus pour les trois constats bruts. Même filtre, mêmes deux questions (qui fait
+respecter la promesse ? et au niveau de l'octet ?) — plus, depuis le cycle 97, la troisième :
+**ce qu'on détruit méritait-il de l'être ?**
 
 ### 3. L'index MongoDB non appliqué — inchangé, et toujours le maillon faible
 
 `expiresAt_ephemeral_partial` (cycle 92) est fourni mais **jamais appliqué** — aucun déploiement ne
 joue les migrations MongoDB manuelles. Sans lui, le balayage fait un COLLSCAN par minute sur
-`Message`, et c'est ce balayage qui `unlink`. Le cycle 96 y ajoute un second dépendant : la
-récupération des octets de post s'exécute dans la passe horaire du balayage éphémère.
+`Message`, et c'est ce balayage qui `unlink`. Le cycle 96 y a ajouté un second dépendant (la
+récupération des octets de post), et le cycle 97 un troisième (la coupure des pointeurs de repost) :
+les trois s'exécutent dans la passe horaire du balayage éphémère.
 
 ### 4. Les constats non instruits des cycles 93 à 95 (inchangés)
 
@@ -133,8 +165,7 @@ récupération des octets de post s'exécute dans la passe horaire du balayage �
 - Le passif en base de `scheduleViewOnceBurn` ne se rattrape pas tout seul.
 - Aucun client ne masque `.forward` sur un message à vue unique (iOS : toolchain absente ici).
 - `copyForwardedAttachments` copie `filePath` VERBATIM — la copie transférée et l'original
-  partagent l'octet. **Le cycle 96 confirme que ce motif est propre à la famille message** ; côté
-  post, la duplication est réelle.
+  partagent l'octet. Motif propre à la famille message ; côté post, la duplication est réelle.
 - `MessageAttachment.isViewOnce` n'a aucun écrivain : soit le retirer, soit le câbler.
 - Veine « événement socket manqué » : modération admin, rattrapage à la reconnexion.
 - `tsc --noEmit` sur `apps/web` rend 1 224 diagnostics, tous dans `__tests__/**`, tous
@@ -145,7 +176,7 @@ récupération des octets de post s'exécute dans la passe horaire du balayage �
 
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
   depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
-  la routine** — inchangé aux cycles 86 à 95. Exige une machine macOS.
+  la routine** — inchangé aux cycles 86 à 97. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
 - **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
   `push --delete` non. Les branches mergées s'accumulent — à purger depuis un contexte qui a le
@@ -153,7 +184,7 @@ récupération des octets de post s'exécute dans la passe horaire du balayage �
 - Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
   n'existe toujours pas.
 - **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
-  charge** (cycle 87). Non reproduit aux cycles 88 à 95.
+  charge** (cycle 87). Non reproduit aux cycles 88 à 97.
 
 ## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
 
@@ -166,7 +197,7 @@ récupération des octets de post s'exécute dans la passe horaire du balayage �
 `bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
 et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
 
-**Ordre exact vérifié au cycle 95** (sans lui, `tsc --noEmit` rend un faux positif
+**Ordre exact vérifié aux cycles 95 et 97** (sans lui, `tsc --noEmit` rend un faux positif
 `Cannot find module '@meeshy/shared'` sur `utils/sanitize.ts`) :
 
 ```bash

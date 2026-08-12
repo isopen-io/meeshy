@@ -3,6 +3,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
+import { detachReposts } from './posts/detachReposts';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { retractPostNotifications } from './posts/retractPostNotifications';
@@ -215,12 +216,29 @@ export class ExpiredStoriesCleanupService {
           });
         }
 
-        // Reposts that reference these expired stories are deleted too — a
-        // repost of a story dead for 7+ days has no value (stories are
-        // ephemeral). Their comments share the same self-relation hazard,
-        // so clear them in the same pass.
+        // Les reposts ÉPHÉMÈRES de ces posts sont emportés avec eux — leur
+        // propre échéance est périmée depuis aussi longtemps que celle de leur
+        // source, et ils n'ont aucune surface d'archive. Leurs commentaires
+        // partagent le même piège de self-relation, donc ils sont nettoyés dans
+        // la même passe.
+        //
+        // Le filtre de type est le correctif du cycle 97, et l'absence de
+        // filtre était une perte de données. Le commentaire d'origine
+        // justifiait la cascade par « a repost of a story dead for 7+ days has
+        // no value (stories are ephemeral) » — vrai quand un repost ne faisait
+        // que RÉFÉRENCER sa source. L'instantané l'a invalidé :
+        // `PostService.repostPost` DUPLIQUE le contenu de toute source
+        // éphémère dans le repost (médias en fichiers neufs, audio,
+        // storyEffects, texte), « so a repost that merely referenced it via
+        // repostOfId would render EMPTY once the source is gone ». Et l'API
+        // expose `targetType`, donc « reposter un STATUS en POST PERMANENT » —
+        // le chemin `status→post` que le commentaire de l'instantané nomme
+        // lui-même — est le geste « je garde ça sur mon fil ». La cascade
+        // détruisait ce post permanent quatorze jours plus tard, avec ses
+        // octets depuis le cycle 96. Il SURVIT désormais, détaché juste en
+        // dessous.
         const repostRows = await this.prisma.post.findMany({
-          where: { repostOfId: { in: ids } },
+          where: { repostOfId: { in: ids }, type: { in: [...SWEPT_POST_TYPES] } },
           select: { id: true },
         });
         const repostIds = repostRows.map((p) => p.id);
@@ -321,6 +339,28 @@ export class ExpiredStoriesCleanupService {
         // aucun chemin n'atteindrait. Le `catch` de cette passe rattrape, la
         // passe horaire suivante rejoue tout.
         await this.soundCaptureService.releasePosts(allPostIds);
+
+        // Les pointeurs de repost qui visent la fournée, coupés AVANT qu'elle
+        // ne disparaisse — le remède déjà écrit pour la self-relation des
+        // commentaires, appliqué à son jumeau `Post.repostOf` (même
+        // `onDelete: NoAction`). Il ferme trois choses d'un geste : le post
+        // permanent qui survit désormais ne garde aucun pointeur vers une ligne
+        // détruite ; le routage des réactions (`originalRepostOfId ??
+        // repostOfId`) cesse de viser un id disparu ; et la passe devient
+        // insensible à la PROFONDEUR des chaînes de reposts, que sa cascade
+        // d'un seul niveau ignorait — un repost de repost référençait un repost
+        // détruit, exactement le P2014 corrigé plus haut pour les réponses.
+        //
+        // Sur `allPostIds` et pas `ids` : les reposts éphémères détruits sont
+        // eux-mêmes des cibles de pointeurs.
+        //
+        // REJETTE volontairement, comme ses voisins de bloc : sans relation ni
+        // cascade, détruire après une coupure en échec laisserait des pointeurs
+        // que plus aucun chemin n'atteindrait.
+        const detached = await detachReposts(this.prisma, allPostIds);
+        if (detached.direct > 0 || detached.roots > 0) {
+          log.info('detached reposts from the posts about to be destroyed', detached);
+        }
 
         // Les OCTETS avant les LIGNES, et l'ordre porte tout : la ligne est le
         // seul chemin qui relie un post à ses fichiers. Détruite en premier,
