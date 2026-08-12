@@ -42,7 +42,7 @@ final class VoiceProfileManageViewModel: ObservableObject {
             isCloningEnabled = c.voiceCloningEnabled
             isVoicePublic = authManager.currentUser?.voicePublic ?? false
         } catch {
-            self.error = "Impossible de charger le profil vocal."
+            self.error = String(localized: "voice.profile.error.load", defaultValue: "Impossible de charger le profil vocal.", bundle: .main)
         }
     }
 
@@ -52,9 +52,13 @@ final class VoiceProfileManageViewModel: ObservableObject {
 
         do {
             _ = try await userService.updateProfile(UpdateProfileRequest(voicePublic: enabled))
+            // Refléter le changement confirmé sur currentUser : sinon une réouverture
+            // (loadProfile lit authManager.currentUser?.voicePublic) restaurerait la
+            // valeur stale et le toggle « sauterait » en arrière.
+            authManager.applyLocalVoicePublicChange(enabled)
         } catch {
             isVoicePublic = previous
-            self.error = "Erreur lors du changement de visibilite du profil vocal."
+            self.error = String(localized: "voice.profile.error.visibility", defaultValue: "Erreur lors du changement de visibilité du profil vocal.", bundle: .main)
         }
     }
 
@@ -66,7 +70,7 @@ final class VoiceProfileManageViewModel: ObservableObject {
             try await service.toggleVoiceCloning(enabled: enabled)
         } catch {
             isCloningEnabled = previous
-            self.error = "Erreur lors du changement de statut du clonage."
+            self.error = String(localized: "voice.profile.error.cloning", defaultValue: "Erreur lors du changement de statut du clonage.", bundle: .main)
         }
     }
 
@@ -78,7 +82,7 @@ final class VoiceProfileManageViewModel: ObservableObject {
             try await service.deleteSample(sampleId: id)
         } catch {
             samples = snapshot
-            self.error = "Erreur lors de la suppression de l'echantillon."
+            self.error = String(localized: "voice.profile.error.deleteSample", defaultValue: "Erreur lors de la suppression de l'échantillon.", bundle: .main)
         }
     }
 
@@ -92,7 +96,7 @@ final class VoiceProfileManageViewModel: ObservableObject {
             samples = []
             isCloningEnabled = false
         } catch {
-            self.error = "Erreur lors de la suppression du profil."
+            self.error = String(localized: "voice.profile.error.deleteProfile", defaultValue: "Erreur lors de la suppression du profil.", bundle: .main)
         }
     }
 
@@ -104,7 +108,7 @@ final class VoiceProfileManageViewModel: ObservableObject {
             }
             await loadProfile()
         } catch {
-            self.error = "Erreur lors de l'envoi des echantillons."
+            self.error = String(localized: "voice.profile.error.uploadSamples", defaultValue: "Erreur lors de l'envoi des échantillons.", bundle: .main)
         }
     }
 }

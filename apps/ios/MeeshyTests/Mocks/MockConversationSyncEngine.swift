@@ -32,6 +32,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     var stopSocketRelayCallCount = 0
     var markConversationReadLocallyCallCount = 0
     var lastMarkReadConversationId: String?
+    var markConversationUnreadLocallyCallCount = 0
+    var lastMarkUnreadConversationId: String?
     var updateConversationAfterSendCallCount = 0
 
     /// Optional hook invoked inside `syncSinceLastCheckpoint()` so tests can
@@ -81,8 +83,19 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         lastMarkReadConversationId = conversationId
     }
 
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
+    func markConversationUnreadLocally(_ conversationId: String) async {
+        markConversationUnreadLocallyCallCount += 1
+        lastMarkUnreadConversationId = conversationId
+    }
+
+    /// Dernière facette appliquée — permet aux tests d'affirmer que la ligne
+    /// reçoit bien les pièces jointes et les effets du message envoyé, et pas
+    /// seulement son texte.
+    var lastSentFacet: LastMessageFacet?
+
+    func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
         updateConversationAfterSendCallCount += 1
+        lastSentFacet = facet
     }
 
     var setCurrentlyOpenConversationCallCount = 0
@@ -123,6 +136,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         stopSocketRelayCallCount = 0
         markConversationReadLocallyCallCount = 0
         lastMarkReadConversationId = nil
+        markConversationUnreadLocallyCallCount = 0
+        lastMarkUnreadConversationId = nil
         updateConversationAfterSendCallCount = 0
         setCurrentlyOpenConversationCallCount = 0
         lastSetCurrentlyOpenConversationId = nil

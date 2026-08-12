@@ -24,8 +24,8 @@ extension ConversationView {
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
-    var headerAvatarView: some View {
-        ConversationHeaderAvatarView(
+    var headerAvatarView: AnyView {
+        AnyView(ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
             conversation: conversation,
@@ -42,7 +42,7 @@ extension ConversationView {
                     router.deepLinkProfileUser = profileUser
                 }
             }
-        )
+        ))
     }
 
     // MARK: - Header Call Buttons (audio + video)
@@ -325,12 +325,12 @@ private struct HeaderCallButtonsView: View {
     private var startCallButtons: some View {
         Menu {
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false) }
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }

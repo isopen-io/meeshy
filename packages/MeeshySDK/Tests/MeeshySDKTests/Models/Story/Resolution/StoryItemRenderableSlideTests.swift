@@ -160,4 +160,48 @@ struct StoryItemRenderableSlideTests {
         let slide = item.toRenderableSlide(preferredLanguages: [])
         #expect(slide.mediaURL == nil)
     }
+
+    // MARK: - Hydratation de l'URL des pistes audio
+
+    /// `StoryAudioPlayerObject` ne référence son asset que par `postMediaId` :
+    /// l'URL vit dans `FeedMedia`. Sans cette hydratation, tout consommateur du
+    /// slide qui n'a pas d'index postMediaId → URL sous la main (l'exporteur des
+    /// chemins « Partager » / « Enregistrer ») ne peut pas retrouver le son.
+    @Test func toRenderableSlide_hydratesAudioMediaURL_fromFeedMedia() throws {
+        let audio = StoryAudioPlayerObject(id: "au1", postMediaId: "pm-audio")
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [audio]
+        let feed = FeedMedia(id: "pm-audio", type: .audio,
+                             url: "https://cdn.example.com/track.m4a",
+                             thumbnailColor: "000000", duration: 12)
+        let item = StoryItem(id: "story-1", content: nil, media: [feed],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let resolved = try #require(slide.effects.audioPlayerObjects?.first)
+        #expect(resolved.mediaURL == "https://cdn.example.com/track.m4a")
+        #expect(resolved.duration == 12)
+    }
+
+    /// Une URL déjà persistée par le composer est la plus fiable : le repli par
+    /// `FeedMedia` ne doit jamais l'écraser.
+    @Test func toRenderableSlide_keepsPersistedAudioMediaURL() throws {
+        var audio = StoryAudioPlayerObject(id: "au1", postMediaId: "pm-audio")
+        audio.mediaURL = "https://cdn.example.com/persisted.m4a"
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [audio]
+        let feed = FeedMedia(id: "pm-audio", type: .audio,
+                             url: "https://cdn.example.com/other.m4a",
+                             thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [feed],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        #expect(slide.effects.audioPlayerObjects?.first?.mediaURL
+                == "https://cdn.example.com/persisted.m4a")
+    }
 }

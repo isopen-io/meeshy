@@ -182,6 +182,8 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     private(set) var prepareCallCount = 0
     private(set) var cleanupCallCount = 0
     private(set) var lastLanguages: [String] = []
+    /// Identité transmise au préambule de marque — `nil` = export sans intro.
+    private(set) var lastIntro: StoryExportIntroContent?
     private(set) var lastCleanupURL: URL? = nil
     private(set) var lastBakedURL: URL? = nil
     let behavior: Behavior
@@ -191,11 +193,14 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String],
+        watermark: StoryExportWatermark?,
+        intro: StoryExportIntroContent?,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
         lastLanguages = languages
+        lastIntro = intro
 
         switch behavior {
         case .success:
@@ -213,5 +218,128 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         cleanupCallCount += 1
         lastCleanupURL = url
         try? FileManager.default.removeItem(at: url)
+    }
+}
+
+// MARK: - Préambule de marque
+
+/// Chaque MP4 partagé à l'extérieur porte l'interlude d'identité et la
+/// signature sonore Meeshy (directive user 2026-07-25) : c'est ce qui rend une
+/// story reconnaissable une fois sortie de l'app.
+@MainActor
+final class StoryExportBrandIntroTests: XCTestCase {
+
+    /// L'identité est INJECTÉE et non lue dans `AuthManager.shared` : sinon le
+    /// test juge la session résiduelle du simulateur — vert sur une machine de
+    /// dev connectée, rouge sur un simulateur CI vierge.
+    private func makeAuthor() -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: "Ada Lovelace",
+                                username: "ada",
+                                accentColorHex: "#6366F1")
+    }
+
+    func test_startExport_alwaysRequestsTheBrandIntro() async {
+        let mock = MockShareExporter(behavior: .success)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { author })
+
+        await sut.startExport(story: makeStoryItem())
+
+        XCTAssertEqual(mock.prepareCallCount, 1)
+        XCTAssertNotNil(mock.lastIntro,
+                        "l'export doit toujours demander le préambule de marque")
+    }
+
+    /// Le pendant du test précédent : sans identité d'auteur résolue, le MP4
+    /// partait SANS interlude, en silence. Ce test fige le fait que ce chemin
+    /// est bien celui du « pas d'intro » — pour qu'une régression qui rendrait
+    /// l'identité indisponible se voie ici, et non chez l'utilisateur.
+    func test_startExport_withoutAuthorIdentity_shipsWithoutIntro() async {
+        let mock = MockShareExporter(behavior: .success)
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { nil })
+
+        await sut.startExport(story: makeStoryItem())
+
+        XCTAssertEqual(mock.prepareCallCount, 1)
+        XCTAssertNil(mock.lastIntro)
+    }
+
+    /// L'export est réservé à l'auteur : l'identité du préambule est donc celle
+    /// de l'utilisateur courant, jamais une chaine vide.
+    func test_brandIntro_carriesANonEmptyIdentity() async {
+        let mock = MockShareExporter(behavior: .success)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { author })
+
+        await sut.startExport(story: makeStoryItem())
+
+        guard let intro = mock.lastIntro else {
+            return XCTFail("aucun préambule transmis")
+        }
+        XCTAssertEqual(intro.displayName, "Ada Lovelace")
+        XCTAssertEqual(intro.username, "ada")
+        XCTAssertFalse(intro.accentColorHex.isEmpty)
+    }
+
+    // MARK: - La résolution d'identité est BORNÉE (revue finale, item 4)
+
+    /// « Partager » était le SEUL des trois chemins d'export à attendre
+    /// `brandIntro()` sans borne — et il le faisait avant même que `exportTask`
+    /// existe, donc « Annuler » n'avait aucune prise. Premier partage après
+    /// installation + réseau lent : barre à 0 % pendant jusqu'à ~60 s (timeout
+    /// `URLSession` par défaut).
+    ///
+    /// Mêmes constantes que
+    /// `StoryPhotoSaveServiceTests.test_save_introSlowerThanTimeout_bakesWithoutIntroWithoutBlocking`
+    /// et que la garde équivalente côté timeline (borne 0,1 s / opération lente
+    /// 3 s / seuil 1,5 s), déjà calibrées pour ce host bruyant.
+    func test_startExport_introSlowerThanTimeout_bakesWithoutIntroWithoutBlocking() async {
+        let mock = MockShareExporter(behavior: .success)
+        let sut = StoryExportShareViewModel(
+            exporter: mock,
+            introTimeout: .milliseconds(100),
+            brandIntro: {
+                try? await Task.sleep(for: .seconds(3))
+                return StoryExportIntroContent(displayName: "Late", username: "late",
+                                               accentColorHex: "FFFFFF")
+            }
+        )
+        let start = Date()
+
+        await sut.startExport(story: makeStoryItem())
+
+        let elapsed = Date().timeIntervalSince(start)
+        // Preuve primaire, déterministe : avec une borne (0,1 s) très
+        // inférieure au sommeil de l'intro (3 s), la SEULE façon d'observer
+        // `lastIntro == nil` est que la course ait été coupée par la borne —
+        // l'intro, livrée à elle-même, ne renvoie jamais nil. `elapsed` n'est
+        // qu'un signal de soutien, volontairement peu discriminant.
+        XCTAssertNil(mock.lastIntro, "passé le délai, le bake démarre sans interlude de marque")
+        XCTAssertEqual(mock.prepareCallCount, 1, "le bake doit démarrer, pas être abandonné")
+        XCTAssertLessThan(elapsed, 1.5,
+                          "doit démarrer près de la borne de 0,1 s, jamais attendre les 3 s de l'intro")
+    }
+
+    /// La borne ne doit jamais faire perdre une identité qui arrive à temps.
+    func test_startExport_introFasterThanTimeout_isUsed() async {
+        let mock = MockShareExporter(behavior: .success)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(
+            exporter: mock,
+            introTimeout: .seconds(2),
+            brandIntro: { author }
+        )
+
+        await sut.startExport(story: makeStoryItem())
+
+        XCTAssertEqual(mock.lastIntro?.username, "ada")
+    }
+
+    private func makeStoryItem() -> StoryItem {
+        StoryItem(id: "s1", content: "Bonjour",
+                  storyEffects: StoryEffects(textObjects: [
+                      StoryTextObject(id: "t1", text: "Bonjour")
+                  ]),
+                  createdAt: Date(), expiresAt: Date().addingTimeInterval(3600))
     }
 }

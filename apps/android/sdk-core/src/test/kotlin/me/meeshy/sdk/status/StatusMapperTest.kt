@@ -200,4 +200,38 @@ class StatusMapperTest {
         val ordered = entries.orderedForBar(currentUserId = null)
         assertThat(ordered.map { it.id }).containsExactly("s1", "s2").inOrder()
     }
+
+    // --- statusForUser -----------------------------------------------------------
+    // Port of iOS `StatusViewModel.statusForUser(userId:)` — the lookup other
+    // surfaces (Contacts, Discover, Requests) use to decorate a user's avatar
+    // with their live mood emoji.
+
+    @Test
+    fun `statusForUser finds the entry belonging to that user`() {
+        val entries = listOf(
+            statusPost(id = "s1", authorId = "alice").toStatusEntry()!!,
+            statusPost(id = "s2", authorId = "bob").toStatusEntry()!!,
+        )
+        assertThat(entries.statusForUser("bob")?.id).isEqualTo("s2")
+    }
+
+    @Test
+    fun `statusForUser returns null when no entry matches`() {
+        val entries = listOf(statusPost(id = "s1", authorId = "alice").toStatusEntry()!!)
+        assertThat(entries.statusForUser("nobody")).isNull()
+    }
+
+    @Test
+    fun `statusForUser on an empty list is null`() {
+        assertThat(emptyList<me.meeshy.sdk.model.StatusEntry>().statusForUser("alice")).isNull()
+    }
+
+    @Test
+    fun `statusForUser returns the first match when duplicates exist`() {
+        val entries = listOf(
+            statusPost(id = "s1", authorId = "dup").toStatusEntry()!!,
+            statusPost(id = "s2", authorId = "dup").toStatusEntry()!!,
+        )
+        assertThat(entries.statusForUser("dup")?.id).isEqualTo("s1")
+    }
 }

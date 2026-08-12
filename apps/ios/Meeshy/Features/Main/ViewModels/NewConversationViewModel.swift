@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// Gateway block-rejection detection. A 403 carrying the `USER_BLOCKED` code
 /// (a block in either direction) is forwarded by `MeeshySDK`'s `APIClient` as
@@ -36,25 +37,53 @@ final class NewConversationViewModel: ObservableObject {
 
     @Published private(set) var searchResults: [SearchedUser] = []
     @Published private(set) var isSearching = false
+    /// `true` when the LAST `performSearch` call failed on a network/server
+    /// error — distinguishes "zero results" from "the search itself broke"
+    /// (audit 2026-07-20: `performSearch`'s catch cleared `searchResults`
+    /// with no log and no distinct state, so a failed search looked
+    /// identical to a genuine empty result set). Cleared at the start of
+    /// every new search attempt.
+    @Published private(set) var searchFailed = false
     @Published private(set) var isCreating = false
     @Published private(set) var errorMessage: String?
     /// Set after a successful `createConversation` so the view can dismiss
     /// itself and trigger navigation. Cleared back to `nil` by `consume…`.
     @Published private(set) var createdConversation: MeeshyConversation?
 
+    /// The user's contacts (accepted friends), shown by default before any
+    /// search is typed — the picker is contact-first: browse who you already
+    /// know, then fall back to platform-wide search. Mapped from
+    /// `FriendRequestUser` so they render through the same `userRow` as search
+    /// results.
+    @Published private(set) var contacts: [SearchedUser] = []
+    /// `true` only while contacts are being fetched AND none are cached yet
+    /// (cold start) — drives a skeleton instead of a blank screen. Stays
+    /// `false` when cached contacts are already on screen (Cache-First: no
+    /// spinner over existing data).
+    @Published private(set) var isLoadingContacts = false
+
     // MARK: - Dependencies
 
     private let api: APIClientProviding
+    private let friendService: FriendServiceProviding
     private let currentUserIdProvider: @MainActor () -> String?
     private var searchTask: Task<Void, Never>?
 
     static let searchDebounce: UInt64 = 350_000_000  // ns
 
+    /// Reuses the same GRDB cache the Contacts directory populates
+    /// (`ContactsListViewModel`) so a user who has visited Contacts sees their
+    /// list here instantly. Read-only from this VM — `ContactsListViewModel`
+    /// remains the single writer of that cache.
+    private let contactsCacheKey = FriendshipCache.PersistenceKeys.friendsList
+
     init(
         api: APIClientProviding = APIClient.shared,
+        friendService: FriendServiceProviding = FriendService.shared,
         currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.api = api
+        self.friendService = friendService
         self.currentUserIdProvider = currentUserIdProvider
     }
 
@@ -69,11 +98,13 @@ final class NewConversationViewModel: ObservableObject {
         guard trimmed.count >= 2 else {
             searchResults = []
             isSearching = false
+            searchFailed = false
             return
         }
         isSearching = true
+        searchFailed = false
         searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: Self.searchDebounce)
+            try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled, let self else { return }
             await self.performSearch(query: trimmed)
         }
@@ -98,9 +129,69 @@ final class NewConversationViewModel: ObservableObject {
             let currentUserId = currentUserIdProvider()
             searchResults = response.data.filter { $0.id != currentUserId }
             isSearching = false
+            searchFailed = false
         } catch {
             searchResults = []
             isSearching = false
+            searchFailed = true
+            // `query` is free-text the user typed to look up a contact (name,
+            // email fragment, phone number…) — logged `.private` so it isn't
+            // persisted in cleartext by the unified logging system (fix
+            // 2026-07-21; matches the existing `.private` convention for
+            // user-entered PII, e.g. `MagicLinkView`'s email log).
+            Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .private): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Contacts
+
+    /// Loads the user's contacts (accepted friends) for the default,
+    /// pre-search surface. Cache-First: serves the GRDB-cached list
+    /// immediately (`.fresh`/`.stale`) and silently revalidates on `.stale`;
+    /// only a cold cache shows the loading skeleton. Idempotent — safe to call
+    /// from `.task`/`.onAppear` on every presentation.
+    func loadContacts() async {
+        let cached = await CacheCoordinator.shared.friends.load(for: contactsCacheKey)
+
+        switch cached {
+        case .fresh(let data, _):
+            contacts = data.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+            return
+
+        case .stale(let data, _):
+            contacts = data.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+            await fetchContactsFromNetwork()
+            return
+
+        case .expired, .empty:
+            isLoadingContacts = contacts.isEmpty
+        }
+
+        await fetchContactsFromNetwork()
+    }
+
+    /// Fetches accepted friends from the gateway and aggregates them through
+    /// `FriendListAggregator` (the shared "who is a contact" definition). Does
+    /// NOT write the friends cache — `ContactsListViewModel` owns that store;
+    /// this VM only reads it to avoid a two-writer race.
+    private func fetchContactsFromNetwork() async {
+        do {
+            async let receivedResponse = friendService.receivedRequests(offset: 0, limit: 100)
+            async let sentResponse = friendService.sentRequests(offset: 0, limit: 100)
+            let (received, sent) = try await (receivedResponse, sentResponse)
+
+            let friends = FriendListAggregator.aggregate(
+                received: received.data,
+                sent: sent.data,
+                currentUserId: currentUserIdProvider() ?? ""
+            )
+            contacts = friends.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+        } catch {
+            isLoadingContacts = false
+            Logger.network.warning("[NewConversationViewModel] contacts load failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -111,6 +202,17 @@ final class NewConversationViewModel: ObservableObject {
     /// dismiss + navigate via NotificationCenter. On failure, surfaces a
     /// user-readable error message (no `try?` masking the underlying
     /// network failure, per the audit's gestion-d-erreur findings).
+    ///
+    /// Deliberately NOT routed through the `.createConversation` outbox kind
+    /// (`OutboxDispatcher.dispatchCreateConversation`) despite that kind
+    /// existing and never being enqueued anywhere (audit 2026-07-20,
+    /// "OutboxKinds morts"): the outbox is fire-and-forget/eventually
+    /// consistent — its dispatcher discards the POST response body — while
+    /// this call site needs the created `MeeshyConversation` SYNCHRONOUSLY
+    /// to navigate the user into it. Reconciling/removing the dead kind
+    /// belongs to whichever lane owns `OutboxDispatcher.swift` /
+    /// `OutboxRecord.swift` (settings-profile / offline-instant in the
+    /// audit backlog) — out of scope here to avoid touching those files.
     func createConversation(
         selectedUsers: [SearchedUser],
         groupTitle: String
@@ -173,6 +275,7 @@ final class NewConversationViewModel: ObservableObject {
         searchTask = nil
         searchResults = []
         isSearching = false
+        searchFailed = false
     }
 
     // MARK: - Body

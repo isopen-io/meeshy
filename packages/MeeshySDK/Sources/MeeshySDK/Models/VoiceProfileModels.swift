@@ -83,6 +83,112 @@ public enum VoiceProfileStatus: String, Decodable, CaseIterable, Sendable {
     case expired
 }
 
+// MARK: - Voice Profile — Gateway wire format (`GET /voice/profile`)
+
+/// Réponse brute de `GET /voice/profile` (schema `VoiceProfileDetails`,
+/// `services/gateway/src/routes/voice-profile.ts`). Le gateway modélise UN
+/// profil unique (créé via `/register`, recalibré via `PUT /:profileId`) — pas
+/// de collection d'échantillons. Les noms de champs diffèrent du domaine iOS
+/// (`qualityScore` 0-100, `audioCount`, `audioDurationMs`, `version`,
+/// `needsCalibration`), d'où le mapping `toDomain()` vers `VoiceProfile`.
+/// Quand aucun profil n'existe, le gateway renvoie quand même un objet avec
+/// `exists: false` (jamais 404) — le mapping le convertit en `nil` côté app.
+public struct VoiceProfileDetails: Decodable, Sendable {
+    public let profileId: String?
+    public let userId: String
+    public let exists: Bool
+    public let qualityScore: Double
+    public let audioDurationMs: Int
+    public let audioCount: Int
+    public let version: Int
+    public let createdAt: Date?
+    public let updatedAt: Date?
+    public let expiresAt: Date?
+    public let needsCalibration: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case profileId, userId, exists, qualityScore, audioDurationMs, audioCount, version, createdAt, updatedAt, expiresAt, needsCalibration
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        profileId = try c.decodeIfPresent(String.self, forKey: .profileId)
+        userId = try c.decodeIfPresent(String.self, forKey: .userId) ?? ""
+        exists = try c.decodeIfPresent(Bool.self, forKey: .exists) ?? (try c.decodeIfPresent(String.self, forKey: .profileId) != nil)
+        qualityScore = try c.decodeIfPresent(Double.self, forKey: .qualityScore) ?? 0
+        audioDurationMs = try c.decodeIfPresent(Int.self, forKey: .audioDurationMs) ?? 0
+        audioCount = try c.decodeIfPresent(Int.self, forKey: .audioCount) ?? 0
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 0
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        needsCalibration = try c.decodeIfPresent(Bool.self, forKey: .needsCalibration) ?? false
+    }
+
+    /// Mappe la forme gateway vers le modèle domaine iOS. Retourne `nil`
+    /// quand aucun profil n'existe (`exists == false`), pour que les vues
+    /// (`if let profile`) affichent l'état vide. `qualityScore` est déjà sur une
+    /// échelle 0-1 dans les données réelles (ex. `0.5`, malgré le « 0-100 » du
+    /// schema OpenAPI) — l'UI le multiplie par 100 pour l'affichage `%`, donc on
+    /// le passe tel quel, en tolérant une valeur 0-100 héritée (division si
+    /// > 1). Le statut est dérivé (`needsCalibration` → `.expired`, sinon
+    /// `.ready`) faute d'enum côté gateway. `audioCount` alimente `sampleCount`,
+    /// `audioDurationMs` la durée.
+    public func toDomain() -> VoiceProfile? {
+        guard exists else { return nil }
+        let status: VoiceProfileStatus = needsCalibration ? .expired : .ready
+        let normalizedQuality: Double? = qualityScore <= 0 ? nil
+            : (qualityScore > 1 ? qualityScore / 100.0 : qualityScore)
+        return VoiceProfile(
+            id: profileId ?? "",
+            userId: userId,
+            status: status,
+            sampleCount: audioCount,
+            totalDurationMs: audioDurationMs,
+            quality: normalizedQuality,
+            createdAt: createdAt ?? Date(timeIntervalSince1970: 0),
+            updatedAt: updatedAt ?? Date(timeIntervalSince1970: 0),
+            lastUsedAt: nil
+        )
+    }
+}
+
+/// Réponse de `POST /voice/profile/register` — création du profil à partir
+/// d'un audio (≥ 10 s). `qualityScore` 0-100. `needsCalibration` invite à
+/// enrichir via `PUT /:profileId`.
+public struct VoiceProfileRegisterResponse: Decodable, Sendable {
+    public let profileId: String
+    public let qualityScore: Double
+    public let audioDurationMs: Int
+    public let needsCalibration: Bool
+    public let expiresAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case profileId, qualityScore, audioDurationMs, needsCalibration, expiresAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        profileId = try c.decodeIfPresent(String.self, forKey: .profileId) ?? ""
+        qualityScore = try c.decodeIfPresent(Double.self, forKey: .qualityScore) ?? 0
+        audioDurationMs = try c.decodeIfPresent(Int.self, forKey: .audioDurationMs) ?? 0
+        needsCalibration = try c.decodeIfPresent(Bool.self, forKey: .needsCalibration) ?? false
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+    }
+}
+
+/// Corps de `POST /voice/profile/register` et `PUT /voice/profile/:profileId`
+/// (mode JSON base64). `audioFormat` ∈ {wav, mp3, ogg, webm, m4a}.
+public struct VoiceProfileAudioRequest: Encodable {
+    public let audioData: String
+    public let audioFormat: String
+
+    public init(audioData: Data, audioFormat: String) {
+        self.audioData = audioData.base64EncodedString()
+        self.audioFormat = audioFormat
+    }
+}
+
 // MARK: - Voice Sample
 
 public struct VoiceSample: Identifiable, Decodable, Sendable {

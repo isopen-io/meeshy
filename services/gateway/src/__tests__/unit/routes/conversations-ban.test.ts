@@ -53,13 +53,20 @@ function makeSocketIO() {
 }
 
 function makePrisma(overrides: any = {}) {
+  // `...overrides` d'ABORD : placé après, il réécrasait `participant` en entier
+  // avec la version du test, annulant la fusion par clé que la ligne
+  // `...overrides.participant` prétend faire — tout défaut non redéclaré par le
+  // test disparaissait silencieusement.
   return {
+    ...overrides,
     participant: {
       findFirst: jest.fn<any>(),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Membres actifs APRÈS l'écriture : rooms personnelles de la diffusion,
+      // et effectif absolu du payload.
+      findMany: jest.fn<any>().mockResolvedValue([{ id: 'part-other', userId: 'user-other' }]),
       ...overrides.participant,
     },
-    ...overrides,
   };
 }
 

@@ -16,6 +16,7 @@ final class StoryPublishQueueTests: XCTestCase {
             .appendingPathComponent("StoryPublishQueueTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         queue = StoryPublishQueue.shared
+        await queue._testResetPublishHandler()
         await queue.clearAll()
     }
 
@@ -338,13 +339,176 @@ final class StoryPublishQueueTests: XCTestCase {
         XCTAssertEqual(remaining, 0)
     }
 
+    // MARK: - Failed items history (retry-able, media preserved)
+
+    func test_processNext_unrecoverableError_addsToFailedPendingItems() async {
+        // Handler BEFORE enqueue: setPublishHandler auto-drains (M5) a
+        // non-empty queue, which would race the explicit processNext() below.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertEqual(failed.map(\.id), [item.id])
+        XCTAssertNotNil(failed.first?.lastError)
+        let pending = await queue.pendingItems
+        XCTAssertTrue(pending.isEmpty, "a permanently-failed item leaves the retry queue")
+    }
+
+    func test_processNext_permanentFailure_preservesLocalMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_failed_history", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        // Handler BEFORE enqueue: avoids racing the M5 auto-drain trigger.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: mediaFile.path),
+                      "A permanent failure must keep the media on disk so the user can retry from the failed-items history")
+    }
+
+    func test_retryFailedItem_movesItemBackToPendingQueue() async {
+        var item = makeItem(visibility: "PUBLIC")
+        item.retryCount = 3
+        item.lastError = "boom"
+        await queue._testSetFailedItems([item])
+
+        await queue.retryFailedItem(item.id)
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.map(\.id), [item.id])
+        XCTAssertEqual(pending.first?.retryCount, 0)
+        XCTAssertNil(pending.first?.lastError)
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+    }
+
+    func test_discardFailedItem_removesItemAndDeletesMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_discard", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue._testSetFailedItems([item])
+
+        await queue.discardFailedItem(item.id)
+
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
+    }
+
+    func test_failedItems_capped_dropsOldestWhenExceedingLimit() async {
+        let seeded = (0..<20).map { _ in makeItem(visibility: "PUBLIC") }
+        await queue._testSetFailedItems(seeded)
+
+        // Handler BEFORE enqueue: avoids racing the M5 auto-drain trigger.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let newItem = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(newItem)
+        await queue.processNext()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertEqual(failed.count, 20, "the failed-items history stays capped")
+        XCTAssertFalse(failed.contains { $0.id == seeded[0].id }, "the oldest failed item is dropped to make room")
+        XCTAssertTrue(failed.contains { $0.id == newItem.id })
+    }
+
+    func test_clearAll_alsoPurgesFailedItemsAndMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_clearall_failed", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue._testSetFailedItems([item])
+        await queue.clearAll()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
+    }
+
     // MARK: - Helpers
 
-    private func makeItem(visibility: String, mediaReferences: [StoryMediaReference] = []) -> StoryPublishQueueItem {
+    // MARK: - Cycle brouillon/publication : le draftId traverse les dispositions
+
+    func test_processNext_success_payloadCarriesTheDraftId() async {
+        let item = makeItem(visibility: "PUBLIC", draftId: "draft-ok")
+        await queue.enqueue(item)
+
+        let receivedExpectation = expectation(description: "publishSucceeded carries draftId")
+        var cancellables = Set<AnyCancellable>()
+        var received: StoryPublishSuccess?
+        queue.publishSucceeded.publisher
+            .sink { payload in
+                received = payload
+                receivedExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        await queue.setPublishHandler { _ in "server-story-1" }
+        await queue.processNext()
+
+        await fulfillment(of: [receivedExpectation], timeout: 2.0)
+        XCTAssertEqual(
+            received?.draftId, "draft-ok",
+            "Le SUCCÈS serveur est le seul événement autorisé à supprimer le brouillon — il doit savoir lequel"
+        )
+    }
+
+    func test_processNext_permanentFailure_payloadCarriesTheDraftId() async {
+        let item = makeItem(visibility: "PUBLIC", draftId: "draft-ko")
+        await queue.enqueue(item)
+
+        let failedExpectation = expectation(description: "publishFailed carries draftId")
+        var cancellables = Set<AnyCancellable>()
+        var received: StoryPublishFailure?
+        queue.publishFailed.publisher
+            .sink { payload in
+                received = payload
+                failedExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        await queue.processNext()
+
+        await fulfillment(of: [failedExpectation], timeout: 2.0)
+        XCTAssertEqual(
+            received?.draftId, "draft-ko",
+            "L'échec PERMANENT ramène la story en brouillon : le payload doit désigner ce brouillon"
+        )
+    }
+
+    private func makeItem(visibility: String,
+                          mediaReferences: [StoryMediaReference] = [],
+                          draftId: String? = nil) -> StoryPublishQueueItem {
         StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: Data("[]".utf8),
-            mediaReferences: mediaReferences
+            mediaReferences: mediaReferences,
+            draftId: draftId
         )
     }
 }

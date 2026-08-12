@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon background layer — the brand Indigo gradient (CLAUDE.md "Design
+  System & Visual Identity", apps/ios/CLAUDE.md § Brand Identity — Indigo).
+
+  Port of the iOS AppIcon light variant background
+  (apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png):
+  a linear gradient Indigo500 (#6366F1, top-left) -> Indigo700 (#4338CA,
+  bottom-right), measured directly off the source PNG's corner pixels — do not
+  re-hue. See apps/android/scripts/generate_legacy_launcher_icons.py for the
+  full geometry derivation shared with the legacy PNG fallbacks.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108"
+                android:startColor="#FF6366F1"
+                android:endColor="#FF4338CA" />
+        </aapt:attr>
+    </path>
+</vector>

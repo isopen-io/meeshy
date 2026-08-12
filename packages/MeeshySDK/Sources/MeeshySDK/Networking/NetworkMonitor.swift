@@ -47,9 +47,8 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
         case unknown
     }
 
-    private let monitor: NWPathMonitor
-    private let monitorQueue = DispatchQueue(label: "com.meeshy.networkmonitor", qos: .utility)
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
+    private var pathCancellable: AnyCancellable?
 
     fileprivate let isOfflineSubject = SendableCurrentValueSubject<Bool>(false)
 
@@ -60,60 +59,64 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
             .eraseToAnyPublisher()
     }
 
-    internal init(startMonitor: Bool = true) {
-        monitor = NWPathMonitor()
+    /// Lecture BINAIRE du chemin réseau. `NetworkConditionMonitor` en fait une
+    /// lecture QUALITATIVE à partir de la même source — les deux ne peuvent
+    /// donc plus se contredire. Cf. `NetworkPathSource` pour l'historique du
+    /// doublon.
+    internal init(source: NetworkPathSource = .shared) {
+        // Amorçage SYNCHRONE, sans passer par `apply` : `isOffline` est
+        // `@Published` et sa mutation doit rester sur le main thread une fois
+        // le moniteur observable. Ici personne n'est encore abonné, et
+        // l'initialisation d'un `static let` peut survenir hors main thread.
+        let initial = source.current
+        isOffline = !initial.isSatisfied
+        connectionType = Self.connectionType(for: initial)
+        isOfflineSubject.send(!initial.isSatisfied)
 
-        monitor.pathUpdateHandler = { [weak self] path in
-            guard let self else { return }
-
-            let offline = path.status != .satisfied
-            let type: ConnectionType = {
-                if path.usesInterfaceType(.wifi) { return .wifi }
-                if path.usesInterfaceType(.cellular) { return .cellular }
-                if path.usesInterfaceType(.wiredEthernet) { return .wired }
-                return .unknown
-            }()
-
-            DispatchQueue.main.async {
-                self.isOffline = offline
-                self.connectionType = type
-                self.isOfflineSubject.send(offline)
-            }
-
-            if offline {
-                self.logger.info("Network: offline")
-            } else {
-                self.logger.info("Network: online via \(type.rawValue)")
-            }
-        }
-
-        // En test, `startMonitor: false` évite de démarrer le vrai NWPathMonitor :
-        // ses path-updates réels (réseau online → envoie `false`) entraient en
-        // concurrence avec `simulateOffline()` (envoie `true`) et, via le
-        // `debounce(500ms)` qui ne garde que la dernière valeur, pouvaient
-        // coalescer en `false` → `filter { $0 }` ne fire jamais → timeout flaky.
-        if startMonitor {
-            monitor.start(queue: monitorQueue)
-        }
+        pathCancellable = source.publisher
+            .dropFirst()                       // la valeur courante vient d'être appliquée
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in self?.apply(snapshot) }
     }
 
-    deinit {
-        monitor.cancel()
+    /// Traduit une photo du chemin en état binaire + type d'interface.
+    /// `nonisolated static` pour être exercé sans instancier le moniteur.
+    nonisolated static func connectionType(for snapshot: NetworkPathSnapshot) -> ConnectionType {
+        if snapshot.usesWiFi { return .wifi }
+        if snapshot.usesCellular { return .cellular }
+        if snapshot.usesWired { return .wired }
+        return .unknown
+    }
+
+    private func apply(_ snapshot: NetworkPathSnapshot) {
+        let offline = !snapshot.isSatisfied
+        let type = Self.connectionType(for: snapshot)
+        isOffline = offline
+        connectionType = type
+        isOfflineSubject.send(offline)
+        if offline {
+            logger.info("Network: offline")
+        } else {
+            logger.info("Network: online via \(type.rawValue)")
+        }
     }
 }
 
 #if DEBUG
 extension NetworkMonitor {
-    /// Bypasses the `.shared` singleton to produce an isolated instance for tests.
-    /// Each instance starts its own `NWPathMonitor`; remember to drop the reference
-    /// at the end of the test so the monitor cancels via `deinit`.
-    public static func makeForTesting() -> NetworkMonitor {
-        NetworkMonitor(startMonitor: false)
+    /// Instance isolée du singleton, adossée à une source SANS `NWPathMonitor`
+    /// réel : plus aucun rappel du système ne vient écraser un état simulé.
+    /// C'était la course que documentait l'ancien `startMonitor: false` — elle
+    /// vit désormais dans la source amont, donc une seule fois pour les deux
+    /// moniteurs.
+    public static func makeForTesting(source: NetworkPathSource = .makeForTesting()) -> NetworkMonitor {
+        NetworkMonitor(source: source)
     }
 
     public func simulateOffline() {
         DispatchQueue.main.async {
             self.isOffline = true
+            self.connectionType = .unknown
             self.isOfflineSubject.send(true)
         }
     }

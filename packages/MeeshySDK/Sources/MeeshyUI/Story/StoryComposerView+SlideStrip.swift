@@ -27,8 +27,9 @@ extension StoryComposerView {
                 // C6 — l'ajout de slide a une affordance directe (avant, le
                 // seul chemin était long-press → Dupliquer). Masqué au cap de
                 // 10 slides : on n'affiche que l'utile ; `addSlide()` garde
-                // son guard `canAddSlide` en défense.
-                if viewModel.canAddSlide {
+                // son guard `canAddSlide` en défense. Masqué aussi en mode
+                // édition : une story publiée = UN slide.
+                if viewModel.canAddSlide && !isEditingExistingStory {
                     addSlideThumb
                 }
             }
@@ -106,12 +107,14 @@ extension StoryComposerView {
                     Label(String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
                 }
             }
-            Button {
-                syncCurrentSlideEffects()
-                viewModel.duplicateSlide(at: index)
-                restoreCanvas(from: viewModel.currentSlide)
-            } label: {
-                Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
+            if !isEditingExistingStory {
+                Button {
+                    syncCurrentSlideEffects()
+                    viewModel.duplicateSlide(at: index)
+                    restoreCanvas(from: viewModel.currentSlide)
+                } label: {
+                    Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
+                }
             }
         }
         // Réordonner les slides par glisser-déposer (long-press natif), MÊME mécanisme

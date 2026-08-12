@@ -23,7 +23,14 @@ export function validatePagination(
 ): PaginationParams {
   const { defaultLimit = 20, maxLimit = 100, maxOffset = MAX_PAGINATION_OFFSET } = options;
   const offsetNum = Math.min(Math.max(0, parseInt(offset, 10) || 0), maxOffset);
-  const limitNum = Math.min(Math.max(1, parseInt(limit ?? '', 10) || defaultLimit), maxLimit);
+  // `defaultLimit` is the fallback for MISSING/unparsable input only (`NaN`). An
+  // explicit but below-minimum value (`'0'`, `'-5'`) is a real parsed number and
+  // must clamp to the floor of 1 — not be falsy-coerced to `defaultLimit`. The
+  // former `parseInt(...) || defaultLimit` conflated `0` with "absent", so
+  // `limit=0` returned a full page (20) while `limit=-5` returned 1.
+  const parsedLimit = parseInt(limit ?? '', 10);
+  const requestedLimit = Number.isNaN(parsedLimit) ? defaultLimit : parsedLimit;
+  const limitNum = Math.min(Math.max(1, requestedLimit), maxLimit);
   return { offset: offsetNum, limit: limitNum };
 }
 

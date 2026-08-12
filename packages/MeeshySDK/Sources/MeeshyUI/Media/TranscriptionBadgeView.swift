@@ -32,7 +32,7 @@ public struct TranscriptionBadgeView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .accessibilityLabel("Transcription: \(transcriptionText)")
+        .accessibilityLabel(String(localized: "media.transcription.a11y", defaultValue: "Transcription : \(transcriptionText)", bundle: .module))
         .accessibilityHint(isExpanded ? String(localized: "media.transcription.collapseHint", defaultValue: "Tap to collapse", bundle: .module) : String(localized: "media.transcription.expandHint", defaultValue: "Tap to expand", bundle: .module))
     }
 

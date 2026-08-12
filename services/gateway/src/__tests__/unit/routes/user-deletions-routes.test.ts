@@ -134,7 +134,6 @@ type PrismaOpts = {
   participantFindFirst?: PrismaParticipant | null | Error;
   convPrefFindUnique?: PrismaConvPref | null | Error;
   convPrefUpsert?: PrismaConvPref | Error;
-  convPrefUpdate?: PrismaConvPref | Error;
   messageFindUnique?: PrismaMessage | null | Error;
   msgDeletionFindUnique?: PrismaMessageDeletion | null | Error;
   msgDeletionUpsert?: PrismaMessageDeletion | Error;
@@ -163,7 +162,6 @@ function makePrisma(opts: PrismaOpts = {}) {
     userConversationPreferences: {
       findUnique: resolve(opt(opts.convPrefFindUnique, DELETED_PREF)),
       upsert: resolve(opt(opts.convPrefUpsert, DELETED_PREF)),
-      update: resolve(opt(opts.convPrefUpdate, NOT_DELETED_PREF)),
       findMany: resolve(opt(opts.convPrefFindMany, [DELETED_PREF])),
     },
     message: {
@@ -310,8 +308,8 @@ describe('POST /api/conversations/:conversationId/restore-for-me', () => {
     await appErr.close();
   });
 
-  it('returns 500 on database error during update', async () => {
-    const appErr = await buildApp({ convPrefUpdate: new Error('update failed') });
+  it('returns 500 on database error during the restore write', async () => {
+    const appErr = await buildApp({ convPrefUpsert: new Error('update failed') });
     const res = await appErr.inject({
       method: 'POST',
       url: `/api/conversations/${CONV_ID}/restore-for-me`,

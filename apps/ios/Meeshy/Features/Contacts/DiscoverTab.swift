@@ -159,7 +159,7 @@ struct DiscoverTab: View {
             )
         }
         .disabled(viewModel.isImportingContacts)
-        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont deja sur Meeshy", bundle: .main))
+        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont déjà sur Meeshy", bundle: .main))
     }
 
     // MARK: - Contact Matches Section
@@ -224,7 +224,11 @@ struct DiscoverTab: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            .contentShape(Rectangle())
             .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
 
             Spacer()
 
@@ -253,6 +257,8 @@ struct DiscoverTab: View {
                     Spacer()
                 }
                 .padding(.top, 20)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "accessibility.searching", defaultValue: "Recherche en cours", bundle: .main))
             } else if !viewModel.searchResults.isEmpty {
                 searchResults
             } else if !viewModel.searchQuery.isEmpty && viewModel.searchQuery.count >= 2 {
@@ -260,12 +266,14 @@ struct DiscoverTab: View {
                     Image(systemName: "magnifyingglass")
                         .font(.system(.title).weight(.light))
                         .foregroundColor(theme.textMuted.opacity(0.4))
+                        .accessibilityHidden(true)
                     Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 30)
+                .accessibilityElement(children: .combine)
             }
         }
         .padding(.horizontal, 16)
@@ -300,6 +308,7 @@ struct DiscoverTab: View {
                         .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -348,6 +357,7 @@ struct DiscoverTab: View {
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
+            .contentShape(Rectangle())
             .onTapGesture {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: user.id,
@@ -356,6 +366,9 @@ struct DiscoverTab: View {
                     avatarURL: user.avatar
                 )
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
 
             Spacer()
 
@@ -394,7 +407,7 @@ struct SMSComposerView: UIViewControllerRepresentable {
     @MainActor
     class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
         nonisolated func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 controller.dismiss(animated: true)
             }
         }

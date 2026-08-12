@@ -12,10 +12,15 @@ final class DiscoverViewModelTests: XCTestCase {
         // Suggestions list goes through `CacheCoordinator.shared.userSearch`.
         // Reset between tests so state from a previous run never bleeds in.
         await CacheCoordinator.shared.userSearch.invalidate(for: "discover:suggestions")
+        // `sendRequest` flips this singleton — reset so a prior test's
+        // `.pendingSent` entry never bleeds into the next (mirrors
+        // RequestsViewModelTests' setUp/tearDown for the same cache).
+        FriendshipCache.shared.clear()
     }
 
     override func tearDown() async throws {
         await CacheCoordinator.shared.userSearch.invalidate(for: "discover:suggestions")
+        FriendshipCache.shared.clear()
         try await super.tearDown()
     }
 
@@ -28,6 +33,17 @@ final class DiscoverViewModelTests: XCTestCase {
     ) -> (sut: DiscoverViewModel, friendService: MockFriendService, userService: MockUserService) {
         let sut = DiscoverViewModel(friendService: friendService, userService: userService, contactSync: contactSync)
         return (sut, friendService, userService)
+    }
+
+    /// Distinct factory (mirrors `RequestsViewModelTests.makeSUTWithQueue`) for
+    /// the `sendRequest` outbox tests, so the 13 pre-existing call sites above
+    /// keep destructuring a 3-tuple unchanged.
+    private func makeSUTWithQueue(
+        friendService: MockFriendService = MockFriendService(),
+        offlineQueue: MockOfflineQueue = MockOfflineQueue()
+    ) -> (sut: DiscoverViewModel, friendService: MockFriendService, offlineQueue: MockOfflineQueue) {
+        let sut = DiscoverViewModel(friendService: friendService, offlineQueue: offlineQueue)
+        return (sut, friendService, offlineQueue)
     }
 
     private static let stubSearchResults: [UserSearchResult] = {
@@ -96,28 +112,46 @@ final class DiscoverViewModelTests: XCTestCase {
         XCTAssertEqual(userService.lastSearchUsersQuery, "alice")
     }
 
-    // MARK: - sendRequest
+    // MARK: - sendRequest (Wave 4 — routed through the `.sendFriendRequest`
+    // outbox instead of a direct `FriendService` REST call; see
+    // `DiscoverViewModel.sendRequest` for the rationale. `FriendService` is no
+    // longer touched by this path at all — `MockFriendService` stays at its
+    // default in these tests to prove that.)
 
-    func test_sendRequest_success_callsFriendService() async {
-        let (sut, friendService, _) = makeSUT()
-        let stubRequest: FriendRequest = JSONStub.decode("""
-        {"id":"req-1","senderId":"me","receiverId":"u1","status":"pending","createdAt":"2026-01-01T00:00:00.000Z"}
-        """)
-        friendService.sendRequestResult = .success(stubRequest)
+    func test_sendRequest_success_enqueuesSendFriendRequestViaOutbox() async {
+        let (sut, friendService, offlineQueue) = makeSUTWithQueue()
 
         await sut.sendRequest(to: "u1")
 
-        XCTAssertEqual(friendService.sendRequestCallCount, 1)
-        XCTAssertEqual(friendService.lastSendRequestReceiverId, "u1")
+        XCTAssertEqual(offlineQueue.enqueueCalls.count, 1)
+        XCTAssertEqual(offlineQueue.enqueueCalls.first?.kind, .sendFriendRequest)
+        let payload = offlineQueue.lastPayload as? SendFriendRequestPayload
+        XCTAssertEqual(payload?.targetUserId, "u1")
+        XCTAssertEqual(friendService.sendRequestCallCount, 0, "sendRequest must no longer call FriendService directly")
     }
 
-    func test_sendRequest_error_doesNotCrash() async {
-        let (sut, friendService, _) = makeSUT()
-        friendService.sendRequestResult = .failure(NSError(domain: "test", code: 500))
+    /// Core fix: the cache must flip to `.pendingSent` synchronously, before
+    /// the enqueue is even awaited — the old code only flipped it inside the
+    /// (awaited) success branch, so the success haptic fired with no
+    /// accompanying optimistic state change at all.
+    func test_sendRequest_flipsFriendshipCacheToPendingSentOptimistically() async {
+        let (sut, _, _) = makeSUTWithQueue()
 
         await sut.sendRequest(to: "u1")
 
-        XCTAssertEqual(friendService.sendRequestCallCount, 1)
+        guard case .pendingSent = FriendshipCache.shared.status(for: "u1") else {
+            return XCTFail("Expected .pendingSent immediately after sendRequest")
+        }
+    }
+
+    func test_sendRequest_enqueueFailure_rollsBackFriendshipCache() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, _, _) = makeSUTWithQueue(offlineQueue: queue)
+
+        await sut.sendRequest(to: "u1")
+
+        XCTAssertEqual(FriendshipCache.shared.status(for: "u1"), .none)
     }
 
     // MARK: - sendEmailInvitation

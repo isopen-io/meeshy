@@ -90,4 +90,40 @@ final class StoryTextLayerInkClippingTests: XCTestCase {
                 "« \(text) » : encre au bord droit — glyphe final rogné")
         }
     }
+
+    // MARK: - Panne 2 (2026-08) : la réserve d'encre ne doit pas re-wrapper le texte
+
+    /// `inkPad` (la réserve pour l'encre qui déborde de l'avance typographique
+    /// — cf. tests ci-dessus) ne doit JAMAIS être injecté dans la largeur de
+    /// WRAP de `CATextLayer` lui-même : sinon CoreText remplit cette réserve
+    /// de VRAIS glyphes au lieu de la laisser vide en marge, et peut
+    /// re-wrapper le texte DIFFÉREMMENT de la mesure (`designSize`/
+    /// `renderedNeed`, qui ignorent `inkPad`) — débordant alors du `bounds`
+    /// finalement calculé. Repro : `textStyle: "curve"` (SavoyeLetPlain,
+    /// `inkPad` ≈ 5 design px) et `"calligraphy"` (Zapfino, `inkPad` ≈ 86
+    /// design px) sont les deux seuls styles où `inkPad` est assez grand pour
+    /// changer le nombre de lignes du re-wrap — jusqu'à 28pt hors-bounds à
+    /// gauche mesurés pour Zapfino.
+    func test_configure_curveAndCalligraphyStyles_paintedInkNeverExceedsBounds() throws {
+        for style in [StoryTextStyle.curve, .calligraphy] {
+            var text = composerDefaultText(
+                "Un texte assez long pour forcer plusieurs retours a la ligne "
+                + "et exposer tout ecart entre la largeur de mesure et la largeur de pose")
+            text.textStyle = style.rawValue
+
+            let layer = StoryTextLayer()
+            let geometry = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+            layer.configure(with: text, geometry: geometry, mode: .play)
+            let ink = try inkColumns(of: layer)
+
+            XCTAssertGreaterThan(ink.first, 1,
+                "\(style.rawValue) : de l'encre touche le bord gauche du calque "
+                + "(colonne \(ink.first)) — la réserve d'encre a été consommée par un "
+                + "re-wrap et déborde des bounds")
+            XCTAssertLessThan(ink.last, ink.width - 2,
+                "\(style.rawValue) : de l'encre touche le bord droit du calque "
+                + "(colonne \(ink.last)/\(ink.width)) — la réserve d'encre a été "
+                + "consommée par un re-wrap et déborde des bounds")
+        }
+    }
 }

@@ -9,7 +9,13 @@ enum PrimaryAction: String, Equatable {
 /// `.language` n'apparaît jamais dans `moreSections` — il sert uniquement
 /// d'ancre de navigation directe (action primaire « Traduire »).
 enum MoreItem: String, Equatable {
-    case reply, forward, thread, deleteMedia
+    case reply, forward, thread, media
+    /// Actions sorties du menu compact (`primaryActions`) et routées vers
+    /// « Plus… » : épingler/favori (toggles) + suppression du message.
+    case pin, unpin, star, unstar, delete
+    /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
+    /// éditer, copier, partager. `language`/`transcription` = explorables.
+    case edit, copy, share
     case language, views, reactions, transcription, sentiment, history
     case report
 }
@@ -38,36 +44,63 @@ struct MessageMenuContext: Equatable {
     /// « Enregistrer » n'apparaît que pour EXACTEMENT UN attachment —
     /// le multi-attachment passe par la galerie (qui a son propre save).
     var saveableAttachmentCount: Int = 0
+    /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
+    /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
+    /// vide — le serveur ne renverrait rien de toute façon.
+    ///
+    /// Booléen porté par le contexte plutôt que lu ici : ce résolveur est une
+    /// logique pure, entièrement testable, sans dépendance à un singleton.
+    ///
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var showReadReceipts: Bool = true
 }
 
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
 /// entièrement testable. Source unique de vérité pour « quelle action, où ».
 enum MessageActionResolver {
-    /// Liste verticale de l'overlay (ordre fixe, filtré par contexte).
+    /// Liste verticale COMPACTE de l'overlay (façon iMessage) : uniquement les
+    /// actions clés + `.more` toujours en fin. `pin`/`star`/`delete` sont
+    /// routés vers « Plus… » (`moreSections`), jamais affichés ici.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
-        out.append(.translate)
+        if ctx.hasText { out.append(.translate) }
         if ctx.hasText { out.append(.copy) }
         if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
-        out.append(ctx.isPinned ? .unpin : .pin)
-        out.append(ctx.isStarred ? .unstar : .star)
+        // Repli : jamais de menu réduit à « Plus… » seul (média-seul non
+        // enregistrable, localisation…) → épingler comme action visible.
+        if out.isEmpty { out.append(ctx.isPinned ? .unpin : .pin) }
         out.append(.more)
-        if ctx.canDelete { out.append(.delete) }
         return out
     }
 
-    /// Sections de la feuille « Plus… » (filtrées par contexte).
-    /// `.language` n'y figure jamais.
+    /// Sections de la feuille « Plus… » (SSOT overflow, filtrées par contexte).
+    /// Accueille les actions sorties du menu compact : pin/star (toggles) et
+    /// la suppression du message. `.language` n'y figure jamais.
     static func moreSections(_ ctx: MessageMenuContext) -> [MoreSection] {
         var sections: [MoreSection] = []
 
+        // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
+        // éditer (si éditable), copier (si texte), partager, épingler/favori,
+        // supprimer.
         var actions: [MoreItem] = [.reply, .forward, .thread]
-        if ctx.canDelete && ctx.hasMedia { actions.append(.deleteMedia) }
+        if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
+        if ctx.hasText { actions.append(.copy) }
+        actions.append(.share)
+        actions.append(ctx.isPinned ? .unpin : .pin)
+        actions.append(ctx.isStarred ? .unstar : .star)
+        if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
+        if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
-        var info: [MoreItem] = [.views, .reactions]
+        // « Infos & Prisme » (explorables → morph icônes + contenu) : traduire
+        // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
+        // vues, sentiment (texte), historique (édité).
+        var info: [MoreItem] = []
+        if ctx.hasText || ctx.hasTimebasedMedia { info.append(.language) }
         if ctx.hasTimebasedMedia { info.append(.transcription) }
+        info.append(.reactions)
+        if ctx.showReadReceipts { info.append(.views) }
         if ctx.hasText { info.append(.sentiment) }
         if ctx.isEdited && ctx.hasEditRevisions { info.append(.history) }
         sections.append(.info(info))
