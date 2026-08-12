@@ -225,21 +225,28 @@ struct SyncPill: View {
 
         Group {
             if scrolls {
+                // Le viewport à largeur fixe + clip ne s'applique QU'ICI : c'est
+                // ce qui borne la fenêtre visible pendant que le Text (fixedSize,
+                // donc plus large que le viewport) glisse dessous via `offset`.
                 Text(label)
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
                     .fixedSize()
                     .offset(x: marqueeOffset)
+                    .frame(width: Self.maxTextWidth, alignment: .leading)
+                    .clipped()
             } else {
+                // Pas de largeur imposée ici — un label court doit garder sa
+                // taille naturelle (comportement pré-existant), la borne de
+                // `maxTextWidth` n'est qu'un plafond qui ne mord que si le texte
+                // défile.
                 Text(label + (showsDots ? animatedDots : ""))
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
             }
         }
-        .frame(width: Self.maxTextWidth, alignment: .leading)
-        .clipped()
         .background(
             // Mesure la largeur RÉELLE de `label` seul, indépendamment de ce
             // qui est affiché (défilant ou non) — toujours à jour pour la
@@ -254,6 +261,12 @@ struct SyncPill: View {
                 })
         )
         .onPreferenceChange(SyncPillLabelWidthKey.self) { measuredLabelWidth = $0 }
+        // Défilement piloté par un timer manuel (30 Hz) plutôt que par
+        // `Animation.linear(duration:).repeatForever(autoreverses: false)` (la
+        // technique littérale de la spec) : une animation `repeatForever` native
+        // ne peut pas être mise en pause à mi-cycle sans redémarrer à zéro au
+        // retrait de l'animation — ce qui romprait la garantie WCAG 2.2.2 (la
+        // pause doit geler l'état visuel courant, jamais le réinitialiser).
         .onReceive(marqueeTimer) { _ in
             guard scrolls, !isPausedByUser else { return }
             let step = SyncPillMarquee.pointsPerSecond / 30.0
@@ -265,6 +278,14 @@ struct SyncPill: View {
         }
         .adaptiveOnChange(of: scrolls) { _, newValue in
             if !newValue { marqueeOffset = 0 }
+        }
+        // `scrolls` reste `true` d'une entrée à l'autre quand deux entrées
+        // consécutives de la rotation sont TOUTES DEUX assez longues pour
+        // défiler — le reset ci-dessus ne se déclenche alors jamais. Sans ce
+        // second reset, le marquee du nouveau label reprendrait au décalage où
+        // l'ancien s'était arrêté au lieu de repartir de zéro.
+        .adaptiveOnChange(of: visibleEntry?.id) { _, _ in
+            marqueeOffset = 0
         }
     }
 
