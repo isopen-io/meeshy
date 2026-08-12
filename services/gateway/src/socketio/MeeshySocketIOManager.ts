@@ -437,6 +437,13 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       readStatusService,
+      // Quitter une conversation retracte la frappe qu'on y avait diffusée.
+      // `disconnecting` était le seul autre chemin, et changer de conversation
+      // ne déconnecte pas le socket : sans ce câblage les pairs gardent un
+      // « X est en train d'écrire… » fantôme. `statusHandler` est construit
+      // plus haut dans ce même constructeur.
+      retractTyping: (socket, conversationId) =>
+        this.statusHandler.retractTypingIn(socket, conversationId),
     });
   }
 

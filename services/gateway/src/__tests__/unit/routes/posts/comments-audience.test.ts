@@ -85,10 +85,21 @@ const COMMENT_ID = '507f1f77bcf86cd799439033';
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
 
-type PostAcl = { authorId: string; visibility: string; visibilityUserIds: string[] };
+type PostAcl = {
+  id: string; authorId: string; visibility: string; visibilityUserIds: string[];
+  isQuote: boolean; repostOfId: string | null; originalRepostOfId: string | null;
+};
 
+// `id`/`isQuote:false`/`repostOfId:null` = « pas un repost » par défaut, ce
+// qui vaut aussi pour `commentPost` ci-dessous (champs ignorés par
+// `loadCommentPostAcl`, sans effet sur ces tests). La redirection repost
+// simple → racine (`resolveInteractionTarget`/`resolveConsumptionTarget`,
+// tâche 9) est couverte séparément plus bas.
 function acl(visibility: string, visibilityUserIds: string[] = []): PostAcl {
-  return { authorId: AUTHOR_ID, visibility, visibilityUserIds };
+  return {
+    id: POST_ID, authorId: AUTHOR_ID, visibility, visibilityUserIds,
+    isQuote: false, repostOfId: null, originalRepostOfId: null,
+  };
 }
 
 /**
@@ -305,7 +316,10 @@ describe('POST /posts/:postId/comments — commenter suit l’audience d’INTER
   });
 
   it('admet l’auteur sur son propre post PRIVATE', async () => {
-    const prisma = makePrisma({ post: { authorId: VIEWER_ID, visibility: 'PRIVATE', visibilityUserIds: [] } });
+    const prisma = makePrisma({ post: {
+      id: POST_ID, authorId: VIEWER_ID, visibility: 'PRIVATE', visibilityUserIds: [],
+      isQuote: false, repostOfId: null, originalRepostOfId: null,
+    } });
     const app = await buildApp(prisma);
 
     const res = await app.inject({
@@ -376,6 +390,132 @@ describe('POST/DELETE .../like — liker un commentaire suit l’audience d’IN
 
     expect(res.statusCode).toBe(200);
     expect(mockLikeComment).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// ─── Repost simple → redirection du fil vers la racine (tâche 9) ─────────────
+
+const ROOT_ID = '507f1f77bcf86cd799439ccc';
+
+function repostAcl(overrides: Partial<PostAcl> = {}): PostAcl {
+  return {
+    id: POST_ID, authorId: AUTHOR_ID, visibility: 'PUBLIC', visibilityUserIds: [],
+    isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID,
+    ...overrides,
+  };
+}
+
+function rootAcl(overrides: Partial<PostAcl> = {}): PostAcl {
+  return {
+    id: ROOT_ID, authorId: 'root-author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+    isQuote: false, repostOfId: null, originalRepostOfId: null,
+    ...overrides,
+  };
+}
+
+function makeRepostPrisma(byId: Record<string, PostAcl | null>) {
+  return {
+    post: {
+      findFirst: jest.fn<any>().mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(byId[where.id] ?? null)),
+      findUnique: jest.fn<any>().mockImplementation(({ where }: { where: { id: string } }) => {
+        const p = byId[where.id];
+        return Promise.resolve(p ? { ...p, commentCount: 1, type: 'POST', content: 'c', createdAt: new Date(), expiresAt: null } : null);
+      }),
+    },
+    postComment: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'hi', authorId: AUTHOR_ID }),
+    },
+    friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    participant: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+  } as any;
+}
+
+describe('GET /posts/:postId/comments — repost simple renvoie le fil de la RACINE', () => {
+  it('lit le fil de la racine, pas celui (vide) du repost affiché', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetComments).toHaveBeenCalledWith(ROOT_ID, undefined, 20, VIEWER_ID);
+    await app.close();
+  });
+
+  it('une CITATION garde son propre fil', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl({ isQuote: true }), [ROOT_ID]: rootAcl() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetComments).toHaveBeenCalledWith(POST_ID, undefined, 20, VIEWER_ID);
+    await app.close();
+  });
+
+  it('racine invisible pour l’acteur → refus standard, le fil n’est jamais interrogé', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }) });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockGetComments).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /posts/:postId/comments — repost simple atterrit sur le fil de la RACINE', () => {
+  it('crée le commentaire sur la RACINE, pas sur le repost affiché', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'sur la racine' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledWith(
+      ROOT_ID, VIEWER_ID, 'sur la racine', undefined, undefined, undefined, undefined, undefined, undefined,
+    );
+    await app.close();
+  });
+
+  it('une CITATION garde son propre fil de commentaires', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl({ isQuote: true }), [ROOT_ID]: rootAcl() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'sur la citation' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledWith(
+      POST_ID, VIEWER_ID, 'sur la citation', undefined, undefined, undefined, undefined, undefined, undefined,
+    );
+    await app.close();
+  });
+
+  it('racine devenue invisible pour l’acteur → refus standard, aucun commentaire créé', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }) });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'intrusion' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockAddComment).not.toHaveBeenCalled();
     await app.close();
   });
 });

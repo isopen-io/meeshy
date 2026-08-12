@@ -5027,3 +5027,234 @@ passe aussi bien avec une clause juste qu'avec une clause fausse ».
    une seule résolution, et le refus tombe PLUS TÔT (`participant.findFirst` appelé une fois,
    `message.findFirst` jamais).
 
+
+## Leçon 129 — un callback dont le corps n'est que des gardes est un défaut, pas un no-op délibéré (2026-08-12, routine messaging, cycle 86)
+
+`ConversationLayout.onUserTyping` filtrait l'écho de soi, filtrait les autres conversations… puis se
+terminait. Rien n'écrivait. La forme est traître parce qu'elle a l'air FINIE : deux `return` gardés,
+des paramètres préfixés `_` qui signalent « volontairement inutilisés », des deps cohérentes. Le
+hook d'à côté exposait pourtant `handleUserTyping`, seul écrivain de l'état que l'en-tête rend — et
+personne ne l'avait déstructuré.
+
+1. **Un `useCallback` remis à une couche transport et dont AUCUNE branche n'écrit ni n'appelle est
+   presque toujours une moitié de câblage perdue.** Le test bon marché : « ce callback produit-il un
+   effet observable dans au moins un chemin ? ». Si la réponse est non, chercher la fonction qu'il
+   aurait dû appeler — elle est en général exportée par un hook du même fichier.
+2. **Un préfixe `_` sur un paramètre est une AFFIRMATION, pas une preuve.** Ici `_username` et
+   `_isTyping` — les deux valeurs qui portent toute l'information — étaient marqués inutilisés par
+   la personne qui venait justement d'oublier de les utiliser.
+3. **Une fonctionnalité qui marche sur une surface et pas sur l'autre masque la panne au test
+   manuel.** `use-stream-socket.ts` tient sa PROPRE copie du handler typing et la câble juste : les
+   indicateurs marchaient sur l'accueil, donc « les indicateurs marchent ». Quand deux surfaces
+   réimplémentent le même câblage, vérifier les DEUX, ou n'en garder qu'une.
+
+## Leçon 130 — un test qui écrit « may or may not » n'est pas un test, c'est la note de son auteur (2026-08-12, routine messaging, cycle 86)
+
+Deux tests de `useConversationTyping` s'appelaient « should stop typing on conversation change if
+active » et « should stop typing on unmount if active ». Ni l'un ni l'autre n'assertait quoi que ce
+soit sur `stopTyping` ; tous deux portaient un commentaire du type « The cleanup effect may or may
+not call stopTyping depending on React's cleanup timing ». Ils étaient verts, comptés dans la suite,
+et nommaient exactement le comportement cassé.
+
+1. **Un titre qui promet un comportement et un corps qui n'affirme rien, c'est pire qu'un test
+   absent** : le nom occupe la place, et une recherche « est-ce testé ? » répond oui.
+2. **« Ça dépend du timing de React » est la formulation d'une hypothèse non instruite.**
+   L'ordonnancement des nettoyages et des effets est déterministe et documenté (tous les nettoyages
+   avant tous les effets) : il se raisonne, il ne s'invoque pas comme une incertitude.
+3. **Le repérage est mécanique** : `rg -l "may or may not|peut ou non" __tests__/` et, plus large, un
+   `it(...)` dont le corps ne contient aucun `expect`. Les deux se cherchent en une commande.
+4. Corollaire de la leçon 128 sous un autre angle : là-bas le double validait les deux versions du
+   code ; ici c'est l'ABSENCE d'assertion qui les validait toutes les deux.
+
+## Leçon 131 — dans un clone superficiel, « en avance / en retard » est une fiction, et `merge-base` le dit (2026-08-12, routine messaging, cycle 86)
+
+Au démarrage, `git log --oneline origin/main..HEAD` annonçait 334 commits d'avance et 340 de retard,
+avec un `origin/main` daté de trois jours plus tôt portant des numéros de PR INFÉRIEURS à ceux de la
+branche. Tout invitait à conclure à une divergence à réconcilier — et donc à un merge inutile et
+risqué. La branche et `main` étaient en réalité **le même commit**.
+
+1. **Le signal qui tranche est `git merge-base HEAD origin/main` qui ÉCHOUE** (aucun ancêtre commun).
+   Deux branches d'un même dépôt en ont toujours un : son absence ne dit pas « divergence », elle dit
+   « historique tronqué ». Confirmer avec `git rev-parse --is-shallow-repository` et
+   `wc -l .git/shallow`.
+2. **Le piège d'écriture** : `git merge-base A B | xargs git log -1` sur une sortie VIDE exécute
+   `git log -1` sans révision, donc affiche HEAD — et fabrique la preuve rassurante que HEAD est
+   l'ancêtre commun. Ne jamais piper un `merge-base` dans `xargs` sans garde.
+3. **L'autorité est le distant, pas le ref local.** `git ls-remote --heads origin main` a répondu en
+   une commande que `main` valait exactement HEAD. Un `git fetch` ordinaire n'avait pas corrigé le
+   ref local greffé ; `git update-ref` sur le sha du distant, si.
+4. Corollaire : une routine qui commence par « où en est ma branche ? » doit poser cette question au
+   DISTANT tant qu'elle n'a pas vérifié la profondeur du clone.
+
+## Leçon 132 — deux sessions de la même routine peuvent écrire le même correctif en parallèle ; la tête instruite ne réserve rien (2026-08-12, routine messaging, cycle 87)
+
+Le cycle 86 a légué une « Priorité 1 » nommée et argumentée. Deux sessions l'ont lue et l'ont
+implémentée **en même temps** : celle-ci (`claude/keen-hamilton-tpltop`) et
+`claude/keen-hamilton-8m3aqm`, qui a mergé la sienne sur `main` pendant que celle-ci finissait la
+vérification. Les deux ont convergé au nom de méthode près — `retractTypingIn`, même signature à id
+déjà normalisé, même ordre, même refus de re-résoudre la conversation. Découvert seulement au
+`git fetch` final, après trois commits.
+
+1. **Une tête instruite est une file de lecture, pas un verrou.** Elle dit quoi faire ensuite, elle
+   ne dit à personne que quelqu'un d'autre l'a commencé. Tant qu'il n'existe pas de mécanisme
+   d'exclusion, l'ordre de priorité est un aimant à collisions : plusieurs sessions démarrent par
+   l'item 1.
+2. **`git fetch origin main` AVANT d'écrire, pas seulement avant de merger.** Le coût est d'une
+   seconde ; le coût de l'omission est un correctif entier à jeter. À refaire aussi en cours de
+   route sur les cycles longs.
+3. **Quand la collision est constatée, la version mergée gagne — sans rejouer les arbitrages.**
+   Ici main avait fait deux choix différents des miens (dépendance optionnelle plutôt que requise ;
+   `try/catch` au point d'appel plutôt que dans la retraction). Tous deux défendables. Les
+   re-litiger aurait produit du churn sur du code déjà revu et mergé, pour une préférence.
+4. **Ce qui doit survivre, c'est ce que l'autre n'avait pas.** Mes trois tests de `retractTypingIn`
+   (main n'en avait aucun : sa couverture passait entièrement par `ConversationHandler`) et deux
+   garanties de coût qu'il n'affirmait pas. Un merge « je prends tout de main » les aurait perdus ;
+   un merge « je garde tout de moi » aurait écrasé son travail. Le tri se fait test par test.
+5. **Un test à moi affirmait un contrat que la version retenue ne tient pas** (« la retraction ne
+   rejette jamais » — vrai chez moi, faux chez main qui garde chez l'appelant). Le garder tel quel
+   l'aurait rendu rouge ; le supprimer aurait perdu la couverture. **Le réécrire pour affirmer ce
+   que la version retenue garantit vraiment** (l'ordre untrack-avant-I/O) est la seule issue qui ne
+   perd rien. Un test importé d'une implémentation concurrente doit être relu contre CELLE qui reste.
+
+---
+
+## Leçon 133 — un rollback « inconditionnel » qui écrit `undefined` dans React Query ne défait rien (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Deux mutations de réaction gardaient leur rollback derrière `if (context?.previousData)`,
+ce qui laissait vivre l'état FABRIQUÉ par `onMutate` sur un cache vide. Le correctif évident —
+retirer le garde et appeler `setQueryData(key, context?.previousData)` — a laissé les tests
+**ROUGES**.
+
+**La leçon.** `setQueryData(key, undefined)` est un **no-op** : React Query interprète `undefined`
+comme « ne rien changer » (même règle que pour un updater qui renvoie `undefined`). Restaurer
+l'ABSENCE de donnée n'est pas une écriture, c'est un `removeQueries`. Un instantané optimiste a donc
+deux états de restauration, pas un :
+
+| `previousData` | Restauration correcte |
+|---|---|
+| une valeur | `setQueryData(key, previousData)` |
+| `undefined` | `removeQueries({ queryKey, exact: true })` |
+
+**Généralisation.** Chaque fois qu'un rollback prétend « remettre exactement l'état d'avant », se
+demander si « l'état d'avant » pouvait être *rien*. Beaucoup d'API traitent l'absence comme une
+non-instruction plutôt que comme une valeur ; le cas vide est alors le seul que le rollback ne
+couvre pas — et c'est précisément celui où `onMutate` a inventé le plus.
+
+**Ce qui l'a attrapé.** Le test RED écrit AVANT le correctif, et surtout re-lancé APRÈS : sans lui,
+le rollback inconditionnel aurait été committé comme une correction, avec sa jolie explication, sans
+rien corriger du tout. Un correctif qui semble évident mérite quand même son passage au vert.
+
+---
+
+## Leçon 134 — un test peut passer par FUITE de mock, et le correctif qui le casse a raison (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Après avoir gardé le `reconnect()` de montage sur les diagnostics de connexion, deux
+tests jusque-là verts sont tombés : « should attempt reconnection on mount if token available » et
+son jumeau anonyme. Ni l'un ni l'autre ne posait de diagnostics — ils héritaient d'un
+`mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true })` posé par un test « Initial
+State » **soixante lignes plus haut**.
+
+**La leçon.** `jest.clearAllMocks()` remet à zéro les APPELS, pas les IMPLÉMENTATIONS (`mockReturnValue`
+survit ; il faut `resetAllMocks` / `mockReset`). Un `beforeEach` qui n'appelle que `clearAllMocks`
+laisse donc chaque test hériter des stubs de ses prédécesseurs — dans l'ORDRE de déclaration, ce qui
+rend la fuite invisible tant qu'on lance le fichier entier.
+
+**Le réflexe à avoir.** Quand un correctif fait tomber un test qui ne le concerne pas
+frontalement, se demander d'abord *pourquoi ce test passait avant*. Ici la réponse était : parce que
+le code de production **ignorait** la valeur que le test ne posait pas. Le test n'affirmait donc rien
+sur la précondition qu'il prétendait couvrir. Le corriger = rendre la précondition EXPLICITE, pas
+neutraliser le correctif.
+
+**Signature à reconnaître.** Un test qui devient sensible à un mock qu'il ne configure pas est un
+test dont la précondition était implicite. C'est vrai à chaque fois qu'on rend un code de production
+*plus* attentif à son état : les tests qui passaient par indifférence deviennent des tests qui
+passent par hasard.
+
+---
+
+## Leçon 135 — cartographier ce que l'environnement NE PEUT PAS exécuter, et l'écrire dans la tête de cycle (2026-08-12, routine messaging, cycle 88)
+
+**Contexte.** Trois cycles de suite (86, 87, 88) ont buté sur l'absence de toolchain Swift pour les
+242 « source guards » iOS. Le cycle 88 a découvert une seconde zone morte : les tests du translator
+sont incollectables parce que `numpy`/`torch` s'installent depuis l'index PyTorch, **bloqué par le
+proxy** — quatre tentatives d'installation (pip système, pip du venv `uv`, `uv pip`) avant de le
+constater.
+
+**La leçon.** Une zone non exécutable n'est pas un échec ponctuel, c'est une **propriété stable de
+l'environnement**. Ne pas la consigner condamne chaque cycle suivant à la redécouvrir au prix de
+plusieurs minutes et d'un faux espoir. La tête de cycle porte désormais un tableau explicite
+(iOS ✗, translator ✗, gateway/web ✓ + prérequis d'installation).
+
+**Corollaire sur ce qu'on livre quand même.** L'impossibilité de tester n'interdit pas de corriger —
+elle change le standard de preuve. Le retrait du doublon audio du translator a été livré parce que
+sa sûreté est établie par **lecture des deux côtés du contrat** (producteur, et consommateur
+`extractAudioBinaryFrames` qui résout par index borné), pas parce qu'on l'espérait sans risque. Ce
+qui est dû dans ce cas, c'est de l'ÉCRIRE : le commit et le dossier de cycle disent tous deux que ce
+correctif-là n'est pas couvert par un test vert. Un correctif non testé qui se présente comme testé
+est le vrai défaut.
+
+---
+## Leçon 136 — une question d'identité réputée « à trancher » est presque toujours déjà tranchée par le handler JUMEAU (2026-08-12, routine messaging, cycle 88)
+
+Le cycle 87 a instruit le join anonyme, prouvé le défaut, écarté le faux gel qui semblait le
+protéger — puis s'est arrêté sur une question qu'il a jugée non tranchable seul : quelle identité
+mettre dans le `userId` d'un `conversation:joined` pour un participant sans compte ? Le `SocketUser`
+anonyme porte `id` ET `participantId` ; « envoyer la mauvaise fait d'un accusé une désinformation
+d'identité » ; trancher « demande de lire ce que les clients font ». L'item est reparti au cycle
+suivant, non livré.
+
+La réponse tenait en deux `grep` et n'exigeait aucune toolchain :
+
+1. **Le handler jumeau l'envoyait déjà.** `handleConversationLeave` émet `conversation:left` avec la
+   clé de `socketToUser` — `participant.id` pour un anonyme. La paire join/leave partage un payload
+   et une sémantique : si l'un expédie cette identité en production depuis toujours, l'autre n'a
+   aucune décision à prendre, il a une divergence à supprimer. **Chercher le geste symétrique AVANT
+   de déclarer une question ouverte** : leave/join, add/remove, subscribe/unsubscribe.
+2. **Les clients ne lisaient pas le champ.** `rg "conversation:joined"` rend cinq sites ; les trois
+   consommateurs (web `use-socket-cache-sync`, iOS `ConversationSyncEngine` et `ParticipantsView`)
+   n'utilisent que `conversationId`. Le seul contrat est que le champ soit PRÉSENT — le struct Swift
+   le déclare non optionnel, donc l'omettre casserait le décodage. Une question d'identité se pose à
+   qui la lit ; quand personne ne la lit, il n'y a pas de désinformation possible, seulement une
+   convention à respecter.
+3. **Et une troisième source disait la même chose** : `ROOMS.user(userId ?? id)`, la room personnelle
+   que ce socket a DÉJÀ rejointe, plus l'en-tête de `getUnreadCount` qui documente accepter un
+   `Participant.id`. Trois sites concordants, zéro ambiguïté résiduelle.
+
+La leçon de méthode, et elle est plus large que ce cas : **« il faudrait lire les clients » est une
+tâche de dix minutes, pas un motif de report.** Le cycle 87 a écrit trois paragraphes pour expliquer
+pourquoi il ne tranchait pas — plus de travail que la vérification elle-même. Quand un dossier
+s'arrête sur « demanderait de lire X », faire la lecture de X est le pas suivant, pas un blocage à
+léguer. Le blocage LÉGITIME (leçon 43) est celui qui exige une machine ou un accès qu'on n'a pas :
+compiler du Swift, déclencher un workflow sur une porte fermée. Lire un fichier dans le dépôt qu'on
+a déjà cloné n'en fait pas partie.
+
+---
+
+## Leçon 137 — la leçon 132 s'est reproduite en pire : le `git fetch` d'ouverture ne protège de rien, seul celui d'AVANT-CHAQUE-ITEM protège (2026-08-12, routine messaging, cycle 88)
+
+Le cycle 87 avait perdu UN correctif à une session concurrente et en avait tiré la leçon 132, dont
+le point 2 disait déjà : « `git fetch origin main` AVANT d'écrire, pas seulement avant de merger.
+À refaire aussi en cours de route sur les cycles longs. » Le cycle 88 a ouvert par un `git fetch`
+propre — `origin/main` valait exactement HEAD, aucune collision en vue — puis a travaillé trois
+heures sans en refaire un. Pendant ce temps, `claude/keen-hamilton-...` (session
+`013bGFApHREf7fPySWkrZZ5Y`) livrait la PR #2884 : **les trois mêmes correctifs**, plus deux autres
+de la même liste. Découvert au `mergeable_state: "dirty"` de ma propre PR, après six commits et une
+CI complète.
+
+1. **Un `fetch` d'ouverture ne dit rien de l'avenir.** Il atteste qu'à l'instant T personne n'avait
+   commencé — pas que personne ne commencera. Sur un cycle de plusieurs heures, c'est l'information
+   la moins utile du lot. La vérification qui protège est celle qu'on fait **juste avant d'écrire
+   chaque item**, et **juste avant d'ouvrir la PR**.
+2. **Le coût croît avec la qualité du travail.** Trois correctifs RED-prouvés, 654 suites vertes,
+   une PR de 200 lignes, une CI complète de 13 minutes : tout cela était déjà sur `main`, écrit par
+   quelqu'un d'autre, avant que ma CI ne finisse. Plus la routine travaille proprement, plus une
+   collision non détectée coûte cher.
+3. **Le salvage se fait test par test, arbitrage par arbitrage** (leçon 132.3–132.5). Ici : trois
+   implémentations quasi identiques → main partout ; deux de mes tests affirmaient MES arbitrages
+   (cible canonique rendue, clé de cache normalisée) que main a tranchés autrement → supprimés, pas
+   « défendus » ; un seul test m'a survécu, le cas capitalisé (`'FR'`) que la couverture de main ne
+   portait pas. **Un cycle entier pour un test.**
+4. **Ce qu'il reste à construire.** Tant qu'aucun mécanisme d'exclusion n'existe, la seule défense
+   praticable est procédurale et doit vivre dans la tête de cycle, pas dans une leçon qu'on relit
+   après coup : *avant d'écrire l'item N, `git fetch origin main && git log --oneline -15 origin/main`
+   et chercher le mot-clé de l'item.* Une seconde de commande contre trois heures de travail.
