@@ -1542,6 +1542,57 @@ describe('PostService', () => {
         select: { postId: true, emoji: true },
       });
     });
+
+    // Review task-9, critique #1 : un repost simple SOURCÉ depuis une
+    // STORY/STATUS ne redirige JAMAIS ses flags perso vers la racine — il
+    // porte son propre instantané et garde sa PROPRE vie sociale. Sans cette
+    // exclusion, lecture (ce flag) et écriture (like désormais posé sur le
+    // repost lui-même, `resolveInteractionTarget`) divergeraient.
+    it('a repost sourced from a STORY keeps its own currentUserReactions/isLikedByMe — no redirect to the ephemeral root', async () => {
+      const repost = makePost({
+        id: 'repost-story-1',
+        isQuote: false,
+        repostOfId: 'story-root-1',
+        originalRepostOfId: 'story-root-1',
+        repostOf: { id: 'story-root-1', type: 'STORY' },
+      });
+      prisma.post.findFirst.mockResolvedValue(repost);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([{ postId: 'repost-story-1', emoji: '❤️' }]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      const result = await service.getPostById('repost-story-1', 'user-1');
+
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', postId: 'repost-story-1' },
+        select: { postId: true, emoji: true },
+      });
+      expect((result as any).currentUserReactions).toEqual(['❤️']);
+      expect((result as any).isLikedByMe).toBe(true);
+    });
+
+    it('a repost sourced from a STATUS keeps its own currentUserReactions/isLikedByMe — no redirect', async () => {
+      const repost = makePost({
+        id: 'repost-status-1',
+        isQuote: false,
+        repostOfId: 'status-root-1',
+        originalRepostOfId: 'status-root-1',
+        repostOf: { id: 'status-root-1', type: 'STATUS' },
+      });
+      prisma.post.findFirst.mockResolvedValue(repost);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+      prisma.postBookmark.findFirst.mockResolvedValue(null);
+      prisma.post.count.mockResolvedValue(0);
+
+      await service.getPostById('repost-status-1', 'user-1');
+
+      expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', postId: 'repost-status-1' },
+        select: { postId: true, emoji: true },
+      });
+    });
   });
 
   // -----------------------------------------------------------------------

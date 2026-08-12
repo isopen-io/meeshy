@@ -862,23 +862,30 @@ describe('PostReactionHandler', () => {
     });
 
     it('test_handleJoinPost_privatePost_nonAuthor_forbidden', async () => {
+      // `post:join` route désormais par `resolveConsumptionTarget`, qui refuse
+      // indistinctement (jamais de 'Forbidden' séparé) — même posture que
+      // `handleAddReaction`/`handleRemoveReaction` et `comments.ts` GET :
+      // pas de code d'erreur différent qui divulguerait l'existence d'un
+      // post restreint (review task-9, important #1).
       const socket = createMockSocket();
       const data = { postId: POST_ID };
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue({
+      mockPrisma.post.findFirst.mockResolvedValue({
         id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'PRIVATE',
         visibilityUserIds: [],
-        deletedAt: null,
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).not.toHaveBeenCalled();
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
 
     it('test_handleJoinPost_onlyVisibility_userInList_success', async () => {
@@ -887,12 +894,14 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue({
+      mockPrisma.post.findFirst.mockResolvedValue({
         id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'ONLY',
         visibilityUserIds: [USER_ID],
-        deletedAt: null,
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleJoinPost(socket as any, data, callback);
@@ -907,18 +916,20 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue({
+      mockPrisma.post.findFirst.mockResolvedValue({
         id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'ONLY',
         visibilityUserIds: ['507f1f77bcf86cd799439099'],
-        deletedAt: null,
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).not.toHaveBeenCalled();
-      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
 
     it('test_handleJoinPost_publicPost_success', async () => {
@@ -927,12 +938,14 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue({
+      mockPrisma.post.findFirst.mockResolvedValue({
         id: POST_ID,
         authorId: ANOTHER_USER_ID,
         visibility: 'PUBLIC',
         visibilityUserIds: [],
-        deletedAt: null,
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
       });
 
       await handler.handleJoinPost(socket as any, data, callback);
@@ -947,7 +960,7 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue(null);
+      mockPrisma.post.findFirst.mockResolvedValue(null);
 
       await handler.handleJoinPost(socket as any, data, callback);
 
@@ -961,18 +974,105 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn();
 
       mockValidate.mockReturnValue({ success: true, data });
-      mockPrisma.post.findUnique.mockResolvedValue({
-        id: POST_ID,
-        authorId: ANOTHER_USER_ID,
-        visibility: 'PUBLIC',
-        visibilityUserIds: [],
-        deletedAt: new Date(),
-      });
+      // Soft-deleted: `resolveConsumptionTarget`'s query filters `deletedAt`
+      // in `where`, so the (unfiltered) mock simulates it by resolving null.
+      mockPrisma.post.findFirst.mockResolvedValue(null);
 
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleJoinPost_simpleRepost_joinsRootRoom', async () => {
+      // Review task-9, important #1 : rejoindre un repost simple rejoint la
+      // room de sa RACINE (même redirection que like/comment/lecture) — sinon
+      // le viewer n'entend plus jamais les broadcasts, tous partis vers la
+      // room de la racine.
+      const ROOT_ID = '507f1f77bcf86cd799439077';
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === POST_ID) {
+          return Promise.resolve({
+            id: POST_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: ROOT_ID,
+            originalRepostOfId: ROOT_ID,
+          });
+        }
+        if (where.id === ROOT_ID) {
+          return Promise.resolve({
+            id: ROOT_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: null,
+            originalRepostOfId: null,
+            deletedAt: null,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).toHaveBeenCalledWith(ROOMS.post(ROOT_ID));
+      expect(socket.join).not.toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleJoinPost_storySourcedRepost_joinsOwnRoom_notRootRoom', async () => {
+      // Critique #1 : un repost qui SOURCE une story garde sa PROPRE room.
+      const STORY_ROOT_ID = '507f1f77bcf86cd799439088';
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === POST_ID) {
+          return Promise.resolve({
+            id: POST_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: STORY_ROOT_ID,
+            originalRepostOfId: STORY_ROOT_ID,
+          });
+        }
+        if (where.id === STORY_ROOT_ID) {
+          return Promise.resolve({
+            id: STORY_ROOT_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'STORY',
+            isQuote: false,
+            repostOfId: null,
+            originalRepostOfId: null,
+            deletedAt: null,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(socket.join).not.toHaveBeenCalledWith(ROOMS.post(STORY_ROOT_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
   });
 
@@ -1022,6 +1122,113 @@ describe('PostReactionHandler', () => {
         success: false,
         error: 'User not authenticated',
       });
+    });
+
+    it('test_handleLeavePost_simpleRepost_leavesRootRoom', async () => {
+      // Symétrique de `handleJoinPost` (review task-9, important #1) : sans
+      // cette résolution, `leave` viserait la room DU REPOST — où le socket
+      // n'a jamais mis les pieds (le join a rejoint la racine) — et la vraie
+      // room ne se libérerait jamais (fuite d'abonnement).
+      const ROOT_ID = '507f1f77bcf86cd799439077';
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === POST_ID) {
+          return Promise.resolve({
+            id: POST_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: ROOT_ID,
+            originalRepostOfId: ROOT_ID,
+          });
+        }
+        if (where.id === ROOT_ID) {
+          return Promise.resolve({
+            id: ROOT_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: null,
+            originalRepostOfId: null,
+            deletedAt: null,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await handler.handleLeavePost(socket as any, data, callback);
+
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(ROOT_ID));
+      expect(socket.leave).not.toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleLeavePost_storySourcedRepost_leavesOwnRoom', async () => {
+      const STORY_ROOT_ID = '507f1f77bcf86cd799439088';
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === POST_ID) {
+          return Promise.resolve({
+            id: POST_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'POST',
+            isQuote: false,
+            repostOfId: STORY_ROOT_ID,
+            originalRepostOfId: STORY_ROOT_ID,
+          });
+        }
+        if (where.id === STORY_ROOT_ID) {
+          return Promise.resolve({
+            id: STORY_ROOT_ID,
+            authorId: ANOTHER_USER_ID,
+            visibility: 'PUBLIC',
+            visibilityUserIds: [],
+            type: 'STORY',
+            isQuote: false,
+            repostOfId: null,
+            originalRepostOfId: null,
+            deletedAt: null,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await handler.handleLeavePost(socket as any, data, callback);
+
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(socket.leave).not.toHaveBeenCalledWith(ROOMS.post(STORY_ROOT_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleLeavePost_resolutionFails_fallsBackToRawId', async () => {
+      // Best-effort : si la racine n'est plus résolvable (ACL resserrée
+      // depuis le join), `leave` retombe sur l'id brut plutôt que d'échouer —
+      // quitter une room absente est un no-op silencieux côté Socket.IO.
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue(null);
+
+      await handler.handleLeavePost(socket as any, data, callback);
+
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
   });
   // ===== Audience du post — réagir est une INTERACTION =====

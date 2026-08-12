@@ -298,6 +298,38 @@ describe('POST /posts/:postId/like — repost simple redirige vers la racine', (
     expect(mockLikePost).not.toHaveBeenCalled();
     await app.close();
   });
+
+  // Review task-9, critique #1 : un repost simple SOURCÉ depuis une
+  // STORY/STATUS ne redirige JAMAIS — il porte son propre instantané et
+  // garde SA PROPRE vie sociale, même une fois la racine éphémère
+  // soft-supprimée par `ExpiredStoriesCleanupService` (~7j après expiry).
+  it('un repost sourcé depuis une STORY garde sa vie sociale propre — likePost reçoit l’id du repost, jamais celui de la story', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord(),
+      [ROOT_ID]: rootRecord({ type: 'STORY' }),
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    await app.close();
+  });
+
+  it('reste likeable une fois la racine STORY soft-supprimée — le repost n’est jamais socialement mort', async () => {
+    const prisma = makeRedirectPrisma({
+      [POST_ID]: repostRecord(),
+      [ROOT_ID]: rootRecord({ type: 'STORY', deletedAt: new Date() }),
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockLikePost).toHaveBeenCalledWith(POST_ID, USER_ID, expect.any(String));
+    await app.close();
+  });
 });
 
 describe('DELETE /posts/:postId/like — repost simple redirige vers la racine', () => {
