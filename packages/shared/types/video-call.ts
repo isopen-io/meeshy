@@ -91,6 +91,15 @@ export interface CallSession {
  * Métadonnées optionnelles d'un appel
  */
 export interface CallMetadata {
+  /**
+   * Nature audio/vidéo de l'appel — la SEULE source REST fiable (`mode`
+   * transporte l'architecture WebRTC p2p|sfu, jamais le type). Whitelisté par
+   * `callSessionSchema` (gateway) ; posé côté serveur à l'initiation
+   * (@see CallService.initiateCall). Ne JAMAIS dériver le type d'appel de
+   * `participants[].isVideoEnabled` côté client — cet état média change
+   * pendant l'appel (mute caméra) sans rapport avec la nature de l'appel.
+   */
+  readonly type?: 'audio' | 'video';
   readonly maxParticipants?: number;
   readonly recordingEnabled?: boolean;
   readonly screenShareEnabled?: boolean;

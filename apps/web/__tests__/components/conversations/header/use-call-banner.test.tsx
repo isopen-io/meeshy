@@ -20,6 +20,9 @@
  * - Call status='ended': showCallBanner=false
  * - callDuration anchors on answeredAt, falls back to startedAt
  * - handleJoinCall: poses a requestJoin (live-bubble join path), never starts a new call
+ * - handleJoinCall: derives callType from metadata.type, NOT participants[].isVideoEnabled
+ *   (Vague 115 — the latter is always stripped by the REST whitelist, so every banner join
+ *   silently forced audio-only regardless of the call's real nature)
  * - handleDismissCallBanner: hides the banner for that call id only
  */
 
@@ -207,10 +210,10 @@ describe('useCallBanner', () => {
   });
 
   describe('handleJoinCall', () => {
-    it('poses a requestJoin with callType="video" when any participant has video enabled', async () => {
+    it('poses a requestJoin with callType="video" when metadata.type is video', async () => {
       const call = makeCallSession({
         id: 'call-456',
-        participants: [makeParticipant({ isVideoEnabled: false }), makeParticipant({ id: 'p-2', isVideoEnabled: true })],
+        metadata: { type: 'video' },
       });
       mockGetActiveCall.mockResolvedValue({ success: true, data: call });
 
@@ -228,8 +231,8 @@ describe('useCallBanner', () => {
       });
     });
 
-    it('poses callType="audio" when no participant has video enabled', async () => {
-      const call = makeCallSession({ participants: [makeParticipant({ isVideoEnabled: false })] });
+    it('poses callType="audio" when metadata.type is audio', async () => {
+      const call = makeCallSession({ metadata: { type: 'audio' } });
       mockGetActiveCall.mockResolvedValue({ success: true, data: call });
 
       const { result } = renderBanner();
@@ -240,6 +243,38 @@ describe('useCallBanner', () => {
       });
 
       expect(useCallStore.getState().joinRequest?.callType).toBe('audio');
+    });
+
+    it('poses callType="audio" when metadata is absent (legacy/pre-Vague-115 session)', async () => {
+      const call = makeCallSession({ metadata: undefined });
+      mockGetActiveCall.mockResolvedValue({ success: true, data: call });
+
+      const { result } = renderBanner();
+      await waitFor(() => expect(result.current.showCallBanner).toBe(true));
+
+      act(() => {
+        result.current.handleJoinCall();
+      });
+
+      expect(useCallStore.getState().joinRequest?.callType).toBe('audio');
+    });
+
+    it('Vague 115 regression: derives callType from metadata.type, NOT participants[].isVideoEnabled — the REST whitelist never carries the latter, so a video call must still join as video even though every participant appears video-off on the wire', async () => {
+      const call = makeCallSession({
+        id: 'call-789',
+        metadata: { type: 'video' },
+        participants: [makeParticipant({ isVideoEnabled: false })],
+      });
+      mockGetActiveCall.mockResolvedValue({ success: true, data: call });
+
+      const { result } = renderBanner('conv-123');
+      await waitFor(() => expect(result.current.showCallBanner).toBe(true));
+
+      act(() => {
+        result.current.handleJoinCall();
+      });
+
+      expect(useCallStore.getState().joinRequest?.callType).toBe('video');
     });
 
     it('never starts a brand new call — no onStartCall escape hatch exists on this hook', async () => {

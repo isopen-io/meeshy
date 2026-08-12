@@ -72,7 +72,13 @@ export function useCallBanner(conversationId: string) {
 
   const handleJoinCall = useCallback(() => {
     if (!activeCall) return;
-    const callType = activeCall.participants.some((p) => p.isVideoEnabled) ? 'video' : 'audio';
+    // `metadata.type` is the only whitelisted REST source of the call's
+    // audio/video nature (Vague 115) — `participants[].isVideoEnabled` is
+    // mutable media state (camera mute), not the call's nature, and was
+    // always `false` here anyway since the REST schema never carried it in
+    // the first place, silently forcing every join through this banner into
+    // audio-only.
+    const callType = activeCall.metadata?.type === 'video' ? 'video' : 'audio';
     requestJoin({ callId: activeCall.id, conversationId, callType });
   }, [activeCall, conversationId, requestJoin]);
 
