@@ -7062,3 +7062,56 @@ trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHo
 toolchains iOS/Android hors d'atteinte dans ce sandbox. **Candidat sérieux pour la Vague 109** : un
 audit frais (gateway ou iOS) reste à mandater au prochain cycle — aucun nouveau candidat concret n'a
 été identifié cette fois-ci au-delà du fix ci-dessus.
+
+## Vague 109 — `translateAndEmitSegment` résolvait la langue cible des sous-titres d'appel via `systemLanguage` seul, contournant le Prisme Linguistique (gateway) (2026-08-12)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche
+`claude/upbeat-dirac-l6bxcd` strictement à jour avec `origin/main` au démarrage (`fc27724ff`, qui
+contient déjà la Vague 108 — PR #2859 mergée), 0 commit d'avance/retard, aucune PR ouverte de cette
+routine (une seule PR ouverte au repo, `#2870`, sans rapport — stories). Un audit frais (agent
+Explore, lecture readonly) a été mandaté avec la liste condensée des items déjà triés/fixés
+(Vagues 63-108) pour proposer un candidat neuf.
+
+- **Root cause confirmée par lecture directe** (`CallEventsHandler.ts`, `translateAndEmitSegment`,
+  chemin `CALL_EVENTS.TRANSCRIPTION_SEGMENT` qui pousse les sous-titres traduits en temps réel pendant
+  un appel) : le `select` Prisma ne lisait que `user.systemLanguage`, et la résolution de langue cible
+  par participant faisait `(p.participant.user?.systemLanguage as string | undefined) ?? 'fr'` —
+  contournant entièrement `resolveUserLanguage()`, qu'`apps/ios/../services/gateway/CLAUDE.md` impose
+  pourtant comme règle dure (« ALWAYS use `resolveUserLanguage()` … NEVER reimplement the priority
+  order locally »), et qu'`import { resolveUserLanguage } from '@meeshy/shared/…'` était déjà présent
+  en tête de fichier — utilisé 1200 lignes plus haut par `resolveNotificationLangs` (poussé de la
+  Vague… antérieure, non renumérotée ici) pour le tout autre problème du push d'appel entrant, mais
+  jamais consulté par ce site-ci. Un participant d'appel dont `systemLanguage` est vide (état ordinaire
+  : utilisateur n'ayant configuré qu'une langue régionale, une destination personnalisée, ou reposant
+  sur sa seule locale appareil) recevait donc ses sous-titres traduits en français quelle que soit sa
+  préférence réelle — seule feature du produit à violer le Prisme, toutes les fonctions sœurs du
+  même fichier (push d'appel entrant, notification, résolution auth) le respectant déjà.
+- **Fix** : `select` étendu à `regionalLanguage`/`customDestinationLanguage`/`deviceLocale` ; la
+  résolution par participant appelle désormais `resolveUserLanguage(user, { deviceLocale })`, même
+  patron exact que `resolveNotificationLangs` dans le même fichier.
+- **Tests** (TDD, RED confirmé en exécutant réellement le nouveau cas AVANT le fix — `translateText`
+  jamais appelé du tout dans ce scénario particulier, le participant sans `systemLanguage` retombant
+  sur `'fr'` qui égale la langue source du segment donc filtré par le garde anti-langue-identique,
+  pire que le comportement attendu, pas seulement "mauvaise langue") : nouveau cas dans
+  `CallEventsHandler-transcription-translation.test.ts` — auditeur `systemLanguage: null,
+  regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: 'en-US'`, attend
+  `translateText(..., 'es', ...)`, jamais `'fr'`. GREEN après le fix. Sweep complet
+  `--testPathPatterns="[Cc]all"` — **48 suites / 1123 tests verts**, 0 régression. `npx tsc --noEmit` :
+  **0 erreur**. `bun run test:coverage` (sweep complet, pas seulement calls) — **653 suites / 16 463
+  tests verts**, 0 échec.
+- **Portée volontairement non étendue** : `resolveUserLanguagesOrdered` (variante multi-langues
+  ordonnée du même resolver, utilisée ailleurs pour construire des bandes de drapeaux) n'a pas été
+  substituée ici — un seul segment ne cible qu'une langue par auditeur, la variante simple suffit et
+  reste au plus près du patron `resolveNotificationLangs` déjà en place dans ce fichier.
+
+### Reste ouvert
+
+Reconduit tel quel (rien de plus trouvé ce cycle au-delà du fix ci-dessus) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ;
+`removeParticipant()` web (Vague 91, non-régression) ; `call:force-leave`/`call:check-active` en
+string literals hors du type-map partagé (cosmétique) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox. **Candidat pour la Vague 110** : un audit frais (gateway ou iOS) reste à mandater au
+prochain cycle.
