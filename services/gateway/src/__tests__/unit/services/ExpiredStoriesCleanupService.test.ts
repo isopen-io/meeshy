@@ -24,8 +24,48 @@ function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: str
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: {
+      // `findMany` : le hard-delete lit les commentaires AVANT de les détruire
+      // (auto-relation parent/enfant à casser en deux temps).
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postMedia: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    // `SoundCaptureService.releasePosts` — construit sur ce même client, il
+    // RECOMPTE `usageCount` depuis `SoundUsage` après retrait.
+    soundUsage: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      count: jest.fn<any>().mockResolvedValue(0),
+    },
+    sound: {
+      update: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    // Deux effets de bord ajoutés au hard-delete depuis que ce fichier a été
+    // écrit, et qui s'exécutent AVANT toute destruction — délibérément, parce
+    // que `Notification.context.postId` et `TrackingLink.targetId` n'ont ni
+    // relation ni cascade : détruire les posts après un retrait en échec
+    // laisserait des lignes que plus aucun chemin n'atteindrait.
+    //
+    // Conséquence pour ce mock : sans ces deux modèles, `retractPostNotifications`
+    // jetait un TypeError que le `catch` de la passe avalait, et AUCUNE
+    // suppression n'était atteinte — les témoins du hard-delete comptaient 0
+    // appel sans que la cause soit visible.
+    notification: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    // `retractPostNotifications` interroge la collection Notification en RAW
+    // (`find` + projection) plutôt que par le client typé : `context.postId`
+    // est un champ imbriqué sans relation, que Prisma ne sait pas filtrer.
+    // Lot vide = aucune notification à retirer, le chemin nominal de ces
+    // témoins, qui portent sur la destruction elle-même.
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ cursor: { firstBatch: [] } }),
+    trackingLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };
 }
@@ -103,9 +143,17 @@ describe('ExpiredStoriesCleanupService', () => {
       expect(prisma.post.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            type: 'STORY',
+            // Les STATUTS sont éphémères eux aussi et partagent le balayage.
+            type: { in: ['STORY', 'STATUS'] },
             expiresAt: { lt: expect.any(Date) },
-            deletedAt: null,
+            // `isSet: false`, JAMAIS `deletedAt: null` : sur le connecteur
+            // MongoDB, le filtre nul ne matche que les documents
+            // présent-et-null, alors que `post.create` n'écrit jamais cette
+            // colonne — un post vivant l'a ABSENTE. Cette passe portait le
+            // dernier `deletedAt: null` du modèle, et n'appariait donc AUCUN
+            // post : le balayage rendait 0 à chaque heure. Ce témoin figeait
+            // très exactement la forme cassée.
+            deletedAt: { isSet: false },
           }),
         }),
       );
