@@ -1765,6 +1765,12 @@ struct StoryCardView: View {
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
                     .clipped()
                     .transition(.opacity)
+                    // Même scheme que le header/sidebar (Layer 7/8) : sans lui
+                    // le texte des réponses restait blanc fixe, illisible sur un
+                    // fond de story clair/blanc — seul un halo protégeait
+                    // jusqu'ici, insuffisant sur un fond proche du blanc pur
+                    // (capture user 2026-08-11).
+                    .environment(\.colorScheme, readerChromeScheme)
             }
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===

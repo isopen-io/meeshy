@@ -35,6 +35,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let prefsUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
         let reordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
         let readStatus = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+        let userUpdated = PassthroughSubject<UserUpdatedEvent, Never>()
         let categoryCreated = PassthroughSubject<CategorySocketEvent, Never>()
         let categoryUpdated = PassthroughSubject<CategorySocketEvent, Never>()
         let categoryDeleted = PassthroughSubject<CategoryDeletedSocketEvent, Never>()
@@ -52,6 +53,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 conversationDeleted: deleted.eraseToAnyPublisher(),
                 userPreferencesUpdated: prefsUpdated.eraseToAnyPublisher(),
                 userPreferencesReordered: reordered.eraseToAnyPublisher(),
+                userUpdated: userUpdated.eraseToAnyPublisher(),
                 readStatusUpdated: readStatus.eraseToAnyPublisher(),
                 categoryCreated: categoryCreated.eraseToAnyPublisher(),
                 categoryUpdated: categoryUpdated.eraseToAnyPublisher(),
@@ -417,5 +419,29 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         let removed = await waitUntil { await categoryStore.categories().contains { $0.id == "cat-9" } == false }
         XCTAssertTrue(removed, "bridge must route category:deleted → UserCategoryStore.applyRemote(.deleted)")
+    }
+
+    /// `user:updated` — la gateway le diffuse depuis des mois et iOS n'avait
+    /// aucun listener : le bridge est le maillon qui manquait entre le socket
+    /// et la ligne de liste.
+    func test_userUpdated_routesToApplyUserUpdated() async {
+        let store = makeStore()
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+        await store.hydrate(MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct, title: "Alice Smith",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            participantUserId: "u-1", participantUsername: "alice"
+        ))
+
+        let json = """
+        {"userId":"u-1","changes":{"displayName":"Bob Jones","firstName":null,"lastName":null,"username":"bob"}}
+        """
+        let event = try! JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8))
+        env.userUpdated.send(event)
+
+        let renamed = await waitUntil { await store.conversation(id: "conv-1")?.title == "Bob Jones" }
+        XCTAssertTrue(renamed, "bridge must route user:updated → ConversationStore.applyUserUpdated")
     }
 }

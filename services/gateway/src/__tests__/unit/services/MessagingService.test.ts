@@ -184,7 +184,11 @@ describe('MessagingService', () => {
         create: jest.fn(),
         update: jest.fn(),
         findMany: jest.fn(),
-        findFirst: jest.fn().mockResolvedValue(null)
+        findFirst: jest.fn().mockResolvedValue(null),
+        // Lu par `admitMessageForward` pour connaître l'état de la SOURCE d'un
+        // transfert. Nul par défaut : sans `forwardedFromId` le garde ne lit
+        // rien, et un envoi ordinaire ne doit pas dépendre de ce double.
+        findUnique: jest.fn().mockResolvedValue(null)
       },
       trackingLink: {
         updateMany: jest.fn()
@@ -276,6 +280,74 @@ describe('MessagingService', () => {
       expect(response.data).toBeDefined();
       expect(response.message).toBe('Message envoyé avec succès');
       expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+    });
+
+    describe('transfert — la dernière sortie de l’éphémère et de la vue unique', () => {
+      // `forwardedFromId` traversait `handleMessage` sans qu'une ligne de code
+      // serveur ne lise l'état de la source : la copie naissait sans échéance
+      // et sans budget, et survivait à la destruction de l'original. Ces trois
+      // cas prouvent le CÂBLAGE — la règle elle-même est prouvée dans
+      // `forwardAdmission.test.ts`.
+      const forwardedFromId = '507f1f77bcf86cd799439099';
+
+      it('refuse le transfert d’un message à vue unique, sans rien écrire', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: true,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z')
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('fait hériter la copie de la durée éphémère de la source', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          expiresAt: new Date('2026-08-12T11:00:30.000Z')
+        });
+
+        const before = Date.now();
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId },
+          testParticipantId
+        );
+        const after = Date.now();
+
+        expect(response.success).toBe(true);
+        const written = mockPrisma.message.create.mock.calls[0][0].data;
+        // 30 s de durée d'origine, recomptées depuis l'envoi du transfert.
+        expect(written.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 30_000);
+        expect(written.expiresAt.getTime()).toBeLessThanOrEqual(after + 30_000);
+        // Le bit EPHEMERAL se déduit de l'échéance dans `saveMessage` — sans
+        // lui les clients rendraient la copie comme un message ordinaire.
+        expect(written.effectFlags & 1).toBe(1);
+      });
+
+      it('n’impose aucune échéance quand la source est un message ordinaire', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z')
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        expect(mockPrisma.message.create.mock.calls[0][0].data.expiresAt).toBeNull();
+      });
     });
 
     it('should include metadata in successful response', async () => {

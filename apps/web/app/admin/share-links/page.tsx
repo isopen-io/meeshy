@@ -66,7 +66,7 @@ interface ShareLink {
     title?: string;
     type: string;
   };
-  _count: {
+  _count?: {
     anonymousParticipants: number;
   };
 }
@@ -297,7 +297,7 @@ export default function AdminShareLinksPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {shareLinks?.reduce((acc, link) => acc + link._count.anonymousParticipants, 0) || 0}
+                {shareLinks?.reduce((acc, link) => acc + (link._count?.anonymousParticipants ?? 0), 0) || 0}
               </div>
               <Badge variant="outline" className="mt-1">{t('shareLinks.statParticipantsBadge')}</Badge>
             </CardContent>
@@ -491,7 +491,7 @@ export default function AdminShareLinksPage() {
                           )}
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-purple-600">{shareLink._count.anonymousParticipants}</div>
+                          <div className="text-2xl font-bold text-purple-600">{shareLink._count?.anonymousParticipants ?? 0}</div>
                           <div className="text-sm text-gray-600">{t('shareLinks.uniqueParticipants')}</div>
                         </div>
                         <div className="text-center">

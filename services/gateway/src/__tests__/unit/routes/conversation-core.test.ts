@@ -49,6 +49,10 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 }));
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  // `resolveCallerParticipant` reste REEL : c'est sa regle de precedence
+  // (`participantId` avant `userId`) que les tests d'invite anonyme verifient.
+  // La stubber rendrait ces tests tautologiques.
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as object),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 
@@ -649,6 +653,75 @@ describe('registerCoreRoutes', () => {
       );
     });
 
+    it('orders a delta page by updatedAt ASC so a truncated page resumes instead of skipping', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // A delta window that touched more than `limit` conversations returns a
+      // TRUNCATED page. Sorted by `lastMessageAt desc`, the rows left out bear
+      // no relation to the filter, so a client advancing its watermark to the
+      // max `updatedAt` it received steps OVER them — permanently, until its
+      // next full reconcile (24h on iOS). Sorted by `updatedAt` ascending, the
+      // rows left out are exactly those with a HIGHER `updatedAt` than the
+      // page's last row: the same watermark that used to skip them now points
+      // right at them.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        })
+      );
+    });
+
+    it('keeps the recency order for a normal (non-delta) page', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // The list screen reads this route too, and it wants the most recent
+      // conversation first. Only the delta consumers trade recency for
+      // resumability.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('lets the before-cursor keep the recency order it bounds on', async () => {
+      const cursorDate = new Date('2024-01-01');
+      prisma.conversation.findFirst.mockResolvedValue({ lastMessageAt: cursorDate });
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: { before: CONV_ID, updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // `before` bounds on `lastMessageAt`; ordering that page by `updatedAt`
+      // would pair a cursor with a sort it has no relation to. No client
+      // combines the two — the guard is for the one that tries.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
+    it('keeps the recency order when updatedSince is unusable', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+      const req = makeRequest({ query: { updatedSince: 'not-a-date' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // No delta filter was applied, so this is a normal page: ordering it by
+      // `updatedAt` would hand the list screen its OLDEST conversations first.
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+      );
+    });
+
     it('ignores invalid updatedSince date (NaN)', async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
       const req = makeRequest({ query: { updatedSince: 'not-a-date' } });
@@ -1236,6 +1309,44 @@ describe('registerCoreRoutes', () => {
       const sent = mockSendSuccess.mock.calls[0][1];
       expect(sent.participants[0].isOnline).toBe(false);
       expect(sent.participants[0].lastActiveAt).toBeNull();
+    });
+
+    it('counts unread for a shared-link guest, whose userId carries a Participant id', async () => {
+      // La branche anonyme d'`UnifiedAuthService` pose `userId: participant.id`.
+      // Le `where: { conversationId, userId, isActive: true }` ecrit a la main
+      // comparait donc un id de participant a la colonne `userId` : aucun match,
+      // `unreadCount` retombait a 0, et ce 0 ecrasait le badge que le socket
+      // venait de pousser juste. `resolveCallerParticipant` resout par
+      // `participantId` d'abord — c'est exactement le site pour lequel il existe.
+      const readStatusService = {
+        getUnreadCount: jest.fn<any>().mockResolvedValue(4),
+        getUnreadCountsForUser: jest.fn<any>().mockResolvedValue(new Map()),
+      };
+      const { MessageReadStatusService } = jest.requireMock('../../../services/MessageReadStatusService') as any;
+      MessageReadStatusService.mockImplementationOnce(() => readStatusService);
+      prisma.conversation.findFirst.mockResolvedValue(makeFullConversation());
+      // Le double de base de donnees ne repond QUE sur la colonne interrogee :
+      // une clause `{ userId: <participant id> }` ne matche rien, comme en base.
+      prisma.participant.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.id === PARTICIPANT_ID ? { id: PARTICIPANT_ID } : null)
+      );
+
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        authContext: {
+          isAuthenticated: true,
+          type: 'anonymous',
+          isAnonymous: true,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
+        },
+      });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(PARTICIPANT_ID, CONV_ID);
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ unreadCount: 4 }));
     });
 
     it('unreadCount silently fails when participant not found', async () => {

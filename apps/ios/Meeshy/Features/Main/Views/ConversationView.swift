@@ -227,6 +227,13 @@ struct ConversationView: View {
     /// area (composer excluded) to leave the preview and open the full
     /// conversation with a navigation transition.
     var onOpenFullConversation: (() -> Void)? = nil
+    /// `true` uniquement pour les hôtes SANS point de montage racine du
+    /// SyncPill (flux invité — `GuestConversationContainer`, qui ne monte
+    /// jamais `RootView`/`iPadRootView` et n'a donc aucune couverture par
+    /// le hoist). `false` partout ailleurs : le point de montage unique
+    /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
+    /// l'afficherait deux fois.
+    var showsOwnConnectionBanner: Bool = false
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -237,6 +244,7 @@ struct ConversationView: View {
     @Environment(\.colorScheme) var colorScheme
     /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
+    @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
     var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
@@ -450,11 +458,12 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
         self.previewMode = previewMode
+        self.showsOwnConnectionBanner = showsOwnConnectionBanner
         self.onOpenFullConversation = onOpenFullConversation
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
@@ -751,6 +760,16 @@ struct ConversationView: View {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
                     },
+                    onSaveMedia: {
+                        guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                        HapticFeedback.light()
+                        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                            kind: attachment.kind,
+                            remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                        ))
+                    },
                     onDeleteMedia: {
                         if let attId = msg.attachments.first?.id {
                             Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
@@ -779,6 +798,25 @@ struct ConversationView: View {
                             let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
                             if success { HapticFeedback.success() }
                             else { HapticFeedback.error() }
+                        }
+                    },
+                    translatingTextLanguages: viewModel.translatingTextLanguages[msg.id] ?? [],
+                    translatingAudioLanguages: viewModel.translatingAudioLanguages[msg.id] ?? [],
+                    translationRequestFailedPublisher: viewModel.translationRequestFailed.eraseToAnyPublisher(),
+                    onRequestTextTranslation: { targetLang, sourceLang in
+                        Task {
+                            await viewModel.requestTextTranslation(
+                                messageId: msg.id, content: msg.content,
+                                sourceLanguage: sourceLang, targetLanguage: targetLang
+                            )
+                        }
+                    },
+                    onRequestAudioTranslation: { targetLang, attachmentId in
+                        Task {
+                            await viewModel.requestAudioTranslation(
+                                messageId: msg.id, attachmentId: attachmentId,
+                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang
+                            )
                         }
                     }
                 )
@@ -1332,14 +1370,19 @@ struct ConversationView: View {
                     .zIndex(99)
             }
 
-            // Connection status banner
-            VStack {
-                Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                ConnectionBanner(activeConversationId: { viewModel.conversationId })
-                Spacer()
+            // Connection status banner — UNIQUEMENT pour les hôtes sans point
+            // de montage racine (flux invité). Le flux authentifié normal
+            // est couvert par le point de montage unique de RootView/
+            // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
+            if showsOwnConnectionBanner {
+                VStack {
+                    Color.clear.frame(height: composerState.showOptions ? 72 : 56)
+                    ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
+                    Spacer()
+                }
+                .zIndex(98)
+                .allowsHitTesting(false)
             }
-            .zIndex(98)
-            .allowsHitTesting(false)
 
             // Error banner
             Group {
@@ -1805,7 +1848,8 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                 },
                 onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
+                    overlayState.moreSheetInitialItem =
+                        UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                     overlayState.detailSheetMessage = msg
                 },
                 onExpandFullPicker: {
@@ -1975,7 +2019,8 @@ struct ConversationView: View {
             }
         case .more:
             Button {
-                overlayState.moreSheetInitialItem = nil
+                overlayState.moreSheetInitialItem =
+                    UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil
                 overlayState.detailSheetMessage = msg
             } label: {
                 Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")

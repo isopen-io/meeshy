@@ -145,6 +145,16 @@ object Routes {
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+
+    /**
+     * Same destination as [CONVERSATION_SINGULAR_DEEP_LINK] plus an optional
+     * `?draft=` query arg — e.g. a future Quick Reply widget/shortcut
+     * (`ChatViewModel.DRAFT_ARG`/`initialDraft`). Kept as its own pattern (rather
+     * than appended to every conversation deep link) since it is the one shape a
+     * canned-reply tap would actually construct.
+     */
+    const val CONVERSATION_DRAFT_DEEP_LINK =
+        "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatViewModel.DRAFT_ARG}={${ChatViewModel.DRAFT_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
@@ -563,12 +573,14 @@ fun MeeshyApp(
                 route = Routes.CHAT,
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
+                    navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                 ),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SINGULAR_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.CONVERSATION_DRAFT_DEEP_LINK },
                 ),
             ) { entry ->
                 val conversationId = entry.arguments

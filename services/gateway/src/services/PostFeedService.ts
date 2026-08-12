@@ -356,7 +356,25 @@ export class PostFeedService {
     // Même `visibilityFilter` que le tray : le delta ne doit pas divulguer
     // l'existence de stories que l'utilisateur n'a jamais eu le droit de voir.
     // Lancé ici pour s'exécuter en parallèle des requêtes d'enrichissement.
-    const deletedIdsPromise: Promise<string[]> = options?.updatedSince
+    //
+    // Ligne SONDE (`take: LIMIT + 1`), même patron que `hasMore` ci-dessus : le
+    // plafond des tombstones n'a AUCUN curseur de reprise, donc sa troncature
+    // doit voyager jusqu'au client, qui n'a alors qu'un seul recours — refetch
+    // complet, dont le remplacement du tray purge les fantômes. Compter
+    // `length === LIMIT` confondrait une page coupée avec une fenêtre de très
+    // exactement LIMIT suppressions, qui est COMPLÈTE : le client escaladerait
+    // pour rien, à chaque delta, tant que la fenêtre reste sur ce nombre.
+    //
+    // PORTÉE : la FENÊTRE, pas la page — d'où le `!cursorData`. Cette clause ne
+    // dépend pas du curseur, elle est identique d'une page à l'autre. Depuis que
+    // le client draine la fenêtre delta (`StoryViewModel.drainStoryPages`,
+    // jusqu'à 6 pages), la relancer à chaque page referait jusqu'à 6 fois la
+    // même lecture de 501 lignes sous filtre de visibilité, pour un résultat que
+    // le client tient déjà depuis la première page. Elle ne court donc que sur
+    // la page qui OUVRE la fenêtre. Sûr parce que le drain fusionne par union
+    // (`formUnion`) et par `||`, jamais par écrasement : une page suivante sans
+    // tombstone ne peut pas effacer ceux de la première.
+    const deletedIdsPromise: Promise<string[]> = options?.updatedSince && !cursorData
       ? this.prisma.post
           .findMany({
             where: {
@@ -367,7 +385,7 @@ export class PostFeedService {
             },
             select: { id: true },
             orderBy: { updatedAt: 'desc' },
-            take: STORY_TOMBSTONE_LIMIT,
+            take: STORY_TOMBSTONE_LIMIT + 1,
           })
           .then((rows) => rows.map((r) => r.id))
       : Promise.resolve([]);
@@ -406,18 +424,22 @@ export class PostFeedService {
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
 
-    const deletedIds = await deletedIdsPromise;
-    if (deletedIds.length === STORY_TOMBSTONE_LIMIT) {
-      // Troncature : le client gardera quelques fantômes jusqu'à son prochain
-      // full fetch. On le dit plutôt que de le taire — un plafond silencieux se
-      // lit comme une couverture complète.
+    const fetchedDeletedIds = await deletedIdsPromise;
+    const deletedIdsTruncated = fetchedDeletedIds.length > STORY_TOMBSTONE_LIMIT;
+    const deletedIds = deletedIdsTruncated
+      ? fetchedDeletedIds.slice(0, STORY_TOMBSTONE_LIMIT)
+      : fetchedDeletedIds;
+    if (deletedIdsTruncated) {
+      // Le drapeau part maintenant AUSSI dans la charge utile : ce log seul ne
+      // disait la troncature qu'à nous, jamais au seul acteur qui pouvait y
+      // remédier.
       logger.warn(
         `[getStories] tombstones tronqués à ${STORY_TOMBSTONE_LIMIT} pour user=${userId} — ` +
-        'des suppressions plus anciennes attendront le prochain fetch complet'
+        'le client escaladera vers un fetch complet'
       );
     }
 
-    return { items, nextCursor, hasMore, deletedIds };
+    return { items, nextCursor, hasMore, deletedIds, deletedIdsTruncated };
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {

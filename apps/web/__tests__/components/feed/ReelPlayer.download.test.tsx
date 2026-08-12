@@ -65,7 +65,7 @@ describe('ReelPlayer — media download', () => {
     expect(screen.getByLabelText('Download')).toBeInTheDocument();
   });
 
-  it('triggers a download and calls onDownload with the media id', () => {
+  it('triggers a download and calls onDownload with the media id and owning post id', () => {
     const onDownload = jest.fn();
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     renderPlayer(onDownload);
@@ -73,7 +73,7 @@ describe('ReelPlayer — media download', () => {
     fireEvent.click(screen.getByLabelText('Download'));
 
     expect(clickSpy).toHaveBeenCalled();
-    expect(onDownload).toHaveBeenCalledWith('media-1');
+    expect(onDownload).toHaveBeenCalledWith('media-1', 'reel-1');
     clickSpy.mockRestore();
   });
 

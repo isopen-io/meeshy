@@ -88,4 +88,24 @@ final class ReelRepostEmbedCellTests: XCTestCase {
         XCTAssertNotEqual(cell.reelCellId, post.repost?.id,
                           "Keying on the reposted reel id would collide with the native reel card")
     }
+
+    // MARK: - Accessibility label (children: .ignore drops caption + likes)
+
+    func test_reelCardAccessibilityLabel_withCaption_includesAuthorCaptionAndLikes() {
+        let repost = RepostContent(author: "Marie", content: "Ma super vidéo", likes: 42, type: "REEL")
+        let label = ReelRepostEmbedCell.reelCardAccessibilityLabel(for: repost)
+        XCTAssertTrue(label.contains("Marie"), "The reel author must be announced")
+        XCTAssertTrue(label.contains("Ma super vidéo"),
+                      "The reel caption must reach VoiceOver — children: .ignore drops it otherwise")
+        XCTAssertTrue(label.contains("42"), "The like count is visible, so it must be announced")
+    }
+
+    func test_reelCardAccessibilityLabel_emptyCaption_omitsCaptionSegmentWithoutEmptyPunctuation() {
+        let repost = RepostContent(author: "Marie", content: "", likes: 3, type: "REEL")
+        let label = ReelRepostEmbedCell.reelCardAccessibilityLabel(for: repost)
+        XCTAssertTrue(label.contains("Marie"))
+        XCTAssertTrue(label.contains("3"))
+        XCTAssertFalse(label.contains(". ."),
+                       "A blank caption must not leave a dangling '. .' separator")
+    }
 }

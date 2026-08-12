@@ -28,18 +28,24 @@ import MeeshyUI
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
-    /// Source des frappes hors conversation. Injecté à la racine
-    /// (`RootView` / `iPadRootView`), donc disponible partout où cette
-    /// bannière est montée.
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
-    /// Flag d'environnement injecté par `RootView` / `iPadRootView` quand
-    /// `StoryViewerView` est présenté en `fullScreenCover`. Cache la pill
-    /// pour qu'elle ne rende plus par-dessus le header story (le cover ne
-    /// supprime pas les `.safeAreaInset`/overlays du parent). Bug
-    /// 2026-05-27. Par défaut `false` via `IsStoryViewerPresentingKey` —
-    /// safe quand ConnectionBanner est monté hors d'un container qui
-    /// l'injecte (previews, tests, futurs callers).
-    @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
+    /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
+    /// l'appelant (point de montage unique par plateforme), JAMAIS via
+    /// `@EnvironmentObject` : un `.overlay` posé sur la même chaîne de
+    /// modifiers qu'un `.environmentObject(...)` n'hérite pas de façon
+    /// fiable de cet objet dans ce codebase — crash `Fatal error: No
+    /// ObservableObject of type ConversationListViewModel found` au
+    /// lancement, motif documenté 4× (`FloatingCallPillView.swift`,
+    /// `StoryViewerView.swift`, `AudioFullscreenView.swift`,
+    /// `PanelBackAction.swift`). `nil` (flux invité, sans liste de
+    /// conversations) désactive uniquement les entrées de frappe — le
+    /// reste (statut connexion, file d'attente hors-ligne) fonctionne
+    /// identiquement.
+    let conversationListViewModel: ConversationListViewModel?
+    /// `true` quand `StoryViewerView` est présenté en `fullScreenCover` —
+    /// cache la pill pour qu'elle ne rende plus par-dessus le header story
+    /// (bug 2026-05-27). Injecté explicitement pour la même raison que
+    /// `conversationListViewModel` ci-dessus.
+    let isStoryViewerPresenting: Bool
 
     /// Callback invoked when the user taps an entry whose `source` is
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
@@ -95,9 +101,13 @@ struct ConnectionBanner: View {
     @State private var downWasSurfaced: Bool = false
 
     init(
+        conversationListViewModel: ConversationListViewModel?,
+        isStoryViewerPresenting: Bool = false,
         onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
         activeConversationId: (() -> String?)? = nil
     ) {
+        self.conversationListViewModel = conversationListViewModel
+        self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
     }
@@ -169,10 +179,12 @@ struct ConnectionBanner: View {
             ))
         }
 
-        result.append(contentsOf: Self.typingEntries(
-            typingUsers: conversationListViewModel.typingUsers,
-            excluding: activeConversationId?()
-        ))
+        if let conversationListViewModel {
+            result.append(contentsOf: Self.typingEntries(
+                typingUsers: conversationListViewModel.typingUsers,
+                excluding: activeConversationId?()
+            ))
+        }
 
         return result
     }

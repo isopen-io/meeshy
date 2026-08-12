@@ -16,6 +16,26 @@ import type { AttachmentParams } from './types';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
 
+/**
+ * Helmet pose `Cross-Origin-Resource-Policy: same-origin` sur TOUTES les
+ * réponses. Les médias servis ici sont embarqués depuis meeshy.me (origine
+ * différente de gate.meeshy.me) : chaque réponse — 304 de revalidation ETag
+ * et erreurs 4xx comprises — doit porter `cross-origin`, sinon Chrome bloque
+ * la ressource avec ERR_BLOCKED_BY_RESPONSE.NotSameOrigin (avatars cassés au
+ * rechargement de page). Hook onSend SYNCHRONE obligatoirement : un second
+ * hook async provoque des double-send (voir commentaire sur la route file/*).
+ */
+function crossOriginMediaHeaders(
+  _request: FastifyRequest,
+  reply: FastifyReply,
+  payload: unknown,
+  done: (err: Error | null, payload?: unknown) => void
+) {
+  reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  reply.header('Access-Control-Allow-Origin', '*');
+  done(null, payload);
+}
+
 export async function registerDownloadRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient
@@ -73,6 +93,7 @@ export async function registerDownloadRoutes(
     '/attachments/:attachmentId',
     {
       onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
+      onSend: crossOriginMediaHeaders,
       // Never compress this route: media is already compressed and text
       // attachments are served via Range (206) where re-compression would
       // corrupt Content-Range/Content-Length. Enforced at the proxy layer
@@ -153,8 +174,6 @@ export async function registerDownloadRoutes(
           reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
         }
         reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
-        reply.header('Access-Control-Allow-Origin', '*');
         reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 
         const stream = createReadStream(filePath);
@@ -174,6 +193,7 @@ export async function registerDownloadRoutes(
     '/attachments/:attachmentId/thumbnail',
     {
       onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
+      onSend: crossOriginMediaHeaders,
       // already-compressed JPEG thumbnail — never recompressed (Traefik excludedContentTypes)
       schema: {
         description: 'Stream the thumbnail image for an attachment. Only available for image attachments. Thumbnails are JPEG format, optimized for fast loading in lists and previews. Supports CORS and aggressive caching.',
@@ -235,8 +255,6 @@ export async function registerDownloadRoutes(
         // (always JPEG bytes whatever their extension) stay image/jpeg.
         reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
-        reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
-        reply.header('Access-Control-Allow-Origin', '*');
         reply.header('Cache-Control', 'public, max-age=31536000, immutable');
 
         const stream = createReadStream(thumbnailPath);
@@ -301,7 +319,7 @@ export async function registerDownloadRoutes(
       onSend: (request, reply, payload, done) => {
         reply.removeHeader('X-Frame-Options');
         reply.header('Content-Security-Policy', "frame-ancestors *");
-        done(null, payload);
+        crossOriginMediaHeaders(request, reply, payload, done);
       }
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -419,8 +437,6 @@ export async function registerDownloadRoutes(
             reply.header('Content-Length', chunkSize);
             reply.header('Content-Type', mimeType);
             reply.header('ETag', etag);
-            reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
-            reply.header('Access-Control-Allow-Origin', '*');
             reply.header('Cache-Control', cacheControl);
 
             const stream = createReadStream(filePath, { start, end });
@@ -432,8 +448,6 @@ export async function registerDownloadRoutes(
         reply.header('Content-Length', fileSize);
         reply.header('ETag', etag);
         reply.header('Content-Disposition', 'inline');
-        reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
-        reply.header('Access-Control-Allow-Origin', '*');
         reply.header('Cache-Control', cacheControl);
 
         const stream = createReadStream(filePath);

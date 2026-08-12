@@ -608,6 +608,9 @@ export function registerMessagesAdvancedRoutes(
         conversationId,
         actorUserId: userId,
         eventType: 'deleted',
+        // L'AUTEUR, pas l'acteur : la pastille de l'acteur bouge aussi quand un
+        // modérateur retire le message de quelqu'un d'autre.
+        authorId: existingMessage.senderId,
         messageId,
         payload: { messageId, conversationId },
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),

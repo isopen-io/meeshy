@@ -93,6 +93,7 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
   if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
+  if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -436,6 +437,13 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       readStatusService,
+      // Quitter une conversation retracte la frappe qu'on y avait diffusée.
+      // `disconnecting` était le seul autre chemin, et changer de conversation
+      // ne déconnecte pas le socket : sans ce câblage les pairs gardent un
+      // « X est en train d'écrire… » fantôme. `statusHandler` est construit
+      // plus haut dans ce même constructeur.
+      retractTyping: (socket, conversationId) =>
+        this.statusHandler.retractTypingIn(socket, conversationId),
     });
   }
 
@@ -1468,12 +1476,21 @@ export class MeeshySocketIOManager {
       
       // Récupérer la conversation du message pour broadcast
       let conversationIdForBroadcast: string | null = null;
+      // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans
+      // ConversationUpdatedEventData, sur le rafraîchissement d'aperçu ci-dessous.
+      // Une traduction n'a pas d'acteur humain : l'auteur du message traduit est
+      // la seule identité honnête à porter là, et c'est déjà le repli que le
+      // chemin d'envoi utilise (`senderUserId ?? message.senderId`). La colonne
+      // est non-nullable et la ligne a forcément été lue quand on arrive au
+      // rafraîchissement — `conversationIdForBroadcast` sort du MÊME `msg`.
+      let senderIdForPreview = '';
       try {
         const msg = await this.prisma.message.findUnique({
           where: { id: result.messageId },
-          select: { conversationId: true }
+          select: { conversationId: true, senderId: true }
         });
         conversationIdForBroadcast = msg?.conversationId || null;
+        senderIdForPreview = msg?.senderId ?? '';
       } catch (error) {
         logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
       }
@@ -1508,7 +1525,29 @@ export class MeeshySocketIOManager {
         
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
-        
+
+        // `message:translation` ne porte QUE la room de conversation. Un lecteur
+        // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu
+        // servi à l'ENVOI, quand aucune traduction n'existait encore, et rien ne
+        // repasse jamais. Le Prisme devenait donc fonction de l'ordre d'arrivée —
+        // ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait
+        // dans la langue de l'expéditeur, indéfiniment.
+        //
+        // Borné aux deux seuls cas où la ligne change VRAIMENT : le message
+        // traduit est encore le dernier de la conversation, et le destinataire
+        // lit la langue qui vient d'atterrir (cf. `PreviewUpdateScope`).
+        await emitConversationPreviewUpdate(
+          this.prisma,
+          this.io,
+          normalizedId,
+          senderIdForPreview,
+          (error) => logger.warn('preview refresh after translation failed (best-effort)', {
+            messageId: result.messageId,
+            targetLanguage,
+            error,
+          }),
+          { onlyIfLatestIs: result.messageId, onlyIfPreviewCarriesLanguage: targetLanguage },
+        );
       } else {
         logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
       }
@@ -1646,12 +1685,15 @@ export class MeeshySocketIOManager {
         logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
         return;
       }
-      emitAttachmentUpdated(
-        this.io,
-        normalizedConversationId,
+      await emitAttachmentUpdated({
+        io: this.io,
+        prisma: this.prisma,
+        deliveryQueue: this.deliveryQueue,
+        connectedUsers: this.connectedUsers,
+        conversationId: normalizedConversationId,
         messageId,
-        fresh as Record<string, unknown>
-      );
+        attachment: fresh as Record<string, unknown>,
+      });
     } catch (err) {
       logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
     }

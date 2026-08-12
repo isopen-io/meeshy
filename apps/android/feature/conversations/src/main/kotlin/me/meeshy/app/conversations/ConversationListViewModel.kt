@@ -23,7 +23,11 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PresenceSnapshotEvent
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserCategoryCatalog
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
@@ -31,6 +35,7 @@ import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.theme.otherParticipantUserId
 import javax.inject.Inject
 
 data class ConversationListUiState(
@@ -66,6 +71,14 @@ data class ConversationListUiState(
      * flight); present-but-empty = loaded, genuinely no cached messages.
      */
     val previewMessages: Map<String, List<LocalMessage>> = emptyMap(),
+    /**
+     * Live `user:status`/`presence:snapshot` frames, keyed by userId — see
+     * [ConversationListViewModel.observePresence]. A userId absent here has no
+     * live presence data yet (a genuinely cold cache, not an error): `ApiConversation
+     * .participants` carries no `isOnline`/`lastActiveAt` fields at all, so there is
+     * no REST-fetched fallback to fall back to, unlike the Contacts roster.
+     */
+    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
@@ -74,6 +87,18 @@ data class ConversationListUiState(
 
     /** The preview card's cached messages for [conversationId], or `null` while not yet loaded. */
     fun previewFor(conversationId: String): List<LocalMessage>? = previewMessages[conversationId]
+
+    /**
+     * The live presence state for [conversation]'s other participant, or `null` for a
+     * group/community/channel/bot conversation, or when nothing has arrived for them yet.
+     * UI wiring (the actual dot on the row/header) is a deliberately deferred follow-up —
+     * see `NOTES.md`/`PROGRESS.md` for this slice.
+     */
+    fun presenceStateFor(conversation: ApiConversation, nowEpochMillis: Long): PresenceState? {
+        val otherId = conversation.otherParticipantUserId(currentUserId) ?: return null
+        val event = presenceByUserId[otherId] ?: return null
+        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
+    }
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -191,6 +216,32 @@ class ConversationListViewModel @Inject constructor(
             launch {
                 messageSocketManager.participantLeft.collect { event ->
                     ConversationPurge.onParticipantLeft(event, _state.value.currentUserId)?.let(::purge)
+                }
+            }
+        }
+
+        observePresence()
+    }
+
+    /**
+     * Overlays live `user:status`/`presence:snapshot` frames into
+     * [ConversationListUiState.presenceByUserId] — started eagerly here (not lazily
+     * on first row render): [MessageSocketManager]'s flows are hot `SharedFlow`s with
+     * no replay, so a late subscriber genuinely misses events (mirrors the identical
+     * `ContactsListViewModel.observePresence` precedent, `presence-live-contacts-
+     * overlay` slice). UI wiring (the actual dot on the row/header) is a deliberately
+     * deferred follow-up — this slice is the data plumbing only.
+     */
+    private fun observePresence() {
+        viewModelScope.launch {
+            messageSocketManager.userStatus.collect { event ->
+                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
+            }
+        }
+        viewModelScope.launch {
+            messageSocketManager.presenceSnapshot.collect { snapshot ->
+                _state.update {
+                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
                 }
             }
         }

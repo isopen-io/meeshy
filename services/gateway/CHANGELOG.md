@@ -1,5 +1,644 @@
 # @meeshy/gateway
 
+## 1.25.6
+
+### Patch Changes
+
+- b3e95ef: Les messages autodestructibles ne s'autodétruisaient que sur l'écran
+
+  `Message.expiresAt` est écrit par les deux transports d'envoi (WS et REST), et les trois
+  clients replient la bulle quand l'échéance passe — iOS (`ThemedMessageBubble`,
+  `BubbleStandardLayout`), Android (« collapse ephemeral bubble when its self-destruct timer
+  expires »). Le serveur, lui, ne balayait **rien**.
+
+  Aucune des ~119 lectures du modèle `Message` ne filtre `expiresAt` : elles sont toutes
+  gardées par le seul `deletedAt`. Et aucun service ne posait ce `deletedAt` sur une échéance
+  passée — `MaintenanceService` ne balaye que les messages **vides**,
+  `ExpiredStoriesCleanupService` ne connaît que les `Post`.
+
+  Conséquence : le texte en clair d'un message « autodestructible » restait servi par
+  `GET /conversations/:id/messages` **indéfiniment** après son échéance. Une réinstallation,
+  un nouvel appareil, le client web (qui n'a aucun traitement d'éphémère) ou un simple appel
+  d'API avec un jeton valide le rendaient intégralement. Ce que l'expéditeur croyait effacé
+  au bout de trente secondes était intact un an plus tard, en clair, en base.
+
+  **`ExpiredMessagesCleanupService`** ferme les deux fuites — celle de lecture et celle au
+  repos. À la minute (la plus courte durée offerte par les clients est de 30 s), il écrase
+  `content` et `encryptedContent`, vide les traductions, supprime les pièces jointes
+  (fichiers et lignes), puis pose `deletedAt` — ce qui suffit à retirer le message des ~119
+  lectures sans en toucher une seule. Cinquième écrivain de `deletedAt` sur un message, il
+  appelle `applyMessageRemovalEffects`, l'unité que les quatre autres partagent déjà.
+
+  L'effacement du CONTENU est propre à ce chemin, et délibérément : une suppression demandée
+  par une personne veut dire « retire-le de la vue » et laisse la ligne récupérable ; une
+  échéance dit « détruis-le ».
+
+  Deux garde-fous, parce que ce balayage peut faire pire que le défaut qu'il ferme :
+
+  - `unsetOrNull('deletedAt')` plutôt que `deletedAt: null` — une ligne dont le créateur n'a
+    pas écrit `LIVE_MESSAGE_MARK` a la colonne ABSENTE et ne serait jamais balayée.
+  - un filtre `_isLapsed` dans le processus en plus du prédicat Mongo. `$lt` avec une date
+    est bracketé par type et n'apparie pas les nuls — mais le rayon de souffle d'une erreur
+    ici est la destruction de tous les messages de la base, et un invariant à ce prix se
+    revérifie plutôt que de se documenter.
+
+  Index partiel `expiresAt_ephemeral_partial` fourni en migration MongoDB
+  (`packages/shared/prisma/migrations/2026-08-12-message-expires-at-partial-index.mongodb.js`) :
+  `expiresAt` étant écrit explicitement à `null` par tous les créateurs, un index ordinaire
+  porterait une entrée par message pour servir une fraction infime d'entre eux.
+
+## 1.25.5
+
+### Patch Changes
+
+- af390d8: Les accusés de lecture ne se rattrapaient sur AUCUN client mobile après une coupure socket
+
+  `read-status:updated` n'est émis que par une **action** d'accusé — un pair qui lit, une
+  remise automatique. Un socket coupé à cet instant ne le reçoit jamais, et **rien ne le lui
+  rejoue** : la file de livraison hors ligne ne porte que des messages et leurs mutations.
+
+  La coche de l'expéditeur reste donc figée sur sa valeur d'avant la coupure. Les compteurs
+  étant monotones côté client depuis le cycle 85, un événement manqué n'est pas un retard
+  qu'un suivant corrigerait — c'est un **gel permanent**. Une personne qui lit sans écrire ne
+  voit plus jamais ses coches avancer.
+
+  Le cycle 90 a réparé le **web** en relançant son lot REST sur le front montant de la
+  reconnexion (`use-conversation-messages-rq.ts`). iOS et Android n'ont pas de lot REST
+  équivalent : ils n'avaient **aucun** rattrapage.
+
+  ## Le rattrapage vit sur `conversation:join`
+
+  `ConversationHandler._resyncReadStatusToSocket` renvoie le résumé d'accusés courant
+  (`getLatestMessageSummary`) au socket qui rejoint. `conversation:join` est le point de
+  rattachement de **chaque** reconnexion des trois clients — web `_autoJoinLastConversation`,
+  iOS et Android re-joignent après authentification — et le payload est celui qu'ils traitent
+  déjà : **aucun changement client**.
+
+  Les deux rattrapages ne font pas double emploi : celui-ci pousse le résumé de conversation
+  vers les trois clients, celui du web détaille message par message pour un seul.
+
+  ## `type: 'received'`, jamais `'read'`
+
+  Ce n'est pas un détail de forme. iOS (`ConversationSyncEngine`, `NotificationCoordinator`)
+  et Android ne remettent le compteur de non-lus à zéro que sur un `'read'` émis par
+  **soi-même**. Un rattrapage estampillé `read` aurait vidé la pastille du rejoignant à
+  **chaque ouverture de conversation** — le correctif aurait fabriqué un défaut pire que celui
+  qu'il ferme.
+
+  `received` ne porte que le `summary` agrégé : même contrat que la remise automatique en lot
+  (`MessageHandler.autoDeliverToOnlineRecipients`), qui est le précédent de cette forme. Ni
+  `lastReadAt` ni `unreadCount` ne l'accompagnent — ils n'appartiennent qu'aux diffusions
+  `read`.
+
+  ## Le rattrapage ne peut pas faire reculer une coche
+
+  Vérifié sur les trois clients avant d'écrire la ligne, parce que c'était le seul moyen que ce
+  correctif nuise : `isStaleReceipt` (web, `conversation-ui-store.ts`),
+  `if newStatus.isBetterThan(current)` (iOS, `applyReadReceipt`), `deliveryRank` (Android,
+  `MessageRepository.applyReadReceipt`). Les trois n'appliquent le résumé que **vers le haut**.
+
+  Une conversation sans message n'émet rien. Canal best-effort : le join a déjà réussi et la
+  room est déjà rejointe, donc un rattrapage qui échoue ne le défait pas.
+
+  `participantId` porte la ligne `Participant` que le contrôle d'appartenance vient de
+  résoudre, jamais l'identité de room (un `User.id` dès que le rejoignant a un compte).
+
+  Documentation : `services/gateway/src/socketio/README.md` gagne la section
+  « `read-status:updated` — l'evenement manque pendant une coupure n'est rejoue nulle part ».
+
+## 1.25.4
+
+### Patch Changes
+
+- 74eee6a: Cinq défauts temps réel : un invité qui rejoignait en silence, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
+
+  ## 1. Gateway — l'invité de lien partagé rejoignait en silence
+
+  Le handler gatait **toutes** ses émissions post-join sur `connectedUser.userId`,
+  `undefined` pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a
+  laissé passer et que le socket EST dans la room. Résultat : un invité rejoignait en
+  silence, badge de non-lus vide, et rien pour le remplir.
+
+  `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` — son en-tête
+  nomme même le chemin anonyme comme le cas courant. Le compteur sort donc du garde et
+  reçoit `participantId`. **Pas `connectedUser.id`** (le jeton de session) : il ne résout
+  aucune ligne Participant et aurait rendu `0` en silence, un badge « correct » et faux. Un
+  test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+
+  **L'accusé `conversation:joined` part lui aussi**, sous la même identité. Le blocage annoncé
+  — « quelle identité mettre dans `userId` pour un participant sans compte ? » — s'est dissous à
+  la lecture des clients : les cinq consommateurs (web `use-socket-cache-sync`,
+  `use-stream-socket`, `orchestrator` ; iOS `ConversationSyncEngine`, `ParticipantsView`)
+  n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+  La seule contrainte dure est de **décodage** : `ConversationParticipationEvent.userId` est un
+  `String` **non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé
+  serait silencieusement jeté sur iOS. Le champ doit donc être présent ; sa valeur n'est lue par
+  personne. D'où `participationId = userId ?? participantId`, une seule résolution d'identité
+  pour les deux émissions.
+
+  ## 2. Gateway — une traduction présentée comme telle, mais jamais traduite
+
+  `getTranslation()` lisait `translations[targetLanguage]` **verbatim** quand tous les
+  écrivains stockent sous la forme canonique de `normalizeLanguageCode` (`'pt-BR'` →
+  `'pt'`). Une demande `pt-BR` interrogeait donc une clé absente pendant que la traduction
+  attendait une clé plus loin ; l'appelant sondait 20 fois sur 10 s, puis rendait un repli
+  **fabriqué** `[PT-BR] <texte original>` — le texte source affublé d'une étiquette de
+  langue. Violation directe du Prisme Linguistique, et dans sa pire forme : du contenu non
+  traduit présenté comme traduit.
+
+  Verbatim d'abord, forme normalisée en repli : un document legacy portant réellement une
+  clé régionale reste servi tel quel. Aucune traduction ne change de gagnant — seules
+  celles qu'on ne trouvait pas deviennent trouvables. La cible **rendue** reste celle
+  demandée (`'pt-BR'`), le client corrèle sa requête dessus.
+
+  ## 3. Web — ouvrir un profil coupait la connexion temps réel
+
+  `useSocketIOMessaging` appelait `meeshySocketIOService.reconnect()` **sans condition** au
+  montage. Or `reconnect()` n'est pas un « connecte si besoin » : c'est `disconnect()` suivi
+  d'une reconnexion différée par backoff, 1 à 2,5 s au premier essai. Cinq composants
+  montent ce hook — ouvrir un profil coupait donc un socket parfaitement sain, messages
+  temps réel compris.
+
+  L'étape 1C, quinze lignes plus bas, fait exactement le même geste correctement gardé
+  (`!isConnected && !isConnecting`) ; c'est cette garde qui est appliquée au montage.
+
+  ## 4. Web — une réaction refusée par le serveur restait affichée pour toujours
+
+  Les deux mutations de réaction gardaient leur rollback derrière
+  `if (context?.previousData)`. Or `onMutate` **fabrique** l'état optimiste quand le cache
+  est vide : `previousData` vaut alors `undefined`, et le garde refusait précisément de
+  défaire ce qui venait d'être inventé.
+
+  Le rollback devient inconditionnel — mais `setQueryData(key, undefined)` n'y suffit pas :
+  React Query traite `undefined` comme « ne rien changer ». Restaurer l'absence de donnée
+  exige `removeQueries`. `restoreReactionSnapshot` retire donc l'entrée quand il n'y avait
+  rien, et la réécrit sinon.
+
+  ## 5. Translator — chaque audio traduit partait en double
+
+  Bloc `if audio_bytes:` dupliqué verbatim dans le sender multipart : 2× la charge ZMQ par
+  message vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son
+  propre index, si bien qu'elle désignait le doublon et que la première copie restait un
+  frame orphelin. Rien ne cassait — le gateway résout les frames strictement par
+  `info.index`, bornes vérifiées — ce qui explique la survie du défaut. Origine sans
+  ambiguïté au `git log -L` : un hunk de conflit résolu en double.
+
+  ## Vérification
+
+  - **RED prouvé pour chacun des quatre correctifs TypeScript** avant correction ; le
+    rollback de réaction est resté rouge après un premier correctif « évident »
+    (`setQueryData(key, undefined)`, no-op), ce que seul le test a révélé.
+  - **Suite gateway complète verte** : 654/654 suites, 16 504/16 504 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 563/563 suites, 12 089 tests passés, 21 ignorés,
+    0 échec.
+  - **Réserve sur le translator** : sa suite pytest n'a pas pu être exécutée dans cet
+    environnement (`numpy`/`torch` s'installent depuis l'index PyTorch, bloqué par le
+    proxy). La sûreté du retrait est établie par lecture des deux côtés du contrat —
+    producteur, et consommateur `extractAudioBinaryFrames` — **pas par exécution**.
+
+- 2111603: Deux compteurs qui mentaient sans jamais se corriger : la pastille après une suppression REST, et les accusés après une coupure socket
+
+  ## 1. Gateway — les deux transports REST de suppression ne repoussaient pas la pastille de non-lus
+
+  Le cycle 89 a câblé le recalcul du badge sur le transport WebSocket
+  (`MessageHandler.handleMessageDelete`). Les deux transports REST — `DELETE /messages/:id`
+  (celui d'Android) et `DELETE /conversations/:id/messages/:messageId` (celui du SDK iOS) —
+  ne le faisaient pas : le lecteur voyait le message disparaître pendant que sa pastille
+  continuait de le compter. La liste de conversations du web tourne en `staleTime: Infinity`,
+  donc sans poussée la valeur ne vieillit pas — **elle ment, indéfiniment**.
+
+  Le décompte lui-même était déjà juste (`getUnreadCountsForParticipants` filtre
+  `deletedAt: null`) : il ne manquait que de le **redemander**.
+
+  La poussée vit dans `broadcastMessageMutation`, l'unique broadcaster des cinq routes de
+  mutation REST — donc écrite **une seule fois** pour les deux suppressions. Les trois autres
+  appelants sont des éditions, et une édition ne change aucun compte : le badge n'y est pas
+  touché, ce qui aurait coûté deux requêtes par frappe validée pour zéro delta.
+
+  **L'exclusion porte sur l'AUTEUR (`authorId`), jamais sur l'acteur** : un modérateur qui
+  retire le message d'un autre est lui-même un destinataire dont la pastille doit bouger.
+  C'est le contraire de la file hors ligne, dix lignes plus bas, qui exclut bien l'acteur.
+
+  **C'est le TYPE qui tient la règle**, pas la vigilance : `MessageMutationParams` est une
+  union discriminée où `authorId` est **requis** sur `eventType: 'deleted'` et **absent** de
+  `'edited'`. Un sixième transport de suppression ne compile pas sans nommer l'auteur — les
+  deux callsites REST ont d'ailleurs été trouvés par `tsc`, pas par lecture.
+
+  La table du § « La pastille de non-lus » de `socketio/README.md` annonçait TROIS transports
+  REST de suppression, et les disait dépourvus d'aperçu de liste. Vérification faite : il y en
+  a **deux**, et ils émettent bien `emitConversationPreviewUpdate` depuis qu'ils passent par
+  `broadcastMessageMutation`. Le document est corrigé.
+
+  ## 2. Web — les accusés de lecture n'étaient jamais re-synchronisés après une coupure socket
+
+  Le lot REST `messagesService.getReadStatuses` est gardé par une clé
+  `${conversationId}:${dernier message à soi}` : il ne se relance donc que lorsqu'on **ENVOIE**
+  un nouveau message. Et `conversation:join` ne re-émet aucun `read-status:updated`.
+
+  Depuis que le cycle 85 a rendu ces compteurs **monotones** (`isStaleReceipt` rejette tout
+  résumé qui recule à `totalMembers` inchangé), un `read-status:updated` manqué pendant une
+  coupure n'est plus une valeur en retard qu'un événement suivant corrigerait : c'est un **gel
+  permanent**. L'expéditeur regarde une coche « remis » sur un message que tout le monde a lu,
+  jusqu'à ce qu'il en envoie un autre.
+
+  Le hook rattrapait déjà les MESSAGES manqués sur le front montant de la reconnexion
+  (« Trigger 1 » → `syncNewerMessages`). Ce front est désormais compté **une seule fois**
+  (`reconnectEpoch`, en tête du hook) et sert les deux dettes du même instant : les messages
+  manqués et les accusés manqués. La détection de front, qui était dupliquée pour le premier
+  et absente pour le second, n'existe plus qu'en un endroit.
+
+  ## Vérification
+
+  - **RED prouvé avant chaque correctif** : la pastille au niveau de l'unité partagée ET des
+    deux routes (le type impose de passer _une_ identité ; seuls les tests de route disent
+    LAQUELLE) ; le rattrapage des accusés par un cycle connecté → coupé → reconnecté sans
+    envoi de message.
+  - **Suite gateway complète verte** : 680/680 suites, 16 847/16 847 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 564/564 suites, 12 122 tests passés, 21 ignorés.
+  - **Réserve honnête sur le typecheck web** : `tsc --noEmit -p tsconfig.json` rend **1 224
+    diagnostics, tous situés dans `**tests**/**`, et strictement PRÉ-EXISTANTS\*\* — le même
+    compte exactement, mesuré sur l'arbre stashé. Ce travail n'en ajoute aucun, et aucun ne
+    porte sur un fichier qu'il touche. Le décompte n'a pas été assaini (hors périmètre) mais
+    il est consigné ici pour que le prochain cycle ne le découvre pas comme une nouveauté.
+  - Le test de rattrapage a d'abord été écrit avec `waitFor` et s'est révélé **flaky sous la
+    suite complète** (564 suites en parallèle, délai par défaut d'une seconde dépassé). Il
+    asserte désormais directement après `rerender` — le front monté relance le lot de façon
+    synchrone, il n'y avait rien à attendre. RED/GREEN re-prouvé sous cette forme.
+
+- 45d82ce: Quitter une conversation retracte la frappe qu'on y diffusait — la moitié serveur du correctif typing, pour tous les clients
+
+  Le cycle précédent a réparé les indicateurs de saisie **du web**. Le défaut qu'il
+  contournait côté client était serveur : `conversation:leave` ne retracte pas la frappe.
+
+  Seul `disconnecting` le faisait (`StatusHandler.handleSocketDisconnecting`), et changer de
+  conversation **ne déconnecte pas le socket**. Un utilisateur qui tape dans une conversation puis
+  passe à une autre laissait donc « X est en train d'écrire… » chez tous ses pairs jusqu'à
+  l'expiration de leur filet de sécurité local — sur **tous** les clients. Le correctif web faisait
+  émettre un `typing:stop` au navigateur avant de partir ; iOS et Android restaient exposés, et le
+  web ne l'était plus que par la grâce d'un geste client qu'aucune règle serveur ne garantissait.
+
+  **Le geste juste existait déjà en entier** dans `handleTypingStop`, et il n'est pas anodin :
+  l'identité de la retraction est tirée de l'entrée `activeTypers` (donc juste même si l'utilisateur
+  s'est renommé pendant la frappe), le verrou de throttle est levé pour que la frappe suivante ne
+  soit pas avalée par la fenêtre de coalescence de 2 s, et la suppression multi-appareils évite
+  d'effacer un indicateur qu'un autre appareil du même utilisateur doit encore. Le réécrire pour le
+  départ de conversation aurait été la dixième copie d'une règle qui en a déjà coûté cher.
+
+  Il est donc **extrait tel quel** en `retractTypingIn(socket, normalizedId)` — deux entrées, un seul
+  énoncé — et `ConversationHandler.handleConversationLeave` l'appelle par une dépendance optionnelle
+  que le manager injecte.
+
+  Deux décisions, chacune verrouillée par un test :
+
+  **L'id est passé DÉJÀ NORMALISÉ.** Brancher `handleTypingStop` directement sur
+  `CONVERSATION_LEAVE` aurait été plus court d'une ligne, mais ce handler commence par valider puis
+  `normalizeConversationId` — un `conversation.findUnique` — avant même de regarder s'il y a quelque
+  chose à retracter. `handleConversationLeave` vient de résoudre exactement le même id : le
+  brancher naïvement aurait payé une seconde résolution à **chaque changement de conversation**,
+  pour un socket qui neuf fois sur dix ne tapait pas.
+
+  **La retraction précède `socket.leave(room)` et porte son propre `try/catch`.** L'ordre garde
+  l'énoncé lisible — « je retire ce que j'ai diffusé, puis je sors » — et le catch local est ce qui
+  empêche une retraction en échec de transformer un départ demandé par le client en
+  `conversation:leave` refusé.
+
+  **Un test du fichier ne discriminait rien.** Le double de `validateSocketEvent` y rend un
+  `conversationId` CONSTANT : « id normalisé » et « id brut » y étaient indistinguables, et la
+  mutation correspondante survivait au premier passage. Le test fait désormais échoïser son entrée au
+  double et écarte explicitement l'id normalisé de l'identifiant reçu — sans quoi il aurait validé
+  les deux versions du code (leçon 128).
+
+  Vérification :
+
+  - **RED prouvé** avant le correctif : d'abord à la compilation (la dépendance n'existait pas),
+    puis 3 rouges de comportement une fois le type en place.
+  - **Mutation appliquée et vérifiée — 5 réversions, 5 rouges** : retraction jamais appelée (3),
+    retraction déplacée après la sortie de room (1), id brut relayé à la place du normalisé (1),
+    `try/catch` local retiré (1), et l'extraction rendue injoignable depuis `typing:stop` (10 rouges
+    sur les suites StatusHandler, qui prouvent que le chemin d'origine passe bien par elle).
+    Restauré, re-vérifié vert.
+  - **Suite gateway complète : 654/654 suites, 16 491 tests verts** (baseline au même commit :
+    16 486 — les 5 tests neufs).
+  - `tsc --noEmit` gateway : **0 diagnostic avant comme après**.
+
+- 6baa30e: Deux compteurs de lecture qui mentaient : la synchro multi-appareils d'iOS, et le badge d'un invité de lien partagé
+
+  Deux défauts indépendants, même symptôme pour l'utilisateur — un compteur de non-lus
+  qui ne bouge pas quand il devrait, ou qui retombe à zéro quand il ne devrait pas.
+
+  ## 1. `mark-read` diffusait un `read-status:updated` amputé
+
+  `POST /conversations/:id/mark-read` construisait son payload sans `lastReadAt` ni
+  `unreadCount`. Or `ReadStatusUpdatedEventData` les déclare comme une **paire** sur
+  `type: 'read'`, et le contrat dit explicitement qu'un consommateur « les applique
+  ensemble ou pas du tout ». iOS le fait à la lettre :
+
+  ```swift
+  guard event.type == "read",
+        let lastReadAt = event.lastReadAt,
+        let unreadCount = event.unreadCount else { return }
+  ```
+
+  Un payload amputé n'est donc pas appliqué partiellement — il est **silencieusement
+  jeté**. Et c'est précisément cette route que poste `ConversationService.markRead`, le
+  transport de lecture primaire d'iOS : **la synchronisation de lecture multi-appareils
+  d'iOS ne partait jamais**. Lire une conversation sur son iPhone ne descendait pas le
+  badge sur son iPad. La route jumelle (`message-read-status.ts`) envoyait le couple
+  correctement depuis toujours — le défaut était la divergence entre deux routes qui
+  doivent dire la même chose.
+
+  Le couple est désormais résolu **une fois et utilisé deux fois** : il accompagne la
+  diffusion, et il alimente la remise à zéro du badge, qui faisait jusqu'ici son propre
+  `getUnreadCount`. Une requête de moins par marquage de lecture. Il ne voyage que sur un
+  `read` — seule action qui avance un curseur de lecture ; un `received` (distribution) ne
+  déplace jamais `lastReadAt`. Le payload est en outre typé `ReadStatusUpdatedEventData`
+  au lieu d'être structurellement libre.
+
+  ## 2. Un invité de lien partagé voyait toujours `unreadCount: 0`
+
+  `GET /conversations/:id` recalculait le compteur avec un
+  `where: { conversationId, userId, isActive: true }` **écrit à la main**. Pour un invité
+  de lien partagé, `authContext.userId` porte un `Participant.id` (branche anonyme
+  d'`UnifiedAuthService`) : la clause comparait un id de participant à la colonne `userId`,
+  ne matchait rien, et le compteur retombait à `0` — un `0` qui **écrasait ensuite le badge
+  que le socket venait de pousser juste**. Le badge d'un invité ne pouvait donc que
+  disparaître à chaque ouverture de la conversation.
+
+  `resolveCallerParticipant` existe exactement pour ce site : sa précédence
+  (`participantId` avant `userId`) est celle de `canAccessConversation`, donc l'accès et le
+  comptage ne peuvent plus diverger sur l'identité de l'appelant. Le helper exclut de plus
+  les participants bannis, ce que la clause manuelle ne faisait pas.
+
+  ## Vérification
+
+  - **RED prouvé pour chacun** en réintroduisant le défaut : le couple retiré du payload →
+    2 rouges ; la clause manuelle restaurée → 1 rouge. Restaurés, re-vérifiés verts.
+  - Le double de base de données du test d'invité ne répond **que sur la colonne
+    interrogée** — une clause `{ userId: <participant id> }` n'y matche rien, comme en base.
+    Et le module d'access-control n'y est plus stubbé que sur `canAccessConversation` : la
+    vraie règle de précédence est exercée, pas un mock qui la répète.
+  - Suite gateway complète verte, `tsc --noEmit` gateway : 0 diagnostic.
+
+## 1.25.3
+
+### Patch Changes
+
+- 34383f0: Un `typing:stop` retracte ce que ce socket a réellement diffusé — et ne coûte plus rien quand il n'a rien à retracter
+
+  `handleTypingStop` reconstruisait depuis zéro tout ce que `handleTypingStart` avait déjà établi :
+  `resolveParticipant` (participation), `shouldShowTypingIndicator` (préférence), puis
+  `_resolveTypingIdentity` (identité), avant de consulter enfin l'état de suivi `activeTypers`. Or
+  `activeTypers` EST l'enregistrement exact de ce qui a été diffusé — `_trackTyping` ne s'exécute que
+  sur un start ayant franchi ces mêmes portes. Le commentaire du fichier énonçait déjà la règle (« A
+  stop must retract exactly what a prior start broadcast, so the handler proceeds on tracking state —
+  NOT the live preference ») ; il ne l'appliquait qu'à moitié. L'entrée de suivi est désormais à la
+  fois l'autorisation, l'audience et la charge utile de la retraction, et rien ne la surcharge.
+
+  Trois conséquences, chacune verrouillée par un test.
+
+  **Amplification.** `typing:start` est limité en débit (`SOCKET_RATE_LIMITS.TYPING_INDICATOR`),
+  `typing:stop` ne l'est pas. Un stop sans start correspondant dépensait pourtant `resolveParticipant`
+
+  - la lecture de préférence + la requête des viewers bloqués (`participant.findMany` puis la requête
+    de blocage), puis diffusait une retraction fantôme à **tous** les sockets de la conversation : un
+    paquet client non throttlé achetait trois allers-retours base + un fan-out N-way. Le socket qui n'a
+    rien diffusé n'a rien à reprendre : on sort avant toute I/O. La borne de débit manquante devient
+    sans objet plutôt que d'être ajoutée — un limiteur sur `typing:stop` aurait jeté de vraies
+    retractions, ce qui est précisément le défaut qu'on ne veut pas.
+
+  **Indicateur fantôme.** Re-vérifier la participation sur le chemin du stop ne pouvait que REFUSER de
+  reprendre ce que les pairs voyaient déjà. Un participant désactivé en cours de frappe (retrait par
+  un admin) voyait donc son stop rejeté, son entrée `activeTypers` fuir, et ses pairs garder « X est
+  en train d'écrire… » jusqu'à la déconnexion du socket. Même classe de défaut que celui déjà corrigé
+  pour la préférence qui bascule en cours de rafale — la même cause, l'autre porte.
+
+  **Identité de la retraction.** Le stop ré-interrogeait l'identité au lieu de reprendre celle sous
+  laquelle le start était parti. Le cache masquait le coût jusqu'à son invalidation (une édition de
+  profil) : après renommage en cours de rafale, le start partait sous « Alice S » et le stop sous
+  « Alice Renamed » — une retraction désignant quelqu'un que les pairs n'ont jamais vu. L'entrée de
+  suivi porte déjà `username`/`displayName` ; elle les rend, sans lookup.
+
+  Les tests qui appelaient `handleTypingStop` sans start préalable ont été corrigés plutôt que
+  contournés : un stop sans start n'est pas une scène de fond, c'est un cas distinct — désormais
+  couvert explicitement, dans les deux fichiers de suite.
+
+## 1.25.2
+
+### Patch Changes
+
+- 778e96c: Un invité de lien partagé peut enfin acquitter ses messages — son badge de non-lus ne pouvait jusqu'ici que monter
+
+  Le serveur soutenait déjà la MOITIÉ anonyme du suivi de lecture, et délibérément :
+  `MessageReadStatusService.getUnreadCount` résout aussi bien un `Participant.id` qu'un `User.id`,
+  `emitUnreadCountsToRecipients` adresse `ROOMS.user(userId ?? id)`, et `AuthHandler` fait rejoindre
+  cette room aux sockets anonymes précisément « because joining anything else had already left
+  anonymous participants without their unread badge ». Le compte était donc tenu, et poussé.
+
+  L'autre moitié — celle qui REMET LE COMPTEUR À ZÉRO — était fermée deux fois :
+
+  1. **La porte.** `message-read-status.ts` et les trois routes de lecture de `conversations/messages.ts`
+     (`mark-read`, `read`, `mark-unread`) portaient `allowAnonymous: false` : 403 avant même de
+     regarder la conversation. Elles acceptent désormais un appelant **authentifié sans compte** —
+     `requireAuth: true` reste, un appelant sans jeton n'entre toujours pas. C'est la règle que
+     `routes/reactions.ts` applique depuis toujours (« Les anonymes peuvent aussi réagir ») et que le
+     POST d'envoi de message applique aussi : l'invité écrivait et réagissait, il ne pouvait pas lire.
+
+  2. **La clé.** Les six gardes d'appartenance de ces routes filtraient `Participant.userId` avec
+     `authContext.userId`, qui **vaut un `Participant.id`** pour un anonyme (`middleware/auth.ts`,
+     branche anonyme : `userId: participant.id`). La comparaison n'appariait donc rien : la garde ne
+     sautait pas une ligne inexistante, elle rendait invisible une ligne qui existe. Les six passent
+     par un `resolveCallerParticipant` unique, dont la précédence (`participantId` d'abord, `userId`
+     ensuite) est celle de `canAccessConversation`, dans le même fichier — les deux réponses ne
+     peuvent plus diverger sur l'identité de l'appelant.
+
+  Effets de bord réparés au passage : les préférences de confidentialité d'un anonyme sont désormais
+  demandées EN TANT QU'anonyme (`shouldShowReadReceipts(userId, isAnonymous)` — trois sites codaient
+  `false` en dur sous le commentaire « les utilisateurs authentifiés ne sont pas anonymes ici », qui
+  n'était vrai que parce que la porte était fermée) ; `mark-unread` ne relit plus deux fois le même
+  participant ; et `GET /messages/:messageId/read-status` cesse de filtrer l'appartenance EN RELATION,
+  la cinquième copie de la règle.
+
+  Le client iOS envoie déjà `X-Session-Token` sur ses appels REST (`APIClient.swift`) et appelle
+  exactement `/conversations/:id/mark-read` et `/mark-unread` : le suivi de lecture des invités y
+  fonctionne dès ce correctif, sans une ligne de Swift. La webapp, elle, avait débranché son propre
+  suivi pour les sessions anonymes (`bubble-stream-page.tsx`, « la route mark-as-read est JWT-only ») ;
+  le rebrancher demande d'abord que `apiService` porte `X-Session-Token`, ce qu'il ne fait pas encore.
+
+## 1.25.1
+
+### Patch Changes
+
+- ac3c088: L'enrichissement d'une pièce jointe (transcription, audio traduit) atteint enfin les lecteurs qui ne sont pas dans le fil
+
+  `message:attachment-updated` — le delta émis quand Whisper finit de transcrire une note
+  vocale, puis quand NLLB+Chatterbox rendent chaque langue d'audio traduit — n'était diffusé
+  que dans la room `conversation:<id>`. Deux audiences le perdaient :
+
+  - **Le lecteur resté sur la liste de conversations.** iOS ne rejoint une room de
+    conversation qu'à l'OUVERTURE du fil : au lancement de l'app, un lecteur sur la liste
+    n'est dans aucune room de conversation. Son SDK applique pourtant ce delta sans regarder
+    quel fil est ouvert (`ConversationSyncEngine.handleAttachmentUpdated` patche le message
+    en cache de n'importe quelle conversation) — la room personnelle n'est donc pas une
+    audience plus large pour le principe, c'est l'endroit où l'écriture atterrit vraiment.
+  - **Le lecteur hors ligne.** Le `message:new` mis en file à l'ENVOI porte la pièce jointe
+    telle qu'elle était alors : sans transcription, sans audio traduit, les deux arrivant une
+    à deux secondes plus tard. Sans rejeu de l'enrichissement, la copie rejouée à la
+    reconnexion reste définitivement celle-là.
+
+  Même classe de défaut que l'aperçu de liste qui ne se retraduisait jamais : le Prisme
+  (« il s'applique à TOUT le contenu, transcriptions audio comprises ») dépendait de la
+  ROUTE du lecteur — avoir le fil ouvert au moment où Whisper a fini — et non de ses
+  préférences de langue.
+
+  L'émission chaîne désormais la room de conversation et les rooms personnelles de tous les
+  participants (une seule copie par socket, `emitToConversationParticipants`), et met
+  l'enrichissement en file pour les participants hors ligne sous le nouveau
+  `eventType: 'attachment-updated'`, rejoué en `message:attachment-updated` à la
+  reconnexion. La clé de dédup est l'id de la PIÈCE JOINTE : l'identité par défaut
+  `(messageId, eventType)` ferait superséder l'enrichissement de la première pièce jointe
+  par celui de la seconde sur un message à deux audios. Le payload n'est pas filtré par
+  langue du destinataire — les clients REMPLACENT la carte de traductions de la pièce
+  jointe, donc un sous-ensemble par lecteur effacerait les langues déjà en cache.
+
+  Une panne de la requête participants dégrade vers la room de conversation seule (l'audience
+  d'avant), jamais vers le silence.
+
+- ac3c088: Une page delta de conversations tronquée se rattrape au lieu de sauter des lignes
+
+  `GET /conversations?updatedSince=` plafonne à 100 lignes et triait par `lastMessageAt`
+  décroissant — l'ordre de l'écran de liste, sans aucun rapport avec le filtre. Une fenêtre
+  de synchronisation ayant touché plus de 100 conversations rendait donc une page tronquée
+  dont les lignes coupées n'étaient pas « les moins récemment mises à jour ». Les deux
+  clients avancent pourtant leur watermark au max des `updatedAt` REÇUS : les lignes coupées
+  étaient enjambées définitivement, jusqu'à la réconciliation complète (1×/24 h sur iOS).
+  Entre-temps la liste affichait des compteurs de non-lus et des aperçus périmés sans qu'aucun
+  signal ne l'indique.
+
+  Une page delta est désormais triée par `updatedAt` croissant (`id` départage les égalités) :
+  les lignes coupées sont exactement celles d'`updatedAt` supérieur à la dernière ligne
+  rendue, donc le watermark qui les enjambait pointe dessus et l'appel suivant les rend. La
+  troncature devient une pagination naturelle, sans aucun changement client. Une page
+  ordinaire (sans `updatedSince`) garde l'ordre de récence.
+
+  Reste à la charge des clients, et le web le couvre déjà (`DELTA_PAGE_LIMIT` ⇒ relecture
+  complète) : plus de 100 conversations portant la MÊME milliseconde d'`updatedAt` débordent
+  d'une page que la borne stricte `gt` ne peut pas reprendre.
+
+- Updated dependencies [ac3c088]
+  - @meeshy/shared@1.10.2
+
+## 1.25.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - une notification manquée l'était pour la session entière — le web ignorait `_seq` (#2844)
+  - deuxieme widget ecran d'accueil — conversations recentes (#2841)
+  - CallNotification no longer orphans the ringtone on fast unmount (#2843)
+  - déclare `userUpdated` sur `MessageSocketProviding` — main était rouge
+
+## 1.24.1
+
+### Patch Changes
+
+- 70a0e04: user:updated — les composants du nom voyagent en groupe, et iOS applique enfin l'événement
+
+  La gateway diffusait `user:updated` à tous les contacts depuis des mois ; le web
+  l'appliquait, iOS n'avait aucun listener. Un interlocuteur qui changeait d'avatar
+  ou de nom restait figé sur la ligne de liste, l'en-tête et le sélecteur de
+  transfert jusqu'au prochain refetch complet.
+
+  Le payload envoie désormais les quatre composants du nom ensemble
+  (`displayName`, `firstName`, `lastName`, `username`) dès que l'un change : un
+  delta partiel est irrecomposable chez un client qui ne stocke que le nom déjà
+  composé. `null` y signifie EFFACÉ, seule façon de faire retomber le nom sur le
+  composant suivant.
+
+- Updated dependencies [70a0e04]
+  - @meeshy/shared@1.10.1
+
+## 1.24.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.10.0
+
 ## 1.23.0
 
 ### Minor Changes

@@ -137,6 +137,12 @@ describe('GET /attachments/:attachmentId', () => {
       const body = res.json();
       expect(body.success).toBe(false);
     });
+
+    it('keeps CORP header on 404 so the error response is not CORP-blocked by the browser', async () => {
+      const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+      expect(res.statusCode).toBe(404);
+      expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    });
   });
 
   describe('when file path is not found', () => {
@@ -395,6 +401,12 @@ describe('GET /attachments/file/*', () => {
       const body = res.json();
       expect(body.success).toBe(false);
     });
+
+    it('keeps CORP header on 404 so the error response is not CORP-blocked by the browser', async () => {
+      const res = await app.inject({ method: 'GET', url: '/attachments/file/uploads/file.jpg' });
+      expect(res.statusCode).toBe(404);
+      expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    });
   });
 
   describe('ETag / conditional GET', () => {
@@ -416,6 +428,17 @@ describe('GET /attachments/file/*', () => {
         headers: { 'if-none-match': expectedEtag },
       });
       expect(res.statusCode).toBe(304);
+    });
+
+    it('keeps CORP/CORS headers on 304 so revalidated images stay embeddable cross-origin', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.jpg',
+        headers: { 'if-none-match': expectedEtag },
+      });
+      expect(res.statusCode).toBe(304);
+      expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+      expect(res.headers['access-control-allow-origin']).toBe('*');
     });
 
     it('returns 200 when If-None-Match does not match ETag', async () => {
@@ -637,6 +660,14 @@ describe('contrôle d\'accès aux pièces jointes', () => {
     const app = await buildApp({ granted: false });
     const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
     expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('garde le header CORP cross-origin sur un refus 403', async () => {
+    const app = await buildApp({ granted: false });
+    const res = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(res.statusCode).toBe(403);
+    expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
     await app.close();
   });
 

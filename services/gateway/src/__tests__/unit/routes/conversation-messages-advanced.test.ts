@@ -1372,6 +1372,37 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
+    // La QUATRIÈME audience d'une suppression. Le cycle 89 l'a câblée sur le
+    // transport WS ; les deux transports REST — dont celui-ci, celui du SDK iOS
+    // — laissaient la pastille compter un message que le lecteur voyait
+    // pourtant disparaître, indéfiniment (`staleTime: Infinity` côté web).
+    //
+    // L'exclusion porte sur l'AUTEUR (`senderId`, ici `PART_ID`) et jamais sur
+    // l'acteur (`USER_ID`) : un modérateur qui retire le message d'un autre est
+    // lui-même un destinataire dont la pastille doit bouger. Le type de
+    // `broadcastMessageMutation` impose de passer UNE identité ; seul ce test
+    // dit LAQUELLE.
+    it('repousse la pastille de non-lus, en excluant l\'auteur et non l\'acteur', async () => {
+      const emitUnread = jest.fn().mockResolvedValue(undefined);
+      fastify.socketIOHandler.getManager.mockReturnValue({
+        getIO: jest.fn().mockReturnValue({ to: jest.fn().mockReturnValue({ emit: jest.fn() }) }),
+        enqueueOfflineMessageMutation: jest.fn().mockResolvedValue(undefined),
+        emitUnreadCountsToRecipients: emitUnread,
+      });
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({});
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      expect(emitUnread).toHaveBeenCalledWith({
+        conversationId: CONV_ID,
+        senderId: PART_ID,
+      });
+    });
+
     // Cette route ne recalculait PAS `lastMessageAt`, alors que les deux autres
     // chemins de suppression le faisaient mot pour mot. C'est justement la
     // route d'iOS et de la vue web : supprimer le dernier message y laissait la

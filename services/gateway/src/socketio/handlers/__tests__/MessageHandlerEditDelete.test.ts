@@ -1414,6 +1414,52 @@ describe('MessageHandler — handleMessageDelete', () => {
     }));
   });
 
+  // Un badge de non-lus compte des messages qui n'existent plus.
+  //
+  // `conversation:unread-updated` est le SEUL signal qui déplace la pastille en
+  // vif, et aucun de ses sites d'émission n'était un chemin de SUPPRESSION : ils
+  // sont tous des chemins d'ENVOI. La liste de conversations du web tourne en
+  // `staleTime: Infinity` — sans poussée, la pastille garde sa valeur jusqu'au
+  // prochain refetch complet, alors que le message qu'elle compte a disparu de
+  // la conversation sous les yeux du lecteur.
+  //
+  // Le décompte lui-même est déjà juste : `getUnreadCountsForParticipants`
+  // filtre `deletedAt: null`. Il ne manquait que de le redemander.
+  it('repousse le badge de non-lus aux destinataires après une suppression', async () => {
+    setupSuccessfulDelete();
+    const recipientUserId = 'user-recipient-0011223344556677';
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date('2024-01-01') },
+      { id: 'part-recipient', userId: recipientUserId, joinedAt: new Date('2024-01-01') },
+    ]);
+    (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(
+      new Map([['part-recipient', 2]])
+    );
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(emitsTo(deps.io, `user:${recipientUserId}`)).toContainEqual([
+      'conversation:unread-updated',
+      { conversationId: VALID_CONV_ID, unreadCount: 2 },
+    ]);
+  });
+
+  it('n\'échoue pas la suppression quand le recalcul du badge échoue', async () => {
+    setupSuccessfulDelete();
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: null },
+      { id: 'part-recipient', userId: 'user-recipient-0011223344556677', joinedAt: null },
+    ]);
+    (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockRejectedValue(
+      new Error('read cursor store down')
+    );
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(callback).toHaveBeenCalledWith({ success: true, data: { messageId: VALID_MSG_ID } });
+  });
+
   it('enqueues the delete for the OFFLINE original author when an admin deletes their message', async () => {
     const enqueue = jest.fn().mockResolvedValue(undefined);
     const offlineAuthorUserId = 'user-offline-author-001122334455';

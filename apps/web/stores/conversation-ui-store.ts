@@ -17,6 +17,42 @@ import type { ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
 
 const TYPING_INDICATOR_TIMEOUT_MS = 5000;
 
+/**
+ * Is `incoming` an OLDER view of the receipts than what is already stored?
+ *
+ * Two writers feed the receipt maps and only one of them is ordered. The socket
+ * (`presence.service.ts`) is ordered per connection. The REST batch
+ * (`use-conversation-messages-rq.ts` → `messagesService.getReadStatuses`) is a
+ * SNAPSHOT taken when the request left and applied whenever it returns — and it
+ * is re-fired on every own message sent, so its window is wide open in normal
+ * use, not just at cold start.
+ *
+ * Lose that race and `DeliveryIndicator` walks backwards in front of the user:
+ * it renders `readCount > 0` as BLUE double checks, so a snapshot carrying
+ * `readCount: 0` turns them grey again and leaves them wrong until the next
+ * receipt happens to arrive.
+ *
+ * `totalMembers` is what keeps this guard from freezing the counts forever:
+ * receipts are grow-only only for a FIXED membership. When someone leaves, the
+ * server recomputes against the survivors and legitimately reports fewer reads —
+ * so a changed `totalMembers` means the incoming summary describes a different
+ * conversation, and it wins outright.
+ *
+ * A regressing summary is rejected WHOLE rather than merged field-by-field: a
+ * per-field maximum would synthesise a state no server ever reported, and
+ * `readCount >= totalMembers` is what drives the "read by all" branch of the
+ * indicator. Every stored summary stays a real server snapshot.
+ */
+function isStaleReceipt(
+  current: ReadStatusSummary | undefined,
+  incoming: ReadStatusSummary
+): boolean {
+  if (!current) return false;
+  if (current.totalMembers !== incoming.totalMembers) return false;
+  return incoming.readCount < current.readCount
+    || incoming.deliveredCount < current.deliveredCount;
+}
+
 // Stockage des timeouts hors du store Zustand (non-sérialisable, runtime uniquement)
 const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -217,13 +253,17 @@ export const useConversationUIStore = create<ConversationUIStore>()(
             && current.totalMembers === summary.totalMembers
             && current.deliveredCount === summary.deliveredCount
             && current.readCount === summary.readCount) return;
+          if (isStaleReceipt(current, summary)) return;
           set((state) => {
             const updates: Partial<ConversationUIState> = {
               readStatusSummaries: { ...state.readStatusSummaries, [conversationId]: summary },
             };
-            // Also update the latest own message's per-message status
+            // Also update the latest own message's per-message status — but the
+            // per-message entry is guarded on its OWN history, not on the
+            // conversation's: the REST batch writes it directly, so it can
+            // legitimately be ahead of the conversation-level summary.
             const latestOwnMsgId = state.latestOwnMessageIds[conversationId];
-            if (latestOwnMsgId) {
+            if (latestOwnMsgId && !isStaleReceipt(state.messageReadStatuses[latestOwnMsgId], summary)) {
               updates.messageReadStatuses = { ...state.messageReadStatuses, [latestOwnMsgId]: summary };
             }
             return updates;
@@ -231,15 +271,28 @@ export const useConversationUIStore = create<ConversationUIStore>()(
         },
 
         updateMessageReadStatus: (messageId, summary) => {
+          if (isStaleReceipt(get().messageReadStatuses[messageId], summary)) return;
           set((state) => ({
             messageReadStatuses: { ...state.messageReadStatuses, [messageId]: summary },
           }));
         },
 
         updateMessageReadStatusBatch: (statuses) => {
-          set((state) => ({
-            messageReadStatuses: { ...state.messageReadStatuses, ...statuses },
-          }));
+          set((state) => {
+            // Per ENTRY, never all-or-nothing: one message whose snapshot lost
+            // its race must not cost the batch the receipts it carries for
+            // every other message.
+            const fresh = Object.entries(statuses).filter(
+              ([messageId, summary]) => !isStaleReceipt(state.messageReadStatuses[messageId], summary)
+            );
+            if (fresh.length === 0) return {};
+            return {
+              messageReadStatuses: {
+                ...state.messageReadStatuses,
+                ...Object.fromEntries(fresh),
+              },
+            };
+          });
         },
 
         setLatestOwnMessageId: (conversationId, messageId) => {

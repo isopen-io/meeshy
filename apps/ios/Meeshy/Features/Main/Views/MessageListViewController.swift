@@ -535,6 +535,15 @@ final class MessageListViewController: UIViewController {
             // ZStack contenant uniquement le `Color.black` de fond — d'où
             // l'écran noir observé en prod.
             let allAudioItems = vm?.allAudioItems ?? []
+            // Cold-open plein écran audio (F1) : sans lecture déjà active, la
+            // carte Now Playing / l'avance auto doivent porter le même
+            // contexte conversation que `ConversationViewModel.playAudio`
+            // (mini-player / lock screen). `audioQueueTail(after:)` est
+            // réutilisée telle quelle — jamais redéfinie ici.
+            let conversationName = vm?.currentConversationName
+            let audioQueueTailProvider: (String) -> [QueuedAudio] = { [weak self] attachmentId in
+                self?.conversationViewModel?.audioQueueTail(after: attachmentId) ?? []
+            }
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
@@ -679,6 +688,8 @@ final class MessageListViewController: UIViewController {
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },
                         allAudioItems: allAudioItems,
+                        conversationName: conversationName,
+                        audioQueueTailProvider: audioQueueTailProvider,
                         onScrollToMessage: scrollHandler,
                         onCallBack: callBackHandler,
                         onLongPressCallDetail: { callDetailHandler?(messageId) },
@@ -1473,7 +1484,11 @@ private struct TypingIndicatorBubble: View {
             HStack(spacing: 6) {
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
+                        // scale via MeeshyFont.relative. La bulle est dimensionnée par
+                        // padding (pas de frame figée), donc elle grandit proprement ;
+                        // les 3 points restent des `Circle` décoratifs de 5pt.
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
                         .lineLimit(1)
                 }

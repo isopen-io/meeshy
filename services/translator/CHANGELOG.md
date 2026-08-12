@@ -1,5 +1,181 @@
 # @meeshy/translator
 
+## 1.24.1
+
+### Patch Changes
+
+- 74eee6a: Cinq défauts temps réel : un invité qui rejoignait en silence, une traduction fabriquée, un socket coupé, une réaction fantôme et un audio envoyé en double
+
+  ## 1. Gateway — l'invité de lien partagé rejoignait en silence
+
+  Le handler gatait **toutes** ses émissions post-join sur `connectedUser.userId`,
+  `undefined` pour un anonyme — alors que le contrôle d'appartenance juste au-dessus l'a
+  laissé passer et que le socket EST dans la room. Résultat : un invité rejoignait en
+  silence, badge de non-lus vide, et rien pour le remplir.
+
+  `getUnreadCount` accepte indifféremment un `Participant.id` ou un `User.id` — son en-tête
+  nomme même le chemin anonyme comme le cas courant. Le compteur sort donc du garde et
+  reçoit `participantId`. **Pas `connectedUser.id`** (le jeton de session) : il ne résout
+  aucune ligne Participant et aurait rendu `0` en silence, un badge « correct » et faux. Un
+  test verrouille l'identité exacte transmise, pas seulement le fait qu'un compteur parte.
+
+  **L'accusé `conversation:joined` part lui aussi**, sous la même identité. Le blocage annoncé
+  — « quelle identité mettre dans `userId` pour un participant sans compte ? » — s'est dissous à
+  la lecture des clients : les cinq consommateurs (web `use-socket-cache-sync`,
+  `use-stream-socket`, `orchestrator` ; iOS `ConversationSyncEngine`, `ParticipantsView`)
+  n'exploitent QUE `conversationId`. Aucun ne lit `userId`.
+
+  La seule contrainte dure est de **décodage** : `ConversationParticipationEvent.userId` est un
+  `String` **non optionnel** côté Swift — omettre le champ ferait échouer le décodage et l'accusé
+  serait silencieusement jeté sur iOS. Le champ doit donc être présent ; sa valeur n'est lue par
+  personne. D'où `participationId = userId ?? participantId`, une seule résolution d'identité
+  pour les deux émissions.
+
+  ## 2. Gateway — une traduction présentée comme telle, mais jamais traduite
+
+  `getTranslation()` lisait `translations[targetLanguage]` **verbatim** quand tous les
+  écrivains stockent sous la forme canonique de `normalizeLanguageCode` (`'pt-BR'` →
+  `'pt'`). Une demande `pt-BR` interrogeait donc une clé absente pendant que la traduction
+  attendait une clé plus loin ; l'appelant sondait 20 fois sur 10 s, puis rendait un repli
+  **fabriqué** `[PT-BR] <texte original>` — le texte source affublé d'une étiquette de
+  langue. Violation directe du Prisme Linguistique, et dans sa pire forme : du contenu non
+  traduit présenté comme traduit.
+
+  Verbatim d'abord, forme normalisée en repli : un document legacy portant réellement une
+  clé régionale reste servi tel quel. Aucune traduction ne change de gagnant — seules
+  celles qu'on ne trouvait pas deviennent trouvables. La cible **rendue** reste celle
+  demandée (`'pt-BR'`), le client corrèle sa requête dessus.
+
+  ## 3. Web — ouvrir un profil coupait la connexion temps réel
+
+  `useSocketIOMessaging` appelait `meeshySocketIOService.reconnect()` **sans condition** au
+  montage. Or `reconnect()` n'est pas un « connecte si besoin » : c'est `disconnect()` suivi
+  d'une reconnexion différée par backoff, 1 à 2,5 s au premier essai. Cinq composants
+  montent ce hook — ouvrir un profil coupait donc un socket parfaitement sain, messages
+  temps réel compris.
+
+  L'étape 1C, quinze lignes plus bas, fait exactement le même geste correctement gardé
+  (`!isConnected && !isConnecting`) ; c'est cette garde qui est appliquée au montage.
+
+  ## 4. Web — une réaction refusée par le serveur restait affichée pour toujours
+
+  Les deux mutations de réaction gardaient leur rollback derrière
+  `if (context?.previousData)`. Or `onMutate` **fabrique** l'état optimiste quand le cache
+  est vide : `previousData` vaut alors `undefined`, et le garde refusait précisément de
+  défaire ce qui venait d'être inventé.
+
+  Le rollback devient inconditionnel — mais `setQueryData(key, undefined)` n'y suffit pas :
+  React Query traite `undefined` comme « ne rien changer ». Restaurer l'absence de donnée
+  exige `removeQueries`. `restoreReactionSnapshot` retire donc l'entrée quand il n'y avait
+  rien, et la réécrit sinon.
+
+  ## 5. Translator — chaque audio traduit partait en double
+
+  Bloc `if audio_bytes:` dupliqué verbatim dans le sender multipart : 2× la charge ZMQ par
+  message vocal multilingue. La seconde copie écrasait en outre la métadonnée avec son
+  propre index, si bien qu'elle désignait le doublon et que la première copie restait un
+  frame orphelin. Rien ne cassait — le gateway résout les frames strictement par
+  `info.index`, bornes vérifiées — ce qui explique la survie du défaut. Origine sans
+  ambiguïté au `git log -L` : un hunk de conflit résolu en double.
+
+  ## Vérification
+
+  - **RED prouvé pour chacun des quatre correctifs TypeScript** avant correction ; le
+    rollback de réaction est resté rouge après un premier correctif « évident »
+    (`setQueryData(key, undefined)`, no-op), ce que seul le test a révélé.
+  - **Suite gateway complète verte** : 654/654 suites, 16 504/16 504 tests.
+    `tsc --noEmit` gateway : 0 diagnostic.
+  - **Suite web complète verte** : 563/563 suites, 12 089 tests passés, 21 ignorés,
+    0 échec.
+  - **Réserve sur le translator** : sa suite pytest n'a pas pu être exécutée dans cet
+    environnement (`numpy`/`torch` s'installent depuis l'index PyTorch, bloqué par le
+    proxy). La sûreté du retrait est établie par lecture des deux côtés du contrat —
+    producteur, et consommateur `extractAudioBinaryFrames` — **pas par exécution**.
+
+## 1.24.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - une notification manquée l'était pour la session entière — le web ignorait `_seq` (#2844)
+  - deuxieme widget ecran d'accueil — conversations recentes (#2841)
+  - CallNotification no longer orphans the ringtone on fast unmount (#2843)
+  - déclare `userUpdated` sur `MessageSocketProviding` — main était rouge
+
+## 1.23.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - reinitialise isPaused au changement de story pour eviter un gel permanent
+  - convertit la duree audio ms->s avant formatDuration sur la tuile PostCard
+  - purge 39 cles orphelines du catalogue, adapte MiniAudioPlayerBar a la relance de tete, etend le timeout AuthService
+  - release.yml ne tourne plus sur dev — stoppe les bumps/tags fantomes qui bloquaient la release de main
+  - réconcilie l'échec silencieux du serveur (success:true, attachments tronqués)
+  - live mood-emoji badge on the Contacts list avatars
+  - retombe sur la durée client quand ffprobe échoue pour une vidéo
+  - expose l'erreur d'upload via l'API du hook
+  - purge selectedFiles sur échec d'upload image/vidéo
+  - l'ouverture cesse d'avaler la fermeture dans l'aperçu du composer
+  - corrige le double comptage de la limite d'attachments
+  - extrait la durée média côté client et la transmet à l'upload
+  - archives Xcode Cloud signées avec entitlements + boot DB jamais fatal (crash-loop macOS build 1750)
+  - CallDetailSheet uses per-caller accentColor, not hardcoded indigo500
+  - migre 5 sites SDK restants vers adaptiveOnChange
+  - l'effectif de la ligne de liste — compté par la base, et convergent en temps réel
+  - signalement gated par auteur sur les réels et le hashtag (revue #3)
+  - repost story gated PUBLIC + partage ne ment plus au clic annulé (revue #1 et #2)
+  - restore background+foreground video/audio playback in the story viewer (#2818)
+  - repost minimal des stories via « Republier » (point 4)
+  - téléchargement média sur PostCard/PostDetail/ReelPlayer (point 3)
+  - survol continu entre tuiles (fallback nearest-X borne), reset scrub au changement de slide, doc pulse
+  - partage enrichi via lien traçable + navigator.share (point 2)
+  - repost sur ReelPlayer (point 1)
+  - active le payoff de l'optimistic media (point 0bis)
+  - câble le report hérité sur les 5 dernières surfaces (point 0)
+  - l'effectif de la ligne de liste peut enfin AUGMENTER
+  - l'effectif d'un groupe cesse de bouger à chaque ouverture ou fermeture de fil
+  - unrelated call:ended no longer dismisses a ringing call (web) + iOS retain-cycle convention + dead-code removal (#2815)
+  - le picker de réaction story met en pause l'auto-advance
+  - hard-press conversation preview popover (#2813)
+  - aligner coordinateSpace scrub sur le pin de taille, identite par vol, sentinelles reaction a jour
+  - brancher un point d'entrée UI pour le signalement (point 2)
+  - exposer l'audience du post audio
+  - tap coeur direct, scrub longpress, vol de reaction, big reaction retiree
+  - corrige les commentaires obsolètes et localise le toggle Reel/Post
+  - inclure les médias dans le post optimiste
+  - brancher les réactions story sur le viewer
+  - PostComposer — toggle Reel ⇄ Post sur composition qualifiante
+  - add report services for posts and stories
+  - invalidate post detail cache on bookmark/unbookmark
+  - hisse l'extraction du tri-état en fonction nommée
+  - la ligne de liste applique le Prisme reçu par conversation:updated
+  - change email / phone with two-step verification (#2808)
+  - StoryLanguageQuickBar scrubbable (survol + cadres publies)
+  - EmojiReactionPicker scrubbable (survol + publication des cadres, parametres opaques)
+  - PostComposer — cap média fiable + fuite de blob URLs
+  - resolver pur de survol scrub + espace de coordonnees partage
+  - audioPlayerObjects embarque placement/volume/waveformSamples (decode iOS)
+  - PostsFeedScreen relaie mediaIds et visibilityUserIds
+  - câble l'upload média (photo/vidéo) sur PostComposer
+  - root-space bars/flight offset, repeat-reaction flight, exclusive rail bars
+  - storyEffects embarque mediaObjects/audioPlayerObjects (parité iOS)
+  - scrub de reactions/langues au longpress + vol vers le coeur, strip du bas retiree
+  - prevent tap double-fire on static long-press with guard flag
+  - rail lateral coeur+langue avec tap et flux de scrub longpress
+  - LanguageQuickStrip scrubbable (chips drapeau, actif souligne)
+  - EmojiQuickStrip scrubbable (survol + bounds, parametres opaques)
+  - langues disponibles + override de langue ephemere dans le viewer
+  - override de langue (Exploration) dans la resolution Prisme des stories
+  - plan du rail lateral (react + langue) en parite iOS
+  - resolver pur de survol scrub (hit-test + action au relachement)
+  - un événement pour l'ADHÉSION, et les trois routes d'appartenance atteignent les écrans de liste
+  - PostService consomme qualifiesAsReel depuis @meeshy/shared
+  - le renommage et la clôture d'une conversation atteignent les écrans de LISTE
+  - qualifiesAsReel devient la source unique partagée
+
 ## 1.22.0
 
 ### Minor Changes

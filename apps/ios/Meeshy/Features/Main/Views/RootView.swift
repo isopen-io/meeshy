@@ -105,9 +105,8 @@ struct CallPresentationLayer: ViewModifier {
                         .allowsHitTesting(false)
                 }
             }
-            .overlay(alignment: .top) {
+            .safeAreaInset(edge: .top, spacing: 0) {
                 FloatingCallPillView(callManager: callManager)
-                    .padding(.top, MeeshySpacing.sm)
             }
             .overlay {
                 CallBubbleView(callManager: callManager)
@@ -303,7 +302,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -324,7 +322,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -360,7 +357,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -743,6 +739,35 @@ struct RootView: View {
             conversationListViewModel: conversationViewModel,
             statusViewModel: statusViewModel
         )
+        // Point de montage unique du SyncPill (indicateur de frappe global +
+        // statut connexion + file d'attente hors-ligne), voir
+        // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
+        // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
+        // composite (contenu + SyncPill) descende comme un bloc quand la
+        // bannière d'appel réserve de l'espace (§B2 de la spec — l'ordre
+        // inverse ferait chevaucher les deux bannières).
+        // conversationListViewModel/isStoryViewerPresenting passés
+        // explicitement, jamais via @EnvironmentObject/@Environment dans ce
+        // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).
+        // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
+        // un fullScreenCover — contrairement au story viewer déjà gated via
+        // isStoryViewerPresenting, il n'avait aucune garde équivalente).
+        // Padding-top fixe quand une conversation est active : compense le
+        // floatingHeaderSection propre à ConversationView (qui utilisait
+        // auparavant un décalage 56/72pt suivant composerState.showOptions —
+        // 72pt fixe est un compromis assumé plutôt qu'un couplage à cet état
+        // privé, cf. spec §Partie 1/C1).
+        .overlay(alignment: .top) {
+            if reelsPresenter.launch == nil {
+                ConnectionBanner(
+                    conversationListViewModel: conversationViewModel,
+                    isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
+                    onItemTap: handleSyncPillTap,
+                    activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
+                )
+                .padding(.top, router.currentConversationId != nil ? 72 : 0)
+            }
+        }
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
         // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
         // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
@@ -751,9 +776,9 @@ struct RootView: View {
         // ViewModifier ci-dessus.
         .modifier(CallPresentationLayer())
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
-        // single-label "Synchronisation..." pill) via .safeAreaInset on the
-        // NavigationStack root. Same emplacement, same chrome dimensions —
-        // see ConnectionBanner.syncingPill / SyncPillContent.
+        // single-label "Synchronisation..." pill) via the single
+        // `.overlay(alignment: .top)` mount point above. Same chrome
+        // dimensions — see ConnectionBanner.syncingPill / SyncPillContent.
         // B4 — Mini audio player floats above the tab bar. Mounted HERE
         // (not in `AdaptiveRootView`) so the tap-body handler can reach
         // the `router` via the local `@StateObject` — `AdaptiveRootView`
@@ -804,6 +829,11 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
             guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
             navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
+        }
+        // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
+        // ramène vers la conversation et le message audio en cours de lecture.
+        .nowPlayingReturnNavigation(router: router) { conversationId in
+            conversationViewModel.conversations.contains { $0.id == conversationId }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
             guard let targetUserId = notification.object as? String else { return }

@@ -1,9 +1,11 @@
 export const queryKeys = {
   conversations: {
     all: ['conversations'] as const,
-    lists: () => [...queryKeys.conversations.all, 'list'] as const,
-    list: (filters?: { type?: string; search?: string }) =>
-      [...queryKeys.conversations.lists(), filters] as const,
+    // Pas de forme PLATE ici, volontairement. `['conversations','list']` a
+    // existé, avec une dizaine d'écrivains et zéro lecteur : les deux préfixes
+    // étant disjoints de `infinite()`, chaque écriture était un no-op silencieux
+    // et le code se lisait comme si deux caches étaient tenus en phase. La
+    // sidebar lit `infinite()`, et c'est le seul cache de liste.
     infinite: () => [...queryKeys.conversations.all, 'infinite'] as const,
     details: () => [...queryKeys.conversations.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.conversations.details(), id] as const,
@@ -121,6 +123,12 @@ export const queryKeys = {
       [...queryKeys.posts.lists(), 'community', communityId] as const,
     stories: () => [...queryKeys.posts.lists(), 'stories'] as const,
     statuses: () => [...queryKeys.posts.lists(), 'statuses'] as const,
+  },
+
+  calls: {
+    all: ['calls'] as const,
+    active: (conversationId: string) =>
+      [...queryKeys.calls.all, 'active', conversationId] as const,
   },
 } as const;
 

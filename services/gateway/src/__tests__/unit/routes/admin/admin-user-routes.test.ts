@@ -110,7 +110,7 @@ const mockPrisma: Record<string, Record<string, jest.Mock>> = {
   postMedia: { findMany: jest.fn(), count: jest.fn() },
   messageAttachment: { findMany: jest.fn(), count: jest.fn() },
   report: { findMany: jest.fn(), count: jest.fn() },
-  participant: { findMany: jest.fn(), count: jest.fn() },
+  participant: { findMany: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
   message: { findMany: jest.fn() },
 };
 
@@ -950,11 +950,50 @@ describe('GET /admin/users/:userId/activity', () => {
     mockPrisma.trackingLink.findMany.mockResolvedValue([trackingLink]);
     mockPrisma.affiliateToken.findMany.mockResolvedValue([affiliateToken]);
     mockPrisma.friendRequest.findMany.mockResolvedValueOnce([friendReq]).mockResolvedValueOnce([]);
+    mockPrisma.participant.groupBy.mockResolvedValue([{ shareLinkId: 'sl1', _count: { _all: 2 } }]);
 
     const res = await app.inject({ method: 'GET', url: '/admin/users/user123/activity' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.data).toMatchObject({ shareLinks: [shareLink], trackingLinks: [trackingLink] });
+  });
+
+  it('attaches _count.anonymousParticipants to each share link (unified Participant model)', async () => {
+    const shareLinks = [
+      { id: 'sl1', linkId: 'link1', conversation: null },
+      { id: 'sl2', linkId: 'link2', conversation: null },
+    ];
+    mockPrisma.conversationShareLink.findMany.mockResolvedValue(shareLinks);
+    mockPrisma.trackingLink.findMany.mockResolvedValue([]);
+    mockPrisma.affiliateToken.findMany.mockResolvedValue([]);
+    mockPrisma.friendRequest.findMany.mockResolvedValue([]);
+    mockPrisma.participant.groupBy.mockResolvedValue([{ shareLinkId: 'sl1', _count: { _all: 4 } }]);
+
+    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/activity' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.shareLinks[0]._count).toEqual({ anonymousParticipants: 4 });
+    expect(body.data.shareLinks[1]._count).toEqual({ anonymousParticipants: 0 });
+    expect(mockPrisma.participant.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ['shareLinkId'],
+        where: expect.objectContaining({
+          shareLinkId: { in: ['sl1', 'sl2'] },
+          type: 'anonymous',
+        }),
+      })
+    );
+  });
+
+  it('skips the participant count query when the user has no share links', async () => {
+    mockPrisma.conversationShareLink.findMany.mockResolvedValue([]);
+    mockPrisma.trackingLink.findMany.mockResolvedValue([]);
+    mockPrisma.affiliateToken.findMany.mockResolvedValue([]);
+    mockPrisma.friendRequest.findMany.mockResolvedValue([]);
+
+    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/activity' });
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.participant.groupBy).not.toHaveBeenCalled();
   });
 
   it('returns 500 when prisma throws', async () => {

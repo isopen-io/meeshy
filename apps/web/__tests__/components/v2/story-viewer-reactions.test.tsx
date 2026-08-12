@@ -279,4 +279,35 @@ describe('StoryViewer — reaction picker pauses auto-advance (fix: two-tap reac
       expect.objectContaining({ postId: 'story-react-2' }),
     );
   });
+
+  it('resumes auto-advance after the story changes while the picker was still open (tap-through, not an explicit close)', () => {
+    render(
+      <StoryViewer
+        stories={[makeStory('story-tap-1'), makeStory('story-tap-2'), makeStory('story-tap-3')]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('story-reaction-button'));
+    expect(screen.getByTestId('story-reaction-picker')).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.keyDown(document, { key: 'ArrowRight' });
+    });
+
+    expect(screen.queryByTestId('story-reaction-picker')).not.toBeInTheDocument();
+    expect(mockUseCommentsInfiniteQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ postId: 'story-tap-2' }),
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(6000 + 500);
+    });
+
+    expect(mockUseCommentsInfiniteQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ postId: 'story-tap-3' }),
+    );
+  });
 });

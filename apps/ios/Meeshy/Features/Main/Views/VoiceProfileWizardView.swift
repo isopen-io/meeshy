@@ -36,6 +36,34 @@ struct VoiceProfileWizardView: View {
         .task {
             await viewModel.checkConsent()
         }
+        .adaptiveOnChange(of: viewModel.currentStep) { _, newStep in
+            // Chaque étape remplace TOUT le contenu de l'écran (consent → âge →
+            // enregistrement → traitement → terminé) sans que VoiceOver ne
+            // déplace le focus ni n'annonce le changement — l'utilisateur non
+            // voyant resterait bloqué sur l'ancien focus. On poste
+            // `.screenChanged` (parité `IncomingCallView`) : VoiceOver refocalise
+            // sur le nouveau contenu et annonce le titre de l'étape. Les 5 libellés
+            // réutilisent l'i18n déjà présent dans les étapes (0 clé neuve).
+            UIAccessibility.post(
+                notification: .screenChanged,
+                argument: stepAnnouncement(for: newStep)
+            )
+        }
+    }
+
+    private func stepAnnouncement(for step: VoiceProfileWizardStep) -> String {
+        switch step {
+        case .consent:
+            return String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main)
+        case .ageVerification:
+            return String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Verification de l'age", bundle: .main)
+        case .recording:
+            return String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main)
+        case .processing:
+            return String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours...", bundle: .main)
+        case .complete:
+            return String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal cree !", bundle: .main)
+        }
     }
 
     // MARK: - Header

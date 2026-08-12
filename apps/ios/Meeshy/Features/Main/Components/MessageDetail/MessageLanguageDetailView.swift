@@ -17,35 +17,47 @@ struct MessageLanguageDetailView: View {
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
 
+    /// In-flight language codes for THIS message — owned by
+    /// `ConversationViewModel` (survives this view being torn down when the
+    /// sheet is dismissed), not local `@State`. See `onRequestTextTranslation`.
+    var translatingTextLanguages: Set<String> = []
+    var translatingAudioLanguages: Set<String> = []
+    var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
+    var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
+    var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
     // Translation state
     @State private var translations: [String: String] = [:]
-    @State private var translatingLanguages: Set<String> = []
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
     @State private var translationError: String? = nil
     @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
-    @State private var translatingAudioLanguages: Set<String> = []
+
+    /// Fallback in-flight tracking for callers that don't supply
+    /// `onRequestTextTranslation`/`onRequestAudioTranslation` (currently
+    /// `AudioFullscreenView`'s embedded language sheet, which has no
+    /// `ConversationViewModel` to delegate to — see its own file comment on
+    /// being deliberately decoupled). Preserves this call site's PRE-EXISTING
+    /// behavior unchanged; only callers that wire the closures get the fix
+    /// where the in-flight flag survives the sheet being dismissed/reopened.
+    @State private var localTranslatingLanguages: Set<String> = []
+    @State private var localTranslatingAudioLanguages: Set<String> = []
 
     var body: some View {
         content
             .onAppear { Task { await loadExistingTranslations() } }
+            .onChange(of: textTranslations) { _ in syncTranslationsFromProps() }
+            .onChange(of: translatedAudios) { _ in syncTranslatedAudiosFromProps() }
             .onReceive(
-                MessageSocketManager.shared.translationFailed
+                (translationRequestFailedPublisher ?? Empty().eraseToAnyPublisher())
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingLanguages = []
-            }
-            .onReceive(
-                MessageSocketManager.shared.audioTranslationFailed
-                    .filter { $0.messageId == message.id }
-                    .receive(on: DispatchQueue.main)
-            ) { _ in
-                translatingAudioLanguages = []
+            ) { failure in
+                translationError = failure.message
             }
     }
 
@@ -178,7 +190,8 @@ struct MessageLanguageDetailView: View {
     private func languageRow(_ lang: LanguageDisplay, originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
-        let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
+        let isTranslating = translatingTextLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
+            || localTranslatingLanguages.contains(lang.code) || localTranslatingAudioLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
 
         return Button {
@@ -222,9 +235,19 @@ struct MessageLanguageDetailView: View {
                 cachedTranscriptionAttachmentId: transcription?.attachmentId,
                 attachments: message.attachments
             ) {
-                Task { await translateAudioTo(lang.code, attachmentId: audioAttachmentId) }
+                translationError = nil
+                if let onRequestAudioTranslation {
+                    onRequestAudioTranslation(lang.code, audioAttachmentId)
+                } else {
+                    Task { await translateAudioToLocal(lang.code, attachmentId: audioAttachmentId) }
+                }
             } else {
-                Task { await translateTo(lang.code, from: originalLang) }
+                translationError = nil
+                if let onRequestTextTranslation {
+                    onRequestTextTranslation(lang.code, originalLang)
+                } else {
+                    Task { await translateToLocal(lang.code, from: originalLang) }
+                }
             }
         } label: {
             HStack(spacing: 10) {
@@ -255,7 +278,12 @@ struct MessageLanguageDetailView: View {
                         .frame(maxWidth: 180, alignment: .trailing)
 
                     Button {
-                        Task { await translateTo(lang.code, from: originalLang) }
+                        translationError = nil
+                        if let onRequestTextTranslation {
+                            onRequestTextTranslation(lang.code, originalLang)
+                        } else {
+                            Task { await translateToLocal(lang.code, from: originalLang) }
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.medium))
@@ -304,15 +332,42 @@ struct MessageLanguageDetailView: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    // MARK: - Network Actions
+    // MARK: - Reacting to ViewModel-owned translation state
 
-    private func translateTo(_ targetLang: String, from sourceLang: String) async {
-        // Audio messages have empty `content`; text translation only applies
-        // when there is text. (Audio messages are handled by the audio branch.)
+    /// The actual network request now runs in `ConversationViewModel`
+    /// (`requestTextTranslation`/`requestAudioTranslation`) so it — and the
+    /// in-flight loader — survive this view being torn down when the sheet
+    /// is dismissed. This view only mirrors the result back into its local
+    /// display caches when the VM-owned props change.
+    private func syncTranslationsFromProps() {
+        for t in textTranslations {
+            let isNewlyArrived = translations[t.targetLanguage] == nil
+            translations[t.targetLanguage] = t.translatedContent
+            if isNewlyArrived {
+                withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = t.targetLanguage }
+                onSelectTranslation?(t)
+                HapticFeedback.success()
+            }
+        }
+    }
+
+    private func syncTranslatedAudiosFromProps() {
+        let known = Set(mergedTranslatedAudios.map { $0.targetLanguage.lowercased() })
+        mergedTranslatedAudios = translatedAudios
+        for audio in translatedAudios where !known.contains(audio.targetLanguage.lowercased()) {
+            withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = audio.targetLanguage }
+            onSelectAudioLanguage?(audio.targetLanguage)
+            HapticFeedback.success()
+        }
+    }
+
+    // MARK: - Local fallback (no ConversationViewModel available)
+
+    private func translateToLocal(_ targetLang: String, from sourceLang: String) async {
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        translatingLanguages.insert(targetLang)
+        localTranslatingLanguages.insert(targetLang)
         translationError = nil
-        defer { translatingLanguages.remove(targetLang) }
+        defer { localTranslatingLanguages.remove(targetLang) }
 
         do {
             let response = try await TranslationService.shared.translate(
@@ -335,10 +390,6 @@ struct MessageLanguageDetailView: View {
                 confidenceScore: nil
             )
             onSelectTranslation?(mt)
-            // No socket call: passing `messageId` routes /translate-blocking
-            // into the Case 1 "retranslation" branch, which persists AND
-            // broadcasts via `message:translation`. A second socket request
-            // would double-persist.
             HapticFeedback.success()
         } catch {
             translationError = String(
@@ -349,10 +400,10 @@ struct MessageLanguageDetailView: View {
         }
     }
 
-    private func translateAudioTo(_ targetLang: String, attachmentId: String) async {
-        translatingAudioLanguages.insert(targetLang)
+    private func translateAudioToLocal(_ targetLang: String, attachmentId: String) async {
+        localTranslatingAudioLanguages.insert(targetLang)
         translationError = nil
-        defer { translatingAudioLanguages.remove(targetLang) }
+        defer { localTranslatingAudioLanguages.remove(targetLang) }
         do {
             let response = try await AttachmentService.shared.translate(
                 attachmentId: attachmentId,

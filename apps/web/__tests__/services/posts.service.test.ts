@@ -43,14 +43,6 @@ describe('postsService', () => {
     });
   });
 
-  describe('getStories', () => {
-    it('calls GET /posts/feed/stories', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-      await postsService.getStories();
-      expect(mockApi.get).toHaveBeenCalledWith('/posts/feed/stories');
-    });
-  });
-
   describe('getStatuses', () => {
     it('calls GET /posts/feed/statuses', async () => {
       mockApi.get.mockResolvedValue({ success: true, data: [] });

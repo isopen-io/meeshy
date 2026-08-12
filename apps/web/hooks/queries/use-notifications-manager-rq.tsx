@@ -21,6 +21,9 @@ import { useNotificationStore } from '@/stores/notification-store';
 
 const recentToasts = new Set<string>();
 
+/** Miroir du débounce de `NotificationGapResyncCoordinator` (iOS, 0.3 s). */
+const SYNC_RESYNC_DEBOUNCE_MS = 300;
+
 interface UseNotificationsManagerRQOptions {
   filters?: NotificationFilters;
   limit?: number;
@@ -33,6 +36,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
   const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     data: notificationsData,
@@ -289,16 +293,38 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       queryClient.setQueryData(queryKeys.notifications.unreadCount(), counts.unread);
     };
 
+    // SyncEngine — le transport a détecté que le client a perdu de vue l'état
+    // serveur (trou de `_seq`, ou reconnexion après coupure). Le client global
+    // tourne en `staleTime: Infinity` : sans ce rattrapage, les notifications
+    // manquées ne réapparaissent JAMAIS de la session, ni dans la cloche ni sur
+    // /notifications. Le refetch est idempotent (la réponse serveur remplace
+    // les pages, dédup par id inhérente) et débouncé pour coaléscer une rafale
+    // — un gap suivi d'un reconnect ne paie qu'une resync.
+    const scheduleResync = () => {
+      if (resyncTimerRef.current !== null) clearTimeout(resyncTimerRef.current);
+      resyncTimerRef.current = setTimeout(() => {
+        resyncTimerRef.current = null;
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
+      }, SYNC_RESYNC_DEBOUNCE_MS);
+    };
+
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
     const unsubscribeDeleted = notificationSocketIO.onNotificationDeleted(handleNotificationDeleted);
     const unsubscribeCounts = notificationSocketIO.onCounts(handleCounts);
+    const unsubscribeDesync = notificationSocketIO.onSyncDesync(scheduleResync);
 
     return () => {
       unsubscribeNotification();
       unsubscribeRead();
       unsubscribeDeleted();
       unsubscribeCounts();
+      unsubscribeDesync();
+      if (resyncTimerRef.current !== null) {
+        clearTimeout(resyncTimerRef.current);
+        resyncTimerRef.current = null;
+      }
     };
   }, [isAuthenticated, queryClient, showNotificationToast]);
 

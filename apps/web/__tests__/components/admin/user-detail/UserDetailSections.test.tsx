@@ -1216,6 +1216,14 @@ describe('UserActivitySection', () => {
     await waitFor(() => expect(screen.getByText('my-conv')).toBeInTheDocument());
   });
 
+  it('share link without _count renders with 0 anonymous participants instead of crashing', async () => {
+    const link = makeShareLink({ _count: undefined });
+    mockGet.mockResolvedValue(makeActivityResponse({ shareLinks: [link] }));
+    render(<UserActivitySection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText('My Share Link')).toBeInTheDocument());
+    expect(screen.getByText('usersDetail.anonymousLabel')).toBeInTheDocument();
+  });
+
   it('renders tracking link section', async () => {
     mockGet.mockResolvedValue(makeActivityResponse({ trackingLinks: [makeTrackingLink()] }));
     render(<UserActivitySection userId="user-1" />);

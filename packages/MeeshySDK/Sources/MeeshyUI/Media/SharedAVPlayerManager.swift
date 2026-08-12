@@ -80,6 +80,13 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var pipController: AVPictureInPictureController?
     private var pipDelegate: PipDelegate?
+    /// Armé AVANT tout teardown PiP qui ne doit PAS arrêter la lecture :
+    /// `stopPip()` programmatique (toggle transport, fin naturelle) et le
+    /// chemin de restauration in-app (flèche de la fenêtre PiP). Consommé par
+    /// le delegate `didStop` — s'il est retombé, la fenêtre a été fermée par
+    /// l'utilisateur (X) et la lecture s'arrête, sinon l'audio continuerait
+    /// invisible en arrière-plan.
+    private var pipTeardownIsInternal = false
     private var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
@@ -277,6 +284,42 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Picture-in-Picture
 
+    /// PiP réellement engagé — état LIVE du contrôleur, pas le `@Published`
+    /// `isPipActive` qui traverse un hop MainActor. Lu par le garde background
+    /// de l'app pendant la transition, où l'auto-PiP vient tout juste de
+    /// démarrer et où le flag publié peut encore être en retard d'un tick.
+    public var isPipEngaged: Bool {
+        pipController?.isPictureInPictureActive == true
+    }
+
+    /// Une surface a opté pour le PiP sur la vidéo courante (le simulateur ne
+    /// supporte pas le PiP : toujours `false` là-bas).
+    public var isPipConfigured: Bool {
+        pipController != nil
+    }
+
+    /// Attend (borné) que l'auto-PiP s'engage pendant la transition vers
+    /// l'arrière-plan : AVKit démarre le PiP de son côté au moment où l'app
+    /// se retire, et le garde background court CONTRE cette animation. Sans
+    /// cette fenêtre, un `pause()` prématuré avorterait la fenêtre PiP que le
+    /// système était en train d'ouvrir.
+    public func waitForPipEngagement(timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if isPipEngaged { return true }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return isPipEngaged
+    }
+
+    /// Pure, testable decision: must playback halt when the PiP window tears
+    /// down? Closing the window (X) is the user saying "stop the video" —
+    /// letting it run would leak invisible audio in the background. Internal
+    /// teardowns (programmatic `stopPip()`, in-app restore) keep playing.
+    public nonisolated static func shouldHaltPlaybackOnPipStop(teardownWasInternal: Bool) -> Bool {
+        !teardownWasInternal
+    }
+
     /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
     public func configurePip(playerLayer: AVPlayerLayer) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
@@ -287,10 +330,21 @@ public final class SharedAVPlayerManager: ObservableObject {
         let delegate = PipDelegate { [weak self] in
             Task { @MainActor [weak self] in self?.isPipActive = true }
         } onStop: { [weak self] in
-            Task { @MainActor [weak self] in self?.isPipActive = false }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isPipActive = false
+                let wasInternal = self.pipTeardownIsInternal
+                self.pipTeardownIsInternal = false
+                if Self.shouldHaltPlaybackOnPipStop(teardownWasInternal: wasInternal) {
+                    self.stop()
+                }
+            }
         } onRestore: { [weak self] completion in
             Task { @MainActor [weak self] in
-                _ = self // The player is already shared — nothing to restore
+                // The player is already shared — nothing to restore, but the
+                // upcoming `didStop` must NOT halt playback (the user asked to
+                // come BACK to the video, not to close it).
+                self?.pipTeardownIsInternal = true
                 completion(true)
             }
         }
@@ -305,6 +359,12 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     public func stopPip() {
+        // Le flag n'est armé QUE si une fenêtre PiP est réellement ouverte :
+        // un no-op (`stopPictureInPicture()` sans PiP actif) laisserait sinon
+        // un flag orphelin qui avalerait la PROCHAINE fermeture utilisateur.
+        if pipController?.isPictureInPictureActive == true {
+            pipTeardownIsInternal = true
+        }
         pipController?.stopPictureInPicture()
         isPipActive = false
     }
@@ -510,6 +570,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         attachmentId = nil
         pipController = nil
         pipDelegate = nil
+        pipTeardownIsInternal = false
         // shouldLoop reset : ne traverse pas un changement d'attachment.
         // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse
         // pas non plus un changement d'attachment/surface.

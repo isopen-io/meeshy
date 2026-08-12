@@ -93,6 +93,24 @@ describe('PostComposer — optimisticMedia payoff (Task 4, point 0bis)', () => {
     );
   });
 
+  it('carries the raw millisecond duration through optimisticMedia for audio/video attachments', () => {
+    mockAttachmentState.uploadedAttachments = [
+      makeAttachment({ id: 'att-1', mimeType: 'audio/webm', fileUrl: 'https://cdn.test/clip.webm', duration: 75000 }),
+    ];
+    const onPublish = jest.fn();
+    render(<PostComposer onPublish={onPublish} />);
+    expandComposer();
+    fireEvent.click(screen.getByText('publish'));
+
+    expect(onPublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        optimisticMedia: [
+          expect.objectContaining({ id: 'att-1', mimeType: 'audio/webm', duration: 75000 }),
+        ],
+      }),
+    );
+  });
+
   it('omits optimisticMedia entirely for a text-only publish', () => {
     const onPublish = jest.fn();
     render(<PostComposer onPublish={onPublish} />);

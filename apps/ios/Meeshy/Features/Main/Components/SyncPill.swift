@@ -93,6 +93,29 @@ struct SyncPill: View {
     // same connected publisher instance is preserved across re-renders.
     @State private var dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
+    /// Largeur mesurée du `label` SEUL (jamais `label + animatedDots` — voir
+    /// doc `SyncPillMarquee`). Alimentée par la mesure `GeometryReader` en
+    /// fond du `Text` du label.
+    @State private var measuredLabelWidth: CGFloat = 0
+    /// Largeur réellement disponible pour la zone de texte (mesurée une
+    /// seule fois via `GeometryReader` sur le conteneur, indépendante du
+    /// contenu texte lui-même).
+    @State private var availableTextWidth: CGFloat = 140
+    /// Décalage horizontal courant du texte en défilement. `0` = position de
+    /// repos (texte visible depuis le début).
+    @State private var marqueeOffset: CGFloat = 0
+    /// Bascule par appui long sur la pill — gèle À LA FOIS la rotation
+    /// (`rotator.setAutoRotation(false)`) et le défilement du marquee.
+    /// Mécanisme obligatoire (WCAG 2.2.2 Pause/Stop/Hide, niveau A) — le
+    /// respect de `accessibilityReduceMotion` seul NE SUFFIT PAS comme
+    /// justificatif de conformité pour cette SC (elle ne couvre que la
+    /// 2.3.3). Un second appui long relance.
+    @State private var isPausedByUser = false
+    /// Tick dédié au défilement du marquee — même pattern que `dotTimer`
+    /// (Timer.publish `@State`, pas `let`, pour survivre aux reconstructions
+    /// fréquentes de cette vue). 30 Hz : fluide sans coût perceptible.
+    @State private var marqueeTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
+
     init(
         entries: [SyncPillEntry],
         onTap: ((OutboxUIItem.Source) -> Void)? = nil
@@ -153,10 +176,7 @@ struct SyncPill: View {
     private var pillContent: some View {
         HStack(spacing: 6) {
             statusDot
-            Text((visibleEntry?.label ?? "") + (visibleEntry?.showsActivityDots == true ? animatedDots : ""))
-                .font(MeeshyFont.relative(11, weight: .medium))
-                .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
-                .lineLimit(1)
+            labelText
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .id(visibleEntry?.id ?? "empty")
             if entries.count > 1 {
@@ -171,11 +191,102 @@ struct SyncPill: View {
         .background(Capsule().fill(capsuleBackground))
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
+        .onLongPressGesture(minimumDuration: 0.5) {
+            togglePause()
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityHint(visibleEntry?.source != nil
             ? String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
             : "")
+        .accessibilityAction(named: isPausedByUser
+            ? String(localized: "sync.pill.a11y.resume", defaultValue: "Reprendre", bundle: .main)
+            : String(localized: "sync.pill.a11y.pause", defaultValue: "Mettre en pause", bundle: .main)
+        ) {
+            togglePause()
+        }
+    }
+
+    /// Largeur max de la zone de texte — la pill grandissait auparavant sans
+    /// borne jusqu'au bord de l'écran. Le compteur `i/n` (sibling dans
+    /// `pillContent`) reste HORS de cette contrainte : elle porte
+    /// uniquement sur le `Text` du label.
+    private static let maxTextWidth: CGFloat = 160
+
+    private var textColor: Color { isDark ? .white.opacity(0.7) : .primary.opacity(0.6) }
+
+    @ViewBuilder
+    private var labelText: some View {
+        let label = visibleEntry?.label ?? ""
+        let showsDots = visibleEntry?.showsActivityDots == true
+        // La mesure porte sur `label` SEUL — jamais `label + animatedDots`,
+        // qui change 2×/s et ferait osciller la décision de défilement.
+        let scrolls = !reduceMotion && SyncPillMarquee.shouldScroll(textWidth: measuredLabelWidth, availableWidth: Self.maxTextWidth)
+
+        Group {
+            if scrolls {
+                // Le viewport à largeur fixe + clip ne s'applique QU'ICI : c'est
+                // ce qui borne la fenêtre visible pendant que le Text (fixedSize,
+                // donc plus large que le viewport) glisse dessous via `offset`.
+                Text(label)
+                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .offset(x: marqueeOffset)
+                    .frame(width: Self.maxTextWidth, alignment: .leading)
+                    .clipped()
+            } else {
+                // Pas de largeur imposée ici — un label court doit garder sa
+                // taille naturelle (comportement pré-existant), la borne de
+                // `maxTextWidth` n'est qu'un plafond qui ne mord que si le texte
+                // défile.
+                Text(label + (showsDots ? animatedDots : ""))
+                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .foregroundStyle(textColor)
+                    .lineLimit(1)
+            }
+        }
+        .background(
+            // Mesure la largeur RÉELLE de `label` seul, indépendamment de ce
+            // qui est affiché (défilant ou non) — toujours à jour pour la
+            // PROCHAINE entrée de la rotation.
+            Text(label)
+                .font(MeeshyFont.relative(11, weight: .medium))
+                .lineLimit(1)
+                .fixedSize()
+                .hidden()
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: SyncPillLabelWidthKey.self, value: proxy.size.width)
+                })
+        )
+        .onPreferenceChange(SyncPillLabelWidthKey.self) { measuredLabelWidth = $0 }
+        // Défilement piloté par un timer manuel (30 Hz) plutôt que par
+        // `Animation.linear(duration:).repeatForever(autoreverses: false)` (la
+        // technique littérale de la spec) : une animation `repeatForever` native
+        // ne peut pas être mise en pause à mi-cycle sans redémarrer à zéro au
+        // retrait de l'animation — ce qui romprait la garantie WCAG 2.2.2 (la
+        // pause doit geler l'état visuel courant, jamais le réinitialiser).
+        .onReceive(marqueeTimer) { _ in
+            guard scrolls, !isPausedByUser else { return }
+            let step = SyncPillMarquee.pointsPerSecond / 30.0
+            marqueeOffset -= step
+            let gap: CGFloat = 24
+            if marqueeOffset < -(measuredLabelWidth + gap) {
+                marqueeOffset = Self.maxTextWidth
+            }
+        }
+        .adaptiveOnChange(of: scrolls) { _, newValue in
+            if !newValue { marqueeOffset = 0 }
+        }
+        // `scrolls` reste `true` d'une entrée à l'autre quand deux entrées
+        // consécutives de la rotation sont TOUTES DEUX assez longues pour
+        // défiler — le reset ci-dessus ne se déclenche alors jamais. Sans ce
+        // second reset, le marquee du nouveau label reprendrait au décalage où
+        // l'ancien s'était arrêté au lieu de repartir de zéro.
+        .adaptiveOnChange(of: visibleEntry?.id) { _, _ in
+            marqueeOffset = 0
+        }
     }
 
     /// Leading visual indicator. If the entry carries a concrete SFSymbol
@@ -236,11 +347,27 @@ struct SyncPill: View {
         }
     }
 
+    /// WCAG 2.2.2 — mécanisme de pause actionnable, indépendant du réglage
+    /// système Reduce Motion. Gèle rotation ET marquee ; un second appui
+    /// long relance les deux.
+    private func togglePause() {
+        isPausedByUser.toggle()
+        rotator.setAutoRotation(!isPausedByUser)
+        HapticFeedback.light()
+    }
+
     private var accessibilityText: String {
         guard let entry = visibleEntry else { return "" }
         if entries.count == 1 {
             return entry.label
         }
         return String(localized: "sync.pill.a11y.multiple", defaultValue: "\(entries.count) signaux. Actif : \(entry.label).", bundle: .main)
+    }
+}
+
+private struct SyncPillLabelWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
