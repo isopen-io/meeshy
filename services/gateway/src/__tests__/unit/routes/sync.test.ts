@@ -16,7 +16,12 @@ jest.mock('../../../middleware/auth', () => ({
   },
 }));
 
-import { syncRoutes, encodeSyncCursor, decodeSyncCursor } from '../../../routes/sync';
+import {
+  syncRoutes,
+  encodeSyncCursor,
+  decodeSyncCursor,
+  SYNC_CHECKPOINT_LAG_MS,
+} from '../../../routes/sync';
 
 type PrismaStub = {
   participant: { findMany: jest.Mock };
@@ -289,5 +294,148 @@ describe('sync cursor codec', () => {
 
   it('throws on a malformed token', () => {
     expect(() => decodeSyncCursor('%%%not-json%%%')).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cycle 98 — le `checkpoint` rendu est un WATERMARK : le client le renvoie en
+// `since` au tour suivant, et la borne serveur est STRICTE (`gt`). Tout ce qui
+// devient visible APRÈS la lecture mais AVANT l'instant du checkpoint tombe
+// donc dans un trou définitif. Les gardes ci-dessous ancrent la seule
+// direction sûre : un checkpoint qui ne peut jamais dépasser la donnée que la
+// réponse couvre réellement — quitte à faire relire (idempotent).
+//
+// Jumelle exacte de la règle que le SDK iOS documente déjà côté client
+// (`SyncWatermark.advancedAfterDeltaPage` : « la fenêtre ne saute jamais une
+// mise à jour réelle, au pire elle en relit »).
+// ---------------------------------------------------------------------------
+describe('GET /sync — checkpoint watermark', () => {
+  it('never post-dates the oldest read the response is built from', async () => {
+    // La borne honnête est l'instant où la PREMIÈRE lecture part, pas celui où
+    // la dernière rend : une ligne écrite après ce départ peut manquer au
+    // snapshot de lecture tout en portant un `updatedAt` antérieur au
+    // checkpoint — exactement le trou définitif. Le délai matérialise la
+    // fenêtre ; sans lui, lecture et checkpoint partagent la milliseconde et
+    // le défaut passe inaperçu.
+    let firstQueryEnteredAtMs = 0;
+    const prisma = makePrisma({
+      message: {
+        findMany: jest.fn<any>().mockImplementation(async () => {
+          if (firstQueryEnteredAtMs === 0) firstQueryEnteredAtMs = Date.now();
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          return [];
+        }),
+      },
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const checkpointMs = new Date(res.json().data.checkpoint).getTime();
+
+    expect(firstQueryEnteredAtMs).toBeGreaterThan(0);
+    expect(checkpointMs).toBeLessThanOrEqual(firstQueryEnteredAtMs);
+    await app.close();
+  });
+
+  it('trails wall-clock by the write-visibility lag', async () => {
+    const app = await buildApp(makePrisma());
+
+    const beforeMs = Date.now();
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const afterMs = Date.now();
+    const checkpointMs = new Date(res.json().data.checkpoint).getTime();
+
+    // `updatedAt` est estampillé par Prisma à la CONSTRUCTION de l'écriture,
+    // pas à son commit : une ligne estampillée T peut n'être visible qu'à
+    // T+δ. Sans ce retrait, un checkpoint pris même AVANT la lecture laisse
+    // passer les écritures en vol. Le checkpoint vaut donc
+    // `débutHandler − SYNC_CHECKPOINT_LAG_MS`, encadré par les deux bornes.
+    expect(checkpointMs).toBeLessThanOrEqual(afterMs - SYNC_CHECKPOINT_LAG_MS);
+    expect(checkpointMs).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);
+    await app.close();
+  });
+
+  it('never regresses below the `since` the caller already acknowledged', async () => {
+    const app = await buildApp(makePrisma());
+
+    // `since` = maintenant : `now − lag` tombe DERRIÈRE lui. Reculer le
+    // watermark rejouerait sans fin une fenêtre déjà livrée.
+    const nowIso = new Date().toISOString();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${encodeURIComponent(nowIso)}&collections=messages`,
+    });
+
+    expect(new Date(res.json().data.checkpoint).getTime()).toBe(new Date(nowIso).getTime());
+    await app.close();
+  });
+
+  it('applies the same watermark on the gap path, which returns no items at all', async () => {
+    const prisma = makePrisma({
+      userEventSeq: { findUnique: jest.fn<any>().mockResolvedValue({ lastSeq: 50_000 }) },
+    });
+    const app = await buildApp(prisma);
+
+    const beforeMs = Date.now();
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&seq=1` });
+    const afterMs = Date.now();
+    const body = res.json().data;
+
+    expect(body.hasGap).toBe(true);
+    const checkpointMs = new Date(body.checkpoint).getTime();
+    expect(checkpointMs).toBeLessThanOrEqual(afterMs - SYNC_CHECKPOINT_LAG_MS);
+    expect(checkpointMs).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);
+    await app.close();
+  });
+});
+
+describe('GET /sync — checkpoint vs truncation', () => {
+  // Une page TRONQUÉE n'a pas livré toute la fenêtre : le reste porte des
+  // `updatedAt` ANTÉRIEURS au checkpoint (c'est un arriéré). Un client qui
+  // adopterait ce checkpoint au lieu de suivre `nextCursor` perdrait tout
+  // l'arriéré d'un coup, définitivement. Le serveur ne doit donc pas remettre
+  // un watermark qui affirme une couverture qu'il n'a pas démontrée — même
+  // règle que `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
+  function backlog(count: number) {
+    return Array.from({ length: count }, (_, n) => ({
+      id: `m${String(n).padStart(4, '0')}`,
+      conversationId: 'c1',
+      senderId: 's1',
+      content: 'x',
+      createdAt: new Date('2026-07-02T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+    }));
+  }
+
+  it('holds the watermark at `since` while the page leaves a remainder', async () => {
+    const prisma = makePrisma({
+      message: {
+        findMany: jest.fn<any>().mockImplementation((args: any) =>
+          Promise.resolve(args.where.deletedAt === null ? backlog(args.take) : []),
+        ),
+      },
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&limit=5` });
+    const body = res.json().data;
+
+    expect(body.hasMore).toBe(true);
+    expect(body.nextCursor).toBeTruthy();
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  it('advances the watermark again on the page that closes the run', async () => {
+    const app = await buildApp(makePrisma());
+
+    const beforeMs = Date.now();
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&limit=5` });
+    const body = res.json().data;
+
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeNull();
+    expect(new Date(body.checkpoint).getTime()).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);
+    await app.close();
   });
 });
