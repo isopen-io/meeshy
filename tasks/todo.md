@@ -1,31 +1,15 @@
-# Tête instruite pour le cycle 92 — le rattrapage des accusés couvre les trois clients, la file reste vide
+# Tête instruite pour le cycle 93 — l'autodestruction serveur existe ; deux restes nommés, une famille à balayer
 
-*Le cycle 91 a étendu aux TROIS clients le rattrapage des accusés que le cycle 90 n'avait livré que
-pour le web : iOS et Android n'en avaient aucun. Il n'y a toujours rien de légué avec site et
-scénario — le cycle 92 doit AUDITER, et les pistes du cycle 90 (reproduites plus bas) restent les
-meilleures.*
-
-> ## Corollaire de la leçon 143, à lire avec celle qui suit
->
-> Le cycle 91 est tombé sur le doublon que la leçon 142 décrit — mais **à moitié seulement**, et
-> c'est ce qui compte. La session parallèle avait corrigé le même défaut d'accusés **côté web** ;
-> le cycle 91 l'avait corrigé **côté gateway**, donc pour les trois clients. Le doublon portait sur
-> le DÉFAUT, pas sur la COUVERTURE.
->
-> **Avant de jeter un travail doublonné, comparer la couverture, pas l'intitulé.** Le salvage du
-> cycle 90 était intégralement négatif ; celui du cycle 91 valait la moitié du cycle, et cette
-> moitié était la seule chose qui réparait iOS et Android.
+*Le cycle 92 a AUDITÉ, comme la tête du cycle 92 le demandait, et l'audit a rendu un défaut
+que huit cycles de travail sur le temps réel n'avaient pas vu : les messages autodestructibles
+ne s'autodétruisaient nulle part ailleurs que dans l'UI des clients. Le cycle 93 hérite pour la
+première fois depuis longtemps de restes NOMMÉS, avec site et scénario.*
 
 > ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
 >
 > Le cycle 90 a fait son `git fetch` d'ouverture, lu la tête, puis passé une heure à implémenter
 > les trois défauts du pipeline de traduction — pendant qu'une session parallèle livrait les
-> **mêmes trois**, mieux, et les mergeait (PR #2890). Une heure entièrement jetée : le salvage a
-> été **intégralement négatif** (les 10 tests écrits passaient contre `main`, mais les 7 de
-> l'autre session couvraient strictement plus).
->
-> La consigne du cycle 89 disait déjà « fetch avant CHAQUE item ». Elle a échoué parce que
-> **« item » n'a pas de grain défini** : la tête présentait trois défauts comme UN bloc.
+> **mêmes trois**, mieux, et les mergeait (PR #2890).
 >
 > ```bash
 > git fetch origin main && git log --oneline -5 origin/main
@@ -34,82 +18,95 @@ meilleures.*
 > **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
 > depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
 > contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.** Un doublon de défaut n'est pas un doublon de correctif.
 
-## Livré au cycle 91
+> ## Ce que le cycle 92 ajoute à la méthode : chercher la promesse, pas seulement l'événement
+>
+> Les cycles 85 à 91 ont tous cherché des défauts de la même forme — *un événement socket
+> manqué que rien ne rejoue*. Cette veine est riche et n'est pas épuisée. Mais elle a un angle
+> mort, et le cycle 92 est tombé dedans par accident en suivant la piste « rattrapage à la
+> reconnexion » : **une fonctionnalité peut n'avoir jamais eu d'implémentation serveur du
+> tout**. `expiresAt` était écrit par les deux transports d'envoi, décodé par les trois clients,
+> replié à l'écran par deux d'entre eux — toute la chaîne avait l'air branchée. Il manquait la
+> seule pièce que personne ne regarde parce qu'elle ne produit aucun événement : le balayage.
+>
+> **Question à poser à chaque champ de `schema.prisma` qui promet un comportement**
+> (`expiresAt`, `maxViewOnceCount`, `pinnedAt`, `bannedAt`, `mutedUntil`, `archivedAt`) :
+> *qui, côté serveur, fait respecter cette promesse ?* Si la réponse est « les clients », la
+> promesse est cosmétique — et un client modifié, un appel d'API brut ou une plateforme qui n'a
+> jamais implémenté le repli la rendent nulle.
 
-1. **Le rattrapage des accusés sert désormais iOS et Android, pas seulement le web.** Le cycle 90
-   avait posé le rattrapage dans `use-conversation-messages-rq.ts` — un fichier web. Les deux
-   clients mobiles restaient donc sous le gel PERMANENT décrit ci-dessous, sans aucun rattrapage.
-   `ConversationHandler._resyncReadStatusToSocket` renvoie le résumé d'accusés courant au socket
-   qui rejoint : `conversation:join` est le point de rattachement de CHAQUE reconnexion des trois
-   clients, et le payload est celui qu'ils traitent déjà — aucun changement client. Les deux
-   rattrapages ne font pas double emploi : celui-ci pousse le résumé de conversation vers les
-   trois, celui du web détaille message par message pour un seul.
+## Livré au cycle 92
 
-## Livré au cycle 90
+1. **`ExpiredMessagesCleanupService` — les messages autodestructibles se détruisent enfin côté
+   serveur.** À la minute : `content` et `encryptedContent` écrasés, traductions vidées, pièces
+   jointes supprimées (fichiers ET lignes), puis `deletedAt` posé — ce qui suffit à retirer le
+   message des ~119 lectures du modèle sans en toucher une seule. Cinquième écrivain de
+   `deletedAt`, il appelle `applyMessageRemovalEffects` comme les quatre autres. Index partiel
+   `expiresAt_ephemeral_partial` fourni en migration MongoDB.
 
-1. **Les deux transports REST de suppression repoussent la pastille de non-lus.** La poussée vit
-   dans `broadcastMessageMutation`, l'unique broadcaster des cinq routes de mutation REST — écrite
-   UNE fois pour `DELETE /messages/:id` (Android) et `DELETE /conversations/:id/messages/:messageId`
-   (SDK iOS). `MessageMutationParams` est désormais une **union discriminée** : `authorId` requis
-   sur `'deleted'`, absent de `'edited'`. Un sixième transport de suppression ne compile pas sans
-   nommer l'auteur — les deux callsites ont été trouvés par `tsc`, pas par lecture.
-2. **Les accusés se rattrapent à la reconnexion socket** (web). Le front montant est compté une
-   seule fois (`reconnectEpoch`, en tête de `use-conversation-messages-rq.ts`) et sert les DEUX
-   dettes du même instant : les messages manqués (qui l'avaient déjà) et les accusés manqués (qui
-   ne l'avaient pas). La détection de front, dupliquée d'un côté et absente de l'autre, n'existe
-   plus qu'en un endroit.
+## Ce que le cycle 93 doit faire — trois pistes, dont deux nommées par le cycle 92
 
-## Deux affirmations de la tête du cycle 90 qui étaient FAUSSES — vérifiées, corrigées
+### 1. La même question, posée aux autres promesses du schéma (piste la plus riche)
 
-La tête annonçait « **trois** transports REST de suppression », et les disait dépourvus
-d'`emitConversationPreviewUpdate`. Les deux points sont faux :
+`isViewOnce` / `maxViewOnceCount` sont le candidat le plus direct : `recordViewOnceConsumption`
+compte les spectateurs correctement, mais **rien ne détruit le message une fois le budget
+épuisé**. `isFullyConsumed` est lu par les clients pour masquer le média — exactement la même
+forme de promesse cosmétique que `expiresAt` avant le cycle 92, et le contenu reste servi.
+À VÉRIFIER avant d'écrire : le balayage est-il le bon chemin, ou la consommation elle-même
+(qui sait, elle, qu'elle vient d'épuiser le budget) ? Le second est plus juste et n'a pas de
+fenêtre résiduelle.
 
-| Ce que la tête disait | Ce que la vérification a établi |
-|---|---|
-| trois transports REST de suppression | **deux** — les trois autres appelants de `broadcastMessageMutation` sont des ÉDITIONS |
-| ils n'émettent pas l'aperçu de liste | ils l'émettent **depuis toujours**, via `broadcastMessageMutation` |
+Puis, dans l'ordre où le doute paraît légitime : `Participant.mutedUntil` (une sourdine expirée
+est-elle levée côté serveur, ou seulement affichée levée ?), `bannedAt`.
 
-`src/socketio/README.md` § « La pastille de non-lus » portait la même erreur et est corrigé.
-**Morale, à appliquer au cycle 91 :** « ne pas re-auditer — vérifier puis corriger » veut dire
-VÉRIFIER. Un site exact légué par un cycle précédent se relit avant qu'on écrive contre lui ;
-ici la vérification a économisé un correctif sur un transport qui n'existe pas et un autre sur
-un canal déjà branché.
+### 2. Les deux restes NOMMÉS de la destruction éphémère (dette assumée du cycle 92)
 
-## Ce que le cycle 91 doit faire : auditer, la file est vide
+- **`metadata` survit à la destruction.** Il porte l'instantané du post cité
+  (`metadata.postReplyTo` : contenu, vignette, compteurs) et le résumé d'appel. Ce n'est pas le
+  contenu du message, d'où sa mise hors périmètre — mais un message éphémère qui cite un post
+  laisse cet instantané en clair en base après sa destruction.
+- **Les lignes de localisation** (`MessageLocation`, cf. `LocationModels.swift`) ne sont pas
+  touchées : les coordonnées d'un partage de position éphémère survivent à son échéance.
 
-Aucun défaut n'est légué avec site et scénario. Pistes non instruites, par ordre de valeur
-apparente — **à confirmer par lecture avant tout code** :
+Les deux se traitent au même endroit (`ExpiredMessagesCleanupService._burn`) et méritent
+chacun leur test. Vérifier d'abord ce que la relocation lit encore : effacer un `metadata`
+qu'un AUTRE message référence serait pire que de le laisser.
 
-- **Les autres chemins qui rendent un message invisible** ne repoussent pas la pastille : la règle
-  du README dit « soft delete, rappel, expiration, modération ». Seules les suppressions (WS + les
-  deux REST) sont câblées. L'expiration éphémère (`ExpiredStoriesCleanupService` et son équivalent
-  messages) et la modération admin sont des candidats directs, avec le même one-liner.
-- **Le rattrapage à la reconnexion est maintenant un motif à trois usages** (messages, accusés) et
-  vaut d'être cherché ailleurs : réactions, épinglages, statuts de présence — tout état poussé par
-  socket et jamais re-demandé sur reconnexion souffre du même gel.
+### 3. La veine « événement socket manqué », toujours ouverte
+
+Inchangée depuis le cycle 92 et toujours non instruite :
+
+- **Les autres chemins qui rendent un message invisible** ne repoussent pas la pastille de
+  non-lus. La modération admin est le candidat restant (l'expiration éphémère est traitée : le
+  balayage du cycle 92 passe par `applyMessageRemovalEffects`, mais **il n'émet AUCUN
+  `conversation:unread-updated` ni `message:deleted` en direct** — un client web connecté garde
+  le message affiché et lisible jusqu'au prochain rechargement, car le web n'a aucun traitement
+  d'éphémère. C'est le reste le plus visible du cycle 92, et le plus facile à fermer).
+- **Le rattrapage à la reconnexion vaut d'être cherché ailleurs** : réactions, épinglages,
+  statuts de présence.
 - **`tsc --noEmit` sur `apps/web` rend 1 224 diagnostics**, tous dans `__tests__/**` et tous
-  pré-existants (compte identique mesuré sur l'arbre stashé au cycle 90). Ce n'est pas une
-  régression, mais c'est un signal éteint : plus personne ne peut lire ce compte pour y détecter
-  une vraie erreur. Assainir est un chantier en soi, pas un à-côté.
+  pré-existants. Signal éteint ; assainir est un chantier en soi.
 
 ## Ce qui reste ouvert des cycles précédents
 
-
 - **Les 242 « source guards » iOS** (tête du cycle 86) : des tests qui `grep` le code au RUNTIME
-  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de la
-  routine** — inchangé aux cycles 86 à 89. Exige une machine macOS.
+  depuis un `#filePath` figé à la COMPILATION. **Aucune toolchain Swift dans l'environnement de
+  la routine** — inchangé aux cycles 86 à 92. Exige une machine macOS.
 - La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
-- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` vers la branche
-  passent, le `push --delete` non — quatre tentatives, 403 constant, donc une politique de droits
-  et non un aléa réseau. `claude/keen-hamilton-6o1jgj` est restée en place après le merge de la
-  PR #2894. Conséquence pratique : la consigne « supprimer la branche après merge » n'est pas
-  exécutable ici, et les branches mergées s'accumulent — à purger depuis un contexte qui a le
-  droit (cf. `tasks/branch-purge-*.sh`).
-- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
-  toujours pas.
-- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
-  (cycle 87). Non reproduit aux cycles 88 ni 89.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91). Les `push` passent, le
+  `push --delete` non — quatre tentatives, 403 constant : une politique de droits, pas un aléa
+  réseau. Les branches mergées s'accumulent — à purger depuis un contexte qui a le droit
+  (cf. `tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2)
+  n'existe toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous
+  charge** (cycle 87). Non reproduit aux cycles 88 à 92.
+- **Les migrations MongoDB manuelles ne sont jouées par AUCUN déploiement** (constat repris de
+  `2026-08-04-post-media-download-indexes.mongodb.js`). L'index du cycle 92 est donc fourni mais
+  **pas appliqué** : sans lui le balayage fait un COLLSCAN par minute sur `Message`. À jouer à
+  la main sur la production, ou à automatiser — ce serait un chantier utile en soi.
 
 ## Environnement de la routine — ce qui s'exécute et ce qui ne s'exécute pas
 
@@ -119,8 +116,103 @@ apparente — **à confirmer par lecture avant tout code** :
 | build web (Next.js) | ⚠ | dépend du réseau Google Fonts (cf. cycle 88) |
 | gateway + web (jest) | ✓ | après `bun install --ignore-scripts`, `prisma generate`, build de `shared` |
 
-`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur et
-interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+`bun install` **échoue** sans `--ignore-scripts` (le postinstall de `grpc-tools` sort en erreur
+et interrompt toute l'installation). C'est la première chose à faire dans un environnement neuf.
+
+---
+
+# Cycle 92 — L'autodestruction n'existait que sur l'écran
+
+*Branche `claude/keen-hamilton-zexh82`. Un correctif, RED-prouvé avant correction, et un audit
+qui a rendu autre chose que ce que la tête du cycle attendait.*
+
+## 0. Ce que l'audit cherchait, et ce qu'il a trouvé
+
+La tête du cycle 92 donnait trois pistes, toutes de la même famille : *un état poussé par socket
+et jamais re-demandé à la reconnexion*. En suivant la deuxième (« réactions, épinglages,
+présence »), la vérification a d'abord établi que la famille était **déjà couverte** — la file
+hors ligne porte `new`, `edited`, `deleted`, `pinned`, `unpinned`, les deux réactions et les
+mises à jour de pièce jointe, sur cinq transports, et `_drainedEventName` les rejoue toutes.
+
+C'est en cherchant ce qui restait de non couvert dans le cycle de vie d'un message que le
+`expiresAt` du schéma est apparu — écrit partout, **lu nulle part côté serveur**.
+
+## 1. Le défaut
+
+`Message.expiresAt` est écrit par les deux transports d'envoi (`MessageHandler` pour le WS,
+`routes/conversations/messages.ts` pour le REST), et `MessageProcessor.saveMessage` en dérive le
+drapeau `MESSAGE_EFFECT_FLAGS.EPHEMERAL`. Les trois clients le décodent ; deux replient la bulle
+à l'échéance (iOS `ThemedMessageBubble` + `BubbleStandardLayout`, Android « collapse ephemeral
+bubble when its self-destruct timer expires »). Toute la chaîne avait l'air branchée.
+
+Elle ne l'était pas :
+
+| Ce qui existait | Ce qui manquait |
+|---|---|
+| écriture d'`expiresAt` sur les 2 transports | aucune LECTURE ne le filtre — les ~119 requêtes du modèle sont gardées par le seul `deletedAt` |
+| repli de la bulle sur 2 clients sur 3 | le web n'a AUCUN traitement d'éphémère |
+| `ExpiredStoriesCleanupService` pour les `Post` | rien pour les `Message` — `MaintenanceService` ne balaye que les messages VIDES |
+
+Conséquence : le texte en clair d'un message « autodestructible » restait servi par
+`GET /conversations/:id/messages` **indéfiniment** après son échéance. Réinstallation, nouvel
+appareil, client web, appel d'API brut avec un jeton valide : tous le rendaient intégralement.
+Ce que l'expéditeur croyait effacé au bout de trente secondes était intact un an plus tard.
+
+## 2. Le correctif, et les deux façons dont il pouvait faire pire
+
+`ExpiredMessagesCleanupService` (`services/gateway/src/services/`), démarré par `server.ts` à
+côté du balayage des stories. Une passe par minute — et non l'heure des stories : la plus courte
+durée offerte par les clients est de 30 s, la fenêtre résiduelle doit rester du même ordre que
+la durée qu'elle borne.
+
+**Effacer plutôt que masquer.** Les quatre écrivains existants de `deletedAt` posent la date et
+vident les traductions mais LAISSENT le clair en base : une suppression demandée par une
+personne veut dire « retire-le de la vue ». Une échéance dit « détruis-le ». Ce balayage est
+donc le seul chemin qui écrase `content` et `encryptedContent`. Masquer sans effacer aurait
+fermé la fuite de LECTURE en laissant intacte la fuite AU REPOS — celle que l'échéance promet
+précisément de fermer.
+
+**Masquer plutôt que filtrer.** `deletedAt` retire le message des ~119 lectures **sans en
+toucher une seule**. Filtrer `expiresAt` dans chacune aurait fermé la fenêtre résiduelle au prix
+de 119 sites, chacun libre de l'oublier.
+
+Les deux garde-fous, tous deux RED-prouvés :
+
+- **`unsetOrNull('deletedAt')`, jamais `deletedAt: null` seul.** Une ligne dont le créateur n'a
+  pas écrit `LIVE_MESSAGE_MARK` a la colonne ABSENTE ; le filtre nul ne l'apparie pas et
+  l'éphémère survivrait exactement là où personne ne le chercherait. C'est le piège que ce dépôt
+  a payé quatre fois en production (cf. `utils/prisma-unset.ts`).
+- **`_isLapsed` re-filtre dans le processus.** Sur MongoDB l'ordre BSON place `null` avant les
+  dates ; `$lt` est bracketé par type et ne les apparie donc pas. C'est vrai — et le rayon de
+  souffle d'une erreur ici est la destruction de TOUS les messages de la base. Un invariant à ce
+  prix se revérifie dans le processus plutôt que dans un commentaire. Une divergence entre ce
+  que la requête rend et ce que le filet accepte est journalisée en `error`, pas avalée.
+
+**Index partiel.** `expiresAt` est écrit explicitement à `null` par tous les créateurs : un
+`@@index([expiresAt])` ordinaire porterait une entrée par message pour servir une fraction
+infime d'entre eux. `partialFilterExpression: { expiresAt: { $type: 'date' } }` n'indexe que les
+lignes qui ont réellement une échéance — exactement l'ensemble interrogé. Prisma ne sait pas
+l'exprimer dans le schéma ; le dépôt a le précédent
+(`2026-05-09-message-client-id.mongodb.js`).
+
+**Tests** (11, tous RED d'abord) : le prédicat d'échéance ; l'appariement des deux états de
+`deletedAt` ; la fournée bornée et ordonnée par échéance croissante ; l'effacement exact
+(clair + chiffré + traductions + `deletedAt`) ; **rien n'est détruit d'un message sans échéance
+ou pas encore échu** ; les fichiers partent avant la ligne qui les nomme ; un fichier
+récalcitrant n'empêche pas la destruction ; les effets de retrait partagés jouent avec le
+contenu CAPTURÉ avant l'effacement ; un message en échec ne fait pas échouer la passe ; une
+requête en échec rend une passe vide ; `start`/`stop` arment et désarment.
+
+## 3. Ce que le cycle 92 laisse volontairement de côté — et qui est nommé, pas oublié
+
+- `metadata` (instantané de post cité, résumé d'appel) et les lignes de localisation survivent à
+  la destruction. Ce n'est pas le contenu du message, mais un partage de position éphémère laisse
+  ses coordonnées en base.
+- **Aucune émission live.** Le balayage ne pousse ni `message:deleted` ni
+  `conversation:unread-updated` : un client web connecté garde le message affiché et lisible
+  jusqu'au prochain rechargement. C'est le reste le plus visible, et le plus facile à fermer.
+- Les migrations MongoDB manuelles n'étant jouées par aucun déploiement, l'index est **fourni,
+  pas appliqué**.
 
 ---
 

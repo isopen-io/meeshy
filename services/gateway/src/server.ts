@@ -54,6 +54,7 @@ import { BackgroundJobsManager } from './jobs';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
+import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
@@ -168,6 +169,7 @@ class MeeshyServer {
   private jobMappingCache: MultiLevelJobMappingCache;
   private tusCleanup: TusCleanupService;
   private expiredStoriesCleanup: ExpiredStoriesCleanupService;
+  private expiredMessagesCleanup: ExpiredMessagesCleanupService;
   private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
@@ -280,6 +282,16 @@ class MeeshyServer {
     // Cron de purge des stories expirees (soft-delete passe le `expiresAt`,
     // hard-delete au-dela de la fenetre de retention).
     this.expiredStoriesCleanup = new ExpiredStoriesCleanupService(this.prisma);
+
+    // Cron de destruction des messages autodestructibles echus. Sans lui,
+    // `expiresAt` n'existait que dans l'UI des clients : le clair restait servi
+    // par les lectures indefiniment apres l'echeance.
+    // `resolveManager` est PARESSEUX : le manager Socket.IO n'existe pas encore
+    // a cet instant (il est cree par `socketIOHandler.initialize()`), et une
+    // capture ici retiendrait `null` pour toujours.
+    this.expiredMessagesCleanup = new ExpiredMessagesCleanupService(this.prisma, {
+      resolveManager: () => this.socketIOHandler.getManager(),
+    });
     // SOTA audit Pilier 4 — outbox-based ghost media file cleanup. Reaps
     // any orphaned files left behind by partial uploads or crashed
     // transactions (e.g. story repost media snapshots that never made it
@@ -1060,6 +1072,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredStoriesCleanup.start();
       logger.info('✓ Expired stories cleanup service started');
 
+      // Start expired-messages sweep (per-minute): erase content + ciphertext
+      // of self-destructing messages whose expiresAt has lapsed.
+      this.expiredMessagesCleanup.start();
+      logger.info('✓ Expired messages cleanup service started');
+
       // Start orphan-media cleanup worker (5-min sweep, deletes files
       // referenced in OrphanMediaCleanup whose cleanupAfter has passed).
       this.orphanMediaCleanup.start();
@@ -1117,6 +1134,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredStoriesCleanup) {
         this.expiredStoriesCleanup.stop();
         logger.info('✓ Expired stories cleanup service stopped');
+      }
+
+      // Stop expired-messages sweep
+      if (this.expiredMessagesCleanup) {
+        this.expiredMessagesCleanup.stop();
+        logger.info('✓ Expired messages cleanup service stopped');
       }
 
       // Stop orphan-media cleanup worker
