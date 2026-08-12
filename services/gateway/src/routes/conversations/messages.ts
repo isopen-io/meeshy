@@ -45,7 +45,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFo
 import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
@@ -367,25 +367,49 @@ export function registerMessagesRoutes(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // Read frontier + remaining unread of the ACTOR, resolved once and used
+      // twice: they ride the read-status broadcast below (multi-device read
+      // sync) AND drive the badge reset. Both travel ONLY on a 'read' — the
+      // sole action that advances a read cursor; a 'received' never moves
+      // `lastReadAt`. Mirrors `broadcastReadStatus` in message-read-status.ts,
+      // the twin route: `ReadStatusUpdatedEventData` declares the two as a pair
+      // and consumers apply them together or not at all, so a broadcast missing
+      // them is silently dropped rather than partially applied. iOS posts every
+      // read to THIS route, so omitting them here kept its multi-device read
+      // sync from ever starting.
+      const actorReadSync = type === 'read'
+        ? await Promise.all([
+            prisma.conversationReadCursor.findUnique({
+              where: {
+                conversation_participant_cursor: { participantId, conversationId }
+              },
+              select: { lastReadAt: true }
+            }),
+            readStatusService.getUnreadCount(participantId, conversationId)
+          ]).then(([cursor, unreadCount]) => ({
+            lastReadAt: cursor?.lastReadAt ?? null,
+            unreadCount
+          }))
+        : undefined;
+
       // Badge reset is internal multi-device sync, not a peer disclosure — it
       // fires on BOTH privacy branches. Emit the REAL post-mark remaining
       // unread (mirrors message-read-status.ts:560-565), never a hardcoded 0:
       // an exact/partial read advances the cursor only over the contiguous
       // read prefix, so messages can legitimately remain unread. A hardcoded 0
       // would wrongly clear the reader's badge across ALL their devices.
-      const emitUnreadUpdate = async () => {
-        if (type !== 'read') return;
-        const remainingUnread = await readStatusService.getUnreadCount(participantId, conversationId);
+      const emitUnreadUpdate = () => {
+        if (!actorReadSync) return;
         io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
-          unreadCount: remainingUnread,
+          unreadCount: actorReadSync.unreadCount,
         });
       };
 
       const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
 
       if (!shouldBroadcast) {
-        await emitUnreadUpdate();
+        emitUnreadUpdate();
         return;
       }
 
@@ -403,13 +427,14 @@ export function registerMessagesRoutes(
         })
       ]);
 
-      const payload = {
+      const payload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId,
         userId,
         type,
         updatedAt: new Date(),
-        summary
+        summary,
+        ...(actorReadSync ?? {})
       };
 
       emitToConversationParticipants({
@@ -420,7 +445,7 @@ export function registerMessagesRoutes(
         payload
       });
 
-      await emitUnreadUpdate();
+      emitUnreadUpdate();
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }

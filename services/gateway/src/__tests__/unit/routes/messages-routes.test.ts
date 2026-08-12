@@ -2364,6 +2364,63 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
     );
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
   });
+
+  // ── the actor read-sync pair travels on this route too ─────────────────────
+  // `ReadStatusUpdatedEventData` declares `lastReadAt` and `unreadCount` as a
+  // pair on `type: 'read'`, and consumers require BOTH before applying either
+  // (iOS `ConversationStoreSocketBridge` guards `let lastReadAt, let unreadCount
+  // else { return }`). This route omitted them while its twin
+  // (`message-read-status.ts`) sent them — and this is the route iOS posts to
+  // for every read, so its multi-device read sync never started at all.
+
+  it('carries the actor lastReadAt + unreadCount on a read broadcast', async () => {
+    const lastReadAt = new Date('2024-06-03T10:00:00Z');
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt });
+    mockGetUnreadCount.mockResolvedValue(4);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'read-status:updated',
+      expect.objectContaining({ type: 'read', lastReadAt, unreadCount: 4 }),
+    );
+  });
+
+  it('reports a null frontier when the actor has no read cursor yet', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+    // Pre-mark count first (3 — otherwise the route short-circuits with nothing
+    // to mark), then the post-mark count the broadcast carries.
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValue(0);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'read-status:updated',
+      expect.objectContaining({ type: 'read', lastReadAt: null, unreadCount: 0 }),
+    );
+  });
+
+  it('still resets the actor badge when read receipts are disabled', async () => {
+    // Badge reset is internal multi-device sync, not a peer disclosure: it must
+    // survive the privacy branch that suppresses the receipt broadcast.
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockGetUnreadCount.mockResolvedValue(7);
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ unreadCount: 7 }),
+    );
+    expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -94,6 +94,10 @@ function makeReadStatusService() {
   return { getUnreadCount: jest.fn().mockResolvedValue(0) };
 }
 
+function makeRetractTyping() {
+  return jest.fn<any>().mockResolvedValue(undefined);
+}
+
 function makeHandler({
   prisma = makePrisma(),
   connectedUsers = makeConnectedUsers(),
@@ -529,6 +533,34 @@ describe('ConversationHandler', () => {
 
       await expect(handler.handleConversationLeave(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
       expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
+    });
+
+    // La conversation n'est résolue QU'UNE FOIS. Router la retraction par le
+    // point d'entrée complet de `typing:stop` la ferait re-normaliser, soit un
+    // second `conversation.findUnique` facturé à CHAQUE changement de
+    // conversation. Le test « id normalisé, pas brut » ci-dessus prouve QUOI
+    // est passé ; celui-ci prouve ce que ça a coûté.
+    it('resolves the conversation once — the retraction reuses the resolved id', async () => {
+      const retractTyping = makeRetractTyping();
+      const socket = makeSocket();
+      const handler = makeHandler({ retractTyping });
+
+      await handler.handleConversationLeave(socket, { conversationId: CONV_ID });
+
+      expect(mockNormalizeConversationId).toHaveBeenCalledTimes(1);
+    });
+
+    // Un payload refusé sort avant toute résolution : rien n'a été diffusé sous
+    // cet identifiant, il n'y a rien à retracter — et surtout rien à facturer.
+    it('does not retract when the payload was rejected', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: false, error: 'Validation failed: x' });
+      const retractTyping = makeRetractTyping();
+      const socket = makeSocket();
+      const handler = makeHandler({ retractTyping });
+
+      await handler.handleConversationLeave(socket, { conversationId: '' });
+
+      expect(retractTyping).not.toHaveBeenCalled();
     });
   });
 

@@ -860,6 +860,74 @@ describe('StatusHandler', () => {
     });
   });
 
+  // ── retractTypingIn ──────────────────────────────────────────────────────────
+  // The retraction itself, addressable with a conversation id ALREADY resolved.
+  // `typing:stop` reaches it after normalising; `conversation:leave` reaches it
+  // having normalised for its own room join, and must not pay a second lookup.
+
+  describe('retractTypingIn', () => {
+    it('retracts a tracked typing burst without resolving the conversation again', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      const resolutionsAfterStart = mockNormalizeConversationId.mock.calls.length;
+
+      await handler.retractTypingIn(socket, CONV_ID);
+
+      const stopEmit = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ isTyping: false, conversationId: CONV_ID, displayName: 'Alice' })
+      );
+      expect(mockNormalizeConversationId.mock.calls.length).toBe(resolutionsAfterStart);
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+    });
+
+    it('costs nothing for a socket that never typed in the conversation', async () => {
+      // The overwhelmingly common case once wired into `conversation:leave`:
+      // every conversation switch reaches this, and almost none of them were
+      // typing. It must be a map lookup and nothing else — no resolution, no
+      // identity read, no blocked-viewer query, no fan-out.
+      const prisma = makePrisma();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.retractTypingIn(socket, CONV_ID);
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockNormalizeConversationId).not.toHaveBeenCalled();
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('sheds its tracking entry before any I/O that could fail', async () => {
+      // La retraction NE rattrape PAS : chacun de ses deux appelants porte son
+      // propre try/catch (`handleTypingStop`, `handleConversationLeave`), et
+      // c'est la sortie de room qui doit survivre a un echec, pas la retraction.
+      // Ce qui doit tenir ici est l'ordre : untrack AVANT la requete des
+      // bloqueurs. Sinon une panne DB laisse l'entree `activeTypers` en place,
+      // et le socket reste eternellement « en train d'ecrire » pour ce que la
+      // suppression multi-appareils en deduira.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB unreachable')) },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      await expect(handler.retractTypingIn(socket, CONV_ID)).rejects.toThrow('DB unreachable');
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+    });
+  });
+
   // ── blocking privacy ─────────────────────────────────────────────────────────
   // Typing is a moment-to-moment presence signal, more sensitive than the
   // `_broadcastUserStatus` snapshot already gated on blocking — it must not
