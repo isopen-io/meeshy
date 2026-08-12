@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/auth-store';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { useToast } from '@/components/v2';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
+import { RepostModal } from '@/components/v2/RepostModal';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
@@ -11,7 +15,7 @@ import {
   useUnlikePostMutation,
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
-  useSharePostMutation,
+  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
@@ -19,7 +23,9 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
-import { copyToClipboard } from '@/lib/clipboard';
+import { shareLink } from '@/lib/share-utils';
+import { reportService } from '@/services/report.service';
+import { postsService } from '@/services/posts.service';
 
 const LIKE_EMOJI = '❤️';
 
@@ -54,7 +60,8 @@ export default function ReelPage() {
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
-  const shareMutation = useSharePostMutation();
+  const repostMutation = useRepostMutation();
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
 
   // Only a REEL seeds the immersive player; any other post type (stale/scraped
   // link) is treated as unavailable rather than forced into reel chrome.
@@ -102,6 +109,18 @@ export default function ReelPage() {
     if (currentId) recordImpression(currentId);
   }, [currentId, recordImpression]);
 
+  // Consommer les notifications du réel affiché (nouveau réel, commentaires,
+  // réactions — portée serveur `context.postId`). Le viewer de réels
+  // n'émettait AUCUN marquage : les notifications de réels restaient non lues
+  // à vie. Miroir du `onPostOpened` iOS, coalescé par le module.
+  const queryClient = useQueryClient();
+  const { isAuthenticated, user } = useAuthStore();
+  useEffect(() => {
+    if (currentId && isAuthenticated) {
+      markScopeNotificationsRead(queryClient, { kind: 'post', postId: currentId });
+    }
+  }, [currentId, isAuthenticated, queryClient]);
+
   const close = useCallback(() => {
     if (window.history.length > 1) router.back();
     else router.push('/feed/posts');
@@ -121,14 +140,22 @@ export default function ReelPage() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
-    if (success) {
-      shareMutation.mutate({ postId: current.id });
-      toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } else {
-      toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
+    const localUrl = `${window.location.origin}/reel/${current.id}`;
+    const title = current.author?.displayName ?? current.author?.username ?? 'Meeshy';
+    const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+    try {
+      const { shortUrl } = await postsService.sharePost(current.id, { generateLink: true });
+      const shared = await shareLink(shortUrl ?? localUrl, title, current.content ?? '');
+      if (shared) {
+        toastCtx.addToast(t('shared', 'Shared!'), 'success');
+      } else if (!hasNativeShare) {
+        toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
+      }
+      // else: native share sheet dismissed — nothing was copied, no toast
+    } catch {
+      toastCtx.addToast(t('linkCopyError', "Couldn't share the reel"), 'error');
     }
-  }, [current, shareMutation, toastCtx, t]);
+  }, [current, toastCtx, t]);
 
   // Reel comment notifications link to `/reel/:id#comment-:cid`. The reel player
   // surfaces comments via the post-detail thread, so forward to it preserving the
@@ -136,10 +163,17 @@ export default function ReelPage() {
   // (not push) so Back returns to where the user came from, not this redirect.
   useEffect(() => {
     if (typeof window === 'undefined' || !postId) return;
+    const searchParams = new URLSearchParams(window.location.search);
     const anchorCommentId = window.location.hash.match(/^#comment-(.+)$/)?.[1]
-      ?? new URLSearchParams(window.location.search).get('comment');
+      ?? searchParams.get('comment');
     if (anchorCommentId) {
-      router.replace(`/feeds/post/${postId}#comment-${anchorCommentId}`);
+      // Préserver `?parent=<id>` (cible = réponse) pour que la page post
+      // déplie le bon thread et surligne la réponse exacte.
+      const parentCommentId = searchParams.get('parent');
+      const parentQuery = parentCommentId
+        ? `?parent=${encodeURIComponent(parentCommentId)}`
+        : '';
+      router.replace(`/feeds/post/${postId}${parentQuery}#comment-${anchorCommentId}`);
     }
   }, [postId, router]);
 
@@ -147,26 +181,90 @@ export default function ReelPage() {
     if (current) router.push(`/feeds/post/${current.id}`);
   }, [current, router]);
 
+  const onReport = useCallback(() => {
+    if (!current) return;
+    if (!window.confirm(t('reportConfirm', 'Report this reel?'))) return;
+    reportService
+      .reportPost(current.id, 'inappropriate', '')
+      .then(() => toastCtx.addToast(t('reported', 'Reel reported'), 'success'))
+      .catch(() => toastCtx.addToast(t('reportError', "Couldn't report the reel"), 'error'));
+  }, [current, toastCtx, t]);
+
+  const onRepost = useCallback(() => {
+    if (current) setRepostModalOpen(true);
+  }, [current]);
+
+  const handleRepost = useCallback(() => {
+    if (!current) return;
+    repostMutation.mutate(
+      { postId: current.id, data: { isQuote: false } },
+      {
+        onSuccess: () => {
+          setRepostModalOpen(false);
+          toastCtx.addToast(t('reposted', 'Reposted!'), 'success');
+        },
+        onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+      },
+    );
+  }, [current, repostMutation, toastCtx, t]);
+
+  const handleQuote = useCallback(
+    (quoteContent: string) => {
+      if (!current) return;
+      repostMutation.mutate(
+        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostModalOpen(false);
+            toastCtx.addToast(t('quoted', 'Quoted!'), 'success');
+          },
+          onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
+        },
+      );
+    },
+    [current, repostMutation, toastCtx, t],
+  );
+
+  const onDownload = useCallback((mediaId: string, owningPostId: string) => {
+    postsService.recordMediaDownloads(owningPostId, [mediaId], 'reel');
+  }, []);
+
   if (current) {
     return (
-      <ReelPlayer
-        key={current.id}
-        reel={current}
-        index={index}
-        total={thread.length}
-        hasPrev={index > 0}
-        hasNext={index < thread.length - 1}
-        isLiked={isReelLiked(current)}
-        isBookmarked={!!current.bookmarkedAt}
-        userLanguage={userLanguage}
-        onPrev={() => setIndex((i) => Math.max(0, i - 1))}
-        onNext={() => setIndex((i) => Math.min(thread.length - 1, i + 1))}
-        onClose={close}
-        onLike={onLike}
-        onComment={onComment}
-        onShare={onShare}
-        onBookmark={onBookmark}
-      />
+      <>
+        <ReelPlayer
+          key={current.id}
+          reel={current}
+          index={index}
+          total={thread.length}
+          hasPrev={index > 0}
+          hasNext={index < thread.length - 1}
+          isLiked={isReelLiked(current)}
+          isBookmarked={!!current.bookmarkedAt}
+          userLanguage={userLanguage}
+          onPrev={() => setIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setIndex((i) => Math.min(thread.length - 1, i + 1))}
+          onClose={close}
+          onLike={onLike}
+          onComment={onComment}
+          onShare={onShare}
+          onBookmark={onBookmark}
+          onReport={user?.id !== current.authorId ? onReport : undefined}
+          onRepost={onRepost}
+          onDownload={onDownload}
+        />
+        {repostModalOpen && (
+          <RepostModal
+            open
+            originalAuthor={current.author?.displayName ?? current.author?.username}
+            originalContent={current.content ?? undefined}
+            onRepost={handleRepost}
+            onQuote={handleQuote}
+            onClose={() => setRepostModalOpen(false)}
+            saving={repostMutation.isPending}
+          />
+        )}
+      </>
     );
   }
 

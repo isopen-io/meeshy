@@ -94,4 +94,42 @@ describe('emitWithSeq', () => {
     expect(emit).toHaveBeenCalledWith('notification:new', { title: 'resilient' });
     expect(emit.mock.calls[0][1]).not.toHaveProperty('_seq');
   });
+
+  it('emits WITHOUT _seq (never blocks) when sequence allocation STALLS past the timeout', async () => {
+    const { io, emit } = makeIO();
+    // A stalled Mongo op (replica-set election, pool exhaustion) neither resolves
+    // nor rejects. Without a bound this awaits forever and head-of-line-blocks
+    // every subsequent real-time event for the user — violating the module's
+    // "emit never blocks the real-time path" invariant. A tiny timeout keeps the
+    // test deterministic on real timers.
+    const seq = {
+      nextSeq: jest.fn<() => Promise<number>>(() => new Promise<number>(() => {})),
+    } as unknown as SequenceService;
+
+    await expect(
+      emitWithSeq(io, seq, 'u-stall', 'notification:new', { title: 'live' }, 10),
+    ).resolves.toBeUndefined();
+
+    expect(emit).toHaveBeenCalledWith('notification:new', { title: 'live' });
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('_seq');
+  });
+
+  it('a stalled allocation does not permanently poison the per-user chain', async () => {
+    const { io, emit } = makeIO();
+    let call = 0;
+    const seq = {
+      nextSeq: jest.fn<() => Promise<number>>(() => {
+        call += 1;
+        // First allocation stalls forever; the sequence source then recovers.
+        return call === 1 ? new Promise<number>(() => {}) : Promise.resolve(7);
+      }),
+    } as unknown as SequenceService;
+
+    await emitWithSeq(io, seq, 'u-recover', 'notification:new', { n: 'first' }, 10);
+    await emitWithSeq(io, seq, 'u-recover', 'notification:new', { n: 'second' }, 10);
+
+    expect(emit).toHaveBeenNthCalledWith(1, 'notification:new', { n: 'first' });
+    expect(emit.mock.calls[0][1]).not.toHaveProperty('_seq');
+    expect(emit).toHaveBeenNthCalledWith(2, 'notification:new', { n: 'second', _seq: 7 });
+  });
 });

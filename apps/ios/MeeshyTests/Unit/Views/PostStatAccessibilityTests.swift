@@ -31,34 +31,70 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertTrue(PostStatAccessibility.repostsLabel(3).contains("3"))
     }
 
-    // MARK: - Accord singulier / pluriel (langue de dev = en)
+    // MARK: - Accord singulier / pluriel, langue par langue
+    //
+    // La langue que résout `String(localized:)` vient du BUNDLE, donc de la
+    // langue du simulateur : comparer à une chaîne littérale sans fixer le
+    // bundle donne un test vert en local (simu français) et rouge en CI (simu
+    // anglais). D'où l'injection explicite de `en.lproj` / `fr.lproj` — la
+    // suite juge alors l'accord réel, sur la machine de n'importe qui.
+    //
+    // Noter que « j'aime » est invariable en français : le pluriel ne calque
+    // pas l'anglais, et c'est bien ce que doit lire VoiceOver.
 
-    func test_likesLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(1), "1 like")
+    /// Table de traduction ET règle de pluriel : les DEUX sont nécessaires.
+    /// Le bundle seul ne suffit pas — table anglaise + simulateur français
+    /// rend « 0 like », le français rangeant 0 dans le singulier.
+    private func label(_ make: (Int, Bundle, Locale) -> String,
+                       _ count: Int,
+                       in code: String) throws -> String {
+        let path = try XCTUnwrap(
+            Bundle.main.path(forResource: code, ofType: "lproj"),
+            "localisation « \(code) » absente du bundle — régression de packaging"
+        )
+        return make(count, try XCTUnwrap(Bundle(path: path)), Locale(identifier: code))
     }
 
-    func test_likesLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(5), "5 likes")
+    func test_likesLabel_singularForOne() throws {
+        let likes = PostStatAccessibility.likesLabel
+        XCTAssertEqual(try label(likes, 1, in: "en"), "1 like")
+        XCTAssertEqual(try label(likes, 1, in: "fr"), "1 j'aime")
     }
 
-    func test_likesLabel_pluralForZero() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(0), "0 likes")
+    func test_likesLabel_pluralForMany() throws {
+        let likes = PostStatAccessibility.likesLabel
+        XCTAssertEqual(try label(likes, 5, in: "en"), "5 likes")
+        XCTAssertEqual(try label(likes, 5, in: "fr"), "5 j'aime")
     }
 
-    func test_commentsLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.commentsLabel(1), "1 comment")
+    func test_likesLabel_pluralForZero() throws {
+        let likes = PostStatAccessibility.likesLabel
+        XCTAssertEqual(try label(likes, 0, in: "en"), "0 likes")
+        XCTAssertEqual(try label(likes, 0, in: "fr"), "0 j'aime")
     }
 
-    func test_commentsLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.commentsLabel(12), "12 comments")
+    func test_commentsLabel_singularForOne() throws {
+        let comments = PostStatAccessibility.commentsLabel
+        XCTAssertEqual(try label(comments, 1, in: "en"), "1 comment")
+        XCTAssertEqual(try label(comments, 1, in: "fr"), "1 commentaire")
     }
 
-    func test_repostsLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.repostsLabel(1), "1 repost")
+    func test_commentsLabel_pluralForMany() throws {
+        let comments = PostStatAccessibility.commentsLabel
+        XCTAssertEqual(try label(comments, 12, in: "en"), "12 comments")
+        XCTAssertEqual(try label(comments, 12, in: "fr"), "12 commentaires")
     }
 
-    func test_repostsLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.repostsLabel(4), "4 reposts")
+    func test_repostsLabel_singularForOne() throws {
+        let reposts = PostStatAccessibility.repostsLabel
+        XCTAssertEqual(try label(reposts, 1, in: "en"), "1 repost")
+        XCTAssertEqual(try label(reposts, 1, in: "fr"), "1 repartage")
+    }
+
+    func test_repostsLabel_pluralForMany() throws {
+        let reposts = PostStatAccessibility.repostsLabel
+        XCTAssertEqual(try label(reposts, 4, in: "en"), "4 reposts")
+        XCTAssertEqual(try label(reposts, 4, in: "fr"), "4 repartages")
     }
 
     // MARK: - Chaque compteur nomme sa propre sémantique (pas de confusion)

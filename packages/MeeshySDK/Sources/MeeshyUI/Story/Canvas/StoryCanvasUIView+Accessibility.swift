@@ -37,7 +37,7 @@ extension StoryCanvasUIView {
                 label: "\(textAccessibilityPrefix) : \(txt.text)",
                 traits: .staticText,
                 id: txt.id,
-                allowCustomActions: true
+                editableKind: .text
             ))
         }
         for media in slide.effects.mediaObjects ?? [] {
@@ -45,18 +45,40 @@ extension StoryCanvasUIView {
                 label: mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
-                allowCustomActions: true
+                editableKind: .media
             ))
         }
         for sticker in slide.effects.stickerObjects ?? [] {
             elements.append(makeAccessibilityElement(
-                label: "\(stickerAccessibilityWord) \(sticker.emoji)",
+                // Même helper de résolution du nom Unicode qu'en `.play` —
+                // la concaténation brute de l'emoji faisait épeler "feu-de-
+                // camp-glyphe-inconnu" à VoiceOver en édition au lieu de
+                // "Sticker Fire".
+                label: stickerAccessibilityLabel(for: sticker),
                 traits: .image,
                 id: sticker.id,
-                allowCustomActions: true
+                editableKind: .sticker
             ))
         }
-        return elements
+        for location in slide.locationObjects {
+            elements.append(makeAccessibilityElement(
+                label: locationAccessibilityLabel(for: location),
+                traits: .staticText,
+                id: location.id,
+                editableKind: .location
+            ))
+        }
+        // Un container UIKit qui expose des enfants via `accessibilityElements`
+        // ne peut PAS aussi porter son propre label (`isAccessibilityElement`
+        // reste `false` sur la vue) — la synthèse "Story, N objets : …" est
+        // donc un élément de LISTE supplémentaire, prépendu, jamais une
+        // propriété du container. Rien à résumer sur un slide vide : la
+        // surface `blankCanvasStarters` (SwiftUI, ses propres libellés/actions
+        // déjà annotés) se superpose au canvas UIKit dans cet état — un résumé
+        // fantôme ici ferait doublon.
+        guard !elements.isEmpty else { return elements }
+        let summaryLabels = elements.compactMap(\.accessibilityLabel)
+        return [compositionSummaryElement(objectLabels: summaryLabels)] + elements
     }
 
     /// Builds VoiceOver elements for `.play` (reader) mode.
@@ -78,7 +100,7 @@ extension StoryCanvasUIView {
                     : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module),
                 traits: .image,
                 id: media.id,
-                allowCustomActions: false
+                editableKind: nil
             ))
         }
         for txt in slide.effects.textObjects {
@@ -87,7 +109,7 @@ extension StoryCanvasUIView {
                 label: resolved,
                 traits: .staticText,
                 id: txt.id,
-                allowCustomActions: false
+                editableKind: nil
             ))
         }
         for media in slide.effects.mediaObjects ?? [] where !media.isBackground {
@@ -95,7 +117,7 @@ extension StoryCanvasUIView {
                 label: mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
-                allowCustomActions: false
+                editableKind: nil
             ))
         }
         for sticker in slide.effects.stickerObjects ?? [] {
@@ -103,23 +125,49 @@ extension StoryCanvasUIView {
                 label: stickerAccessibilityLabel(for: sticker),
                 traits: .image,
                 id: sticker.id,
-                allowCustomActions: false
+                editableKind: nil
             ))
         }
         return elements
     }
 
+    /// `editableKind` collapses what used to be a `Bool` (allow custom
+    /// actions?) plus an implicit "which kind is this?" carried elsewhere —
+    /// a redundant bool+context pair. `nil` means read-only (`.play`);
+    /// non-nil both turns custom actions on AND tells `makeCustomActions`
+    /// which ones apply (only `.text`/`.media` get "Modifier").
     func makeAccessibilityElement(label: String,
                                           traits: UIAccessibilityTraits,
                                           id: String,
-                                          allowCustomActions: Bool) -> UIAccessibilityElement {
+                                          editableKind: CanvasItemKind?) -> UIAccessibilityElement {
         let el = UIAccessibilityElement(accessibilityContainer: self)
         el.accessibilityLabel = label
         el.accessibilityTraits = traits
         el.accessibilityFrameInContainerSpace = accessibilityFrame(forId: id)
-        if allowCustomActions {
-            el.accessibilityCustomActions = makeCustomActions(forId: id)
+        if let editableKind {
+            el.accessibilityCustomActions = makeCustomActions(forId: id, kind: editableKind)
         }
+        return el
+    }
+
+    /// Synthesized VoiceOver overview of the whole slide, prepended ahead of
+    /// the per-object elements — the first swipe stop on a non-empty canvas
+    /// is now "Story, 3 objets : Texte «Bonjour», Image, Sticker Fire"
+    /// instead of an arbitrary first object with no sense of the whole.
+    /// Read-only (no custom actions) — it doesn't represent a manipulable
+    /// item, just a summary.
+    func compositionSummaryElement(objectLabels: [String]) -> UIAccessibilityElement {
+        let count = objectLabels.count
+        let countLabel = count == 1
+            ? String(localized: "story.composer.a11y.compositionCount.one", defaultValue: "1 objet", bundle: .module)
+            : String(localized: "story.composer.a11y.compositionCount.many", defaultValue: "\(count) objets", bundle: .module)
+        let joined = objectLabels.joined(separator: ", ")
+        let el = UIAccessibilityElement(accessibilityContainer: self)
+        el.accessibilityLabel = String(localized: "story.composer.a11y.composition",
+                                       defaultValue: "Story, \(countLabel) : \(joined)",
+                                       bundle: .module)
+        el.accessibilityTraits = .staticText
+        el.accessibilityFrameInContainerSpace = bounds
         return el
     }
 
@@ -214,6 +262,17 @@ extension StoryCanvasUIView {
         String(localized: "story.canvas.a11y.sticker", defaultValue: "Sticker", bundle: .module)
     }
 
+    /// Mirror of `stickerAccessibilityLabel(for:)` for location pins — "Lieu"
+    /// alone, or "Lieu : {name}" when the reverse-geocoded POI has a name.
+    func locationAccessibilityLabel(for location: StoryLocationObject) -> String {
+        guard let name = location.place.name, !name.isEmpty else { return locationAccessibilityWord }
+        return "\(locationAccessibilityWord) : \(name)"
+    }
+
+    var locationAccessibilityWord: String {
+        String(localized: "story.canvas.a11y.location", defaultValue: "Lieu", bundle: .module)
+    }
+
     var textAccessibilityPrefix: String {
         String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
     }
@@ -224,8 +283,32 @@ extension StoryCanvasUIView {
             : String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
     }
 
-    func makeCustomActions(forId id: String) -> [UIAccessibilityCustomAction] {
-        [
+    /// "Modifier" is added ONLY for `.text`/`.media` — the two kinds that
+    /// actually open an editor on double-tap (`onItemDoubleTapped`, wired by
+    /// the composer to `enterTextEditingMode`/`openMediaEditor`). `.sticker`
+    /// and `.location` route the same callback to a `break` (nothing to
+    /// edit — they move/resize by touch and are removed via the menu), so
+    /// advertising "Modifier" for them would be a VoiceOver dead end (D4).
+    ///
+    /// Note: the long-press context menu (`StoryCanvasUIView+ContextMenu`)
+    /// already offers "Modifier" unconditionally for every kind, including
+    /// sticker/location — the SAME dead end exists there today for sighted
+    /// users, pre-existing and out of this pass's scope. Not replicating it
+    /// here for VoiceOver avoids adding a NEW instance of the same gap.
+    func makeCustomActions(forId id: String, kind: CanvasItemKind) -> [UIAccessibilityCustomAction] {
+        var actions: [UIAccessibilityCustomAction] = []
+        if kind == .text || kind == .media {
+            actions.append(UIAccessibilityCustomAction(
+                name: String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
+            ) { [weak self] _ in
+                // Réutilise EXACTEMENT le canal du double-tap / menu
+                // contextuel — le SDK ne décide pas QUOI faire à l'édition
+                // (SDK Purity), il rejoue le callback déjà câblé par l'app.
+                self?.onItemDoubleTapped?(id, kind)
+                return true
+            })
+        }
+        actions.append(contentsOf: [
             UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module)
             ) { [weak self] _ in
@@ -244,6 +327,7 @@ extension StoryCanvasUIView {
                 self?.sendToBack(id: id)
                 return true
             },
-        ]
+        ])
+        return actions
     }
 }

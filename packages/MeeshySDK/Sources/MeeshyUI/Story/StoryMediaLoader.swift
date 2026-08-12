@@ -57,6 +57,49 @@ public final class StoryMediaLoader {
         }.value
     }
 
+    /// Downsample + encodage JPEG en UN SEUL aller hors du thread principal.
+    /// Les deux opérations sont les deux moitiés du même travail (préparer un
+    /// fichier temporaire pour un média de premier plan) : les séparer
+    /// laisserait l'encodage — le plus coûteux des deux — sur le MainActor.
+    public func downsampledJPEG(
+        image: UIImage,
+        maxDimension: CGFloat,
+        compressionQuality: CGFloat
+    ) async -> (image: UIImage, data: Data)? {
+        let source = image
+        let dim = maxDimension
+        let quality = compressionQuality
+        return await Task.detached(priority: .userInitiated) {
+            let resized = StoryMediaLoader.downsample(image: source, maxDimension: dim) ?? source
+            guard let data = resized.jpegData(compressionQuality: quality) else { return nil }
+            return (resized, data)
+        }.value
+    }
+
+    /// Cœur PUR du redimensionnement, `nonisolated` : c'est ce qui garantit que
+    /// le travail lourd ne peut PAS revenir sur le MainActor par accident.
+    /// `UIGraphicsImageRenderer` est utilisable hors thread principal.
+    ///
+    /// Pas de variante publique `downsampled(image:)` : elle n'a jamais eu
+    /// d'appelant hors tests. Le seul chemin d'un `UIImage` DÉJÀ décodé (capture
+    /// caméra, asset de la pellicule) est `downsampledJPEG`, qui redimensionne
+    /// ET encode en un seul aller détaché — les séparer laissait l'encodage, la
+    /// plus coûteuse des deux moitiés, sur le MainActor.
+    nonisolated static func downsample(image: UIImage, maxDimension: CGFloat) -> UIImage? {
+        let size = image.size
+        let longest = max(size.width, size.height)
+        guard longest > maxDimension, longest > 0 else { return image }
+        let scale = maxDimension / longest
+        let target = CGSize(width: (size.width * scale).rounded(),
+                            height: (size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
     // MARK: - ImageIO Downsampling (nonisolated — runs on background thread)
 
     /// Hardware-accelerated downsample via CGImageSource.

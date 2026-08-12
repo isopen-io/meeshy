@@ -298,11 +298,15 @@ describe('MessageValidator — anonymous permissions', () => {
     expect(result.reason).toMatch(/expiré/);
   });
 
-  it('denies when maxUses reached', async () => {
+  it('allows an admitted participant to send even when the join quota (maxUses) is full', async () => {
+    // `currentUses` is a JOIN counter — incremented once per anonymous join
+    // (routes/anonymous.ts, routes/conversations/sharing.ts) and enforced against
+    // `maxUses` at JOIN time. It is NOT a per-message budget (admin surfaces it as
+    // `totalParticipants`/`anonymousCount`). Re-gating each message send by it would
+    // permanently mute every admitted user the instant the link fills up.
     const v = makeAnonValidator({ participant: baseParticipant, shareLink: { ...baseShareLink, maxUses: 5, currentUses: 5 } });
     const result = await v.checkPermissions(anonCtx, CONV_ID, makeRequest());
-    expect(result.canSend).toBe(false);
-    expect(result.reason).toMatch(/limite/i);
+    expect(result.canSend).toBe(true);
   });
 
   it('denies when allowAnonymousMessages is false', async () => {

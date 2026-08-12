@@ -242,4 +242,62 @@ class OutboxRepositoryTest {
         assertThat(repository.deliverable(OutboxLanes.forMessage("c1")).single().stateEnum)
             .isEqualTo(OutboxState.PENDING)
     }
+
+    @Test
+    fun `activeMessageLanes discovers a per-conversation lane holding a pending send`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        assertThat(repository.activeMessageLanes()).containsExactly(OutboxLanes.forMessage("c1"))
+    }
+
+    @Test
+    fun `activeMessageLanes discovers every distinct conversation lane, oldest lane first`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c2"), "cid_2", "{}", cmid = "m2"),
+        )
+        // A second message on c1's lane must not duplicate the discovered lane.
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m3"),
+        )
+
+        assertThat(repository.activeMessageLanes())
+            .containsExactly(OutboxLanes.forMessage("c1"), OutboxLanes.forMessage("c2"))
+    }
+
+    @Test
+    fun `activeMessageLanes omits a lane whose only row is exhausted`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+        repository.markExhausted("m1", "gave up")
+
+        assertThat(repository.activeMessageLanes()).isEmpty()
+    }
+
+    @Test
+    fun `activeMessageLanes is empty when the queue holds only shared-lane rows`() = runTest {
+        repository.enqueue(reaction(OutboxKind.ADD_REACTION, "add"))
+
+        assertThat(repository.activeMessageLanes()).isEmpty()
+    }
+
+    @Test
+    fun `deliverable of forMessage empty string never finds a real per-conversation lane`() = runTest {
+        // Regression guard: OutboxFlushWorker used to discover message lanes via
+        // `deliverable(OutboxLanes.forMessage(""))`, i.e. an exact-match query for the literal
+        // lane "message:" — which no real row (always enqueued with a non-blank conversation id)
+        // ever matches. This silently meant SEND_MESSAGE/EDIT_MESSAGE/DELETE_MESSAGE rows were
+        // NEVER drained by the worker; activeMessageLanes() (a distinct-lane discovery query) is
+        // the fix. This test pins the old call pattern's brokenness so nobody reintroduces it.
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        assertThat(repository.deliverable(OutboxLanes.forMessage(""))).isEmpty()
+    }
 }

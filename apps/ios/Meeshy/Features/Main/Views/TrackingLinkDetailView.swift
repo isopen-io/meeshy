@@ -2,6 +2,16 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
+/// The QR bitmap is minted on demand, so `ShareLink` — which needs its item at
+/// view-construction time — cannot carry it. Wrapping the render in an
+/// `Identifiable` value lets `.sheet(item:)` own the presentation instead:
+/// SwiftUI anchors the iPad popover and picks the presenting scene, which the
+/// manual top-VC walk this replaces got wrong on both counts.
+private struct QRShareImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
 struct TrackingLinkDetailView: View {
     let link: TrackingLink
 
@@ -11,6 +21,7 @@ struct TrackingLinkDetailView: View {
     @StateObject private var viewModel: TrackingDetailViewModel
     @State private var copiedFeedback = false
     @State private var showDeleteConfirm = false
+    @State private var qrShareImage: QRShareImage?
     @Environment(\.dismiss) private var dismiss
 
     init(link: TrackingLink) {
@@ -42,6 +53,9 @@ struct TrackingLinkDetailView: View {
         .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        }
+        .sheet(item: $qrShareImage) { qr in
+            ShareSheet(activityItems: [qr.image])
         }
     }
 
@@ -373,25 +387,7 @@ struct TrackingLinkDetailView: View {
         let scaled = ciImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
         let context = CIContext()
         guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return }
-        let uiImage = UIImage(cgImage: cgImage)
-        let av = UIActivityViewController(activityItems: [uiImage], applicationActivities: nil)
-        presentVC(av)
-    }
-
-    private func presentVC(_ vc: UIViewController) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = scene.windows.first,
-              let root = window.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        // iPad requires a popover anchor for UIActivityViewController or
-        // -present crashes. Anchor to the presenter's view, centered, no arrow.
-        if let popover = vc.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-        topVC.present(vc, animated: true)
+        qrShareImage = QRShareImage(image: UIImage(cgImage: cgImage))
     }
 
     private func deleteLink() {

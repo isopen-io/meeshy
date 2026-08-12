@@ -33,23 +33,22 @@ struct ComposerFABColumn: View, Equatable {
     private static let fabDiameter: CGFloat = 48
 
     var body: some View {
+        // Ordre canonique unique (`StoryToolMode.composerOrder`) : cette barre en
+        // EST la référence, la grille d'état vide et les chips de switch la
+        // suivent. Six appels manuels laissaient trois ordres diverger.
         HStack(spacing: 10) {
-            fab(category: .media, icon: "play.rectangle.fill", badge: mediaBadge)
-            fab(category: .text, icon: "textformat", badge: textBadge)
-            fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
-            fab(category: .son, icon: "music.note", badge: sonBadge)
-            fab(category: .texture, icon: "paintpalette.fill", badge: textureBadge)
-            fab(category: .timeline, icon: "clock", badge: timelineBadge)
+            ForEach(StoryToolMode.composerOrder, id: \.rawValue) { tool in
+                fab(tool: tool)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     @ViewBuilder
-    private func fab(
-        category: BandCategory,
-        icon: String,
-        badge: Int
-    ) -> some View {
+    private func fab(tool: StoryToolMode) -> some View {
+        let category = tool.bandCategory
+        let icon = tool.symbolName
+        let badge = badge(for: tool)
         let isActive = activeCategory == category
         let accent: Color = {
             switch category {
@@ -117,6 +116,21 @@ struct ComposerFABColumn: View, Equatable {
                          defaultValue: "Touchez deux fois pour ouvrir.", bundle: .module))
         }
         .frame(width: Self.fabDiameter, height: Self.fabDiameter)
+    }
+
+    /// Compteur d'éléments de l'outil. Les six pastilles arrivent en primitives
+    /// (`Int`) pour que la vue reste `Equatable` ; ce switch les re-associe à
+    /// l'outil pour que l'ordre soit consommé, pas récrit.
+    private func badge(for tool: StoryToolMode) -> Int {
+        switch tool {
+        case .media:    return mediaBadge
+        case .audio:    return sonBadge
+        case .text:     return textBadge
+        case .drawing:  return drawingBadge
+        case .texture:  return textureBadge
+        case .timeline: return timelineBadge
+        case .filters:  return 0   // hors `composerOrder` — jamais rendu
+        }
     }
 
     /// Nom AFFICHÉ de l'outil (mêmes clés que les tuiles/chips — story.tool.*),

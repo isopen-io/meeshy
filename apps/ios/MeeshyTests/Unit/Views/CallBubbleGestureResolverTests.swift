@@ -83,4 +83,107 @@ final class CallBubbleGestureResolverTests: XCTestCase {
         // maxY would compute negative here — must clamp to minY (28), never invert the range.
         XCTAssertEqual(CallBubbleGestureResolver.clampedVerticalPosition(1000, availableHeight: 100, bubbleRadius: 28), 28)
     }
+
+    // MARK: - size(for:) / interpolatedSize(progress:)
+
+    func test_size_forEachTier() {
+        XCTAssertEqual(CallBubbleGestureResolver.size(for: .circle), CGSize(width: 56, height: 56))
+        XCTAssertEqual(CallBubbleGestureResolver.size(for: .small), CGSize(width: 90, height: 160))
+        XCTAssertEqual(CallBubbleGestureResolver.size(for: .medium), CGSize(width: 120, height: 213))
+        XCTAssertEqual(CallBubbleGestureResolver.size(for: .large), CGSize(width: 160, height: 284))
+    }
+
+    func test_interpolatedSize_atExactTierBoundaries_matchesSize() {
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: 0), CGSize(width: 56, height: 56))
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: 1), CGSize(width: 90, height: 160))
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: 3), CGSize(width: 160, height: 284))
+    }
+
+    func test_interpolatedSize_midway_isLinearMidpoint() {
+        // Between .circle (56,56) and .small (90,160): midpoint (73,108).
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: 0.5), CGSize(width: 73, height: 108))
+    }
+
+    func test_interpolatedSize_clampsBelowZeroAndAboveMax() {
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: -5), CGSize(width: 56, height: 56))
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedSize(progress: 99), CGSize(width: 160, height: 284))
+    }
+
+    // MARK: - interpolatedCornerRadius(progress:)
+
+    func test_interpolatedCornerRadius_atCircle_isHalfDiameter() {
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedCornerRadius(progress: 0), 28)
+    }
+
+    func test_interpolatedCornerRadius_atOrPastFirstRectangleTier_isFixedTwenty() {
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedCornerRadius(progress: 1), 20)
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedCornerRadius(progress: 2.5), 20)
+    }
+
+    func test_interpolatedCornerRadius_midwayToFirstRectangleTier_isLinearMidpoint() {
+        // 28 + (20 - 28) * 0.5 = 24
+        XCTAssertEqual(CallBubbleGestureResolver.interpolatedCornerRadius(progress: 0.5), 24)
+    }
+
+    // MARK: - controlBarOpacity(progress:)
+
+    func test_controlBarOpacity_belowHalf_isZero() {
+        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0), 0)
+        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0.5), 0)
+    }
+
+    func test_controlBarOpacity_fadesInBetweenHalfAndOne() {
+        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0.75), 0.5, accuracy: 0.0001)
+    }
+
+    func test_controlBarOpacity_atOrPastFirstRectangleTier_isFullyOpaque() {
+        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 1), 1)
+        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 2.5), 1)
+    }
+
+    // MARK: - progress(startingTier:scale:)
+
+    func test_progress_noScaleChange_returnsStartingTierRawValue() {
+        XCTAssertEqual(CallBubbleGestureResolver.progress(startingTier: .medium, scale: 1.0), 2)
+    }
+
+    func test_progress_pinchOutFromCircle_reachesSmallAtQuarterZoom() {
+        // sensitivity 4: (1.25 - 1) * 4 = 1.0
+        XCTAssertEqual(CallBubbleGestureResolver.progress(startingTier: .circle, scale: 1.25), 1.0, accuracy: 0.0001)
+    }
+
+    func test_progress_pinchInFromSmall_returnsToCircleAtQuarterPinchIn() {
+        // (0.75 - 1) * 4 = -1.0, starting tier .small (1) → 0
+        XCTAssertEqual(CallBubbleGestureResolver.progress(startingTier: .small, scale: 0.75), 0, accuracy: 0.0001)
+    }
+
+    func test_progress_clampsToValidRange() {
+        XCTAssertEqual(CallBubbleGestureResolver.progress(startingTier: .circle, scale: 0.2), 0)
+        XCTAssertEqual(CallBubbleGestureResolver.progress(startingTier: .large, scale: 3.0), 3)
+    }
+
+    // MARK: - nextTier(progress:velocity:)
+
+    func test_nextTier_belowMidpoint_snapsDown() {
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: 0.4, velocity: 0), .circle)
+    }
+
+    func test_nextTier_aboveMidpoint_snapsUp() {
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: 0.6, velocity: 0), .small)
+    }
+
+    func test_nextTier_fastOutwardFlick_skipsATierAhead() {
+        // biased = 1.0 + 0.5 = 1.5 → rounds to 2 (.medium), one tier past a plain snap of .small.
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: 1.0, velocity: 2.0), .medium)
+    }
+
+    func test_nextTier_fastInwardFlick_snapsATierEarlyOnTheWayDown() {
+        // biased = 0.9 - 0.5 = 0.4 → rounds to 0 (.circle) even though plain progress alone (0.9) would round to 1.
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: 0.9, velocity: -2.0), .circle)
+    }
+
+    func test_nextTier_clampsToValidTierRange() {
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: -1, velocity: 0), .circle)
+        XCTAssertEqual(CallBubbleGestureResolver.nextTier(progress: 5, velocity: 0), .large)
+    }
 }

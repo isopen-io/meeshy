@@ -11,6 +11,8 @@
     <string name="chat_record_voice">Record voice message</string>
     <string name="chat_effects_open">Message effects</string>
     <string name="chat_attach_file">Attach file</string>
+    <string name="chat_composer_read_only">You can\'t send messages in this conversation</string>
+    <string name="chat_slow_mode_wait">Slow mode · wait %1$ds</string>
     <string name="chat_effects_title">Message effects</string>
     <string name="chat_effects_done">Done</string>
     <string name="chat_effects_section_behavior">Behavior</string>
@@ -78,6 +80,8 @@
     <string name="chat_cancel_edit">Cancel edit</string>
     <string name="chat_react_with">React with %1$s</string>
     <string name="chat_message_actions">Message actions</string>
+    <string name="chat_unread_separator">Unread messages</string>
+    <string name="chat_encryption_notice">Messages in this conversation are end-to-end encrypted. No one, not even Meeshy, can read them.</string>
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="chat_date_day_before_yesterday">Two days ago</string>
@@ -139,4 +143,20 @@
     <string name="report_reason_hate_speech">Hate speech</string>
     <string name="report_reason_impersonation">Impersonation</string>
     <string name="report_reason_other">Other</string>
+    <!-- Conversation settings (admin) -->
+    <string name="conversation_settings_title">Conversation settings</string>
+    <string name="conversation_settings_saved">Settings saved</string>
+    <string name="conversation_settings_write_role">Who can send messages</string>
+    <string name="conversation_settings_announcement">Announcement mode</string>
+    <string name="conversation_settings_slow_mode">Slow mode</string>
+    <string name="conversation_settings_auto_translate">Auto-translate</string>
+    <string name="conversation_settings_error">Couldn’t save settings. Try again.</string>
+    <string name="conversation_settings_save">Save</string>
+    <string name="conversation_settings_role_creator">Creator only</string>
+    <string name="conversation_settings_role_admin">Admins and up</string>
+    <string name="conversation_settings_role_moderator">Moderators and up</string>
+    <string name="conversation_settings_role_member">Everyone</string>
+    <string name="conversation_settings_slow_mode_off">Off</string>
+    <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
+    <string name="chat_create_share_link">Create share link</string>
 </resources>

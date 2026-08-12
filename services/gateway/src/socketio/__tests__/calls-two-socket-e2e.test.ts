@@ -7,14 +7,23 @@
  * « 2 devices du callee, un seul répond » :
  *
  *   A (appelant) ──initiate──▶ gateway ──call:initiated──▶ B1 + B2
- *   B1 ──join (ACK)──▶ gateway ──call:already-answered──▶ B2 (dismiss)
+ *   B1 ──join (ACK, EARLY, encore sonnant)──▶ gateway : AUCUN dismiss
  *   B1 ──signal answer──▶ gateway ──relais ciblé──▶ A (et A seul)
+ *                        └────────▶ gateway ──call:already-answered──▶ B2 (dismiss)
  *
  * Seule la couche métier (CallService/Prisma) est stubée — le WebRTC est
  * « mocké » par construction (le SDP transite, personne ne l'exécute).
  * Couvre la chaîne des findings #1/#3 (dismiss multi-device) et le ciblage
  * du relais de signaux au niveau où les tests unitaires ne peuvent pas :
  * le fanout de rooms réel entre plusieurs connexions simultanées.
+ *
+ * Vague 104 — le join n'implique plus "répondu" (Item F : `call:join` ne
+ * fait que transitionner `ringing`, l'early-join reçoit l'offer SDP en
+ * sonnant). L'étape 2 verrouille désormais l'ABSENCE de dismiss au join ;
+ * le dismiss réel est vérifié à l'étape 3, sur la vraie SDP answer — voir
+ * `CallEventsHandler-already-answered-scope.test.ts` pour la couverture
+ * unitaire complète du prédicat (renégociation, self-answer, target
+ * socketless).
  */
 
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
@@ -231,11 +240,17 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
     expect((await ringB1).callId).toBe(CALL_ID);
     expect((await ringB2).callId).toBe(CALL_ID);
 
-    // --- 2. B1 répond (join) : B2 — et B2 seul — reçoit already-answered --
-    const dismissB2 = nextEvent<{ callId: string }>(clientB2, CALL_EVENTS.ALREADY_ANSWERED);
-    let dismissedB1 = false;
+    // --- 2. B1 EARLY-joins (encore sonnant, pas encore répondu) : B2 ne
+    // doit voir AUCUN dismiss — c'est précisément le bug Vague 104 : un
+    // join qui déclenchait already-answered aurait fait taire B2, qui sonne
+    // toujours légitimement à cet instant. -------------------------------
+    let dismissedB1AtJoin = false;
+    let dismissedB2AtJoin = false;
     clientB1.once(CALL_EVENTS.ALREADY_ANSWERED, () => {
-      dismissedB1 = true;
+      dismissedB1AtJoin = true;
+    });
+    clientB2.once(CALL_EVENTS.ALREADY_ANSWERED, () => {
+      dismissedB2AtJoin = true;
     });
     const participantJoinedA = nextEvent<{ callId: string }>(
       clientA,
@@ -246,13 +261,22 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
       clientB1.emit(CALL_EVENTS.JOIN, { callId: CALL_ID }, resolve);
     });
     expect(joinAck.success).toBe(true);
-
-    expect((await dismissB2).callId).toBe(CALL_ID);
     expect((await participantJoinedA).callId).toBe(CALL_ID);
-    // Le device qui a répondu ne doit JAMAIS recevoir son propre dismiss.
-    expect(dismissedB1).toBe(false);
 
-    // --- 3. B1 envoie l'answer : relais ciblé vers A (et A seul) ----------
+    expect(dismissedB1AtJoin).toBe(false);
+    // B2 is still genuinely ringing — the early-join of another of the
+    // callee's devices must never dismiss it.
+    expect(dismissedB2AtJoin).toBe(false);
+    clientB1.off(CALL_EVENTS.ALREADY_ANSWERED);
+    clientB2.off(CALL_EVENTS.ALREADY_ANSWERED);
+
+    // --- 3. B1 envoie l'answer : relais ciblé vers A (et A seul), ET c'est
+    // SEULEMENT maintenant que B2 — et B2 seul — reçoit already-answered ---
+    const dismissB2 = nextEvent<{ callId: string }>(clientB2, CALL_EVENTS.ALREADY_ANSWERED);
+    let dismissedB1 = false;
+    clientB1.once(CALL_EVENTS.ALREADY_ANSWERED, () => {
+      dismissedB1 = true;
+    });
     const answerAtA = nextEvent<{ callId: string; signal: { type: string; from: string } }>(
       clientA,
       CALL_EVENTS.SIGNAL
@@ -280,6 +304,10 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
     expect(relayed.signal.from).toBe(USER_B);
     // Le signal est ciblé : l'autre device du callee ne doit rien recevoir.
     expect(signalLeakedToB2).toBe(false);
+
+    expect((await dismissB2).callId).toBe(CALL_ID);
+    // Le device qui a répondu ne doit JAMAIS recevoir son propre dismiss.
+    expect(dismissedB1).toBe(false);
   }, 20_000);
 
   // Les scénarios suivants RÉUTILISENT l'état du premier (A et B1 membres de

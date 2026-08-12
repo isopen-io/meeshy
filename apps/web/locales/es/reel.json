@@ -21,7 +21,8 @@
     "like": "Me gusta",
     "comment": "Comentar",
     "share": "Compartir",
-    "save": "Guardar"
+    "save": "Guardar",
+    "repostedFrom": "Republicado desde"
   },
   "feed": {
     "loadingReels": "Cargando reels…",

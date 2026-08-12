@@ -6,11 +6,10 @@ import XCTest
 /// The VoiceOver label used to be a hardcoded English `Text(...)` literal
 /// ("Meeshy version …, build …. Made with love by Services CEO."), which Xcode
 /// auto-extracted into the catalog as its own untranslated key — so blind users
-/// on every non-English locale heard English while the visible credit
-/// (`splash.madeWithLove`) was fully localized. This locks down the fix: the
-/// label must resolve through the stable `brand.signature.accessibilityLabel`
-/// key, and that key must ship translations for every language the sibling
-/// `splash.madeWithLove` covers.
+/// on every non-English locale heard English while the visible credit was fully
+/// localized. This locks down the fix: the label must resolve through the stable
+/// `brand.signature.accessibilityLabel` key, and that key must ship exactly the
+/// same languages as the visible credit `brand.signature.credit`.
 final class BrandSignatureLocalizationTests: XCTestCase {
 
     private var iosRoot: URL {
@@ -39,7 +38,28 @@ final class BrandSignatureLocalizationTests: XCTestCase {
                 + "it gets auto-extracted as its own untranslated catalog key.")
     }
 
-    func test_catalog_shipsAllSplashLanguagesForBrandSignatureLabel() throws {
+    func test_credit_isLocalizedNotHardcoded() throws {
+        let source = try brandSignatureSource()
+        XCTAssertTrue(
+            source.contains("brand.signature.credit"),
+            "The visible credit line must resolve through the localized key "
+                + "brand.signature.credit.")
+        XCTAssertFalse(
+            source.contains(#"Text("By Services CEO")"#)
+                || source.contains(#"Text("Par Services CEO")"#),
+            "The credit must never be a hardcoded literal — it ships in 7 locales.")
+    }
+
+    /// The version line reads `Meeshy 1.0.0 · 1` — the build number is separated
+    /// from the version by a middle dot, never wrapped in parentheses.
+    func test_versionLine_separatesBuildNumberWithMiddleDot() throws {
+        let source = try brandSignatureSource()
+        XCTAssertTrue(
+            source.contains(#"Text("Meeshy \(appVersion) · \(buildNumber)")"#),
+            "The version line must render as `Meeshy <version> · <build>`.")
+    }
+
+    func test_catalog_shipsSameLanguagesForCreditAndAccessibilityLabel() throws {
         let url = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
         let data = try Data(contentsOf: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -56,15 +76,23 @@ final class BrandSignatureLocalizationTests: XCTestCase {
             signatureLangs.isEmpty,
             "brand.signature.accessibilityLabel must exist in the catalog.")
 
-        let splashLangs = languages(of: "splash.madeWithLove")
-        XCTAssertTrue(
-            splashLangs.isSubset(of: signatureLangs),
-            "The signature a11y label must cover every language of the sibling "
-                + "visible credit splash.madeWithLove. Missing: "
-                + "\(splashLangs.subtracting(signatureLangs).sorted())")
+        let creditLangs = languages(of: "brand.signature.credit")
+        XCTAssertFalse(
+            creditLangs.isEmpty,
+            "brand.signature.credit must exist in the catalog.")
+
+        XCTAssertEqual(
+            creditLangs, signatureLangs,
+            "The signature a11y label and the visible credit must cover the exact "
+                + "same languages. Diff: "
+                + "\(creditLangs.symmetricDifference(signatureLangs).sorted())")
 
         XCTAssertNil(
             strings?["Meeshy version %@, build %@. Made with love by Services CEO."],
             "The auto-extracted English literal key must be removed from the catalog.")
+        XCTAssertNil(
+            strings?["splash.madeWithLove"],
+            "The legacy 'Made with ❤️ by' credit was replaced by "
+                + "brand.signature.credit — the dead key must not linger.")
     }
 }

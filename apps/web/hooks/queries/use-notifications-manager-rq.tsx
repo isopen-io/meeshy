@@ -10,6 +10,7 @@ import {
 } from './use-notifications-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
+import { NotificationService } from '@/services/notification.service';
 import type { Notification, NotificationFilters } from '@/types/notification';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
@@ -19,6 +20,9 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 
 const recentToasts = new Set<string>();
+
+/** Miroir du débounce de `NotificationGapResyncCoordinator` (iOS, 0.3 s). */
+const SYNC_RESYNC_DEBOUNCE_MS = 300;
 
 interface UseNotificationsManagerRQOptions {
   filters?: NotificationFilters;
@@ -32,6 +36,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
   const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     data: notificationsData,
@@ -40,7 +45,11 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useInfiniteNotificationsQuery({ limit, ...filters });
+  // `enabled` : le manager est monté au layout RACINE (TabNotificationManager),
+  // donc aussi sur /login, /join/*, etc. Sans garde, la query (refetchOnMount
+  // 'always' + withRetry) tirait des GET /notifications non authentifiés sur
+  // toutes les pages publiques.
+  } = useInfiniteNotificationsQuery({ limit, enabled: isAuthenticated, ...filters });
 
   const unreadCount = notificationsData?.pages[0]?.unreadCount ?? 0;
 
@@ -94,8 +103,8 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       notificationSocketIO.connect(authToken);
     }
 
-    const handleNewNotification = (notification: Notification) => {
-      const notificationConversationId = notification.context?.conversationId;
+    const handleNewNotification = (incoming: Notification) => {
+      const notificationConversationId = incoming.context?.conversationId;
       const activeConversationId = useNotificationStore.getState().activeConversationId;
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const isInActiveConversation = notificationConversationId && (
@@ -103,7 +112,32 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
         currentPath.includes(`/conversations/${notificationConversationId}`)
       );
 
+      // Une notification pour la conversation OUVERTE naît consommée (miroir du
+      // `markConsumedOnArrival` iOS) : insérée déjà lue — sinon la liste montre
+      // une ligne non lue alors que le compteur n'a pas bougé — et marquée lue
+      // côté serveur pour que `notification:counts` et le badge push ne la
+      // recomptent pas.
+      const notification: Notification = isInActiveConversation
+        ? { ...incoming, state: { ...incoming.state, isRead: true, readAt: new Date() } }
+        : incoming;
+      if (isInActiveConversation) {
+        NotificationService.markAsRead(incoming.id).catch(() => {});
+      }
+
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
+
+      // Aucune liste n'a encore de données (fetch initial en vol, ou écran
+      // jamais monté) : `setQueriesData` ci-dessous n'écrirait NULLE PART et la
+      // notification serait perdue sans rattrapage, `staleTime: Infinity`
+      // interdisant toute relecture. On invalide pour forcer le serveur.
+      const hasCachedList = queries.some(([_key, data]: [unknown, unknown]) =>
+        !!data && typeof data === 'object' && 'pages' in data
+      );
+
+      if (!hasCachedList) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
+      }
 
       const notificationExists = queries.some(([_key, data]: [unknown, unknown]) => {
         if (!data || typeof data !== 'object' || !('pages' in data)) return false;
@@ -201,12 +235,96 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       }
     };
 
+    const handleNotificationDeleted = (notificationId: string) => {
+      let wasUnread = false;
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+
+          const foundUnread = data.pages.some((page) =>
+            page.notifications?.some((n: Notification) => n.id === notificationId && !n.state.isRead)
+          );
+          if (foundUnread) wasUnread = true;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              notifications: page.notifications?.filter((n: Notification) => n.id !== notificationId),
+              unreadCount: foundUnread
+                ? Math.max(0, (page.unreadCount ?? 0) - 1)
+                : page.unreadCount,
+            })),
+          };
+        }
+      );
+
+      if (wasUnread) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(),
+          (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
+        );
+      }
+    };
+
+    // `notification:counts` est la resync AUTORITAIRE du serveur : émise après
+    // chaque marquage côté gateway (ouverture de conversation, vue d'un post,
+    // action sur un autre appareil). Sans elle, la cloche ne se corrigeait
+    // qu'au prochain refetch (montage / focus fenêtre).
+    const handleCounts = (counts: { unread?: number; total?: number }) => {
+      if (typeof counts?.unread !== 'number') return;
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+          if (data.pages.every((page) => page.unreadCount === counts.unread)) return old;
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({ ...page, unreadCount: counts.unread })),
+          };
+        }
+      );
+
+      queryClient.setQueryData(queryKeys.notifications.unreadCount(), counts.unread);
+    };
+
+    // SyncEngine — le transport a détecté que le client a perdu de vue l'état
+    // serveur (trou de `_seq`, ou reconnexion après coupure). Le client global
+    // tourne en `staleTime: Infinity` : sans ce rattrapage, les notifications
+    // manquées ne réapparaissent JAMAIS de la session, ni dans la cloche ni sur
+    // /notifications. Le refetch est idempotent (la réponse serveur remplace
+    // les pages, dédup par id inhérente) et débouncé pour coaléscer une rafale
+    // — un gap suivi d'un reconnect ne paie qu'une resync.
+    const scheduleResync = () => {
+      if (resyncTimerRef.current !== null) clearTimeout(resyncTimerRef.current);
+      resyncTimerRef.current = setTimeout(() => {
+        resyncTimerRef.current = null;
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
+      }, SYNC_RESYNC_DEBOUNCE_MS);
+    };
+
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
+    const unsubscribeDeleted = notificationSocketIO.onNotificationDeleted(handleNotificationDeleted);
+    const unsubscribeCounts = notificationSocketIO.onCounts(handleCounts);
+    const unsubscribeDesync = notificationSocketIO.onSyncDesync(scheduleResync);
 
     return () => {
       unsubscribeNotification();
       unsubscribeRead();
+      unsubscribeDeleted();
+      unsubscribeCounts();
+      unsubscribeDesync();
+      if (resyncTimerRef.current !== null) {
+        clearTimeout(resyncTimerRef.current);
+        resyncTimerRef.current = null;
+      }
     };
   }, [isAuthenticated, queryClient, showNotificationToast]);
 

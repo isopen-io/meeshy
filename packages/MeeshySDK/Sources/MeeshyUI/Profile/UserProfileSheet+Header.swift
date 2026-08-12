@@ -49,7 +49,10 @@ extension UserProfileSheet {
                 // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
                 // la bannière n'est téléchargée qu'une fois par installation, et le
                 // resolver interne accepte aussi les chemins relatifs du gateway.
-                CachedAsyncImage(url: bannerURL) {
+                // showsStatusOverlays: false — echec silencieux, degradation
+                // vers le gradient deja fourni ci-dessous ; pas de bouton
+                // retry sur une banniere decorative (D2, no-retry-on-avatars).
+                CachedAsyncImage(url: bannerURL, showsStatusOverlays: false) {
                     defaultBannerGradient
                 }
                 .scaledToFill()
@@ -312,6 +315,6 @@ extension UserProfileSheet {
             Divider().opacity(0.3)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
+        .accessibilityLabel(Text(verbatim: "\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
     }
 }

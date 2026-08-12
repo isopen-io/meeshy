@@ -165,4 +165,97 @@ final class TimelineInspectorHostClipKindTests: XCTestCase {
         )
         _ = view.body
     }
+
+    // MARK: - Le clip STICKER (lane tapable, inspecteur absent)
+
+    private func stickerProject(clipId: String = "st-1") -> TimelineProject {
+        let sticker = StorySticker(id: clipId, emoji: "🔥", startTime: 2, duration: 3,
+                                   fadeIn: 0.4, fadeOut: 0.6)
+        var project = TimelineProject(slideId: "slide-1", slideDuration: 10,
+                                      mediaObjects: [], audioPlayerObjects: [],
+                                      textObjects: [], clipTransitions: [])
+        project.stickerObjects = [sticker]
+        return project
+    }
+
+    /// La timeline expose une lane sticker tapable, et le view model gère
+    /// déjà trim / déplacement / keyframes des stickers — mais
+    /// `resolveClipSnapshot` n'avait aucune branche pour eux : la sélection
+    /// rendait `nil` et la sheet ne s'ouvrait jamais. Cul-de-sac complet.
+    func test_selectingASticker_opensAnInspector() {
+        let vm = makeViewModel(project: stickerProject())
+        vm.selectClip(id: "st-1")
+
+        let snapshot = TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)
+
+        XCTAssertNotNil(snapshot, "Taper la lane sticker doit ouvrir son inspecteur.")
+        XCTAssertEqual(snapshot?.kind, .sticker)
+        XCTAssertEqual(snapshot?.id, "st-1")
+    }
+
+    func test_stickerSnapshot_carriesItsTimingWindow() {
+        let vm = makeViewModel(project: stickerProject())
+        vm.selectClip(id: "st-1")
+        let snapshot = TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)
+
+        XCTAssertEqual(snapshot?.startTime ?? -1, 2, accuracy: 0.001)
+        XCTAssertEqual(snapshot?.duration ?? -1, 3, accuracy: 0.001)
+        XCTAssertEqual(snapshot?.fadeInDuration ?? -1, 0.4, accuracy: 0.001)
+        XCTAssertEqual(snapshot?.fadeOutDuration ?? -1, 0.6, accuracy: 0.001)
+    }
+
+    /// `StorySticker` n'a pas de champ `name` : l'emoji EST son identité.
+    func test_stickerSnapshot_isNamedByItsEmoji() {
+        let vm = makeViewModel(project: stickerProject())
+        vm.selectClip(id: "st-1")
+        XCTAssertEqual(TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)?.displayName, "🔥")
+    }
+
+    // MARK: - Aucun contrôle mort dans l'inspecteur
+
+    /// Chaque contrôle affiché doit correspondre à une mutation que le view
+    /// model accepte réellement. Pour le sticker, `setClipVolume`,
+    /// `setClipLoop`, `setClipBackground` et `deleteClip` retournent tous
+    /// sans rien faire — les afficher serait mentir.
+    func test_stickerInspector_hidesEveryControlTheViewModelIgnores() {
+        XCTAssertFalse(ClipInspector.hasAudioAffordances(kind: .sticker))
+        XCTAssertFalse(ClipInspector.supportsLoop(kind: .sticker, isBackground: true))
+        XCTAssertFalse(ClipInspector.supportsBackgroundToggle(kind: .sticker))
+        XCTAssertFalse(ClipInspector.supportsDeletion(kind: .sticker),
+                       "Un sticker se retire depuis le canvas — deleteClip le refuse explicitement.")
+    }
+
+    /// Même règle pour le TEXTE, dont la bascule « Fond » était déjà morte :
+    /// `setClipBackground` l'ignore depuis toujours.
+    func test_textInspector_hidesTheDeadBackgroundToggle() {
+        XCTAssertFalse(ClipInspector.supportsBackgroundToggle(kind: .text))
+    }
+
+    func test_mediaAndAudioInspectors_keepTheirBackgroundToggleAndTrash() {
+        for kind in [ClipInspector.ClipSnapshot.Kind.video, .audio, .image] {
+            XCTAssertTrue(ClipInspector.supportsBackgroundToggle(kind: kind), "\(kind)")
+            XCTAssertTrue(ClipInspector.supportsDeletion(kind: kind), "\(kind)")
+        }
+    }
+
+    func test_visibleSections_dropTheTogglesRow_whenNoToggleActs() {
+        for kind in [ClipInspector.ClipSnapshot.Kind.sticker, .text] {
+            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false)
+            XCTAssertFalse(sections.contains(.toggles), "\(kind) n'a aucun interrupteur qui agisse")
+            XCTAssertTrue(sections.contains(.actions), "\(kind) garde l'accès à l'animation")
+        }
+    }
+
+    func test_visibleSections_keepTheTogglesRow_forMediaAndAudio() {
+        for kind in [ClipInspector.ClipSnapshot.Kind.video, .audio, .image] {
+            let sections = ClipInspector.visibleSections(kind: kind, isBackground: false)
+            XCTAssertTrue(sections.contains(.toggles), "\(kind)")
+        }
+    }
+
+    func test_stickerInspector_announcesItselfToVoiceOver() {
+        let label = ClipInspector.accessibilityLabel(for: .sticker)
+        XCTAssertFalse(label.isEmpty)
+        XCTAssertFalse(label.hasPrefix("story.timeline."), "Traduction manquante : \(label)")
+    }
 }

@@ -12,7 +12,7 @@ public struct VoiceProfileManageView: View {
     }
 
     public var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -147,7 +147,7 @@ public struct VoiceProfileManageView: View {
             Toggle("", isOn: $viewModel.cloningEnabled)
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .onChange(of: viewModel.cloningEnabled) { newValue in
+                .adaptiveOnChange(of: viewModel.cloningEnabled) { _, newValue in
                     Task { await viewModel.toggleCloning(enabled: newValue) }
                 }
         }

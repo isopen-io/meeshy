@@ -104,7 +104,7 @@ FROM python:${PYTHON_VERSION}-slim AS runtime-cpu
 # =============================================================================
 # Stage 2b: GPU Runtime Base (CUDA 12.4)
 # =============================================================================
-FROM nvidia/cuda:13.3.0-runtime-ubuntu22.04 AS runtime-gpu
+FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu
 
 # Install Python 3.11 on CUDA base (including libpython for shared library support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -124,7 +124,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 # Stage 2c: GPU Runtime Base (CUDA 12.1)
 # =============================================================================
-FROM nvidia/cuda:13.3.0-runtime-ubuntu22.04 AS runtime-gpu-cu121
+FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu-cu121
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
@@ -143,7 +143,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =============================================================================
 # Stage 2d: GPU Runtime Base (CUDA 11.8)
 # =============================================================================
-FROM nvidia/cuda:13.3.0-runtime-ubuntu22.04 AS runtime-gpu-cu118
+FROM nvidia/cuda:13.3.1-runtime-ubuntu22.04 AS runtime-gpu-cu118
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
@@ -193,6 +193,15 @@ ARG NODE_VERSION=22
 
 # Environment variables
 ENV HOME=/workspace \
+    # Build metadata — le label OCI grave déjà la révision, mais un label n'est
+    # lisible que par `docker inspect` sur l'hôte. En variable d'environnement,
+    # `resolve_build_info` la remonte dans /health : identifier le code en
+    # production devient un `curl`, plus une corrélation entre l'uptime du
+    # container et l'horodatage des tags `sha-<short>` du registre.
+    # (VCS_REF / BUILD_DATE sont déjà re-déclarés en ARG l.171-172, après le
+    # `FROM runtime-${TORCH_BACKEND}` — un ARG ne franchit pas un FROM.)
+    GIT_COMMIT=${VCS_REF} \
+    BUILD_DATE=${BUILD_DATE} \
     PYTHONPATH=/workspace:/workspace/generated \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

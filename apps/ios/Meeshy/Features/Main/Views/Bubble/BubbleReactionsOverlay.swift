@@ -124,7 +124,7 @@ struct BubbleReactionsOverlay: View, Equatable {
             // reste entierement tappable (l'overlay de bulle n'est pas clippe).
             .frame(height: 22)
             .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Add reaction", bundle: .main))
-            .accessibilityHint(String(localized: "bubble.reactions.add.hint", defaultValue: "Appuyer pour reagir rapidement, maintenir pour choisir un emoji", bundle: .main))
+            .accessibilityHint(String(localized: "bubble.reactions.add.hint", defaultValue: "Appuyer pour réagir rapidement, maintenir pour choisir un emoji", bundle: .main))
     }
 
     // MARK: - Overflow pill (was: overflowPill)
@@ -149,7 +149,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 )
         )
         .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d more reactions", bundle: .main), count))
-        .accessibilityHint(String(localized: "bubble.reactions.viewAll.hint", defaultValue: "Voir toutes les reactions", bundle: .main))
+        .accessibilityHint(String(localized: "bubble.reactions.viewAll.hint", defaultValue: "Voir toutes les réactions", bundle: .main))
     }
 
     // MARK: - Reaction pill (was: reactionPill)
@@ -216,7 +216,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 onShowReactions?(messageId)
             }
             .accessibilityLabel(Self.pillAccessibilityLabel(reaction))
-            .accessibilityHint(String(localized: "bubble.reactions.toggle.hint", defaultValue: "Appuyer pour basculer la reaction, maintenir pour voir toutes les reactions", bundle: .main))
+            .accessibilityHint(String(localized: "bubble.reactions.toggle.hint", defaultValue: "Appuyer pour basculer la réaction, maintenir pour voir toutes les réactions", bundle: .main))
     }
 
     // MARK: - Accessibility helper (was: reactionPillAccessibilityLabel)

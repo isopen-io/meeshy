@@ -63,4 +63,95 @@ enum CallBubbleGestureResolver {
         let maxY = max(availableHeight - fabExclusionZoneHeight - bubbleRadius, minY)
         return min(max(y, minY), maxY)
     }
+
+    /// Rayon de coin fixe (pt) partagé par les 3 paliers rectangle — seul le
+    /// palier `.circle` a un rayon dérivé (moitié du diamètre, cercle parfait).
+    static let rectangleCornerRadius: CGFloat = 20
+    /// Sensibilité du mapping pinch → progression : un delta d'échelle de 0.25
+    /// (25% de zoom) parcourt un palier plein. Valeur de confort, ajustable au
+    /// ressenti.
+    static let magnificationSensitivity: CGFloat = 4
+    /// Vitesse de progression (paliers/s) au-delà de laquelle un relâchement
+    /// biaise le snap d'un demi-palier dans le sens du geste — même principe
+    /// que `collapseVelocityThreshold` pour le drag de la pilule.
+    static let tierVelocityThreshold: CGFloat = 1.5
+
+    /// Taille (pt) du palier donné. `.circle` est un carré (cercle une fois
+    /// clippé en `RoundedRectangle(cornerRadius: diameter/2)`) ; les paliers
+    /// rectangle suivent un ratio 9:16, aligné sur `preferredContentSize` du
+    /// PiP système (`PiPCallController.swift`).
+    static func size(for tier: CallBubbleSizeTier) -> CGSize {
+        switch tier {
+        case .circle: return CGSize(width: bubbleDiameter, height: bubbleDiameter)
+        case .small: return CGSize(width: 90, height: 160)
+        case .medium: return CGSize(width: 120, height: 213)
+        case .large: return CGSize(width: 160, height: 284)
+        }
+    }
+
+    /// Taille interpolée linéairement pour une progression continue
+    /// `0...3` (`.circle...large`), clampée aux bornes. Alimente le morphing
+    /// en direct pendant le pinch — `progress` fractionnaire retombe toujours
+    /// entre deux paliers adjacents.
+    static func interpolatedSize(progress: CGFloat) -> CGSize {
+        let maxTier = CallBubbleSizeTier.allCases.count - 1
+        let clamped = min(max(progress, 0), CGFloat(maxTier))
+        let lowerRaw = Int(clamped.rounded(.down))
+        let upperRaw = min(lowerRaw + 1, maxTier)
+        let lowerTier = CallBubbleSizeTier(rawValue: lowerRaw) ?? .circle
+        let upperTier = CallBubbleSizeTier(rawValue: upperRaw) ?? .large
+        let fraction = clamped - CGFloat(lowerRaw)
+        let lowerSize = size(for: lowerTier)
+        let upperSize = size(for: upperTier)
+        return CGSize(
+            width: lowerSize.width + (upperSize.width - lowerSize.width) * fraction,
+            height: lowerSize.height + (upperSize.height - lowerSize.height) * fraction
+        )
+    }
+
+    /// Rayon de coin interpolé. `RoundedRectangle(cornerRadius:)` rend un
+    /// cercle parfait à `progress == 0` (rayon = moitié du diamètre) ; au-delà
+    /// de `progress == 1` le rayon reste fixe (`rectangleCornerRadius`) — les
+    /// 3 paliers rectangle partagent le même arrondi, seule la taille varie
+    /// entre eux.
+    static func interpolatedCornerRadius(progress: CGFloat) -> CGFloat {
+        let clamped = min(max(progress, 0), CGFloat(CallBubbleSizeTier.allCases.count - 1))
+        guard clamped < 1 else { return rectangleCornerRadius }
+        let circleRadius = bubbleDiameter / 2
+        return circleRadius + (rectangleCornerRadius - circleRadius) * clamped
+    }
+
+    /// Opacité de la barre de contrôle persistante (mute/speaker/hangup) aux
+    /// paliers rectangle : invisible tant qu'on est encore proche du cercle
+    /// (`progress <= 0.5`), fondu progressif jusqu'à pleine opacité à
+    /// `progress == 1`.
+    static func controlBarOpacity(progress: CGFloat) -> Double {
+        let clamped = min(max(progress, 0), CGFloat(CallBubbleSizeTier.allCases.count - 1))
+        guard clamped > 0.5 else { return 0 }
+        guard clamped < 1 else { return 1 }
+        return Double((clamped - 0.5) / 0.5)
+    }
+
+    /// Progression continue (0...3) correspondant à l'échelle cumulée d'un
+    /// `MagnificationGesture` en cours, ancrée sur le palier de départ du
+    /// geste. `scale == 1` (aucun pinch) retombe exactement sur
+    /// `startingTier.rawValue`.
+    static func progress(startingTier: CallBubbleSizeTier, scale: CGFloat) -> CGFloat {
+        let maxTier = CGFloat(CallBubbleSizeTier.allCases.count - 1)
+        let raw = CGFloat(startingTier.rawValue) + (scale - 1) * magnificationSensitivity
+        return min(max(raw, 0), maxTier)
+    }
+
+    /// Palier de destination au relâchement du pinch : arrondi de `progress`
+    /// au palier le plus proche, biaisé d'un demi-palier dans le sens du
+    /// geste si le relâchement est rapide (flick), même principe que
+    /// `shouldCollapse` pour le drag de la pilule.
+    static func nextTier(progress: CGFloat, velocity: CGFloat) -> CallBubbleSizeTier {
+        let maxTier = CGFloat(CallBubbleSizeTier.allCases.count - 1)
+        let clamped = min(max(progress, 0), maxTier)
+        let velocityBias: CGFloat = abs(velocity) > tierVelocityThreshold ? (velocity > 0 ? 0.5 : -0.5) : 0
+        let biased = min(max(clamped + velocityBias, 0), maxTier)
+        let rawValue = Int(biased.rounded())
+        return CallBubbleSizeTier(rawValue: rawValue) ?? .circle
+    }
 }

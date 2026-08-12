@@ -82,6 +82,22 @@ final class VoiceProfileWizardViewModelTests: XCTestCase {
         XCTAssertEqual(mock.lastGrantConsentVoiceCloning, false)
     }
 
+    func test_grantConsent_sendsFormattedBirthDateFromPicker() async {
+        let (sut, mock) = makeSUT()
+        mock.grantConsentResult = .success(Self.stubConsentResponse)
+        // 1990-05-15 (UTC) — la date du picker doit partir au serveur en YYYY-MM-DD.
+        var comps = DateComponents()
+        comps.year = 1990; comps.month = 5; comps.day = 15
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        sut.birthDate = cal.date(from: comps)!
+
+        await sut.grantConsent()
+
+        XCTAssertEqual(mock.lastGrantConsentBirthDate, "1990-05-15")
+        XCTAssertTrue(sut.ageVerified)
+    }
+
     func test_grantConsent_error_setsError() async {
         let (sut, mock) = makeSUT()
         mock.grantConsentResult = .failure(NSError(domain: "test", code: 500))
@@ -92,16 +108,15 @@ final class VoiceProfileWizardViewModelTests: XCTestCase {
         XCTAssertEqual(sut.currentStep, .consent)
     }
 
-    // MARK: - confirmAgeVerification
+    // MARK: - proceedToAgeVerification
 
-    func test_confirmAgeVerification_setsAgeVerifiedAndMovesToConsent() {
+    func test_proceedToAgeVerification_movesConsentToAgeVerificationStep() {
         let (sut, _) = makeSUT()
-        sut.currentStep = .ageVerification
+        sut.currentStep = .consent
 
-        sut.confirmAgeVerification()
+        sut.proceedToAgeVerification()
 
-        XCTAssertTrue(sut.ageVerified)
-        XCTAssertEqual(sut.currentStep, .consent)
+        XCTAssertEqual(sut.currentStep, .ageVerification)
     }
 
     // MARK: - uploadSamples
