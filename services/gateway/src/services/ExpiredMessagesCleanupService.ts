@@ -161,7 +161,7 @@ export class ExpiredMessagesCleanupService {
 
     let candidates: ExpiredMessageRow[];
     try {
-      candidates = (await this.prisma.message.findMany({
+      candidates = await this.prisma.message.findMany({
         where: {
           expiresAt: { lt: now },
           ...unsetOrNull('deletedAt'),
@@ -182,7 +182,7 @@ export class ExpiredMessagesCleanupService {
         },
         orderBy: { expiresAt: 'asc' },
         take: this.batchSize,
-      })) as unknown as ExpiredMessageRow[];
+      });
     } catch (err) {
       log.warn('expired-messages query failed', { err });
       return { burned: 0 };
