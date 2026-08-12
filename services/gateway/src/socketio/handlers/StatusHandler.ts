@@ -309,12 +309,37 @@ export class StatusHandler {
       return;
     }
 
+    let normalizedId: string;
     try {
-      const normalizedId = await normalizeConversationId(
+      normalizedId = await normalizeConversationId(
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+    } catch (error) {
+      logger.error('typing:stop failed', { error });
+      return;
+    }
 
+    await this.retractTypingIn(socket, normalizedId);
+  }
+
+  /**
+   * Retracts the typing indicator THIS socket broadcast in `normalizedId` —
+   * the whole of `typing:stop` past the point where the conversation id is
+   * known, and nothing else. The id must already be resolved.
+   *
+   * Split out because `typing:stop` is not the only way a burst ends:
+   * `conversation:leave` ends one too, and switching conversation does not
+   * disconnect the socket, so `handleSocketDisconnecting` never sees it. That
+   * caller has ALREADY resolved the conversation id for its own room name, so
+   * it takes an id rather than a payload — routing it through `handleTypingStop`
+   * would bill a second `conversation.findUnique` to every conversation switch.
+   *
+   * Never rejects: on the leave path an escaping rejection would abort the leave
+   * and strand the socket in the room it asked to leave.
+   */
+  async retractTypingIn(socket: Socket, normalizedId: string): Promise<void> {
+    try {
       // A typing:stop retracts a typing:start THIS socket broadcast, and
       // `activeTypers` is the record of exactly that — `_trackTyping` runs on
       // every start that cleared the participant and privacy gates. So the
@@ -381,7 +406,7 @@ export class StatusHandler {
         emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
       }
     } catch (error) {
-      logger.error('typing:stop failed', { error });
+      logger.error('typing retraction failed', { error, conversationId: normalizedId });
     }
   }
 

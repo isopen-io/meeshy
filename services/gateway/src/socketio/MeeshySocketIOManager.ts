@@ -437,6 +437,11 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       readStatusService,
+      // A conversation switch ends a typing burst without disconnecting the
+      // socket, so the leave must retract what this socket broadcast — the
+      // `disconnecting` path never sees it. `statusHandler` is constructed above.
+      retractTyping: (socket, normalizedConversationId) =>
+        this.statusHandler.retractTypingIn(socket, normalizedConversationId),
     });
   }
 

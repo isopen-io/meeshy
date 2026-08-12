@@ -21,6 +21,12 @@ export interface ConversationHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  /**
+   * Retracts the typing indicator this socket broadcast in an ALREADY-resolved
+   * conversation — `StatusHandler.retractTypingIn`. Injected as a function so a
+   * leave owes nothing to the typing handler beyond this one obligation.
+   */
+  retractTyping: (socket: Socket, normalizedConversationId: string) => Promise<void>;
 }
 
 export class ConversationHandler {
@@ -28,6 +34,7 @@ export class ConversationHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private retractTyping: (socket: Socket, normalizedConversationId: string) => Promise<void>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -35,6 +42,7 @@ export class ConversationHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.readStatusService = deps.readStatusService;
+    this.retractTyping = deps.retractTyping;
   }
 
   /**
@@ -191,6 +199,19 @@ export class ConversationHandler {
         validated.conversationId,
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
+
+      // Take back what this socket broadcast, then leave. Switching conversation
+      // does NOT disconnect the socket, so `StatusHandler.handleSocketDisconnecting`
+      // — the only other server-side retraction — never fires here: a user who was
+      // mid-word when they opened another conversation left a phantom "typing…"
+      // with every peer, on every client with no local retraction of its own.
+      // Issued while still in the room (the retraction is addressed to it), with
+      // the id `normalizeConversationId` already resolved above so a switch pays
+      // no second lookup — and non-blocking, since a failed retraction must not
+      // strand this socket in a room it asked to leave.
+      await this.retractTyping(socket, normalizedId).catch(error => {
+        logger.warn('typing retraction on conversation:leave failed (non-blocking)', { conversationId: normalizedId, error });
+      });
 
       const room = ROOMS.conversation(normalizedId);
       await socket.leave(room);

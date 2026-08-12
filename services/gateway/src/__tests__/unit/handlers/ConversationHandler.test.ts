@@ -111,12 +111,14 @@ function makeDeps(overrides: Partial<{
   connectedUsers: Map<string, unknown>;
   socketToUser: Map<string, string>;
   readStatusService: ReturnType<typeof makeReadStatusService>;
+  retractTyping: ConversationHandlerDependencies['retractTyping'];
 }> = {}): ConversationHandlerDependencies {
   return {
     prisma: (overrides.prisma ?? makePrisma()) as any,
     connectedUsers: (overrides.connectedUsers ?? makeConnectedUsers()) as any,
     socketToUser: overrides.socketToUser ?? makeSocketToUser(),
     readStatusService: (overrides.readStatusService ?? makeReadStatusService()) as any,
+    retractTyping: overrides.retractTyping ?? ((jest.fn() as any).mockResolvedValue(undefined) as any),
   };
 }
 
