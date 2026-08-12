@@ -45,10 +45,12 @@ final class LoadMoreRepliesCell: UICollectionViewCell {
         )
     }
 
+    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
+    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
     static func labelText(remaining: Int) -> String {
         String(
             localized: "comments.load-more-replies",
-            defaultValue: "View ^[\(remaining) more reply](inflect: true)",
+            defaultValue: "View \(remaining) more \(remaining == 1 ? "reply" : "replies")",
             bundle: .main
         )
     }

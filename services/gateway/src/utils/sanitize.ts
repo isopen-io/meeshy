@@ -13,6 +13,7 @@
 import DOMPurify from 'isomorphic-dompurify';
 import { createHash } from 'crypto';
 import { NotificationTypeEnum } from '@meeshy/shared';
+import { validateAndNormalizeEmail } from '@meeshy/shared/utils/email-validator';
 
 export class SecuritySanitizer {
   /**
@@ -200,15 +201,11 @@ export class SecuritySanitizer {
   static sanitizeEmail(input: string | null | undefined): string | null {
     if (!input) return null;
 
-    // Basic email validation regex
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    const sanitized = input.trim().toLowerCase();
-
-    if (!emailRegex.test(sanitized)) {
-      return null;
-    }
-
-    return sanitized;
+    // Single source of truth: RFC 5322 validator from `@meeshy/shared`.
+    // The web side (`apps/web/utils/xss-protection.ts`) already converged on it;
+    // the gateway must gate on the same rules (no consecutive/edge dots, no
+    // hyphen-edged domains) so trust-boundary validation stays consistent.
+    return validateAndNormalizeEmail(input);
   }
 
   /**

@@ -98,7 +98,7 @@ struct UploadProgressBar: View {
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 Spacer()
-                Text(formatBytes(progress.uploadedBytes) + " / " + formatBytes(progress.totalBytes))
+                Text(formatMediaFileSize(progress.uploadedBytes) + " / " + formatMediaFileSize(progress.totalBytes))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
@@ -117,9 +117,5 @@ struct UploadProgressBar: View {
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityValue(accessibilityValueText)
         .accessibilityAddTraits(isUploading ? .updatesFrequently : [])
-    }
-
-    private func formatBytes(_ bytes: Int64) -> String {
-        bytes.formatted(.byteCount(style: .file))
     }
 }

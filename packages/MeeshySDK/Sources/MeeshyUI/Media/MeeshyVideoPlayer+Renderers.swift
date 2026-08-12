@@ -116,7 +116,12 @@ internal struct _InlineRenderer: View {
             Color.black
 
             if isThisActive, let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: manager.isMuted)
+                MeeshyVideoSurface(
+                    player: p,
+                    gravity: .resizeAspect,
+                    isMuted: manager.isMuted,
+                    enablesPip: Self.surfaceEnablesPip(controls: player.controls)
+                )
                     .onTapGesture { toggleControls() }
                 if isLoadingAsset {
                     loadingIndicator
@@ -341,8 +346,12 @@ internal struct _InlineRenderer: View {
 
     private func startPlayback() {
         HapticFeedback.light()
-        manager.attachmentId = player.attachment.id
-        manager.load(urlString: player.attachment.fileUrl)
+        // `attachmentId` MUST be the `load()` argument, not set beforehand —
+        // `load()` calls `cleanup()` internally, which wipes `attachmentId` to
+        // `nil` before the new value could apply. Passing it as a parameter
+        // (applied AFTER `cleanup()`) is what keeps `reportWatchProgress`
+        // firing. See `SharedAVPlayerManagerAttachmentTrackingTests`.
+        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
         manager.play()
         scheduleControlsHide()
     }
@@ -358,6 +367,16 @@ internal struct _InlineRenderer: View {
         isCallActive: Bool
     ) -> Bool {
         autoplayOnAppear && isReady && isOnScreen && !isCallActive
+    }
+
+    /// Décision pure (§ B.2) : une surface sans bouton PiP visible ne doit
+    /// jamais configurer le PiP — `configurePip` arme implicitement
+    /// `canStartPictureInPictureAutomaticallyFromInline`. Miroir de
+    /// `ReelVideoSurface.enablesPip` ; source de vérité unique avec
+    /// `_InlineOverlayControls.showsPipButton` (même `ControlSet` pilote les
+    /// deux — impossible d'avoir l'un sans l'autre).
+    nonisolated static func surfaceEnablesPip(controls: MeeshyVideoPlayer.ControlSet) -> Bool {
+        controls.contains(.pip)
     }
 
     private func autoplayIfNeeded() {
@@ -516,8 +535,11 @@ internal struct _FullscreenRenderer: View {
                         // replay of the just-watched video.
                         guard !didInitialLoad else { return }
                         didInitialLoad = true
-                        manager.attachmentId = player.attachment.id
-                        manager.load(urlString: player.attachment.fileUrl)
+                        // See `startPlayback()` above — `attachmentId` must be
+                        // passed as the `load()` argument, applied AFTER the
+                        // internal `cleanup()`, or it is silently wiped and
+                        // watch-progress tracking never fires.
+                        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
                         manager.play()
                     }
             }
@@ -581,14 +603,15 @@ internal struct _FullscreenRenderer: View {
         } label: {
             HStack(spacing: 6) {
                 if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
-                    // CachedAsyncImage : l'avatar auteur est déjà dans le
-                    // DiskCacheStore (MeeshyAvatar l'y a mis) — zéro re-download.
-                    CachedAsyncImage(url: avatarUrl) {
-                        Circle().fill(Color.white.opacity(0.3))
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
+                    // CachedAvatarImage : échec silencieux (initiales + accent
+                    // du player), zéro bouton retry sur un chip 24pt — l'avatar
+                    // auteur est déjà dans le DiskCacheStore (MeeshyAvatar l'y a mis).
+                    CachedAvatarImage(
+                        urlString: avatarUrl,
+                        name: author.displayName,
+                        size: 24,
+                        accentColor: player.accentColor
+                    )
                 }
                 Text(author.displayName)
                     .font(.system(size: 12, weight: .semibold))
@@ -766,16 +789,22 @@ internal struct _FullscreenRenderer: View {
         let currentSec = manager.currentTime
         let totalSec = manager.duration
         let attId = player.attachment.id
-        Task {
-            let body = AttachmentStatusBody(
-                action: "watched",
-                playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
-                durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
-                complete: complete
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status", body: body
-            )
+        let body = AttachmentStatusBody(
+            action: "watched",
+            playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
+            durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
+            complete: complete
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
+
+        // Resume-where-you-stopped on dismiss — the manager's own
+        // `reportWatchProgress` never fires here (this path only reports the
+        // partial-watch on disappear, see the BUG B fix note above).
+        guard !currentSec.isNaN, !totalSec.isNaN, !totalSec.isInfinite else { return }
+        if complete || !SharedAVPlayerManager.isResumable(currentSec, totalDuration: totalSec) {
+            VideoPlaybackPositionStore.shared.clear(for: attId)
+        } else {
+            VideoPlaybackPositionStore.shared.save(currentSec, for: attId)
         }
     }
 

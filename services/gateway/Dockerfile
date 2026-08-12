@@ -158,11 +158,25 @@ ARG FASTIFY_PORT=3000
 ARG FASTIFY_HOST=0.0.0.0
 ARG LOG_LEVEL=info
 
+# VCS_REF / BUILD_DATE sont RE-DÉCLARÉS ici : un ARG n'est visible que dans le
+# stage qui le déclare, et ceux du stage `base` (l.24) ne franchissent pas ce
+# `FROM`. Sans cette redéclaration, les ENV ci-dessous seraient vides et
+# `/health` annoncerait un commit `null` sur toutes les images.
+ARG VCS_REF
+ARG BUILD_DATE
+
+# Le label OCI grave déjà la révision, mais un label n'est lisible que par
+# `docker inspect` sur l'hôte. En variable d'environnement, `resolveBuildInfo`
+# la remonte dans `/health` et `/info` : identifier le code en production
+# devient un `curl`, plus une corrélation entre l'uptime du container et
+# l'horodatage des tags `sha-<short>` du registre.
 ENV NODE_ENV=production \
     FASTIFY_PORT=${FASTIFY_PORT} \
     FASTIFY_HOST=${FASTIFY_HOST} \
     LOG_LEVEL=${LOG_LEVEL} \
-    PORT=${FASTIFY_PORT}
+    PORT=${FASTIFY_PORT} \
+    GIT_COMMIT=${VCS_REF} \
+    BUILD_DATE=${BUILD_DATE}
 
 # Runtime dependencies only (no build tools!)
 RUN apt-get update && apt-get install -y --no-install-recommends \

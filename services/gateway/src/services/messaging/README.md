@@ -202,6 +202,40 @@ If modules exceed 800 lines in the future:
 ✅ **Type Safety**: Strong typing throughout with no `any` types
 ✅ **Backward Compatibility**: Zero breaking changes for existing code
 
+## Les unités d'effets — une par geste du cycle de vie d'un message
+
+Un message n'est écrit par une seule classe qu'en apparence. L'ENVOI a cinq écrivains (handler
+socket `message:send` et `send-with-attachments`, `POST /conversations/:id/messages`, les deux
+routes de lien de partage), le RETRAIT en a quatre, l'ÉDITION en a quatre. Les routes de lien
+contournent `MessagingService` entièrement ; les routes de suppression et d'édition ne la traversent
+jamais.
+
+Chaque obligation produit tenue « de mémoire » par ces écrivains a donc divergé, invariablement et
+sans que rien ne le signale. Les trois unités ci-dessous existent pour que **l'obligation soit
+énoncée une fois et honorée par tous** — un effet ajouté ici s'applique à tous les chemins.
+
+| geste | unité | ce qu'elle écrit |
+|---|---|---|
+| envoi | `messagePostSaveEffects.runMessagePostSaveEffects` | `Conversation.lastMessageAt` · file de traduction (Prisme) · statistiques de LANGUE · compteurs de la conversation |
+| retrait | `messageRemovalEffects.applyMessageRemovalEffects` | décompte des compteurs · désactivation des `/l/<token>` orphelins · recalcul de `lastMessageAt` |
+| édition | `messageEditEffects.applyMessageEditEffects` | écart de mots / caractères sur les compteurs |
+
+Trois règles valent pour les trois :
+
+1. **Best-effort, toujours.** Quand elles s'exécutent, l'écriture qui compte pour l'utilisateur est
+   DÉJÀ committée. Chaque effet porte son propre `catch` : une panne de translator ne doit pas
+   empêcher le bump, et aucune ne doit transformer un envoi ou une suppression réussie en 500.
+2. **Les champs sont REQUIS dans le type du record, jamais optionnels.** C'est la seule chose qui
+   force un nouvel écrivain à honorer l'obligation : il ne compile pas sans elle. Un champ optionnel
+   reproduirait exactement l'omission silencieuse que ces unités referment.
+3. **Ce que l'unité ne peut pas relire doit être CAPTURÉ par l'appelant.** Deux des trois routes de
+   suppression détruisent les `MessageAttachment` avant d'appeler l'unité ; les MIME doivent donc
+   venir de la lecture d'admission, pas d'une relecture.
+
+Leurs jumelles côté DÉCISION — qui a le droit, et quoi écrire — vivent à côté :
+`messageEditAdmission` (qui peut éditer, jusqu'à quand), `messageDeleteAdmission` (qui peut
+supprimer), `messageEditContent` (ce qu'une édition a le droit de mettre à la place).
+
 ## Related Services
 
 The messaging module integrates with:

@@ -50,6 +50,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         applyCategory(to: bestAttemptContent)
         applyBadge(to: bestAttemptContent)
         applyThreading(to: bestAttemptContent)
+        // Préférences de notification (miroir App Group) — APRÈS applyBadge et
+        // applyThreading pour que sons/badge/regroupement coupés gagnent, et
+        // avant tout chemin de sortie (contentHandler / expiration).
+        NSEPreferencesGate.apply(
+            preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
+            to: bestAttemptContent,
+            rawType: bestAttemptContent.userInfo["type"] as? String
+        )
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
         prefetchSocialData(from: bestAttemptContent.userInfo)
@@ -231,7 +239,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         case "friend_request", "contact_request":
             category = "MEESHY_FRIEND_REQUEST"
 
-        // Social feed — view + mark as read
+        // Social feed — view + mark as read ; commentable types WITH a postId
+        // additionally expose the inline « Commenter » text action (R3).
         case "post_like",
              "post_comment",
              "post_repost",
@@ -248,15 +257,23 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
              "friend_new_story",
              "friend_new_post",
              "friend_new_mood":
-            category = "MEESHY_SOCIAL"
+            category = NotificationPayloadHelpers.socialCategoryIdentifier(
+                type: rawType,
+                postId: content.userInfo["postId"] as? String
+            )
 
-        // Call events — callback / answer / decline actions
+        // Call events — split by state (G4d): ringing exposes answer/decline,
+        // terminal states expose callback/view only (no « Answer » on an
+        // already-ended call).
         case "missed_call",
              "incoming_call",
              "call_ended",
              "call_declined",
              "call_recording_ready":
-            category = "MEESHY_CALL"
+            guard let callCategory = NotificationPayloadHelpers.callCategoryIdentifier(type: rawType) else {
+                return
+            }
+            category = callCategory
 
         default:
             // Unknown / new server-side type: stay quiet and show the default
@@ -355,7 +372,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     private static let sharedPool: DatabasePool? = {
         guard let path = appGroupDatabasePath() else { return nil }
         do {
-            let pool = try DatabasePool(path: path)
+            // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
+            // the main app holds its own pool on this same file, and GRDB's
+            // default `.immediateError` busy mode would turn a cross-process
+            // write collision into an SQLITE_BUSY swallowed by the catch
+            // below (pre-persisted bubble silently lost).
+            var config = Configuration()
+            config.busyMode = .timeout(5)
+            let pool = try DatabasePool(path: path, configuration: config)
             try MessageDatabaseMigrations.runAll(on: pool)
             return pool
         } catch { return nil }
@@ -381,6 +405,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         let content = userInfo["content"] as? String ?? ""
 
+        // N4 — derive the media kind from the attachment mime so the
+        // pre-persisted bubble renders as audio/image/video instead of an
+        // empty text bubble until the canonical REST fetch overwrites it.
+        let media = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: userInfo["attachmentMimeType"] as? String
+        )
+
         do {
             let now = Date()
             let record = MessageRecord(
@@ -393,7 +424,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 // fetch will overwrite with the canonical value seconds later.
                 content: content,
                 originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
-                messageType: "text", messageSource: "user", contentType: "text",
+                messageType: media.messageType, messageSource: "user",
+                contentType: media.contentType,
                 // Incoming messages are .delivered (received by us), not
                 // .sent (which means "sent BY us and acked by server").
                 // The previous .sent value broke any GRDB query that
@@ -441,7 +473,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
         ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
-        try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        nseCreateDirectory(dbDir, context: "NSE database directory")
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 

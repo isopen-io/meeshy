@@ -16,6 +16,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
 import { normalizeMarkdown } from './normalize-markdown';
+import { openExternalUrl } from '@/utils/safe-redirect';
 import { preprocessContent } from './preprocess-content';
 
 interface MarkdownMessageProps {
@@ -94,25 +95,16 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
               deviceFingerprint,
             });
 
-            if (result.success && result.originalUrl) {
-              const newWindow = window.open(result.originalUrl, '_blank', 'noopener,noreferrer');
-              if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                window.location.href = result.originalUrl;
-              }
-            } else {
+            // Destination choisie par le créateur du lien : validée avant
+            // d'atteindre window.open / location.href (cf. openExternalUrl).
+            if (!result.success || !openExternalUrl(result.originalUrl)) {
               const fallbackUrl = linkPart.type === 'mshy-link' ? linkPart.trackingUrl! : href;
-              const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-              if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                window.location.href = fallbackUrl;
-              }
+              openExternalUrl(fallbackUrl);
             }
           } catch (error) {
             console.error('Error handling tracking link click:', error);
             const fallbackUrl = linkPart.type === 'mshy-link' ? linkPart.trackingUrl! : href;
-            const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
-            if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-              window.location.href = fallbackUrl;
-            }
+            openExternalUrl(fallbackUrl);
           }
         }
 

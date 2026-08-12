@@ -29,10 +29,17 @@ final class MockCategoryWriter: UserCategoryWriting, @unchecked Sendable {
         return ConversationCategory(id: UUID().uuidString, name: name, color: color, icon: icon, order: 0, isExpanded: true)
     }
 
+    /// stores-10 — hooks d'observation « pendant l'appel » : permettent au
+    /// test de lire l'état du store AU MOMENT où le service est sollicité
+    /// (vérifier le signal optimiste, pas seulement l'état final).
+    var onUpdateCategory: (@Sendable () async -> Void)?
+    var onDeleteCategory: (@Sendable () async -> Void)?
+
     func updateCategory(
         id: String, name: String?, color: String?, icon: String?, isExpanded: Bool?
     ) async throws -> ConversationCategory {
         updateCalls.append((id, name, color, icon, isExpanded))
+        await onUpdateCategory?()
         if let e = errorToThrow { throw e }
         if let r = updateResult { return r }
         // Default: synthesize an updated row.
@@ -44,6 +51,7 @@ final class MockCategoryWriter: UserCategoryWriting, @unchecked Sendable {
 
     func deleteCategory(id: String) async throws {
         deleteCalls.append(id)
+        await onDeleteCategory?()
         if let e = errorToThrow { throw e }
     }
 
@@ -282,4 +290,81 @@ final class UserCategoryStoreTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 2)
         XCTAssertFalse(snapshots.isEmpty, "publisher must surface the post-create snapshot")
     }
+}
+
+/// stores-10 — reset au logout + CRUD optimiste (application locale immédiate,
+/// rollback sur échec serveur).
+extension UserCategoryStoreTests {
+
+    func test_reset_afterHydrate_clearsCategoriesAndPublishesEmptyList() async {
+        let (store, _) = makeStore()
+        await store.hydrateFromSnapshot([makeCat("a"), makeCat("b")])
+
+        await store.reset()
+
+        let snapshot = await store.categories()
+        XCTAssertTrue(snapshot.isEmpty, "reset() (logout) doit vider le store — résidu cross-compte sinon (widget)")
+    }
+
+    func test_rename_appliesLocallyBeforeServerConfirms() async throws {
+        let (store, mock) = makeStore()
+        await store.hydrateFromSnapshot([makeCat("a", name: "Old")])
+        let observed = ObservedName()
+        mock.onUpdateCategory = { [weak store] in
+            guard let store else { return }
+            await observed.record(store.categories().first?.name)
+        }
+        mock.updateResult = makeCat("a", name: "New")
+
+        _ = try await store.rename("a", to: "New")
+
+        let nameAtCall = await observed.value
+        XCTAssertEqual(nameAtCall, "New", "le rename doit s'appliquer LOCALEMENT avant la confirmation serveur (optimiste)")
+    }
+
+    func test_delete_removesLocallyBeforeServerConfirms() async throws {
+        let (store, mock) = makeStore()
+        await store.hydrateFromSnapshot([makeCat("a")])
+        let observed = ObservedName()
+        mock.onDeleteCategory = { [weak store] in
+            guard let store else { return }
+            await observed.record(store.categories().first?.id)
+        }
+
+        try await store.delete("a")
+
+        let idAtCall = await observed.value
+        XCTAssertNil(idAtCall, "le delete doit retirer LOCALEMENT avant la confirmation serveur (optimiste)")
+    }
+
+    func test_rename_serverFails_rollsBackToPriorSnapshot() async {
+        let (store, mock) = makeStore()
+        await store.hydrateFromSnapshot([makeCat("a", name: "Old")])
+        mock.errorToThrow = MeeshyError.server(statusCode: 500, message: "down")
+
+        _ = try? await store.rename("a", to: "New")
+
+        let snapshot = await store.categories()
+        XCTAssertEqual(snapshot.first?.name, "Old", "échec serveur ⇒ rollback au snapshot précédent")
+    }
+
+    func test_delete_serverFails_categoryStillPresent() async {
+        let (store, mock) = makeStore()
+        await store.hydrateFromSnapshot([makeCat("a")])
+        mock.errorToThrow = MeeshyError.server(statusCode: 500, message: "down")
+
+        try? await store.delete("a")
+
+        let snapshot = await store.categories()
+        XCTAssertEqual(snapshot.map(\.id), ["a"], "échec serveur ⇒ la catégorie est restaurée")
+    }
+
+    private func makeCat(_ id: String, name: String = "n") -> ConversationCategory {
+        ConversationCategory(id: id, name: name, color: nil, icon: nil, order: 0, isExpanded: true)
+    }
+}
+
+private actor ObservedName {
+    private(set) var value: String?
+    func record(_ v: String?) { value = v }
 }

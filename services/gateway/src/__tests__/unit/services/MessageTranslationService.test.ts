@@ -86,7 +86,8 @@ const createMockPrisma = () => ({
     findFirst: jest.fn() as MockFn,
     findUnique: jest.fn() as MockFn,
     create: jest.fn() as MockFn,
-    update: jest.fn() as MockFn
+    update: jest.fn() as MockFn,
+    updateMany: jest.fn() as MockFn
   },
   message: {
     findFirst: jest.fn() as MockFn,
@@ -217,6 +218,87 @@ describe('MessageTranslationService', () => {
       expect(result.messageId).toBe('msg-789');
       expect(result.status).toBe('message_saved');
       expect(mockPrisma.message.create).toHaveBeenCalled();
+    });
+
+    it('flips firstMessageSentAt via a guarded updateMany, separate from the unconditional lastMessageAt bump — this path creates the message OUTSIDE MessagingService.handleMessage (e.g. POST /translate-blocking)', async () => {
+      const messageData: MessageData = {
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      };
+
+      mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-123' });
+      mockPrisma.message.create.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en',
+        createdAt: new Date()
+      });
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockPrisma.conversation.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.message.findFirst.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      });
+
+      await translationService.handleNewMessage(messageData);
+
+      // Le bump reste inconditionnel — pas de `where.firstMessageSentAt`.
+      expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { lastMessageAt: expect.any(Date) } })
+      );
+      expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'conv-123', firstMessageSentAt: null },
+        data: { firstMessageSentAt: expect.any(Date) }
+      });
+    });
+
+    it('still saves and returns the message when the firstMessageSentAt flip rejects — a non-critical DB hiccup must never turn a successful send into a failure', async () => {
+      const messageData: MessageData = {
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      };
+
+      mockPrisma.conversation.findFirst.mockResolvedValue({ id: 'conv-123' });
+      mockPrisma.message.create.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en',
+        createdAt: new Date()
+      });
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockPrisma.conversation.updateMany.mockRejectedValue(new Error('flip down'));
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.message.findFirst.mockResolvedValue({
+        id: 'msg-789',
+        conversationId: 'conv-123',
+        senderId: 'user-456',
+        content: 'Hello world',
+        originalLanguage: 'en'
+      });
+
+      const result = await translationService.handleNewMessage(messageData);
+
+      // The message was already saved and lastMessageAt already bumped —
+      // neither must be undone or hidden behind a thrown exception just
+      // because the guarded flip failed after them.
+      expect(result.messageId).toBe('msg-789');
+      expect(result.status).toBe('message_saved');
+      expect(mockPrisma.message.create).toHaveBeenCalled();
+      expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { lastMessageAt: expect.any(Date) } })
+      );
     });
 
     it('should create conversation if it does not exist', async () => {
@@ -436,6 +518,50 @@ describe('MessageTranslationService', () => {
       expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
     });
 
+    it('resolves a regional target code against the normalized stored key', async () => {
+      // Les écrivains stockent sous la forme canonique du SSOT
+      // `normalizeLanguageCode` ('pt-BR' → 'pt'). Une lecture verbatim de
+      // `translations['pt-BR']` manquait donc la traduction pourtant présente
+      // une clé plus loin, et l'appelant rendait un repli fabriqué
+      // `[PT-BR] <texte original>` — le texte source affublé d'une étiquette,
+      // violation directe du Prisme Linguistique.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-regional',
+        originalLanguage: 'en',
+        translations: {
+          pt: {
+            text: 'Olá mundo',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá mundo');
+      // La cible RENDUE reste celle demandée : le client corrèle sa requête
+      // dessus, la normalisation est un détail de stockage.
+      expect(result?.targetLanguage).toBe('pt-BR');
+    });
+
+    it('prefers an exact verbatim key over its normalized form', async () => {
+      // Un document legacy qui porterait RÉELLEMENT une clé régionale ne doit
+      // pas se faire détourner vers la clé de base : le verbatim gagne.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-legacy-regional',
+        originalLanguage: 'en',
+        translations: {
+          'pt-BR': { text: 'Olá (BR)', translationModel: 'basic', confidenceScore: 0.9 },
+          pt: { text: 'Olá (base)', translationModel: 'basic', confidenceScore: 0.9 }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-legacy-regional', 'pt-BR');
+
+      expect(result?.translatedText).toBe('Olá (BR)');
+    });
+
     it('should return null if translation not found', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-not-found',
@@ -472,6 +598,27 @@ describe('MessageTranslationService', () => {
       const result = await translationService.getTranslation('msg-src', 'fr', 'en');
 
       expect(result).toBeDefined();
+      expect(result?.translatedText).toBe('Bonjour');
+    });
+
+    // Le cas CAPITALISÉ, que la couverture voisine ne porte pas : `Locale.current`
+    // rend aussi bien `'FR'` que `'pt-BR'`, et la lecture stricte manquait les
+    // deux. La normalisation en repli les rattrape l'un comme l'autre.
+    it('resolves an uppercase target against the normalized stored key', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: 'msg-upper',
+        originalLanguage: 'en',
+        translations: {
+          fr: {
+            text: 'Bonjour',
+            translationModel: 'basic',
+            confidenceScore: 0.9
+          }
+        }
+      });
+
+      const result = await translationService.getTranslation('msg-upper', 'FR');
+
       expect(result?.translatedText).toBe('Bonjour');
     });
   });

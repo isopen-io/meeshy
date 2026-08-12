@@ -6,7 +6,7 @@
  * - Swift app  : ConversationLanguagePreferences.normalize (apps/ios)
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeLanguageCode } from '../utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '../utils/language-normalize';
 
 describe('normalizeLanguageCode', () => {
   it('returns ISO 639-1 for plain code', () => {
@@ -62,10 +62,39 @@ describe('normalizeLanguageCode', () => {
   });
 
   it('reduces ISO 639-3 to its supported 2-letter equivalent when unambiguous', () => {
-    // "eng"/"fra" have no Meeshy entry but their 2-letter prefix IS supported,
+    // "eng"/"fra" have no Meeshy entry but map to a supported 639-1 code,
     // and the translator pipeline maps 2-letter codes ("en" → "eng_Latn").
     expect(normalizeLanguageCode('eng')).toBe('en');
     expect(normalizeLanguageCode('fra')).toBe('fr');
+  });
+
+  it('reduces via the explicit ISO 639-2/3 map, never by blind truncation', () => {
+    // 'spa' (Spanish) reduces to the SUPPORTED 'es' — NOT rejected, and NOT
+    // truncated to 'sp'. The explicit map knows the real 639-1 target.
+    expect(normalizeLanguageCode('spa')).toBe('es');
+    // 639-2/B (bibliographic) variants that differ from /T also reduce.
+    expect(normalizeLanguageCode('deu')).toBe('de');
+    expect(normalizeLanguageCode('ger')).toBe('de');
+    expect(normalizeLanguageCode('zho')).toBe('zh');
+    expect(normalizeLanguageCode('chi')).toBe('zh');
+  });
+
+  it('reduces a 3-letter code whose 2-letter prefix collides with a DIFFERENT supported language', () => {
+    // 'swe' (Swedish) MUST map to 'sv' — blind truncation gave 'sw' (Swahili),
+    // a completely unrelated supported language. This was the collision bug.
+    expect(normalizeLanguageCode('swe')).toBe('sv');
+    // The Swahili 639-3 code still maps to its own 'sw'.
+    expect(normalizeLanguageCode('swa')).toBe('sw');
+  });
+
+  it('rejects Filipino (`fil`/`tgl`) rather than mapping it to Finnish', () => {
+    // Apple/CLDR report Filipino as `fil` (Locale.current = "fil_PH"). Blind
+    // truncation mapped it to 'fi' (Finnish) — silently serving a Filipino user
+    // Finnish translations, violating the Prisme Linguistique. Filipino has no
+    // supported Meeshy entry, so the correct answer is `undefined`.
+    expect(normalizeLanguageCode('fil')).toBeUndefined();
+    expect(normalizeLanguageCode('fil-PH')).toBeUndefined();
+    expect(normalizeLanguageCode('tgl')).toBeUndefined();
   });
 
   it('preserves supported ISO 639-3 codes verbatim (never truncates)', () => {
@@ -85,14 +114,66 @@ describe('normalizeLanguageCode', () => {
     expect(normalizeLanguageCode('BAS_CM')).toBe('bas');
   });
 
-  it('rejects unknown ISO 639-3 whose 2-letter prefix is unsupported', () => {
-    // 'spa' → 'sp' would be wrong (Spanish is 'es'); refuse rather than corrupt.
-    expect(normalizeLanguageCode('spa')).toBeUndefined();
+  it('rejects unknown ISO 639-3 codes absent from the reduction map', () => {
+    // A 3-letter code with no explicit 639-1 target is refused rather than
+    // corrupted by truncation (both when its prefix is supported and when not).
     expect(normalizeLanguageCode('xyz')).toBeUndefined();
+    expect(normalizeLanguageCode('enx')).toBeUndefined();
   });
 
   it('rejects primary subtag containing digits or punctuation', () => {
     expect(normalizeLanguageCode('fr2')).toBeUndefined();
     expect(normalizeLanguageCode('fr!')).toBeUndefined();
+  });
+
+  it('reduces deprecated ISO 639-1 aliases to their canonical code', () => {
+    // `iw`/`in`/`ji` are the DEPRECATED ISO 639-1 codes for Hebrew/Indonesian/
+    // Yiddish. The JVM `java.util.Locale.getLanguage()` still normalizes
+    // `he→iw`, `id→in`, `yi→ji` for backward compat, so an Android client (a
+    // Meeshy mirror platform) reporting a Hebrew device locale emits `iw`.
+    // Left verbatim, `iw` matches ZERO `MessageTranslation` rows (keyed `he`)
+    // and the reader silently falls back to the untranslated original —
+    // a direct Prisme Linguistique violation. Same collision class the 3-letter
+    // reduction map already eliminates for `fil`/`swe`.
+    expect(normalizeLanguageCode('iw')).toBe('he');
+    expect(normalizeLanguageCode('in')).toBe('id');
+  });
+
+  it('strips region tag from a deprecated 639-1 alias before reducing', () => {
+    // Android `iw_IL` / `in_ID` device locales.
+    expect(normalizeLanguageCode('iw-IL')).toBe('he');
+    expect(normalizeLanguageCode('IN_ID')).toBe('id');
+  });
+
+  it('rejects a deprecated alias whose canonical target is unsupported', () => {
+    // `ji` → `yi` (Yiddish), but `yi` is not a supported Meeshy target. The
+    // reduced code is re-validated against SUPPORTED_CODES exactly like the
+    // 3-letter path, so it resolves to undefined rather than a verbatim `ji`
+    // (or a `yi` that matches no translation) — the caller applies its fallback.
+    expect(normalizeLanguageCode('ji')).toBeUndefined();
+  });
+
+  it('still returns an unknown non-deprecated 2-letter code verbatim', () => {
+    // Only the three deprecated aliases are remapped; other unknown 2-letter
+    // codes keep their historical verbatim behavior (caller applies fallback).
+    expect(normalizeLanguageCode('zz')).toBe('zz');
+  });
+});
+
+describe('normalizeLanguageForDedup', () => {
+  it('collapses casing and region tags to one canonical dedup key', () => {
+    // The whole point: 'en', 'EN' and 'en-US' must hash to the same Set entry.
+    expect(normalizeLanguageForDedup('en')).toBe('en');
+    expect(normalizeLanguageForDedup('EN')).toBe('en');
+    expect(normalizeLanguageForDedup('en-US')).toBe('en');
+    expect(normalizeLanguageForDedup('fr_FR')).toBe('fr');
+    expect(normalizeLanguageForDedup('zh-Hant-HK')).toBe('zh');
+  });
+
+  it('keeps irreducible unknown codes lowercased instead of dropping them', () => {
+    // normalizeLanguageCode returns undefined here; the dedup helper must NOT
+    // lose the datum — it lowercases so a list/counter still reflects it.
+    expect(normalizeLanguageForDedup('xyz')).toBe('xyz');
+    expect(normalizeLanguageForDedup('QW')).toBe('qw');
   });
 });

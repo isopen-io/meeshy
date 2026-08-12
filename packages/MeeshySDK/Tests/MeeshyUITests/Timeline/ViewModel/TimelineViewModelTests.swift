@@ -326,7 +326,7 @@ final class TimelineViewModelTests: XCTestCase {
 
 private func assertFloatArraysEqual(
     _ a: [Float], _ b: [Float], accuracy: Float,
-    file: StaticString = #file, line: UInt = #line
+    file: StaticString = #filePath, line: UInt = #line
 ) {
     XCTAssertEqual(a.count, b.count, file: file, line: line)
     for (x, y) in zip(a, b) {

@@ -16,6 +16,7 @@ final class StoryPublishQueueTests: XCTestCase {
             .appendingPathComponent("StoryPublishQueueTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         queue = StoryPublishQueue.shared
+        await queue._testResetPublishHandler()
         await queue.clearAll()
     }
 
@@ -448,11 +449,66 @@ final class StoryPublishQueueTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeItem(visibility: String, mediaReferences: [StoryMediaReference] = []) -> StoryPublishQueueItem {
+    // MARK: - Cycle brouillon/publication : le draftId traverse les dispositions
+
+    func test_processNext_success_payloadCarriesTheDraftId() async {
+        let item = makeItem(visibility: "PUBLIC", draftId: "draft-ok")
+        await queue.enqueue(item)
+
+        let receivedExpectation = expectation(description: "publishSucceeded carries draftId")
+        var cancellables = Set<AnyCancellable>()
+        var received: StoryPublishSuccess?
+        queue.publishSucceeded.publisher
+            .sink { payload in
+                received = payload
+                receivedExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        await queue.setPublishHandler { _ in "server-story-1" }
+        await queue.processNext()
+
+        await fulfillment(of: [receivedExpectation], timeout: 2.0)
+        XCTAssertEqual(
+            received?.draftId, "draft-ok",
+            "Le SUCCÈS serveur est le seul événement autorisé à supprimer le brouillon — il doit savoir lequel"
+        )
+    }
+
+    func test_processNext_permanentFailure_payloadCarriesTheDraftId() async {
+        let item = makeItem(visibility: "PUBLIC", draftId: "draft-ko")
+        await queue.enqueue(item)
+
+        let failedExpectation = expectation(description: "publishFailed carries draftId")
+        var cancellables = Set<AnyCancellable>()
+        var received: StoryPublishFailure?
+        queue.publishFailed.publisher
+            .sink { payload in
+                received = payload
+                failedExpectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        await queue.processNext()
+
+        await fulfillment(of: [failedExpectation], timeout: 2.0)
+        XCTAssertEqual(
+            received?.draftId, "draft-ko",
+            "L'échec PERMANENT ramène la story en brouillon : le payload doit désigner ce brouillon"
+        )
+    }
+
+    private func makeItem(visibility: String,
+                          mediaReferences: [StoryMediaReference] = [],
+                          draftId: String? = nil) -> StoryPublishQueueItem {
         StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: Data("[]".utf8),
-            mediaReferences: mediaReferences
+            mediaReferences: mediaReferences,
+            draftId: draftId
         )
     }
 }

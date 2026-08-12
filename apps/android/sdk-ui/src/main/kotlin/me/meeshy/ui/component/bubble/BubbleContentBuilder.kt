@@ -11,6 +11,8 @@ import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
+import me.meeshy.sdk.model.SendLifecycle
+import me.meeshy.sdk.model.SendLifecycleResolver
 
 public object BubbleContentBuilder {
 
@@ -26,6 +28,8 @@ public object BubbleContentBuilder {
         activeLanguageCode: String? = null,
         mediaBaseUrl: String? = null,
         recipientCount: Int = 0,
+        showReadReceipts: Boolean = true,
+        isOffline: Boolean = false,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -45,19 +49,29 @@ public object BubbleContentBuilder {
         val isShowingOriginal = isTranslated && activeIsOriginal
         val deliveryStatus = when {
             !isOutgoing -> DeliveryStatus.Sent
-            isFailed -> DeliveryStatus.Failed
-            isPending -> DeliveryStatus.Pending
             else -> when (
-                DeliveryStatusResolver.resolve(
-                    deliveredCount = message.deliveredCount,
-                    readCount = message.readCount,
-                    recipientCount = recipientCount,
-                    readByAllAt = message.readByAllAt,
+                SendLifecycleResolver.resolve(
+                    isPending = isPending,
+                    isFailed = isFailed,
+                    isOffline = isOffline,
                 )
             ) {
-                DeliveryTier.Read -> DeliveryStatus.Read
-                DeliveryTier.Delivered -> DeliveryStatus.Delivered
-                DeliveryTier.Sent -> DeliveryStatus.Sent
+                SendLifecycle.Failed -> DeliveryStatus.Failed
+                SendLifecycle.QueuedOffline -> DeliveryStatus.QueuedOffline
+                SendLifecycle.InFlight -> DeliveryStatus.Pending
+                SendLifecycle.Settled -> when (
+                    DeliveryStatusResolver.resolve(
+                        deliveredCount = message.deliveredCount,
+                        readCount = message.readCount,
+                        recipientCount = recipientCount,
+                        readByAllAt = message.readByAllAt,
+                        showReadReceipts = showReadReceipts,
+                    )
+                ) {
+                    DeliveryTier.Read -> DeliveryStatus.Read
+                    DeliveryTier.Delivered -> DeliveryStatus.Delivered
+                    DeliveryTier.Sent -> DeliveryStatus.Sent
+                }
             }
         }
         val reactions = message.reactionSummary

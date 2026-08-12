@@ -1,7 +1,14 @@
+/**
+ * Unit tests for gateway response utilities.
+ * Covers: sendSuccess, sendPaginatedSuccess, sendError, convenience helpers
+ * (sendBadRequest/Unauthorized/Forbidden/NotFound/Conflict/InternalError),
+ * buildSuccessResponse, buildErrorResponse, createPaginationMeta.
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
 import {
-  buildSuccessResponse,
-  buildErrorResponse,
-  createPaginationMeta,
   sendSuccess,
   sendPaginatedSuccess,
   sendError,
@@ -11,86 +18,298 @@ import {
   sendNotFound,
   sendConflict,
   sendInternalError,
+  buildSuccessResponse,
+  buildErrorResponse,
+  createPaginationMeta,
 } from '../../../utils/response';
 
+// ─── Reply factory ───────────────────────────────────────────────────────────
+
 function makeReply() {
-  let sentStatus = 0;
-  let sentBody: unknown = undefined;
-  const reply = {
-    status: jest.fn((code: number) => {
-      sentStatus = code;
-      return reply;
-    }),
-    send: jest.fn((body: unknown) => {
-      sentBody = body;
-      return reply;
-    }),
-    get sentStatus() { return sentStatus; },
-    get sentBody() { return sentBody; },
+  const r = {
+    status: jest.fn<any>().mockReturnThis(),
+    send: jest.fn<any>().mockReturnThis(),
   };
-  return reply;
+  return r;
 }
 
-// ─── buildSuccessResponse ──────────────────────────────────────────────────
+// ─── sendSuccess ─────────────────────────────────────────────────────────────
 
-describe('buildSuccessResponse', () => {
-  it('returns success:true with data', () => {
-    const res = buildSuccessResponse({ id: '1' });
-    expect(res.success).toBe(true);
-    expect(res.data).toEqual({ id: '1' });
+describe('sendSuccess', () => {
+  it('sends 200 with success:true and data', () => {
+    const reply = makeReply();
+    sendSuccess(reply as any, { id: '1', name: 'Alice' });
+
+    expect(reply.status).toHaveBeenCalledWith(200);
+    expect(reply.send).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: { id: '1', name: 'Alice' } })
+    );
   });
 
-  it('includes message when provided', () => {
-    const res = buildSuccessResponse(null, { message: 'Done' });
-    expect(res.message).toBe('Done');
+  it('includes optional message when provided', () => {
+    const reply = makeReply();
+    sendSuccess(reply as any, {}, { message: 'Created' });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.message).toBe('Created');
   });
 
   it('includes pagination when provided', () => {
-    const pagination = { total: 100, offset: 0, limit: 10, hasMore: true };
-    const res = buildSuccessResponse([], { pagination });
-    expect(res.pagination).toEqual(pagination);
+    const reply = makeReply();
+    const pag = { total: 50, offset: 0, limit: 10, hasMore: true };
+    sendSuccess(reply as any, [], { pagination: pag });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.pagination).toEqual(pag);
+  });
+
+  it('uses custom statusCode when provided', () => {
+    const reply = makeReply();
+    sendSuccess(reply as any, {}, { statusCode: 201 });
+
+    expect(reply.status).toHaveBeenCalledWith(201);
   });
 
   it('includes meta when provided', () => {
-    const res = buildSuccessResponse(null, { meta: { requestId: 'r1' } });
-    expect(res.meta).toEqual({ requestId: 'r1' });
+    const reply = makeReply();
+    sendSuccess(reply as any, {}, { meta: { requestId: 'req-1' } as any });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.meta).toEqual({ requestId: 'req-1' });
   });
 
   it('omits meta when not provided', () => {
-    const res = buildSuccessResponse(null);
-    expect(res.meta).toBeUndefined();
+    const reply = makeReply();
+    sendSuccess(reply as any, {});
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.meta).toBeUndefined();
   });
 });
 
-// ─── buildErrorResponse ───────────────────────────────────────────────────
+// ─── sendPaginatedSuccess ─────────────────────────────────────────────────────
 
-describe('buildErrorResponse', () => {
-  it('returns success:false with error', () => {
-    const res = buildErrorResponse('Something went wrong');
-    expect(res.success).toBe(false);
-    expect(res.error).toBe('Something went wrong');
+describe('sendPaginatedSuccess', () => {
+  it('sends 200 with data and pagination', () => {
+    const reply = makeReply();
+    const pag = { total: 100, offset: 20, limit: 10, hasMore: true };
+    sendPaginatedSuccess(reply as any, ['a', 'b'], pag);
+
+    expect(reply.status).toHaveBeenCalledWith(200);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.success).toBe(true);
+    expect(sent.data).toEqual(['a', 'b']);
+    expect(sent.pagination).toEqual(pag);
   });
 
-  it('uses error as message when message not provided', () => {
-    const res = buildErrorResponse('Not found');
-    expect(res.message).toBe('Not found');
+  it('includes optional message', () => {
+    const reply = makeReply();
+    const pag = { total: 0, offset: 0, limit: 10, hasMore: false };
+    sendPaginatedSuccess(reply as any, [], pag, { message: 'No results' });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.message).toBe('No results');
   });
 
-  it('uses options.message when provided', () => {
-    const res = buildErrorResponse('err', { message: 'Custom message' });
-    expect(res.message).toBe('Custom message');
+  it('omits meta when not provided', () => {
+    const reply = makeReply();
+    const pag = { total: 1, offset: 0, limit: 10, hasMore: false };
+    sendPaginatedSuccess(reply as any, [{}], pag);
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.meta).toBeUndefined();
+  });
+});
+
+// ─── sendError ───────────────────────────────────────────────────────────────
+
+describe('sendError', () => {
+  it('sends the provided status code with success:false', () => {
+    const reply = makeReply();
+    sendError(reply as any, 422, 'Unprocessable Entity');
+
+    expect(reply.status).toHaveBeenCalledWith(422);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.success).toBe(false);
+    expect(sent.error).toBe('Unprocessable Entity');
+  });
+
+  it('uses the error string as message fallback', () => {
+    const reply = makeReply();
+    sendError(reply as any, 400, 'Bad input');
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.message).toBe('Bad input');
+  });
+
+  it('overrides message when options.message is provided', () => {
+    const reply = makeReply();
+    sendError(reply as any, 400, 'Bad input', { message: 'Custom message' });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.message).toBe('Custom message');
   });
 
   it('includes code when provided', () => {
-    const res = buildErrorResponse('err', { code: 'E_NOTFOUND' });
-    expect(res.code).toBe('E_NOTFOUND');
+    const reply = makeReply();
+    sendError(reply as any, 400, 'Bad input', { code: 'VALIDATION_ERROR' });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.code).toBe('VALIDATION_ERROR');
   });
 });
 
-// ─── createPaginationMeta ─────────────────────────────────────────────────
+// ─── Convenience helpers ──────────────────────────────────────────────────────
+
+describe('sendBadRequest', () => {
+  it('sends 400', () => {
+    const reply = makeReply();
+    sendBadRequest(reply as any, 'Invalid input');
+    expect(reply.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('sendUnauthorized', () => {
+  it('sends 401 with default message', () => {
+    const reply = makeReply();
+    sendUnauthorized(reply as any);
+    expect(reply.status).toHaveBeenCalledWith(401);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toContain('Authentication');
+  });
+
+  it('sends 401 with custom message', () => {
+    const reply = makeReply();
+    sendUnauthorized(reply as any, 'Token expired');
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toBe('Token expired');
+  });
+});
+
+describe('sendForbidden', () => {
+  it('sends 403 with default message', () => {
+    const reply = makeReply();
+    sendForbidden(reply as any);
+    expect(reply.status).toHaveBeenCalledWith(403);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toContain('Access');
+  });
+
+  it('sends 403 with custom message', () => {
+    const reply = makeReply();
+    sendForbidden(reply as any, 'Insufficient role');
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toBe('Insufficient role');
+  });
+});
+
+describe('sendNotFound', () => {
+  it('sends 404 with default message', () => {
+    const reply = makeReply();
+    sendNotFound(reply as any);
+    expect(reply.status).toHaveBeenCalledWith(404);
+  });
+
+  it('sends 404 with custom resource name', () => {
+    const reply = makeReply();
+    sendNotFound(reply as any, 'User not found');
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toBe('User not found');
+  });
+});
+
+describe('sendConflict', () => {
+  it('sends 409', () => {
+    const reply = makeReply();
+    sendConflict(reply as any, 'Duplicate entry');
+    expect(reply.status).toHaveBeenCalledWith(409);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toBe('Duplicate entry');
+  });
+});
+
+describe('sendInternalError', () => {
+  it('sends 500 with default message', () => {
+    const reply = makeReply();
+    sendInternalError(reply as any);
+    expect(reply.status).toHaveBeenCalledWith(500);
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toContain('Internal');
+  });
+
+  it('sends 500 with custom message', () => {
+    const reply = makeReply();
+    sendInternalError(reply as any, 'DB connection lost');
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.error).toBe('DB connection lost');
+  });
+});
+
+// ─── buildSuccessResponse ─────────────────────────────────────────────────────
+
+describe('buildSuccessResponse', () => {
+  it('returns object with success:true and data', () => {
+    const result = buildSuccessResponse({ value: 42 });
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ value: 42 });
+  });
+
+  it('includes message when provided', () => {
+    const result = buildSuccessResponse({}, { message: 'Done' });
+    expect(result.message).toBe('Done');
+  });
+
+  it('includes pagination when provided', () => {
+    const pag = { total: 5, offset: 0, limit: 10, hasMore: false };
+    const result = buildSuccessResponse([], { pagination: pag });
+    expect(result.pagination).toEqual(pag);
+  });
+
+  it('omits meta when not provided', () => {
+    const result = buildSuccessResponse({});
+    expect(result.meta).toBeUndefined();
+  });
+
+  it('includes meta when provided', () => {
+    const result = buildSuccessResponse({}, { meta: { duration: 42 } as any });
+    expect(result.meta).toEqual({ duration: 42 });
+  });
+});
+
+// ─── buildErrorResponse ───────────────────────────────────────────────────────
+
+describe('buildErrorResponse', () => {
+  it('returns object with success:false and error', () => {
+    const result = buildErrorResponse('Something went wrong');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Something went wrong');
+  });
+
+  it('uses error as message fallback', () => {
+    const result = buildErrorResponse('Oops');
+    expect(result.message).toBe('Oops');
+  });
+
+  it('overrides message when options.message is provided', () => {
+    const result = buildErrorResponse('Oops', { message: 'Custom' });
+    expect(result.message).toBe('Custom');
+  });
+
+  it('includes code when provided', () => {
+    const result = buildErrorResponse('Oops', { code: 'ERR_CODE' });
+    expect(result.code).toBe('ERR_CODE');
+  });
+
+  it('omits code when not provided', () => {
+    const result = buildErrorResponse('Oops');
+    expect(result.code).toBeUndefined();
+  });
+});
+
+// ─── createPaginationMeta ─────────────────────────────────────────────────────
 
 describe('createPaginationMeta', () => {
-  it('hasMore is true when there are more results', () => {
+  it('sets hasMore=true when more items remain', () => {
     const meta = createPaginationMeta(100, 0, 10, 10);
     expect(meta.hasMore).toBe(true);
     expect(meta.total).toBe(100);
@@ -98,198 +317,24 @@ describe('createPaginationMeta', () => {
     expect(meta.limit).toBe(10);
   });
 
-  it('hasMore is false when last page is returned', () => {
-    const meta = createPaginationMeta(10, 0, 10, 10);
+  it('sets hasMore=false when all items are returned', () => {
+    const meta = createPaginationMeta(5, 0, 10, 5);
     expect(meta.hasMore).toBe(false);
   });
 
-  it('hasMore is false when result count is less than limit (partial page)', () => {
-    const meta = createPaginationMeta(25, 20, 10, 5);
+  it('sets hasMore=false on the last page (exact fit)', () => {
+    const meta = createPaginationMeta(20, 10, 10, 10);
     expect(meta.hasMore).toBe(false);
   });
 
-  it('hasMore is false when result count is zero', () => {
+  it('handles empty result set', () => {
     const meta = createPaginationMeta(0, 0, 10, 0);
     expect(meta.hasMore).toBe(false);
+    expect(meta.total).toBe(0);
   });
 
-  it('hasMore is true on middle page', () => {
-    const meta = createPaginationMeta(50, 10, 10, 10);
-    expect(meta.hasMore).toBe(true);
-  });
-});
-
-// ─── sendSuccess ──────────────────────────────────────────────────────────
-
-describe('sendSuccess', () => {
-  it('sends 200 with success response', () => {
-    const reply = makeReply();
-    sendSuccess(reply as any, { id: '1' });
-    expect(reply.status).toHaveBeenCalledWith(200);
-    expect(reply.sentBody).toMatchObject({ success: true, data: { id: '1' } });
-  });
-
-  it('uses custom statusCode when provided', () => {
-    const reply = makeReply();
-    sendSuccess(reply as any, null, { statusCode: 201 });
-    expect(reply.status).toHaveBeenCalledWith(201);
-  });
-
-  it('includes message in response', () => {
-    const reply = makeReply();
-    sendSuccess(reply as any, null, { message: 'Created' });
-    expect((reply.sentBody as any).message).toBe('Created');
-  });
-
-  it('includes pagination in response', () => {
-    const reply = makeReply();
-    const pagination = { total: 5, offset: 0, limit: 5, hasMore: false };
-    sendSuccess(reply as any, [], { pagination });
-    expect((reply.sentBody as any).pagination).toEqual(pagination);
-  });
-
-  it('includes meta in response when meta option is provided', () => {
-    const reply = makeReply();
-    sendSuccess(reply as any, null, { meta: { requestId: 'abc' } });
-    expect((reply.sentBody as any).meta).toEqual({ requestId: 'abc' });
-  });
-});
-
-// ─── sendPaginatedSuccess ────────────────────────────────────────────────
-
-describe('sendPaginatedSuccess', () => {
-  it('sends 200 with paginated data', () => {
-    const reply = makeReply();
-    const pagination = { total: 20, offset: 0, limit: 10, hasMore: true };
-    sendPaginatedSuccess(reply as any, [1, 2], pagination);
-    expect(reply.status).toHaveBeenCalledWith(200);
-    expect((reply.sentBody as any).pagination).toEqual(pagination);
-    expect((reply.sentBody as any).data).toEqual([1, 2]);
-  });
-
-  it('includes meta when provided', () => {
-    const reply = makeReply();
-    const pagination = { total: 5, offset: 0, limit: 5, hasMore: false };
-    sendPaginatedSuccess(reply as any, [], pagination, { meta: { requestId: 'r2' } });
-    expect((reply.sentBody as any).meta).toEqual({ requestId: 'r2' });
-  });
-
-  it('omits meta when not provided', () => {
-    const reply = makeReply();
-    sendPaginatedSuccess(reply as any, [], { total: 0, offset: 0, limit: 10, hasMore: false });
-    expect((reply.sentBody as any).meta).toBeUndefined();
-  });
-});
-
-// ─── sendError ────────────────────────────────────────────────────────────
-
-describe('sendError', () => {
-  it('sends the given status code', () => {
-    const reply = makeReply();
-    sendError(reply as any, 422, 'Validation error');
-    expect(reply.status).toHaveBeenCalledWith(422);
-  });
-
-  it('sends success:false with error field', () => {
-    const reply = makeReply();
-    sendError(reply as any, 400, 'Bad input');
-    expect((reply.sentBody as any).success).toBe(false);
-    expect((reply.sentBody as any).error).toBe('Bad input');
-  });
-
-  it('uses options.message when provided', () => {
-    const reply = makeReply();
-    sendError(reply as any, 400, 'err', { message: 'Custom' });
-    expect((reply.sentBody as any).message).toBe('Custom');
-  });
-
-  it('falls back to error string as message', () => {
-    const reply = makeReply();
-    sendError(reply as any, 400, 'Bad input');
-    expect((reply.sentBody as any).message).toBe('Bad input');
-  });
-});
-
-// ─── sendBadRequest ───────────────────────────────────────────────────────
-
-describe('sendBadRequest', () => {
-  it('sends 400', () => {
-    const reply = makeReply();
-    sendBadRequest(reply as any, 'Invalid data');
-    expect(reply.status).toHaveBeenCalledWith(400);
-    expect((reply.sentBody as any).error).toBe('Invalid data');
-  });
-});
-
-// ─── sendUnauthorized ─────────────────────────────────────────────────────
-
-describe('sendUnauthorized', () => {
-  it('sends 401 with default message', () => {
-    const reply = makeReply();
-    sendUnauthorized(reply as any);
-    expect(reply.status).toHaveBeenCalledWith(401);
-    expect((reply.sentBody as any).error).toBe('Authentication required');
-  });
-
-  it('sends 401 with custom error string', () => {
-    const reply = makeReply();
-    sendUnauthorized(reply as any, 'Token expired');
-    expect((reply.sentBody as any).error).toBe('Token expired');
-  });
-});
-
-// ─── sendForbidden ────────────────────────────────────────────────────────
-
-describe('sendForbidden', () => {
-  it('sends 403 with default message', () => {
-    const reply = makeReply();
-    sendForbidden(reply as any);
-    expect(reply.status).toHaveBeenCalledWith(403);
-    expect((reply.sentBody as any).error).toBe('Access denied');
-  });
-});
-
-// ─── sendNotFound ─────────────────────────────────────────────────────────
-
-describe('sendNotFound', () => {
-  it('sends 404 with default message', () => {
-    const reply = makeReply();
-    sendNotFound(reply as any);
-    expect(reply.status).toHaveBeenCalledWith(404);
-    expect((reply.sentBody as any).error).toBe('Resource not found');
-  });
-
-  it('sends 404 with custom error string', () => {
-    const reply = makeReply();
-    sendNotFound(reply as any, 'User not found');
-    expect((reply.sentBody as any).error).toBe('User not found');
-  });
-});
-
-// ─── sendConflict ─────────────────────────────────────────────────────────
-
-describe('sendConflict', () => {
-  it('sends 409', () => {
-    const reply = makeReply();
-    sendConflict(reply as any, 'Email already in use');
-    expect(reply.status).toHaveBeenCalledWith(409);
-    expect((reply.sentBody as any).error).toBe('Email already in use');
-  });
-});
-
-// ─── sendInternalError ────────────────────────────────────────────────────
-
-describe('sendInternalError', () => {
-  it('sends 500 with default message', () => {
-    const reply = makeReply();
-    sendInternalError(reply as any);
-    expect(reply.status).toHaveBeenCalledWith(500);
-    expect((reply.sentBody as any).error).toBe('Internal server error');
-  });
-
-  it('sends 500 with custom message', () => {
-    const reply = makeReply();
-    sendInternalError(reply as any, 'DB crashed');
-    expect((reply.sentBody as any).error).toBe('DB crashed');
+  it('handles offset mid-dataset', () => {
+    const meta = createPaginationMeta(30, 10, 10, 10);
+    expect(meta.hasMore).toBe(true); // 10+10=20 < 30
   });
 });

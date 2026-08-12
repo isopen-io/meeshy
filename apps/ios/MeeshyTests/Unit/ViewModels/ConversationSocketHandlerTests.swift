@@ -227,9 +227,14 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // 2. UI signals on delegate are still expected.
         XCTAssertNotNil(delegate.lastUnreadMessage)
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "newmsg")
+        // Read-exactness (2026-07-24 read-exactness-design): "Lu = affiché".
+        // The socket handler no longer marks a message read on arrival — a
+        // bubble is reported read only once actually displayed
+        // (MessageListViewController willDisplay → SeenMessageAccumulator →
+        // markAsRead(messageIds:)). The arrival path must NOT fire markAsRead.
         XCTAssertEqual(
-            delegate.markAsReadCallCount, 1,
-            "Inbound message in an active conversation must auto-trigger markAsRead so the sender's checkmark turns purple"
+            delegate.markAsReadCallCount, 0,
+            "Inbound message must NOT be marked read on arrival — the visibility layer owns read receipts (read-exactness)"
         )
     }
 
@@ -1047,6 +1052,114 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
     }
 
+    // MARK: - attachmentStatusUpdated — media consumption tracking
+
+    func test_attachmentStatusUpdated_withPositionFields_recordsMediaConsumptionFraction() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":2500,
+            "durationMs":10000,
+            "percentage":25
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.fraction(for: attachmentId), 0.25)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_completedPlayback_recordsCompleteConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(currentUserId)",
+            "action":"watched",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":10000,
+            "durationMs":10000,
+            "percentage":100
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(MediaConsumptionStore.shared.consumption(for: attachmentId)?.complete, true)
+        MediaConsumptionStore.shared.clear(for: attachmentId)
+    }
+
+    func test_attachmentStatusUpdated_withoutPositionFields_doesNotRecordConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"downloaded",
+            "updatedAt":"2099-12-31T23:59:59.000Z"
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
+    }
+
+    func test_attachmentStatusUpdated_fromOtherParticipant_doesNotRecordMediaConsumption() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        _ = delegate
+        let attachmentId = "consumption-\(UUID().uuidString)"
+
+        let event: AttachmentStatusUpdatedEvent = JSONStub.decode("""
+        {
+            "attachmentId":"\(attachmentId)",
+            "messageId":"msg1",
+            "conversationId":"\(conversationId)",
+            "userId":"\(otherUserId)",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z",
+            "playPositionMs":8000,
+            "durationMs":10000,
+            "percentage":80
+        }
+        """)
+        socket.attachmentStatusUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(
+            MediaConsumptionStore.shared.fraction(for: attachmentId),
+            "Another participant's playback progress must never tint the local user's own view of this attachment"
+        )
+    }
+
     // MARK: - messageReceived clears typing indicator for sender
 
     func test_messageReceived_clearsTypingForSender() async throws {
@@ -1246,6 +1359,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // MARK: - armSocketSubscriptions idempotency
 
     func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {
+        let (db, actor) = try makeDB()
         let socket = MockMessageSocket()
         let sut = ConversationSocketHandler(
             conversationId: conversationId,
@@ -1255,6 +1369,8 @@ final class ConversationSocketHandlerTests: XCTestCase {
         )
         let delegate = MockConversationSocketDelegate()
         sut.delegate = delegate
+        sut.persistence = actor
+        await actor.start()
         sut.armSocketSubscriptions()
         sut.armSocketSubscriptions()
 
@@ -1266,12 +1382,18 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.simulateMessage(apiMsg)
 
         await Task.yield()
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(nanoseconds: 800_000_000)
 
-        // Post Sprint 2: delegate.messages is no longer mutated. `markAsRead`
-        // fires exactly once per inbound message — `armSocketSubscriptions`
-        // early-returns on the second call so only one subscription is wired.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        // `armSocketSubscriptions` early-returns on the second call
+        // (guard cancellables.isEmpty), so only one subscription is wired and
+        // the inbound message is processed exactly once. Read-exactness moved
+        // read receipts off the arrival path, so single delivery is asserted on
+        // the persistence side: exactly one row lands in GRDB, never a duplicate.
+        let records = try await db.read { db in
+            try MessageRecord.filter(Column("localId") == "duptest").fetchAll(db)
+        }
+        XCTAssertEqual(records.count, 1, "Inbound message must be persisted exactly once despite double armSocketSubscriptions()")
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "duptest", "The message must still be delivered as an unread anchor")
         _ = sut
     }
 
@@ -1308,10 +1430,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 800_000_000)
 
         // Post Sprint 2: delegate.messages is no longer appended to. The
-        // socket handler emits UI signals (lastUnreadMessage, markAsRead) and
-        // writes the full APIMessage through persistence — the view layer
-        // surfaces it via store observation. We verify the persistence side.
-        XCTAssertEqual(delegate.markAsReadCallCount, 1, "inbound message must auto-fire markAsRead")
+        // socket handler emits the UI signal (lastUnreadMessage) and writes the
+        // full APIMessage through persistence — the view layer surfaces it via
+        // store observation. Read-exactness moved read receipts off the arrival
+        // path, so markAsRead must NOT fire here. We verify the persistence side.
+        XCTAssertEqual(delegate.markAsReadCallCount, 0, "read-exactness: arrival must NOT mark read — the visibility layer does")
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "persist_new", "lastUnreadMessage must be set")
 
         // Verify the record was written to the database

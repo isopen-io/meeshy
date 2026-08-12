@@ -522,6 +522,110 @@ final class OutboxFlusherTests: XCTestCase {
         let status = try await pool.read { db in try OutboxRecord.fetchOne(db, key: "active")!.status }
         XCTAssertEqual(status, .inflight)
     }
+
+    // MARK: - Pagination du backlog (outbox-06)
+
+    /// outbox-06 — le SELECT .limit(50) ne drainait qu'UNE page par flush() :
+    /// les rows 51+ restaient .pending échues, invisibles d'earliestDeferred
+    /// (qui ne regarde que le futur) → timer annulé, backlog gelé jusqu'au
+    /// prochain front réseau.
+    func test_flush_backlogOf60ReadyRows_drainsAllInSinglePass() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            for i in 1...60 {
+                try OutboxRecord(
+                    id: "\(i)", kind: .sendMessage, conversationId: "c1",
+                    clientMessageId: "cid_\(i)", payload: Data(), status: .pending,
+                    attempts: 0, lastError: nil,
+                    createdAt: now.addingTimeInterval(0.01 * Double(i)),
+                    updatedAt: now, nextAttemptAt: now
+                ).insert(db)
+            }
+        }
+        let dispatcher = MockOutboxDispatcher()
+        let flusher = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+
+        _ = await flusher.flush()
+
+        let processed = await dispatcher.processedIds
+        XCTAssertEqual(processed.count, 60,
+                       "un flush() draine TOUT le backlog échu, pas une seule page de 50")
+        let remaining = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(remaining, 0)
+    }
+
+    /// Preuve de TERMINAISON (pas un RED de régression) : une row qui échoue
+    /// voit son nextAttemptAt repoussé dans le futur — elle sort du SELECT et
+    /// la boucle de pagination se termine en rendant l'échéance de retry.
+    func test_flush_failingRow_terminates() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "1", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_1", payload: Data(), status: .pending,
+                attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        let dispatcher = MockOutboxDispatcher(shouldFail: true)
+        let flusher = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+
+        let nextRetry = await flusher.flush()
+
+        let row = try await pool.read { db in try OutboxRecord.fetchOne(db, key: "1") }
+        XCTAssertNotNil(nextRetry, "une row échouée re-programme un réveil")
+        XCTAssertEqual(nextRetry, row?.nextAttemptAt)
+        XCTAssertEqual(row?.status, .pending)
+        XCTAssertEqual(row?.attempts, 1)
+    }
+
+    /// Des claims .inflight FRAIS (un autre flusher au travail) ne doivent ni
+    /// être volés ni empêcher de drainer le backlog .pending au-delà de la
+    /// première page.
+    func test_flush_freshInflightClaims_doNotBlockBacklogDrain() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            for i in 1...80 {
+                try OutboxRecord(
+                    id: "p\(i)", kind: .sendMessage, conversationId: "c1",
+                    clientMessageId: "cid_p\(i)", payload: Data(), status: .pending,
+                    attempts: 0, lastError: nil,
+                    createdAt: now.addingTimeInterval(0.01 * Double(i)),
+                    updatedAt: now, nextAttemptAt: now
+                ).insert(db)
+            }
+            for i in 1...20 {
+                try OutboxRecord(
+                    id: "f\(i)", kind: .sendMessage, conversationId: "c1",
+                    clientMessageId: "cid_f\(i)", payload: Data(), status: .inflight,
+                    attempts: 1, lastError: nil,
+                    createdAt: now, updatedAt: now, nextAttemptAt: now
+                ).insert(db)
+            }
+        }
+        let dispatcher = MockOutboxDispatcher()
+        let flusher = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+
+        _ = await flusher.flush()
+
+        let processed = await dispatcher.processedIds
+        XCTAssertEqual(processed.count, 80,
+                       "tout le backlog .pending est drainé malgré les claims frais d'autrui")
+        let pendingLeft = try await pool.read { db in
+            try OutboxRecord.filter(Column("status") == OutboxStatus.pending.rawValue).fetchCount(db)
+        }
+        XCTAssertEqual(pendingLeft, 0)
+        let inflightLeft = try await pool.read { db in
+            try OutboxRecord.filter(Column("status") == OutboxStatus.inflight.rawValue).fetchCount(db)
+        }
+        XCTAssertEqual(inflightLeft, 20, "les claims frais d'un autre flusher restent intouchés")
+    }
 }
 
 actor MockOutboxDispatcher: OutboxDispatching {

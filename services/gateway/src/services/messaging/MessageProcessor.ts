@@ -8,9 +8,16 @@ import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
+import { processExplicitLinks } from './messageLinks';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
-import { NotificationService, protectedPreview } from '../notifications/NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
+import {
+  notifyMessageRecipients,
+  type FanOutPrisma,
+  type MessageNotificationTarget,
+} from './messageNotificationFanOut';
+import { resolveMessageMentions } from './messageMentions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
@@ -22,6 +29,9 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
   type PostReplyTo,
 } from './postReplySnapshot';
+import { parseSharedPlace } from '../location/sharedPlace';
+import { LIVE_MESSAGE_MARK } from './liveMessage';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -57,125 +67,59 @@ export class MessageProcessor {
   }
 
   /**
-   * Traite les liens dans le contenu du message selon les règles suivantes:
-   * - Règle 1: Markdown [texte](url) → Lien normal (pas de tracking)
-   * - Règle 2: URLs brutes → Aucun tracking automatique
-   * - Règle 3: [[url]] → Force le tracking → m+token
-   * - Règle 4: <url> → Force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes :
+   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
+   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → force le tracking → m+token
+   * - Règle 4 : <url> → force le tracking → m+token
+   *
+   * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
+   * `TrackingLinkService.processExplicitLinksInContent` : mêmes expressions
+   * régulières, même réutilisation de token, ~90 lignes chacun. Deux copies
+   * d'un algorithme ne restent pas d'accord — le correctif des séquences `$`
+   * (replacer fonction) a dû être appliqué aux deux, séparément. Il n'y en a
+   * plus qu'une, et l'envoi la traverse par la même unité que les deux chemins
+   * d'édition.
+   *
+   * `createdBy` est un **`User.id`** — cf. `ExplicitLinkParams`. Ce chemin y
+   * passait le `Participant.id` de l'expéditeur, d'un espace d'ids disjoint.
    */
   async processLinksInContent(
     content: string,
     conversationId: string,
-    senderId?: string,
+    createdBy?: string,
     messageId?: string
   ): Promise<string> {
+    return processExplicitLinks({
+      trackingLinkService: this.trackingLinkService,
+      content,
+      conversationId,
+      messageId,
+      createdBy,
+      onError: (error) => logger.error('[MessageProcessor] Error processing links', error),
+    });
+  }
+
+  /**
+   * L'identité UTILISATEUR derrière le participant expéditeur — la seule que
+   * `TrackingLink.createdBy` accepte de désigner (`/tracking-links` y compare
+   * un `User.id` pour lister « mes liens » ET pour autoriser l'accès).
+   *
+   * `undefined` pour un expéditeur anonyme (aucun `User.id`) comme pour une
+   * lecture en échec : dans les deux cas, un lien sans propriétaire vaut mieux
+   * qu'un lien attribué à un id qui ne désigne aucun utilisateur. Même forme et
+   * même raison que `resolveSenderUserId` côté mentions (cf. messageMentions.ts).
+   */
+  private async resolveLinkAuthorUserId(senderParticipantId: string): Promise<string | undefined> {
     try {
-      let processedContent = content;
-      const protectedItems: Array<{ placeholder: string; original: string }> = [];
-      let placeholderCounter = 0;
-
-      // Track URLs already processed in this message to reuse tokens for identical URLs
-      const urlTokenMap = new Map<string, string>();
-
-      // ÉTAPE 1: Protéger les liens markdown [texte](url) - Règle 1
-      const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(([^)]+)\)/g;
-      processedContent = processedContent.replace(MARKDOWN_LINK_REGEX, (match) => {
-        const placeholder = `__PROTECTED_MD_${placeholderCounter++}__`;
-        protectedItems.push({ placeholder, original: match });
-        return placeholder;
+      const participant = await this.prisma.participant.findUnique({
+        where: { id: senderParticipantId },
+        select: { userId: true },
       });
-
-      // ÉTAPE 2: Traiter [[url]] - Règle 3: Force le tracking
-      const DOUBLE_BRACKET_REGEX = /\[\[(https?:\/\/[^\]]+)\]\]/gi;
-      const doubleBracketMatches = [...processedContent.matchAll(DOUBLE_BRACKET_REGEX)];
-
-      for (const match of doubleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
-          processedContent = processedContent.replace(fullMatch, url);
-        }
-      }
-
-      // ÉTAPE 3: Traiter <url> - Règle 4: Force le tracking
-      const ANGLE_BRACKET_REGEX = /<(https?:\/\/[^>]+)>/gi;
-      const angleBracketMatches = [...processedContent.matchAll(ANGLE_BRACKET_REGEX)];
-
-      for (const match of angleBracketMatches) {
-        const fullMatch = match[0];
-        const url = match[1];
-
-        try {
-          let token: string;
-
-          if (urlTokenMap.has(url)) {
-            token = urlTokenMap.get(url)!;
-            logger.info(`[MessageProcessor] Reusing token ${token} for duplicate URL: ${url}`);
-          } else {
-            let trackingLink = await this.trackingLinkService.findExistingTrackingLink(
-              url,
-              conversationId
-            );
-
-            if (!trackingLink) {
-              trackingLink = await this.trackingLinkService.createTrackingLink({
-                originalUrl: url,
-                conversationId,
-                createdBy: senderId,
-                messageId
-              });
-            }
-
-            token = trackingLink.token;
-            urlTokenMap.set(url, token);
-          }
-
-          const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, meeshyShortLink);
-        } catch (linkError) {
-          logger.error(`[MessageProcessor] Error processing <url>:`, linkError);
-          processedContent = processedContent.replace(fullMatch, url);
-        }
-      }
-
-      // ÉTAPE 4: Restaurer les liens markdown protégés
-      for (const { placeholder, original } of protectedItems) {
-        processedContent = processedContent.replace(placeholder, original);
-      }
-
-      return processedContent;
+      return participant?.userId ?? undefined;
     } catch (error) {
-      logger.error('[MessageProcessor] Error processing links', error);
-      return content;
+      logger.error('[MessageProcessor] Error resolving link author', error);
+      return undefined;
     }
   }
 
@@ -190,12 +134,12 @@ export class MessageProcessor {
   private async buildRawUrlTrackingLinks(
     content: string,
     conversationId: string,
-    senderId?: string
+    createdBy?: string
   ): Promise<Array<{ url: string; token: string }>> {
     return this.trackingLinkService.collectContentTrackingLinks({
       content,
       conversationId,
-      createdBy: senderId,
+      createdBy,
     });
   }
 
@@ -343,6 +287,8 @@ export class MessageProcessor {
     isViewOnce?: boolean;
     maxViewOnceCount?: number;
     clientMessageId?: string;
+    /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
+    location?: unknown;
   }): Promise<Message> {
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
@@ -350,13 +296,27 @@ export class MessageProcessor {
       senderId: data.senderId
     };
 
+    // À qui appartiendront les liens de ce message : le `User.id` DERRIÈRE le
+    // participant expéditeur, résolu UNE fois pour les deux chemins de tracking
+    // (syntaxe explicite ci-dessous, URLs brutes plus bas). `Message.senderId`
+    // est un `Participant.id` ; `TrackingLink.createdBy` est un `User.id`, et
+    // c'est contre lui que `/tracking-links` autorise l'accès.
+    //
+    // La résolution est PAYÉE seulement si le texte porte une URL — un message
+    // sans lien ne produit aucun `TrackingLink`, donc aucun propriétaire à
+    // désigner. `containsLinks` couvre les deux syntaxes explicites autant que
+    // les URLs brutes : `[[https://…]]` contient une URL.
+    const linkAuthorUserId = this.containsLinks(data.content)
+      ? await this.resolveLinkAuthorUserId(data.senderId)
+      : undefined;
+
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
     const processedContent = await performanceLogger.withTiming(
       'messaging.processLinks',
       () => this.processLinksInContent(
         data.content,
         data.conversationId,
-        data.senderId,
+        linkAuthorUserId,
         undefined
       ),
       corr
@@ -407,11 +367,20 @@ export class MessageProcessor {
     // Ignoré pour les messages chiffrés (contenu vide côté serveur).
     const trackingLinks = encryptionContext.isEncrypted
       ? []
-      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, data.senderId);
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthorUserId);
+
+    // Partage de position : le client transporte un champ `location` DÉDIÉ
+    // (jamais un `metadata` brut — voir sharedPlace.ts). `parseSharedPlace`
+    // revalide les coordonnées côté serveur avant écriture. Chiffrement :
+    // stockage EN CLAIR dans `metadata.location`, décision assumée (cf.
+    // commentaire de tête de sharedPlace.ts) — au même régime que
+    // `postReplyTo` / `trackingLinks` ci-dessus.
+    const sharedPlace = parseSharedPlace(data.location);
 
     const messageMetadata: Record<string, unknown> = {};
     if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
     if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
+    if (sharedPlace) messageMetadata.location = sharedPlace;
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
@@ -444,7 +413,7 @@ export class MessageProcessor {
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
-      deletedAt: null,
+      ...LIVE_MESSAGE_MARK,
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;
 
@@ -842,11 +811,19 @@ export class MessageProcessor {
       for (const match of matches) {
         const token = match[1];
         try {
+          // `messageId: null` n'appariait AUCUN lien : la réécriture appelle
+          // `createTrackingLink` avec `messageId` encore indisponible, donc
+          // omis, donc la colonne est ABSENTE du document — pas nulle.
+          // L'attribution d'un lien à son message n'était jamais écrite sur ce
+          // chemin. La garde reste nécessaire pour ne pas voler le lien qu'un
+          // autre message de la conversation a déjà réclamé (un `TrackingLink`
+          // est PARTAGÉ par URL, cf. `messageRemovalEffects.ts`).
+          // Voir `utils/prisma-unset.ts`.
           await this.prisma.trackingLink.updateMany({
             where: {
               token,
               conversationId: data.conversationId,
-              messageId: null
+              ...unsetOrNull('messageId')
             },
             data: { messageId }
           });
@@ -869,14 +846,10 @@ export class MessageProcessor {
     processedContent: string
   ): Promise<void> {
     try {
-      // 1. Gérer les mentions en DB (validation + création)
-      // Short-circuit: skip all DB work when no @ in content and no explicit mentionedUserIds.
-      // This avoids participant lookup + username resolution queries for the majority of messages.
-      const hasPotentialMentions = (data.mentionedUserIds && data.mentionedUserIds.length > 0)
-        || processedContent.includes('@');
-      const validatedMentionUserIds = hasPotentialMentions
-        ? await this.processMentionsInDB(data, message, processedContent)
-        : [];
+      // 1. Gérer les mentions en DB (validation + création). Le court-circuit
+      // « pas de `@`, pas de requête » vit dans l'unité, pas ici : c'est une
+      // garde qu'un nouvel écrivain oublierait.
+      const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {
@@ -890,66 +863,50 @@ export class MessageProcessor {
   }
 
   /**
-   * Valide et crée les mentions en base de données
+   * Valide et crée les mentions en base de données.
+   *
+   * Délègue à `resolveMessageMentions` : le corps vivait ici, `private` sous
+   * `handleMentionsAndNotifications` (elle-même `private`), donc inatteignable
+   * par tout écrivain hors de cette classe. Les deux routes de lien de partage
+   * contournent `MessagingService` en entier — un `@alice` envoyé par lien ne
+   * produisait ni ligne `Mention`, ni `validatedMentions`, ni notification de
+   * mention.
+   *
+   * L'affectation en mémoire reste ici : ce sont les émetteurs socket de CETTE
+   * classe qui relisent `message.validatedMentions` pour peupler leur payload.
    */
   private async processMentionsInDB(
     data: { senderId: string; conversationId: string; mentionedUserIds?: readonly string[] },
     message: Message,
     processedContent: string
   ): Promise<string[]> {
-    try {
-      let mentionedUserIds: string[] = [];
-      let validatedUsernames: string[] = [];
+    const { validatedUserIds, validatedUsernames } = await resolveMessageMentions({
+      prisma: this.prisma,
+      mentionService: this.mentionService,
+      message: {
+        id: message.id,
+        conversationId: data.conversationId,
+        senderId: data.senderId
+      },
+      content: processedContent,
+      explicitMentionedUserIds: data.mentionedUserIds,
+      onError: (error) => logger.error('[MessageProcessor] Error processing mentions in DB', error)
+    });
 
-      if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-        mentionedUserIds = Array.from(data.mentionedUserIds);
-      } else {
-        const participants = await this.getConversationParticipants(data.conversationId);
-        const mentionedUsernames = this.mentionService.extractMentionsWithParticipants(processedContent, participants);
-        if (mentionedUsernames.length > 0) {
-          const userMap = await this.mentionService.resolveUsernames(mentionedUsernames);
-          mentionedUserIds = Array.from(userMap.values()).map(user => user.id);
-          validatedUsernames = Array.from(userMap.keys());
-        }
-      }
-
-      if (mentionedUserIds.length > 0) {
-        const validationResult = await this.mentionService.validateMentionPermissions(
-          data.conversationId,
-          mentionedUserIds,
-          data.senderId
-        );
-
-        if (validationResult.validUserIds.length > 0) {
-          await this.mentionService.createMentions(message.id, validationResult.validUserIds);
-
-          let finalValidatedUsernames: string[] = validatedUsernames;
-          if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
-            const users = await this.prisma.user.findMany({
-              where: { id: { in: validationResult.validUserIds } },
-              select: { username: true }
-            });
-            finalValidatedUsernames = users.map(u => u.username);
-          }
-
-          await this.prisma.message.update({
-            where: { id: message.id },
-            data: { validatedMentions: finalValidatedUsernames }
-          });
-
-          (message as any).validatedMentions = finalValidatedUsernames;
-          return validationResult.validUserIds;
-        }
-      }
-      return [];
-    } catch (error) {
-      logger.error('[MessageProcessor] Error processing mentions in DB', error);
-      return [];
+    if (validatedUsernames.length > 0) {
+      (message as any).validatedMentions = [...validatedUsernames];
     }
+    return [...validatedUserIds];
   }
 
   /**
-   * Déclenche les notifications pour tous les types de destinataires
+   * Déclenche les notifications pour tous les types de destinataires.
+   *
+   * Délègue à `notifyMessageRecipients` : le corps vivait ici, `private` sous
+   * `handleMentionsAndNotifications` (elle-même `private`), donc inatteignable
+   * par tout écrivain hors de cette classe. Les deux routes de lien de partage
+   * contournent `MessagingService` en entier — un message envoyé par lien ne
+   * produisait ni push, ni notification in-app, ni ligne `Notification`.
    */
   private async triggerAllNotifications(
     message: Message,
@@ -957,195 +914,19 @@ export class MessageProcessor {
     processedContent: string,
     validatedMentionUserIds: string[]
   ): Promise<void> {
-    if (!this.notificationService) return;
-
-    try {
-      // Sanitize notification preview for protected messages.
-      // The body is now a compact icon-only string (e.g. "👁️ 🎵" for a
-      // view-once audio, "🔥 💬 5min" for a 5-minute ephemeral text) so the
-      // recipient instantly sees WHAT KIND of protected payload landed
-      // without the content itself leaking. `protectedPreview()` encodes
-      // the precedence ephemeral > view-once > blurred > encrypted and
-      // returns the matching `notificationLocKey` for the iOS NSE fallback
-      // path (only consumed when E2EE decryption fails — emojis don't
-      // need locale-side localisation).
-      const protectedOverride = protectedPreview({
-        messageType: message.messageType,
-        isEncrypted: message.isEncrypted || message.encryptionMode === 'e2ee',
-        isViewOnce: message.isViewOnce,
-        isBlurred: message.isBlurred,
-        effectFlags: message.effectFlags,
-        expiresAt: message.expiresAt as Date | null | undefined,
-        createdAt: message.createdAt as Date | null | undefined,
-      });
-      const notificationPreview = protectedOverride?.preview ?? processedContent;
-      const notificationLocKey = protectedOverride?.locKey;
-      // 1. Résoudre le senderId en userId
-      let senderUserId = data.senderId;
-      const senderParticipant = await this.prisma.participant.findUnique({
-        where: { id: data.senderId },
-        select: { userId: true }
-      });
-      if (senderParticipant?.userId) {
-        senderUserId = senderParticipant.userId;
-      }
-
-      // 2. Charger les infos de l'expéditeur et de la conversation
-      const [sender, conversation] = await Promise.all([
-        this.prisma.user.findUnique({
-          where: { id: senderUserId },
-          select: { username: true, displayName: true, avatar: true }
-        }),
-        this.prisma.conversation.findUnique({
-          where: { id: data.conversationId },
-          select: {
-            title: true,
-            type: true,
-            participants: {
-              where: { isActive: true, type: 'user' },
-              select: { userId: true }
-            }
-          }
-        })
-      ]);
-
-      if (!sender || !conversation) return;
-
-      const memberIds = conversation.participants
-        .map(p => p.userId)
-        .filter((id): id is string => id !== null);
-
-      // 3. Déterminer l'auteur du message original pour les réponses
-      let originalMessageAuthorUserId: string | null = null;
-      if (message.replyToId) {
-        const originalMessage = await this.prisma.message.findUnique({
-          where: { id: message.replyToId },
-          select: { senderId: true }
-        });
-        if (originalMessage?.senderId) {
-          const originalAuthorPart = await this.prisma.participant.findUnique({
-            where: { id: originalMessage.senderId },
-            select: { userId: true }
-          });
-          originalMessageAuthorUserId = originalAuthorPart?.userId || null;
-        }
-      }
-
-      // 4. Préparer les infos d'attachments
-      // Phase A — fileUrl + transcription added to the select so iOS rich-push
-      // can attach the media inline (audio waveform, image preview, video thumb)
-      // and use the transcription as the body for audio messages when available.
-      const attachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: message.id },
-        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true, fileUrl: true, transcription: true }
-      });
-
-      const first = attachments[0];
-      const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio' | 'document' =>
-        mimeType?.startsWith('image/') ? 'image' :
-        mimeType?.startsWith('video/') ? 'video' :
-        mimeType?.startsWith('audio/') ? 'audio' : 'document';
-      const attachmentInfo = {
-        hasAttachments: attachments.length > 0,
-        attachmentCount: attachments.length,
-        firstAttachmentType: attachmentTypeOf(first?.mimeType),
-        attachments: attachments.map(att => ({
-          type: attachmentTypeOf(att.mimeType),
-          filename: att.fileName,
-        })),
-        firstAttachmentFilename: first?.fileName,
-        firstAttachmentFileSize: first?.fileSize,
-        firstAttachmentDuration: first?.duration,
-        firstAttachmentWidth: first?.width,
-        firstAttachmentHeight: first?.height,
-        // Phase A — rich-push fields propagated to APN payload via NotificationService.
-        firstAttachmentUrl: first?.fileUrl || undefined,
-        firstAttachmentMimeType: first?.mimeType || undefined,
-      };
-
-      // Phase A — if the first attachment is audio and already has a transcription
-      // (pre-transcribed upload path, or transcription already completed by the
-      // time the notification fan-out runs), use the transcript text as the
-      // push body so the recipient sees the content immediately on the lock
-      // screen — the audio file is still attached for inline playback.
-      const firstAttachmentTranscript =
-        first?.mimeType?.startsWith('audio/')
-          ? extractTranscriptionText(first as { transcription?: unknown })
-          : undefined;
-      const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
-
-      // 5. Notification de RÉPONSE (prioritaire sur message régulier)
-      if (originalMessageAuthorUserId &&
-          originalMessageAuthorUserId !== senderUserId &&
-          !validatedMentionUserIds.includes(originalMessageAuthorUserId)) {
-
-        await this.notificationService.createReplyNotification({
-          recipientUserId: originalMessageAuthorUserId,
-          replierUserId: senderUserId,
-          messageId: message.id,
-          conversationId: data.conversationId,
-          messagePreview: notificationPreview,
-          originalMessageId: message.replyToId!,
-        });
-      }
-
-      // 6. Notifications de MENTION (Batch)
-      if (validatedMentionUserIds.length > 0) {
-        await this.notificationService.createMentionNotificationsBatch(
-          validatedMentionUserIds,
-          {
-            senderId: senderUserId,
-            senderUsername: sender.displayName || sender.username,
-            senderAvatar: sender.avatar || undefined,
-            messageContent: notificationPreview,
-            conversationId: data.conversationId,
-            messageId: message.id,
-          },
-          memberIds
-        );
-      }
-
-      // 7. Notifications de MESSAGE RÉGULIER
-      const alreadyNotified = new Set([senderUserId, ...validatedMentionUserIds]);
-      if (originalMessageAuthorUserId) alreadyNotified.add(originalMessageAuthorUserId);
-
-      const candidateRegularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
-
-      // Fetch mentionsOnly preferences for all candidate recipients
-      const conversationPrefs = candidateRegularRecipients.length > 0
-        ? await this.prisma.userConversationPreferences.findMany({
-            where: {
-              conversationId: data.conversationId,
-              userId: { in: candidateRegularRecipients },
-              mentionsOnly: true,
-            },
-            select: { userId: true },
-          })
-        : [];
-
-      const mentionsOnlyUserIds = new Set(conversationPrefs.map(p => p.userId));
-      const regularRecipients = candidateRegularRecipients.filter(id => !mentionsOnlyUserIds.has(id));
-
-      if (regularRecipients.length > 0) {
-        await Promise.all(regularRecipients.map(recipientUserId =>
-          this.notificationService!.createMessageNotification({
-            recipientUserId,
-            senderId: senderUserId,
-            messageId: message.id,
-            conversationId: data.conversationId,
-            messagePreview: notificationPreviewForPush,
-            encryptedContent: message.encryptedContent || undefined,
-            notificationLocKey: notificationLocKey,
-            ...attachmentInfo as any
-          })
-        ));
-      }
-
-      logger.info(`[MessageProcessor] Notifications triggered for ${message.id}: ${validatedMentionUserIds.length} mentions, ${regularRecipients.length} messages, reply=${!!originalMessageAuthorUserId}`);
-
-    } catch (error) {
-      logger.error('[MessageProcessor] Error triggering notifications', error);
-    }
+    await notifyMessageRecipients({
+      prisma: this.prisma as unknown as FanOutPrisma,
+      notificationService: this.notificationService as unknown as MessageNotificationTarget | undefined,
+      message,
+      senderParticipantId: data.senderId,
+      conversationId: data.conversationId,
+      processedContent,
+      validatedMentionUserIds,
+      onError: (error) => logger.error('[MessageProcessor] Error triggering notifications', error),
+      onFanOut: ({ mentions, regular, reply }) => logger.info(
+        `[MessageProcessor] Notifications triggered for ${message.id}: ${mentions} mentions, ${regular} messages, reply=${reply}`
+      ),
+    });
   }
 
   /**
@@ -1160,36 +941,6 @@ export class MessageProcessor {
    */
   containsLinks(content: string): boolean {
     return /https?:\/\/[^\s]+/.test(content);
-  }
-
-  /**
-   * Récupère les participants actifs d'une conversation pour la résolution des mentions.
-   */
-  private async getConversationParticipants(
-    conversationId: string
-  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true, type: 'user' },
-        select: {
-          userId: true,
-          displayName: true,
-          user: {
-            select: { id: true, username: true, displayName: true }
-          }
-        }
-      });
-
-      return participants
-        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
-        .map((p) => ({
-          userId: p.user.id,
-          username: p.user.username,
-          displayName: p.user.displayName ?? p.user.username,
-        }));
-    } catch {
-      return [];
-    }
   }
 
   /**
@@ -1210,26 +961,4 @@ export class MessageProcessor {
       return null;
     }
   }
-}
-
-/**
- * Best-effort plain-text extraction from an AttachmentTranscription blob.
- * Returns undefined if the structure isn't recognized — caller falls back
- * to the original preview. Used to inline voice-message transcripts in the
- * push body for Phase A rich notifications (Communication Notifications iOS).
- */
-function extractTranscriptionText(att: { transcription?: unknown } | null | undefined): string | undefined {
-  if (!att?.transcription || typeof att.transcription !== 'object') return undefined;
-  const t = att.transcription as Record<string, unknown>;
-  if (typeof t.text === 'string' && t.text.trim().length > 0) return t.text.trim();
-  if (Array.isArray(t.segments)) {
-    const joined = t.segments
-      .map(seg => (typeof seg === 'object' && seg && typeof (seg as Record<string, unknown>).text === 'string'
-        ? (seg as Record<string, unknown>).text as string
-        : ''))
-      .join(' ')
-      .trim();
-    if (joined.length > 0) return joined;
-  }
-  return undefined;
 }

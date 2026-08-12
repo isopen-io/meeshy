@@ -141,6 +141,14 @@ object LanguageData {
         common + rest
     }
 
+    /**
+     * The set of Meeshy-supported codes (lowercase), derived from [allLanguages] so it never
+     * drifts from the catalogue. Consumed by [me.meeshy.sdk.lang.LanguageCodeNormalizer] to
+     * (a) preserve a supported 2-/3-letter code verbatim and (b) re-validate an ISO 639-3
+     * reduction target. Mirror of iOS `LanguageData.supportedCodeSet`.
+     */
+    val supportedCodeSet: Set<String> = allLanguages.mapTo(HashSet()) { it.code.lowercase() }
+
     /** Canonical-code aliases so legacy/BCP-47 spellings resolve (e.g. "fil" → "tl"). */
     private val aliases: Map<String, String> = mapOf("fil" to "tl")
 

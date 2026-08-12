@@ -66,7 +66,20 @@ export interface UseAudioEffectsOptions {
 export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEffectsOptions) {
   const inputNodeRef = useRef<ToneTypes.ToneAudioNode | null>(null);
   const mediaStreamDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const channelSplitterRef = useRef<ChannelSplitterNode | null>(null);
+  const channelMergerRef = useRef<ChannelMergerNode | null>(null);
   const processorsRef = useRef<Map<AudioEffectType, AudioEffectProcessor>>(new Map());
+  const previouslyEnabledTypesRef = useRef<Set<AudioEffectType>>(new Set());
+  // Mirrors `isInitialized` synchronously. The mount effect below tears down
+  // and re-initializes the pipeline in one flush whenever `inputStream`
+  // changes: its cleanup (old closure) runs immediately before its setup
+  // (closure captured at the last render) within the same commit, so a state
+  // update made in the cleanup is not yet visible to that setup body — only
+  // a ref mutation is. Without this, swapping `inputStream` mid-call (e.g.
+  // changing mic/camera source) tears the old pipeline down but never
+  // rebuilds one for the new stream.
+  const isInitializedRef = useRef(false);
 
   const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -80,7 +93,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   });
 
   const initializeAudioPipeline = useCallback(async () => {
-    if (!inputStream || isInitialized) return;
+    if (!inputStream || isInitializedRef.current) return;
 
     try {
       const { tone: Tone } = await loadAudioModules();
@@ -90,6 +103,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
 
       const audioContext = Tone.context.rawContext as AudioContext;
       const source = audioContext.createMediaStreamSource(inputStream);
+      sourceNodeRef.current = source;
 
       const inputChannels =
         source.channelCount ||
@@ -100,6 +114,8 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       if (inputChannels < 2) {
         const splitter = audioContext.createChannelSplitter(1);
         const merger = audioContext.createChannelMerger(2);
+        channelSplitterRef.current = splitter;
+        channelMergerRef.current = merger;
         source.connect(splitter);
         splitter.connect(merger, 0, 0);
         splitter.connect(merger, 0, 1);
@@ -120,12 +136,13 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
       const newOutputStream = mediaStreamDestinationRef.current.stream;
       setOutputStream(newOutputStream);
       onOutputStreamReady?.(newOutputStream);
+      isInitializedRef.current = true;
       setIsInitialized(true);
       logger.info('[useAudioEffects]', 'Audio pipeline initialized');
     } catch (error) {
       logger.error('[useAudioEffects]', 'Failed to initialize audio pipeline', { error });
     }
-  }, [inputStream, onOutputStreamReady, isInitialized]);
+  }, [inputStream, onOutputStreamReady]);
 
   const rebuildAudioGraph = useCallback(() => {
     if (!inputNodeRef.current || !mediaStreamDestinationRef.current) return;
@@ -133,9 +150,34 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
     logger.debug('[useAudioEffects]', 'Rebuilding audio graph');
 
     (inputNodeRef.current as any).disconnect();
-    processorsRef.current.forEach((processor) => processor.disconnect());
 
     const enabledEffects = Object.values(effectsState).filter((effect) => effect.enabled);
+    const enabledTypes = new Set(enabledEffects.map((effect) => effect.type));
+    const previouslyEnabledTypes = previouslyEnabledTypesRef.current;
+
+    // A processor's chain POSITION can shift even when its own enabled bit
+    // didn't (an unrelated neighbor toggling moves what it connects to), so
+    // the Web Audio graph edges are always rebuilt below. But the processor's
+    // OWN lifecycle — disconnect()'s side effects (BackSoundProcessor stops
+    // playback) and setActive() — must only fire when its OWN enabled bit
+    // actually flips. Otherwise every unrelated toggle (or even a params-only
+    // update, which also produces a new effectsState reference) forces every
+    // still-enabled processor through a pointless stop/restart cycle of
+    // background work it never stopped needing.
+    processorsRef.current.forEach((processor, type) => {
+      const wasEnabled = previouslyEnabledTypes.has(type);
+      const isEnabled = enabledTypes.has(type);
+      if (wasEnabled === isEnabled) {
+        (processor.outputNode as any).disconnect();
+        return;
+      }
+      processor.disconnect();
+      (processor as AudioEffectProcessor & { setActive?: (active: boolean) => void }).setActive?.(
+        isEnabled
+      );
+    });
+
+    previouslyEnabledTypesRef.current = enabledTypes;
 
     if (enabledEffects.length === 0) {
       (inputNodeRef.current as any).connect(mediaStreamDestinationRef.current);
@@ -238,7 +280,7 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
   );
 
   useEffect(() => {
-    if (inputStream && !isInitialized) {
+    if (inputStream && !isInitializedRef.current) {
       initializeAudioPipeline();
     }
 
@@ -248,9 +290,42 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
         (inputNodeRef.current as any).dispose?.();
         inputNodeRef.current = null;
       }
+      // `disconnect()` only severs a node's OUTGOING edges — disconnecting the
+      // Gain node above leaves the UPSTREAM `source [→ splitter → merger]`
+      // chain still wired into the shared, app-lifetime AudioContext graph.
+      // Left uncut, each mic/camera swap during a call pins one more
+      // MediaStreamAudioSourceNode (and, on mono input, its upmix pair) into
+      // the graph forever, holding a reference to the old stream/tracks.
+      if (channelSplitterRef.current) {
+        channelSplitterRef.current.disconnect();
+        channelSplitterRef.current = null;
+      }
+      if (channelMergerRef.current) {
+        channelMergerRef.current.disconnect();
+        channelMergerRef.current = null;
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
       processorsRef.current.forEach((processor) => processor.destroy());
       processorsRef.current.clear();
-      if (inputStream) setIsInitialized(false);
+      previouslyEnabledTypesRef.current = new Set();
+      if (mediaStreamDestinationRef.current) {
+        // The destination node stays wired into the shared, long-lived
+        // AudioContext graph until explicitly stopped — overwriting the ref
+        // on re-init (below, in initializeAudioPipeline) isn't enough, it
+        // just orphans the old node while it keeps generating audio into a
+        // MediaStream nobody reads from anymore. Left unstopped, this leaks
+        // CPU/battery on every mic/camera switch for the rest of the call.
+        mediaStreamDestinationRef.current.stream.getTracks?.().forEach((track) => track.stop());
+        mediaStreamDestinationRef.current.disconnect?.();
+        mediaStreamDestinationRef.current = null;
+      }
+      if (inputStream) {
+        isInitializedRef.current = false;
+        setIsInitialized(false);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputStream]);

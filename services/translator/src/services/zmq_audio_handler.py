@@ -360,6 +360,11 @@ class AudioHandler:
             await self._publish_audio_result(task_id, result, processing_time)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
 
+            # Le résultat porte la transcription même sans traduction : on le
+            # publie d'abord, puis on signale l'échec pour sortir le client de
+            # son état « traduction en cours ».
+            await self._report_total_translation_failure(task_id, request_data, result)
+
             logger.info(
                 f"✅ [TRANSLATOR] Audio process terminé: "
                 f"msg={result.message_id}, "
@@ -393,6 +398,33 @@ class AudioHandler:
                 error=str(e),
                 error_code="processing_failed"
             )
+
+    async def _report_total_translation_failure(self, task_id: str, request_data: dict, result) -> bool:
+        """Signale au client l'échec de TOUTES les langues demandées.
+
+        `translation_stage` absorbe l'exception de chaque langue : un crash TTS
+        ou un timeout watchdog produit donc un résultat sans traduction, sans
+        exception. Sans ce signalement, le gateway n'émet jamais
+        `audio:translation-failed` et le client reste bloqué sur « traduction en
+        cours ». Un résultat sans langue demandée reste une transcription seule
+        parfaitement légitime.
+        """
+        requested = list(getattr(result, 'requested_languages', []) or [])
+        if not requested or result.translations:
+            return False
+
+        logger.error(
+            f"❌ [TRANSLATOR] Toutes les traductions ont échoué: "
+            f"task={task_id}, langues={requested}"
+        )
+        await self._publish_audio_error(
+            task_id=task_id,
+            message_id=request_data.get('messageId', ''),
+            attachment_id=request_data.get('attachmentId', ''),
+            error=f"Toutes les traductions ont échoué ({', '.join(requested)})",
+            error_code="translation_failed"
+        )
+        return True
 
     async def _publish_audio_result(self, task_id: str, result, processing_time: int):
         """
@@ -445,17 +477,6 @@ class AudioHandler:
                     }
                     frame_index += 1
 
-                    logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
-
-                if audio_bytes:
-                    binary_frames.append(audio_bytes)
-                    audio_key = f"audio_{t.language}"
-                    binary_frames_info[audio_key] = {
-                        'index': frame_index,
-                        'size': len(audio_bytes),
-                        'mimeType': t.audio_mime_type or 'audio/mp3'
-                    }
-                    frame_index += 1
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
 
                 # Metadata sans base64 (contient juste le mapping vers le frame)
@@ -726,21 +747,21 @@ class AudioHandler:
         try:
             translation = translation_data['translation']
 
-            # D2: prefer raw bytes (no base64 round-trip), fall back to base64 or file
+            # D2: prefer raw bytes (no base64 round-trip), fall back to base64/file
+            # (read_audio_bytes handles the base64→file fallback off the event
+            # loop, matching _publish_audio_result's non-blocking read).
             audio_bytes = None
             if getattr(translation, 'audio_bytes', None):
                 audio_bytes = translation.audio_bytes
-            elif translation.audio_data_base64:
+            else:
                 try:
-                    audio_bytes = base64.b64decode(translation.audio_data_base64)
+                    audio_bytes = await asyncio.to_thread(
+                        read_audio_bytes,
+                        audio_path=translation.audio_path,
+                        audio_data_base64=translation.audio_data_base64,
+                    )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage audio {translation.language}: {e}")
-            elif translation.audio_path and os.path.exists(translation.audio_path):
-                try:
-                    with open(translation.audio_path, 'rb') as f:
-                        audio_bytes = f.read()
-                except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture fichier audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {

@@ -11,6 +11,8 @@
     <string name="chat_record_voice">Enregistrer un message vocal</string>
     <string name="chat_effects_open">Effets du message</string>
     <string name="chat_attach_file">Joindre un fichier</string>
+    <string name="chat_composer_read_only">Vous ne pouvez pas envoyer de messages dans cette conversation</string>
+    <string name="chat_slow_mode_wait">Mode lent · attendez %1$ds</string>
     <string name="chat_effects_title">Effets du message</string>
     <string name="chat_effects_done">OK</string>
     <string name="chat_effects_section_behavior">Comportement</string>
@@ -78,6 +80,8 @@
     <string name="chat_cancel_edit">Annuler la modification</string>
     <string name="chat_react_with">Réagir avec %1$s</string>
     <string name="chat_message_actions">Actions du message</string>
+    <string name="chat_unread_separator">Messages non lus</string>
+    <string name="chat_encryption_notice">Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.</string>
     <string name="chat_date_today">Aujourd\'hui</string>
     <string name="chat_date_yesterday">Hier</string>
     <string name="chat_date_day_before_yesterday">Avant-hier</string>
@@ -139,4 +143,20 @@
     <string name="report_reason_hate_speech">Discours haineux</string>
     <string name="report_reason_impersonation">Usurpation d’identité</string>
     <string name="report_reason_other">Autre</string>
+    <!-- Conversation settings (admin) -->
+    <string name="conversation_settings_title">Paramètres de la conversation</string>
+    <string name="conversation_settings_saved">Paramètres enregistrés</string>
+    <string name="conversation_settings_write_role">Qui peut envoyer des messages</string>
+    <string name="conversation_settings_announcement">Mode annonce</string>
+    <string name="conversation_settings_slow_mode">Mode lent</string>
+    <string name="conversation_settings_auto_translate">Traduction automatique</string>
+    <string name="conversation_settings_error">Échec de l’enregistrement. Réessayez.</string>
+    <string name="conversation_settings_save">Enregistrer</string>
+    <string name="conversation_settings_role_creator">Créateur uniquement</string>
+    <string name="conversation_settings_role_admin">Admins et plus</string>
+    <string name="conversation_settings_role_moderator">Modérateurs et plus</string>
+    <string name="conversation_settings_role_member">Tout le monde</string>
+    <string name="conversation_settings_slow_mode_off">Désactivé</string>
+    <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
+    <string name="chat_create_share_link">Créer un lien de partage</string>
 </resources>

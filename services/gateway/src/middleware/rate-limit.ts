@@ -5,7 +5,7 @@
  * to prevent denial-of-service attacks via excessive requests
  */
 
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { logger } from '../utils/logger.js';
 import { isLocalIp } from '../utils/rate-limiter';
@@ -111,16 +111,46 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
 /**
  * Creates a custom rate limiter for specific endpoints
  *
+ * CVE-002 follow-up (dette keygen-calls) : sans `keyGenerator` explicite, une
+ * config de route ne remplace que `max`/`timeWindow` — elle HERITE du
+ * `keyGenerator` du plugin global enregistre par ailleurs (`global:${request.ip}`,
+ * cf. middleware/rate-limiter.ts#registerGlobalRateLimiter). Le gateway tourne
+ * sans `trustProxy` derriere Traefik : `request.ip` est l'IP du conteneur proxy,
+ * IDENTIQUE pour TOUS les utilisateurs. Une limite "5/min" par route devenait
+ * donc un seau plateforme unique partage par tout le monde.
+ *
+ * Meme pattern que createPostRouteRateLimitConfig / createSoundRouteRateLimitConfig
+ * / createSignalProtocolRateLimitConfig (middleware/rate-limiter.ts) : cle PAR
+ * UTILISATEUR (authContext.userId), repli IP, namespace par label pour que
+ * chaque route calls ait son propre seau.
+ *
  * @param max - Maximum requests allowed
  * @param timeWindow - Time window in ms or string (e.g., '1 minute')
+ * @param label - Route namespace (evite les collisions de seau entre routes)
  * @returns Rate limit configuration
  */
-export function createRateLimitConfig(max: number, timeWindow: number | string) {
+export function createRateLimitConfig(
+  max: number,
+  timeWindow: number | string,
+  label: string
+) {
   return {
     config: {
       rateLimit: {
         max,
-        timeWindow
+        timeWindow,
+        keyGenerator: (request: FastifyRequest) => {
+          const userId = (request as UnifiedAuthRequest).authContext?.userId;
+          const id = userId ?? `ip:${request.ip}`;
+          return `calls:${label}:${id}`;
+        },
+        errorResponseBuilder: () => ({
+          success: false,
+          error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: `Too many requests (calls/${label}). Please try again later.`
+          }
+        })
       }
     }
   };
@@ -132,14 +162,17 @@ export function createRateLimitConfig(max: number, timeWindow: number | string) 
 export const ROUTE_RATE_LIMITS = {
   initiateCall: createRateLimitConfig(
     RATE_LIMITS.INITIATE_CALL.max,
-    RATE_LIMITS.INITIATE_CALL.timeWindow
+    RATE_LIMITS.INITIATE_CALL.timeWindow,
+    'initiate'
   ),
   joinCall: createRateLimitConfig(
     RATE_LIMITS.JOIN_CALL.max,
-    RATE_LIMITS.JOIN_CALL.timeWindow
+    RATE_LIMITS.JOIN_CALL.timeWindow,
+    'join'
   ),
   callOperations: createRateLimitConfig(
     RATE_LIMITS.CALL_OPERATIONS.max,
-    RATE_LIMITS.CALL_OPERATIONS.timeWindow
+    RATE_LIMITS.CALL_OPERATIONS.timeWindow,
+    'operations'
   )
 };

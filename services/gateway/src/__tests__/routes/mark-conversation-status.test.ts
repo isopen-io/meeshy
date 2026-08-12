@@ -49,7 +49,9 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
 
 const mockPrisma: any = {
   participant: { findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn() },
-  message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
+  message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn(), findMany: jest.fn() },
+  messageStatusEntry: { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
+  userPreference: { findMany: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
     updateMany: jest.fn(),
@@ -94,6 +96,11 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     // read floor (cursor.lastReadAt ?? participant.joinedAt) — no longer a
     // cached cursor.unreadCount field.
     mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+    mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
+    mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.userPreference.findMany.mockResolvedValue([]);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
     mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
@@ -128,6 +135,48 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     expect(typeof body.data.markedCount).toBe('number');
     expect(body.data.markedCount).toBe(UNREAD_COUNT);
     expect(body.data.message).toBeUndefined();
+  });
+
+  // Suivi de lecture exact — la webapp appelle CE point d'entrée, pas
+  // /conversations/:id/mark-read. Doter l'un sans l'autre laisserait le web sur
+  // le chemin par fenêtre, qui sur-déclare.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+
+  it('mark-as-read bounds the freeze to the reported messageIds', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+      payload: { messageIds: [LATEST_MESSAGE_ID] }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockPrisma.message.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: [LATEST_MESSAGE_ID] } })
+      })
+    );
+  });
+
+  it('mark-as-read without a body keeps the legacy window path', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const freezeCall = mockPrisma.message.findMany.mock.calls[0];
+    expect(freezeCall[0].where.id).toBeUndefined();
+    expect(freezeCall[0].where.createdAt).toBeDefined();
+  });
+
+  it('mark-as-read rejects a malformed messageIds payload with 400', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+      payload: { messageIds: ['pas-un-objectid'] }
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 
   it('mark-as-received still rejects a non-participant with 403', async () => {
@@ -216,14 +265,41 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
 
     expect(response.statusCode).toBe(200);
     // Badge reset must still fire — it syncs the reader's OWN devices, not discloses to peers.
+    // The count is sourced from the real post-mark getUnreadCount (mirrors the
+    // showReadReceipts=true sibling test above), not a hardcoded value.
     expect(mockTo2).toHaveBeenCalledWith('user:user-1');
     expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONVERSATION_ID,
-      unreadCount: 0,
+      unreadCount: expect.any(Number),
     });
     // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
     // neither the legacy name nor the dual-emitted message:read-status-updated.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
+  });
+
+  // Exact-read (spec 2026-07-24-read-exactness-design.md): a partial read reports only
+  // a subset of messageIds (no caughtUpToMessageId), so the cursor advances only over the
+  // contiguous read prefix and messages legitimately remain unread. The opted-out badge
+  // reset previously hardcoded unreadCount: 0, wrongly clearing the reader's badge across
+  // their devices. It must emit the REAL remaining unread, like the opted-in path does.
+  it('mark-as-read badge reset reflects the real remaining unread on a partial read, not 0 (showReadReceipts=false)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    // Post-mark getUnreadCount resolves a nonzero remainder (partial read left messages unread).
+    mockPrisma.message.count.mockResolvedValue(3);
+
+    const response = await app2.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+      payload: { messageIds: [LATEST_MESSAGE_ID] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockTo2).toHaveBeenCalledWith('user:user-1');
+    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONVERSATION_ID,
+      unreadCount: 3,
+    });
   });
 });
