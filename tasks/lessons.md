@@ -4932,3 +4932,48 @@ donnait **0** symbole pour la classe, contre 11 pour un témoin voisin.
    fichier NEUF et fait naître mort tout test créé par un plan. Distinguer : churn
    (réordonnancements, UUID régénérés, build number réécrit) → jeter ; 4 lignes nommant le
    fichier neuf (`xcodegen generate` en produit exactement 4, 0 suppression) → committer.
+
+## Leçon 125 — une consigne héritée d'un cycle précédent ne dispense pas de lire l'en-tête du fichier qu'elle prescrit de changer (2026-08-12, routine messaging, cycle 81)
+
+Le cycle 80 léguait une action nommée et argumentée : « ajouter un trigger `pull_request` restreint
+aux chemins `apps/ios/**` » pour que la routine cesse de merger du Swift non compilé. L'appliquer
+aurait annulé une décision **délibérée, datée et mesurée** — l'en-tête d'`ios-tests.yml` documente
+son retrait au 2026-07-27 sur les runs #3728-#3741 : le trigger PR ajoutait 24-49 min de pure
+attente de runner et ralentissait la suite **pour `dev` et `main` aussi**.
+
+1. **Une prescription héritée est une hypothèse, pas un mandat.** Elle a été écrite par un cycle qui
+   n'avait pas le fichier sous les yeux. Le fichier, lui, porte souvent la contre-mesure.
+2. **Chercher la trace de décision AVANT de l'annuler**, et la chercher là où elle vit : l'en-tête du
+   workflow, pas seulement `decisions.md`. Ici le paragraphe s'appelait littéralement
+   « TRIGGER SCOPE (2026-07-27, measured on runs #3728-#3741) ».
+3. **Le bon livrable, quand la prescription tombe, est la tête du cycle suivant** — les deux portes
+   restantes (`macos-15-xlarge`, nommé « the RIGHT fix » par le fichier lui-même ; ou `actions: write`),
+   avec la question qui les relie peut-être en une seule. Pas un revert silencieux, pas un abandon.
+4. Corollaire du cycle 80 (fiche gwcontract-11) sous un autre angle : **le dépôt est une source, pas
+   seulement un registre.** Au 80 il contenait déjà le correctif à écrire ; au 81 il contenait déjà la
+   raison de ne pas écrire celui qu'on prescrivait.
+
+## Leçon 126 — un test intermittent sur du code qui n'a pas bougé nomme une course, et la course est en général dans la production (2026-08-12, routine messaging, cycle 81)
+
+`StoryUploadQueueTests.test_uploadSucceeds_dequeuesItsWriteAheadIntent` était rouge sur `dev` avec
+deux runs verts antérieurs sur le MÊME code (fichier inchangé depuis `0737b063`). Le réflexe
+« stabiliser le test » (attendre la queue plutôt que l'UI) aurait éteint le signal et laissé le
+défaut.
+
+1. **Intermittent + source figée ⇒ ordonnancement, pas régression.** Le seul travail utile est de
+   trouver les deux choses que rien n'ordonne. Ici : le retrait de l'intent write-ahead
+   (`Task.detached`) et la déclaration de succès à l'UI (`activeUploads`, toast, slot), sur le
+   chemin de succès de `StoryViewModel.launchUploadTask`.
+2. **Un `Task.detached` qui retire un garde de durabilité APRÈS que l'action gardée a réussi est un
+   défaut de correction, pas une optimisation.** Le commentaire du site disait déjà ce que l'intent
+   protège (« sinon le boot suivant re-publierait ») : le détacher ouvre une fenêtre où l'app meurt
+   avec l'intent en base et la story déjà en ligne — le drain de boot la republie.
+3. **Chercher le chemin jumeau avant de conclure au choix délibéré.** Le drain hors-ligne
+   (`executeQueuedPublish`) awaitait ce même retrait depuis toujours : l'incohérence interne au
+   fichier prouve la dette. Deux gestes opposés sur la même invariante, c'est l'un des deux qui a
+   tort.
+4. **Détacher ce qui doit l'être, awaiter ce qui doit l'être — dans le même correctif.** L'acteur
+   (retrait de l'intent) s'awaite : c'est un saut d'acteur, et il ORDONNE. L'IO synchrone
+   `nonisolated` (suppression du dossier médias) reste détachée : aucun boot n'en dépend une fois
+   l'intent parti. Tout awaiter aurait mis du `FileManager` sur le MainActor ; tout détacher était le
+   défaut d'origine.

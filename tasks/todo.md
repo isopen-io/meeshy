@@ -1,35 +1,159 @@
-# Tête instruite pour le cycle 81 — le tray de stories du WEB est coupé à 50, et deux services s'en disputent la responsabilité
+# Tête instruite pour le cycle 82 — le gate iOS est rouge, et le geste que le cycle 80 prescrivait pour le rouvrir annulerait une décision mesurée
 
-*Trouvé en livrant le cycle 80, vérifié par grep exhaustif des consommateurs.*
+*Trouvé en exécutant la première action que le cycle 80 s'était prescrite, avant tout code.*
 
-Le cycle 80 a fait draîner ses pages au client iOS. **Le web, lui, jette l'enveloppe entière.**
-`apps/web/services/story.service.ts` (`getStories`) et `apps/web/services/posts.service.ts`
-(ligne 200) appellent tous deux `GET /posts/feed/stories` **sans aucun paramètre** et rendent
-`response.data?.data ?? []` : ni `limit`, ni `cursor`, ni `updatedSince`, et surtout aucune lecture
-de `pagination.hasMore`/`nextCursor`. Le tray web est donc plafonné à 50 stories exactement comme
-l'était celui d'iOS, pour la même raison, avec le même silence.
+Le cycle 80 se terminait sur une consigne : « commencer par vérifier l'état de "iOS Tests" sur
+`dev`/`main` » et, si la routine doit continuer à toucher `apps/ios`, « la vraie correction est
+structurelle : obtenir le droit `actions: write`, ou **ajouter un trigger `pull_request` restreint
+aux chemins `apps/ios/**`** ».
 
-Trois bornes avant d'ouvrir :
+**Le second geste ne doit PAS être appliqué.** L'en-tête d'`ios-tests.yml` documente son retrait
+délibéré, daté et MESURÉ (2026-07-27, runs #3728-#3741) : le job dure 29-45 min, mais un run
+déclenché par PR prenait 56 min à 1 h 34 — les 24-49 min d'écart sont de la pure attente de runner,
+le plafond de concurrence macOS du compte étant saturé par 5-6 runs de PR simultanés (plus
+`sdk-tests.yml`, aussi sur `macos-15`). Le trigger PR rendait donc la suite plus lente **pour tout
+le monde, `dev` et `main` compris**. Le cycle 80 a proposé de le rétablir sans avoir lu ce
+paragraphe, et sans mesure contraire.
 
-1. **Ce n'est PAS un drain de 3 lignes à recopier depuis iOS.** Il y a **deux** services qui font
-   la même chose, et la première question est laquelle des deux copies est vivante (grep des
-   consommateurs de chacune) — puis si l'autre doit mourir. Ajouter la pagination aux deux
-   dupliquerait la dette au lieu de la payer. C'est la même famille que le cycle 78 (« une dizaine
-   d'écrivains tenaient un cache que personne ne lisait ») : commencer par l'inventaire des
-   LECTEURS, pas par le correctif.
-2. **Le web n'a pas de delta stories du tout.** Il ne passe jamais `updatedSince`, donc
-   `meta.deletedStoryIds` lui vaut toujours `[]` et le drapeau
-   `meta.deletedStoryIdsTruncated` livré au cycle 80 est toujours `false` pour lui. Le geste
-   « escalader sur troncature de tombstones » n'a donc **rien à faire ici** — ne pas le transposer
-   par symétrie. Le seul défaut web est la page tronquée.
-3. **Le curseur web serait recalculé, pas persisté** (D1 du cycle 79) : si un delta arrive un jour,
-   c'est le geste iOS qui ne se transpose pas, pas l'inverse.
+Il reste donc deux portes, et le cycle 82 devrait en instruire une :
 
-Point d'entrée : `apps/web/services/story.service.ts` + `apps/web/services/posts.service.ts`,
-miroir serveur inchangé (`PostFeedService.getStories` rend déjà `hasMore`/`nextCursor` juste).
+1. **`macos-15-xlarge`** — nommé dans le fichier lui-même comme « the RIGHT fix » (compile et tests
+   plus rapides, assez de RAM pour du vrai parallélisme, « reliably under ~30 min »). Question à
+   trancher avant d'y toucher : le coût runner, et si l'abaissement de durée suffirait à rendre le
+   trigger PR soutenable — c'est-à-dire si les deux gestes ne sont pas UN SEUL.
+2. **`actions: write` pour l'intégration** — le `workflow_dispatch` existe exprès pour ce cas et
+   répond `403 Resource not accessible by integration`. C'est une décision d'accès, hors du code.
+
+**Ne pas partir en Swift avant d'avoir tranché.** Tant que ni l'une ni l'autre n'est faite, tout lot
+`apps/ios` de cette routine part non compilé — c'est l'écart au gate d'`apps/ios/CLAUDE.md` déjà
+consigné au cycle 80, et le cycle 81 l'a assumé une deuxième fois (2 lignes déplacées, aucun
+symbole neuf).
+
+Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « TRIGGER SCOPE (2026-07-27) »), et le
+même paragraphe dans `sdk-tests.yml` s'il en porte un.
 
 ---
 
+# Cycle 81 — Le tray coupé à 50 sur le web, et un intent write-ahead qui courait contre son propre succès
+
+## Ce que la tête annonçait, et ce que l'inventaire a répondu
+
+**Borne 1 levée sans ambiguïté : une des deux copies est morte.** `apps/web/services/posts.service.ts`
+et `apps/web/services/story.service.ts` déclaraient tous deux un `getStories()` appelant
+`GET /posts/feed/stories` sans paramètre. `rg` exhaustif des consommateurs : `postsService.getStories`
+n'a **aucun lecteur de production** — sa seule occurrence dans tout le dépôt est son propre test
+(`__tests__/services/posts.service.test.ts:49`). Le lecteur vivant est
+`storyService.getStories`, via `hooks/social/use-stories.ts:26` (`useStoriesFeedQuery`). La copie
+morte est supprimée, son test avec ; paginer les deux aurait dupliqué la dette, comme la tête le
+craignait — mais la question n'était même pas « laquelle garder », c'était « laquelle existe ».
+
+**Borne 2 respectée : rien de la troncature de tombstones n'a été transposé.** Le web ne passe
+jamais `updatedSince`, donc `meta.deletedStoryIds` lui vaut toujours `[]` et
+`meta.deletedStoryIdsTruncated` toujours `false`. L'escalade sur troncature du cycle 80 n'a
+strictement rien à faire ici, et n'y est pas.
+
+## Le correctif web
+
+`storyService.getStories` drainait une page unique et jetait l'enveloppe : ni `limit`, ni `cursor`,
+aucune lecture de `pagination.hasMore`/`nextCursor`. Le tray web était donc coupé à 50 stories
+exactement comme celui d'iOS avant le cycle 80.
+
+Il draine désormais, avec les **deux arrêts** que le cycle 80 avait établis comme nécessaires et
+distincts :
+
+- **Plafond de pages** (`STORY_TRAY_MAX_PAGES_PER_PASS = 6`, valeur miroir d'iOS) — protège contre
+  un serveur qui annoncerait `hasMore` sans fin. Ce n'est PAS une protection de bande passante : le
+  tray ne préfetche aucun média par page.
+- **`hasMore` sans curseur ⇒ arrêt** (cycle 80, D2) — une page suivante qu'on ne sait pas demander ;
+  boucler dessus rejouerait la même page indéfiniment. Deux témoins, `null` et `''`.
+
+La pagination de cette route est réellement exacte (fenêtre filtrée par `updatedAt`, mais curseur
+porté sur le couple `(createdAt, id)` de l'ordre) — c'est ce qui rend le drain suffisant, sans
+l'escalade dont le cycle 79 avait besoin.
+
+## Le défaut qui n'était pas au programme — et qui rougissait le gate
+
+En exécutant la consigne du cycle 80 (« vérifier l'état de iOS Tests avant tout »), le dernier run
+sur `dev` (#31543763910, 5471 verts) portait **2 rouges**, dont un jamais consigné :
+`StoryUploadQueueTests.test_uploadSucceeds_dequeuesItsWriteAheadIntent`. Le fichier n'avait pas
+bougé depuis `0737b063` et deux runs antérieurs du même code étaient verts : **intermittent**, donc
+une course, pas une régression.
+
+La course est dans la production, pas dans le test. `StoryViewModel.launchUploadTask`, sur succès
+serveur, retirait l'intent write-ahead dans un `Task.detached` — puis, sans aucune synchronisation,
+vidait `activeUploads`, affichait le toast de succès et libérait le slot. Rien n'ordonne les deux.
+Le test observe la fin visible (`activeUploads.isEmpty`) et lit la queue : il gagne ou perd la
+course selon l'ordonnancement.
+
+**Ce que la course coûte en production, et pourquoi ce n'est pas qu'un test flaky** : le commentaire
+du site le dit lui-même — « sinon le boot suivant re-publierait ». L'intent est le garde-fou contre
+la re-publication ; le détacher de la déclaration de succès ouvre une fenêtre où l'app peut mourir
+avec l'intent encore en base alors que la story est **déjà en ligne**. Le drain de boot la publie
+une seconde fois.
+
+Le retrait est donc désormais **awaité** — la tâche englobante est déjà `async`, la mesure ne coûte
+qu'un saut d'acteur. C'est exactement le geste que le chemin de drain hors-ligne
+(`executeQueuedPublish`, ligne ~2518) applique depuis toujours : le `Task.detached` du chemin online
+était l'incohérence, pas la règle. Le ménage disque, lui, RESTE détaché — c'est de l'IO synchrone
+`nonisolated` qu'on ne veut pas sur le MainActor, et aucun boot n'en dépend une fois l'intent parti.
+
+## Le second rouge : déjà réparé sur `main`, et pour une raison instructive
+
+`CallViewAccessibilityTests.test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone` est
+un garde de SOURCE : il cherche `hasAdvancedFilters` dans une fenêtre de N caractères après la
+déclaration de `hasActiveEffects`. La production était déjà correcte ; le token se trouve à
+**exactement 500 caractères** de la déclaration, sous une fenêtre de 500 — `[i, i+500)` s'arrête un
+caractère avant de pouvoir matcher. `180e364f` a élargi à 700 sur `main`, donc ce rouge est éteint.
+
+Aucun correctif supplémentaire n'a été tenté ici, **délibérément** : réécrire un scanner de source
+en Swift non compilable (cf. tête du cycle 82) pour gagner de la robustesse est un mauvais échange.
+Follow-up ci-dessous.
+
+## Vérification
+
+- **Suite web complète** : `561/561` suites, `12 062` tests verts, 21 skipped (`jest --maxWorkers=50%`).
+- **Mutations appliquées et vérifiées** (leçon 117), trois fois, revert confirmé par grep :
+  - production ramenée à la page unique ⇒ **3 témoins tombent** (drain, plafond, signature d'appel) ;
+  - garde `!nextCursor` retirée ⇒ **les 2 témoins** `hasMore`-sans-curseur tombent (`null` et `''`) ;
+  - plafond 6 → 9 ⇒ **le témoin de plafond** tombe.
+- `tsc --noEmit` sur `apps/web` : **1757 erreurs avant, 1757 après** — base pré-existante inchangée,
+  et **zéro** sur les fichiers touchés (`services/story.service.ts`, `services/posts.service.ts`).
+  Relevé après `prisma generate --generator client` + `packages/shared && bun run build`, donc le
+  chiffre n'est pas un artefact d'install incomplète.
+- **Local sous bun 1.3.11**, pas 1.3.14 comme la CI (`bun upgrade` non tenté dans le conteneur) —
+  l'écart n'a pas mordu ici (aucun test de couverture relevé), mais il est réel.
+- iOS : **rien n'a compilé le lot `apps/ios`**, même contrainte qu'au cycle 80 (pas de toolchain
+  Swift dans le conteneur, `ios-tests.yml` ne tourne pas sur PR, dispatch manuel `403`). Mitigation :
+  aucun fichier ni symbole neuf, 2 lignes déplacées dans un `do { try await … }` déjà async,
+  `await` sur un acteur déjà awaité 6 lignes plus haut dans le même fichier.
+
+## Reste ouvert après ce cycle
+
+- **Le gate iOS lui-même** — voir la tête du cycle 82. C'est le vrai reliquat, et il commande tout
+  travail iOS futur de cette routine.
+- **`cancelUpload(id:)` garde le même `Task.detached` pour le même intent**, et il n'est PAS
+  réparable de la même façon : c'est une `func` synchrone appelée depuis l'UI, elle ne peut pas
+  awaiter. La fenêtre y est la même (annulation confirmée à l'écran, intent encore en base ⇒ le
+  drain de boot publie une story que l'utilisateur a annulée). Le geste correct est probablement de
+  rendre le chemin d'annulation async, ou de faire porter au drain de boot une vérification
+  « cette story a-t-elle déjà été publiée/annulée ». Chantier à part entière, pas un mini-fix.
+- **Le garde de source `hasActiveEffects` reste une fenêtre de N caractères** — 700 aujourd'hui, ce
+  qui laisse 200 de marge. Toute ligne de commentaire ajoutée dans ce bloc le re-rougit sans qu'un
+  seul comportement change. Le geste robuste est de scanner jusqu'à l'accolade fermante appariée de
+  la propriété ; il vaut mieux le faire quand le gate iOS sait dire oui.
+- **Le web n'a toujours aucun delta stories** (`updatedSince` jamais passé) : `staleTime: Infinity`
+  + invalidations socket. Ce n'est pas un défaut du tray, c'est une capacité absente ; la comparer à
+  iOS demanderait d'abord de décider si le web en a besoin.
+- **Le drain web ne lit pas `meta.mentionedUsers`** — il ne le lisait pas avant non plus (aucune
+  régression), mais si un jour il le fait, l'union inter-pages sera à écrire, pas juste la dernière
+  page à garder.
+- **`STORY_TRAY_PAGE_LIMIT`/`STORY_TRAY_MAX_PAGES_PER_PASS` sont tenues à la main** face au
+  `Math.min(limit, 50)` du serveur, comme leurs jumelles iOS. Troisième cycle consécutif à relever
+  cette dette de constantes non liées (`deltaPageLimit`/`DELTA_PAGE_LIMIT` au 79, `trayPageLimit` au
+  80) : le motif mériterait un geste unique — exposer les plafonds de la route dans
+  `packages/shared` et les lire des deux côtés.
+
+---
 # Cycle 80 — Deux troncatures, deux gestes opposés : l'une se pagine, l'autre s'escalade
 
 ## Le défaut
