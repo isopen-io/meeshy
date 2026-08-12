@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from '../../../routes/conversations/utils/access-control';
 import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 const VALID_CONVERSATION_ID = '507f1f77bcf86cd799439011';
@@ -359,5 +359,70 @@ describe('canAccessConversation', () => {
       const result = await canAccessConversation(mockPrisma, auth, 'meeshy', 'meeshy');
       expect(result).toBe(false);
     });
+  });
+});
+
+describe('resolveCallerParticipant', () => {
+  const ROWS: MongoDocument[] = [
+    { id: VALID_PARTICIPANT_ID, userId: null, conversationId: VALID_CONVERSATION_ID, isActive: true },
+    { id: 'participant-of-the-account', userId: VALID_USER_ID, conversationId: VALID_CONVERSATION_ID, isActive: true },
+    { id: 'participant-qui-est-parti', userId: 'user-parti', conversationId: VALID_CONVERSATION_ID, isActive: false },
+    { id: 'participant-banni', userId: null, conversationId: VALID_CONVERSATION_ID, isActive: true, bannedAt: new Date('2026-01-01') },
+  ];
+
+  function prismaOverRows() {
+    return { participant: { findFirst: jest.fn<any>(findFirstIn(ROWS)) } } as any;
+  }
+
+  it('résout un participant SANS COMPTE par son Participant.id', async () => {
+    const prisma = prismaOverRows();
+    const auth = { participantId: VALID_PARTICIPANT_ID, userId: VALID_PARTICIPANT_ID };
+
+    await expect(resolveCallerParticipant(prisma, auth, VALID_CONVERSATION_ID))
+      .resolves.toEqual(expect.objectContaining({ id: VALID_PARTICIPANT_ID }));
+  });
+
+  it('ne compare JAMAIS un Participant.id à la colonne userId', async () => {
+    // Le piège au complet : `authContext.userId` VAUT le `Participant.id` pour un
+    // anonyme (middleware/auth.ts). Une garde qui filtre `userId` avec cette
+    // valeur n'apparie rien — c'est le 403 que payait tout invité de lien partagé.
+    const prisma = prismaOverRows();
+    const auth = { participantId: VALID_PARTICIPANT_ID, userId: VALID_PARTICIPANT_ID };
+
+    await resolveCallerParticipant(prisma, auth, VALID_CONVERSATION_ID);
+
+    const where = prisma.participant.findFirst.mock.calls[0][0].where;
+    expect(where.userId).toBeUndefined();
+    expect(where.id).toBe(VALID_PARTICIPANT_ID);
+  });
+
+  it('résout un utilisateur enregistré par sa colonne userId', async () => {
+    const prisma = prismaOverRows();
+    const auth = { userId: VALID_USER_ID };
+
+    await expect(resolveCallerParticipant(prisma, auth, VALID_CONVERSATION_ID))
+      .resolves.toEqual(expect.objectContaining({ id: 'participant-of-the-account' }));
+  });
+
+  it('refuse un participant banni, dont la colonne bannedAt est renseignée', async () => {
+    const prisma = prismaOverRows();
+    const auth = { participantId: 'participant-banni', userId: 'participant-banni' };
+
+    await expect(resolveCallerParticipant(prisma, auth, VALID_CONVERSATION_ID)).resolves.toBeNull();
+  });
+
+  it('refuse une appartenance inactive', async () => {
+    const prisma = prismaOverRows();
+    const auth = { userId: 'user-parti' };
+
+    await expect(resolveCallerParticipant(prisma, auth, VALID_CONVERSATION_ID)).resolves.toBeNull();
+  });
+
+  it('refuse un contexte sans aucune des deux identités, sans toucher la base', async () => {
+    const prisma = prismaOverRows();
+
+    await expect(resolveCallerParticipant(prisma, {}, VALID_CONVERSATION_ID)).resolves.toBeNull();
+    await expect(resolveCallerParticipant(prisma, undefined, VALID_CONVERSATION_ID)).resolves.toBeNull();
+    expect(prisma.participant.findFirst).not.toHaveBeenCalled();
   });
 });

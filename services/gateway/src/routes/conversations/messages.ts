@@ -24,7 +24,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { resolveReadAt } from '../../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
@@ -32,7 +32,7 @@ import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
 import { isBlockedBetween } from '../../utils/blocking';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import type {
@@ -307,6 +307,26 @@ export function registerMessagesRoutes(
   optionalAuth: any,
   requiredAuth: any
 ) {
+  // Authentification des routes de LECTURE (mark-read / read / mark-unread).
+  //
+  // `requiredAuth` porte `allowAnonymous: false` et sert tout le reste de ce
+  // fichier ; le suivi de lecture est la seule famille qui ne peut pas
+  // l'accepter. Un invité de lien partagé lit la conversation (`optionalAuth`
+  // sur le GET), y envoie des messages (`optionalAuth` sur le POST) et y réagit
+  // (`routes/reactions.ts`), mais se voyait refuser la seule opération qui
+  // REMET SON BADGE À ZÉRO — et le serveur lui pousse pourtant ce badge
+  // (`emitUnreadCountsToRecipients`, `ROOMS.user(userId ?? id)`). Son compteur
+  // ne pouvait donc que monter.
+  //
+  // `requireAuth: true` reste : c'est « authentifié, avec ou sans compte », pas
+  // `optionalAuth` (`requireAuth: false`), qui laisserait passer un appelant
+  // sans jeton du tout. Le curseur de lecture est indexé sur `Participant.id`
+  // depuis toujours : rien en aval ne suppose un `User`.
+  const participantAuth = createUnifiedAuthMiddleware(prisma, {
+    requireAuth: true,
+    allowAnonymous: true
+  });
+
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = fastify.socketIOHandler;
@@ -1528,7 +1548,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1548,10 +1568,7 @@ export function registerMessagesRoutes(
       }
 
       // Resolve participant ID for this user
-      const currentParticipant = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
+      const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
         return sendForbidden(reply, 'Not a participant');
@@ -1888,7 +1905,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1901,11 +1918,8 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // Résoudre userId → participantId (curseur = participantId)
-      const membership = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
+      // Résoudre l'appelant → participantId (curseur = participantId)
+      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!membership) {
         return sendForbidden(reply, 'Not a participant in this conversation');
@@ -1961,7 +1975,7 @@ export function registerMessagesRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
+    preValidation: [participantAuth]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -1981,10 +1995,7 @@ export function registerMessagesRoutes(
       }
 
       // Resolve participant ID for this user
-      const currentParticipant = await prisma.participant.findFirst({
-        where: { userId, conversationId, isActive: true },
-        select: { id: true }
-      });
+      const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
         return sendForbidden(reply, 'Participant not found in this conversation');
@@ -2021,15 +2032,10 @@ export function registerMessagesRoutes(
         select: { id: true, createdAt: true }
       });
 
-      // Update the cursor: set lastReadAt before the latest message
-      const participantForCursor = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true }
-      });
-
-      if (!participantForCursor) {
-        return sendForbidden(reply, 'Not a participant');
-      }
+      // Le participant a déjà été résolu en tête de ce handler — la seconde
+      // requête ne faisait que reposer la même question à la même base, avec la
+      // copie de la règle d'identité qui oubliait les invités de lien partagé.
+      const participantForCursor = currentParticipant;
 
       // Guard against a race with a concurrent, fresher read: another device
       // may have read a message newer than `latestMessage` between our read

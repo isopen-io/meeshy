@@ -1,36 +1,157 @@
-# Tête instruite pour le cycle 82 — le gate iOS est rouge, et le geste que le cycle 80 prescrivait pour le rouvrir annulerait une décision mesurée
+# Tête instruite pour le cycle 83 — les deux portes du gate iOS sont instruites, l'une est close par un droit, l'autre par une dépense
 
-*Trouvé en exécutant la première action que le cycle 80 s'était prescrite, avant tout code.*
+*Le cycle 82 a exécuté la consigne du cycle 81 : instruire une des deux portes avant tout Swift. Les
+deux le sont. Aucune ne se referme par du code, et c'est le résultat.*
 
-Le cycle 80 se terminait sur une consigne : « commencer par vérifier l'état de "iOS Tests" sur
-`dev`/`main` » et, si la routine doit continuer à toucher `apps/ios`, « la vraie correction est
-structurelle : obtenir le droit `actions: write`, ou **ajouter un trigger `pull_request` restreint
-aux chemins `apps/ios/**`** ».
+## Porte 2 — `actions: write` : close, re-mesurée aujourd'hui
 
-**Le second geste ne doit PAS être appliqué.** L'en-tête d'`ios-tests.yml` documente son retrait
-délibéré, daté et MESURÉ (2026-07-27, runs #3728-#3741) : le job dure 29-45 min, mais un run
-déclenché par PR prenait 56 min à 1 h 34 — les 24-49 min d'écart sont de la pure attente de runner,
-le plafond de concurrence macOS du compte étant saturé par 5-6 runs de PR simultanés (plus
-`sdk-tests.yml`, aussi sur `macos-15`). Le trigger PR rendait donc la suite plus lente **pour tout
-le monde, `dev` et `main` compris**. Le cycle 80 a proposé de le rétablir sans avoir lu ce
-paragraphe, et sans mesure contraire.
+`POST /repos/isopen-io/meeshy/actions/workflows/ios-tests.yml/dispatches` répond
+**403 Resource not accessible by integration**. Le cycle 80 l'avait constaté depuis la CLI ; ce
+cycle l'a rejoué depuis l'**intégration GitHub App** de la routine, qui est la seule identité dont
+elle dispose. Ce n'est donc pas un défaut d'outil : le jeton de l'App n'a pas le droit `actions:
+write` sur ce dépôt. Les runs `workflow_dispatch` existants sur `main` et sur une branche de
+worktree (#30748751746, #31079195135) prouvent que la porte s'ouvre pour un humain — pas pour elle.
 
-Il reste donc deux portes, et le cycle 82 devrait en instruire une :
+**C'est une décision d'accès, hors du code.** Rien qu'un cycle puisse écrire ne la lève. Elle est
+remontée à la propriétaire de la routine.
 
-1. **`macos-15-xlarge`** — nommé dans le fichier lui-même comme « the RIGHT fix » (compile et tests
-   plus rapides, assez de RAM pour du vrai parallélisme, « reliably under ~30 min »). Question à
-   trancher avant d'y toucher : le coût runner, et si l'abaissement de durée suffirait à rendre le
-   trigger PR soutenable — c'est-à-dire si les deux gestes ne sont pas UN SEUL.
-2. **`actions: write` pour l'intégration** — le `workflow_dispatch` existe exprès pour ce cas et
-   répond `403 Resource not accessible by integration`. C'est une décision d'accès, hors du code.
+## Porte 1 — `macos-15-xlarge` : ouverte, mais c'est une dépense, et la mesure dit qu'elle vise à côté
 
-**Ne pas partir en Swift avant d'avoir tranché.** Tant que ni l'une ni l'autre n'est faite, tout lot
-`apps/ios` de cette routine part non compilé — c'est l'écart au gate d'`apps/ios/CLAUDE.md` déjà
-consigné au cycle 80, et le cycle 81 l'a assumé une deuxième fois (2 lignes déplacées, aucun
-symbole neuf).
+Décomposition RÉELLE d'un run vert de 35 min (#31488415343, `dev`, 2026-08-11, pas à pas) :
 
-Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « TRIGGER SCOPE (2026-07-27) »), et le
-même paragraphe dans `sdk-tests.yml` s'il en porte un.
+| étape | durée |
+|---|---|
+| checkout + Xcode + caches + XcodeGen | 38 s |
+| **provision du runtime iOS 18.2** | **7 min 01** |
+| **résolution SPM** (cache manqué) | **8 min 07** |
+| sauvegarde du cache SPM | 36 s |
+| **compilation (`build-for-testing`)** | **8 min 58** |
+| sauvegarde de DerivedData | 40 s |
+| **exécution des tests** | **8 min 20** |
+| relevé + fin de job | 26 s |
+
+Deux des quatre gros postes — téléchargement du runtime et résolution SPM, soit **15 min sur 35** —
+sont bornés par le RÉSEAU, pas par le CPU. `macos-15-xlarge` ne les raccourcit pas. Il attaque les
+17 min de compile+tests, qu'il peut plausiblement ramener à ~6-8 (plus de cœurs, assez de RAM pour
+du vrai parallélisme, ce que l'en-tête du fichier appelle « the RIGHT fix »). Gain espéré : 35 min →
+~24. Pas les « reliably under ~30 min » promis parce que le fichier ne comptait pas les 15 min de
+réseau, mais un vrai gain — payé environ **2 à 4× la minute**, ce qui rend le run PLUS CHER en
+valeur absolue malgré sa brièveté.
+
+**Réponse à la question que le cycle 81 posait — « les deux gestes ne sont-ils pas UN SEUL ? » :
+non.** Le trigger `pull_request` avait été retiré le 2026-07-27 pour une raison qui n'est pas la
+durée du job mais la SATURATION du plafond de concurrence macOS du compte (24-49 min de pure attente
+de runner, 5-6 runs de PR simultanés). Diviser la durée par 1,5 ne crée pas de runner ; la file
+reste la file. Rétablir le trigger PR après un passage à xlarge referait exactement ce que la mesure
+de juillet a puni, en plus cher.
+
+## Ce que le cycle 83 devrait instruire à la place — une troisième porte, non explorée
+
+Le gate qui manque à cette routine n'est pas « tous les tests iOS passent » : c'est **« le Swift que
+je viens d'écrire compile »**. Les deux sont séparés dans le workflow depuis toujours
+(`build-for-testing` puis `test-without-building`, étapes 10 et 12). Un job **compile seule** :
+
+- n'a PAS besoin du runtime iOS 18.2 (`-destination 'generic/platform=iOS Simulator'` suffit à
+  compiler) → **−7 min**, et le poste le plus variable disparaît ;
+- n'exécute pas les tests → **−8 min**, le second poste variable disparaît ;
+- coûte donc ≈ **18 min à froid, ~10 min avec le cache SPM chaud**, sur le runner standard, au tarif
+  standard.
+
+Reste la seule vraie question, celle que le 2026-07-27 a tranchée pour l'AUTRE job et qu'il faut
+mesurer pour celui-ci : **combien de PR touchent `apps/ios/**` simultanément ?** Si c'est 1-2, un job
+de 10-18 min ne sature rien et la routine cesse de merger du Swift non compilé. Si c'est 5-6, la
+réponse est encore non, et il faut alors le restreindre (label d'opt-in, ou branches `claude/**`).
+**Mesurer d'abord, câbler ensuite** — c'est la leçon 125, et elle vaut aussi pour la porte qu'on
+ouvre soi-même.
+
+Point d'entrée : `.github/workflows/ios-tests.yml` (en-tête « TRIGGER SCOPE (2026-07-27) », étapes
+10 et 12), et l'historique des PR touchant `apps/ios/**` sur les 30 derniers jours.
+
+---
+
+# Cycle 82 — Le badge d'un invité de lien partagé ne pouvait que monter
+
+## Ce que la tête demandait, et pourquoi le Swift n'a pas été touché
+
+La tête du cycle 82 interdisait de partir en Swift avant d'avoir tranché une des deux portes du gate
+iOS. Les deux sont instruites ci-dessus ; aucune ne se referme par du code. Le travail de ce cycle
+est donc allé là où un gate RÉEL existe — la passerelle, dont les 654 suites tournent en local — et
+il y a trouvé un défaut que le dépôt documentait sans le voir.
+
+## Le défaut : le serveur compte les non-lus d'un invité, et refuse qu'il les acquitte
+
+Trois faits que le dépôt porte déjà, chacun écrit délibérément :
+
+- `MessageReadStatusService.getUnreadCount` résout son argument par `OR: [{ id }, { userId }]` — il
+  SAIT compter pour un participant sans compte ;
+- `emitUnreadCountsToRecipients` adresse `ROOMS.user(recipient.userId ?? recipient.id)` ;
+- `AuthHandler` fait rejoindre cette room aux sockets anonymes, avec le motif écrit sur place :
+  « joining anything else had already left anonymous participants without their unread badge ».
+
+Le compte est donc tenu, et poussé. Ce qui manquait est la moitié qui le REMET À ZÉRO, et elle
+manquait deux fois : la porte (`allowAnonymous: false` sur `message-read-status.ts` et sur les trois
+routes de lecture de `conversations/messages.ts`) et la clé (six gardes filtrant `Participant.userId`
+avec `authContext.userId`, qui vaut un `Participant.id` pour un anonyme).
+
+**Le dépôt l'avait déjà constaté, sans le nommer comme un défaut serveur** :
+`apps/web/components/common/bubble-stream-page.tsx` débranche son propre suivi de lecture pour les
+sessions anonymes — « la route mark-as-read est JWT-only (allowAnonymous: false) — chaque flush
+partirait en 401 » — trois lignes après avoir expliqué qu'un écran sans ce hook voit « son compteur
+croître indéfiniment ». Le contournement client était la trace du défaut serveur.
+
+## Le correctif
+
+- **La porte** : `requireAuth: true, allowAnonymous: true` — « authentifié, avec ou sans compte ».
+  Pas `optionalAuth` (`requireAuth: false`), qui laisserait entrer un appelant sans jeton. C'est
+  exactement la configuration de `routes/reactions.ts` (« Les anonymes peuvent aussi réagir »), et
+  l'invité envoyait déjà des messages par une route `optionalAuth`.
+- **La clé** : un `resolveCallerParticipant` unique dans `access-control.ts`, dont la précédence
+  (`participantId` d'abord, `userId` ensuite) est celle de `canAccessConversation` juste au-dessus —
+  les deux fonctions répondent à la même question et ne peuvent plus diverger. Les contextes
+  enregistrés ne portent jamais `participantId` (branche `type: 'user'` de `UnifiedAuthService`), la
+  précédence est donc sans ambiguïté et non conventionnelle.
+- Trois effets de bord réparés : les préférences de confidentialité d'un anonyme sont demandées EN
+  TANT QU'anonyme ; `mark-unread` ne relit plus deux fois le même participant ; et
+  `GET /messages/:messageId/read-status` cesse de filtrer l'appartenance EN RELATION (5ᵉ copie).
+
+## Vérification
+
+- **Suite passerelle complète** : `654/654` suites, `16 481` tests verts (`jest --maxWorkers=50%`),
+  sous bun 1.3.11 après `prisma generate --generator client` + `packages/shared && bun run build`.
+- `tsc --noEmit` sur `services/gateway` : **0 erreur**.
+- **Mutation appliquée et vérifiée** (leçon 117) : production ramenée à `allowAnonymous: false` ET à
+  une garde `where: { conversationId, userId, isActive }` ⇒ **3 témoins tombent** (options du
+  middleware, identité de résolution, préférences d'anonyme). Restauré, re-vérifié vert.
+- **Les doubles Prisma des nouveaux tests ÉVALUENT le `where`** (`helpers/mongo-where`, déjà dans le
+  dépôt) : une garde revenue à `userId` seul ne trouve plus la ligne anonyme et rougit. Un
+  `mockResolvedValue` constant, lui, aurait passé dans les deux sens — c'est ainsi que le défaut a
+  traversé des suites vertes pendant des mois.
+- **Quatre fichiers de test corrigés, pas contournés** : ceux qui doublaient `access-control` en
+  entier rendaient `resolveCallerParticipant` indéfini ; ils gardent désormais l'implémentation
+  RÉELLE (`jest.requireActual`) et ne doublent que `canAccessConversation`. Le double de
+  `departed-member-status-gates` a été enseigné à discriminer sur `isActive` par
+  `participant.findFirst` — la garde qu'il mesure reste mesurée.
+- iOS : **aucune ligne de Swift**, et aucune n'était nécessaire — `APIClient.swift` envoie déjà
+  `X-Session-Token` et `ConversationService.swift` appelle exactement `/mark-read` et `/mark-unread`.
+
+## Reste ouvert après ce cycle
+
+- **Le gate iOS** — voir la tête du cycle 83. Les deux portes prescrites sont closes ; la troisième
+  (job compile seule) est chiffrée mais demande une mesure de concurrence avant d'être câblée.
+- **La webapp ne rebranche PAS son suivi de lecture dans ce lot.** Le blocage y est ailleurs :
+  `apiService` (`apps/web/services/api.service.ts`) ne pose que `Authorization: Bearer` et ignore
+  `X-Session-Token` — un flush anonyme partirait en 401 sans avoir touché la nouvelle porte. Le
+  geste correct est de faire porter le jeton de session à `apiService` (le chemin anonyme du web
+  l'ajoute aujourd'hui à la main, service par service : `anonymous-chat.service.ts`,
+  `link-conversation.service.ts`, `message-translation.service.ts`, `tusUploadService.ts` — quatre
+  copies), PUIS de retirer l'exclusion `isAnonymousMode` de `bubble-stream-page.tsx`. Chantier
+  web à part entière, avec sa propre suite.
+- **Les autres routes filtrant `Participant` par `userId` n'ont pas toutes été auditées.** Ce cycle a
+  traité la famille lecture/non-lus. `calls.ts`, `sync.ts`, `translation-non-blocking.ts`,
+  `messages-advanced.ts`, `conversations/leave.ts`, `participants.ts` portent le même motif ; pour
+  certaines c'est délibéré (un invité ne gère pas les membres), pour d'autres il faudra regarder.
+  `resolveCallerParticipant` existe maintenant pour celles qui doivent changer.
+- Les points hérités des cycles précédents restent ouverts tels quels.
 
 ---
 

@@ -54,8 +54,34 @@ jobs:
     # build was a fluke), + 14-16 min serial tests. Observed range ≈ 38-44 min;
     # 30/35/40 caps all timed out. 50 covers the tail with margin so CI stops
     # flapping. The RIGHT fix is macos-15-xlarge (faster compile/tests + enough
-    # RAM for real parallel testing, impossible on this runner) — that would
-    # bring it reliably under ~30 min. Hard cap kept so a real deadlock fails.
+    # RAM for real parallel testing, impossible on this runner). Hard cap kept
+    # so a real deadlock fails.
+    #
+    # WHAT xlarge WOULD ACTUALLY BUY (measured step-by-step on run #31488415343,
+    # a green 35-min run on dev, 2026-08-11 — the "reliably under ~30 min" above
+    # was an estimate, this is the meter):
+    #   38s   checkout + Xcode select + cache restore + XcodeGen
+    #   7m01  provision the iOS 18.2 runtime      ← NETWORK-bound
+    #   8m07  resolve SPM (cache miss)            ← NETWORK-bound
+    #   36s   save SPM cache
+    #   8m58  build-for-testing                   ← CPU-bound
+    #   40s   save DerivedData
+    #   8m20  test-without-building               ← CPU-bound
+    #   26s   failure summary + job teardown
+    # 15 of the 35 minutes are network, and no runner size shortens them. xlarge
+    # attacks the 17 CPU-bound minutes (plausibly → 6-8), so the honest estimate
+    # is ~24 min, not "under 30 by a wide margin", at 2-4x the per-minute rate.
+    #
+    # And it does NOT re-open the pull_request trigger. That was dropped for
+    # QUEUE saturation (see TRIGGER SCOPE above), not for job duration: a
+    # shorter job does not create a runner. What a PR-time gate actually needs
+    # is far cheaper — the compile alone. Steps 10 and 12 are already separate;
+    # a build-only job can drop the simulator provisioning entirely by targeting
+    # `generic/platform=iOS Simulator`, which removes BOTH the 7-min runtime
+    # download and the 8-min test run: ~18 min cold, ~10 min on a warm SPM
+    # cache, on this same standard runner. Measure how many PRs touch
+    # apps/ios/** concurrently before wiring it — that number, not the duration,
+    # is what closed the door in July.
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7

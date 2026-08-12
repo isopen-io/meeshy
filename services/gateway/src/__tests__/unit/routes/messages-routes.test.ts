@@ -65,7 +65,22 @@ const mockHandleMessage = jest.fn<any>().mockResolvedValue({ success: true, data
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
+// `participantAuth` — la porte des routes de LECTURE. On capture les options
+// pour verrouiller `allowAnonymous: true` (un invité de lien partagé entre) sans
+// perdre `requireAuth: true` (un appelant sans jeton n'entre pas).
+const mockAuthMiddlewareOptions: any[] = [];
+const mockParticipantAuthMiddleware = jest.fn();
+jest.mock('../../../middleware/auth', () => ({
+  createUnifiedAuthMiddleware: (_prisma: any, options: any) => {
+    mockAuthMiddlewareOptions.push(options);
+    return mockParticipantAuthMiddleware;
+  },
+}));
+// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
+// et interroge le double Prisma de ce fichier : un mock de module complet le
+// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
+  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
   canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
 }));
 jest.mock('../../../utils/response', () => ({
@@ -214,6 +229,7 @@ import {
   SendMessageBodySchema,
   registerMessagesRoutes,
 } from '../../../routes/conversations/messages';
+import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -2430,16 +2446,18 @@ describe('POST /conversations/:id/messages — coverage extension', () => {
 describe('POST /conversations/:id/mark-unread — coverage extension', () => {
   const getHandler_ = () => fastify._routes['POST']['/conversations/:id/mark-unread'];
 
-  it('latestMessage found but participantForCursor=null → 403', async () => {
-    prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: PART_ID })
-      .mockResolvedValueOnce(null);
-    prisma.message.findFirst
-      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date() })
-      .mockResolvedValueOnce(null);
+  it('un seul appelant, une seule résolution : le participant est résolu AVANT de chercher le dernier message', async () => {
+    // Ce test pinnait `participantForCursor`, une SECONDE lecture du même
+    // participant faite juste avant l'écriture du curseur — elle reposait la
+    // même question à la même base, avec la copie de la règle d'identité qui
+    // oubliait les invités de lien partagé. La seconde lecture n'existe plus :
+    // le refus, lui, doit tomber plus tôt qu'avant, pas plus tard.
+    prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Not a participant');
+    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
+    expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('previousMessage=null: upserts cursor with lastReadMessageId=null', async () => {
@@ -3419,5 +3437,107 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Le suivi de lecture d'un participant SANS COMPTE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('mark-read / read / mark-unread — un invité de lien partagé', () => {
+  // Un double qui ÉVALUE le `where` : une garde revenue à `userId` seul ne
+  // trouve plus cette ligne, et le test rougit. `userId: null` est la ligne
+  // réelle d'un participant sans compte.
+  const ROWS: MongoDocument[] = [
+    { id: ANON_PART_ID, userId: null, conversationId: 'resolved-conv-id', isActive: true },
+  ];
+
+  const anonymousRequest = (overrides: any = {}) =>
+    makeRequest({
+      authContext: {
+        type: 'anonymous',
+        isAuthenticated: true,
+        isAnonymous: true,
+        participantId: ANON_PART_ID,
+        // Le piège : pour un anonyme, `userId` PORTE un `Participant.id`.
+        userId: ANON_PART_ID,
+        hasFullAccess: false,
+      },
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    prisma.participant.findFirst.mockImplementation(findFirstIn(ROWS) as any);
+    prisma.participant.findMany.mockResolvedValue([]);
+  });
+
+  it('mark-read avance le curseur de l\'invité au lieu de lui répondre 403', async () => {
+    mockGetUnreadCount.mockResolvedValue(2);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(
+      ANON_PART_ID, 'resolved-conv-id', undefined, undefined,
+    );
+  });
+
+  it('mark-read remet à zéro le badge de l\'invité dans SA room personnelle', async () => {
+    // `ROOMS.user(Participant.id)` : celle qu'`AuthHandler` fait rejoindre aux
+    // sockets anonymes, et celle qu'`emitUnreadCountsToRecipients` adresse déjà.
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockGetUnreadCount.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
+
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+  });
+
+  it('/read acquitte la conversation de l\'invité', async () => {
+    mockGetUnreadCount.mockResolvedValue(1);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/read'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(ANON_PART_ID, 'resolved-conv-id');
+  });
+
+  it('mark-unread rembobine le curseur de l\'invité', async () => {
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2026-08-01') })
+      .mockResolvedValueOnce(null);
+    prisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+    const reply = makeReply();
+
+    await fastify._routes['POST']['/conversations/:id/mark-unread'](anonymousRequest(), reply);
+
+    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          conversation_participant_cursor: expect.objectContaining({ participantId: ANON_PART_ID }),
+        }),
+      }),
+    );
+  });
+
+  it('les trois routes de lecture acceptent un authentifié SANS COMPTE, jamais un anonyme sans jeton', () => {
+    // La porte, pas la clé : `requiredAuth` (allowAnonymous: false) répondait 403
+    // avant même de regarder la conversation. `requireAuth: true` reste — un
+    // appelant sans jeton du tout n'entre pas.
+    const readRoutes = ['/conversations/:id/mark-read', '/conversations/:id/read', '/conversations/:id/mark-unread'];
+    for (const route of readRoutes) {
+      expect(fastify._routeOpts['POST'][route].preValidation).toEqual([mockParticipantAuthMiddleware]);
+    }
+    expect(mockAuthMiddlewareOptions).not.toHaveLength(0);
+    for (const options of mockAuthMiddlewareOptions) {
+      expect(options).toEqual({ requireAuth: true, allowAnonymous: true });
+    }
   });
 });
