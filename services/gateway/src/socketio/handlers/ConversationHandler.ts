@@ -156,19 +156,44 @@ export class ConversationHandler {
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
       const registeredUserId = connectedUser.userId;
-      if (registeredUserId) {
+      // L'identité du socket dans cette conversation. Un invité de lien partagé
+      // n'a pas de `userId` : c'est son `Participant.id` qui l'identifie, et
+      // c'est celui que le contrôle d'appartenance vient de résoudre. SURTOUT
+      // PAS `connectedUser.id`, qui est le jeton de SESSION — un credential n'a
+      // rien à faire dans un payload d'événement, et il ne résout d'ailleurs
+      // aucune ligne Participant (`getUnreadCount` rendrait 0 en silence).
+      //
+      // Les deux émissions ci-dessous étaient gatées sur `userId` et laissaient
+      // donc l'invité rejoindre en SILENCE — sans accusé, sans badge — alors
+      // que le contrôle d'appartenance l'a laissé passer et que son socket EST
+      // dans la room.
+      const participationId = registeredUserId ?? connectedUser.participantId;
+
+      if (participationId) {
+        // `userId` ne peut pas être omis pour un anonyme : côté iOS,
+        // `ConversationParticipationEvent.userId` est un `String` NON optionnel
+        // et un payload amputé ferait échouer le décodage Swift — l'accusé
+        // serait silencieusement jeté. Aucun des cinq consommateurs connus ne
+        // LIT ce champ (web use-socket-cache-sync / use-stream-socket /
+        // orchestrator, iOS ConversationSyncEngine / ParticipantsView
+        // n'exploitent que `conversationId`), mais tous exigent qu'il soit là.
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId: registeredUserId
+          userId: participationId
         });
 
+        // `getUnreadCount` accepte indifféremment un `Participant.id` ou un
+        // `User.id` (contrat documenté dans MessageReadStatusService, qui nomme
+        // le chemin anonyme comme le cas courant).
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }
+      }
 
+      if (registeredUserId) {
         // Envoyer les stats de conversation. On passe l'id RÉSOLU (`normalizedId`),
         // comme le room join, le payload joined et l'emit unread ci-dessus — sauf
         // pour la conversation globale "meeshy", que ConversationStatsService résout
