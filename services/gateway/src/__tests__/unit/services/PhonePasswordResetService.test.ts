@@ -162,6 +162,18 @@ function makePrisma(overrides: Record<string, any> = {}) {
       create: jest.fn<any>().mockResolvedValue({ id: 'token-1' }),
       findUnique: jest.fn<any>().mockResolvedValue(makeToken()),
       update: jest.fn<any>().mockResolvedValue({}),
+      // La consommation d'une tentative est devenue une écriture conditionnelle
+      // ATOMIQUE (`updateMany` filtré `< MAX` + `$inc`) au lieu d'un
+      // « lire les tentatives puis incrémenter ». L'ancienne forme était un
+      // TOCTOU : des requêtes concurrentes lisaient toutes le même instantané,
+      // passaient toutes le plafond, et consommaient chacune une tentative —
+      // amplifiant le brute-force AU-DELÀ du maximum. Le plafond ne se lit donc
+      // plus dans le compteur du jeton mais dans `count` : 1 = tentative
+      // consommée, 0 = plafond déjà atteint.
+      //
+      // Sans ce stub, `consumed` valait `undefined` et `consumed.count` jetait —
+      // chaque témoin de `verifyIdentity`/`verifyCode` recevait `internal_error`.
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     passwordResetToken: {
       create: jest.fn<any>().mockResolvedValue({ id: 'prt-1' }),
@@ -353,8 +365,11 @@ describe('PhonePasswordResetService.verifyIdentity', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when identityAttempts >= 3', async () => {
+  it('returns max_attempts_exceeded when the atomic guard consumes no attempt', async () => {
     const prisma = makePrisma();
+    // `count: 0` = l'écriture conditionnelle n'a apparié aucun document, donc
+    // le plafond était déjà atteint. C'est désormais LE signal du refus.
+    prisma.phonePasswordResetToken.updateMany.mockResolvedValue({ count: 0 });
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeToken({ identityAttempts: 3 })
     );
@@ -475,8 +490,9 @@ describe('PhonePasswordResetService.verifyCode', () => {
     expect(result.error).toBe('invalid_step');
   });
 
-  it('returns max_attempts_exceeded when codeAttempts >= 5', async () => {
+  it('returns max_attempts_exceeded when the atomic code guard consumes no attempt', async () => {
     const prisma = makePrisma();
+    prisma.phonePasswordResetToken.updateMany.mockResolvedValue({ count: 0 });
     (prisma.phonePasswordResetToken.findUnique as jest.Mock<any>).mockResolvedValue(
       makeCodeReadyToken({ codeAttempts: 5 })
     );
