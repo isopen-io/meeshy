@@ -7,6 +7,25 @@ re-auditer — vérifier puis corriger.***
 **Avant de commencer un item, `git fetch origin main` et vérifier qu'aucun commit récent ne le porte
 déjà** (leçon du cycle 87 : deux sessions ont écrit le même correctif en parallèle).
 
+> **Et cette consigne n'est pas assez forte — elle vient d'échouer une seconde fois.** Une session
+> parallèle (`claude/keen-hamilton-r0rdv1`) a mené le cycle 88 de bout en bout en même temps que
+> celle-ci : mêmes trois premiers correctifs, RED-prouvés, suite complète verte, PR #2886 ouverte et
+> CI passée — le tout déjà sur `main` quand sa CI s'est terminée. Elle avait bien fait son
+> `git fetch` d'ouverture ; à cet instant `origin/main` valait exactement HEAD. **Le `fetch`
+> d'ouverture ne protège de rien** : il atteste du passé, pas de l'avenir, et un cycle dure des
+> heures.
+>
+> La règle praticable, à appliquer littéralement :
+>
+> ```bash
+> git fetch origin main && git log --oneline -15 origin/main   # AVANT d'écrire CHAQUE item
+> git fetch origin main                                        # ET juste avant d'ouvrir la PR
+> ```
+>
+> Ce qui a survécu de la session doublon, après salvage test par test : **un seul test** (le cas
+> capitalisé `'FR'` de `getTranslation`, que la couverture retenue ne portait pas) et deux leçons.
+> Détail du salvage et des arbitrages non rejoués : leçon 137.
+
 ## Livré au cycle 88
 
 1. **L'invité anonyme n'est plus traité en silence par `conversation:join`** (ancienne priorité 1,
