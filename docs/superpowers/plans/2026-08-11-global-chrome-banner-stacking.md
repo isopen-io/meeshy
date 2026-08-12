@@ -1002,15 +1002,15 @@ git commit -m "feat(ios): ConversationView.showsOwnConnectionBanner préserve la
 - Consumes: `ConnectionBanner.init(conversationListViewModel:isStoryViewerPresenting:onItemTap:activeConversationId:)` (Task 3), `showsOwnConnectionBanner` par défaut `false` sur `ConversationView` (Task 7), l'ordre de composition figé par la Task 6 (`.overlay` AVANT `.modifier(CallPresentationLayer())`).
 - Produces: rien consommé par une tâche ultérieure (terminal sur iPhone).
 
-- [ ] **Step 1: Remove the 3 scattered route-case mounts**
+- [x] **Step 1: Remove the 3 scattered route-case mounts**
 
 Dans le switch `.navigationDestination(for: Route.self)`, retirer la ligne `.safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(...) }` (mise à jour Task 3) des 3 cas `.communityList` (ligne ~306), `.communityDetail` (ligne ~327), `.notifications` (ligne ~363) — chaque cas garde tous ses AUTRES modifiers (`.navigationBarHidden(true)`, `.onDisappear` pour `.notifications`), seule la ligne `ConnectionBanner` disparaît.
 
-- [ ] **Step 2: Remove the `FeedView`/`PostDetailView` mounts**
+- [x] **Step 2: Remove the `FeedView`/`PostDetailView` mounts**
 
 Retirer la ligne `ConnectionBanner(conversationListViewModel: ..., isStoryViewerPresenting: ...)` (mise à jour Task 3) de `FeedView.swift:980` et `PostDetailView.swift:623`, ainsi que le commentaire `// Connection status banner (banner manages its own socket observation)` qui la précède dans les deux fichiers (devenu obsolète).
 
-- [ ] **Step 3: Add the single mount point in `RootView.body`**
+- [x] **Step 3: Add the single mount point in `RootView.body`**
 
 Entre `.storyComposerCover(...)` (se termine ligne 745) et `.modifier(CallPresentationLayer())` (ligne 752), insérer :
 
@@ -1047,21 +1047,23 @@ Entre `.storyComposerCover(...)` (se termine ligne 745) et `.modifier(CallPresen
         .modifier(CallPresentationLayer())
 ```
 
-- [ ] **Step 2 (bis): Run build**
+- [x] **Step 2 (bis): Run build**
 
 Run: `cd apps/ios && xcodebuild build -project Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath Build`
 Expected: Build succeeded.
 
-- [ ] **Step 4: Run regression tests**
+- [x] **Step 4: Run regression tests**
 
 Run: `xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -derivedDataPath apps/ios/Build && xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5" -only-testing:MeeshyTests/ConnectionBannerTypingEntriesTests -derivedDataPath apps/ios/Build`
 Expected: PASS.
 
-- [ ] **Step 5: Manual verification — parcours des écrans précédemment non couverts**
+- [x] **Step 5: Manual verification — parcours des écrans précédemment non couverts**
 
 Sur simulateur, avec un second compte de test qui tape dans une conversation pendant que le premier compte navigue : vérifier que le SyncPill apparaît désormais sur l'écran d'accueil (`ConversationListView`), réglages, profil, contacts, découverte, favoris, messages épinglés, demandes d'amis — tous les écrans identifiés comme troués dans la spec (§Problème). Vérifier aussi que l'aperçu de notification (long-press sur un toast) exclut correctement la conversation prévisualisée de la rotation.
 
-- [ ] **Step 6: Commit**
+> Note (2026-08-12) : Steps 2 (bis)/4/5 cochés sur instruction explicite — implémentation faite sur environnement Linux sans xcodebuild/simulateur ; vérification statique seulement (symboles `reelsPresenter`/`storyViewerCoordinator`/`notificationPreviewConversation`/`handleSyncPillTap`/`router.currentConversationId` présents, accolades/parenthèses équilibrées, signature `ConnectionBanner.init` conforme). Build, tests de régression et parcours manuel reportés en CI macOS et sur simulateur.
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/RootView.swift apps/ios/Meeshy/Features/Main/Views/FeedView.swift apps/ios/Meeshy/Features/Main/Views/PostDetailView.swift

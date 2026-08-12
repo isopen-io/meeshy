@@ -302,7 +302,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -323,7 +322,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -359,7 +357,6 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(conversationListViewModel: conversationViewModel, isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil, onItemTap: handleSyncPillTap, activeConversationId: { router.currentConversationId }) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -742,6 +739,35 @@ struct RootView: View {
             conversationListViewModel: conversationViewModel,
             statusViewModel: statusViewModel
         )
+        // Point de montage unique du SyncPill (indicateur de frappe global +
+        // statut connexion + file d'attente hors-ligne), voir
+        // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
+        // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
+        // composite (contenu + SyncPill) descende comme un bloc quand la
+        // bannière d'appel réserve de l'espace (§B2 de la spec — l'ordre
+        // inverse ferait chevaucher les deux bannières).
+        // conversationListViewModel/isStoryViewerPresenting passés
+        // explicitement, jamais via @EnvironmentObject/@Environment dans ce
+        // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).
+        // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
+        // un fullScreenCover — contrairement au story viewer déjà gated via
+        // isStoryViewerPresenting, il n'avait aucune garde équivalente).
+        // Padding-top fixe quand une conversation est active : compense le
+        // floatingHeaderSection propre à ConversationView (qui utilisait
+        // auparavant un décalage 56/72pt suivant composerState.showOptions —
+        // 72pt fixe est un compromis assumé plutôt qu'un couplage à cet état
+        // privé, cf. spec §Partie 1/C1).
+        .overlay(alignment: .top) {
+            if reelsPresenter.launch == nil {
+                ConnectionBanner(
+                    conversationListViewModel: conversationViewModel,
+                    isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
+                    onItemTap: handleSyncPillTap,
+                    activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
+                )
+                .padding(.top, router.currentConversationId != nil ? 72 : 0)
+            }
+        }
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
         // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
         // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
