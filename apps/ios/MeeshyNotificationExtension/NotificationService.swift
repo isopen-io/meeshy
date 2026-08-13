@@ -400,6 +400,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // response overwrites it. NSEDataSync already fetches the
         // canonical record from the gateway and writes it via the
         // pending-messages path — that's the trustworthy source.
+        //
+        // Audit 2026-08-13: that last sentence is a PREMISE, and it was false
+        // from the day it was written until this audit — `syncMessage` aimed
+        // at a route the gateway never registered, so an E2EE push staged
+        // NOTHING: no pre-persist (skipped here, correctly) and no canonical
+        // fetch (404). The skip is only safe while the fetch works; whoever
+        // changes `NSEDataSync.syncMessage`'s endpoint owns this branch too.
         let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
         if isEncryptedPush { return }
 
