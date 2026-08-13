@@ -20,6 +20,8 @@ private enum WidgetColors {
     static let indigo400Hex = "818CF8"
     static let successHex = "34D399"
     static let errorHex = "F87171"
+    static let warningHex = "FBBF24"
+    static let neutral400Hex = "9CA3AF"
 
     static var brandPrimary: Color { Color(hex: brandPrimaryHex) }
     static var brandDeep: Color { Color(hex: brandDeepHex) }
@@ -72,13 +74,25 @@ private struct InitialsAvatar: View {
 
 @available(iOS 17.0, *)
 struct MarkConversationReadIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "Mark conversation as read"
+    // `LocalizedStringResource` se résout dans le bundle de la cible qui la
+    // déclare — c'est le catalogue `MeeshyWidgets/Localizable.xcstrings` qui
+    // lui donne ses sept langues.
+    nonisolated static let title = LocalizedStringResource(
+        "widget.intent.markRead.title",
+        defaultValue: "Mark conversation as read"
+    )
     nonisolated static let description = IntentDescription(
-        "Clears the unread badge for this conversation from the widget."
+        LocalizedStringResource(
+            "widget.intent.markRead.description",
+            defaultValue: "Clears the unread badge for this conversation from the widget."
+        )
     )
     nonisolated static let openAppWhenRun: Bool = false
 
-    @Parameter(title: "Conversation ID")
+    @Parameter(title: LocalizedStringResource(
+        "widget.intent.markRead.parameter.conversationId",
+        defaultValue: "Conversation ID"
+    ))
     var conversationId: String
 
     init() {}
@@ -284,12 +298,66 @@ struct Conversation: Codable, Identifiable {
     let accentColor: String
 }
 
+/// Miroir cible-widget de `PresenceState` (SDK) — l'extension ne lie pas
+/// `MeeshySDK`, elle en reproduit donc les symboles, comme `FavoriteContact`
+/// reproduit `WidgetFavoriteContact`.
+///
+/// Les valeurs brutes DOIVENT rester identiques à celles du SDK : c'est le
+/// contrat de transport de l'App Group. Garde : `WidgetPresenceContractTests`.
+enum WidgetPresence: String {
+    case online, away, idle, offline
+
+    /// Règle produit 1/3/5 (`CLAUDE.md` § User Presence, mapping central
+    /// `PresenceState.dotColor`) : vert, orange, gris — et RIEN hors ligne.
+    /// Les hex sont ceux de `MeeshyColors`, que la cible widget ne peut pas
+    /// lier ; `WidgetPresenceContractTests` les confronte à la source.
+    var dotHex: String? {
+        switch self {
+        case .online: return WidgetColors.successHex
+        case .away: return WidgetColors.warningHex
+        case .idle: return WidgetColors.neutral400Hex
+        // Hors ligne ne rend AUCUNE pastille (comportement WhatsApp) — le gris
+        // des maps centrales est réservé aux affichages LABELLISÉS, que le
+        // widget Favoris n'a pas.
+        case .offline: return nil
+        }
+    }
+
+    /// Libellé VoiceOver de l'état.
+    ///
+    /// `offline` en a un alors qu'il ne rend aucune pastille, et ce n'est pas
+    /// une incohérence : une annonce EST un affichage labellisé, le cas que la
+    /// règle produit réserve justement au gris et au mot. Un lecteur d'écran
+    /// qui n'entend rien ne peut pas distinguer « hors ligne » de « présence
+    /// inconnue ».
+    var localizedLabel: String {
+        switch self {
+        case .online: return String(localized: "widget.presence.online", defaultValue: "Online")
+        case .away: return String(localized: "widget.presence.away", defaultValue: "Away")
+        case .idle: return String(localized: "widget.presence.idle", defaultValue: "Idle")
+        case .offline: return String(localized: "widget.presence.offline", defaultValue: "Offline")
+        }
+    }
+}
+
 struct FavoriteContact: Codable, Identifiable {
     let id: String
     let name: String
     let avatar: String
-    let status: String
+    /// Jeton `PresenceState.rawValue` publié par `WidgetDataManager`.
+    ///
+    /// Optionnel par TOLÉRANCE DE VERSION, pas par indécision : au premier
+    /// lancement suivant une mise à jour, le widget peut être rendu à partir
+    /// d'un payload écrit par l'ancienne app, qui portait `status` et pas
+    /// `presence`. Un champ non optionnel ferait échouer le décodage du
+    /// TABLEAU ENTIER — la liste des favoris disparaîtrait jusqu'à la
+    /// prochaine publication. Absent ⇒ hors ligne ⇒ pas de pastille.
+    let presence: String?
     let accentColor: String
+
+    var presenceState: WidgetPresence {
+        presence.flatMap(WidgetPresence.init(rawValue:)) ?? .offline
+    }
 }
 
 // ============================================================================
@@ -384,7 +452,7 @@ struct MediumConversationView: View {
                     .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
-                    Text("\(entry.unreadCount) unread")
+                    Text(String(localized: "widget.unreadCount", defaultValue: "\(entry.unreadCount) unread"))
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
@@ -449,7 +517,7 @@ struct MediumConversationView: View {
                         .foregroundColor(WidgetColors.brandPrimary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Mark as read")
+                .accessibilityLabel(String(localized: "widget.markAsRead", defaultValue: "Mark as read"))
             }
         }
     }
@@ -466,7 +534,7 @@ struct LargeConversationView: View {
                     .foregroundColor(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
-                    Text("\(entry.unreadCount) unread")
+                    Text(String(localized: "widget.unreadCount", defaultValue: "\(entry.unreadCount) unread"))
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
@@ -624,7 +692,7 @@ struct RectangularUnreadView: View {
         VStack(alignment: .leading) {
             HStack {
                 Image(systemName: "message.fill")
-                Text("\(entry.unreadCount) unread")
+                Text(String(localized: "widget.unreadCount", defaultValue: "\(entry.unreadCount) unread"))
                     .font(.headline)
             }
             if let first = entry.conversations.first(where: { $0.isUnread }) {
@@ -646,7 +714,7 @@ struct InlineUnreadView: View {
     var body: some View {
         HStack {
             Image(systemName: "message.fill")
-            Text("\(count) unread messages")
+            Text(String(localized: "widget.unreadMessagesCount", defaultValue: "\(count) unread messages"))
         }
         // TODO cycle 107 : router `meeshy://conversations/unread` vers les non
         // lues. NON ROUTÉ au cycle 106 — le tap ouvre simplement l'accueil.
@@ -700,10 +768,19 @@ struct QuickReplyWidgetView: View {
                         .padding(.vertical, 4)
 
                     HStack(spacing: 8) {
-                        QuickReplyButton(text: "\u{1F44D}", conversationId: conversation.id)
-                        QuickReplyButton(text: "OK", conversationId: conversation.id)
-                        QuickReplyButton(text: "Thanks!", conversationId: conversation.id)
-                        QuickReplyButton(text: "Call me", conversationId: conversation.id)
+                        QuickReplyButton(label: "\u{1F44D}", conversationId: conversation.id)
+                        QuickReplyButton(
+                            label: String(localized: "widget.quickReply.ok", defaultValue: "OK"),
+                            conversationId: conversation.id
+                        )
+                        QuickReplyButton(
+                            label: String(localized: "widget.quickReply.thanks", defaultValue: "Thanks!"),
+                            conversationId: conversation.id
+                        )
+                        QuickReplyButton(
+                            label: String(localized: "widget.quickReply.callMe", defaultValue: "Call me"),
+                            conversationId: conversation.id
+                        )
                     }
                 }
             } else {
@@ -717,13 +794,34 @@ struct QuickReplyWidgetView: View {
     }
 }
 
+/// Deux chaînes, pas une — elles n'obéissent pas à la même autorité.
+///
+/// `label` est du CHROME d'interface : il suit la locale de l'appareil, comme
+/// tout le reste du widget. `draft` est du CONTENU : c'est le texte déposé
+/// dans le composeur, donc un message que l'utilisateur va signer, et il
+/// relève de la langue configurée du COMPTE (Prisme Linguistique).
+///
+/// Les deux peuvent diverger — un compte francophone sur un iPhone anglais
+/// doit lire « Merci ! » sur un bouton intitulé « Thanks! ». La cible widget
+/// ne connaît pas la langue du compte ; en attendant que `WidgetDataManager`
+/// publie les brouillons résolus dans l'App Group, `draft` suit la locale
+/// appareil. C'est déjà strictement mieux que l'anglais servi à tous, et la
+/// séparation des deux rôles est ici pour que la moitié restante soit un
+/// branchement et non une réécriture.
 struct QuickReplyButton: View {
-    let text: String
+    let label: String
+    let draft: String
     let conversationId: String
 
+    init(label: String, draft: String? = nil, conversationId: String) {
+        self.label = label
+        self.draft = draft ?? label
+        self.conversationId = conversationId
+    }
+
     var body: some View {
-        Link(destination: URL(string: "meeshy://quickreply/\(conversationId)?text=\(text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!) {
-            Text(text)
+        Link(destination: URL(string: "meeshy://quickreply/\(conversationId)?text=\(draft.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!) {
+            Text(label)
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -792,10 +890,10 @@ struct FavoriteContactsEntry: TimelineEntry {
     let contacts: [FavoriteContact]
 
     static let sampleContacts: [FavoriteContact] = [
-        FavoriteContact(id: "1", name: "Mom", avatar: "person.circle.fill", status: "Online", accentColor: "34D399"),
-        FavoriteContact(id: "2", name: "John", avatar: "person.circle.fill", status: "Away", accentColor: "6366F1"),
-        FavoriteContact(id: "3", name: "Sarah", avatar: "person.circle.fill", status: "Online", accentColor: "F39C12"),
-        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", status: "3 members", accentColor: WidgetColors.brandDeepHex)
+        FavoriteContact(id: "1", name: "Mom", avatar: "person.circle.fill", presence: "online", accentColor: "34D399"),
+        FavoriteContact(id: "2", name: "John", avatar: "person.circle.fill", presence: "away", accentColor: "6366F1"),
+        FavoriteContact(id: "3", name: "Sarah", avatar: "person.circle.fill", presence: "idle", accentColor: "F39C12"),
+        FavoriteContact(id: "4", name: "Team", avatar: "person.3.fill", presence: "offline", accentColor: WidgetColors.brandDeepHex)
     ]
 }
 
@@ -826,9 +924,9 @@ struct FavoriteContactsWidgetView: View {
                             ZStack(alignment: .bottomTrailing) {
                                 InitialsAvatar(name: contact.name, accentColor: contact.accentColor, size: 50)
 
-                                if contact.status == "Online" {
+                                if let dotHex = contact.presenceState.dotHex {
                                     Circle()
-                                        .fill(Color(hex: WidgetColors.successHex))
+                                        .fill(Color(hex: dotHex))
                                         .frame(width: 12, height: 12)
                                         .overlay(
                                             Circle()
@@ -842,6 +940,11 @@ struct FavoriteContactsWidgetView: View {
                                 .lineLimit(1)
                                 .foregroundColor(.primary)
                         }
+                        // La pastille est une forme sans texte : sans cette
+                        // fusion, VoiceOver ne lit que le nom et l'état de
+                        // présence n'existe pas pour un lecteur d'écran.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("\(contact.name), \(contact.presenceState.localizedLabel)")
                     }
                 }
             }

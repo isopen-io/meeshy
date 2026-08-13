@@ -163,11 +163,11 @@ struct LiveActivityLockScreenView: View {
     var subtitleForActivityType: String {
         switch context.state.activityType {
         case .call:
-            return "Active Call"
+            return String(localized: "liveActivity.subtitle.call", defaultValue: "Active Call")
         case .messageDelivery:
-            return "Sending Message"
+            return String(localized: "liveActivity.subtitle.messageDelivery", defaultValue: "Sending Message")
         case .translation:
-            return "Translating..."
+            return String(localized: "liveActivity.subtitle.translation", defaultValue: "Translating…")
         }
     }
 
@@ -189,15 +189,15 @@ struct LiveActivityLockScreenView: View {
     func labelForMessageStatus(_ status: MeeshyActivityAttributes.MessageStatus) -> String {
         switch status {
         case .sending:
-            return "Sending..."
+            return String(localized: "liveActivity.messageStatus.sending", defaultValue: "Sending…")
         case .sent:
-            return "Sent"
+            return String(localized: "liveActivity.messageStatus.sent", defaultValue: "Sent")
         case .delivered:
-            return "Delivered"
+            return String(localized: "liveActivity.messageStatus.delivered", defaultValue: "Delivered")
         case .read:
-            return "Read"
+            return String(localized: "liveActivity.messageStatus.read", defaultValue: "Read")
         case .failed:
-            return "Failed"
+            return String(localized: "liveActivity.messageStatus.failed", defaultValue: "Failed")
         }
     }
 
@@ -310,7 +310,7 @@ struct LiveActivityExpandedBottom: View {
                         VStack(spacing: 4) {
                             Image(systemName: "mic.slash.fill")
                                 .font(.title3)
-                            Text("Mute")
+                            Text(String(localized: "liveActivity.action.mute", defaultValue: "Mute"))
                                 .font(.caption2)
                         }
                         .foregroundColor(.white)
@@ -320,7 +320,7 @@ struct LiveActivityExpandedBottom: View {
                         VStack(spacing: 4) {
                             Image(systemName: "phone.down.fill")
                                 .font(.title3)
-                            Text("End")
+                            Text(String(localized: "liveActivity.action.end", defaultValue: "End"))
                                 .font(.caption2)
                         }
                         .foregroundColor(.red)
@@ -330,7 +330,7 @@ struct LiveActivityExpandedBottom: View {
                         VStack(spacing: 4) {
                             Image(systemName: "message.fill")
                                 .font(.title3)
-                            Text("View")
+                            Text(String(localized: "liveActivity.action.view", defaultValue: "View"))
                                 .font(.caption2)
                         }
                         .foregroundColor(.white)

@@ -203,13 +203,22 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
 
-    public var lastSeenText: String? {
-        guard let date = lastSeenAt else { return nil }
-        let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "En ligne" }
-        if interval < 3600 { return "Vu il y a \(Int(interval / 60))min" }
-        if interval < 86400 { return "Vu il y a \(Int(interval / 3600))h" }
-        return "Vu il y a \(Int(interval / 86400))j"
+    /// Présence du pair d'une conversation directe, dérivée du SEUL signal que
+    /// le modèle porte (`lastSeenAt`) via la règle produit 1/3/5.
+    ///
+    /// C'est de la DONNÉE, pas un libellé : le rendu (couleur du dot, texte,
+    /// silence) appartient aux surfaces. Le libellé humain correspondant vit
+    /// dans `MeeshyUI` (`MeeshyConversation.lastSeenLabel`), qui a un catalogue
+    /// de chaînes — la cible `MeeshySDK` n'en a pas, et c'est pourquoi le
+    /// prédécesseur de cette propriété (`lastSeenText`) était du français codé
+    /// en dur servi à tous les utilisateurs, toutes langues confondues.
+    ///
+    /// `isOnline: false` : le modèle de conversation ne transporte pas le flag
+    /// backend, seulement l'horodatage. Une surface qui dispose de la présence
+    /// temps réel (`PresenceManager`) doit la préférer à ce calcul.
+    public var lastSeenPresence: PresenceState? {
+        guard let lastSeenAt else { return nil }
+        return UserPresence(isOnline: false, lastActiveAt: lastSeenAt).state
     }
 
     /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.

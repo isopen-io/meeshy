@@ -1,3 +1,131 @@
+# Tête instruite pour le cycle 109 — une chaîne d'affichage qui franchit un processus cesse d'être un affichage : elle devient un protocole, et personne ne l'a spécifiée
+
+*Le cycle 108 a pris le lot laissé par le 107 — « la cible MeeshyWidgets n'a aucun catalogue de
+chaînes » — et l'a trouvé exact. Mais en dénombrant les chaînes de la cible, il est tombé sur une
+d'entre elles qui n'était pas seulement mal traduite : elle était le seul argument d'une comparaison
+qui décidait d'afficher, ou non, la pastille de présence.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 108 ajoute — le treizième membre de la famille
+>
+> Le cycle 105 : *une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore.*
+> Le cycle 106 : *une garde LOCALE sur un défaut GLOBAL rassure autant qu'une garde globale.*
+> Le cycle 107 : *une règle appliquée par ses lecteurs CANONIQUES est plus dure à auditer qu'une règle appliquée nulle part — la réponse juste est un DÉNOMBREMENT.*
+> Le cycle 108 trouve le cas où les deux bouts sont corrects SÉPARÉMENT :
+>
+> **Un libellé humain qui franchit une frontière de processus devient un protocole, et un protocole
+> que personne n'a spécifié n'a aucune raison de s'accorder. `WidgetDataManager` publiait
+> `conv.lastSeenText ?? "Offline"` — du français codé en dur dans le SDK. Le widget Favoris, seul
+> lecteur, allumait sa pastille sur `contact.status == "Online"`. Les deux fichiers sont
+> irréprochables SÉPARÉMENT : l'un compose un texte plausible, l'autre teste une valeur plausible.
+> Ensemble, la comparaison était littéralement inatteignable — la pastille de présence du widget
+> n'a jamais pu s'allumer, dans aucune langue, depuis son écriture.**
+>
+> **Le symptôme à reconnaître** : un champ dont le nom décrit un AFFICHAGE (`status`, `label`,
+> `text`, `title`) et qui sert d'ARGUMENT à une décision (`== "Online"`, `.contains("error")`,
+> `switch text`). Le nom du champ dit sortie, l'usage dit entrée. Ce qui traverse un processus doit
+> être une DONNÉE — un jeton stable, non traduit, que chaque bout rend dans sa propre langue.
+>
+> **Corollaire de méthode** : un test de round-trip JSON ne prouve RIEN d'un contrat. Celui qui
+> existait (`test_widgetFavoriteContact_encodesAndDecodes`, `XCTAssertEqual(decoded.status,
+> "Online")`) fabriquait lui-même la valeur qu'il vérifiait ; il serait resté vert pour toujours.
+> Un contrat inter-processus se teste en confrontant l'ÉCRIVAIN au LECTEUR, jamais un côté seul.
+
+## Livré au cycle 108 — la pastille de présence du widget peut s'allumer, et 39 chaînes se traduisent
+
+**Défaut 1 — la pastille inatteignable.** Décrit ci-dessus. `WidgetFavoriteContact.status: String`
+(libellé) devient `presence: String` portant `PresenceState.rawValue`. `PresenceState` gagne un
+`String` brut, documenté comme CONTRAT DE TRANSPORT. Le widget en tient un miroir (`WidgetPresence`,
+la cible ne peut pas lier le SDK) et rend la règle produit 1/3/5 complète — vert `#34D399`, orange
+`#FBBF24`, gris `#9CA3AF`, et **rien** hors ligne — là où il n'avait qu'un booléen vert/rien.
+La présence publiée vient désormais de la MÊME autorité que la liste in-app
+(`PresenceManager.knownPresenceState`), avec repli sur l'horodatage REST pour un favori que le
+temps réel ne suit pas encore. Le champ est optionnel côté lecteur par tolérance de version : un
+payload écrit par l'ancienne app ne doit pas faire échouer le décodage du tableau entier.
+
+**Défaut 2 — le dénombrement 15 / 0.** La cible `MeeshyWidgets` appelait `String(localized:)` sur
+15 sites, avec clés et défauts propres, et n'embarquait AUCUN `Localizable.xcstrings`. Les 15
+retombaient sur leur défaut anglais pour 100 % des utilisateurs. Elle annonçait par ailleurs 5
+langues dans `CFBundleLocalizations` quand l'app en annonce 7. Livré : le catalogue (39 clés × 7
+langues, pluriels CLDR compris — 6 formes pour l'arabe), l'alignement des `CFBundleLocalizations`,
+et les ~15 littéraux restants routés (boutons de réponse rapide, « Mark as read », libellés de la
+Live Activity, métadonnées de l'App Intent visibles dans Raccourcis).
+
+**Défaut 3 — le français codé en dur dans le SDK.** `MeeshyConversation.lastSeenText` composait
+« En ligne » / « Vu il y a 3min » dans la cible `MeeshySDK`, qui n'a pas de catalogue. Remplacé par
+`lastSeenPresence` (DONNÉE, dans le SDK) + `lastSeenLabel` (LIBELLÉ localisé, dans `MeeshyUI`, qui a
+un catalogue). Les deux lecteurs app-side suivent.
+
+**Accessibilité** : la pastille est une forme sans texte — le nom seul était lu par VoiceOver.
+La cellule fusionne désormais nom + état. `offline` a un libellé bien qu'il ne rende aucune
+pastille : une annonce EST un affichage labellisé, et un lecteur d'écran qui n'entend rien ne peut
+pas distinguer « hors ligne » de « présence inconnue ».
+
+**Gardes** : `WidgetLocalizationCatalogGuardTests` (5 témoins) tient le dénombrement tout seul —
+tout site d'appel a une entrée, le catalogue n'a pas d'orpheline, chaque entrée couvre toutes les
+langues annoncées, et les deux cibles annoncent le même jeu. Son extracteur est **agnostique du
+constructeur** (il repère `"clé", defaultValue:`, pas `String(localized:)`) : une garde qui énumère
+les formes connues cesse de voir la première forme nouvelle, et cesse de le dire, puisqu'une clé
+non extraite disparaît des DEUX ensembles comparés. `WidgetPresenceContractTests` (8 témoins)
+confronte l'écrivain au lecteur : jeton toujours dans le vocabulaire, temps réel prioritaire sur
+l'horodatage, règle 1/3/5 sur le repli REST, miroir widget identique aux jetons du SDK, palette
+centrale non dérivée, `offline` sans pastille.
+
+**Réserve d'honnêteté sur la preuve RED** : aucune toolchain Swift dans l'environnement de la
+routine (constat inchangé des cycles 86 à 107) — le rouge-avant n'a pas été EXÉCUTÉ. Il a été établi
+MÉCANIQUEMENT hors Swift, par un portage à l'identique des algorithmes des deux gardes appliqué à
+`git show HEAD:` : 15 clés demandées contre 0 entrée de catalogue (le fichier n'existait pas),
+5 langues déclarées contre 7, aucun `enum WidgetPresence`. Le défaut 1 se démontre en outre par
+lecture pure : `lastSeenText` ne rend jamais la chaîne `"Online"` sur aucun chemin.
+
+## Constats du cycle 108, NON traités — le lot naturel du cycle 109
+
+1. **Le brouillon de réponse rapide suit la locale APPAREIL, pas la langue du COMPTE.** Le cycle 108
+   a séparé les deux rôles dans `QuickReplyButton` (`label` = chrome, `draft` = contenu) et les fait
+   tous deux passer par le catalogue widget — strictement mieux que l'anglais servi à tous, mais la
+   moitié « contenu » reste fausse au regard du Prisme : un compte francophone sur un iPhone anglais
+   déposera « Thanks! » dans son composeur. La séparation est là pour que la suite soit un
+   branchement : `WidgetDataManager` publie déjà dans l'App Group et connaît
+   `preferredContentLanguages` — il lui reste à publier les trois brouillons résolus. **Décision à
+   prendre en même temps** : le catalogue app ne couvre que 7 langues alors qu'un compte peut en
+   configurer ~200 ; quel repli quand la langue du compte n'est pas traduite (original anglais, ou
+   langue appareil) ?
+2. **`ContactEntity` et le widget Favoris nomment « contact » ce qui est une conversation.**
+   Reconduit du 106/107 — un renommage touche la clé App Group, donc la compatibilité des widgets
+   déjà posés. Le cycle 108 a payé exactement ce prix en douceur sur `status` → `presence` (champ
+   optionnel côté lecteur) : le patron de migration existe désormais, il est applicable ici.
+3. **`meeshy://conversations/recent` demande une destination qui n'existe pas.** Reconduit du
+   106/107 : l'App Shortcut s'intitule « Open Recent Conversation », la destination juste est *la
+   conversation la plus récente*, aucun cas `DeepLink` ne porte cette élection.
+4. **`meeshy://call?contactId=&type=` : amorcer un appel depuis un lien n'a pas de chemin.** Reconduit.
+5. **Les boutons de la Live Activity sont doublement morts.** Reconduit — `LiveActivityBridge` est
+   un stub, router les URL sans démarrer les activités ne servirait à rien. Sur iOS 17+, la bonne
+   forme est `Button(intent:)` / `LiveActivityIntent`, pas un `Link`. Le cycle 108 en a localisé les
+   libellés : ils sont désormais corrects et toujours inertes.
+6. **La garde du Prisme ne balaie que `apps/ios/Meeshy/`.** Reconduit du 107 — à étendre EN MÊME
+   TEMPS que la première extension qui afficherait un aperçu qu'elle résout elle-même.
+7. **Le dénombrement des catalogues n'existe QUE pour `MeeshyWidgets`.** La garde livrée est cadrée
+   sur une cible parce que c'est là qu'était le trou. Les trois autres cibles à catalogue
+   (`Meeshy`, `MeeshyNotificationExtension`, `MeeshyShareExtension`) et `MeeshyUI` n'ont AUCUN
+   dénombrement équivalent : rien n'y interdit aujourd'hui une clé demandée sans entrée, ni une
+   entrée sans langue. C'est la même question posée à quatre endroits de plus, et la réponse est
+   inconnue — **la poser AVANT de supposer qu'elle est bonne** (c'est très exactement l'erreur que
+   la leçon du cycle 107 décrit).
+8. **Reconduits, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans producteur ;
+   `clearHistoryBefore` écrit et diffusé, jamais appliqué côté serveur ; l'épingle qui n'atteint pas
+   la 3e audience ; Socket.IO sans adapter Redis ; le commentaire de `handleMessage` qui affirme à
+   tort que REST y passe ; la projection des accusés en trois exemplaires inline ;
+   `TranslationStatus` sans référent in-repo. Et l'audit d'adressage n'est toujours pas clos :
+   **Android hors `MessageApi`** n'a pas été passé au crible.
+
 # Tête instruite pour le cycle 108 — la bonne question n'est jamais « la règle est-elle appliquée ? », c'est « par combien de lecteurs sur combien ? »
 
 *Le cycle 107 a repris le lot laissé par le 106 et n'y a pas trouvé son défaut. Il l'a trouvé à côté,

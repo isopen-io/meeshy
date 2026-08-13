@@ -2,7 +2,19 @@ import Foundation
 
 // MARK: - Presence State
 
-public enum PresenceState: Equatable, Sendable {
+/// Les valeurs brutes sont un CONTRAT DE TRANSPORT, pas un détail d'affichage.
+///
+/// Elles franchissent l'App Group (`favorite_contacts`), où l'extension widget
+/// — qui ne peut pas lier le SDK — les reconstruit par un miroir de mêmes
+/// symboles. Un état de présence traverse donc les processus sous une forme
+/// stable et non traduite : ce que la surface d'arrivée en fait (couleur du
+/// dot, libellé, rien du tout) reste sa décision.
+///
+/// Ne JAMAIS faire voyager un libellé humain à leur place. C'est le défaut que
+/// le widget Favoris a porté jusqu'au cycle 108 : l'app publiait
+/// `lastSeenText` (français codé en dur), le widget testait `== "Online"`, et
+/// la pastille verte était donc littéralement inatteignable.
+public enum PresenceState: String, Equatable, Sendable {
     case online   // vert + pulse — connecté (isOnline backend, garde <= 5min) ou actif <= 60s
     case away     // orange — actif <= 3min
     case idle     // gris AFFICHÉ — actif <= 5min
