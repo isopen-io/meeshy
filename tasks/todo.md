@@ -1,3 +1,109 @@
+# Tête instruite pour le cycle 103 — un compteur se tait, un NOM se tait deux fois
+
+*Le cycle 102 a exécuté le lot que le cycle 101 avait instruit et refusé de livrer dans le même
+passage. En l'ouvrant, il a trouvé sous le défaut annoncé (un résumé lu de colonnes mortes) deux
+défauts que l'instruction n'avait pas vus : la fuite y était NOMINATIVE, et la requête n'avait
+aucune borne.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 102 ajoute — le septième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 : *un gate posé sur le chemin CHAUD n'est tenu que par les chemins qui le RELISENT.*
+> Le cycle 102 trouve le septième :
+>
+> **Un constat reporté est une hypothèse, pas un inventaire. Le cycle qui l'ouvre doit RELIRE le
+> code, pas croire sa propre note — le défaut annoncé est rarement le seul, et rarement le pire.**
+>
+> Le cycle 101 avait consigné : « ces deux routes servent leur résumé depuis les colonnes mortes,
+> donc `{0, 0, null, null}` ». Exact, et incomplet sur deux points que seule la relecture donne :
+> (1) les `entries` de `GET /conversations/:id/status` exposaient `readAt` **avec l'identité** —
+> `displayName`, `avatar`, `username` — sans aucun filtre `showReadReceipts`, une fuite d'une autre
+> NATURE que le compteur fermé au cycle 101 ; (2) sa requête n'avait **aucun `take`** — chaque
+> message non supprimé de la conversation, chacun avec ses entrées de statut et le participant
+> joint sur chacune. Un déni de service qu'un participant ordinaire déclenchait, et que la note du
+> cycle 101 ne mentionnait pas parce qu'elle regardait la valeur servie, pas la requête qui la
+> produit.
+>
+> **La méthode qui en découle :** rouvrir un constat reporté, c'est rouvrir le HANDLER ENTIER —
+> sa requête, ses jointures, ses bornes, ce qu'il expose — et non seulement la ligne que la note
+> désignait. Une note de suivi oriente le regard ; elle ne le remplace pas.
+
+## Livré au cycle 102 — les deux dernières surfaces d'accusés rejoignent la source de vérité
+
+**Le défaut, en trois couches.** `GET /conversations/:id/status` (a) servait un `summary` lu de
+colonnes sans écrivain, donc toujours `{0, 0, null, null}`, **à côté** d'`entries` portant les
+vraies dates — une charge utile qui se contredisait elle-même ; (b) exposait ces `entries`
+NOMINATIVES sans le gate `showReadReceipts` que les cinq autres lecteurs posent ; (c) chargeait la
+conversation ENTIÈRE, sans `take`, chaque message avec ses entrées et le participant joint sur
+chacune. `GET /messages/:messageId` partageait le défaut (a), au niveau de `statusSummary` **et**
+de ses champs de premier niveau, ceux que les trois clients décodent pour leurs coches.
+
+**Livré** : les deux routes délèguent à `getConversationReadStatuses` ; nouvelle méthode publique
+`MessageReadStatusService.filterReadReceiptVisible(participants)` (le cœur `_loadReadReceiptOptOuts`
+reste privé) par laquelle `/status` filtre ses `entries` ; plafond
+`CONVERSATION_STATUS_PAGE_SIZE = 50`. ADR : `services/gateway/decisions.md` § 2026-08-13 (2ᵉ entrée).
+
+**Tests** : 8 nouveaux, **RED prouvé sur 7** — le résumé rendait `99` (la colonne stubbée à une
+valeur impossible), le participant opt-out figurait dans `entries` avec son nom et sa date, et
+`findMany` n'avait pas de `take`. Deux tests PRÉEXISTANTS ont été repointés : ils figeaient
+`deliveredCount: 3` / `deliveredCount: 1`, c'est-à-dire des valeurs que la production ne produit
+jamais — ils verrouillaient le comportement du double, pas celui de la route. **Mutation-proof** :
+retrait du `.filter(visibleParticipantIds)` → exactement le test de fuite rougit ; retrait du
+`take` → exactement le test de borne rougit. Gate : `tsc --noEmit` gateway **propre**, suite
+gateway complète **691 suites / 17 046 tests** vertes.
+
+**Robustesse rencontrée en chemin** : le premier câblage de `/messages/:messageId` utilisait
+`.catch()` sur la promesse du service. Un jet SYNCHRONE (méthode absente sur un double, demain une
+erreur de construction) le traversait et rendait un **500** sur la route entière. Remplacé par un
+`try/catch` : le résumé est un ENRICHISSEMENT, son échec ne doit jamais emporter le contenu demandé.
+
+## Constats du cycle 102, NON traités — le lot naturel du cycle 103
+
+1. **`GET /conversations/:id/status` n'a AUCUN consommateur** — vérifié par grep sur `apps/web`,
+   `apps/ios`, `apps/android` et `packages/MeeshySDK`. Sa fonction est rendue, correctement et
+   paginée, par `GET /messages/:messageId/status-details`. Le cycle 102 l'a RÉPARÉ plutôt que
+   retiré, délibérément : supprimer un endpoint d'une API publiée est une décision produit
+   irréversible, du genre de celles que cette routine confie à un humain. **La question mérite
+   d'être posée** — la réparation ne la referme pas.
+2. **`receivedByAllAt`** reste déclaré (Prisma, deux types partagés, schéma OpenAPI), `select`é et
+   relayé par trois routes, **sans écrivain ni lecteur** — aucun client des trois plateformes ne le
+   décode. Cas du cycle 100 à l'état pur ; il sort entier, avec ses déclarations, ou pas du tout.
+   Ses voisins `deliveredToAllAt` / `readByAllAt` sont dans le même cas côté ÉCRITURE mais, eux,
+   sont décodés par iOS et Android — ils ne se valent pas et ne doivent pas être retirés du même
+   geste.
+
+## Ce qui reste ouvert des cycles précédents (inchangé au cycle 102)
+
+- **Item 1 (rétention des posts supprimés) : toujours à poser à un humain, pas à réessayer.**
+- **L'index MongoDB `expiresAt_ephemeral_partial` n'est toujours pas appliqué** (cycle 92) —
+  COLLSCAN par minute sur `Message`. Demande un accès de déploiement que la routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : aucune toolchain Swift ici.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91) — re-confirmé au cycle 101,
+  `claude/keen-hamilton-zphlmj` survit à son merge. Purger depuis un contexte qui a le droit.
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84) n'existe toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). Non reproduit aux cycles 88 à 102.
+- Le mode `around` de `GET /conversations/:id/messages` lit `limit + 1` sans jamais retirer de ligne
+  sonde (cycle 99).
+- `callParticipantStatusEnum` (`utils/validation.ts`) survit sans lecteur (cycle 100).
+
 # Tête instruite pour le cycle 102 — le gate posé à l'ÉMISSION ne vaut que si le RATTRAPAGE le tient
 
 *Le cycle 101 a porté la méthode du cycle 100 (« compter les ÉCRIVAINS d'un champ avant ses
