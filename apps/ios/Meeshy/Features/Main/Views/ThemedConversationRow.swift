@@ -488,9 +488,21 @@ struct ThemedConversationRow: View {
 
     // MARK: - Last Message Preview
 
+    /// B1 (Prisme Linguistique) — l'aperçu TEL QU'IL SERA RENDU.
+    ///
+    /// Le test d'existence (`hasText`, qui arbitre entre texte, pièce jointe et
+    /// position) lisait le champ BRUT pendant que le rendu, lui, affichait la
+    /// valeur résolue. Les deux ne peuvent pas diverger sur un même écran :
+    /// une conversation dont la traduction est vide aurait réservé la place
+    /// d'un texte pour n'en afficher aucun, au lieu de retomber sur son
+    /// libellé de position ou de pièce jointe.
+    private var resolvedPreviewText: String {
+        conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? ""
+    }
+
     @ViewBuilder
     private func standardMessageContent(showEphemeralIcon: Bool) -> some View {
-        let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let attachments = conversation.lastMessageAttachments
         let totalCount = conversation.lastMessageAttachmentCount
         HStack(spacing: 4) {
@@ -516,7 +528,7 @@ struct ThemedConversationRow: View {
                 }
                 // B1 — apply Prisme Linguistique. Falls back to the raw
                 // preview when no translations are attached.
-                Text(conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? "")
+                Text(resolvedPreviewText)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
@@ -571,7 +583,7 @@ struct ThemedConversationRow: View {
                 standardMessageContent(showEphemeralIcon: true)
 
             case .standard:
-                let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let attachments = conversation.lastMessageAttachments
                 if hasText || !attachments.isEmpty {
                     standardMessageContent(showEphemeralIcon: false)

@@ -1,3 +1,106 @@
+# Tête instruite pour le cycle 108 — la bonne question n'est jamais « la règle est-elle appliquée ? », c'est « par combien de lecteurs sur combien ? »
+
+*Le cycle 107 a repris le lot laissé par le 106 et n'y a pas trouvé son défaut. Il l'a trouvé à côté,
+sur la surface que le 106 venait justement de rendre fonctionnelle : le widget affiche désormais ses
+conversations — dans la langue de l'expéditeur.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 107 ajoute — le douzième membre de la famille
+>
+> Le cycle 105 : *une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore.*
+> Le cycle 106 : *une garde LOCALE sur un défaut GLOBAL rassure autant qu'une garde globale.*
+> Le cycle 107 trouve la version sans garde du tout :
+>
+> **Une règle appliquée par ses lecteurs CANONIQUES est plus difficile à auditer qu'une règle
+> appliquée nulle part. `CLAUDE.md` nomme `resolvedLastMessagePreview` comme la source de vérité du
+> Prisme pour l'aperçu de conversation ; `ThemedConversationRow` l'appelle, commente la règle, et la
+> teste. Un audit qui demande « le Prisme est-il appliqué à l'aperçu ? » tombe dessus et répond oui.
+> La réponse juste n'est jamais un exemple — c'est un DÉNOMBREMENT : 2 appels du résolveur contre 6
+> fichiers lisant le champ brut. L'écart entre les deux chiffres EST le défaut, et il se lit en deux
+> greps.**
+>
+> **Le symptôme à reconnaître** : un commentaire de code qui explique correctement une règle
+> partagée. Il prouve que ce fichier-là la connaît ; il ne dit rien des autres, et il RASSURE.
+>
+> **Corollaire de sortie de périmètre, à appliquer partout** : la surface la plus grave n'est pas la
+> plus visible, c'est la DERNIÈRE — celle après laquelle plus personne ne peut résoudre. App Group,
+> payload de notification, export gravé : toute fonction qui écrit hors de l'app est un point de
+> résolution OBLIGATOIRE, jamais un relais.
+
+## Livré au cycle 107 — l'aperçu de conversation se résout partout, et une garde le dénombre
+
+**Le défaut.** Cinq lecteurs de production de `conversation.lastMessagePreview`, deux qui appliquent le
+Prisme. Les trois autres affichaient le dernier message dans la langue de l'expéditeur : `WidgetDataManager`
+(le texte publié dans `recent_conversations`, donc l'écran d'accueil), `SharePickerView` (sélecteur de
+destination de partage) et `WidgetPreviewView` (aperçu in-app des widgets). Les trois recevaient pourtant
+les MÊMES objets `MeeshyConversation` que la liste, `lastMessageTranslations` inclus — la traduction était
+en main, personne ne la lisait. Le widget est le cas grave : son texte QUITTE l'app, aucune résolution
+n'est plus possible en aval.
+
+**Livré** : les trois surfaces résolvent par le prisme du lecteur (`AuthManager.currentUser?
+.preferredContentLanguages`, la même autorité que `ConversationListView`) ; côté widget par un seam
+injectable résolu une fois par publication. La ligne de liste cesse au passage de se contredire —
+son `hasText` lisait le brut pendant que le rendu affichait le résolu. Et la règle n'est plus tenue par
+convention : `ConversationPreviewPrismSourceGuardTests` extrait TOUS les accès `.lastMessagePreview`
+sous `apps/ios/Meeshy/` et exige de chaque fichier une classification (résolu, ou allowlisté avec sa
+raison — 2 entrées, dont aucune n'AFFICHE le champ : l'une l'écrit depuis `conversation:updated`,
+l'autre lit un homonyme déjà résolu). La garde refuse un balayage vide, corollaire payé au cycle 106.
+
+**Tests** : 4 témoins de garde + 4 témoins de comportement sur le payload App Group réellement publié.
+**Réserve d'honnêteté sur la preuve RED** : aucune toolchain Swift dans l'environnement de la routine
+(constat inchangé des cycles 86 à 106) — le rouge-avant n'a pas été EXÉCUTÉ. Il a en revanche été établi
+MÉCANIQUEMENT hors Swift, par un portage à l'identique de l'algorithme de la garde : avant correctif il
+rendait 4 fichiers non déclarés (`WidgetDataManager`, `SharePickerView`, `WidgetPreviewView`,
+`ThemedConversationRow`), après correctif exactement les 2 de l'allowlist. C'est ce même portage qui a
+servi à choisir la forme du motif (`.lastMessagePreview` en accès membre, borne droite obligatoire —
+sans elle le balayage comptait `lastMessagePreviewView`, un nom de vue).
+
+## Constats du cycle 107, NON traités — le lot naturel du cycle 108
+
+1. **La cible `MeeshyWidgets` n'a AUCUN catalogue de chaînes.** Le cycle 106 notait que trois libellés
+   du widget « Réponse rapide » (« OK », « Thanks! », « Call me ») n'étaient pas localisés « alors que
+   tout le reste passe par `String(localized:)` ». Le constat est plus large et sa conclusion inverse :
+   `Localizable.xcstrings` existe pour `Meeshy`, `MeeshyNotificationExtension` et `MeeshyShareExtension`
+   — **pas** pour `MeeshyWidgets`. Chaque `String(localized:…, defaultValue:)` du widget retombe donc sur
+   son défaut anglais pour TOUS les utilisateurs, y compris les 7 langues que l'app traduit. Localiser
+   les trois littéraux ne changerait rien à l'exécution : le travail est d'ajouter un catalogue à la
+   cible (`project.yml`), pas de réécrire trois lignes. **À décider en même temps** : le libellé du
+   bouton est aussi le TEXTE déposé en brouillon — le premier relève de la locale appareil (chrome
+   d'interface), le second de la langue configurée du compte (contenu). Les deux peuvent diverger.
+2. **`WidgetDataManager` publie encore deux chaînes fabriquées à la main, hors catalogue.**
+   `formatLastMessage` compose `"[N attachment(s)]"` — anglais, pluriel bricolé — et
+   `publishFavoriteContacts` publie `conv.lastSeenText ?? "Offline"`, où `lastSeenText` est du FRANÇAIS
+   codé en dur dans le SDK (`CoreModels.swift`, « Vu il y a … »). Le widget mélange donc les deux langues
+   dans une même vue. Contrairement au point 1, ces deux-là sont composées DANS l'app, qui a son
+   catalogue : elles sont corrigibles sans toucher à la cible widget. Le `lastSeenText` du SDK est le
+   morceau qui demande une décision (localiser dans le SDK, ou rendre la composition app-side).
+3. **`meeshy://conversations/recent` demande une destination qui n'existe pas.** Reconduit du 106 :
+   l'App Shortcut s'intitule « Open Recent Conversation », la destination juste est *la conversation la
+   plus récente*, aucun cas `DeepLink` ne porte cette élection. Décision de produit légère, mais décision.
+4. **`meeshy://call?contactId=&type=` : amorcer un appel depuis un lien n'a pas de chemin.** Reconduit.
+5. **Les boutons de la Live Activity sont doublement morts.** Reconduit — `LiveActivityBridge` est un
+   stub, router les URL sans démarrer les activités ne servirait à rien. Sur iOS 17+, la bonne forme
+   est `Button(intent:)` / `LiveActivityIntent`, pas un `Link`.
+6. **`ContactEntity` et le widget Favoris nomment « contact » ce qui est une conversation.** Reconduit —
+   un renommage touche la clé App Group, donc la compatibilité des widgets déjà posés.
+7. **La garde du Prisme ne balaie que `apps/ios/Meeshy/`.** Aucune cible d'extension n'affiche
+   aujourd'hui un aperçu qu'elle résout elle-même, mais si l'une venait à le faire, elle serait hors
+   de portée du dénombrement. À étendre EN MÊME TEMPS que la première extension qui le ferait.
+8. **Reconduits, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans producteur ;
+   `clearHistoryBefore` écrit et diffusé, jamais appliqué côté serveur ; l'épingle qui n'atteint pas la
+   3e audience ; Socket.IO sans adapter Redis ; le commentaire de `handleMessage` qui affirme à tort que
+   REST y passe ; la projection des accusés en trois exemplaires inline ; `TranslationStatus` sans
+   référent in-repo. Et l'audit d'adressage n'est toujours pas clos : **Android hors `MessageApi`**
+   n'a pas été passé au crible.
+
 # Tête instruite pour le cycle 107 — la connaissance qui manque n'est pas toujours absente : elle peut être là, appliquée à UNE cible
 
 *Le cycle 106 a mené l'audit d'adressage promis au cycle 102 et reconduit quatre fois. Il ne l'a pas

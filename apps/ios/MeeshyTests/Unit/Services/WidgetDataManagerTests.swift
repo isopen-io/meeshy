@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -46,6 +47,124 @@ final class WidgetDataManagerTests: XCTestCase {
                 "staging dir \(dir.lastPathComponent) must be removed — its blobs would replay under the next account"
             )
         }
+    }
+
+    // MARK: - B1 (Prisme Linguistique) — l'aperçu PUBLIÉ dans l'App Group
+
+    /// Le texte publié ici quitte l'app : il s'affiche sur l'écran d'accueil,
+    /// hors de portée de toute résolution ultérieure. `publishConversations`
+    /// est donc le dernier endroit où le Prisme peut encore s'appliquer — et
+    /// il ne l'appliquait pas, pendant que la ligne de liste in-app, elle, le
+    /// faisait depuis `resolvedLastMessagePreview`.
+    private func makePrismSUT(
+        preferredLanguages: [String]
+    ) throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.widgetprism.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { preferredLanguages }
+        )
+        return (sut, defaults)
+    }
+
+    private func makeConversation(
+        id: String = "conv-1",
+        type: MeeshyConversation.ConversationType = .direct,
+        title: String = "Alice",
+        lastMessagePreview: String?,
+        lastMessageOriginalLanguage: String?,
+        lastMessageTranslations: [String: String]?,
+        lastMessageSenderName: String? = nil
+    ) -> MeeshyConversation {
+        var conversation = MeeshyConversation(
+            id: id,
+            identifier: id,
+            type: type,
+            title: title,
+            lastMessagePreview: lastMessagePreview,
+            lastMessageSenderName: lastMessageSenderName
+        )
+        conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        conversation.lastMessageTranslations = lastMessageTranslations
+        return conversation
+    }
+
+    private func publishedPreviews(from defaults: UserDefaults) throws -> [String] {
+        let data = try XCTUnwrap(
+            defaults.data(forKey: "recent_conversations"),
+            "publishConversations doit écrire la clé recent_conversations"
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([WidgetConversation].self, from: data).map(\.lastMessage)
+    }
+
+    func test_publishConversations_publishesTheTranslationMatchingTheViewerPrism_notTheSenderLanguage() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"]
+            )
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults), ["Bonjour"],
+            "le widget doit afficher l'aperçu dans la langue du LECTEUR, comme la liste in-app"
+        )
+    }
+
+    /// Règle #1 du Prisme (CLAUDE.md) : l'absence de traduction vers une langue
+    /// du prisme fait afficher l'ORIGINAL — jamais `translations.first`.
+    func test_publishConversations_withNoPreferredLanguageServed_publishesTheOriginal_neverAnUnrelatedTranslation() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["de": "Hallo"]
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Hello there"])
+    }
+
+    /// Règle #3 du Prisme : la langue d'origine concourt à son RANG. Prisme
+    /// `["fr", "en"]`, message anglais, traduction française disponible →
+    /// « Bonjour », jamais « Hello ».
+    func test_publishConversations_originalLanguageRanksInThePrism_itNeverShortCircuitsThePrimaryLanguage() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr", "en"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"]
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Bonjour"])
+    }
+
+    /// Le préfixe d'expéditeur des conversations de groupe doit précéder le
+    /// texte RÉSOLU — sinon la ligne mélange le nom traduit et le corps brut.
+    func test_publishConversations_groupPrefix_wrapsTheResolvedPreview() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                type: .group,
+                title: "Équipe",
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"],
+                lastMessageSenderName: "Alice"
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Alice: Bonjour"])
     }
 
     // MARK: - WidgetConversation Data Model
