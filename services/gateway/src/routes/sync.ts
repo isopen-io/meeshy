@@ -4,6 +4,10 @@ import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middlew
 import { SequenceService } from '../services/SequenceService';
 import { computeETag, ifNoneMatchMatches } from '../utils/etag';
 import { loadPersonalHistoryHidingByConversation } from '../services/personalHistoryFilter';
+import {
+  historyFloorClause,
+  loadShareLinkHistoryFloorsOrFail,
+} from '../services/shareLinkHistoryFloor';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from './conversations/utils/message-sender-select';
@@ -236,12 +240,28 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
 
 type SyncMessage = Prisma.MessageGetPayload<{ select: typeof syncMessageSelect }>;
 
+/**
+ * QUI demande le rattrapage — et la seule forme qui rende l'erreur du correctif
+ * naïf inexprimable.
+ *
+ * `authContext.userId` porte un `User.id` pour un compte et un `Participant.id`
+ * pour une session anonyme : la MÊME variable, deux colonnes différentes. La
+ * RLS de `/sync` filtre `Participant.userId`, qui est NULL pour tout anonyme —
+ * ouvrir la route sans toucher à la clause aurait rendu des streams vides, sans
+ * erreur ni log, c'est-à-dire un rattrapage qui ne rattrape rien. Une union
+ * discriminée oblige chaque lecteur à dire laquelle des deux colonnes il
+ * interroge.
+ */
+type SyncIdentity =
+  | { readonly kind: 'user'; readonly userId: string }
+  | { readonly kind: 'anonymous'; readonly participantId: string };
+
 export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
   const sequenceService = new SequenceService(prisma);
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
-    allowAnonymous: false,
+    allowAnonymous: true,
   });
 
   fastify.get('/sync', { preValidation: [requiredAuth] }, async (request, reply) => {
@@ -280,7 +300,24 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const authRequest = request as UnifiedAuthRequest;
-    const userId = authRequest.authContext.userId;
+    const authContext = authRequest.authContext;
+    const userId = authContext.userId;
+
+    // Une session anonyme SANS `participantId` n'a pas d'identité interrogeable
+    // ici. Retomber sur la branche `userId` lui servirait des streams vides —
+    // une réponse 200 qui affirme « rien n'a changé » à qui n'a rien pu être
+    // demandé. Le middleware pose toujours ce champ ; c'est précisément
+    // pourquoi son absence est un refus et non un cas nominal.
+    if (authContext.type === 'anonymous' && !authContext.participantId) {
+      return reply.status(401).send({
+        success: false,
+        error: { code: 'AUTH_REQUIRED', message: 'Authentication required' },
+      });
+    }
+    const identity: SyncIdentity = authContext.type === 'anonymous'
+      ? { kind: 'anonymous', participantId: authContext.participantId as string }
+      : { kind: 'user', userId: userId as string };
+
     const sinceDate = new Date(since);
     const cap = Math.min(limit ?? MAX_ITEMS_PER_COLLECTION, MAX_ITEMS_PER_COLLECTION);
 
@@ -295,14 +332,24 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     // Gap detection EXACTE (A1) : le client annonce le dernier `_seq` vu ; si
     // le serveur a émis > GAP_THRESHOLD events depuis, le delta temporel ne
     // suffit plus → full resync requis.
-    const checkpointSeq = await sequenceService.currentSeq(userId);
+    //
+    // Une session anonyme n'a pas de curseur à lire : `UserEventSeq` est
+    // INDEXÉE par `User.id` (`@id @db.ObjectId`, alimentée par `emitWithSeq`
+    // sur la room personnelle d'un compte), et un `Participant.id` n'y désigne
+    // rien. La requête ne planterait pas — un id de participant est un ObjectId
+    // valide — elle poserait une question dont la réponse est connue d'avance,
+    // sur le chemin appelé au retour de veille. `checkpointSeq = 0` rend
+    // `hasGap` faux, ce qu'il serait de toute façon.
+    const checkpointSeq = identity.kind === 'anonymous'
+      ? 0
+      : await sequenceService.currentSeq(identity.userId);
     const hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD;
 
     const collectionsResult: Record<string, unknown> = {};
     if (requested.includes('messages')) {
       collectionsResult.messages = hasGap
         ? { added: [], modified: [], deleted: [], truncated: false, nextCursor: null }
-        : await syncMessages({ prisma, userId, sinceDate, cap, scope, cursor: syncCursor });
+        : await syncMessages({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor });
     }
 
     const messagesCol = collectionsResult.messages as { nextCursor?: string | null } | undefined;
@@ -487,7 +534,7 @@ function trimToByteBudget<T>(
 
 async function syncMessages(opts: {
   prisma: FastifyInstance['prisma'];
-  userId: string;
+  identity: SyncIdentity;
   sinceDate: Date;
   cap: number;
   scope?: string;
@@ -499,17 +546,59 @@ async function syncMessages(opts: {
   truncated: boolean;
   nextCursor: string | null;
 }> {
-  const { prisma, userId, sinceDate, cap, scope, cursor } = opts;
+  const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
 
-  // RLS : uniquement les conversations où l'utilisateur est participant actif.
+  // RLS : uniquement les conversations où le demandeur est participant actif —
+  // par `Participant.userId` pour un compte, par `Participant.id` pour une
+  // session anonyme, dont c'est la SEULE clé (son `userId` est null). Le `scope`
+  // reste une INTERSECTION dans les deux cas : il rétrécit l'appartenance, il ne
+  // la remplace jamais.
+  //
+  // `joinedAt` et `shareLinkId` sont lus dans la même passe parce que c'est la
+  // ligne participant qui porte le plancher d'historique du lien de partage —
+  // les redemander plus bas ferait un aller-retour de plus sur le chemin de
+  // rattrapage.
   const memberships = await prisma.participant.findMany({
-    where: { userId, isActive: true, ...(scope ? { conversationId: scope } : {}) },
-    select: { conversationId: true },
+    where: identity.kind === 'anonymous'
+      ? { id: identity.participantId, isActive: true, ...(scope ? { conversationId: scope } : {}) }
+      : { userId: identity.userId, isActive: true, ...(scope ? { conversationId: scope } : {}) },
+    select: { conversationId: true, joinedAt: true, shareLinkId: true },
   });
-  const conversationIds = memberships.map((m) => m.conversationId);
-  if (conversationIds.length === 0) {
+  if (memberships.length === 0) {
     return { added: [], modified: [], deleted: [], truncated: false, nextCursor: null };
   }
+
+  // Ce que le lien d'entrée interdit de relire. La lecture est un CONTRÔLE
+  // D'ACCÈS : quand elle échoue, les conversations concernées sortent de
+  // l'ensemble plutôt que d'être servies sans borne.
+  //
+  // Mais un retrait SILENCIEUX serait un trou définitif, et pour la raison que
+  // documente `SYNC_CHECKPOINT_LAG_MS` : une page non tronquée fait adopter le
+  // checkpoint, et la borne serveur est stricte — la fenêtre écartée ne serait
+  // jamais redemandée. La conversation retirée fait donc de la page une page
+  // INCOMPLÈTE (`truncated`), ce que le client traduit par « redemande depuis
+  // la même position ». C'est la posture du stream des masquages, pour la même
+  // raison, et elle ne se confond pas avec le budget de poids : ici on ne
+  // reprendra pas « plus loin », on reprendra AU MÊME endroit jusqu'à ce que la
+  // lecture du plancher redevienne possible.
+  const { floors, unreadableConversationIds } = await loadShareLinkHistoryFloorsOrFail(
+    prisma,
+    memberships,
+  );
+  const dropped = new Set(unreadableConversationIds);
+  const conversationIds = memberships
+    .map((m) => m.conversationId)
+    .filter((id) => !dropped.has(id));
+  if (conversationIds.length === 0) {
+    return {
+      added: [],
+      modified: [],
+      deleted: [],
+      truncated: dropped.size > 0,
+      nextCursor: dropped.size > 0 ? encodeSyncCursor(cursor ?? {}) : null,
+    };
+  }
+  const historyFloor = historyFloorClause(conversationIds, floors);
 
   // CHANGED — non supprimés modifiés depuis `since`. Keyset `(updatedAt, id)` :
   // à la 1re page on part du floor `since` ; ensuite on reprend STRICTEMENT après
@@ -518,6 +607,7 @@ async function syncMessages(opts: {
     where: {
       conversationId: { in: conversationIds },
       deletedAt: null,
+      ...historyFloor,
       ...(cursor?.c
         ? {
             OR: [
@@ -553,8 +643,14 @@ async function syncMessages(opts: {
   // synchronisation boucherait sur place. Filtrer la livraison suffit — c'est
   // le seul stream où un message masqué reviendrait sans que l'utilisateur ait
   // rien demandé, la synchronisation étant déclenchée par l'app, pas par lui.
+  // `UserMessageDeletion` et `UserConversationPreferences` sont attachées à
+  // `User` (relation obligatoire côté schéma) : une session anonyme n'y a ni
+  // ligne ni moyen d'en écrire une. Passer `null` — l'idiome exact de
+  // `GET /conversations/:id/messages` — court-circuite les deux lectures plutôt
+  // que de les interroger avec un `Participant.id`, qui est une faute de
+  // catégorie avant d'être une requête inutile.
   const hidingByConversation = await loadPersonalHistoryHidingByConversation(prisma, {
-    userId,
+    userId: identity.kind === 'user' ? identity.userId : null,
     conversationIds,
   });
   const visible = hidingByConversation.size === 0
@@ -585,6 +681,11 @@ async function syncMessages(opts: {
   const deletedRows = await prisma.message.findMany({
     where: {
       conversationId: { in: conversationIds },
+      // Le plancher d'historique vaut aussi ICI. Une tombstone ne porte pas de
+      // contenu, mais elle atteste qu'un message a EXISTÉ à un instant donné —
+      // exactement ce qu'un lien `allowViewHistory: false` retire à qui entre
+      // par lui. Le stream le plus maigre est celui qu'on oublie de border.
+      ...historyFloor,
       ...(cursor?.d
         ? {
             OR: [
@@ -611,14 +712,23 @@ async function syncMessages(opts: {
   // bulle), et deux tableaux auraient obligé chaque client à écrire deux fois
   // le même retrait. La distinction reste lisible sur le serveur, où elle porte
   // — deux tables, deux keysets.
-  const hidden = await syncHiddenTombstones({
-    prisma,
-    userId,
-    sinceDate,
-    conversationIds,
-    cap,
-    cursor: cursor?.h,
-  });
+  //
+  // Une session anonyme n'a pas ce stream, et son absence n'est PAS une
+  // exhaustivité en défaut : il n'y a rien à énumérer, donc `truncated` reste
+  // faux. C'est la distinction que la posture d'échec de `syncHiddenTombstones`
+  // rend importante — « je n'ai pas pu lire » et « il n'y a rien à lire » se
+  // ressemblent dans le résultat et s'opposent dans ce qu'elles demandent au
+  // client.
+  const hidden = identity.kind === 'user'
+    ? await syncHiddenTombstones({
+        prisma,
+        userId: identity.userId,
+        sinceDate,
+        conversationIds,
+        cap,
+        cursor: cursor?.h,
+      })
+    : { tombstones: [] as DeletedRef[], truncated: false, nextKey: cursor?.h };
 
   // Un message peut être masqué pour moi PUIS supprimé pour tous : il sort des
   // deux streams. Dédupliquer par message évite d'annoncer deux fois la même
@@ -636,7 +746,10 @@ async function syncMessages(opts: {
       return true;
     });
 
-  const truncated = changedTruncated || deletedTruncated || hidden.truncated;
+  // `dropped.size` compte ici au même titre que les trois autres : une
+  // conversation écartée faute de pouvoir lire son plancher n'a rien livré, et
+  // la page ne peut donc pas se déclarer complète.
+  const truncated = changedTruncated || deletedTruncated || hidden.truncated || dropped.size > 0;
 
   // Report par stream : on avance la clé si cette page a livré des items, sinon
   // on conserve la clé entrante — un stream épuisé reste sur sa dernière position
