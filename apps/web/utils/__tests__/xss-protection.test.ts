@@ -11,7 +11,6 @@ import {
   sanitizeUsername,
   sanitizeJson,
   containsXss,
-  sanitizeNotification,
   escapeAttribute,
   truncateText,
   isValidEmail,
@@ -339,52 +338,6 @@ describe('containsXss', () => {
   it('should not flag safe content', () => {
     expect(containsXss('Hello World')).toBe(false);
     expect(containsXss('<p>Safe paragraph</p>')).toBe(false);
-  });
-});
-
-describe('sanitizeNotification', () => {
-  it('should sanitize all text fields', () => {
-    const notification = {
-      id: 'notif123',
-      type: 'new_message',
-      title: '<script>XSS</script>Title',
-      content: '<b>Bold</b> content',
-      messagePreview: 'Preview <script>alert(1)</script>',
-      senderUsername: 'John<script>Doe',
-      senderAvatar: 'https://example.com/avatar.jpg',
-      isRead: false,
-      priority: 'normal',
-      createdAt: new Date(),
-      context: {
-        conversationId: 'conv123',
-        conversationTitle: '<b>Chat</b>',
-        messageId: 'msg456',
-        userId: 'user789'
-      }
-    };
-
-    const result = sanitizeNotification(notification);
-
-    expect(result.title).not.toContain('<script>');
-    expect(result.content).not.toContain('<b>');
-    expect(result.messagePreview).not.toContain('<script>');
-    expect(result.senderUsername).not.toContain('<script>');
-    expect(result.context.conversationTitle).not.toContain('<b>');
-  });
-
-  it('should validate URLs', () => {
-    const notification = {
-      senderAvatar: 'javascript:alert(1)',
-      // ... other fields
-    };
-
-    const result = sanitizeNotification(notification);
-
-    expect(result.senderAvatar).toBeNull(); // Invalid URL blocked
-  });
-
-  it('should handle null notification', () => {
-    expect(sanitizeNotification(null)).toBeNull();
   });
 });
 

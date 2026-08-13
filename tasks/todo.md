@@ -291,3 +291,109 @@ singleton).
 - Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
   (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`), arbitrage produit `delete-for-me`
   au niveau message (cycle 114, constat 2).
+
+---
+
+# Cycle 118 — le web décodait `notification:new` contre une forme que plus personne n'émet
+
+*Entrée de cycle : branche `claude/keen-hamilton-1bqy2f` alignée sur `main` (0/0), arbre propre,
+`git fetch origin main` fait. Le cycle 117 désignait explicitement son successeur : « `socket-validator.ts`
+est du code mort, deux cycles de suite que la décision se repose — elle mérite un cycle à elle. »
+Ce cycle l'a instruite. La décision « retirer ou brancher » s'est révélée ne pas EXISTER, et en
+cherchant pourquoi, on a trouvé le vrai défaut : il était dans le chemin VIVANT.*
+
+## Audit — la question posée n'avait pas deux réponses
+
+`socket-validator.ts` valide un payload **plat** : `isRead`, `readAt`, `createdAt`, `senderId`,
+`senderUsername`, `messagePreview` à la racine, et `createdAt` y est **requis sans défaut**. Le
+payload réel est **groupé** depuis #2920 (`formatNotification()` → `state: {isRead, readAt,
+createdAt, expiresAt}`). Son enum compte 11 types quand `NotificationTypeEnum` en compte ~60.
+
+Donc « brancher » n'était pas une option disponible : `createValidatedHandler` aurait rejeté
+**100 % des notifications réelles**, `createdAt` racine étant absent. Les cycles 116 et 117 ont
+chacun envisagé d'y ajouter leur nouvel événement. Aucun des deux n'a regardé le schéma.
+
+**Et c'est en le regardant qu'on voit le vrai défaut.** Le validateur n'est pas un fossile isolé :
+c'est le TROISIÈME artefact d'une même forme abandonnée. Les deux autres ne sont pas morts.
+
+| artefact | forme | vivant ? |
+|---|---|---|
+| `socket-validator.ts` | plate | non — zéro appelant |
+| **décodeur du singleton web** | **plate** | **oui — chaque `notification:new`** |
+| fixture du test du singleton | plate | oui — et c'est elle qui rendait le vert |
+
+## Le défaut vivant
+
+`notification-socketio.singleton.ts` lisait `data.isRead` / `data.readAt` / `data.createdAt` à la
+racine, sous un commentaire qui affirmait le contrat comme un fait : « IMPORTANT: Le backend envoie
+isRead, readAt, createdAt à la racine (pas dans state) ». Vrai avant le regroupement. Faux depuis.
+
+Ce que le décodeur perdait, vérifié sur le code :
+
+| champ | conséquence |
+|---|---|
+| `title` | **jamais recopié.** Or `buildNotificationTitle()` en fait sa source unique — titre calculé SERVEUR dans la langue résolue du destinataire. Toast ET ligne de liste retombaient sur le repli client, dérivé et dans une autre langue. |
+| `subtitle` | **jamais recopié.** `buildNotificationContextLine()` rend `null` sans lui : les notifications sociales perdaient « publié il y a 2 j · expirée ». |
+| `state.createdAt` | lu à la racine ⇒ absent ⇒ `new Date()` — **l'horloge de l'appareil** substituée à l'horodatage serveur. Pilote le regroupement par jour, le « il y a X », et la clé d'anti-doublon des toasts. |
+| `state.expiresAt` | perdu ⇒ `isNotificationExpired()` jamais vrai pour une notification arrivée par socket. |
+| `state.readAt` | perdu — bénin ici (toujours `null` sur une notification neuve). |
+
+**Et ça ne se rattrape pas dans la session** : `handleNewNotification` écrit la notification dans le
+cache React Query, où `staleTime: Infinity` la fige jusqu'à un refetch explicite. La même
+notification s'affiche donc différemment selon qu'elle est arrivée par socket ou par REST.
+
+**Pourquoi rien ne pouvait le signaler** : les trois champs d'état dégradent vers des valeurs
+PLAUSIBLES au lieu de jeter — `isRead: false` et `readAt: null` sont même *justes* pour une
+notification neuve. Seul `createdAt` fait un dégât visible, et il le fait avec une valeur qui a
+l'air correcte. Le seul artefact du dépôt qui écrivait le contrat — le validateur — écrivait le
+mauvais, et ne s'exécutait nulle part.
+
+## Livré
+
+- **`apps/web/utils/notification-socket-payload.ts`** — `decodeNotificationSocketPayload()`, pure,
+  testable sans socket. Lit la forme groupée, conserve `title`/`subtitle`, reprend `context` TEL
+  QUEL (une vingtaine de clés portent la navigation), rend `null` sur un payload sans identité.
+- **Singleton** — appelle le décodeur ; le parseur inline et son commentaire faux disparaissent.
+- **Fossile retiré** — `socket-validator.ts` (449 l.) + son test (507 l.), et
+  `sanitizeNotification()` de `xss-protection.ts` + son bloc de test : seul le validateur l'appelait,
+  et il **reconstruisait `context` avec 4 clés sur 21** — un piège actif pour qui l'aurait « juste
+  rebranché ». Les primitives (`sanitizeText`, `sanitizeUrl`, `sanitizeJson`) restent. Le rendu des
+  notifications n'utilise aucun `dangerouslySetInnerHTML` : React échappe, l'assainissement à
+  l'ingress n'était pas la frontière.
+
+### Ce qui a été REFUSÉ
+
+Relire les champs racine « au cas où » (skew de déploiement). Refusé, et **gelé par un test** : un
+payload portant `createdAt` racine doit être ignoré. Il n'y a qu'un émetteur (`NotificationService`
+ligne 959) et il émet groupé depuis #2920 ; retenir la lecture plate, c'est replanter le fossile
+dans le fichier même qui le retire — avec la dégradation silencieuse qui l'a caché deux ans.
+
+## TDD
+
+12 tests vus ROUGES avant toute ligne de production (module introuvable), puis verts. La fixture du
+test du singleton a été migrée vers le payload RÉEL — elle encodait la forme plate, c'est elle qui
+rendait le vert. La matrice de forme vit désormais dans le test du décodeur ; le test du singleton
+prouve ce qu'il est seul à prouver : l'écoute décode et dispatche.
+
+## Gates
+
+| Gate | Résultat |
+|---|---|
+| shared `bun run build` | OK (prérequis — 5 suites web échouent sans lui) |
+| web jest **complet** | **569 suites / 12 180 tests verts** (21 skipped) |
+| web jest `[Nn]otification\|xss-protection` | 19 suites / 442 verts |
+| web `tsc --noEmit` | **1 229 erreurs — baseline identique** avant/après |
+| net | **−1 010 lignes** |
+
+## Reste ouvert après ce cycle
+
+- **iOS — fossile INERTE, à ne pas confondre avec le défaut web.** `SocketNotificationEvent`
+  (`MessageSocketManager.swift:1115`) déclare `isRead: Bool?` à la racine : toujours `nil` sur le
+  fil, et **zéro consommateur** — inoffensif, à retirer. Il ne décode pas `subtitle`, sans
+  conséquence actuelle (`notificationReceived` alimente `ConversationListViewModel`, pas une toast).
+  Vérifié : le défaut vivant était web-only. Nettoyage non livrable depuis un runner Linux (Xcode).
+- **Volets iOS de `gwcontract-05` et `gwcontract-13`** — miroir Swift des deux prédicats bulk, à
+  livrer ENSEMBLE (même câblage). Hérité des cycles 116/117.
+- Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
+  (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`), arbitrage produit `delete-for-me`
+  au niveau message (cycle 114).
