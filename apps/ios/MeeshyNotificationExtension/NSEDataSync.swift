@@ -77,6 +77,21 @@ nonisolated enum NSEDataSync {
     /// FCM credentials, MITM in the APNs delivery chain) to redirect this
     /// authenticated request to an attacker-controlled host and exfiltrate
     /// the user's live Bearer JWT.
+    ///
+    /// IMPORTANT — endpoint note (audit 2026-08-13):
+    /// This used to GET `/conversations/:conversationId/messages/:messageId`,
+    /// a method/path pair the gateway has **never** registered — only PUT
+    /// (edit) and DELETE live there, so every prefetch answered 404 and the
+    /// App Group staging directory stayed empty. Two guarantees rested on
+    /// this call and neither held: cold-start-from-push never had its message
+    /// locally, and `NotificationService.prePersistMessage` deliberately skips
+    /// E2EE messages *because* "NSEDataSync already fetches the canonical
+    /// record" — so encrypted pushes staged nothing at all. The canonical
+    /// single-message read is `GET /messages/:messageId` (membership-checked
+    /// server-side, same `{ success, data }` envelope, and since the same
+    /// audit it serves the real receipt counters rather than the dead
+    /// denormalised columns). `conversationId` stays a parameter: it keys the
+    /// staged blob, it is not part of the request.
     static func syncMessage(
         conversationId: String,
         messageId: String,
@@ -88,7 +103,7 @@ nonisolated enum NSEDataSync {
         }
 
         let apiBaseURL = resolveApiBaseURL()
-        let urlString = "\(apiBaseURL)/api/v1/conversations/\(conversationId)/messages/\(messageId)"
+        let urlString = "\(apiBaseURL)/api/v1/messages/\(messageId)"
         guard let url = URL(string: urlString) else {
             completion(false)
             return

@@ -1,3 +1,150 @@
+# Tête instruite pour le cycle 103 — un CLIENT peut appeler une route qui n'existe pas, et rien ne devient rouge
+
+*Le cycle 102 a trouvé la septième forme de la famille. Les six premières venaient d'un producteur
+SERVEUR qui recomposait sa propre vérité ; celle-ci vient d'un CONSOMMATEUR qui adresse une vérité
+qu'aucun producteur ne sert.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.** Le cycle 102 en a fait la démonstration en direct : le fetch posé
+> juste avant le commit a ramené **#2931**, livré en parallèle sur les MÊMES fichiers et le MÊME
+> défaut. Sans ce fetch, le lot écrasait le travail d'autrui.
+> Corollaire du cycle 91 (leçon 143), appliqué ici pour la première fois à chaud : **avant de
+> jeter — ou d'imposer — un travail doublonné, comparer la COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 102 ajoute — le septième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 : *une règle posée sur le chemin CHAUD n'est tenue que par les chemins qui la RELISENT.*
+> Le cycle 102 trouve le septième :
+>
+> **Un appel réseau écrit à la main — chaîne interpolée, méthode implicite — n'est confronté à la
+> table de routage de PERSONNE. Le compilateur le valide, les tests du client ne l'atteignent pas,
+> ceux du serveur ne le connaissent pas. Un couple méthode/chemin qui n'existe NULLE PART peut
+> donc vivre indéfiniment en rendant 404 — et un appelant qui avale son échec en fait un silence.**
+>
+> `NSEDataSync.syncMessage` faisait `GET /conversations/:cid/messages/:mid` ; la gateway
+> n'enregistre à ce chemin que `PUT` et `DELETE`. Le préchargement de notification n'a donc JAMAIS
+> fonctionné. Et le coût réel n'était pas la latence : `NotificationService.prePersistMessage`
+> saute les messages E2EE **parce que** « NSEDataSync already fetches the canonical record » — un
+> saut délibéré adossé à un appel mort, donc un push chiffré ne déposait rien du tout.
+>
+> **La méthode qui en découle :** énumérer les appels réseau écrits à la main dans les cibles qui
+> n'importent pas le SDK (extensions iOS, widgets, workers Android, scripts) et confronter chaque
+> couple méthode/chemin à la table de routage réelle du gateway. Un appelant qui avale son échec
+> ne dira jamais qu'il se trompe d'adresse.
+
+## Livré au cycle 102
+
+**`NSEDataSync.syncMessage` vise `GET /messages/:messageId`** — la lecture mono-message canonique.
+Le préchargement de notification existe pour la première fois, et un push E2EE dépose enfin quelque
+chose. La branche E2EE de `prePersistMessage` porte l'avertissement qui manquait.
+ADR : `services/gateway/decisions.md` § 2026-08-13.
+
+**Tests** : 4 neufs au niveau HTTP (`message-detail-read-receipts.test.ts`, harness Fastify réel +
+double Prisma nourrissant le **VRAI** `MessageReadStatusService`) figeant le contrat SERVEUR dont
+le repointage dépend : `GET /messages/:messageId` sert des compteurs calculés et respecte l'opt-out
+`showReadReceipts`. La couverture existante de cette route (`messages.test.ts`) DOUBLE le service
+et ne peut donc pas voir l'opt-out.
+
+### Convergence — DEUX fois dans le même cycle, sur deux chantiers distincts
+
+**C'est le fait marquant du cycle 102**, plus encore que le défaut trouvé. Deux sessions
+parallèles ont livré, pendant que celle-ci travaillait, exactement ce qu'elle était en train
+d'écrire — une fois sur le lot d'accusés (#2931), une fois sur le correctif de compile Swift 6
+(#2929). Les deux fois, la comparaison de COUVERTURE a fait abandonner le travail local.
+
+**Ce qui a rendu les deux abandons possibles : le `git fetch origin main` posé AVANT le commit.**
+Sans lui, les deux lots écrasaient le travail d'autrui. La leçon d'ouverture n'est pas une
+formalité — elle a payé deux fois en une seule session.
+
+#### Convergence 2 — #2929 (correctif de compile `MeeshyVideoWatermarkBaker`)
+
+Le gate iOS était rouge sur `main` (`error: sending 'request' risks causing data races`, 25×).
+Ce cycle l'a diagnostiqué et corrigé en deux poussées (c5c3cdc puis c6c32d2) — puis a trouvé
+#2929 déjà mergé sur le même défaut. Couverture comparée :
+
+| Point | #2929 (sur `main`) | Ce lot (abandonné) |
+|---|---|---|
+| Marquage du peintre | **membre par membre** (`paint`, `tile`, `renderOnMain`, `init`) + `nonisolated(unsafe)` sur les stockées mutables | `nonisolated` sur la CLASSE |
+| `animationFPS` | oui | oui (2ᵉ poussée) |
+| `orientedSize` / `sizesMatch` | **oui** (les tests les appellent hors MainActor) | non |
+| `MeeshyAudioSignature` | **oui** — 3ᵉ site, jamais examiné ici | non |
+
+**#2929 gagne nettement.** Le marquage au niveau CLASSE ne couvre pas les propriétés stockées
+mutables — leur `nonisolated(unsafe)` explicite indique que la variante locale aurait rouge au
+tour suivant. Le lot local a donc été retiré de la branche par `reset` + `cherry-pick` du seul
+commit NSE.
+
+#### Convergence 1 — #2931 (les routes servant les colonnes mortes)
+
+Le cycle 102 avait aussi instruit et implémenté le lot que le cycle 101 lui avait légué (les deux
+routes servant les colonnes mortes, la fuite d'`entries` sans opt-out). Le fetch posé avant le
+commit a révélé **#2931**, livré en parallèle sur exactement ce défaut. Comparaison de COUVERTURE,
+pas d'intitulé :
+
+| Point | #2931 (sur `main`) | Ce lot (abandonné) |
+|---|---|---|
+| `/messages/:messageId` délègue | oui, + `recipientCount` | idem |
+| `/conversations/:id/status` | **réparé** (opt-out sur `entries` via `filterReadReceiptVisible`, plafond 50) | **retiré** |
+| Projection partagée | inline ×3 | extraite dans `messageReceipts.ts` |
+
+**#2931 gagne sur le point décisif** : réparer la route préserve une API publique là où la retirer
+la casse, et son plafond de 50 ferme en plus un déni de service que le retrait ne traitait pas. Le
+lot local a donc été ABANDONNÉ plutôt qu'imposé — écraser le travail d'un autre pour un intitulé
+équivalent est exactement ce que la leçon 143 interdit. Les 4 témoins écrits AVANT #2931 étaient
+RED sur l'ancien code et passent sur le sien sans retouche : confirmation indépendante, conservée.
+
+## Constats du cycle 102, NON traités — le lot naturel du cycle 103
+
+- **L'audit d'adressage promis par la leçon ci-dessus n'a PAS été mené.** Seuls les trois endpoints
+  de `NSEDataSync` ont été confrontés à la table de routage (`/posts/:postId` ✓,
+  `…/delivery-receipt` ✓, le troisième était le défaut). Restent à passer au même crible :
+  `MeeshyShareExtension` (`ShareSender` poste `/conversations/:id/messages`), `MeeshyWidgets`,
+  et tout appel Android hors `MessageApi`.
+- **`NSEDataSync` n'appartient à aucune cible de test** : l'endpoint corrigé n'est gardé que par le
+  build CI. Le motif de la double appartenance existe (`NSEDecryptor`, helpers de
+  `MeeshyShareExtension`) mais le fichier utilise `URLSession.shared` sans injection — le rendre
+  testable est un lot de refactorisation à part.
+- **La projection des accusés existe désormais en TROIS exemplaires inline** (`conversations/messages.ts`,
+  `messages.ts`, `conversations/messages-advanced.ts`) : `receivedCount → deliveredCount`,
+  `totalMembers → recipientCount`. C'est le motif du cycle 101 à l'état naissant. Une extraction
+  (`services/messaging/messageReceipts.ts`) était écrite et testée dans ce cycle ; elle a été
+  retenue pour ne pas churner du code livré depuis moins d'une heure par une session concurrente.
+  **À reprendre à froid**, quand #2931 aura reposé.
+- **`deliveredToAllAt` / `receivedByAllAt` / `readByAllAt`** restent déclarés (Prisma, deux types
+  partagés, schéma OpenAPI) et sans aucun écrivain ni lecteur client. Cas du cycle 100 à l'état
+  pur ; ils sortent ensemble, avec leurs déclarations, ou pas du tout.
+
+## Ce qui reste ouvert des cycles précédents (inchangé au cycle 102)
+
+- **Item 1 (rétention des posts supprimés) : toujours à poser à un humain, pas à réessayer.** Refus
+  motivé aux cycles 98, 99 et 100.
+- **L'index MongoDB `expiresAt_ephemeral_partial` n'est toujours pas appliqué** (cycle 92) —
+  COLLSCAN par minute sur `Message`. Demande un accès de déploiement que la routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : aucune toolchain Swift ici, inchangé des
+  cycles 86 à 102.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91) : les `push` passent, le
+  `push --delete` non. Purger depuis un contexte qui a le droit (`tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). Non reproduit aux cycles 88 à 102.
+- Le mode `around` de `GET /conversations/:id/messages` lit `limit + 1` sans jamais retirer de ligne
+  sonde (cycle 99) — inoffensif aujourd'hui, piège si la fenêtre s'élargit.
+- `callParticipantStatusEnum` (`utils/validation.ts`) survit sans lecteur et décrit un espace
+  d'états que `CallParticipant` ne porte pas (cycle 100).
+
 # Tête instruite pour le cycle 103 — un compteur se tait, un NOM se tait deux fois
 
 *Le cycle 102 a exécuté le lot que le cycle 101 avait instruit et refusé de livrer dans le même
