@@ -617,6 +617,55 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
             "stopTranscribing must remove the interruption observer to avoid a dangling observer firing after teardown"
         )
     }
+
+    // Regression: a resume-after-interruption/config-change `audioEngine.start()`
+    // that itself throws (mic grabbed by another app, a second interruption
+    // arriving back-to-back, hardware busy — all realistic on-device) used to
+    // only log the error. The tap was already reinstalled on a STOPPED engine,
+    // so no more audio ever reached the recognizer, yet `isTranscribing` stayed
+    // `true` and the captions UI kept claiming they were live for the rest of
+    // the call — the exact failure mode `observeAudioInterruptions`'s doc
+    // comment says this file exists to prevent. Both catch blocks must route
+    // through `applyRecognitionError` (like `startTranscribing`'s own catch)
+    // so `isTranscribing`/`lastError` reflect reality and the UI can degrade.
+    func test_handleAudioInterruption_whenEngineRestartFails_degradesViaApplyRecognitionError() throws {
+        let source = try serviceSource()
+        guard let range = source.range(of: "private func handleAudioInterruption(") else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<nextFunc])
+        guard let catchRange = body.range(of: "} catch {") else {
+            XCTFail("handleAudioInterruption has no catch block for audioEngine.start()"); return
+        }
+        let catchBody = String(body[catchRange.lowerBound...])
+        XCTAssertTrue(
+            catchBody.contains("applyRecognitionError(.audioEngineFailed"),
+            "handleAudioInterruption's catch must call applyRecognitionError(.audioEngineFailed(...)) — " +
+            "logging alone leaves isTranscribing=true with a dead tap on a stopped engine, freezing captions " +
+            "for the rest of the call with no user-facing recovery path."
+        )
+    }
+
+    func test_handleAudioEngineConfigurationChange_whenEngineRestartFails_degradesViaApplyRecognitionError() throws {
+        let source = try serviceSource()
+        guard let range = source.range(of: "private func handleAudioEngineConfigurationChange(") else {
+            XCTFail("handleAudioEngineConfigurationChange not found"); return
+        }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<nextFunc])
+        guard let catchRange = body.range(of: "} catch {") else {
+            XCTFail("handleAudioEngineConfigurationChange has no catch block for audioEngine.start()"); return
+        }
+        let catchBody = String(body[catchRange.lowerBound...])
+        XCTAssertTrue(
+            catchBody.contains("applyRecognitionError(.audioEngineFailed"),
+            "handleAudioEngineConfigurationChange's catch must call applyRecognitionError(.audioEngineFailed(...)) — " +
+            "same silently-dead-captions failure mode as handleAudioInterruption."
+        )
+    }
 }
 
 // MARK: - TranscriptionSegment Data Model Tests
