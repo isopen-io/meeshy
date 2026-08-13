@@ -5718,3 +5718,64 @@ touche est précisément celui que son auteur savait déjà faux.
 RÉINTRODUIRE la chose sous sa forme la plus creuse (`metadata: {}` suffit contre `toBeUndefined()`).
 Si le compte de témoins qui rougissent n'est pas exactement le compte de témoins ajoutés, un
 d'entre eux ne tient rien.
+
+## Leçon 228 — L'unanimité des LECTURES est ce qui rend un trou d'ÉCRITURE invisible
+
+Suite des leçons 225 à 227, mais le geste est inverse : là où elles trient un champ mort par sa
+CONSOMMATION, celle-ci porte sur une règle **vivante et partout appliquée** — sauf à un endroit.
+
+`deletedAt: null` était écrit dans chaque lecture de message du service : la liste, la recherche,
+et la liste des messages ÉPINGLÉS, cent lignes sous les deux routes d'épinglage qui, elles, ne
+l'écrivaient pas. Épingler un message supprimé répondait donc 200, écrivait sur un tombstone, et
+diffusait `message:pinned` dans la room ET dans la file de rattrapage hors-ligne.
+
+**Pourquoi ça ne se voyait pas — et c'est le cœur de la leçon.** Ce n'est pas MALGRÉ l'unanimité
+des lectures, c'est À CAUSE d'elle. Aucune lecture ne rendant plus jamais la ligne fautive :
+
+| Surface | Ce qu'elle montre du défaut |
+|---|---|
+| Base | La colonne est écrite, mais aucune requête ne la relit |
+| Réponse HTTP | `200`, indiscernable du succès nominal |
+| Liste des épinglés | Vide — elle filtre `deletedAt: null` |
+| **Le fil temps réel** | **Le seul endroit où le défaut existe** |
+
+Un `where` manquant à l'écriture ne produit donc pas une donnée fausse qu'on peut lire : il produit
+un **événement** qui nomme un objet qu'aucune lecture ne rendra plus. Et l'événement ne se répare
+pas tout seul — le client qui l'applique à son cache (web `handleMessagePinned`, iOS `updatePinned`)
+n'a plus AUCUNE source pour le détromper, et la file hors-ligne le rejoue à chaque reconnexion
+jusqu'à son TTL.
+
+**La méthode** : devant une règle appliquée par toutes les lectures, ne pas conclure à l'invariant.
+Lister les ÉCRITURES et vérifier une par une. Une règle n'est un invariant que si le chemin qui
+CRÉE l'état la porte aussi.
+
+**Corollaire de symétrie, prouvé par mutation** : quand un geste a deux sens (épingler/dépingler,
+bloquer/débloquer, archiver/désarchiver), la garde va sur les DEUX. N'en garder qu'un rouvre le trou
+par l'autre. La mutation-proof doit le montrer séparément — ici, retirer la garde du `PUT` fait
+rougir exactement ses 2 témoins, celle du `DELETE` exactement les 2 autres, sans recouvrement. Un
+recouvrement aurait signifié qu'un seul des deux tenait vraiment.
+
+**Corollaire de non-geste, du même cycle** : l'épingle qui SURVIT à une suppression (épingler puis
+supprimer) reste en base, inatteignable. La nettoyer demandait la même ligne dans les QUATRE chemins
+qui écrivent `deletedAt` — la duplication en N exemplaires dont un finit par manquer. Elle n'est
+visible nulle part et le tombstone part au balayage : **pas de défaut observable, pas de geste.**
+Fermer la porte au point de lecture vaut mieux que la répéter à N points d'écriture.
+
+## Leçon 229 — Un balayage d'audit grepe une FORME, pas une valeur
+
+Découvert en corollaire de la leçon 228, et vérifié sur le dépôt.
+
+`participants.ts` porte la trace explicite d'un audit d'audience passé : « Thread-only À JUSTE
+TITRE, vérifié plutôt que déduit — noté ici pour qu'un prochain balayage de `to(ROOMS.conversation(`
+ne le rouvre pas. » Le balayage cherchait donc cette FORME. Or les deux seules lignes du service à
+composer leur room à la main — `` to(`conversation:${conversationId}`).emit('message:pinned', …) ``
+— sont exactement celles qui portaient le défaut du cycle : **l'audit ne pouvait pas les voir.**
+
+Écrire par la constante (`ROOMS.conversation()`, `SERVER_EVENTS.X`) n'est donc pas une préférence de
+style : c'est ce qui rend un site VISIBLE au prochain balayage. Un site qui recompose la valeur à la
+main est exclu de tous les audits futurs de sa propre famille, silencieusement, et pour toujours.
+
+**Corollaire de vérification** : quand le correctif remplace une chaîne littérale par la constante
+qui vaut la même chose, les tests existants qui assertent la chaîne LITTÉRALE sont la preuve
+d'équivalence — ils doivent rester verts sans être touchés. S'il faut les modifier, la substitution
+n'était pas neutre.

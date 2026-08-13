@@ -85,8 +85,13 @@ const MESSAGE_ID = '507f1f77bcf86cd799439033';
  * `findFirst` répond comme le ferait Prisma : la ligne n'est rendue que si le
  * `conversationId` demandé est bien celui du message. C'est exactement la
  * discrimination que la route de dépinglage ne faisait pas.
+ *
+ * `deletedAt` est modélisé de la même façon, et pour la même raison : un
+ * `where: { deletedAt: null }` ne rend PAS une ligne supprimée. Sans cette
+ * seconde discrimination, le double rendrait un message tombstone à une route
+ * qui croit avoir demandé un message vivant.
  */
-function buildPrisma(message: { id: string; conversationId: string } | null) {
+function buildPrisma(message: { id: string; conversationId: string; deletedAt?: Date | null } | null) {
   const update = jest.fn(async (args: any) => {
     const matches =
       message !== null &&
@@ -108,6 +113,7 @@ function buildPrisma(message: { id: string; conversationId: string } | null) {
           if (!message) return null;
           if (args.where.id !== message.id) return null;
           if (args.where.conversationId !== undefined && args.where.conversationId !== message.conversationId) return null;
+          if (args.where.deletedAt === null && (message.deletedAt ?? null) !== null) return null;
           return message;
         }),
         update,
@@ -135,7 +141,7 @@ function buildSocket() {
   };
 }
 
-async function buildApp(message: { id: string; conversationId: string } | null) {
+async function buildApp(message: { id: string; conversationId: string; deletedAt?: Date | null } | null) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const socket = buildSocket();
   (app as any).socketIOHandler = socket.handler;
@@ -250,6 +256,90 @@ describe('PUT /conversations/:id/messages/:messageId/pin', () => {
       const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
       expect(res.statusCode).toBe(404);
       expect(update).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * Un message supprimé pour tout le monde n'est plus un objet épinglable.
+ *
+ * Toutes les LECTURES de ce fichier le disent déjà : la liste des messages
+ * (`deletedAt: null`), la liste des messages épinglés cent lignes plus bas
+ * (`{ pinnedAt: { not: null }, deletedAt: null }`), la recherche. Les deux
+ * ÉCRITURES de l'épingle étaient les seules à ne pas le dire — elles
+ * localisaient le message par `{ id, conversationId }` seuls.
+ *
+ * Ce que ça donne : `PUT .../pin` sur un message supprimé répond 200, écrit
+ * `pinnedAt`/`pinnedBy` sur un tombstone, et diffuse `message:pinned` dans la
+ * room ET dans la file de rattrapage hors-ligne — un événement qui nomme un
+ * message que tous les clients ont déjà retiré. Le web applique alors les
+ * métadonnées d'épingle à sa copie en cache (`handleMessagePinned`), iOS à sa
+ * persistance locale (`updatePinned`), et RIEN ne les détrompe ensuite : la
+ * liste des épinglés filtre le message, donc aucun rechargement ne corrige
+ * l'état ; et l'identité de dédup de la file étant `(messageId, 'pinned')`,
+ * l'entrée fantôme survit à chaque reconnexion jusqu'au TTL.
+ */
+describe('épingler / dépingler un message supprimé', () => {
+  const DELETED = { id: MESSAGE_ID, conversationId: CONV_ID, deletedAt: new Date('2026-08-01T10:00:00.000Z') };
+
+  beforeEach(() => {
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+  });
+
+  it("PUT rend 404 et n'écrit rien sur un message supprimé", async () => {
+    const { app, update } = await buildApp(DELETED);
+    try {
+      const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(res.statusCode).toBe(404);
+      expect(update).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('PUT ne diffuse ni ne met en file une épingle sur un message supprimé', async () => {
+    const { app, socket } = await buildApp(DELETED);
+    try {
+      await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(socket.emit).not.toHaveBeenCalled();
+      expect(socket.enqueueOfflineMessageMutation).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("DELETE rend 404 et n'écrit rien sur un message supprimé", async () => {
+    const { app, update } = await buildApp(DELETED);
+    try {
+      const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(res.statusCode).toBe(404);
+      expect(update).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('DELETE ne diffuse ni ne met en file un dépinglage sur un message supprimé', async () => {
+    const { app, socket } = await buildApp(DELETED);
+    try {
+      await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(socket.emit).not.toHaveBeenCalled();
+      expect(socket.enqueueOfflineMessageMutation).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("laisse passer un message vivant — la garde ne ferme que la porte des supprimés", async () => {
+    const { app, update, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID, deletedAt: null });
+    try {
+      const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(res.statusCode).toBe(200);
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(socket.emit).toHaveBeenCalledWith('message:pinned', expect.objectContaining({ messageId: MESSAGE_ID }));
     } finally {
       await app.close();
     }

@@ -2145,8 +2145,25 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
+      // `deletedAt: null` — un message supprimé pour tout le monde n'est plus
+      // un objet épinglable, et c'est ce que TOUTES les lectures de ce fichier
+      // disent déjà : la liste des messages, la recherche, et la liste des
+      // messages épinglés cent lignes plus bas (`{ pinnedAt: { not: null },
+      // deletedAt: null }`). Les deux écritures de l'épingle étaient les seules
+      // à ne pas le dire. Sans la garde, l'appel répond 200, écrit sur un
+      // tombstone, et diffuse `message:pinned` — dans la room ET dans la file
+      // hors-ligne — pour un message que tous les clients ont déjà retiré. Le
+      // web l'applique à son cache, iOS à sa persistance, et rien ne les
+      // détrompe : la liste des épinglés filtre ce message, donc aucun
+      // rechargement ne corrige l'état.
+      //
+      // `select: { id: true }` : seule l'existence est en question ici. La
+      // requête chargeait le document entier — contenu, traductions, metadata —
+      // pour un `if (!message)`. Le jumeau qui dépingle sélectionnait déjà `id`
+      // seul ; c'est l'asymétrie que le correctif précédent avait laissée.
       const message = await prisma.message.findFirst({
-        where: { id: messageId, conversationId }
+        where: { id: messageId, conversationId, deletedAt: null },
+        select: { id: true }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
@@ -2169,7 +2186,13 @@ export function registerMessagesRoutes(
           pinnedBy: userId
         };
         const manager = fastify.socketIOHandler.getManager();
-        manager?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', pinPayload);
+        // `ROOMS.conversation` / `SERVER_EVENTS`, et pas les chaînes brutes
+        // équivalentes : ces deux lignes (ici et au dépinglage) étaient les
+        // SEULES du service à composer un nom de room à la main. Le balayage
+        // d'audience de la passerelle grepe `to(ROOMS.conversation(` — cf. la
+        // note laissée dans `participants.ts` § PARTICIPANT_ROLE_UPDATED, qui
+        // le nomme explicitement — donc l'épingle lui était invisible.
+        manager?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_PINNED, pinPayload);
         // Replay the pin to offline participants on reconnect (parity with
         // edit/delete/reaction offline delivery) so their pin state converges.
         void manager?.enqueueOfflineMessageMutation({
@@ -2242,8 +2265,15 @@ export function registerMessagesRoutes(
       // partait vers la conversation de la ROUTE, jamais vers celle du message :
       // les clients réellement concernés gardaient l'épingle affichée jusqu'au
       // prochain chargement complet, sans qu'aucun événement ne les détrompe.
+      // `deletedAt: null` pour la même raison que le jumeau qui épingle : les
+      // deux sens du même geste portent la même garde, sinon le dépinglage
+      // redevient le chemin par lequel un événement fantôme part vers une room
+      // et vers la file hors-ligne. L'épingle qui SURVIT à une suppression
+      // (épingler puis supprimer) reste en base sans être atteignable ici —
+      // elle n'est visible nulle part (toutes les lectures filtrent
+      // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
-        where: { id: messageId, conversationId },
+        where: { id: messageId, conversationId, deletedAt: null },
         select: { id: true }
       });
       if (!message) {
@@ -2264,7 +2294,7 @@ export function registerMessagesRoutes(
           conversationId
         };
         const manager = fastify.socketIOHandler.getManager();
-        manager?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', unpinPayload);
+        manager?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_UNPINNED, unpinPayload);
         // Replay the unpin to offline participants on reconnect (parity with
         // edit/delete/reaction offline delivery) so their pin state converges.
         void manager?.enqueueOfflineMessageMutation({
