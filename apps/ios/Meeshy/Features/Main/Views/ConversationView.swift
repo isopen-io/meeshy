@@ -1545,7 +1545,6 @@ struct ConversationView: View {
 
     private var isAnonymous: Bool { anonymousSession != nil }
 
-    @ViewBuilder
     // Enfants en AnyView : le type structurel du tuple (branches anonymous /
     // typing / bande + searchBar) gonflait le mangled name de
     // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
@@ -1562,6 +1561,7 @@ struct ConversationView: View {
         scrollState.isScrollingActiveList && !headerState.showSearch
     }
 
+    @ViewBuilder
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {

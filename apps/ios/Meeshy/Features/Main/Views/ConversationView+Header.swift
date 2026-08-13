@@ -205,7 +205,15 @@ private struct HeaderCallButtonsView: View {
     var body: some View {
         Group {
             if callManager.callState.isActive {
-                returnToCallIndicator
+                // 2026-08-13 — un appel actif ne doit apparaître dans le header
+                // QUE de la conversation qui l'héberge, jamais dans toutes les
+                // conversations ouvertes pendant qu'un appel tourne ailleurs.
+                // `callManager.callState.isActive` seul (avant ce fix) ne
+                // distinguait pas — cette pastille "revenir à l'appel" sortait
+                // identique dans n'importe quelle conversation directe.
+                if isActiveCallForThisConversation {
+                    returnToCallIndicator
+                }
             } else if let activeCall = reconciledActiveCall {
                 rejoinCallIndicator(activeCall)
             } else {
@@ -234,6 +242,18 @@ private struct HeaderCallButtonsView: View {
                 reconciledActiveCall = nil
             }
         }
+    }
+
+    /// `true` quand l'appel actif localement (`CallManager.shared`) appartient
+    /// à CETTE conversation. `callManager.conversationId` peut être `nil` pour
+    /// un appel entrant réveillé par VoIP push sans ce champ dans le payload
+    /// (cf. doc sur `CallManager.conversationId`) — dans ce cas précis on
+    /// dégrade en affichant quand même la pastille plutôt que de la masquer
+    /// partout, pour ne jamais priver l'utilisateur d'un chemin de retour
+    /// vers son propre appel.
+    private var isActiveCallForThisConversation: Bool {
+        guard let activeConversationId = callManager.conversationId else { return true }
+        return activeConversationId == conversationId
     }
 
     private var returnToCallIndicator: some View {

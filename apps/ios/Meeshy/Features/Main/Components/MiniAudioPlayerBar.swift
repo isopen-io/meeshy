@@ -210,6 +210,14 @@ struct MiniAudioPlayerBar: View {
         .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
         .padding(.horizontal, 12)
+        // Petit espace vertical : que ce bloc soit le tout premier élément
+        // du VStack de compression (pas d'appel actif — respire depuis la
+        // safe area) ou qu'il suive `FloatingCallPillView` (appel actif —
+        // respire depuis la bannière pleine largeur), il ne doit jamais
+        // coller au bord. Vit DANS `content(for:)`, jamais sur le composant
+        // entier au point de montage, pour ne créer aucune empreinte quand
+        // `displayedContext == nil` (cf. doc du VStack dans RootView.swift).
+        .padding(.top, 6)
         .contentShape(Rectangle())
         .onTapGesture { openConversation(for: context) }
     }
