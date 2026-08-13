@@ -78,6 +78,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
 const SPEAKER_ID = 'user-speaker-abc';
+const VICTIM_ID = 'user-victim-def';
 
 const VALID_SEGMENT = {
   callId: VALID_CALL_ID,
@@ -87,6 +88,23 @@ const VALID_SEGMENT = {
     startMs: 0,
     endMs: 1500,
     isFinal: true,
+    confidence: 0.95,
+    language: 'fr',
+  },
+};
+
+// The authenticated sender is SPEAKER_ID, but the segment payload — entirely
+// client-controlled — claims to be spoken by VICTIM_ID (another real
+// participant). The gateway already authenticates SPEAKER_ID as an active
+// participant; it must not also trust the free-form speakerId field.
+const SPOOFED_SEGMENT = {
+  callId: VALID_CALL_ID,
+  segment: {
+    text: 'Words the victim never said',
+    speakerId: VICTIM_ID,
+    startMs: 0,
+    endMs: 1500,
+    isFinal: false,
     confidence: 0.95,
     language: 'fr',
   },
@@ -247,6 +265,32 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
 
     it('does not emit an error to the sender', () => {
       expect(directEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('security: speakerId spoofing protection', () => {
+    let roomEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      // Sender authenticates as SPEAKER_ID and IS an active participant, but
+      // crafts segment.speakerId to name VICTIM_ID (also a real participant)
+      // instead of themselves.
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+      });
+      const { socket, handlers, roomEmit: r } = makeSocket();
+      roomEmit = r;
+
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](SPOOFED_SEGMENT);
+    });
+
+    it('relays the segment stamped with the authenticated sender id, never the client-supplied speakerId', () => {
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerId).toBe(SPEAKER_ID);
+      expect(payload.segment.speakerId).not.toBe(VICTIM_ID);
     });
   });
 
