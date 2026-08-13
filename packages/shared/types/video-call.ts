@@ -723,11 +723,20 @@ export interface CallTranscriptionRoleEvent {
 
 /**
  * Event: call:transcription-segment (Client → Server)
- * Real-time transcription segment from a call participant
+ * Real-time transcription segment from a call participant.
+ *
+ * `id` (UUID côté émetteur) et `capturedAtMs` (horloge murale de capture)
+ * portent la journalisation `displayName (heure): message` : l'`id` est la clé
+ * de fusion inter-transports (le même segment peut arriver au pair via le data
+ * channel WebRTC P2P puis via le relais serveur traduit), `capturedAtMs` la clé
+ * d'ordre du journal. Optionnels pour compatibilité avec les anciens clients.
+ * `language` est le tag automatique de la langue de transcription — le futur
+ * pipeline traduction live + resynthèse TTS s'appuie dessus.
  */
 export interface CallTranscriptionSegmentEvent {
   readonly callId: string;
   readonly segment: {
+    readonly id?: string;
     readonly text: string;
     readonly speakerId: string;
     readonly startMs: number;
@@ -735,6 +744,7 @@ export interface CallTranscriptionSegmentEvent {
     readonly isFinal: boolean;
     readonly confidence: number;
     readonly language: string;
+    readonly capturedAtMs?: number;
   };
 }
 
@@ -743,20 +753,89 @@ export interface CallTranscriptionSegmentEvent {
  * Transcription segment (with optional translation) broadcast to call participants.
  * `translatedText` is omitted when ZMQ translation is not enabled or unavailable;
  * consumers should fall back to displaying `text` in that case.
+ *
+ * `speakerDisplayName` est estampillé CÔTÉ SERVEUR depuis le participant
+ * authentifié (même principe anti-usurpation que `speakerId`, fix 2026-08-13) —
+ * jamais repris d'un champ client. `id`/`capturedAtMs` sont relayés depuis le
+ * segment source (fallback serveur : réception) pour la fusion et l'ordre du
+ * journal côté clients.
  */
 export interface CallTranslatedSegmentEvent {
   readonly callId: string;
   readonly segment: {
+    readonly id?: string;
     readonly text: string;
     readonly translatedText?: string;
     readonly speakerId: string;
+    readonly speakerDisplayName?: string;
     readonly startMs: number;
     readonly endMs: number;
     readonly isFinal: boolean;
     readonly sourceLanguage: string;
     readonly targetLanguage: string;
     readonly confidence: number;
+    readonly capturedAtMs?: number;
   };
+}
+
+/**
+ * Event: call:transcription-active (Client → Server, fire-and-forget)
+ * Un participant vient d'activer (`active: true`) ou de fermer
+ * (`active: false`) son panneau de transcription. Le gateway authentifie,
+ * estampille l'émetteur et rediffuse à la room — voir le broadcast ci-dessous.
+ * Signal de présence, PAS de contenu : il n'est jamais gâté par la visibilité
+ * du panneau du récepteur (c'est précisément l'invitation à l'ouvrir).
+ */
+export interface CallTranscriptionActiveEvent {
+  readonly callId: string;
+  readonly active: boolean;
+}
+
+/**
+ * Event: call:transcription-active (Server → Clients de la room, émetteur exclu)
+ * `speakerId` est estampillé CÔTÉ SERVEUR depuis le participant authentifié
+ * (même principe anti-usurpation que les segments). Les clients affichent un
+ * indicateur discret sur leur icône de transcription pour inviter à activer
+ * aussi — et le retirent quand `active: false` ou à la fin de l'appel.
+ */
+export interface CallTranscriptionActiveBroadcast {
+  readonly callId: string;
+  readonly speakerId: string;
+  readonly active: boolean;
+}
+
+// ===== CALL TRANSCRIPT — DATA CHANNEL P2P =====
+
+/**
+ * Entrée de journal de transcription transportée en P2P sur le data channel
+ * WebRTC `"transcription"` quand il est ouvert (latence minimale, pas de
+ * serveur). Le relais serveur `call:transcription-segment` reste émis en
+ * parallèle : il porte le fallback (data channel absent/fermé — ex. pair web
+ * offreur qui ne crée pas de canal) et la traduction ZMQ. Le récepteur
+ * fusionne les deux arrivées par `id`.
+ *
+ * Contrairement au chemin socket, aucun serveur ne peut estampiller
+ * `speakerDisplayName` ici : les récepteurs DOIVENT préférer le nom résolu
+ * localement depuis leur roster de participants (par `speakerId`) et ne
+ * retenir ce champ qu'en fallback d'affichage.
+ */
+export interface CallTranscriptEntryPayload {
+  readonly id: string;
+  readonly callId: string;
+  readonly speakerId: string;
+  readonly speakerDisplayName: string;
+  readonly text: string;
+  /** Tag automatique de la langue de transcription. */
+  readonly language: string;
+  readonly capturedAtMs: number;
+  readonly isFinal: boolean;
+  readonly confidence: number;
+}
+
+/** Enveloppe JSON du data channel (discriminée par `type`, comme `bye`/`ping`). */
+export interface CallTranscriptDataChannelMessage {
+  readonly type: 'transcript-entry';
+  readonly entry: CallTranscriptEntryPayload;
 }
 
 // ===== FRONTEND STATE (pour Zustand store) =====
@@ -897,6 +976,7 @@ export const CALL_EVENTS = {
   TRANSLATION: 'call:translation',
   TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   TRANSLATED_SEGMENT: 'call:translated-segment',
+  TRANSCRIPTION_ACTIVE: 'call:transcription-active',
   /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */

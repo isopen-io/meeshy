@@ -114,6 +114,53 @@ final class MessageSocketEventTests: XCTestCase {
 
         let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
         XCTAssertNil(event.segment.translatedText)
+        XCTAssertNil(event.segment.id, "legacy gateways omit the journal id")
+        XCTAssertNil(event.segment.speakerDisplayName)
+        XCTAssertNil(event.segment.capturedAtMs)
+    }
+
+    func testCallTranslatedSegmentEventDecoding_withJournalMetadata() throws {
+        // Journal metadata (2026-08-13): `id` is the cross-transport merge key,
+        // `speakerDisplayName` is server-stamped (anti-spoof, same principle as
+        // speakerId), `capturedAtMs` is the capture wall clock ordering the
+        // `displayName (heure): message` journal on every side.
+        let json = """
+        {
+            "callId": "507f1f77bcf86cd799439011",
+            "segment": {
+                "id": "f81d4fae-7dec-4b57-b93a-2c675ddac001",
+                "text": "Bonjour",
+                "translatedText": "Hello",
+                "speakerId": "user-abc",
+                "speakerDisplayName": "Alice Doe",
+                "startMs": 0,
+                "endMs": 1500,
+                "isFinal": true,
+                "sourceLanguage": "fr",
+                "targetLanguage": "en",
+                "confidence": 0.95,
+                "capturedAtMs": 1765650000000
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranslatedSegmentData.self, from: json)
+        XCTAssertEqual(event.segment.id, "f81d4fae-7dec-4b57-b93a-2c675ddac001")
+        XCTAssertEqual(event.segment.speakerDisplayName, "Alice Doe")
+        XCTAssertEqual(event.segment.capturedAtMs, 1_765_650_000_000)
+    }
+
+    func testCallTranscriptionActiveEventDecoding() throws {
+        // Signal de présence transcription (2026-08-13) : speakerId estampillé
+        // côté gateway — pilote le badge d'invitation sur l'icône captions.
+        let json = """
+        {"callId": "507f1f77bcf86cd799439011", "speakerId": "user-abc", "active": true}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranscriptionActiveData.self, from: json)
+        XCTAssertEqual(event.callId, "507f1f77bcf86cd799439011")
+        XCTAssertEqual(event.speakerId, "user-abc")
+        XCTAssertTrue(event.active)
     }
 
     func testMessageUnpinnedEventDecoding() throws {

@@ -30,15 +30,21 @@ public struct CallTranscriptSegment: Codable, Sendable, Equatable {
     public let text: String
     public let translatedText: String?
     public let translatedLanguage: String?
+    /// Tag de la langue dans laquelle le segment a été TRANSCRIT (jamais la
+    /// langue de traduction — celle-ci vit dans `translatedLanguage`).
+    /// Optionnel : les transcripts persistés avant l'ajout du tag décodent
+    /// en `nil`.
+    public let language: String?
     public let capturedAt: Date
 
-    public init(speakerId: String, speakerName: String, isLocal: Bool, text: String, translatedText: String?, translatedLanguage: String?, capturedAt: Date) {
+    public init(speakerId: String, speakerName: String, isLocal: Bool, text: String, translatedText: String?, translatedLanguage: String?, language: String? = nil, capturedAt: Date) {
         self.speakerId = speakerId
         self.speakerName = speakerName
         self.isLocal = isLocal
         self.text = text
         self.translatedText = translatedText
         self.translatedLanguage = translatedLanguage
+        self.language = language
         self.capturedAt = capturedAt
     }
 }

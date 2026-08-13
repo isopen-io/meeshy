@@ -374,10 +374,60 @@ struct CallSummaryDetailSheet: View {
         .presentationDragIndicator(.visible)
         .task(id: summary.callId) {
             transcript = await CallTranscriptStore.shared.transcript(for: summary.callId)
+            guard transcript == nil else { return }
+            // Replay serveur (décision produit 2026-08-13) : le journal
+            // persisté par le gateway survit à la suppression de l'app et de
+            // ses caches locaux. Cascade app-side (SDK Purity) : cache local
+            // d'abord, distant en fallback, puis ré-ensemencement du cache
+            // local chiffré pour les prochaines ouvertures. Le serveur
+            // restreint l'accès aux participants effectifs de l'appel.
+            transcript = await fetchRemoteTranscript()
         }
     }
 
     // MARK: - Transcript
+
+    /// Fallback distant du replay : mappe le DTO wire vers le domaine
+    /// `CallTranscript`. La traduction affichée est résolue AU PRISME
+    /// (langue préférée du lecteur) — si aucune traduction ne matche,
+    /// l'original s'affiche (`nil`), jamais `translations.first` (règle
+    /// critique n°1 du Prisme). Le transcript récupéré est ré-ensemencé
+    /// dans le cache local chiffré.
+    private func fetchRemoteTranscript() async -> CallTranscript? {
+        guard let remote = try? await CallTranscriptRemoteService.shared.transcript(callId: summary.callId),
+              !remote.segments.isEmpty else { return nil }
+        let localUser = AuthManager.shared.currentUser
+        let localUserId = localUser?.id ?? ""
+        let localName = localUser?.displayName ?? localUser?.username
+            ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let preferredLanguage = CallManager.preferredCallLanguage(for: localUser)
+        let fetched = CallTranscript(
+            callId: remote.callId,
+            conversationId: remote.conversationId,
+            callStartedAt: remote.callStartedAt,
+            segments: remote.segments.map { seg in
+                let isLocal = seg.speakerId == localUserId
+                let translation = isLocal
+                    ? nil
+                    : seg.translations.first(where: { $0.targetLanguage == preferredLanguage })
+                return CallTranscriptSegment(
+                    speakerId: seg.speakerId,
+                    speakerName: isLocal
+                        ? localName
+                        : (seg.speakerDisplayName
+                            ?? String(localized: "call.transcript.participant", defaultValue: "Participant", bundle: .main)),
+                    isLocal: isLocal,
+                    text: seg.text,
+                    translatedText: translation?.translatedText,
+                    translatedLanguage: translation?.targetLanguage,
+                    language: seg.language,
+                    capturedAt: Date(timeIntervalSince1970: Double(seg.capturedAtMs) / 1000)
+                )
+            }
+        )
+        await CallTranscriptStore.shared.saveMerging(fetched)
+        return fetched
+    }
 
     private func transcriptSection(_ transcript: CallTranscript) -> some View {
         VStack(alignment: .leading, spacing: 12) {

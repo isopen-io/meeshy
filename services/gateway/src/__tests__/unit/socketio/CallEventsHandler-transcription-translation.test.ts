@@ -118,6 +118,12 @@ function makePrisma() {
         { participant: { userId: LISTENER_ID, user: { systemLanguage: 'en' } } },
       ]),
     },
+    transcription: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' }),
+    },
+    translationCall: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'translation-row-1' }),
+    },
   } as unknown as PrismaClient;
 }
 
@@ -278,6 +284,94 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     const [eventName, payload] = roomEmit.mock.calls[0];
     expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
     expect(payload.segment.translatedText).toBe('Hello world');
+  });
+
+  it('carries the journal metadata (id, speakerDisplayName, capturedAtMs) on the translated emission', async () => {
+    const prisma = makePrisma();
+    const { socket, handlers, roomEmit } = makeSocket();
+    const taskId = 'task-journal';
+    const zmqClient = makeFakeZmqClient(taskId);
+    const emitter = zmqClient as unknown as EventEmitter;
+
+    const callService = {
+      getCallSession: jest.fn<any>().mockResolvedValue({
+        participants: [
+          {
+            participantId: 'participant-1',
+            participant: {
+              userId: SPEAKER_ID,
+              user: { id: SPEAKER_ID, username: 'alice', displayName: 'Alice Doe' },
+            },
+            leftAt: null,
+          },
+        ],
+      }),
+    } as unknown as import('../../../services/CallService').CallService;
+
+    const handler = new CallEventsHandler(prisma, callService);
+    handler.setZmqClient(zmqClient);
+    handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+    const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT]({
+      callId: VALID_CALL_ID,
+      segment: {
+        ...VALID_SEGMENT.segment,
+        id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+        capturedAtMs: 1765650000000,
+      },
+    });
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+      taskId,
+      result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+      targetLanguage: 'en',
+    });
+    await segmentPromise;
+
+    expect(roomEmit).toHaveBeenCalledTimes(1);
+    const [, payload] = roomEmit.mock.calls[0];
+    expect(payload.segment.id).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
+    expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
+    expect(payload.segment.capturedAtMs).toBe(1765650000000);
+    expect(payload.segment.translatedText).toBe('Hello world');
+    expect(payload.segment.sourceLanguage).toBe('fr');
+  });
+
+  it('persists the successful translation onto the stored transcript row (TranslationCall)', async () => {
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const taskId = 'task-persist';
+    const zmqClient = makeFakeZmqClient(taskId);
+    const emitter = zmqClient as unknown as EventEmitter;
+
+    const handler = new CallEventsHandler(prisma, makeCallService());
+    handler.setZmqClient(zmqClient);
+    handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+    const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+      taskId,
+      result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+      targetLanguage: 'en',
+    });
+    await segmentPromise;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect((prisma as any).transcription.create).toHaveBeenCalledTimes(1);
+    expect((prisma as any).translationCall.create).toHaveBeenCalledTimes(1);
+    const { data } = (prisma as any).translationCall.create.mock.calls[0][0];
+    expect(data.transcriptionId).toBe('transcription-row-1');
+    expect(data.targetLanguage).toBe('en');
+    expect(data.translatedText).toBe('Hello world');
   });
 
   it('resolves the target language via the full Prisme chain (regionalLanguage), not a bare systemLanguage ?? "fr" fallback', async () => {

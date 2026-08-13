@@ -8,7 +8,8 @@
 'use client';
 
 import { logger } from '@/utils/logger';
-import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
+import { callTranscriptChannel } from '@/services/call-transcript-channel';
+import type { CallTranscriptEntryPayload, ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
 // Default ICE servers for STUN
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
@@ -370,6 +371,37 @@ export class WebRTCService {
           trackKind: event.track.kind,
         });
         this.config.onTrack?.(event);
+      };
+
+      // Data channel entrant — le pair iOS offreur crée le channel
+      // "transcription" avant son offre (négocié dans le SDP). Il transporte
+      // les entrées de journal de transcription en P2P direct
+      // (`transcript-entry`, miroir de CallTranscriptDataChannelMessage dans
+      // packages/shared/types/video-call.ts) plus les messages de contrôle
+      // ping/bye, ignorés ici (le web s'appuie sur le fanout socket
+      // `call:ended`, chemin autoritatif). Le web ne crée pas de channel
+      // lui-même : quand il est offreur, le pair retombe sur le relais
+      // serveur — les deux chemins convergent dans use-call-transcript-journal
+      // par fusion sur l'id d'entrée.
+      this.peerConnection.ondatachannel = (event) => {
+        event.channel.onmessage = (message) => {
+          if (typeof message.data !== 'string') return;
+          try {
+            const parsed: unknown = JSON.parse(message.data);
+            if (
+              typeof parsed === 'object' && parsed !== null &&
+              (parsed as { type?: unknown }).type === 'transcript-entry' &&
+              typeof (parsed as { entry?: unknown }).entry === 'object' &&
+              (parsed as { entry?: unknown }).entry !== null
+            ) {
+              callTranscriptChannel.publish(
+                (parsed as { entry: CallTranscriptEntryPayload }).entry
+              );
+            }
+          } catch {
+            // Payload non-JSON (version future, bruit) — inerte par design.
+          }
+        };
       };
 
       this.peerConnection.onconnectionstatechange = () => {

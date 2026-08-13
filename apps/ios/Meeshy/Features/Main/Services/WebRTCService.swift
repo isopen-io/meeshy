@@ -489,6 +489,20 @@ final class WebRTCService {
         client.sendDataChannelMessage(data)
     }
 
+    /// Journal de transcription en P2P direct : pousse une entrée
+    /// `transcript-entry` au pair sur le data channel quand il est ouvert
+    /// (latence minimale, zéro serveur). Opportuniste — no-op silencieux si
+    /// le channel n'est pas ouvert : le relais socket
+    /// `call:transcription-segment` reste émis systématiquement par
+    /// `CallTranscriptionService` (traduction ZMQ + fallback), et le
+    /// récepteur fusionne les deux arrivées par `entry.id`.
+    func sendTranscriptEntry(_ entry: DataChannelTranscriptEntry) {
+        let message = DataChannelTranscriptMessage(type: "transcript-entry", entry: entry)
+        guard let data = JSONEncoder().encodeOrLog(message, field: "data-channel transcript entry",
+                                                   logger: Logger.webrtc) else { return }
+        client.sendDataChannelMessage(data)
+    }
+
     func sendDTMF(digits: String) {
         client.sendDTMF(digits: digits)
     }

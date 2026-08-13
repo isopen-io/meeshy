@@ -14,6 +14,10 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
+import {
+  retractNotificationsForClearedHistory,
+  retractNotificationsForHiddenMessages,
+} from '../services/messaging/retractHiddenMessageNotifications';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -265,6 +269,15 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           data: { clearHistoryBefore: clearDate },
         });
 
+        // Idem : les notifications des messages désormais masqués détiennent
+        // leur extrait. La coupure est strictement antérieure, miroir de la
+        // borne inclusive appliquée à la lecture.
+        await retractNotificationsForClearedHistory(prisma, {
+          userId,
+          conversationId,
+          before: clearDate,
+        });
+
         logger.info('History cleared', { conversationId });
 
         return sendSuccess(reply, {
@@ -357,6 +370,12 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
             deletedAt: new Date(),
           },
         });
+
+        // La notification que ce message a produite garde une COPIE de son
+        // extrait : aucun filtre de lecture ne la rattrape. Cf.
+        // `retractHiddenMessageNotifications` — ne lève jamais, la suppression
+        // a déjà eu lieu.
+        await retractNotificationsForHiddenMessages(prisma, { userId, messageIds: [messageId] });
 
         logger.info('Message deleted');
 
@@ -529,6 +548,8 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
             })
           )
         );
+
+        await retractNotificationsForHiddenMessages(prisma, { userId, messageIds: validMessageIds });
 
         logger.info('Messages bulk deleted', { count: validMessageIds.length });
 

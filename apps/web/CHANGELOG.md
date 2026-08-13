@@ -1,5 +1,12 @@
 # @meeshy/web
 
+## 1.25.10
+
+### Patch Changes
+
+- Updated dependencies [87a7779]
+  - @meeshy/shared@1.10.4
+
 ## 1.25.9
 
 ### Patch Changes

@@ -1812,6 +1812,81 @@ export class CallService {
   }
 
   /**
+   * Replay du journal de transcription persisté (2026-08-13) — lit les
+   * segments finaux stockés par CallEventsHandler pendant l'appel, avec
+   * leurs traductions, ordonnés par horloge murale de capture.
+   *
+   * DONNÉE SENSIBLE : accès restreint aux participants EFFECTIFS de l'appel
+   * — plus strict que `getCallSession`, qui autorise tout membre de la
+   * conversation. Un membre qui n'a pas pris part à l'appel n'a pas à lire
+   * ce qui s'y est dit.
+   */
+  async getCallTranscript(callId: string, requestingUserId: string): Promise<{
+    callId: string;
+    conversationId: string;
+    callStartedAt: Date;
+    segments: Array<{
+      id: string;
+      speakerId: string;
+      speakerDisplayName: string | null;
+      text: string;
+      language: string;
+      confidence: number | null;
+      capturedAtMs: number;
+      translations: Array<{ targetLanguage: string; translatedText: string }>;
+    }>;
+  }> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      include: callSessionInclude
+    });
+
+    if (!call) {
+      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    const isCallParticipant = call.participants.some(
+      (p) => p.participant?.userId === requestingUserId
+    );
+    if (!isCallParticipant) {
+      logger.warn('❌ Unauthorized call transcript access attempt', { callId, userId: requestingUserId });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call transcript`);
+    }
+
+    const rows = await this.prisma.transcription.findMany({
+      where: { callSessionId: callId },
+      include: { translations: true },
+      orderBy: { timestamp: 'asc' }
+    });
+
+    const participantsById = new Map(
+      call.participants.map((p) => [p.participantId, p.participant])
+    );
+
+    return {
+      callId,
+      conversationId: call.conversationId,
+      callStartedAt: call.startedAt,
+      segments: rows.map((row) => {
+        const participant = participantsById.get(row.participantId);
+        return {
+          id: row.segmentId ?? row.id,
+          speakerId: participant?.userId ?? row.participantId,
+          speakerDisplayName: participant?.user?.displayName ?? participant?.user?.username ?? null,
+          text: row.text,
+          language: row.language,
+          confidence: row.confidence,
+          capturedAtMs: row.timestamp.getTime(),
+          translations: row.translations.map((t) => ({
+            targetLanguage: t.targetLanguage,
+            translatedText: t.translatedText
+          }))
+        };
+      })
+    };
+  }
+
+  /**
    * End call (force end)
    * CVE-004: Anonymous users cannot end calls for everyone (must leave instead).
    * P2P: any active participant may end the call for everyone (spec C4 fix).

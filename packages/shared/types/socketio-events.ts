@@ -27,6 +27,8 @@ import type {
   CallJoinAck,
   CallTranscriptionSegmentEvent,
   CallTranslatedSegmentEvent,
+  CallTranscriptionActiveEvent,
+  CallTranscriptionActiveBroadcast,
   CallTranscriptionCapabilityEvent,
   CallTranscriptionRoleEvent,
   CallTranslationRequestEvent,
@@ -160,6 +162,10 @@ export const SERVER_EVENTS = {
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
   CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
+  /// Signal de présence transcription (2026-08-13) : un participant a
+  /// activé/fermé son panneau — indicateur d'invitation sur l'icône des
+  /// autres. Relayé estampillé par CallEventsHandler, émetteur exclu.
+  CALL_TRANSCRIPTION_ACTIVE: 'call:transcription-active',
   CALL_TRANSLATION_REQUESTED: 'call:translation-requested',
   CALL_TRANSLATION_ENABLED: 'call:translation-enabled',
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
@@ -450,6 +456,8 @@ export const CLIENT_EVENTS = {
   CALL_BACKGROUNDED: 'call:backgrounded',
   CALL_FOREGROUNDED: 'call:foregrounded',
   CALL_TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
+  /// Signal de présence transcription (2026-08-13) — voir SERVER_EVENTS.
+  CALL_TRANSCRIPTION_ACTIVE: 'call:transcription-active',
   /**
    * --- Reserved: abandoned leader/follower transcription design ---
    * Built for an earlier "one device transcribes both streams, negotiates
@@ -1502,6 +1510,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_MISSED]: (data: CallMissedEvent) => void;
   [SERVER_EVENTS.CALL_QUALITY_ALERT]: (data: CallQualityAlertEvent) => void;
   [SERVER_EVENTS.CALL_TRANSLATED_SEGMENT]: (data: CallTranslatedSegmentEvent) => void;
+  [SERVER_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveBroadcast) => void;
   [SERVER_EVENTS.CALL_TRANSLATION_REQUESTED]: (data: CallTranslationRequestedEvent) => void;
   [SERVER_EVENTS.CALL_TRANSLATION_ENABLED]: (data: CallTranslationEnabledEvent) => void;
   [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
@@ -1793,6 +1802,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_BACKGROUNDED]: (data: { callId: string; participantId: string }) => void;
   [CLIENT_EVENTS.CALL_FOREGROUNDED]: (data: { callId: string; participantId: string }) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT]: (data: CallTranscriptionSegmentEvent) => void;
+  [CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE]: (data: CallTranscriptionActiveEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_CAPABILITY]: (data: CallTranscriptionCapabilityEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSCRIPTION_ROLE]: (data: CallTranscriptionRoleEvent) => void;
   [CLIENT_EVENTS.CALL_TRANSLATION_REQUEST]: (data: CallTranslationRequestEvent) => void;

@@ -117,6 +117,7 @@ const SPOOFED_SEGMENT = {
 function makePrisma(overrides: {
   callSessionFindUnique?: jest.MockedFunction<any>;
   participantFindFirst?: jest.MockedFunction<any>;
+  transcriptionCreate?: jest.MockedFunction<any>;
 } = {}) {
   return {
     callSession: {
@@ -124,6 +125,12 @@ function makePrisma(overrides: {
     },
     participant: {
       findFirst: overrides.participantFindFirst ?? jest.fn<any>(),
+    },
+    transcription: {
+      create: overrides.transcriptionCreate ?? jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' }),
+    },
+    translationCall: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'translation-row-1' }),
     },
   } as unknown as PrismaClient;
 }
@@ -136,6 +143,24 @@ function activeCallSession(userId: string) {
   return {
     participants: [
       { participantId: 'participant-1', participant: { userId }, leftAt: null },
+    ],
+  };
+}
+
+// Same shape as CallService.callSessionInclude in production: each call
+// participant carries its user record (username/displayName) — the server-side
+// source the handler must stamp speakerDisplayName from.
+function activeCallSessionWithUser(
+  userId: string,
+  user: { username?: string; displayName?: string | null }
+) {
+  return {
+    participants: [
+      {
+        participantId: 'participant-1',
+        participant: { userId, user: { id: userId, ...user } },
+        leftAt: null,
+      },
     ],
   };
 }
@@ -268,6 +293,99 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     });
   });
 
+  describe('journal metadata: speakerDisplayName + id + capturedAtMs', () => {
+    function setup(overrides: {
+      callSession?: unknown;
+      payload?: unknown;
+    } = {}) {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+      });
+      const { socket, handlers, roomEmit } = makeSocket();
+      const callService = makeCallService(
+        jest.fn<any>().mockResolvedValue(
+          overrides.callSession ??
+            activeCallSessionWithUser(SPEAKER_ID, { username: 'alice', displayName: 'Alice Doe' })
+        )
+      );
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      const run = () =>
+        handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](overrides.payload ?? VALID_SEGMENT);
+      return { roomEmit, run };
+    }
+
+    it('stamps speakerDisplayName server-side from the participant user record', async () => {
+      const { roomEmit, run } = setup();
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
+    });
+
+    it('falls back to the username when displayName is not set', async () => {
+      const { roomEmit, run } = setup({
+        callSession: activeCallSessionWithUser(SPEAKER_ID, { username: 'alice', displayName: null }),
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('alice');
+    });
+
+    it('omits speakerDisplayName when the participant has no user record', async () => {
+      const { roomEmit, run } = setup({ callSession: activeCallSession(SPEAKER_ID) });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment).not.toHaveProperty('speakerDisplayName');
+    });
+
+    it('ignores a client-supplied speakerDisplayName (server-stamped, anti-spoof)', async () => {
+      const { roomEmit, run } = setup({
+        payload: {
+          callId: VALID_CALL_ID,
+          segment: { ...VALID_SEGMENT.segment, speakerDisplayName: 'Spoofed Name' },
+        },
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
+    });
+
+    it('passes through the client segment id and capturedAtMs for cross-transport merge', async () => {
+      const { roomEmit, run } = setup({
+        payload: {
+          callId: VALID_CALL_ID,
+          segment: {
+            ...VALID_SEGMENT.segment,
+            id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+            capturedAtMs: 1765650000000,
+          },
+        },
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.id).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
+      expect(payload.segment.capturedAtMs).toBe(1765650000000);
+    });
+
+    it('stamps capturedAtMs at reception when the client omits it (legacy clients)', async () => {
+      const before = Date.now();
+      const { roomEmit, run } = setup();
+      await run();
+      const after = Date.now();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.capturedAtMs).toBeGreaterThanOrEqual(before);
+      expect(payload.segment.capturedAtMs).toBeLessThanOrEqual(after);
+    });
+
+    it('preserves the transcription language tag as sourceLanguage', async () => {
+      const { roomEmit, run } = setup();
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.sourceLanguage).toBe('fr');
+      expect(payload.segment.targetLanguage).toBe('fr');
+    });
+  });
+
   describe('security: speakerId spoofing protection', () => {
     let roomEmit: jest.MockedFunction<any>;
 
@@ -362,6 +480,120 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       });
     }
   );
+
+  describe('server-side transcript persistence (replay post-appel)', () => {
+    function setup(overrides: { transcriptionCreate?: jest.MockedFunction<any> } = {}) {
+      const transcriptionCreate =
+        overrides.transcriptionCreate ?? jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' });
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        transcriptionCreate,
+      });
+      const { socket, handlers, roomEmit } = makeSocket();
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      return { handlers, roomEmit, transcriptionCreate };
+    }
+
+    it('persists a FINAL segment with its journal metadata and the resolved participantId', async () => {
+      const { handlers, transcriptionCreate } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT]({
+        callId: VALID_CALL_ID,
+        segment: {
+          ...VALID_SEGMENT.segment,
+          id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+          capturedAtMs: 1765650000000,
+        },
+      });
+      expect(transcriptionCreate).toHaveBeenCalledTimes(1);
+      const { data } = transcriptionCreate.mock.calls[0][0];
+      expect(data.callSessionId).toBe(VALID_CALL_ID);
+      expect(data.participantId).toBe('participant-1');
+      expect(data.source).toBe('client');
+      expect(data.segmentId).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
+      expect(data.text).toBe(VALID_SEGMENT.segment.text);
+      expect(data.language).toBe('fr');
+      expect(data.timestamp).toEqual(new Date(1765650000000));
+    });
+
+    it('never persists a partial revision — only the last spoken value of an utterance lands in storage', async () => {
+      const { handlers, transcriptionCreate } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT]({
+        callId: VALID_CALL_ID,
+        segment: { ...VALID_SEGMENT.segment, isFinal: false },
+      });
+      expect(transcriptionCreate).not.toHaveBeenCalled();
+    });
+
+    it('still relays the segment when persistence fails (storage never blocks live captions)', async () => {
+      const { handlers, roomEmit } = setup({
+        transcriptionCreate: jest.fn<any>().mockRejectedValue(new Error('db down')),
+      });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('call:transcription-active — presence signal relay', () => {
+    function setup(overrides: { callSession?: unknown; status?: string } = {}) {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({
+          status: overrides.status ?? 'active',
+          metadata: null,
+        }),
+      });
+      const { socket, handlers, roomEmit, directEmit } = makeSocket();
+      const callService = makeCallService(
+        jest.fn<any>().mockResolvedValue(overrides.callSession ?? activeCallSession(SPEAKER_ID))
+      );
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      return { socket, handlers, roomEmit, directEmit };
+    }
+
+    it('relays the activation to the call room, stamped with the authenticated sender', async () => {
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+      const [eventName, payload] = roomEmit.mock.calls[0];
+      expect(eventName).toBe(CALL_EVENTS.TRANSCRIPTION_ACTIVE);
+      expect(payload).toEqual({ callId: VALID_CALL_ID, speakerId: SPEAKER_ID, active: true });
+    });
+
+    it('relays the deactivation (active: false) so peers clear their invite badge', async () => {
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: false });
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.active).toBe(false);
+    });
+
+    it('excludes the sender from the relay (socket.to, never io-wide)', async () => {
+      const { socket, handlers } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect((socket.to as jest.Mock)).toHaveBeenCalledWith(`call:${VALID_CALL_ID}`);
+    });
+
+    it('silently drops the signal from a non-participant (no relay, no error)', async () => {
+      const { handlers, roomEmit, directEmit } = setup({ callSession: { participants: [] } });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).not.toHaveBeenCalled();
+      expect(directEmit).not.toHaveBeenCalled();
+    });
+
+    it('silently drops the signal on a terminal call', async () => {
+      const { handlers, roomEmit } = setup({ status: 'ended' });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('does not relay when validation fails', async () => {
+      (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: false });
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: 'yes' });
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+  });
 
   describe('anonymous socket: no userId', () => {
     let roomEmit: jest.MockedFunction<any>;

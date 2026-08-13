@@ -135,6 +135,21 @@ export function applyPersonalHistoryHiding<W extends Record<string, unknown>>(
   return next as W;
 }
 
+/**
+ * The history cut-off restated as an EXCLUSIVE lower bound, in integer
+ * milliseconds — the shape an in-memory counter can merge with a read floor.
+ *
+ * `applyPersonalHistoryHiding` emits `createdAt: { gte: cutoff }`: a message
+ * written at exactly the cut-off is still visible. The unread counters compare
+ * `getTime()` values with a strict `>` (the read floor is exclusive:
+ * `createdAt > lastRead`), so the two bounds can only be collapsed into a
+ * single `Math.max` once they speak the same language. `Date#getTime()` is an
+ * integer number of milliseconds, which makes `>= c` exactly `> c − 1` — an
+ * equality, not an approximation.
+ */
+export const exclusiveFloorMsFor = (hiding: PersonalHistoryHiding): number | null =>
+  hiding.clearHistoryBefore === null ? null : hiding.clearHistoryBefore.getTime() - 1;
+
 export interface LoadPersonalHistoryHidingParams {
   /** Anonymous callers own neither table — they are served unfiltered. */
   readonly userId: string | undefined | null;
@@ -171,6 +186,74 @@ export async function loadPersonalHistoryHiding(
       error: error instanceof Error ? error.message : String(error),
     });
     return NO_PERSONAL_HIDING;
+  }
+}
+
+export interface LoadPersonalHistoryHidingByUserParams {
+  /** Anonymous participants own neither table; `null`/`undefined` entries are dropped. */
+  readonly userIds: ReadonlyArray<string | null | undefined>;
+  readonly conversationId: string;
+}
+
+/**
+ * Batched sibling for the surfaces that read ONE conversation on behalf of MANY
+ * users at once — the unread fan-out, which recomputes every recipient's badge
+ * on every committed message.
+ *
+ * Mirror image of `loadPersonalHistoryHidingByConversation` (one user, many
+ * conversations); same contract, same failure posture, and same absence
+ * convention: a user who hides nothing is absent from the map, so the read is
+ * `map.get(userId) ?? NO_PERSONAL_HIDING`.
+ *
+ * A conversation whose participants are ALL anonymous — the normal shape behind
+ * a share link — issues no query at all.
+ */
+export async function loadPersonalHistoryHidingByUser(
+  prisma: PrismaClient,
+  { userIds, conversationId }: LoadPersonalHistoryHidingByUserParams
+): Promise<Map<string, PersonalHistoryHiding>> {
+  const result = new Map<string, PersonalHistoryHiding>();
+  const ids = [...new Set(userIds.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  if (ids.length === 0) return result;
+
+  try {
+    const [prefs, deletions] = await Promise.all([
+      prisma.userConversationPreferences.findMany({
+        where: { conversationId, userId: { in: ids }, clearHistoryBefore: { not: null } },
+        select: { userId: true, clearHistoryBefore: true },
+      }),
+      prisma.userMessageDeletion.findMany({
+        where: { userId: { in: ids }, message: { conversationId } },
+        select: { userId: true, messageId: true },
+      }),
+    ]);
+
+    const cutoffs = new Map<string, Date>();
+    for (const row of prefs) {
+      if (row.clearHistoryBefore) cutoffs.set(row.userId, row.clearHistoryBefore);
+    }
+
+    const hidden = new Map<string, string[]>();
+    for (const row of deletions) {
+      const bucket = hidden.get(row.userId);
+      if (bucket) bucket.push(row.messageId);
+      else hidden.set(row.userId, [row.messageId]);
+    }
+
+    for (const userId of new Set([...cutoffs.keys(), ...hidden.keys()])) {
+      result.set(userId, {
+        clearHistoryBefore: cutoffs.get(userId) ?? null,
+        hiddenMessageIds: hidden.get(userId) ?? [],
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.warn('[personalHistoryFilter] per-user hiding lookup failed, serving unfiltered', {
+      conversationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Map();
   }
 }
 

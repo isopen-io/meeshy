@@ -60,6 +60,15 @@
     "captions": {
       "region": "Legendas traduzidas ao vivo"
     },
+    "transcript": {
+      "region": "Diário de transcrição da chamada",
+      "title": "Transcrição",
+      "empty": "Os segmentos transcritos aparecerão aqui",
+      "unknownSpeaker": "Participante",
+      "peerActive": "Seu interlocutor ativou a transcrição — ative a sua também",
+      "show": "Mostrar transcrição",
+      "hide": "Ocultar transcrição"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} saiu",
