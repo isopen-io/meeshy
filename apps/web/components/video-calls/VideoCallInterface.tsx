@@ -16,7 +16,7 @@ import { useCallCaptions } from '@/hooks/use-call-captions';
 import { useCallTranscriptJournal } from '@/hooks/use-call-transcript-journal';
 import { useRemoteTranscriptionActive } from '@/hooks/use-remote-transcription-active';
 import { useCallAnalyticsReporter } from '@/hooks/use-call-analytics-reporter';
-import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
+import { usePeerConnections } from '@/hooks/use-peer-connections';
 import {
   useAdaptiveDegradation,
   type AdaptiveDegradationActions,
@@ -121,20 +121,23 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     inputStream: localStream,
   });
 
-  // Active peer connection for quality monitoring. MUST be selected reactively
-  // from the store — it is created lazily inside createOffer/handleOffer, after
-  // this component mounts. A one-shot useMemo([]) snapshot captured an empty map
-  // and stayed null forever, which silently disabled quality monitoring, the
-  // adaptive bitrate ladder and call:quality-report (root cause of the mid-call
-  // "instabilité de connexion": the encoder never shed bitrate under
-  // congestion).
-  const activePeerConnection = useActivePeerConnection();
+  // Every peer connection for quality monitoring. MUST be selected reactively
+  // from the store — connections are created lazily inside
+  // createOffer/handleOffer, after this component mounts. A one-shot
+  // useMemo([]) snapshot captured an empty map and stayed null forever, which
+  // silently disabled quality monitoring, the adaptive bitrate ladder and
+  // call:quality-report (root cause of the mid-call "instabilité de
+  // connexion": the encoder never shed bitrate under congestion). In a group
+  // call there can be more than one peer (W5,
+  // `2026-08-13-group-calls-gap-analysis.md`) — useCallQuality aggregates
+  // across all of them so a single struggling peer is never masked.
+  const peerConnections = usePeerConnections();
 
   // Monitor call quality. callId is required for the server-side quality
   // report (call:quality-report) that drives congestion alerts and persists
   // "data spent / network quality" on the call summary.
   const { qualityStats } = useCallQuality({
-    peerConnection: activePeerConnection,
+    peerConnections,
     callId,
     updateInterval: 2000,
   });

@@ -2,8 +2,10 @@
  * Tests for useCallQuality hook and related helpers
  *
  * Covers:
- * - No peer connection: qualityStats=null, isMonitoring=false
- * - Peer connection provided: getStats called, stats parsed, qualityStats set
+ * - No peer connections: qualityStats=null, isMonitoring=false
+ * - One peer connection: getStats called, stats parsed, qualityStats set
+ * - Multiple peer connections (group calls): worst-of RTT/loss/jitter,
+ *   summed bitrate/bytes, a single failing peer never masked by healthy ones
  * - Quality level calculation via hook output
  * - Socket CALL_QUALITY_REPORT emission every 10s
  * - Helper functions: getQualityColor, getQualityIcon, getQualityLabel
@@ -70,6 +72,13 @@ function makeMockPeerConnection(statsReport = makeStatsReport({})) {
   return { getStats: jest.fn().mockResolvedValue(statsReport) };
 }
 
+// Wraps a single mock peer connection in the `Map<participantId, pc>` shape
+// the hook now expects — the vast majority of tests exercise one peer, same
+// as the old single-`peerConnection` API, just wrapped.
+function onePeer(pc: unknown, participantId = 'peer-1') {
+  return new Map([[participantId, pc as RTCPeerConnection]]);
+}
+
 // Returns a peer connection whose getStats() yields each report in `reports`
 // on successive calls (the last one is reused once the list is exhausted), so
 // a test can drive the hook through multiple monitoring ticks with evolving
@@ -131,10 +140,10 @@ describe('useCallQuality', () => {
     jest.useRealTimers();
   });
 
-  describe('with no peerConnection', () => {
+  describe('with no peer connections', () => {
     it('returns qualityStats=null and isMonitoring=false', () => {
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: null })
+        useCallQuality({ peerConnections: new Map() })
       );
 
       expect(result.current.qualityStats).toBeNull();
@@ -142,7 +151,7 @@ describe('useCallQuality', () => {
     });
 
     it('does not start any interval', async () => {
-      renderHook(() => useCallQuality({ peerConnection: null }));
+      renderHook(() => useCallQuality({ peerConnections: new Map() }));
 
       await act(async () => {
         jest.advanceTimersByTime(5000);
@@ -152,12 +161,12 @@ describe('useCallQuality', () => {
     });
   });
 
-  describe('with a peerConnection', () => {
+  describe('with a single peer connection', () => {
     it('returns isMonitoring=true', async () => {
       const mockPC = makeMockPeerConnection();
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => {
@@ -170,9 +179,7 @@ describe('useCallQuality', () => {
     it('calls getStats immediately on mount', async () => {
       const mockPC = makeMockPeerConnection();
 
-      renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
-      );
+      renderHook(() => useCallQuality({ peerConnections: onePeer(mockPC) }));
 
       await act(async () => {
         await Promise.resolve();
@@ -185,7 +192,7 @@ describe('useCallQuality', () => {
       const mockPC = makeMockPeerConnection();
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => {
@@ -201,7 +208,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           updateInterval: 500,
         })
       );
@@ -242,7 +249,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           // Large enough that the setInterval tick itself never fires within
           // this test — any extra call must come from the effect rebuilding.
           updateInterval: 999_999,
@@ -260,42 +267,40 @@ describe('useCallQuality', () => {
       expect(mockPC.getStats).toHaveBeenCalledTimes(1);
     });
 
-    it('clears the interval when peerConnection becomes null', async () => {
+    it('clears the interval when the peer set becomes empty', async () => {
       const mockPC = makeMockPeerConnection();
 
       const { rerender } = renderHook(
-        ({ pc }) =>
-          useCallQuality({ peerConnection: pc as unknown as RTCPeerConnection | null }),
-        { initialProps: { pc: mockPC as unknown as RTCPeerConnection | null } }
+        ({ peers }) => useCallQuality({ peerConnections: peers }),
+        { initialProps: { peers: onePeer(mockPC) } }
       );
 
       await act(async () => { await Promise.resolve(); });
       const callCountAfterMount = mockPC.getStats.mock.calls.length;
 
-      rerender({ pc: null });
+      rerender({ peers: new Map() });
 
       await act(async () => {
         jest.advanceTimersByTime(2000);
         await Promise.resolve();
       });
 
-      // No additional calls after setting to null
+      // No additional calls after the peer set empties
       expect(mockPC.getStats).toHaveBeenCalledTimes(callCountAfterMount);
     });
 
-    it('resets qualityStats to null when peerConnection becomes null', async () => {
+    it('resets qualityStats to null when the peer set becomes empty', async () => {
       const mockPC = makeMockPeerConnection();
 
       const { result, rerender } = renderHook(
-        ({ pc }) =>
-          useCallQuality({ peerConnection: pc as unknown as RTCPeerConnection | null }),
-        { initialProps: { pc: mockPC as unknown as RTCPeerConnection | null } }
+        ({ peers }) => useCallQuality({ peerConnections: peers }),
+        { initialProps: { peers: onePeer(mockPC) } }
       );
 
       await act(async () => { await Promise.resolve(); });
       expect(result.current.qualityStats).not.toBeNull();
 
-      rerender({ pc: null });
+      rerender({ peers: new Map() });
 
       expect(result.current.qualityStats).toBeNull();
     });
@@ -306,13 +311,199 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
 
       // Should not throw; qualityStats remains null
       expect(result.current.qualityStats).toBeNull();
+    });
+  });
+
+  describe('group calls (multiple peer connections, W5)', () => {
+    it('reports the worst RTT across peers, not the first', async () => {
+      // peer-1: 50ms RTT (excellent) ; peer-2: 400ms RTT (fair/poor territory).
+      // A first-peer-only reading would report 'excellent' and hide peer-2's
+      // struggle from the adaptive-degradation ladder.
+      const good = makeMockPeerConnection(makeStatsReport({ rtt: 0.05, packetsLost: 0, packetsReceived: 100 }));
+      const bad = makeMockPeerConnection(makeStatsReport({ rtt: 0.4, packetsLost: 0, packetsReceived: 100 }));
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', good as unknown as RTCPeerConnection],
+            ['peer-2', bad as unknown as RTCPeerConnection],
+          ]),
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.rtt).toBe(400);
+      expect(result.current.qualityStats?.level).toBe('fair');
+    });
+
+    it('does not let one failing peer permanently drag the level below what a healthy peer alone would report, once it recovers', async () => {
+      // Two peers, one improves on the second tick — the aggregate must
+      // reflect the CURRENT worst peer each tick, not the failing peer's
+      // history.
+      const stable = makeMockPeerConnection(makeStatsReport({ rtt: 0.05, packetsLost: 0, packetsReceived: 100 }));
+      let recovering = true;
+      const other = {
+        getStats: jest.fn().mockImplementation(() => {
+          const report = recovering
+            ? makeStatsReport({ rtt: 0.4, packetsLost: 0, packetsReceived: 100 })
+            : makeStatsReport({ rtt: 0.05, packetsLost: 0, packetsReceived: 100 });
+          recovering = false;
+          return Promise.resolve(report);
+        }),
+      };
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', stable as unknown as RTCPeerConnection],
+            ['peer-2', other as unknown as RTCPeerConnection],
+          ]),
+          updateInterval: 500,
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current.qualityStats?.level).toBe('fair');
+
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+      expect(result.current.qualityStats?.rtt).toBe(50);
+      expect(result.current.qualityStats?.level).toBe('excellent');
+    });
+
+    it('reports the worst packet loss across peers', async () => {
+      const clean = makeMockPeerConnection(makeStatsReport({ packetsLost: 0, packetsReceived: 100, rtt: 0.02 }));
+      const lossy = makeMockPeerConnection(makeStatsReport({ packetsLost: 10, packetsReceived: 90, rtt: 0.02 }));
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', clean as unknown as RTCPeerConnection],
+            ['peer-2', lossy as unknown as RTCPeerConnection],
+          ]),
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.packetLoss).toBe(10);
+      expect(result.current.qualityStats?.level).toBe('poor');
+    });
+
+    it('sums bitrate across peers rather than reporting a single peer', async () => {
+      const peer1 = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'video', bytesReceived: 100000, timestamp: 1000 }]),
+        inboundStatsReport([{ kind: 'video', bytesReceived: 110000, timestamp: 2000 }]),
+      ]);
+      const peer2 = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'video', bytesReceived: 50000, timestamp: 1000 }]),
+        inboundStatsReport([{ kind: 'video', bytesReceived: 60000, timestamp: 2000 }]),
+      ]);
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', peer1 as unknown as RTCPeerConnection],
+            ['peer-2', peer2 as unknown as RTCPeerConnection],
+          ]),
+          updateInterval: 500,
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+
+      // peer-1: Δ10000 bytes/1000ms → 80 kbps ; peer-2: Δ10000 bytes/1000ms → 80 kbps.
+      // Summed: 160 kbps — not either peer's individual 80.
+      expect(result.current.qualityStats?.bitrate.video).toBe(160);
+    });
+
+    it('sums cumulative bytesSent/bytesReceived across peers', async () => {
+      const peer1 = makeMockPeerConnection(makeStatsReport({ bytesSent: 1000, bytesReceived: 2000 }));
+      const peer2 = makeMockPeerConnection(makeStatsReport({ bytesSent: 3000, bytesReceived: 4000 }));
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', peer1 as unknown as RTCPeerConnection],
+            ['peer-2', peer2 as unknown as RTCPeerConnection],
+          ]),
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.bytesSent).toBe(4000);
+      expect(result.current.qualityStats?.bytesReceived).toBe(6000);
+    });
+
+    it('keeps a per-peer delta baseline: adding a new peer mid-call does not corrupt the existing peer bitrate', async () => {
+      const existing = makeSequentialPeerConnection([
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 3000, timestamp: 1000 }]),
+        inboundStatsReport([{ kind: 'audio', bytesReceived: 7000, timestamp: 2000 }]),
+      ]);
+
+      const { result, rerender } = renderHook(
+        ({ peers }) => useCallQuality({ peerConnections: peers, updateInterval: 500 }),
+        { initialProps: { peers: onePeer(existing, 'peer-1') } }
+      );
+
+      // Tick 1: peer-1's own first sample (no predecessor yet → baseline only).
+      await act(async () => { await Promise.resolve(); });
+
+      // peer-2 joins — the peer-set reference change re-arms the monitoring
+      // effect, which fires its own "initial update" immediately (peer-1's
+      // SECOND sample, peer-2's FIRST).
+      const joiner = makeMockPeerConnection(makeStatsReport({ kind: 'audio', bytesReceived: 500 }));
+      await act(async () => {
+        rerender({
+          peers: new Map([
+            ['peer-1', existing as unknown as RTCPeerConnection],
+            ['peer-2', joiner as unknown as RTCPeerConnection],
+          ]),
+        });
+        await Promise.resolve();
+      });
+
+      // peer-1's own delta (4000 bytes / 1000ms → 32 kbps) is preserved even
+      // though peer-2 joined mid-call with no prior sample of its own (its
+      // first-ever sample contributes 0 to the rate) — the join must not have
+      // wiped peer-1's baseline.
+      expect(result.current.qualityStats?.bitrate.audio).toBe(32);
+    });
+
+    it('drops a departed peer from aggregation on the next tick', async () => {
+      const stays = makeMockPeerConnection(makeStatsReport({ rtt: 0.02, packetsLost: 0, packetsReceived: 100 }));
+      const leaves = makeMockPeerConnection(makeStatsReport({ rtt: 0.4, packetsLost: 0, packetsReceived: 100 }));
+
+      const { result, rerender } = renderHook(
+        ({ peers }) => useCallQuality({ peerConnections: peers, updateInterval: 500 }),
+        {
+          initialProps: {
+            peers: new Map([
+              ['peer-1', stays as unknown as RTCPeerConnection],
+              ['peer-2', leaves as unknown as RTCPeerConnection],
+            ]),
+          },
+        }
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current.qualityStats?.rtt).toBe(400);
+
+      rerender({ peers: new Map([['peer-1', stays as unknown as RTCPeerConnection]]) });
+
+      await act(async () => { jest.advanceTimersByTime(500); await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.rtt).toBe(20);
+      expect(result.current.qualityStats?.level).toBe('excellent');
     });
   });
 
@@ -323,7 +514,7 @@ describe('useCallQuality', () => {
       );
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -342,7 +533,7 @@ describe('useCallQuality', () => {
       } as any);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -363,7 +554,7 @@ describe('useCallQuality', () => {
       } as any);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -384,7 +575,7 @@ describe('useCallQuality', () => {
       } as any);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -405,7 +596,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -426,7 +617,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -450,7 +641,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -472,7 +663,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -490,7 +681,7 @@ describe('useCallQuality', () => {
       ]);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+        useCallQuality({ peerConnections: onePeer(mockPC), updateInterval: 500 })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -515,7 +706,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -537,7 +728,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -558,7 +749,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -580,7 +771,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -601,7 +792,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -623,7 +814,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -648,7 +839,7 @@ describe('useCallQuality', () => {
       ]);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+        useCallQuality({ peerConnections: onePeer(mockPC), updateInterval: 500 })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -670,7 +861,7 @@ describe('useCallQuality', () => {
       ]);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+        useCallQuality({ peerConnections: onePeer(mockPC), updateInterval: 500 })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -696,7 +887,7 @@ describe('useCallQuality', () => {
       ]);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection, updateInterval: 500 })
+        useCallQuality({ peerConnections: onePeer(mockPC), updateInterval: 500 })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -721,7 +912,7 @@ describe('useCallQuality', () => {
       } as any);
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -744,7 +935,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -769,7 +960,7 @@ describe('useCallQuality', () => {
       };
 
       const { result } = renderHook(() =>
-        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+        useCallQuality({ peerConnections: onePeer(mockPC) })
       );
 
       await act(async () => { await Promise.resolve(); });
@@ -785,7 +976,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           callId: 'call-123',
         })
       );
@@ -810,7 +1001,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           callId: null,
         })
       );
@@ -836,7 +1027,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           callId: 'call-123',
         })
       );
@@ -863,7 +1054,7 @@ describe('useCallQuality', () => {
 
       renderHook(() =>
         useCallQuality({
-          peerConnection: mockPC as unknown as RTCPeerConnection,
+          peerConnections: onePeer(mockPC),
           callId: 'call-123',
         })
       );

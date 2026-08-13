@@ -224,6 +224,66 @@ adaptative pilotée par un seul pair en groupe) reste À TRAITER** : contraireme
 TOUS les pairs — pas un simple changement de sélecteur. C'est un chantier de
 la Phase 2 web (UI de groupe), pas un fix ponctuel ; laissé pour cette phase.
 
+## Mise à jour 2026-08-13 (3) — W5 corrigé (agrégation multi-pair de la qualité)
+
+**W5 levé.** `useActivePeerConnection` (qui ne sélectionnait que la première
+`RTCPeerConnection` du store, sous l'invariant 1:1 périmé depuis la levée de
+S1) est **supprimé** et remplacé par `usePeerConnections`, qui expose la `Map`
+entière — réactive, stable tant que le SET de pairs ne change pas réellement
+(voir plus bas). `useCallQuality` échantillonne désormais **chaque** pair à
+chaque tick au lieu d'un seul :
+
+- RTT / perte de paquets / gigue retiennent le **PIRE** des pairs — un pair
+  qui décroche doit faire bouger l'aiguille de la pastille de qualité, de
+  l'échelle de dégradation adaptative (`useAdaptiveDegradation`) et du
+  rapport `call:quality-report` (persisté sur le résumé d'appel), jamais être
+  masqué par des pairs en bonne santé échantillonnés à côté de lui.
+- Débit et compteurs d'octets cumulés (`bytesSent`/`bytesReceived`) se
+  **SOMMENT** entre pairs — bande passante totale réellement utilisée par
+  l'appel, pas celle d'un seul participant.
+- La ligne de base delta (nécessaire pour dériver un débit/taux de perte à
+  partir des compteurs cumulatifs WebRTC) est tenue **par pair** dans une
+  `Map<participantId, …>` plutôt que dans une seule ref scalaire, pour qu'un
+  pair qui rejoint en cours d'appel n'écrase jamais la ligne de base d'un pair
+  déjà présent, et qu'un pair qui part laisse simplement une entrée orpheline
+  sans conséquence (purgée au tick suivant).
+- Forme externe inchangée (`ConnectionQualityStats` reste un scalaire) :
+  zéro changement requis côté `CallQualityOverlay`, `useAdaptiveDegradation`
+  ou `useCallAnalyticsReporter`.
+
+**Bug trouvé pendant le TDD, pas seulement dans le code de prod** : la
+première version de `useCallQuality` faisait dépendre `updateStats` et l'effet
+de monitoring de l'identité RÉFÉRENTIELLE de la `Map` `peerConnections`
+passée en paramètre. `usePeerConnections` (l'appelant de prod) garantit déjà
+une référence stable (le store n'émet une nouvelle `Map` que sur un ajout/
+retrait RÉEL de pair — jamais de mutation en place). Mais un appelant qui
+construit une `Map` neuve à CHAQUE rendu (exactement ce que faisaient mes
+propres tests, via un helper `onePeer()` invoqué à l'intérieur du callback de
+rendu) déclenchait une boucle infinie : rendu → nouvelle `Map` → effet
+reconstruit → `updateStats()` → `setQualityStats` → rendu → nouvelle `Map` →
+…, épinglant un cœur CPU à 100 % indéfiniment (repéré via `ps` : le process
+`jest` tournait à 109 % CPU pendant 5+ minutes sur un fichier qui s'exécute
+normalement en < 1 s). Plutôt que de me contenter de corriger mes tests, le
+hook est rendu robuste PAR CONSTRUCTION : un memo interne
+(`useStablePeerConnections`) compare la `Map` reçue par VALEUR (mêmes ids →
+mêmes instances `RTCPeerConnection`) et ne change de référence exposée que si
+le set a réellement changé — indépendamment de la discipline de l'appelant.
+
+Tests : 54 cas dans `use-call-quality.test.ts` (dont 8 nouveaux « group calls
+(multiple peer connections, W5) » — pire RTT/perte/gigue retenu, débit et
+octets sommés, ligne de base par pair préservée à l'arrivée d'un nouveau pair,
+purge propre au départ d'un pair) + 5 cas dans le nouveau
+`use-peer-connections.test.ts` (remplace `use-active-peer-connection.test.ts`,
+supprimé). Suite complète `apps/web/__tests__/hooks/` +
+`__tests__/components/video-calls/` (119 suites / 2317 tests, 2 skip
+pré-existants) verte après le fix.
+
+**Reste à traiter (Phase 2 web UI de groupe, inchangé)** : W6 (grille
+adaptative, roster, `onRemove` non branché sur le kick REST, timeout global
+45 s, `CallNotification` mono-appelant) et W7 (i18n groupe absente de
+`calls.json`). Le mesh iOS mono-PC (I1-I7) et le SFU (Phase 4, optionnel)
+restent également hors scope de cette branche.
+
 ## Récapitulatif
 
 | Capacité demandée | État |

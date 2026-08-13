@@ -83,8 +83,8 @@ jest.mock('@/hooks/use-call-captions', () => ({
 jest.mock('@/hooks/use-call-analytics-reporter', () => ({
   useCallAnalyticsReporter: () => {},
 }));
-jest.mock('@/hooks/use-active-peer-connection', () => ({
-  useActivePeerConnection: () => null,
+jest.mock('@/hooks/use-peer-connections', () => ({
+  usePeerConnections: () => new Map(),
 }));
 jest.mock('@/hooks/use-adaptive-degradation', () => ({
   useAdaptiveDegradation: (...args: unknown[]) => useAdaptiveDegradationMock(...(args as [])),
