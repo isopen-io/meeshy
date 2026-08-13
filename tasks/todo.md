@@ -1,3 +1,106 @@
+# Tête instruite pour le cycle 112 — un delta qui ne sait dire que « voici ce qui a changé » ne dit rien de ce qui a DISPARU
+
+*Le cycle 111 n'a pas pris le lot que le 110 lui désignait (badge APNs, `Mention`/`TrackingLink`).
+Il a ouvert `docs/reviews/2026-08-01-ios-local-first-realtime/10-plan-d-application.md` — le backlog
+d'audit du dépôt, que la leçon 122 nomme « source de conception, pas registre à cocher » — et y a
+trouvé deux P1 ouverts dont l'un mordait sur les DEUX clients depuis le 1ᵉʳ août sans que personne
+ne l'ait vu passer. Le lot du 110 reste intact et reconduit ci-dessous.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 111 ajoute — le seizième membre de la famille
+>
+> Les cycles 105 à 110 cherchaient tous la même chose : une règle appliquée par N lecteurs sur M.
+> Le cycle 111 trouve un cas où le dénombrement ne pose même pas la bonne question, parce que le
+> canal n'a pas de vocabulaire pour le fait manquant :
+>
+> **Un canal delta bâti sur la clause de la LISTE ne peut annoncer que des arrivées. La clause qui
+> décide ce qu'on sert est exactement celle qui rend une disparition inexprimable.**
+> `GET /conversations?updatedSince=` exigeait conversation `isActive: true` + participant actif sans
+> `deletedForMe` : une conversation fermée, quittée, bannie ou supprimée-pour-moi ne pouvait pas
+> revenir dans la réponse — par construction, pas par oubli. Les deux clients fusionnant en upsert,
+> la ligne restait affichée jusqu'à la réconciliation de 24 h.
+>
+> **Le symptôme à reconnaître** : un endpoint delta dont le `where` est réutilisé depuis la liste.
+> Poser la question « quelle valeur de ce champ ferait SORTIR la ligne, et par quel canal le client
+> l'apprend-il ? ». Si la réponse est « aucun », le delta est un demi-canal.
+>
+> **Corollaire — l'écriture qui ne bouge pas l'horodatage.** Un `leave` ou un `ban` n'écrit que la
+> ligne `Participant` : `Conversation.updatedAt` ne bouge pas. Un stream de tombstones qui interroge
+> la CONVERSATION ne les verrait jamais. Avant d'écrire une requête de disparition, chercher quelle
+> TABLE l'événement a réellement touchée — le nom de l'entité affichée n'est pas une réponse.
+>
+> **Corollaire de troncature (leçon 122, repayée)** : la liste de disparitions n'a AUCUN curseur de
+> reprise. Il n'existe pas de « page suivante » de départs. Quand elle déborde son plafond, le seul
+> geste correct est l'ESCALADE vers la relecture complète — et le plafond doit se prouver par une
+> sonde `cap + 1`, jamais par une égalité sur le cap.
+
+## Livré au cycle 111 — le delta des conversations sait enfin dire qu'une ligne est PARTIE
+
+**Le défaut.** `GET /conversations?updatedSince=` est le canal de rattrapage des deux clients
+(`ConversationSyncEngine.deltaSyncCore` iOS, `useConversationsDeltaSync` web) et réutilise le
+`whereClause` de la liste. Quatre sorties de vue — fermeture, leave, ban, delete-for-me depuis un
+autre appareil — ne revenaient donc dans AUCUNE réponse. Fiche `gwcontract-04`, P1, ouverte depuis
+le 1ᵉʳ août.
+
+**Livré (gateway)** : `routes/conversations/utils/delta-tombstones.ts` — trois lectures ids-only,
+parallèles, cappées, servies dans `meta.deletedConversationIds` / `…Truncated` (forme reprise telle
+quelle de `meta.deletedStoryIds`). Deux des trois portent sur `Participant` et non sur
+`Conversation` (le corollaire ci-dessus) ; le stream « fermées » ne filtre PAS sur un participant
+ACTIF, un banni portant `isActive: false` et étant précisément celui qui doit voir la ligne partir.
+`meta` est déclaré dans `conversationListResponseSchema` — non déclaré, `fast-json-stringify`
+l'aurait retiré du fil en silence, et aucun témoin de route ne l'aurait vu (ils lisent l'objet AVANT
+sérialisation). Posture d'échec : `truncated: true` sur liste vide, jamais un échec de la LISTE.
+
+**Livré (web)** : `mergeConversationDelta({ tombstoneIds })` + purge des caches dérivés par le MÊME
+chemin que les retraits `isActive: false`. La purge n'est PAS gardée par `conversations.length > 0`
+(un compte calme dont la seule nouvelle est un départ rend zéro conversation et une tombstone) ; les
+tombstones s'appliquent APRÈS les upserts du même lot ; une liste tronquée chaîne la réconciliation.
+
+**Livré (2ᵉ lot, `gwcontract-03`)** : `syncMessageSelect` — la collection `messages` de `GET /sync`
+ne rendait que six champs, donc un client qui l'appliquerait écrirait des lignes NON RENDABLES
+(Prisme sans traductions, bulle sans pièce jointe, réconciliation optimiste sans `clientMessageId`).
+`SYNC_MESSAGE_RENDERABLE_KEYS` est le contrat qu'un témoin de forme oppose au select réel.
+
+**Vérifié** : gateway 700 suites / 17 178 tests ; web 568 suites / 12 189 tests ; `tsc --noEmit` propre
+sur les deux ; mutation-proof des deux moitiés (helper, câblage route, fusion web, hook).
+
+## Constats du cycle 111, NON traités — le lot naturel du cycle 112
+
+1. **Le client iOS des tombstones (`gwcontract-04`, étape 7).** `ConversationSyncEngine.deltaSyncCore`
+   doit lire `meta.deletedConversationIds` (retrait de la clé cache `"list"` + invalidation des
+   caches messages) et chaîner `fullSync()` sur `…Truncated`. Non livrable depuis un runner Linux :
+   ni `meeshy.sh build` ni XCTest n'y tournent. Le champ étant additif, l'app se comporte
+   exactement comme avant en attendant.
+2. **`gwcontract-02` est maintenant débloqué** (sa seule dépendance gateway était `gwcontract-03`) :
+   documenter le partage des rôles `?after=` (pagination d'affichage) / `/sync` (rattrapage) et
+   poser les gardes de non-régression. La fiche interdit explicitement d'ajouter un mode
+   `updatedSince` parallèle à GET messages.
+3. **`meta` n'est pas typé côté `@meeshy/shared`.** Les deux nouveaux champs vivent dans le schéma
+   JSON de réponse et dans le type web local. Le SDK iOS aura besoin d'un type partagé — le poser
+   AVANT d'écrire le client Swift, sinon il naîtra en double.
+4. **Le poids de la charge utile `/sync` n'est pas mesuré.** Le select enrichi porte `translations`
+   et les pièces jointes sur un cap de 1000 messages. Aucun client ne l'appelle encore, donc rien
+   n'a jamais été pesé ; le faire avant le premier client, pas après.
+5. **Reconduits du cycle 110, intacts** : badge APNs (compte de notifications vs conversations non
+   lues — dénombrement à faire) ; `Mention` / `TrackingLink` sous l'angle « copie du contenu ou
+   simple clé étrangère ? » ; aucun client n'appelle `delete-for-me` / `clear-history` ;
+   `isDeletedForUser: boolean` vs `deletedForUserAt: DateTime` ; `lastMessageAt` non ajusté quand
+   l'aperçu est masqué ; flux `deleted` de `/sync` non filtré à dessein ; `me/export.ts` exempt à
+   dessein ; catalogue de chaînes / destinations d'URL des widgets iOS ;
+   `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans producteur ; l'épingle qui n'atteint pas
+   la 3ᵉ audience ; **Socket.IO sans adapter Redis** (le plus gros risque temps-réel encore ouvert) ;
+   le commentaire de `handleMessage` qui affirme à tort que REST y passe ; la projection des accusés
+   en trois exemplaires inline ; `TranslationStatus` sans référent in-repo ; l'audit d'adressage
+   **Android hors `MessageApi`**.
+
 # Tête instruite pour le cycle 111 — un filtre à la LECTURE ne rattrape jamais une COPIE
 
 *Le cycle 110 a pris l'item 1 que le 109 avait laissé — « le badge APNs compte des notifications,
