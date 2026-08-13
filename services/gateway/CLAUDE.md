@@ -207,6 +207,15 @@ GET /api/v1/static/:filename   (JWT-protected)
 
 ## Critical Gotchas
 - `emit()` does NOT await Promises - wrap async listeners in try/catch
+- **`void p` exige TOUJOURS `p.catch(...)`.** Un `void` DÉTACHE la promesse : le
+  `try/catch` qui l'entoure n'attrape qu'un `throw` SYNCHRONE, jamais le rejet de la
+  promesse rendue. Un rejet sans écouteur termine le PROCESS sous le
+  `--unhandled-rejections=throw` par défaut de Node 22 — toute la gateway tombée pour
+  un canal best-effort. Les deux gardes sont disjointes et aucune ne subsume l'autre :
+  `try/catch` pour l'APPEL, `.catch` pour la PROMESSE. Ne jamais raisonner « le callee
+  avale ses erreurs » : c'est une propriété du collaborateur, pas une garantie du site
+  d'appel — et elle est fausse dès que le callee a UNE instruction non gardée avant son
+  propre `.catch`. Cf. `tasks/lessons.md` § Leçon 230.
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption

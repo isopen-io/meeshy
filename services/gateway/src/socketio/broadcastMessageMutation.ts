@@ -121,18 +121,32 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
     }
   }
 
-  // Fire-and-forget: `enqueueOfflineMessageMutation` swallows its own failures,
-  // so awaiting it would only add the participant lookup's latency to the
-  // response for no observable benefit. The try/catch guards the CALL itself
-  // (a manager double without the method), not the returned promise.
+  // Fire-and-forget: awaiting this would only add the participant lookup's
+  // latency to the response for no observable benefit.
+  //
+  // DEUX gardes, parce qu'il y a deux façons d'échouer et qu'aucune ne couvre
+  // l'autre : le try/catch garde l'APPEL (un double de manager sans la
+  // méthode, un `throw` synchrone), le `.catch` garde la PROMESSE RENDUE. Sans
+  // le second, une implémentation `async` qui rejette produit un rejet non
+  // traité, et Node 22 termine le process sous son
+  // `--unhandled-rejections=throw` par défaut — la gateway entière tombée pour
+  // un canal dont tout le contrat est d'être best-effort.
+  //
+  // Ne PAS raisonner « l'implémentation actuelle avale ses erreurs » :
+  // `MessageMutationManager` est une interface structurelle, la garantie
+  // appartient donc à ce fichier, pas au collaborateur. Le jumeau
+  // `broadcastReactionMutation` garde l'appel identique de cette manière ;
+  // c'était ici la dernière exception de la famille.
   try {
-    void manager.enqueueOfflineMessageMutation({
-      conversationId,
-      actorUserId,
-      eventType,
-      messageId,
-      payload,
-    });
+    void Promise.resolve(
+      manager.enqueueOfflineMessageMutation({
+        conversationId,
+        actorUserId,
+        eventType,
+        messageId,
+        payload,
+      })
+    ).catch((error: unknown) => onError?.(error));
   } catch (error) {
     onError?.(error);
   }
