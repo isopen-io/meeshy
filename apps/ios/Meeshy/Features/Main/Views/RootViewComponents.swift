@@ -108,11 +108,14 @@ struct ThemedFeedOverlay: View {
     @FocusState private var isComposerFocused: Bool
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
+    /// Carte des posts géolocalisés — entrée permanente du header, à droite du
+    /// bouton Réels (directive user 2026-08-13). Parité avec `FeedView`.
+    @State private var showPostsMap = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
     /// Negative scroll offset of the feed (0 at rest, more negative scrolling
-    /// up) — drives the collapsing header and the reveal of the compact story
-    /// trail integrated in the header's accessory slot. Mirrors `FeedView`.
+    /// up) — drives the collapsing header and the hand-over of the title slot to
+    /// the compact story trail. Mirrors `FeedView`.
     @State private var headerScrollOffset: CGFloat = 0
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
@@ -352,7 +355,7 @@ struct ThemedFeedOverlay: View {
 
     /// Header épinglé en haut du feed, même traitement visuel que le header
     /// « Meeshy Chats » (`ConversationListHeaderOverlay`) : titre dégradé indigo +
-    /// action glass à droite. Ici l'action lance la vue des Réels (`presentFresh`).
+    /// actions glass à droite (Réels, puis carte).
     private var feedHeader: some View {
         CollapsibleHeader(
             title: "Meeshy Feed",
@@ -372,24 +375,13 @@ struct ThemedFeedOverlay: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
             },
-            trailing: {
-                Button {
-                    HapticFeedback.medium()
-                    ReelsPresenter.shared.presentFresh()
-                } label: {
-                    Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(MeeshyFont.relative(18, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
-                .accessibilityIdentifier("feed.header.reels")
-            },
-            // Compact story trail integrated inside the header (accessory slot,
-            // below the title/actions bar) — reveals as the full Story Tray
-            // scrolls up under the header. Mirrors `FeedView` and the chats list.
-            accessory: {
+            trailing: { feedHeaderActions },
+            // Compact story trail that TAKES THE TITLE'S PLACE in the bar —
+            // reveals as the full Story Tray scrolls up under the header, so a
+            // scrolled feed shows the trail immediately left of these actions
+            // instead of a shrunken « Meeshy Feed ». Mirrors `FeedView` and the
+            // chats list.
+            titleAccessory: {
                 AnyView(
                     // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
                     PinnedStoryTrailBand(
@@ -399,6 +391,54 @@ struct ThemedFeedOverlay: View {
                 )
             }
         )
+    }
+
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
+    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
+    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
+    /// chemin iPad (`FeedView.feedHeaderActions`) porte la même paire.
+    private var feedHeaderActions: some View {
+        HStack(spacing: 8) {
+            reelsButton
+            postsMapButton
+        }
+    }
+
+    private var reelsButton: some View {
+        Button {
+            HapticFeedback.medium()
+            ReelsPresenter.shared.presentFresh()
+        } label: {
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(MeeshyFont.relative(18, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle(), interactive: true)
+        }
+        .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+        .accessibilityIdentifier("feed.header.reels")
+    }
+
+    private var postsMapButton: some View {
+        Button {
+            HapticFeedback.light()
+            showPostsMap = true
+        } label: {
+            Image(systemName: "map")
+                .font(MeeshyFont.relative(17, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle(), interactive: true)
+        }
+        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
+        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
+        .accessibilityIdentifier("feed.header.map")
+    }
+
+    /// Posts du feed porteurs d'une position — même source unique que le chemin
+    /// iPad : le bouton et les pins de la carte lisent la même liste.
+    private var locatedPosts: [FeedPost] {
+        viewModel.posts.filter { $0.location != nil }
     }
 
     // MARK: - Reel card (full-frame)
@@ -811,6 +851,12 @@ struct ThemedFeedOverlay: View {
                     quoteOriginalPost = nil
                 }
             )
+        }
+        .fullScreenCover(isPresented: $showPostsMap) {
+            FeedPostsMapView(posts: locatedPosts) { post in
+                showPostsMap = false
+                router.push(.postDetail(post.id, post))
+            }
         }
     }
 }

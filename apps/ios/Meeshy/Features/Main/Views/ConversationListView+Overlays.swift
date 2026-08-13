@@ -927,10 +927,11 @@ struct ConversationListHeaderOverlay: View {
     let onSettingsTap: (() -> Void)?
     let onNewConversation: (() -> Void)?
     @Binding var showShareLinkSheet: Bool
-    /// Compact story trail injected into the header's accessory slot (rendered
-    /// below the title/actions bar, inside the same header surface). Receives
-    /// the live scroll offset from this header's own render pass.
-    var accessory: ((CGFloat) -> AnyView)? = nil
+    /// Compact story trail injected into the header's TITLE slot: une fois la
+    /// liste scrollée, on ne lit plus « Meeshy Chats » mais la trail, à gauche
+    /// des boutons d'actions (directive user 2026-08-13). Reçoit l'offset de
+    /// scroll vivant depuis la passe de rendu de ce header.
+    var titleAccessory: ((CGFloat) -> AnyView)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -1065,7 +1066,7 @@ struct ConversationListHeaderOverlay: View {
             // Adapte la closure paramétrée à la slot sans-argument du
             // CollapsibleHeader : l'offset capturé ici est celui du render
             // courant du header (seul abonné au relay), donc toujours frais.
-            accessory: accessory.map { build in
+            titleAccessory: titleAccessory.map { build in
                 let offset = scrollRelay.offset
                 return { build(offset) }
             }
