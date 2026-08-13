@@ -40,13 +40,6 @@ struct StoryViewerRequest: Identifiable, Equatable {
     var targetParentCommentId: String? = nil
 }
 
-/// Named magic numbers for the iPhone root-view audio overlay layout.
-private enum AudioOverlayConstants {
-    /// Padding above the bottom edge for the floating mini-player, sized so
-    /// the bar clears the standard iOS tab bar (~49pt + safe area).
-    static let iPhoneBottomPadding: CGFloat = 60
-}
-
 /// Découple la présentation d'appel (cover plein écran + pastille flottante +
 /// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
 ///
@@ -65,6 +58,18 @@ private enum AudioOverlayConstants {
 struct CallPresentationLayer: ViewModifier {
     @ObservedObject private var callManager = CallManager.shared
 
+    // Mini-lecteur audio hoisté ICI (même point de montage que la bannière
+    // d'appel — demande produit 2026-08-13 : « le mini lecteur doit être
+    // intégré au même endroit que le composant de call »). Injecté en
+    // closures, pas en défaut `= { nil }`/`.shared`, car `CallPresentationLayer`
+    // n'a lui-même aucun accès au `router` (iPhone) / `activeConversation`
+    // (iPad) — seuls `RootView`/`iPadRootView`, qui possèdent ces états, le
+    // peuvent. Mêmes raisons que l'injection explicite de `callManager`
+    // ci-dessus (pas d'`@EnvironmentObject`, cf. commentaire sur
+    // `FloatingCallPillView`).
+    let miniPlayerOnTapBody: () -> Void
+    let miniPlayerCurrentConversationId: () -> String?
+
     func body(content: Content) -> some View {
         // Compression de frame, PAS augmentation de safe area : la bannière
         // d'appel est le premier élément d'un VStack au-dessus du contenu,
@@ -76,8 +81,21 @@ struct CallPresentationLayer: ViewModifier {
         // sommet physique, cachés et inaccessibles derrière la bannière.
         // Réduire la frame préserve aussi toutes les géométries internes des
         // écrans (clearances, gradients, overlays) — seul le viewport bouge.
+        //
+        // Le mini-lecteur audio partage ce même mécanisme, juste SOUS la
+        // bannière d'appel : quand un appel est actif, `FloatingCallPillView`
+        // occupe le haut et le mini-lecteur (s'il joue quelque chose) se pose
+        // juste en dessous — l'appel prime toujours visuellement sur la
+        // lecture audio, jamais l'inverse. Les deux ont un corps vide
+        // (`EmptyView`) quand ils n'ont rien à montrer, donc aucune empreinte
+        // fantôme dans le VStack (même garantie que `FloatingCallPillView`
+        // seule avant ce changement).
         VStack(spacing: 0) {
             FloatingCallPillView(callManager: callManager)
+            MiniAudioPlayerBar(
+                onTapBody: miniPlayerOnTapBody,
+                currentConversationId: miniPlayerCurrentConversationId
+            )
             content
         }
             // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
@@ -825,35 +843,28 @@ struct RootView: View {
         // `RootView.body` (cause du watchdog 0x8BADF00D en arrière-plan pendant un
         // appel). Toute la logique/les commentaires détaillés vivent dans le
         // ViewModifier ci-dessus.
-        .modifier(CallPresentationLayer())
+        // B4 — Mini audio player hoisted into `CallPresentationLayer`
+        // (2026-08-13, same mount point as the call banner — see the
+        // ViewModifier's doc comment above). Closures capture `router` via
+        // this local `@StateObject`, same reasoning as before the hoist:
+        // the handler routes through `navigateToConversationById` (same
+        // path used by deep links and push notifications), so the
+        // cache-first resolution + navigation retry logic is shared.
+        .modifier(CallPresentationLayer(
+            miniPlayerOnTapBody: {
+                guard let convId = ConversationAudioCoordinator.shared
+                    .activeContext?.conversationId else { return }
+                navigateToConversationById(convId)
+            },
+            // Hide the bar whenever the user is already inside the
+            // conversation playing the audio — the in-place audio bubble
+            // owns the controls there.
+            miniPlayerCurrentConversationId: { router.currentConversationId }
+        ))
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
         // single-label "Synchronisation..." pill) via the single
         // `.overlay(alignment: .top)` mount point above. Same chrome
         // dimensions — see ConnectionBanner.syncingPill / SyncPillContent.
-        // B4 — Mini audio player floats above the tab bar. Mounted HERE
-        // (not in `AdaptiveRootView`) so the tap-body handler can reach
-        // the `router` via the local `@StateObject` — `AdaptiveRootView`
-        // sits above the router scope, which was why the original
-        // `onTapBody: {}` no-op shipped with Phase 7. The handler routes
-        // through `navigateToConversationById` (same path used by deep
-        // links and push notifications), so the cache-first resolution +
-        // navigation retry logic is shared.
-        .overlay(alignment: .bottom) {
-            MiniAudioPlayerBar(
-                onTapBody: {
-                    guard let convId = ConversationAudioCoordinator.shared
-                        .activeContext?.conversationId else { return }
-                    navigateToConversationById(convId)
-                },
-                // Hide the bar whenever the user is already inside the
-                // conversation playing the audio — the in-place audio
-                // bubble owns the controls there. Captures `router` so
-                // every `router.path` mutation propagates through to the
-                // bar's next body eval via the parent re-render chain.
-                currentConversationId: { router.currentConversationId }
-            )
-            .padding(.bottom, AudioOverlayConstants.iPhoneBottomPadding)
-        }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
         .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
