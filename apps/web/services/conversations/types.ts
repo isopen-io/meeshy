@@ -56,6 +56,22 @@ export interface GetConversationsResponse {
     hasMore: boolean;
   };
   cursorPagination?: CursorPaginationMeta;
+  /**
+   * Conversations qui ont QUITTÉ la vue de l'utilisateur depuis `updatedSince`
+   * (fermées, quittées, bannies, supprimées-pour-moi depuis un autre appareil).
+   *
+   * Toujours défini — vide hors mode delta. Un client qui fusionne en upsert
+   * n'a AUCUN autre canal : la clause serveur exclut par construction les
+   * lignes qui viennent de partir.
+   */
+  deletedConversationIds: string[];
+  /**
+   * La liste ci-dessus est plafonnée côté serveur et n'a pas de curseur de
+   * reprise : quand elle déborde, le seul recours du client est la relecture
+   * complète. Sans ce drapeau, le plafond se lirait comme une couverture
+   * complète.
+   */
+  deletedConversationIdsTruncated: boolean;
 }
 
 /**

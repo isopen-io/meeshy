@@ -271,3 +271,58 @@ describe('mergeConversationDelta — garde de la conversation OUVERTE', () => {
     expect(merged[0].unreadCount).toBe(4);
   });
 });
+
+/**
+ * Pierres tombales — le canal par lequel une conversation SORT de la liste.
+ *
+ * Le delta est upsert-only : une conversation fermée, quittée, dont on a été
+ * banni, ou supprimée-pour-moi depuis un autre appareil ne revient dans AUCUNE
+ * réponse. Le gateway la déclare désormais dans `meta.deletedConversationIds`
+ * (`GET /conversations?updatedSince=`) ; la fusion doit la retirer.
+ */
+describe('mergeConversationDelta — tombstones', () => {
+  it('retire une conversation dont le serveur annonce la sortie', () => {
+    const { merged, removedIds } = mergeConversationDelta(
+      [conv('a'), conv('gone')],
+      [],
+      { tombstoneIds: ['gone'] }
+    );
+
+    expect(merged.map((c) => c.id)).toEqual(['a']);
+    expect(removedIds).toEqual(['gone']);
+  });
+
+  it('ignore une tombstone pour une conversation absente du cache', () => {
+    // Rien à purger : la rapporter ferait supprimer des caches dérivés qui
+    // n'existent pas, et gonflerait `removedIds` d'ids sans effet.
+    const { merged, removedIds } = mergeConversationDelta([conv('a')], [], {
+      tombstoneIds: ['never-seen'],
+    });
+
+    expect(merged.map((c) => c.id)).toEqual(['a']);
+    expect(removedIds).toEqual([]);
+  });
+
+  it('fait gagner la tombstone sur un upsert du même lot', () => {
+    // Les deux flux du même lot se contredisent rarement (une fermeture ne
+    // ressort pas de la page, un leave ne bouge pas `updatedAt`). Quand ils le
+    // font, la sortie est le fait le plus spécifique : la garder affichée
+    // rendrait la purge inatteignable jusqu'à la réconciliation complète.
+    const { merged, removedIds } = mergeConversationDelta([conv('a')], [conv('a')], {
+      tombstoneIds: ['a'],
+    });
+
+    expect(merged).toEqual([]);
+    expect(removedIds).toEqual(['a']);
+  });
+
+  it('ne rapporte pas deux fois un id déjà retiré par `isActive: false`', () => {
+    const { removedIds } = mergeConversationDelta(
+      [conv('a')],
+      [conv('a', { isActive: false })],
+      { tombstoneIds: ['a'] }
+    );
+
+    expect(removedIds).toEqual(['a']);
+  });
+});

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { messageSchema, conversationMinimalSchema } from '../../types/api-schemas'
+import {
+  messageSchema,
+  conversationMinimalSchema,
+  conversationListResponseSchema,
+} from '../../types/api-schemas'
 
 /**
  * `clientMessageId` is the optimistic-send reconciliation key. The iOS
@@ -85,5 +89,44 @@ describe('conversationMinimalSchema — prisme de l’aperçu du dernier message
     // `{}` : la carte serait vidée langue par langue au lieu d'être strippée,
     // panne plus discrète encore.
     expect(properties.lastMessageTranslations.additionalProperties).toEqual({ type: 'string' })
+  })
+})
+
+/**
+ * Même famille de trou, sur l'enveloppe cette fois.
+ *
+ * Le delta `GET /conversations?updatedSince=` est UPSERT-ONLY : une
+ * conversation fermée, quittée, supprimée-pour-moi depuis un autre appareil ou
+ * dont l'utilisateur a été banni ne revient dans AUCUNE réponse — elle reste en
+ * cache local jusqu'à la réconciliation complète (24 h sur les deux
+ * plateformes). Le gateway la déclare désormais dans `meta.deletedConversationIds`.
+ *
+ * `fast-json-stringify` retire tout champ absent du schéma : sans cette
+ * déclaration, le calcul serveur partirait à la poubelle sur le fil, et le
+ * témoin de route ne le verrait pas (il lit l'objet AVANT sérialisation) —
+ * exactement le scénario `cursorPagination` documenté dans le schéma lui-même.
+ */
+describe('conversationListResponseSchema — pierres tombales du delta', () => {
+  const properties = conversationListResponseSchema.properties as Record<
+    string,
+    { type?: string; properties?: Record<string, { type?: string; items?: unknown }> }
+  >
+
+  it('déclare meta, sans quoi Fastify retire les tombstones du fil', () => {
+    expect(properties.meta).toBeDefined()
+    expect(properties.meta.type).toBe('object')
+  })
+
+  it('déclare deletedConversationIds en tableau de chaînes', () => {
+    const meta = properties.meta.properties as Record<string, { type?: string; items?: { type?: string } }>
+    expect(meta.deletedConversationIds).toBeDefined()
+    expect(meta.deletedConversationIds.type).toBe('array')
+    expect(meta.deletedConversationIds.items).toEqual({ type: 'string' })
+  })
+
+  it('déclare le drapeau de troncature, seul signal qui fait escalader le client', () => {
+    const meta = properties.meta.properties as Record<string, { type?: string }>
+    expect(meta.deletedConversationIdsTruncated).toBeDefined()
+    expect(meta.deletedConversationIdsTruncated.type).toBe('boolean')
   })
 })

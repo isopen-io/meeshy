@@ -75,6 +75,38 @@ describe('ConversationsCrudService', () => {
       expect(result.pagination).toEqual(pagination);
     });
 
+    it('surfaces the delta tombstones the gateway declares under `meta`', async () => {
+      // `meta.deletedConversationIds` est le SEUL canal par lequel une
+      // conversation SORTIE de la vue (fermée, quittée, bannie,
+      // supprimée-pour-moi ailleurs) parvient à un client qui fusionne en
+      // upsert. Le laisser tomber ici le rendrait invisible au hook de delta.
+      mockApi.get.mockResolvedValue({
+        data: {
+          success: true,
+          data: [],
+          pagination: { limit: 100, offset: 0, total: 0, hasMore: false },
+          meta: { deletedConversationIds: ['gone'], deletedConversationIdsTruncated: false },
+        },
+      } as any);
+
+      const result = await svc.getConversations({ updatedSince: '2026-08-01T00:00:00.000Z' });
+
+      expect(result.deletedConversationIds).toEqual(['gone']);
+      expect(result.deletedConversationIdsTruncated).toBe(false);
+    });
+
+    it('degrades to an empty, non-truncated tombstone list when the response omits `meta`', async () => {
+      // Une page NON delta n'en porte pas, et un gateway plus ancien non plus :
+      // inventer `truncated: true` ferait relire la liste entière à chaque
+      // page normale.
+      mockApi.get.mockResolvedValue(makeApiGetConvResponse([{ id: 'c1' }]) as any);
+
+      const result = await svc.getConversations();
+
+      expect(result.deletedConversationIds).toEqual([]);
+      expect(result.deletedConversationIdsTruncated).toBe(false);
+    });
+
     it('builds query params with offset by default', async () => {
       mockApi.get.mockResolvedValue(makeApiGetConvResponse([], { limit: 20, offset: 5, total: 0, hasMore: false }) as any);
 

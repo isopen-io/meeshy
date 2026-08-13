@@ -32,12 +32,23 @@
  * ce que l'upsert rend idempotent. Un event socket qui écrit dans le cache ne
  * peut que faire AVANCER `T` (ou le laisser en place) — jamais le corrompre.
  *
- * ## Borne connue : upsert-only
+ * ## Sorties de liste : deux canaux, une borne résiduelle
  *
- * Le delta ne voit pas une conversation HARD-supprimée côté serveur (aucun
- * tombstone) ; il ne voit que celles passées `isActive: false`. iOS couvre le
- * reste par un `fullSync` périodique ; le web par `refetchOnMount: 'always'` sur
- * la liste infinite, qui relit la vérité serveur à chaque montage de sidebar.
+ * Le lot `deltas` ne porte que des lignes SERVIES — la clause serveur exige une
+ * conversation `isActive` et un participant actif sans `deletedForMe`, donc elle
+ * exclut par construction ce qui vient de partir. Deux canaux couvrent les
+ * sorties :
+ *   - une ligne rendue avec `isActive: false` (le serveur la sert encore) ;
+ *   - `meta.deletedConversationIds`, calculé par le gateway sur la même borne
+ *     `since` (fermeture, leave, ban, delete-for-me) — voir `tombstoneIds`.
+ *     C'est le SEUL canal pour un leave ou un ban, qui n'écrivent que la ligne
+ *     `Participant` et ne bougent donc pas `Conversation.updatedAt`.
+ *
+ * Reste une borne : une conversation HARD-supprimée en base ne laisse aucune
+ * trace dans aucun des deux. iOS la couvre par un `fullSync` périodique ; le web
+ * par `refetchOnMount: 'always'` sur la liste infinite et la réconciliation
+ * complète de 24 h — que `deletedConversationIdsTruncated` déclenche aussi
+ * quand la liste de tombstones déborde son plafond.
  */
 
 import type { Conversation } from '@/types';
@@ -125,6 +136,23 @@ export type ConversationDeltaMergeOptions = {
    * jusqu'au modèle web, chantier de contrat, pas garde de fusion.
    */
   readonly openConversationId?: string | null;
+
+  /**
+   * `meta.deletedConversationIds` de la réponse : les conversations qui ont
+   * QUITTÉ la vue de l'utilisateur depuis le watermark (fermées, quittées,
+   * bannies, supprimées-pour-moi depuis un autre appareil).
+   *
+   * C'est le seul canal par lequel une sortie parvient au client : le lot
+   * `deltas` ci-dessus ne porte que des lignes SERVIES, et la clause serveur
+   * exclut précisément celles-là. Un leave ou un ban n'écrit même pas
+   * `Conversation.updatedAt` — aucune trace ne pouvait remonter.
+   *
+   * Appliquées APRÈS les upserts : quand les deux flux du même lot se
+   * contredisent, la sortie est le fait le plus spécifique, et la garder
+   * affichée rendrait la purge inatteignable jusqu'à la réconciliation
+   * complète (24 h).
+   */
+  readonly tombstoneIds?: readonly string[];
 };
 
 /**
@@ -176,6 +204,15 @@ export function mergeConversationDelta(
       delta.id,
       delta.id === options.openConversationId ? { ...delta, unreadCount: 0 } : delta
     );
+  }
+
+  // Après les upserts, jamais avant : voir `tombstoneIds`. Le `delete` filtre
+  // lui-même les ids inconnus du cache — rapporter une purge qui n'a rien
+  // retiré ferait supprimer des caches dérivés qui n'existent pas.
+  for (const tombstoneId of options.tombstoneIds ?? []) {
+    if (byId.delete(tombstoneId) && !removedIds.includes(tombstoneId)) {
+      removedIds.push(tombstoneId);
+    }
   }
 
   const merged = Array.from(byId.values()).sort((a, b) => orderKey(b) - orderKey(a));
