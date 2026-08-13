@@ -1,3 +1,133 @@
+# Tête instruite pour le cycle 106 — une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore
+
+*Le cycle 105 est parti d'un audit large de la pile temps réel (file hors-ligne, dédup, ordonnancement,
+indicateurs de frappe, présence, reconnexion) et n'a rien trouvé à y reprendre : les cycles 96 à 104 ont
+laissé ces modules dans un état où chaque invariant est écrit, commenté et testé. Le défaut était à côté,
+sur la seule route de message que ce travail d'unification n'avait jamais touchée.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 105 ajoute — le dixième membre de la famille
+>
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 : *une règle posée sur le chemin CHAUD n'est tenue que par les chemins qui la RELISENT.*
+> Le cycle 103 : *zéro écrivain n'implique pas zéro lecteur, et c'est le LECTEUR qui décide du geste.*
+> Le cycle 104 : *un TEST peut être le seul lecteur d'un champ, et il lui donne l'apparence d'un contrat.*
+> Le cycle 105 trouve le dixième :
+>
+> **Une règle que TOUTES les lectures appliquent a l'air d'un invariant, et n'en est pas un tant
+> qu'une ÉCRITURE l'ignore. `deletedAt: null` était écrit dans la liste des messages, dans la
+> recherche, et dans la liste des messages épinglés — cent lignes sous les deux routes d'épinglage
+> qui ne l'écrivaient pas. L'unanimité des lectures est précisément ce qui rend le trou
+> INVISIBLE : la donnée fausse est écrite, elle est diffusée, et aucune lecture ne la rend jamais —
+> donc rien ne la contredit non plus.**
+>
+> **Le symptôme à reconnaître** : quand la règle manque à l'écriture mais tient à la lecture, le
+> défaut ne se voit pas en base ni dans une réponse HTTP. Il se voit **sur le fil** — un événement
+> temps réel qui nomme un objet qu'aucune lecture ne rendra plus. Et il ne se répare pas tout seul :
+> le client qui applique l'événement à son cache n'a plus aucune source pour le détromper.
+>
+> **Corollaire d'outillage, distinct et vérifié ce cycle** : un balayage d'audit qui grepe une FORME
+> (`to(ROOMS.conversation(`) ne voit pas les sites qui composent la même valeur autrement
+> (`` to(`conversation:${id}`) ``). Le dépôt porte la trace de ce balayage (note de `participants.ts`
+> § `PARTICIPANT_ROLE_UPDATED`, « pour qu'un prochain balayage […] ne le rouvre pas ») et les deux
+> seules lignes qu'il ne pouvait pas voir étaient précisément celles qui portaient le défaut de ce
+> cycle. **Écrire par la constante n'est pas cosmétique : c'est ce qui rend un site VISIBLE au
+> prochain audit.**
+
+## Livré au cycle 105 — l'épingle cesse de survivre à la suppression de son message
+
+**Le défaut.** `PUT` et `DELETE /conversations/:id/messages/:messageId/pin` localisaient leur cible
+par `{ id, conversationId }` seuls. Toutes les LECTURES du même fichier disent pourtant déjà
+l'inverse — liste des messages (`deletedAt: null`), recherche, et liste des messages épinglés cent
+lignes plus bas (`{ pinnedAt: { not: null }, deletedAt: null }`) : un message supprimé pour tout le
+monde n'est plus un objet épinglable. Les deux ÉCRITURES de l'épingle étaient les seules à ne pas le
+dire.
+
+**Ce que ça donnait** : `200`, `pinnedAt`/`pinnedBy` écrits sur un tombstone, et `message:pinned`
+diffusé dans la room de conversation **ET** mis dans la file de rattrapage hors-ligne
+(`enqueueOfflineMessageMutation`) — un événement qui nomme un message que tous les clients ont déjà
+retiré. Le web l'applique à son cache (`use-socket-cache-sync.handleMessagePinned`), iOS à sa
+persistance locale (`ConversationSocketHandler` → `updatePinned`), et **rien ne les détrompe
+ensuite** : la liste des épinglés filtre ce message, donc aucun rechargement ne corrige l'état ; et
+l'identité de dédup de la file étant `(messageId, 'pinned')`, l'entrée fantôme se rejoue à chaque
+reconnexion jusqu'au TTL de 48 h.
+
+**Livré** : `deletedAt: null` sur les DEUX sens du même geste. N'en garder qu'un rouvrirait le trou
+par l'autre — et les deux gardes sont indépendamment portantes, la mutation-proof le montre témoin
+par témoin.
+
+**Ce qui a été délibérément NON fait, et pourquoi.** L'épingle qui SURVIT à une suppression
+(épingler puis supprimer) reste en base sans être atteignable par le dépinglage. La nettoyer aurait
+demandé `pinnedAt: null` dans les **quatre** chemins qui écrivent `deletedAt` sur un message
+(`MessageHandler`, `conversations/messages-advanced.ts`, `messages.ts`,
+`ExpiredMessagesCleanupService`) — exactement la duplication en N exemplaires dont un finit par
+manquer, que ce dépôt a documentée trois fois. La ligne survivante n'est visible **nulle part**
+(toutes les lectures filtrent `deletedAt: null`) et le tombstone lui-même part au balayage : pas de
+défaut observable, donc pas de geste.
+
+**Deux corrections annexes dans le même diff, chacune sur une ligne du même bloc.** (1) La requête
+d'épinglage chargeait le document ENTIER — contenu, traductions, `metadata`, pièces jointes — pour
+un simple `if (!message)`, là où son jumeau sélectionnait déjà `id` seul ; asymétrie laissée par le
+correctif précédent, refermée. (2) Les deux diffusions composaient leur nom de room et leur nom
+d'événement **à la main** (`` `conversation:${id}` ``, `'message:pinned'`) — les **seules** du
+service à le faire, donc invisibles au balayage d'audience qui grepe `to(ROOMS.conversation(`. Elles
+passent par `ROOMS.conversation()` / `SERVER_EVENTS`, à valeur identique (les tests existants
+assertent les chaînes littérales et restent verts, ce qui est la preuve d'équivalence).
+
+**Tests** : 5 neufs dans `conversation-message-pin.test.ts`, dont 4 vus ROUGES avant le correctif
+(`Expected: 404 / Received: 200`, et `emit` appelé avec `"message:pinned"` sur un message supprimé).
+Le 5e verrouille le chemin nominal : la garde ne ferme que la porte des supprimés. Le double Prisma
+modélise désormais `deletedAt` comme Prisma le fait (`where: { deletedAt: null }` ne rend pas une
+ligne supprimée), sans quoi il aurait rendu un tombstone à une route croyant demander un message
+vivant. **Mutation-proof** : retirer `deletedAt: null` du `PUT` fait rougir exactement ses 2
+témoins ; le retirer du `DELETE`, exactement les 2 autres ; aucun recouvrement.
+
+## Constats du cycle 105, NON traités — le lot naturel du cycle 106
+
+1. **`NotificationType.MESSAGE_PINNED` / `MESSAGE_UNPINNED` n'ont AUCUN producteur.** Déclarés dans
+   `packages/shared/types/notification.ts`, admis par l'allowlist de `validation.ts`, et RENDUS par
+   de vrais consommateurs — iOS (`NotificationModels.swift` : icône `pin.fill`, groupement,
+   `UserNotificationPreferences+Filter`), web (`types/notification.ts`) — mais `grep` ne trouve pas
+   une seule création côté gateway. Cas de la leçon 226 (zéro écrivain, vrais lecteurs ⇒ **brancher
+   l'écrivain**, pas supprimer), mais l'écrivain est ici une décision PRODUIT avec un rayon de
+   souffle push : « X a épinglé un message » notifie-t-il, et qui ? À trancher avant de coder.
+   Noter que `pushCategoryForNotificationType` renvoie `undefined` pour ces deux types — donc même
+   branché, le push sortirait sans catégorie ni actions.
+2. **`clearHistoryBefore` est écrit et diffusé, jamais APPLIQUÉ côté serveur.**
+   `POST /user-deletions/.../clear-history` persiste la coupure et la synchronise sur tous les
+   appareils ; aucune requête de listing de la passerelle ne la lit. « Effacer l'historique »
+   n'efface donc rien côté serveur, et le cycle 12 avait déjà noté qu'iOS ne l'applique pas non plus
+   (`ConversationStore.dispatchPreferencesUpdate` → succès purement local). **Non traité
+   délibérément** : le corriger change la sémantique d'API publiques, ce qu'un cycle autonome ne
+   tranche pas — même réserve que celle posée sur l'arbitrage `delete-for-me`. À valider par un
+   humain.
+3. **L'épingle n'atteint pas la 3e audience que ses jumelles atteignent.**
+   `broadcastMessageMutation` documente TROIS audiences pour une mutation de message (room ;
+   `user:<id>` pour qui est sur la LISTE ; file hors-ligne). L'épingle sert la 1re et la 3e, jamais
+   la 2e. **Instruit et NON traité** : aucun client ne rend aujourd'hui d'état d'épingle sur une
+   ligne de liste, et l'ouverture du fil recharge de toute façon — donc pas de défaut observable
+   pour motiver l'élargissement, exactement le raisonnement que `participants.ts` a déjà tenu pour
+   `PARTICIPANT_ROLE_UPDATED`. **À rouvrir dès qu'une ligne de liste affiche une épingle.**
+4. **Socket.IO tourne sans adapter Redis** (`grep` : aucun `@socket.io/redis-adapter`). Toute la
+   couche temps réel est donc mono-instance : `io.to(room)` ne franchit pas le processus, et
+   `connectedUsers` — la Map qui décide si un participant est « hors ligne » et mérite la file — ne
+   connaît que les sockets de l'instance courante. Contrainte d'architecture, pas défaut de code ;
+   relevé ici parce qu'aucun document du dépôt ne la nomme et qu'elle borne toute discussion de
+   montée en charge.
+5. **Reconduits, inchangés** : l'audit d'adressage promis au cycle 102 (`MeeshyShareExtension`,
+   `MeeshyWidgets`, Android hors `MessageApi`) — **quatrième** reconduction ; le commentaire de
+   `handleMessage` qui affirme à tort que REST y passe (constat 1 du cycle 104) ; la projection des
+   accusés en trois exemplaires inline (constat 2 du cycle 104) ; `TranslationStatus` sans référent
+   in-repo (constat 3 du cycle 104).
+
 # Tête instruite pour le cycle 105 — un TEST peut être le seul lecteur d'un champ, et il lui donne l'apparence d'un contrat
 
 *Le cycle 104 a ouvert le lot que son prédécesseur lui avait légué : les deux dernières colonnes
