@@ -389,6 +389,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Invoked when active scrolling (drag or deceleration) starts/stops.
+    /// Wire to hide the floating header row while true — the sticky day
+    /// pill takes over that band instead (exclusion mutuelle).
+    var onScrollingActiveChanged: ((Bool) -> Void)?
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Voir
     /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
@@ -478,6 +482,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -539,6 +544,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
