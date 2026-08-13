@@ -89,6 +89,15 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
   it('hydrate exactement les préférences que le wire déclare — customName et reaction compris', () => {
     expect(Object.keys(conversationUserPreferencesSelect).sort()).toEqual([
       'categoryId',
+      // Ajouté pour le masquage personnel de l'aperçu de ligne de liste
+      // (`resolveVisibleLastMessages`). Contrairement aux autres clés, il est
+      // lu SERVEUR-side uniquement : le wire ne le déclare pas, donc
+      // fast-json-stringify le strippe. Il est ici parce qu'il vit dans le
+      // MÊME document que les préférences déjà sélectionnées — le lire coûte
+      // zéro requête, alors qu'une lecture séparée en aurait coûté une par
+      // chargement de liste. `deletedForUserAt` est dans le même cas (le wire
+      // ne connaît que sa projection booléenne `isDeletedForUser`).
+      'clearHistoryBefore',
       'customName',
       'deletedForUserAt',
       'isArchived',
