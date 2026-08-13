@@ -483,12 +483,20 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     private func handleAudioEngineConfigurationChange() {
         guard isTranscribing, let request else { return }
+        let ownerCallId = callId
         reinstallTap(for: request)
         if !audioEngine.isRunning {
             do {
                 try audioEngine.start()
             } catch {
+                // The tap is now installed on a STOPPED engine — no more audio
+                // will ever reach the recognizer for the rest of the call.
+                // Degrade explicitly (mirrors startTranscribing's own catch)
+                // instead of leaving `isTranscribing` lit with dead captions:
+                // see `applyRecognitionError`'s doc comment.
                 callsLogger.error("Failed to restart AVAudioEngine after configuration change: \(error.localizedDescription)")
+                applyRecognitionError(.audioEngineFailed(underlying: error), callId: ownerCallId)
+                return
             }
         }
         callsLogger.info("Reinstalled transcription tap after AVAudioEngine configuration change")
@@ -530,12 +538,20 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             engineIsRunning: audioEngine.isRunning
         )
         guard action == .restartEngine, let request else { return }
+        let ownerCallId = callId
         reinstallTap(for: request)
         do {
             try audioEngine.start()
             callsLogger.info("Restarted transcription capture after audio interruption ended")
         } catch {
+            // Same failure mode as handleAudioEngineConfigurationChange above:
+            // a resume that throws (mic grabbed by another app, a second
+            // interruption arriving back-to-back, hardware busy) leaves the
+            // tap on a stopped engine with `isTranscribing` still `true` —
+            // exactly the silently-dead-captions bug this observer exists to
+            // prevent (see observeAudioInterruptions's doc comment above).
             callsLogger.error("Failed to restart transcription capture after interruption: \(error.localizedDescription)")
+            applyRecognitionError(.audioEngineFailed(underlying: error), callId: ownerCallId)
         }
     }
 
