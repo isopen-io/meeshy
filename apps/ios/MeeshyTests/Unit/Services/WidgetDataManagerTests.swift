@@ -1,5 +1,7 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
+import MeeshySDK
 
 @MainActor
 final class WidgetDataManagerTests: XCTestCase {
@@ -46,6 +48,124 @@ final class WidgetDataManagerTests: XCTestCase {
                 "staging dir \(dir.lastPathComponent) must be removed — its blobs would replay under the next account"
             )
         }
+    }
+
+    // MARK: - B1 (Prisme Linguistique) — l'aperçu PUBLIÉ dans l'App Group
+
+    /// Le texte publié ici quitte l'app : il s'affiche sur l'écran d'accueil,
+    /// hors de portée de toute résolution ultérieure. `publishConversations`
+    /// est donc le dernier endroit où le Prisme peut encore s'appliquer — et
+    /// il ne l'appliquait pas, pendant que la ligne de liste in-app, elle, le
+    /// faisait depuis `resolvedLastMessagePreview`.
+    private func makePrismSUT(
+        preferredLanguages: [String]
+    ) throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.widgetprism.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let sut = WidgetDataManager(
+            suiteName: suite,
+            stagingDirectories: [],
+            preferredContentLanguages: { preferredLanguages }
+        )
+        return (sut, defaults)
+    }
+
+    private func makeConversation(
+        id: String = "conv-1",
+        type: MeeshyConversation.ConversationType = .direct,
+        title: String = "Alice",
+        lastMessagePreview: String?,
+        lastMessageOriginalLanguage: String?,
+        lastMessageTranslations: [String: String]?,
+        lastMessageSenderName: String? = nil
+    ) -> MeeshyConversation {
+        var conversation = MeeshyConversation(
+            id: id,
+            identifier: id,
+            type: type,
+            title: title,
+            lastMessagePreview: lastMessagePreview,
+            lastMessageSenderName: lastMessageSenderName
+        )
+        conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        conversation.lastMessageTranslations = lastMessageTranslations
+        return conversation
+    }
+
+    private func publishedPreviews(from defaults: UserDefaults) throws -> [String] {
+        let data = try XCTUnwrap(
+            defaults.data(forKey: "recent_conversations"),
+            "publishConversations doit écrire la clé recent_conversations"
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([WidgetConversation].self, from: data).map(\.lastMessage)
+    }
+
+    func test_publishConversations_publishesTheTranslationMatchingTheViewerPrism_notTheSenderLanguage() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"]
+            )
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults), ["Bonjour"],
+            "le widget doit afficher l'aperçu dans la langue du LECTEUR, comme la liste in-app"
+        )
+    }
+
+    /// Règle #1 du Prisme (CLAUDE.md) : l'absence de traduction vers une langue
+    /// du prisme fait afficher l'ORIGINAL — jamais `translations.first`.
+    func test_publishConversations_withNoPreferredLanguageServed_publishesTheOriginal_neverAnUnrelatedTranslation() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["de": "Hallo"]
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Hello there"])
+    }
+
+    /// Règle #3 du Prisme : la langue d'origine concourt à son RANG. Prisme
+    /// `["fr", "en"]`, message anglais, traduction française disponible →
+    /// « Bonjour », jamais « Hello ».
+    func test_publishConversations_originalLanguageRanksInThePrism_itNeverShortCircuitsThePrimaryLanguage() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr", "en"])
+        sut.publishConversations([
+            makeConversation(
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"]
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Bonjour"])
+    }
+
+    /// Le préfixe d'expéditeur des conversations de groupe doit précéder le
+    /// texte RÉSOLU — sinon la ligne mélange le nom traduit et le corps brut.
+    func test_publishConversations_groupPrefix_wrapsTheResolvedPreview() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeConversation(
+                type: .group,
+                title: "Équipe",
+                lastMessagePreview: "Hello there",
+                lastMessageOriginalLanguage: "en",
+                lastMessageTranslations: ["fr": "Bonjour"],
+                lastMessageSenderName: "Alice"
+            )
+        ])
+
+        XCTAssertEqual(try publishedPreviews(from: defaults), ["Alice: Bonjour"])
     }
 
     // MARK: - WidgetConversation Data Model
@@ -146,6 +266,69 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded[0].contactName, "A")
         XCTAssertEqual(decoded[1].contactName, "B")
         XCTAssertEqual(decoded[0].accentColor, "6366F1")
+    }
+
+    // MARK: - publishFavoriteContacts (SSOT des raccourcis Siri)
+
+    /// `favorite_contacts` est LA clé que `MeeshyAppIntents.ContactQuery` lit
+    /// pour ré-hydrater les raccourcis enregistrés. Ces tests épinglent la clé
+    /// et le contenu — une dérive rendrait tout raccourci silencieusement
+    /// orphelin (le défaut historique de la clé `contacts`, jamais écrite).
+
+    private func makeFavoritesSUT() throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.favorites.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return (WidgetDataManager(suiteName: suite, stagingDirectories: []), defaults)
+    }
+
+    private func makeDirectConversation(
+        id: String, title: String, isPinned: Bool = true,
+        type: MeeshyConversation.ConversationType = .direct
+    ) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id,
+            identifier: "ident-\(id)",
+            type: type,
+            title: title,
+            isPinned: isPinned
+        )
+    }
+
+    func test_publishFavoriteContacts_writesInCorrectKey() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+
+        sut.publishFavoriteContacts([makeDirectConversation(id: "conv-1", title: "Alice")])
+
+        let data = try XCTUnwrap(
+            defaults.data(forKey: "favorite_contacts"),
+            "favorite_contacts key should be written"
+        )
+        let decoded = try JSONDecoder().decode([WidgetFavoriteContact].self, from: data)
+        XCTAssertEqual(decoded.count, 1)
+        XCTAssertEqual(decoded[0].id, "conv-1")
+        XCTAssertEqual(decoded[0].name, "Alice")
+    }
+
+    func test_publishFavoriteContacts_limitsToEightAndDirectPinnedOnly() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let pinnedDirect = (0..<10).map {
+            makeDirectConversation(id: "direct-\($0)", title: "Contact \($0)")
+        }
+        let noise = [
+            makeDirectConversation(id: "group-1", title: "Groupe", type: .group),
+            makeDirectConversation(id: "unpinned-1", title: "Pas épinglée", isPinned: false),
+        ]
+
+        sut.publishFavoriteContacts(noise + pinnedDirect)
+
+        let data = try XCTUnwrap(defaults.data(forKey: "favorite_contacts"))
+        let decoded = try JSONDecoder().decode([WidgetFavoriteContact].self, from: data)
+        XCTAssertEqual(decoded.count, 8, "cap à 8 contacts")
+        XCTAssertTrue(
+            decoded.allSatisfy { $0.id.hasPrefix("direct-") },
+            "seules les conversations directes épinglées sont publiées, got \(decoded.map(\.id))"
+        )
     }
 }
 

@@ -317,6 +317,7 @@ export function CallManager() {
         initiatorId: event.initiator.userId,
         startedAt: new Date(),
         participants: event.participants,
+        metadata: { type: event.type },
       });
 
       // Set call as active - CallInterface will initialize local stream
@@ -556,7 +557,11 @@ export function CallManager() {
           if (isRetryableCallFailure(event.reason)) {
             offerCallRetry({
               conversationId: currentCall.conversationId,
-              type: controls.videoEnabled ? 'video' : 'audio',
+              // `metadata.type` is the authoritative call-nature source — a
+              // manual mid-call camera toggle must not flip what "retry"
+              // means. Fall back to `controls.videoEnabled` only for a call
+              // session that predates `metadata.type` being wired.
+              type: currentCall.metadata?.type ?? (controls.videoEnabled ? 'video' : 'audio'),
             });
           } else {
             clearCallRetry(currentCall.conversationId);
@@ -769,6 +774,7 @@ export function CallManager() {
         startedAt: answeredAt,
         answeredAt,
         participants: params.participants,
+        metadata: { type: params.isVideo ? 'video' : 'audio' },
       } as CallSession);
 
       // Set call as active

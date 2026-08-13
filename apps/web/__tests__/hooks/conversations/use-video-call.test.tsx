@@ -158,7 +158,7 @@ describe('useVideoCall', () => {
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
-    it('should show error for non-direct conversations', async () => {
+    it('should start a call in a group conversation (1:1 gate lifted)', async () => {
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockGroupConversation })
       );
@@ -167,7 +167,31 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('toasts.directOnly');
+      expect(mockToastError).not.toHaveBeenCalled();
+      expect(mockGetUserMedia).toHaveBeenCalled();
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_INITIATE,
+        expect.objectContaining({ conversationId: mockGroupConversation.id }),
+        expect.any(Function)
+      );
+    });
+
+    it('should show error for conversation types without calls (public)', async () => {
+      const mockPublicConversation = {
+        ...mockGroupConversation,
+        id: 'conv-789',
+        type: 'public',
+      } as Conversation;
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockPublicConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('toasts.unsupportedConversationType');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
@@ -818,6 +842,24 @@ describe('useVideoCall', () => {
         initiatorId: 'user-caller-1',
         participants: [],
       });
+    });
+
+    it('sets currentCall.metadata.type from the call type passed to startCall — the caller-side half of the audio-call-must-never-arm-video invariant', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-audio-1', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('audio');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall?.metadata?.type).toBe('audio');
+      expect(storeModule.getState().controls.videoEnabled).toBe(false);
     });
 
     it('does not set currentCall when the ack is unsuccessful', async () => {

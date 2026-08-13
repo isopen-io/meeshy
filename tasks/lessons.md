@@ -5845,3 +5845,75 @@ balayage.
 une promesse rejetée laisse l'appelant résoudre normalement. C'est l'événement `unhandledRejection`
 du process, sondé après deux tours de boucle (Node ne le signale qu'une fois la file de microtâches
 vidée). Écrire l'assertion sur le retour aurait produit un test vert des deux côtés de la mutation.
+
+---
+
+## Leçon 231 — Une garde LOCALE sur un défaut GLOBAL rassure autant qu'une garde globale
+
+**Contexte** : cycle 106. `ShareExtensionSourceGuardTests.test_extension_doesNotOpenTheHostAppWithAnUnparsedDeepLink`
+interdit à l'extension de partage d'émettre un deep link `contactId=`, et énonce la raison en clair :
+« DeepLinkParser ne comprend que text=/url= ; l'extension poste elle-même ». Cette garde est juste,
+verte, et documentée. Pendant qu'elle veillait, `MeeshyAppIntents.swift` émettait deux `contactId=`
+et `MeeshyWidgets/` cinq autres formes d'URL inconnues du routeur — sept hosts émis, trois routés.
+
+**La leçon** : quand une garde nomme une limite d'un composant **partagé** (« le parseur ne comprend
+que X », « ce service n'accepte que Y »), la limite ne concerne PAS la cible gardée — elle concerne
+**toute cible qui parle à ce composant**. Une garde posée à un seul endroit donne le sentiment que la
+classe de défaut est traitée, alors qu'elle n'en couvre qu'un émetteur. Et elle rend le trou plus
+difficile à voir qu'une absence totale de garde : un audit qui tombe sur elle conclut « déjà traité ».
+
+**Le réflexe** : devant une garde dont le message cite le contrat d'un composant partagé, chercher
+les AUTRES appelants de ce composant AVANT de passer. Ce n'est pas une enquête, c'est un grep.
+
+**Corollaire de forme (payé comptant)** : le découpeur de commentaires recopié de garde en garde dans
+ce dépôt traite `//` comme un début de commentaire de ligne — il EFFACE donc `meeshy://` avant toute
+recherche. Une garde bâtie dessus balaie zéro occurrence et passe au **vert** sans rien avoir
+vérifié. Toute garde qui COMPTE des occurrences doit refuser explicitement un balayage vide
+(`XCTAssertFalse(emitted.isEmpty, …)`) : sans cette assertion, son silence est indiscernable d'un
+succès. Le bug a été trouvé en portant l'algorithme de la garde hors de Swift pour le faire tourner —
+contrôle applicable dès qu'une garde ne peut pas être exécutée localement.
+
+**Corollaire de nommage** : le host d'un deep link décrit ce que la surface MONTRE, pas ce qu'elle
+PORTE. `meeshy://contact/{id}` transporte un identifiant de **conversation** (`publishFavoriteContacts`
+écrit `conv.id` dans `FavoriteContact.id`). Lire le nom au lieu de suivre l'écrivain aurait produit
+une route vers `.userProfile`, c'est-à-dire un 404 à la place d'un no-op.
+
+---
+
+## Leçon 232 — Une règle tenue par ses lecteurs CANONIQUES n'est pas tenue ; deux lecteurs corrects sont un camouflage
+
+**Contexte** : cycle 107. `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` est nommée
+dans `CLAUDE.md` comme la source de vérité iOS du Prisme Linguistique pour l'aperçu de conversation, avec
+sa jumelle gateway. Elle est appelée par `ThemedConversationRow` (la ligne de liste) et par
+`GlobalSearchViewModel` — les deux lecteurs que n'importe qui citerait si on demandait « où l'aperçu
+s'affiche-t-il ? ». Les deux sont corrects, testés, et portent des commentaires qui expliquent la règle.
+Pendant ce temps `WidgetDataManager.formatLastMessage`, `SharePickerView` et `WidgetPreviewView` lisaient
+`lastMessagePreview` brut et affichaient le dernier message dans la langue de l'expéditeur — dont un sur
+l'écran d'accueil, hors de portée de toute résolution ultérieure.
+
+**La leçon** : la leçon 231 disait qu'une garde LOCALE sur un défaut GLOBAL rassure autant qu'une garde
+globale. Le onzième membre de la famille en est la version sans garde du tout : **une règle appliquée par
+ses lecteurs canoniques est PLUS difficile à auditer qu'une règle appliquée nulle part.** Un audit qui
+cherche « le Prisme est-il appliqué à l'aperçu ? » tombe sur `ThemedConversationRow`, lit le commentaire,
+et conclut « oui ». La réponse juste à cette question n'est jamais un exemple — c'est un **dénombrement**.
+
+**Le réflexe** : devant une règle de présentation dont le dépôt nomme le résolveur, ne pas chercher si
+le résolveur est APPELÉ. Grepper le champ BRUT qu'il consomme, et trier les lecteurs un par un. Ici :
+`resolvedLastMessagePreview` → 2 appels de production ; `.lastMessagePreview` → 6 fichiers. C'est l'écart
+entre les deux chiffres qui EST le défaut, et il se lit en deux greps.
+
+**Corollaire de sortie de périmètre** : la surface la plus grave n'est pas la plus visible, c'est la
+**dernière** — celle après laquelle plus personne ne peut résoudre. Un texte publié dans un App Group,
+poussé dans une notification, ou gravé dans un export a quitté le domaine où la règle existe. Toute
+fonction qui écrit hors de l'app est un point de résolution OBLIGATOIRE, jamais un simple relais.
+
+**Corollaire de cohérence intra-écran** : le même fichier peut se contredire. `ThemedConversationRow`
+résolvait à l'affichage mais calculait son test d'existence (`hasText`, qui arbitre entre texte, pièce
+jointe et position) sur le champ brut. Deux valeurs différentes pour une même ligne : la place d'un
+texte réservée pour un texte qui ne s'affichera pas. Un test d'existence doit porter sur la valeur
+RENDUE, pas sur celle dont elle dérive.
+
+**Corollaire de balayage** (repris de la 231, payé à nouveau) : la garde qui dénombre doit refuser un
+balayage vide. `XCTAssertFalse(readers.isEmpty)` ET la présence de chaque entrée d'allowlist — sans quoi
+un découpeur de commentaires trop gourmand, ou une arborescence déplacée, rendent la garde verte en
+n'ayant rien vérifié.

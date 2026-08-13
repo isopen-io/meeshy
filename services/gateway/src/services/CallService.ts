@@ -52,6 +52,15 @@ const ACTIVE_STATUSES: CallStatus[] = [
   CallStatus.reconnecting
 ];
 
+/**
+ * Hard ceiling on simultaneously-active participants in a single call
+ * (levée du verrou 1:1, 2026-08-13). Direct conversations stay naturally
+ * capped at their 2 members by the conversation-membership check in
+ * `joinCall`; group calls accept every active conversation member up to
+ * this ceiling.
+ */
+export const MAX_CALL_PARTICIPANTS = 9999;
+
 // P3 — sender include for the call-summary system message, mirroring the
 // `message:new` broadcast shape produced by the normal message path so iOS/web
 // can render it like any other message.
@@ -1254,12 +1263,12 @@ export class CallService {
   }
 
   /**
-   * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
-   * reads a snapshot fetched before this method's own write, so two callers
-   * racing to join the same call (a third party racing the intended callee,
-   * or the same user answering from two devices within milliseconds) could
-   * both read `< 2` and both insert a `CallParticipant`, exceeding the P2P
-   * cap every downstream consumer assumes. The join transaction now also
+   * TOCTOU close (audit 2026-07-02): the `activeParticipants.length >=
+   * MAX_CALL_PARTICIPANTS` check below reads a snapshot fetched before this
+   * method's own write, so two callers racing to join the same call (a third
+   * party racing the intended callee, or the same user answering from two
+   * devices within milliseconds) could both read below the cap and both
+   * insert a `CallParticipant`, exceeding it. The join transaction now also
    * does a version-guarded conditional update on the shared `CallSession`
    * document — MongoDB detects the write conflict when two transactions
    * touch that same document concurrently, so at most one caller's
@@ -1337,15 +1346,14 @@ export class CallService {
       };
     }
 
-    // Phase 1A: Enforce P2P mode (max 2 participants)
     const activeParticipants = call.participants.filter((p) => !p.leftAt);
-    if (activeParticipants.length >= 2) {
-      logger.error('❌ Max participants reached for P2P call', {
+    if (activeParticipants.length >= MAX_CALL_PARTICIPANTS) {
+      logger.error('❌ Max participants reached for call', {
         callId,
         activeParticipants: activeParticipants.length
       });
       throw new Error(
-        `${CALL_ERROR_CODES.MAX_PARTICIPANTS_REACHED}: Maximum participants (2) reached for P2P calls`
+        `${CALL_ERROR_CODES.MAX_PARTICIPANTS_REACHED}: Maximum participants (${MAX_CALL_PARTICIPANTS}) reached for this call`
       );
     }
 
@@ -2072,11 +2080,11 @@ export class CallService {
 
     // Resolve, for each call the current user did NOT initiate, whether they
     // have their own `CallParticipant` row — i.e. they actually joined this
-    // specific call, as opposed to merely being a conversation member. A P2P
-    // call is capped at 2 active participants; a 3rd group member whose
-    // auto-early-join lost that race never gets a row, and must never be
-    // shown "incoming" just because the call's shared `answeredAt` was set by
-    // one of the two real participants. See `deriveCallDirection`.
+    // specific call, as opposed to merely being a conversation member. A
+    // group member who never joined (declined, ignored, or lost a join race)
+    // never gets a row, and must never be shown "incoming" just because the
+    // call's shared `answeredAt` was set by participants who did join. See
+    // `deriveCallDirection`.
     const nonOutgoingCallIds = page.filter((r) => r.initiatorId !== userId).map((r) => r.id);
     const participatedCallIds = new Set<string>();
     if (nonOutgoingCallIds.length > 0) {

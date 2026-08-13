@@ -239,3 +239,41 @@ Le body d'une bulle a lien heberge un `LinkPreviewCard` dont le `.frame(minHeigh
 **Decision**: Amender ADR-2 pour refleter le code livre : la serialisation des evenements d'appel repose sur le fait que `CallManager` est lui-meme `@MainActor` et que chaque callback externe (delegate WebRTC, event socket, callback CallKit) re-entre via un hop `Task { @MainActor in }` avant de muter l'etat — pas sur un `actor CallEventQueue` distinct. Ce pattern est fonctionnellement equivalent pour la garantie recherchee (pas de race sur l'etat d'appel) et deja couvert par les tests de concurrence existants (`P2PWebRTCClientConcurrencySourceTests`, etc.). Aucun changement de code n'est requis par cette entree — elle corrige uniquement la documentation pour qu'elle cesse de decrire un composant qui n'existe pas.
 
 **Alternatives rejetees**: implementer un `actor CallEventQueue` distinct pour faire correspondre le code a l'ADR d'origine — rejete pour cette passe : reecrire le point d'entree de synchronisation d'un sous-systeme d'appel mature et en production (voir historique de fixes de race conditions dans `services/gateway/decisions.md` et les commits recents `fix(calls/...)`) sans un besoin fonctionnel identifie serait un changement architectural a haut risque pour un benefice non demontre. A reconsiderer si un futur besoin (ex. group calls / SFU) exige une vraie serialisation d'acteur.
+
+## 2026-08-13 : Deep links des surfaces hors-app — la table de routage est la SSOT, et une garde la confronte aux émetteurs
+
+**Statut**: Accepté
+
+**Contexte**: Les widgets (`MeeshyWidgets/`) et les App Shortcuts (`MeeshyAppIntents.swift`) composent leurs `meeshy://` par interpolation de chaîne, dans du code qui n'importe pas `DeepLinkParser`. Rien ne confronte ces URL à la table de routage : le compilateur valide la chaîne, les tests du widget ne l'atteignent pas, ceux du routeur ne la connaissent pas. Résultat mesuré au cycle 106 : **7 hosts émis, 3 routés**. Les quatre boutons du widget « Réponse rapide » et le raccourci Siri « Message X on Meeshy » n'ont jamais rien fait.
+
+**Décision**:
+1. `DeepLinkParser` / `DeepLinkRouter` restent la **seule** table de routage. Une surface hors-app n'invente pas un schéma d'URL : elle émet une forme qui y figure.
+2. Toute forme émise doit être **classée** dans `DeepLinkSurfaceRoutingGuardTests` — routée (avec une URL témoin qui doit résoudre) ou délibérément non routée (avec sa raison). La garde extrait les hosts réellement présents dans les sources émettrices et exige l'égalité des deux ensembles : un host nouveau fait rougir, un host classé qui a disparu aussi.
+3. Un texte transporté par un deep link (réponse rapide, dictée Siri) est **déposé en brouillon** (`DraftStore`), jamais envoyé. Un tap depuis l'écran d'accueil ou une transcription Siri approximative ne peut pas produire un message irrattrapable. Un brouillon qui porte déjà du texte n'est jamais écrasé.
+4. Le **host décrit ce que la surface montre, pas ce qu'elle porte** : `meeshy://contact/{id}` et `meeshy://send?contactId=` transportent des identifiants de **conversation** (`WidgetDataManager.publishFavoriteContacts` écrit `conv.id`). Suivre l'écrivain, jamais le nom.
+
+**Alternatives rejetées**:
+- *Router les 7 hosts d'un coup* : `conversations/*`, `call` et `translate` demandent des destinations produit qui n'existent pas (élire « la conversation la plus récente », amorcer un appel depuis une URL, un écran de traduction hors conversation). Les brancher sur une destination approximative serait pire que le no-op actuel — et le silence resterait, la garde le rend explicite.
+- *Faire émettre au widget des formes canoniques (`meeshy://c/{id}`)* : corrige les émetteurs d'aujourd'hui sans empêcher le prochain d'inventer un host. La contrainte doit vivre dans un test qui LIT les émetteurs, pas dans leur bonne volonté.
+
+**Conséquences**: toute nouvelle surface hors-app qui émet un `meeshy://` doit être ajoutée à la liste balayée par la garde, sans quoi ses URL restent invisibles à cette vérification. Le balayage couvre aujourd'hui `MeeshyWidgets/` et `MeeshyAppIntents.swift`.
+
+## 2026-08-13 : L'aperçu de conversation se résout par le Prisme à TOUS les points d'affichage, garde d'ensemble à l'appui
+
+**Statut**: Accepté
+
+**Contexte**: `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` est la source de vérité iOS du Prisme Linguistique pour l'aperçu de conversation (`CLAUDE.md` règle #3, jumelle de `resolveLastMessagePreview()` côté gateway). Elle était appelée par deux lecteurs — `ThemedConversationRow` et `GlobalSearchViewModel` — pendant que trois autres surfaces d'affichage lisaient `lastMessagePreview` brut : `WidgetDataManager` (texte publié dans l'App Group, donc affiché sur l'écran d'accueil), `SharePickerView` et `WidgetPreviewView`. Les trois recevaient pourtant les mêmes objets `MeeshyConversation`, `lastMessageTranslations` inclus. Rien ne rougissait : chaque surface affichait un texte plausible, et les deux lecteurs corrects — testés, commentés — donnaient à tout audit l'impression que la règle était tenue.
+
+**Décision**:
+1. **Aucune surface n'affiche `lastMessagePreview` brut.** Le champ est une donnée de transport ; la valeur affichable est celle que rend le résolveur, avec le prisme du lecteur.
+2. **Le prisme du lecteur a une seule autorité app-side** : `AuthManager.shared.currentUser?.preferredContentLanguages`, exactement comme `ConversationListView`. Une vue qui a besoin du prisme l'expose en propriété calculée ; un service le reçoit par un seam injectable (`WidgetDataManager.preferredContentLanguagesProvider`), jamais par une liste recopiée.
+3. **Le dernier point de résolution avant la sortie de l'app est obligatoire.** Un texte publié dans l'App Group ne peut plus être résolu par personne : `publishConversations` doit appliquer le prisme, pas le déléguer au widget (qui n'a ni compte ni traductions).
+4. **La règle est tenue par une garde d'ensemble, pas par convention** : `ConversationPreviewPrismSourceGuardTests` extrait tous les accès `.lastMessagePreview` sous `apps/ios/Meeshy/` et exige de chaque fichier une classification — résolu, ou allowlisté avec sa raison. Une garde qui compte des occurrences doit refuser un balayage vide, sinon son silence passe pour un succès.
+5. **Le test d'existence et le rendu lisent la MÊME valeur.** `hasText` (qui arbitre entre texte, pièce jointe et position) se calcule sur le texte résolu : deux valeurs différentes sur un même écran font réserver la place d'un texte qui ne s'affichera pas.
+
+**Alternatives rejetées**:
+- *Résoudre à l'écriture, dans `ConversationListViewModel` / `ConversationStore`* : figerait la langue du lecteur DANS le cache. Le prisme est une propriété du lecteur au moment du rendu — un changement de langue en réglages doit se voir sans re-télécharger les conversations.
+- *Faire résoudre le widget lui-même* : l'extension n'a ni session, ni `lastMessageTranslations` (le payload App Group ne transporte qu'une chaîne), ni le catalogue de langues de l'utilisateur. Lui transmettre la carte de traductions gonflerait `recent_conversations` de 50 conversations × N langues pour un affichage d'une ligne.
+- *Corriger les trois surfaces sans garde* : c'est exactement l'état qui a produit ce défaut — deux lecteurs corrects donnaient l'illusion d'une règle tenue.
+
+**Conséquences**: la garde ne balaie que `apps/ios/Meeshy/`. Une surface d'affichage vivant dans une cible d'extension (widget, NSE, partage) resterait hors de sa portée — aujourd'hui aucune n'affiche d'aperçu qu'elle résout elle-même, mais une extension qui le ferait devrait étendre le balayage en même temps.

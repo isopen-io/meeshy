@@ -112,6 +112,15 @@ struct SendMessageIntent: AppIntent {
 }
 
 // MARK: - Call Contact Intent
+
+/// Raccourci « Appeler un contact sur Meeshy ».
+///
+/// STATUT : NON ROUTÉ (délibéré). Le deep link émis (`meeshy://call?contactId=…&type=…`)
+/// n'a pas de case dans `DeepLinkParser` → `.external` : l'app s'ouvre sans
+/// effet. Amorcer un appel depuis un lien demande une surface produit qui
+/// n'existe pas encore. Le brancher = ajouter le case au parseur ET retirer
+/// `call` de `deliberatelyUnroutedHosts` (`DeepLinkSurfaceRoutingGuardTests`),
+/// qui rougit sinon.
 @available(iOS 18.0, *)
 struct CallContactIntent: AppIntent {
     static let title: LocalizedStringResource = "Call Contact"
@@ -158,6 +167,15 @@ struct CallContactIntent: AppIntent {
 }
 
 // MARK: - Translate Text Intent
+
+/// Raccourci « Traduire du texte ».
+///
+/// STATUT : NON ROUTÉ (délibéré). Le deep link émis (`meeshy://translate?text=…&target=…`)
+/// n'a pas de case dans `DeepLinkParser` → `.external` : l'app s'ouvre sans
+/// effet. Traduire un texte ARBITRAIRE — hors de toute conversation — n'a pas
+/// d'écran dans l'app. Le brancher = ajouter le case au parseur ET retirer
+/// `translate` de `deliberatelyUnroutedHosts`
+/// (`DeepLinkSurfaceRoutingGuardTests`), qui rougit sinon.
 @available(iOS 18.0, *)
 struct TranslateTextIntent: AppIntent {
     static let title: LocalizedStringResource = "Translate Text"
@@ -329,10 +347,27 @@ struct ContactEntity: AppEntity {
 
 @available(iOS 16.0, *)
 struct ContactQuery: EntityQuery {
+    /// Ré-hydratation d'un contact déjà choisi (raccourci Siri enregistré,
+    /// relance Siri).
+    ///
+    /// Lit `group.me.meeshy.apps` / `favorite_contacts` — LA SOURCE DE VÉRITÉ
+    /// des contacts disponibles aux raccourcis, la MÊME clé que
+    /// `suggestedEntities`. DOIT rester en phase avec
+    /// `WidgetDataManager.publishFavoriteContacts` (même clé, même format
+    /// JSON `WidgetFavoriteContact` ↔ `ContactData`).
+    ///
+    /// HISTORIQUE : lisait auparavant `contacts`, qu'AUCUN écrivain du dépôt
+    /// ne pose — tout raccourci enregistré perdait son destinataire au
+    /// deuxième lancement, silencieusement (une liste vide n'est pas une
+    /// erreur). Garde : `DeepLinkSurfaceRoutingGuardTests
+    /// .test_appIntents_doNotReadTheOrphanContactsKey`.
+    ///
+    /// - Parameter identifiers: IDs de CONVERSATION (pas d'user IDs — cf.
+    ///   `publishFavoriteContacts`, qui écrit `conv.id`)
+    /// - Returns: Les contacts correspondants ; liste vide si non publiés
     func entities(for identifiers: [String]) async throws -> [ContactEntity] {
-        // Load contacts from shared container
         guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.apps"),
-              let data = sharedDefaults.data(forKey: "contacts"),
+              let data = sharedDefaults.data(forKey: "favorite_contacts"),
               let contacts = try? JSONDecoder().decode([ContactData].self, from: data) else {
             return []
         }

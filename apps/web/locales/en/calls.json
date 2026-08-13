@@ -93,7 +93,7 @@
       "callFailed": "Call connection failed",
       "retry": "Retry",
       "selectConversation": "Please select a conversation first",
-      "directOnly": "Calls are only available for direct conversations",
+      "unsupportedConversationType": "Calls are not available for this conversation type",
       "startFailed": "Failed to start call. Please try again.",
       "startingCall": "Starting call...",
       "micPermissionDenied": "Camera/microphone permission denied.",

@@ -364,6 +364,11 @@ struct SmallConversationView: View {
         }
         .padding()
         .containerBackground(.background, for: .widget)
+        // TODO cycle 107 : router `meeshy://conversations/recent` vers les
+        // conversations récentes. NON ROUTÉ au cycle 106 (élire « la »
+        // conversation récente est une décision app-side sans destination
+        // DeepLink aujourd'hui) — le tap ouvre simplement l'accueil.
+        // Classé dans deliberatelyUnroutedHosts (DeepLinkSurfaceRoutingGuardTests).
         .widgetURL(URL(string: "meeshy://conversations/recent"))
     }
 }
@@ -585,6 +590,9 @@ struct SmallUnreadView: View {
         .containerBackground(for: .widget) {
             WidgetColors.brandGradient
         }
+        // TODO cycle 107 : router `meeshy://conversations/unread` vers les non
+        // lues. NON ROUTÉ au cycle 106 — le tap ouvre simplement l'accueil.
+        // Classé dans deliberatelyUnroutedHosts (DeepLinkSurfaceRoutingGuardTests).
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
 }
@@ -602,6 +610,9 @@ struct CircularUnreadView: View {
                     .font(.headline)
             }
         }
+        // TODO cycle 107 : router `meeshy://conversations/unread` vers les non
+        // lues. NON ROUTÉ au cycle 106 — le tap ouvre simplement l'accueil.
+        // Classé dans deliberatelyUnroutedHosts (DeepLinkSurfaceRoutingGuardTests).
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
 }
@@ -622,6 +633,9 @@ struct RectangularUnreadView: View {
                     .lineLimit(1)
             }
         }
+        // TODO cycle 107 : router `meeshy://conversations/unread` vers les non
+        // lues. NON ROUTÉ au cycle 106 — le tap ouvre simplement l'accueil.
+        // Classé dans deliberatelyUnroutedHosts (DeepLinkSurfaceRoutingGuardTests).
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
 }
@@ -634,6 +648,9 @@ struct InlineUnreadView: View {
             Image(systemName: "message.fill")
             Text("\(count) unread messages")
         }
+        // TODO cycle 107 : router `meeshy://conversations/unread` vers les non
+        // lues. NON ROUTÉ au cycle 106 — le tap ouvre simplement l'accueil.
+        // Classé dans deliberatelyUnroutedHosts (DeepLinkSurfaceRoutingGuardTests).
         .widgetURL(URL(string: "meeshy://conversations/unread"))
     }
 }

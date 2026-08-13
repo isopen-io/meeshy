@@ -102,6 +102,7 @@ export default function CallPage({ params }: CallPageProps) {
           initiatorId: event.initiator.userId,
           startedAt: new Date(),
           participants: event.participants,
+          metadata: { type: event.type },
         });
         setInCall(true);
         socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
