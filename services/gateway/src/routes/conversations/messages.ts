@@ -24,7 +24,8 @@ import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
-  applyPersonalHistoryHiding
+  applyPersonalHistoryHiding,
+  NO_PERSONAL_HIDING
 } from '../../services/personalHistoryFilter';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
@@ -589,6 +590,27 @@ export function registerMessagesRoutes(
       // Resolve the current user's participantId in this conversation
       t0 = performance.now();
       const isAnonymousUser = authRequest.authContext.type === 'anonymous';
+
+      // Ce que CE lecteur a retiré de sa propre vue : le curseur `clear-history`
+      // de la conversation et ses `delete-for-me` message par message. Lancé
+      // ICI, avant la résolution du participant, et attendu seulement au moment
+      // de bâtir la clause — il ne dépend d'aucune des requêtes qui suivent, et
+      // les recouvrir lui fait coûter zéro aller-retour sur le chemin le plus
+      // chaud du service. Appliqué ensuite à TOUTES les requêtes de cette route
+      // (page, COUNT total, sous-requêtes du mode `around`, compteurs
+      // older/newer) : un seul oubli suffirait à faire réapparaître un message
+      // masqué, soit dans la liste, soit dans un compteur qui promet une page
+      // de plus.
+      // Le `.catch` n'est pas redondant avec le try/catch interne du module :
+      // entre cette ligne et son `await` il y a des `return` (lien de partage
+      // expiré, quota atteint) après lesquels cette promesse n'est plus
+      // attendue. « Le callee avale ses erreurs » est une propriété du
+      // collaborateur, pas une garantie du site d'appel — cf. `tasks/lessons.md`
+      // § Leçon 230.
+      const personalHidingPromise = loadPersonalHistoryHiding(prisma, {
+        userId: isAnonymousUser ? null : userId,
+        conversationId
+      }).catch(() => NO_PERSONAL_HIDING);
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
             where: { userId, conversationId, isActive: true },
@@ -631,17 +653,8 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Ce que CE lecteur a retiré de sa propre vue : le curseur `clear-history`
-      // de la conversation et ses `delete-for-me` message par message. Chargé
-      // une fois et appliqué à TOUTES les requêtes de cette route (page, COUNT
-      // total, sous-requêtes du mode `around`, compteurs older/newer) — un seul
-      // oubli suffirait à faire réapparaître un message masqué, soit dans la
-      // liste, soit seulement dans un compteur qui promet une page de plus.
       t0 = performance.now();
-      const personalHiding = await loadPersonalHistoryHiding(prisma, {
-        userId: isAnonymousUser ? null : userId,
-        conversationId
-      });
+      const personalHiding = await personalHidingPromise;
       timings.personalHiding = performance.now() - t0;
 
       // Construire la requête avec pagination
