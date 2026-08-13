@@ -22,6 +22,11 @@ import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import {
+  loadPersonalHistoryHiding,
+  applyPersonalHistoryHiding,
+  NO_PERSONAL_HIDING
+} from '../../services/personalHistoryFilter';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
@@ -585,6 +590,27 @@ export function registerMessagesRoutes(
       // Resolve the current user's participantId in this conversation
       t0 = performance.now();
       const isAnonymousUser = authRequest.authContext.type === 'anonymous';
+
+      // Ce que CE lecteur a retiré de sa propre vue : le curseur `clear-history`
+      // de la conversation et ses `delete-for-me` message par message. Lancé
+      // ICI, avant la résolution du participant, et attendu seulement au moment
+      // de bâtir la clause — il ne dépend d'aucune des requêtes qui suivent, et
+      // les recouvrir lui fait coûter zéro aller-retour sur le chemin le plus
+      // chaud du service. Appliqué ensuite à TOUTES les requêtes de cette route
+      // (page, COUNT total, sous-requêtes du mode `around`, compteurs
+      // older/newer) : un seul oubli suffirait à faire réapparaître un message
+      // masqué, soit dans la liste, soit dans un compteur qui promet une page
+      // de plus.
+      // Le `.catch` n'est pas redondant avec le try/catch interne du module :
+      // entre cette ligne et son `await` il y a des `return` (lien de partage
+      // expiré, quota atteint) après lesquels cette promesse n'est plus
+      // attendue. « Le callee avale ses erreurs » est une propriété du
+      // collaborateur, pas une garantie du site d'appel — cf. `tasks/lessons.md`
+      // § Leçon 230.
+      const personalHidingPromise = loadPersonalHistoryHiding(prisma, {
+        userId: isAnonymousUser ? null : userId,
+        conversationId
+      }).catch(() => NO_PERSONAL_HIDING);
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
             where: { userId, conversationId, isActive: true },
@@ -626,6 +652,10 @@ export function registerMessagesRoutes(
           }
         }
       }
+
+      t0 = performance.now();
+      const personalHiding = await personalHidingPromise;
+      timings.personalHiding = performance.now() - t0;
 
       // Construire la requête avec pagination
       const whereClause: any = {
@@ -675,15 +705,25 @@ export function registerMessagesRoutes(
           const beforeFilter: any = { lt: aroundMessage.createdAt };
           if (historyStartDate) beforeFilter.gte = historyStartDate;
 
+          // Les deux moitiés sont filtrées ICI et pas seulement à la fin : sans
+          // cela, `take: halfLimit` remplirait sa moitié de messages masqués
+          // que la soustraction finale retirerait, et la fenêtre `around`
+          // rendrait moins de messages que demandé sans jamais le dire.
           const [messagesBefore, messagesAfter] = await Promise.all([
             prisma.message.findMany({
-              where: { conversationId, deletedAt: null, createdAt: beforeFilter },
+              where: applyPersonalHistoryHiding(
+                { conversationId, deletedAt: null, createdAt: beforeFilter },
+                personalHiding
+              ),
               orderBy: { createdAt: 'desc' },
               take: halfLimit,
               select: { id: true }
             }),
             prisma.message.findMany({
-              where: { conversationId, deletedAt: null, createdAt: { gt: aroundMessage.createdAt } },
+              where: applyPersonalHistoryHiding(
+                { conversationId, deletedAt: null, createdAt: { gt: aroundMessage.createdAt } },
+                personalHiding
+              ),
               orderBy: { createdAt: 'asc' },
               take: halfLimit,
               select: { id: true }
@@ -885,19 +925,24 @@ export function registerMessagesRoutes(
       const shouldFetchUserPrefs = authRequest.authContext.isAuthenticated && !isAnonymousUser;
 
       t0 = performance.now();
+      const personalWhereClause = applyPersonalHistoryHiding(whereClause, personalHiding);
+
       const [totalCount, messages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination) - skip when using cursor, around, or forward watermark
         (before || isAroundMode || afterMode)
           ? Promise.resolve(0)
           : prisma.message.count({
-              where: {
-                conversationId: conversationId,
-                deletedAt: null
-              }
+              where: applyPersonalHistoryHiding(
+                {
+                  conversationId: conversationId,
+                  deletedAt: null
+                },
+                personalHiding
+              )
             }),
         // 2. Récupérer les messages avec toutes les relations
         prisma.message.findMany({
-          where: whereClause,
+          where: personalWhereClause,
           select: messageSelect,
           // Forward watermark backfill returns oldest-after-watermark first so
           // the client can advance its high-water mark contiguously; all other
@@ -1464,13 +1509,19 @@ export function registerMessagesRoutes(
         const lastMsg = mappedMessages[mappedMessages.length - 1];
         if (firstMsg) {
           const olderCount = await prisma.message.count({
-            where: { conversationId, deletedAt: null, createdAt: { lt: new Date(firstMsg.createdAt) } }
+            where: applyPersonalHistoryHiding(
+              { conversationId, deletedAt: null, createdAt: { lt: new Date(firstMsg.createdAt) } },
+              personalHiding
+            )
           });
           responsePayload.cursorPagination.hasMore = olderCount > 0;
         }
         if (lastMsg) {
           const newerCount = await prisma.message.count({
-            where: { conversationId, deletedAt: null, createdAt: { gt: new Date(lastMsg.createdAt) } }
+            where: applyPersonalHistoryHiding(
+              { conversationId, deletedAt: null, createdAt: { gt: new Date(lastMsg.createdAt) } },
+              personalHiding
+            )
           });
           responsePayload.hasNewer = newerCount > 0;
         }
@@ -2372,12 +2423,23 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Access denied');
       }
 
+      // Une épingle est posée pour TOUT le monde, mais elle ne rend pas au
+      // lecteur un message qu'il a retiré de sa propre vue : sans ce filtre,
+      // `clear-history` laissait une porte dérobée sur l'historique effacé.
+      const pinnedHiding = await loadPersonalHistoryHiding(prisma, {
+        userId: authRequest.authContext.type === 'anonymous' ? null : authRequest.authContext.userId,
+        conversationId
+      });
+
       const pinnedMessages = await prisma.message.findMany({
-        where: {
-          conversationId,
-          pinnedAt: { not: null },
-          deletedAt: null
-        },
+        where: applyPersonalHistoryHiding(
+          {
+            conversationId,
+            pinnedAt: { not: null },
+            deletedAt: null
+          },
+          pinnedHiding
+        ),
         orderBy: { pinnedAt: 'desc' },
         skip: offset,
         take: limit,
@@ -2432,11 +2494,14 @@ export function registerMessagesRoutes(
       });
 
       const total = await prisma.message.count({
-        where: {
-          conversationId,
-          pinnedAt: { not: null },
-          deletedAt: null
-        }
+        where: applyPersonalHistoryHiding(
+          {
+            conversationId,
+            pinnedAt: { not: null },
+            deletedAt: null
+          },
+          pinnedHiding
+        )
       });
 
       const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
@@ -2778,22 +2843,33 @@ export function registerMessagesRoutes(
         }
       };
 
+      // La recherche est la surface la plus facile à oublier et la plus
+      // révélatrice : elle rend un message par son CONTENU, donc un historique
+      // effacé y ressort intégralement dès qu'on en connaît un mot.
+      const searchHiding = await loadPersonalHistoryHiding(prisma, {
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        conversationId
+      });
+
       // Search content AND translations in parallel
       const [contentMatches, translationCandidates] = await Promise.all([
         prisma.message.findMany({
-          where: whereClause,
+          where: applyPersonalHistoryHiding(whereClause, searchHiding),
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
           take: searchLimit + 1
         }),
         prisma.message.findMany({
-          where: {
-            conversationId,
-            deletedAt: null,
-            NOT: { content: { contains: queryLower, mode: 'insensitive' } },
-            translations: { not: { equals: null } },
-            ...(cursor ? { createdAt: whereClause.createdAt } : {})
-          },
+          where: applyPersonalHistoryHiding(
+            {
+              conversationId,
+              deletedAt: null,
+              NOT: { content: { contains: queryLower, mode: 'insensitive' } },
+              translations: { not: { equals: null } },
+              ...(cursor ? { createdAt: whereClause.createdAt } : {})
+            },
+            searchHiding
+          ),
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
           take: 200

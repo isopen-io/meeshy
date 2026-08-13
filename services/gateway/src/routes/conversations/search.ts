@@ -6,6 +6,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationMinimalSchema,
@@ -26,6 +27,34 @@ const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 /**
  * Enregistre les routes de recherche de conversations
  */
+/**
+ * L'aperçu du dernier message rendu par la recherche de conversations. Extrait
+ * pour la même raison que son jumeau de `core.ts` : la reprise qui cherche le
+ * dernier message ENCORE VISIBLE (`clear-history` / `delete-for-me`) doit
+ * rendre exactement la même forme que la sélection imbriquée.
+ */
+const conversationSearchPreviewInclude = {
+  sender: {
+    select: {
+      id: true,
+      userId: true,
+      displayName: true,
+      avatar: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          isOnline: true,
+        },
+      },
+    },
+  },
+  attachments: { take: 1 },
+  _count: { select: { attachments: true } },
+} as const;
+
 export function registerSearchRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -132,32 +161,34 @@ export function registerSearchRoutes(
             },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            include: {
-              sender: {
-                select: {
-                  id: true,
-                  userId: true,
-                  displayName: true,
-                  avatar: true,
-                  user: {
-                    select: {
-                      id: true,
-                      username: true,
-                      displayName: true,
-                      avatar: true,
-                      isOnline: true,
-                    },
-                  },
-                },
-              },
-              attachments: { take: 1 },
-              _count: { select: { attachments: true } },
-            },
+            include: conversationSearchPreviewInclude,
           },
         },
         orderBy: { lastMessageAt: 'desc' },
         take: 50,
       });
+
+      // Même masquage personnel que la liste (`core.ts`) : la recherche de
+      // conversations rend la MÊME ligne, donc le même aperçu. Ici la route ne
+      // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
+      // dans les candidats — le résolveur charge alors les curseurs lui-même.
+      const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
+        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        candidates: conversations.map(c => {
+          const preview = (c as any).messages?.[0];
+          return {
+            conversationId: c.id,
+            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null
+          };
+        }),
+        query: { include: conversationSearchPreviewInclude as unknown as Record<string, unknown> }
+      });
+      for (const conversation of conversations) {
+        if (!searchVisibleLastMessages.has(conversation.id)) continue;
+        const replacement = searchVisibleLastMessages.get(conversation.id);
+        (conversation as any).messages = replacement ? [replacement] : [];
+      }
 
       // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
       const readStatusService = new MessageReadStatusService(prisma);

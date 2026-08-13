@@ -6442,6 +6442,53 @@
         }
       }
     },
+    "auth.registration.nameInvalid": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحروف والمسافات والفواصل العليا والنقاط والشرطات فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Buchstaben, Leerzeichen, Apostrophe, Punkte und Bindestriche"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letters, spaces, apostrophes, periods and hyphens only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo letras, espacios, apóstrofes, puntos y guiones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lettres, espaces, apostrophes, points et tirets uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo lettere, spazi, apostrofi, punti e trattini"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas letras, espaços, apóstrofos, pontos e hífens"
+          }
+        }
+      }
+    },
     "auth.registration.phoneInvalid": {
       "extractionState": "extracted_with_value",
       "localizations": {
