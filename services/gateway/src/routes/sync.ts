@@ -527,9 +527,18 @@ async function syncMessages(opts: {
   // Un message peut être masqué pour moi PUIS supprimé pour tous : il sort des
   // deux streams. Dédupliquer par message évite d'annoncer deux fois la même
   // disparition, la première rencontrée (la plus ancienne après tri) gagnant.
+  //
+  // Le `Set` n'est pas de la coquetterie : les deux streams sont cappés à 1000
+  // chacun, et un `findIndex` par élément ferait 4 millions de comparaisons de
+  // chaînes sur une page pleine.
+  const seenDeleted = new Set<string>();
   const deleted: DeletedRef[] = [...globalTombstones, ...hidden.tombstones]
     .sort((a, b) => a.deletedAt.getTime() - b.deletedAt.getTime() || a.id.localeCompare(b.id))
-    .filter((ref, index, all) => all.findIndex((other) => other.id === ref.id) === index);
+    .filter((ref) => {
+      if (seenDeleted.has(ref.id)) return false;
+      seenDeleted.add(ref.id);
+      return true;
+    });
 
   const truncated = changedTruncated || deletedTruncated || hidden.truncated;
 
