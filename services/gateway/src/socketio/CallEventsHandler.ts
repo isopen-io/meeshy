@@ -1191,9 +1191,8 @@ export class CallEventsHandler {
    * Resolve the caller's own CallParticipant.participantId, verifying they
    * are an ACTIVE participant of THIS specific call — unlike
    * `resolveParticipantIdFromCall`, which only checks conversation
-   * membership. Calls are capped at 2 participants (`CallService.joinCall`)
-   * even inside group conversations, so a conversation member who never
-   * joined (or already left) this call must not pass authorization checks
+   * membership. A conversation member who never joined (or already left)
+   * this call must not pass authorization checks
    * gating writes against call state/stats (quality reports, media toggles,
    * background/foreground, reconnect status).
    */

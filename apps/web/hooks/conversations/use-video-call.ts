@@ -83,8 +83,8 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       return;
     }
 
-    if (conversation.type !== 'direct') {
-      toast.error(t('toasts.directOnly'));
+    if (conversation.type !== 'direct' && conversation.type !== 'group') {
+      toast.error(t('toasts.unsupportedConversationType'));
       return;
     }
 

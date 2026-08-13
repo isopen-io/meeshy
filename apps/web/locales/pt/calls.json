@@ -84,7 +84,7 @@
       "callFailed": "Falha na conexão da chamada",
       "retry": "Tentar novamente",
       "selectConversation": "Selecione uma conversa primeiro",
-      "directOnly": "As chamadas estão disponíveis apenas para conversas diretas",
+      "unsupportedConversationType": "As chamadas não estão disponíveis para este tipo de conversa",
       "startFailed": "Não foi possível iniciar a chamada. Tente novamente.",
       "startingCall": "Iniciando chamada...",
       "micPermissionDenied": "Acesso à câmera/microfone negado.",

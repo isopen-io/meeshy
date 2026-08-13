@@ -86,7 +86,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
 
   return (
     <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-center">
-      {conversation.type === 'direct' && onStartCall && canUseVideoCalls && (
+      {(conversation.type === 'direct' || conversation.type === 'group') && onStartCall && canUseVideoCalls && (
         <DropdownMenu>
           <TooltipProvider>
             <Tooltip>

@@ -158,7 +158,7 @@ describe('useVideoCall', () => {
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 
-    it('should show error for non-direct conversations', async () => {
+    it('should start a call in a group conversation (1:1 gate lifted)', async () => {
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockGroupConversation })
       );
@@ -167,7 +167,31 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockToastError).toHaveBeenCalledWith('toasts.directOnly');
+      expect(mockToastError).not.toHaveBeenCalled();
+      expect(mockGetUserMedia).toHaveBeenCalled();
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_INITIATE,
+        expect.objectContaining({ conversationId: mockGroupConversation.id }),
+        expect.any(Function)
+      );
+    });
+
+    it('should show error for conversation types without calls (public)', async () => {
+      const mockPublicConversation = {
+        ...mockGroupConversation,
+        id: 'conv-789',
+        type: 'public',
+      } as Conversation;
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockPublicConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('toasts.unsupportedConversationType');
       expect(mockGetUserMedia).not.toHaveBeenCalled();
     });
 

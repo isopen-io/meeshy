@@ -74,13 +74,13 @@ export const clampNonNegativeInt = (value?: number | null): number | null =>
  * - someone else started it, was answered by someone else, but THEY never
  *   personally joined it → missed, never "incoming"
  *
- * The last case matters for group conversations: a P2P call is capped at 2
- * active participants, so a 3rd conversation member whose auto-early-join
- * lost the race (`MAX_PARTICIPANTS_REACHED`) has no `CallParticipant` row for
- * this call at all — the call never actually reached their device. Without
- * `userParticipated`, `answeredAt` alone (set once, call-wide, by whichever
- * of the two real participants answered) wrongly labelled that bystander's
- * history entry "incoming", claiming they received a call they never did.
+ * The last case matters for group conversations: a member who never joined
+ * the call (declined, ignored, hit the `MAX_CALL_PARTICIPANTS` ceiling) has
+ * no `CallParticipant` row for this call at all — the call never actually
+ * reached their device. Without `userParticipated`, `answeredAt` alone (set
+ * once, call-wide, by whichever participant answered) wrongly labelled that
+ * bystander's history entry "incoming", claiming they received a call they
+ * never did.
  */
 export function deriveCallDirection(
   initiatorId: string,

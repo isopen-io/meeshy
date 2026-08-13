@@ -169,6 +169,18 @@ N>4, `mediasoup-client` web (placeholders du store déjà en place), transport
 SFU iOS (le design SOTA prévoit `WebRTCEngine.transport: any MediaTransport`).
 E2EE à traiter via Insertable Streams / `FrameEncrypting`.
 
+## Mise à jour 2026-08-13 — verrous 1:1 levés (cette branche)
+
+- **S1 levé** : le cap `joinCall` passe de 2 à `MAX_CALL_PARTICIPANTS = 9999`
+  (exporté par `CallService.ts`). Les conversations directes restent
+  naturellement bornées à leurs 2 membres par le contrôle d'appartenance.
+- **W1/W2/W3 levés** : initiation, bouton d'appel du header et « Rejoindre »
+  de la bulle live acceptent désormais `direct` ET `group` (les types
+  `public`/`global` restent refusés, en miroir du serveur) ; clé i18n
+  `toasts.directOnly` remplacée par `toasts.unsupportedConversationType`.
+- Le reste de l'analyse (mesh iOS mono-PC, états scalaires web W4/W5, UI de
+  groupe, SFU) demeure inchangé et à traiter.
+
 ## Récapitulatif
 
 | Capacité demandée | État |
