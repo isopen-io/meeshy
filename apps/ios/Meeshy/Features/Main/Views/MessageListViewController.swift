@@ -102,6 +102,11 @@ final class MessageListViewController: UIViewController {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Invoked when active scrolling (drag or deceleration) starts/stops.
+    /// Drives the floating header row in `ConversationView`, which hides
+    /// while this is true — the sticky day pill takes over that band instead
+    /// (exclusion mutuelle, voir `MessageDayStickyPlacement`).
+    var onScrollingActiveChanged: ((Bool) -> Void)?
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Le gateway ne marque plus lus que les messages qu'un
     /// client lui nomme : sans ce signal, il retombe sur son chemin par fenêtre
@@ -239,7 +244,6 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
-            stickyDayState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -295,6 +299,17 @@ final class MessageListViewController: UIViewController {
     /// s'étendant sous la safe area haute, l'offset produit est
     /// `topInset + MessageDayStickyPlacement.topOffset`.
     private var stickyDayTopConstraint: NSLayoutConstraint?
+    /// Défilement actif (drag ou décélération) — miroir de
+    /// `store.isUserScrolling` utilisé comme garde de dédoublonnage pour ne
+    /// propager `onScrollingActiveChanged` qu'aux transitions, jamais à
+    /// chaque frame de `scrollViewDidScroll`.
+    private func setScrollingActive(_ active: Bool) {
+        guard store.isUserScrolling != active else { return }
+        store.isUserScrolling = active
+        stickyDayState.isScrollingActive = active
+        onScrollingActiveChanged?(active)
+    }
+
     /// Dernier item de tête pour lequel la sticky pill a été calculée. Permet
     /// d'éviter le recalcul (résolution `store.message` + `toMessage`) à chaque
     /// frame de `scrollViewDidScroll` tant que la cellule de tête ne change pas.
@@ -327,7 +342,6 @@ final class MessageListViewController: UIViewController {
     }
 
     private func configureStickyDayOverlay() {
-        stickyDayState.isDark = isDark
         let host = UIHostingController(
             rootView: MessageDayStickyOverlay(state: stickyDayState)
         )
@@ -1458,7 +1472,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         let contentHeight = scrollView.contentSize.height
         let frameHeight = scrollView.frame.height
 
-        store.isUserScrolling = scrollView.isDragging || scrollView.isDecelerating
+        setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
 
         // Met à jour le label de la pill flottante en fonction du message
         // en haut visible. Léger : un lookup de l'item à l'index max + une
@@ -1503,6 +1517,19 @@ extension MessageListViewController: UICollectionViewDelegate {
                 await onLoadOlder()
             }
         }
+    }
+
+    // `scrollViewDidScroll` stops firing the instant motion actually stops —
+    // it cannot observe the "scrolling ended" edge itself. These two catch
+    // it: `willDecelerate == false` means the drag ended with no momentum
+    // (finger lift while already still), `scrollViewDidEndDecelerating` is
+    // the end of the momentum phase otherwise.
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { setScrollingActive(false) }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        setScrollingActive(false)
     }
 }
 

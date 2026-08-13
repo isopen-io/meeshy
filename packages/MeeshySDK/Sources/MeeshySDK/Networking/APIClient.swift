@@ -141,9 +141,46 @@ public struct APIResponseMeta: Decodable, Sendable {
     /// de troncature », c'est-à-dire exactement le comportement d'avant.
     public let deletedStoryIdsTruncated: Bool?
 
-    public init(deletedStoryIds: [String]? = nil, deletedStoryIdsTruncated: Bool? = nil) {
+    /// Tombstones du delta-sync des conversations
+    /// (`GET /conversations?updatedSince=`) : ids des conversations qui ont
+    /// QUITTÉ la vue de l'utilisateur depuis le curseur — fermées, quittées,
+    /// bannies, ou supprimées-pour-moi depuis un AUTRE appareil.
+    ///
+    /// `data` d'une page delta ne porte que des lignes SERVIES, et la clause
+    /// serveur (conversation active, participant actif sans `deletedForMe`)
+    /// exclut précisément celles qui viennent de sortir : une disparition n'a
+    /// aucune place dans la page, pas même sous la forme d'un `isActive: false`.
+    /// Un leave ou un ban n'écrit d'ailleurs QUE la ligne `Participant` —
+    /// `Conversation.updatedAt` ne bouge pas, donc même une clause plus large ne
+    /// les verrait jamais.
+    ///
+    /// Jumeau web : `meta.deletedConversationIds`, lu par
+    /// `apps/web/hooks/queries/use-conversations-delta-sync.ts`.
+    public let deletedConversationIds: [String]?
+
+    /// `deletedConversationIds` a débordé son plafond serveur
+    /// (`CONVERSATION_TOMBSTONE_LIMIT`, 500 par stream) : des disparitions plus
+    /// anciennes n'ont PAS été rendues.
+    ///
+    /// Comme pour les stories, ces tombstones n'ont AUCUN curseur de reprise —
+    /// il n'existe pas de « page suivante » de disparitions à demander. Le seul
+    /// recours est la réconciliation complète, dont le remplacement de la liste
+    /// purge les fantômes.
+    ///
+    /// Absent (`nil`) sur un gateway antérieur à ce champ : traité comme « pas
+    /// de troncature », c'est-à-dire exactement le comportement d'avant.
+    public let deletedConversationIdsTruncated: Bool?
+
+    public init(
+        deletedStoryIds: [String]? = nil,
+        deletedStoryIdsTruncated: Bool? = nil,
+        deletedConversationIds: [String]? = nil,
+        deletedConversationIdsTruncated: Bool? = nil
+    ) {
         self.deletedStoryIds = deletedStoryIds
         self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
+        self.deletedConversationIds = deletedConversationIds
+        self.deletedConversationIdsTruncated = deletedConversationIdsTruncated
     }
 }
 
@@ -166,11 +203,22 @@ public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
     public let pagination: OffsetPagination?
     public let error: String?
 
-    public init(success: Bool, data: T, pagination: OffsetPagination?, error: String?) {
+    /// Voir `APIResponseMeta` : la page delta des conversations y porte les
+    /// conversations SORTIES de la vue, que `data` ne peut pas exprimer. Le
+    /// bloc n'existe que sur une page delta — d'où l'optionnel, qui vaut aussi
+    /// rétro-compatibilité avec un gateway antérieur.
+    ///
+    /// `meta` par défaut à `nil` : les call sites qui fabriquent une page à la
+    /// main (tests, chemins optimistes) restent inchangés.
+    public let meta: APIResponseMeta?
+
+    public init(success: Bool, data: T, pagination: OffsetPagination?, error: String?,
+                meta: APIResponseMeta? = nil) {
         self.success = success
         self.data = data
         self.pagination = pagination
         self.error = error
+        self.meta = meta
     }
 }
 
