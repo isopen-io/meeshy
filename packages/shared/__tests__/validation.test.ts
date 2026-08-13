@@ -283,6 +283,61 @@ describe('language-code normalization at the write boundary', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // Le picker d'onboarding iOS offre toute la base de traduction du SDK
+  // (LanguageData.allLanguages) : chaque code proposé doit être accepté à
+  // l'inscription, sinon l'utilisateur est bloqué par « Données invalides ».
+  it('AuthSchemas.register accepts every language the iOS onboarding picker offers', () => {
+    const iosPickerCodes = [
+      'sk', 'sl', 'sr', 'ca', 'et', 'lv', 'az', 'kk', 'uz', 'ka', 'ta',
+      'ne', 'my', 'km', 'lo', 'tl', 'ff', 'tw', 'ak', 'bm', 'byv', 'fan',
+    ];
+    for (const code of iosPickerCodes) {
+      const result = AuthSchemas.register.safeParse({
+        username: 'alice',
+        password: 'password123',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        email: 'alice@example.com',
+        systemLanguage: code,
+      });
+      expect(result.success, `systemLanguage '${code}' should be accepted`).toBe(true);
+    }
+  });
+
+  // Le clavier iOS insère l'apostrophe typographique ’ (U+2019) par défaut
+  // (smart punctuation) : « N’Diaye » doit passer, comme sa variante ASCII.
+  it('AuthSchemas.register accepts names with typographic apostrophes and combining marks', () => {
+    const base = {
+      username: 'alice',
+      password: 'password123',
+      email: 'alice@example.com',
+    };
+    const validNames = [
+      { firstName: 'Awa', lastName: 'N’Diaye' },       // apostrophe typographique
+      { firstName: 'Awa', lastName: "N'Diaye" },            // apostrophe droite
+      { firstName: 'Maʼlik', lastName: 'Diallo' },     // U+02BC modifier letter apostrophe
+      { firstName: 'José', lastName: 'García' }, // é décomposé NFD (e + U+0301)
+      { firstName: 'Jean-Claude', lastName: 'de la Fontaine' },
+    ];
+    for (const names of validNames) {
+      const result = AuthSchemas.register.safeParse({ ...base, ...names });
+      expect(result.success, `${names.firstName} ${names.lastName} should be accepted`).toBe(true);
+    }
+  });
+
+  it('AuthSchemas.register still rejects names without any letter or with forbidden characters', () => {
+    const base = {
+      username: 'alice',
+      password: 'password123',
+      email: 'alice@example.com',
+      lastName: 'Smith',
+    };
+    for (const firstName of ['123', '...', 'Alice!', 'Alice@']) {
+      const result = AuthSchemas.register.safeParse({ ...base, firstName });
+      expect(result.success, `firstName '${firstName}' should be rejected`).toBe(false);
+    }
+  });
 });
 
 describe('updateBannerSchema', () => {

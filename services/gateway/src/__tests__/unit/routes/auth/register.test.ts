@@ -58,6 +58,9 @@ jest.mock('../../../../utils/normalize', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerRegistrationRoutes } from '../../../../routes/auth/register';
+import { validateSchema } from '@meeshy/shared/utils/validation';
+import { MeeshyError } from '@meeshy/shared/utils/errors';
+import { ErrorCode } from '@meeshy/shared/types/errors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -172,6 +175,35 @@ describe('POST /register — success', () => {
     expect(body.success).toBe(true);
     expect(body.data.token).toBe('jwt-token');
     expect(authService.register).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('POST /register — Zod validation failure', () => {
+  // La validation Zod (AuthSchemas.register) tombait dans le catch générique :
+  // 500 « Erreur lors de la création du compte » sans jamais dire quel champ
+  // échoue — ni au client iOS, ni dans les logs. Elle doit produire un 400
+  // VALIDATION_ERROR portant les violations par champ.
+  it('returns 400 with per-field violations when the payload is rejected', async () => {
+    (validateSchema as jest.Mock).mockImplementationOnce(() => {
+      throw new MeeshyError(ErrorCode.VALIDATION_ERROR, 'Données invalides', {
+        errors: [{ path: 'systemLanguage', message: 'Unsupported language code' }],
+        context: 'register',
+      });
+    });
+
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.violations).toEqual([{ path: 'systemLanguage', message: 'Unsupported language code' }]);
+    expect(body.error).toContain('systemLanguage');
     await app.close();
   });
 });
