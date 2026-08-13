@@ -455,6 +455,56 @@ final class ConversationListViewModelTests: XCTestCase {
         ))
     }
 
+    // MARK: - setConversations : la lecture locale tient face à un instantané en retard
+    //
+    // `setConversations` reverse un instantané de cache dans les lignes
+    // AFFICHÉES. Le cache disque et le store RAM appliquent tous deux
+    // `ConversationSyncEngine.reconcileUnread` avant d'accepter un compteur ;
+    // ce chemin-ci ne l'appliquait pas. Un instantané pris avant que
+    // l'écriture de lecture locale ait atteint GRDB rallumait donc la
+    // pastille, que le store rééteignait au tour suivant — le clignotement.
+
+    func test_setConversations_doesNotResurrectAnUnreadCoveredByTheLocalReadFrontier() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var alreadyRead = makeConversation(id: "conv1", unreadCount: 0, lastMessageAt: lastMessageAt)
+        alreadyRead.userState.lastReadAt = lastMessageAt.addingTimeInterval(1)
+        sut.setConversations([alreadyRead])
+
+        // Instantané de cache en retard sur la lecture : le serveur compte encore 99.
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 99, lastMessageAt: lastMessageAt)])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 0,
+                       "la frontière locale est postérieure au dernier message : ce 99 est en retard, pas neuf")
+    }
+
+    func test_setConversations_takesTheIncomingUnread_whenANewerMessageArrived() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var alreadyRead = makeConversation(id: "conv1", unreadCount: 0, lastMessageAt: lastMessageAt)
+        alreadyRead.userState.lastReadAt = lastMessageAt.addingTimeInterval(1)
+        sut.setConversations([alreadyRead])
+
+        sut.setConversations([
+            makeConversation(id: "conv1", unreadCount: 2,
+                             lastMessageAt: lastMessageAt.addingTimeInterval(60))
+        ])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 2,
+                       "la règle ne doit jamais masquer durablement un vrai non-lu")
+    }
+
+    func test_setConversations_forcesTheOpenConversationToZero() async throws {
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.setCurrentlyOpenConversation("conv1")
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 99)])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 0,
+                       "l'utilisateur REGARDE cette conversation — aucun instantané ne doit y rallumer une pastille")
+    }
+
     // MARK: - markAsRead: Failure (rollback)
 
     func test_markAsRead_rollsBackOnPermanentFailure() async throws {

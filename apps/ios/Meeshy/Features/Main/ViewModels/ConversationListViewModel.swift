@@ -183,8 +183,21 @@ class ConversationListViewModel: ObservableObject {
     /// after 30 s.
     func setConversations(_ items: [Conversation]) {
         let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
+        // MÊME règle de non-lu que le cache disque (`saveSorted`) et que le
+        // store RAM (`hydrateMetadata`) : `ConversationSyncEngine.reconcileUnread`.
+        // Ce chemin-ci reverse un instantané de cache dans les lignes
+        // AFFICHÉES ; sans la règle, un instantané pris avant que l'écriture
+        // de lecture locale ait atteint GRDB rallumait la pastille le temps
+        // d'une frame — le store la corrigeait ensuite, ce qui EST le
+        // clignotement. Les trois porteurs appliquent la règle, donc aucun
+        // n'a d'avis propre sur ce qu'« ouverte » ou « déjà lue » veut dire.
+        let reconciled = ConversationSyncEngine.reconcileUnread(
+            incoming: merged,
+            existing: conversations,
+            openConversationId: syncEngine.currentlyOpenConversationId
+        )
         let drafts = draftSummaries
-        let sorted = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
+        let sorted = reconciled.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
         conversations = sorted
         // Hydrate the mutation store with the latest metadata snapshot.
         // `hydrateMetadata` version-gates the per-user state so an in-flight
@@ -1738,10 +1751,22 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Mark as Read
 
+    /// Le geste « Marquer comme lu » de la liste, seul chemin de lecture qui
+    /// porte AUSSI une mutation serveur annulable. Il n'emprunte donc PAS
+    /// `ConversationReadSignal` : le compteur affiché doit rester la propriété
+    /// de `store.apply(.markAsRead)`, qui le remet à sa valeur d'avant sur un
+    /// 4xx. Passer par le bus poserait un zéro hors du store, que le rollback
+    /// ne saurait plus reprendre. Les autres surfaces (ouverture d'écran,
+    /// quick-action push, widget) ne mutent rien côté serveur par ce chemin et
+    /// utilisent le signal partagé.
     func markAsRead(conversationId: String) async {
         guard convIndex(for: conversationId) != nil else { return }
-        // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
+        // Local-first read sync (cache + frontière de lecture GRDB).
         await syncEngine.markConversationReadLocally(conversationId)
+        // Badge d'icône + widget : le store ne les touche pas, et sans cette
+        // ligne le compte de l'icône restait au chiffre d'avant jusqu'à un
+        // `read-status:updated` serveur.
+        NotificationCoordinator.shared.markConversationRead(conversationId)
         guard Self.shouldDispatchListMarkAsRead(
             conversationId: conversationId,
             activeConversationId: messageSocket.activeConversationId
@@ -2075,8 +2100,14 @@ class ConversationListViewModel: ObservableObject {
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Corrige le `ConversationStore` (RAM, tiers) AVANT d'effacer la
-                // pastille affichée : ce store n'apprend autrement jamais qu'une
+                // La ligne AFFICHÉE d'abord, le store ensuite : `clearUnreadLocally`
+                // est synchrone, `store.applyReadReceipt` traverse un acteur.
+                // Les enchaîner dans l'autre sens faisait attendre à la pastille
+                // un aller-retour d'acteur — visible en split-view iPad, où la
+                // liste reste à l'écran pendant qu'on ouvre la conversation.
+                self.clearUnreadLocally(cid)
+                // Corrige le `ConversationStore` (RAM, tiers) : ce store
+                // n'apprend autrement jamais qu'une
                 // conversation vient d'être lue par CE chemin (ouverture,
                 // quick-action push, widget — tous postent `.conversationMarkedRead`,
                 // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
@@ -2094,7 +2125,6 @@ class ConversationListViewModel: ObservableObject {
                 await self.store.applyReadReceipt(
                     ReadStatusEvent(conversationId: cid, unreadCount: 0, lastReadAt: Date())
                 )
-                self.clearUnreadLocally(cid)
             }
         }
     }

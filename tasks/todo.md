@@ -56,6 +56,36 @@ quelques minutes.
 
 TDD : 5 témoins de décodage SDK + 5 côté app.
 
+## Cycle 114-ter — non-lu iOS : une seule vérité locale, et elle tombe à l'ouverture
+
+Signalé par l'utilisateur : « quand j'ouvre une conversation, le compteur doit IMMÉDIATEMENT être à
+0, sans glitch de 99 ». Audit des porteurs du compteur en local — il y en avait trois, et aucun
+chemin d'ouverture ne les touchait tous.
+
+| Porteur | Écrivait sur ouverture ? |
+|---|---|
+| Cache disque (`ConversationSyncEngine`, seul à appliquer `reconcileUnread`) | oui, mais en différé |
+| Store RAM (`ConversationStore`, SoT déclarée de `userState`) | **non** |
+| Lignes `@Published` (`ConversationListViewModel`) | non (seulement via le rechargement débouncé) |
+| Badge d'icône + widget (`NotificationCoordinator`) | **non** |
+
+- `ConversationReadSignal` (app) — point d'écriture UNIQUE de la lecture locale, les 4 surfaces.
+  Appelé par `start()` (ouverture), la quick-action push et le widget. Aucun appel réseau : l'accusé
+  de lecture serveur garde son exigence d'exactitude et part séparément.
+- `reconcileUnread` devient la règle des TROIS porteurs (cache, store, lignes), et sa frontière est
+  monotone (MAX) au lieu de `local ?? incoming` — qui la faisait reculer sur le chemin store.
+- Miroir synchrone de l'agrégat inter-conversations : `setCurrentlyOpenConversation` republie dans
+  le tour de boucle de l'ouverture, sinon l'abonné suivant recevait le total d'avant.
+- Le geste « Marquer comme lu » de la LISTE reste sur `store.apply(.markAsRead)` : c'est le seul
+  chemin dont le zéro doit rester annulable par le rollback 4xx.
+
+TDD : 3 témoins store, 1 règle, 2 agrégat, 3 lignes de liste, 1 ouverture.
+
+**Renversement de politique assumé** : `docs/superpowers/specs/2026-07-24-read-exactness-design.md`
+énonçait « le badge ne se vide plus à l'ouverture ». Il se vide de nouveau — mais LOCALEMENT
+seulement. L'exactitude que la fiche protège porte sur ce qu'on DÉCLARE aux autres, pas sur sa
+propre pastille ; c'est la confusion des deux qui produisait les deux bugs symétriques.
+
 ## Reste ouvert (candidats des prochains cycles)
 
 - **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (voir leçon 238, corollaire de

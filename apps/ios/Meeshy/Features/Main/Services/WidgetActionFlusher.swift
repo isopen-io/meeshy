@@ -43,19 +43,12 @@ final class WidgetActionFlusher {
         for conversationId in queued {
             do {
                 try await ConversationService.shared.markRead(conversationId: conversationId)
-                NotificationCoordinator.shared.markConversationRead(conversationId)
-                NotificationCenter.default.post(
-                    name: .conversationMarkedRead,
-                    object: conversationId
-                )
-                // Frontière de lecture locale (GRDB) — sans elle le prochain
-                // reloadFromCache() ré-affichait la pastille — et notifications
-                // de la cloche (portée conversation), sans déclarer la
-                // conversation active.
-                await ConversationSyncEngine.shared.markConversationReadLocally(conversationId)
-                await MainActor.run {
-                    NotificationToastManager.shared.onConversationMarkedRead(conversationId)
-                }
+                // Les trois surfaces du compteur, en un seul point d'écriture.
+                ConversationReadSignal.markReadLocally(conversationId)
+                // Notifications de la cloche (portée conversation), sans
+                // déclarer la conversation active : le widget consomme la
+                // conversation sans jamais l'afficher.
+                NotificationToastManager.shared.onConversationMarkedRead(conversationId)
             } catch {
                 logger.error("Widget mark-as-read failed for \(conversationId): \(error.localizedDescription)")
                 failed.append(conversationId)

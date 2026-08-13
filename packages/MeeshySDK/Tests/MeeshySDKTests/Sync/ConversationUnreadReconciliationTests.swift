@@ -125,6 +125,24 @@ final class ConversationUnreadReconciliationTests: XCTestCase {
         XCTAssertEqual(result.userState.lastReadAt, readAt)
     }
 
+    /// La règle sert aussi `ConversationStore.hydrateMetadata`, où `incoming`
+    /// n'est PAS le serveur mais le CACHE — qui, lui, porte une frontière.
+    /// Une reprise `local ?? incoming` faisait alors RECULER une frontière que
+    /// le cache venait d'avancer, et le compteur repartait. Une frontière de
+    /// lecture est monotone : c'est la plus récente des deux qui vaut.
+    func test_reconcileUnread_takesTheNewerFrontier_whenBothSidesCarryOne() {
+        let local = makeConversation(unread: 0, lastMessageAt: t0, lastReadAt: t0.addingTimeInterval(10))
+        let incoming = makeConversation(unread: 5, lastMessageAt: t0, lastReadAt: t0.addingTimeInterval(90))
+
+        let result = ConversationSyncEngine.reconcileUnread(
+            incoming: incoming, local: local, openConversationId: nil
+        )
+
+        XCTAssertEqual(result.userState.lastReadAt, t0.addingTimeInterval(90))
+        XCTAssertEqual(result.userState.unreadCount, 0,
+                       "la frontière retenue est postérieure au dernier message : le compteur entrant est en retard")
+    }
+
     func test_reconcileUnread_keepsIncomingMetadata() {
         let local = makeConversation(unread: 0, lastMessageAt: t0, lastReadAt: t0)
         var incoming = makeConversation(unread: 0, lastMessageAt: t0.addingTimeInterval(30))
