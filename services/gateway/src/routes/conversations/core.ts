@@ -480,11 +480,19 @@ export function registerCoreRoutes(
       // Les tombstones partent EN PARALLÈLE de la page (elles ne dépendent que
       // de `since`), sont ids-only, cappées, et n'existent QUE sur une page
       // delta : le chemin chaud de l'écran de liste ne paie rien.
+      //
+      // Le `.catch` n'est pas une ceinture de plus sur les bretelles du module :
+      // la promesse est créée ICI et attendue 400 lignes plus bas. Tout `throw`
+      // entre les deux (la page principale qui rejette, par exemple) la
+      // laisserait sans écouteur — et sous le `--unhandled-rejections=throw` par
+      // défaut de Node 22, un rejet non écouté termine le PROCESS. Que
+      // `loadConversationTombstones` avale déjà ses erreurs est une propriété du
+      // COLLABORATEUR, pas une garantie de ce site d'appel (cf. leçon 230).
       const tombstonesPromise = deltaSince
         ? loadConversationTombstones(prisma, {
             userId: authRequest.authContext.type === 'anonymous' ? null : userId,
             since: deltaSince
-          })
+          }).catch(() => ({ ids: [] as string[], truncated: true }))
         : null;
 
       // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
