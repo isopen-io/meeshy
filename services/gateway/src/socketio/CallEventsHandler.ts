@@ -1491,6 +1491,17 @@ export class CallEventsHandler {
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
    * Falls back to emitting the original text if translation fails.
+   *
+   * Security fix 2026-08-13: every relayed segment is stamped with
+   * `speakerUserId` (the server-authenticated caller resolved by
+   * `resolveActiveCallParticipantId` in the caller), never the
+   * client-supplied `data.segment.speakerId`. Same rationale as
+   * call:backgrounded/call:foregrounded/call:screen-capture-detected: the
+   * gateway authorizes that the sender is an active participant of THIS
+   * call, but that says nothing about who the free-form `speakerId` field
+   * names — trusting it let any participant put words in another
+   * participant's mouth in the live-caption UI and, for final segments, in
+   * the persisted call transcript.
    */
   private async translateAndEmitSegment(
     socket: Socket,
@@ -1534,7 +1545,7 @@ export class CallEventsHandler {
         callId: data.callId,
         segment: {
           text: data.segment.text,
-          speakerId: data.segment.speakerId,
+          speakerId: speakerUserId,
           startMs: data.segment.startMs,
           endMs: data.segment.endMs,
           isFinal: data.segment.isFinal,
@@ -1557,7 +1568,7 @@ export class CallEventsHandler {
         callId: data.callId,
         segment: {
           text: data.segment.text,
-          speakerId: data.segment.speakerId,
+          speakerId: speakerUserId,
           startMs: data.segment.startMs,
           endMs: data.segment.endMs,
           isFinal: data.segment.isFinal,
@@ -1601,7 +1612,7 @@ export class CallEventsHandler {
                 callId: data.callId,
                 segment: {
                   text: data.segment.text,
-                  speakerId: data.segment.speakerId,
+                  speakerId: speakerUserId,
                   startMs: data.segment.startMs,
                   endMs: data.segment.endMs,
                   isFinal: data.segment.isFinal,
@@ -1623,7 +1634,7 @@ export class CallEventsHandler {
                 segment: {
                   text: data.segment.text,
                   translatedText: event.result.translatedText,
-                  speakerId: data.segment.speakerId,
+                  speakerId: speakerUserId,
                   startMs: data.segment.startMs,
                   endMs: data.segment.endMs,
                   isFinal: data.segment.isFinal,
@@ -1642,7 +1653,7 @@ export class CallEventsHandler {
             callId: data.callId,
             segment: {
               text: data.segment.text,
-              speakerId: data.segment.speakerId,
+              speakerId: speakerUserId,
               startMs: data.segment.startMs,
               endMs: data.segment.endMs,
               isFinal: data.segment.isFinal,
@@ -3670,11 +3681,14 @@ export class CallEventsHandler {
         if (this.zmqClient && data.segment.isFinal) {
           await this.translateAndEmitSegment(socket, data, userId);
         } else {
+          // Security fix 2026-08-13: stamp the authenticated `userId`, not
+          // `data.segment.speakerId` — see translateAndEmitSegment's doc
+          // comment for the spoofing this closes.
           socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
             callId: data.callId,
             segment: {
               text: data.segment.text,
-              speakerId: data.segment.speakerId,
+              speakerId: userId,
               startMs: data.segment.startMs,
               endMs: data.segment.endMs,
               isFinal: data.segment.isFinal,
