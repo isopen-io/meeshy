@@ -9,7 +9,6 @@ import type {
   ConversationType
 } from '@meeshy/shared/types';
 import { MessagesDisplay } from '@/components/common/messages-display';
-import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
@@ -80,9 +79,6 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   scrollButtonDirection = 'down', // Par défaut: ArrowDown pour Conversations (descendre vers récent)
   scrollContainerRef // Ref externe du conteneur de scroll (optionnelle)
 }: ConversationMessagesProps) {
-  // Hook pour fixer les z-index des popovers Radix UI
-  useFixRadixZIndex();
-
   const translatedMessagesRef = useRef(translatedMessages);
   translatedMessagesRef.current = translatedMessages;
 

@@ -281,9 +281,10 @@ export class ConversationStatsService {
     } else {
       // Vérifier si c'est une conversation normale
       const conversation = await prisma.conversation.findFirst({
-        where: { id: conversationId }
+        where: { id: conversationId },
+        select: { id: true }
       });
-      
+
       if (!conversation) {
         return []; // Conversation n'existe pas
       }

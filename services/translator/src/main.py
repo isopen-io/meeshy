@@ -535,6 +535,11 @@ async def main():
 if __name__ == "__main__":
     try:
         logger.info("[TRANSLATOR] 🚀 Point d'entrée __main__ atteint")
+        try:
+            import uvloop
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        except ImportError:
+            pass
         asyncio.run(main())
         logger.info("[TRANSLATOR] ✅ asyncio.run(main()) terminé")
     except KeyboardInterrupt:

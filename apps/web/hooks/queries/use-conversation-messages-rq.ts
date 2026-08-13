@@ -249,12 +249,13 @@ export function useConversationMessagesRQ(
     // Départage déterministe par id quand deux messages partagent le même
     // timestamp (même milliseconde) : sans cela l'ordre relatif est instable
     // entre deux rendus et React réconcilie/permute des cellules pour rien.
-    return [...data.messages].sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      if (dateB !== dateA) return dateB - dateA;
-      return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
-    });
+    return data.messages
+      .map((message) => ({ message, timestamp: new Date(message.createdAt).getTime() }))
+      .sort((a, b) => {
+        if (b.timestamp !== a.timestamp) return b.timestamp - a.timestamp;
+        return a.message.id < b.message.id ? 1 : a.message.id > b.message.id ? -1 : 0;
+      })
+      .map(({ message }) => message);
   }, [data?.messages]);
 
   // Front montant de la reconnexion socket, compté UNE fois pour les deux

@@ -294,7 +294,8 @@ export function registerCoreRoutes(
             equals: identifier,
             mode: 'insensitive'
           }
-        }
+        },
+        select: { id: true }
       });
 
       return sendSuccess(reply, {
