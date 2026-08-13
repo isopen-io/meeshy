@@ -41,6 +41,15 @@ Swift sont la CI (`sdk-tests` macOS + `ios-tests`), pas une exécution locale.
 - **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière
   (le SDK a son propre `ConversationSyncEngine` sur `/conversations?updatedSince=`).
 - **Android** — aucun delta `updatedSince` ; pas d'écart symétrique à combler aujourd'hui.
+- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (candidat cycle 115) :
+  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un
+  `cache.participants.invalidate(for:)` — le pendant TEMPS RÉEL du correctif de ce cycle manque
+  donc. Un départ déclenché depuis un autre appareil ne retire la conversation de la liste qu'au
+  prochain delta (ce que la PR #2966 rend enfin possible), pas immédiatement. `conversation:closed`
+  et `conversation:deleted`, eux, ont bien leur branche de retrait — l'asymétrie est l'écart.
+  À vérifier avant de coder : le device qui vient de quitter est-il encore dans la room au moment
+  de l'émission (`emitToConversationParticipants`, `routes/conversations/leave.ts:91`) ? Si non,
+  le canal correct est `broadcastToUser`, et le correctif est côté gateway.
 
 ## Review
 
