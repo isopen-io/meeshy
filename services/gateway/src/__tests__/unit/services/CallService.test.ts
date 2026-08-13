@@ -55,7 +55,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
   }
 }));
 
-import { CallService } from '../../../services/CallService';
+import { CallService, MAX_CALL_PARTICIPANTS } from '../../../services/CallService';
 import { CallMode, CallStatus, ParticipantRole, CallEndReason } from '@meeshy/shared/prisma/client';
 import { buildCallSummaryWithMetadata } from '@meeshy/shared/utils/call-summary';
 
@@ -787,27 +787,51 @@ describe('CallService', () => {
       );
     });
 
-    it('should throw error when max participants reached for P2P', async () => {
+    it('allows a 3rd participant to join a call in a group conversation (1:1 cap lifted)', async () => {
+      const groupConversation = createMockConversation({ type: 'group' });
       const callWith2Participants = createMockCallSession({
         status: CallStatus.active,
+        answeredAt: new Date(),
         participants: [
           createMockParticipant({ userId: 'user-123' }),
-          createMockParticipant({ id: 'participant-789', userId: 'user-789' })
+          createMockParticipant({ id: 'participant-789', participantId: 'participant-789', userId: 'user-789' })
         ],
-        conversation: createMockConversation()
+        conversation: groupConversation
       });
+      const callWith3Participants = {
+        ...callWith2Participants,
+        participants: [
+          ...callWith2Participants.participants,
+          createMockParticipant({
+            id: 'participant-456',
+            participantId: 'participant-456',
+            userId: 'user-456',
+            role: ParticipantRole.participant
+          })
+        ],
+        initiator: createMockUser(),
+        conversation: groupConversation
+      };
 
-      mockPrisma.callSession.findUnique.mockResolvedValue(callWith2Participants);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWith2Participants);
       mockPrisma.participant.findFirst.mockResolvedValue({
-        id: 'member-456',
+        id: 'participant-456',
         conversationId: 'conv-123',
         userId: 'user-456',
         isActive: true
       });
+      mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
+        await callback({
+          callParticipant: { create: jest.fn() },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        });
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWith3Participants);
 
-      await expect(callService.joinCall(validJoinData)).rejects.toThrow(
-        'MAX_PARTICIPANTS_REACHED: Maximum participants (2) reached for P2P calls'
-      );
+      const result = await callService.joinCall(validJoinData);
+
+      expect(result.callSession.participants).toHaveLength(3);
+      expect(result.iceServers).toBeDefined();
     });
 
     it('should update call status to active when joining initiated call', async () => {
@@ -2249,26 +2273,25 @@ describe('CallService - Error Code Verification', () => {
     ).rejects.toThrow(/CALL_ENDED/);
   });
 
-  it('should use MAX_PARTICIPANTS_REACHED error code', async () => {
+  it('should use MAX_PARTICIPANTS_REACHED error code at the participant ceiling', async () => {
     mockPrisma.callSession.findUnique.mockResolvedValue(
       createMockCallSession({
         status: CallStatus.active,
-        participants: [
-          createMockParticipant(),
-          createMockParticipant({ id: 'p2', userId: 'user-456' })
-        ],
-        conversation: createMockConversation()
+        participants: Array.from({ length: MAX_CALL_PARTICIPANTS }, (_, i) =>
+          createMockParticipant({ id: `p-${i}`, participantId: `participant-${i}`, userId: `user-${i}` })
+        ),
+        conversation: createMockConversation({ type: 'group' })
       })
     );
     mockPrisma.participant.findFirst.mockResolvedValue({
-      id: 'member-789',
+      id: 'member-full',
       conversationId: 'conv-123',
-      userId: 'user-789',
+      userId: 'user-full',
       isActive: true
     });
 
     await expect(
-      callService.joinCall({ callId: 'call-123', userId: 'user-789', participantId: 'participant-789' })
+      callService.joinCall({ callId: 'call-123', userId: 'user-full', participantId: 'participant-full' })
     ).rejects.toThrow(/MAX_PARTICIPANTS_REACHED/);
   });
 
