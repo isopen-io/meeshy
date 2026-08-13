@@ -107,7 +107,17 @@ public enum MeeshyVideoWatermarkBaker {
         let expected = orientedSize(natural: natural, transform: transform)
 
         let painter = WatermarkTilePainter(watermark: watermark)
-        let videoComposition = AVMutableVideoComposition(asset: asset) { request in
+        // `@Sendable` EXPLICITE sur le bloc, pas seulement sur `paint`. Sans
+        // lui, l'isolation du bloc dépend de l'annotation d'AVFoundation : sur
+        // un SDK où `applyingCIFiltersWithHandler:` n'est pas encore marqué
+        // `@Sendable`, le littéral hérite du MainActor de `bake` (isolation par
+        // défaut du module, SE-0466). AVFoundation l'appelle depuis SON thread —
+        // et l'appel synchrone vers le peintre tente alors de faire transiter
+        // `AVAsynchronousCIImageFilteringRequest` (non-Sendable) à travers un
+        // hop : c'est exactement `sending 'request' risks causing data races`.
+        // Le marquer ici cloue le bloc non-isolé, quelle que soit la version du
+        // SDK. Le seul saut MainActor reste celui, volontaire, de `render(at:)`.
+        let videoComposition = AVMutableVideoComposition(asset: asset) { @Sendable request in
             painter.paint(request)
         }
 
