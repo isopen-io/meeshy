@@ -30,6 +30,12 @@ struct WidgetPreviewView: View {
         conversationListViewModel.totalUnreadCount
     }
 
+    /// B1 (Prisme Linguistique) — prisme du lecteur, même autorité que
+    /// `ConversationListView` et que `WidgetDataManager`.
+    private var preferredContentLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+
     private var recentConversations: [Conversation] {
         Array(
             conversationListViewModel.conversations
@@ -242,7 +248,13 @@ struct WidgetPreviewView: View {
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if let preview = conv.lastMessagePreview, !preview.isEmpty {
+                    // B1 (Prisme Linguistique) — cet écran est l'aperçu du
+                    // widget : il doit montrer EXACTEMENT ce que
+                    // `WidgetDataManager.publishConversations` publie dans
+                    // l'App Group, donc la même résolution de langue.
+                    if let preview = conv.resolvedLastMessagePreview(
+                        preferredLanguages: preferredContentLanguages
+                    ), !preview.isEmpty {
                         Text(preview)
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)

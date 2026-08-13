@@ -88,14 +88,33 @@ final class WidgetDataManager: NotificationWidgetSink {
         return enc
     }()
 
+    /// B1 (Prisme Linguistique) — prisme du lecteur, relu à CHAQUE publication.
+    ///
+    /// Le widget affiche l'aperçu du dernier message : il doit le montrer dans
+    /// la langue du lecteur, comme la liste in-app, et non dans celle de
+    /// l'expéditeur. `AuthManager.shared` est un singleton `@MainActor` — la
+    /// fermeture est un seam de test, pas une indirection de confort : le
+    /// bundle de tests publie dans une suite jetable sans compte connecté.
+    private let preferredContentLanguagesProvider: @MainActor () -> [String]
+
     private init() {
         self.suiteName = "group.me.meeshy.apps"
         self.stagingDirectoriesOverride = nil
+        self.preferredContentLanguagesProvider = {
+            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        }
     }
 
     /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
     /// staging injectés pour vérifier `wipeAll()` sans toucher l'App Group réel.
-    init(suiteName: String, stagingDirectories: [URL]) {
+    init(
+        suiteName: String,
+        stagingDirectories: [URL],
+        preferredContentLanguages: @escaping @MainActor () -> [String] = {
+            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        }
+    ) {
+        self.preferredContentLanguagesProvider = preferredContentLanguages
         self.suiteName = suiteName
         self.stagingDirectoriesOverride = stagingDirectories
     }
@@ -158,6 +177,10 @@ final class WidgetDataManager: NotificationWidgetSink {
     // MARK: - NotificationWidgetSink
 
     func publishConversations(_ conversations: [MeeshyConversation]) {
+        // Résolu UNE fois par publication : le prisme est une propriété du
+        // lecteur, pas de la conversation, et le relire par ligne ferait 50
+        // reconstructions de tableau pour un résultat identique.
+        let preferredLanguages = preferredContentLanguagesProvider()
         let widgetConversations = conversations
             .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
@@ -172,7 +195,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     id: conv.id,
                     contactName: conv.displayName,
                     contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
-                    lastMessage: formatLastMessage(conv),
+                    lastMessage: formatLastMessage(conv, preferredLanguages: preferredLanguages),
                     timestamp: conv.lastMessageAt,
                     isUnread: conv.userState.unreadCount > 0,
                     isPinned: conv.userState.isPinned,
@@ -313,8 +336,19 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     // MARK: - Private
 
-    private func formatLastMessage(_ conv: MeeshyConversation) -> String {
-        if let preview = conv.lastMessagePreview, !preview.isEmpty {
+    /// B1 (Prisme Linguistique) — l'aperçu publié dans l'App Group passe par
+    /// `resolvedLastMessagePreview`, comme la ligne de liste in-app.
+    ///
+    /// Ce texte quitte l'app : il s'affiche sur l'écran d'accueil, hors de
+    /// portée de toute résolution ultérieure. Le publier brut montrait le
+    /// dernier message dans la langue de l'EXPÉDITEUR pendant que la même
+    /// conversation, ouverte dans l'app, affichait sa traduction.
+    private func formatLastMessage(
+        _ conv: MeeshyConversation,
+        preferredLanguages: [String]
+    ) -> String {
+        if let preview = conv.resolvedLastMessagePreview(preferredLanguages: preferredLanguages),
+           !preview.isEmpty {
             if let sender = conv.lastMessageSenderName, conv.type != .direct {
                 return "\(sender): \(preview)"
             }

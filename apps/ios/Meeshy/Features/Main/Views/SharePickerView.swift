@@ -44,6 +44,12 @@ struct SharePickerView: View {
     private var sentToIds: Set<String> { viewModel.sentToIds }
     private var sendingToId: String? { viewModel.sendingToId }
 
+    /// B1 (Prisme Linguistique) — prisme du lecteur, même autorité que
+    /// `ConversationListView` (`AuthManager.currentUser?.preferredContentLanguages`).
+    private var preferredContentLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+
     private var filteredConversations: [Conversation] {
         let active = conversations.filter { $0.isActive }
         guard !searchText.isEmpty else {
@@ -277,7 +283,13 @@ struct SharePickerView: View {
                         .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
-                    if let preview = conv.lastMessagePreview, !preview.isEmpty {
+                    // B1 (Prisme Linguistique) — même résolution que la ligne
+                    // de liste : le sélecteur de destination montre les MÊMES
+                    // conversations, et une même ligne ne peut pas dire deux
+                    // textes selon l'écran qui la rend.
+                    if let preview = conv.resolvedLastMessagePreview(
+                        preferredLanguages: preferredContentLanguages
+                    ), !preview.isEmpty {
                         Text("\u{2022}")
                             .font(MeeshyFont.relative(10))
                             .foregroundColor(theme.textMuted)
