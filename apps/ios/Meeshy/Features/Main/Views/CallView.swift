@@ -788,20 +788,16 @@ struct CallView: View {
         // never falls back to Apple's server-side recognizer, privacy decision)
         // left the panel open and empty with zero feedback — user-reported
         // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        // Échec du moteur LOCAL (permission refusée, langue non supportée
+        // on-device…) : toast explicite, mais le panneau RESTE ouvert en
+        // réception seule — la réception des transcriptions du pair est liée
+        // à la visibilité du panneau (spec 2026-08-13), le fermer ici
+        // couperait aussi ce flux. L'ancien auto-reveal du panneau au premier
+        // segment reçu est retiré par la même spec : panneau caché ⇒
+        // désabonné, aucun segment ne peut plus arriver panneau fermé.
         .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
             guard let newError else { return }
             FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
-            showTranscript = false
-            transcriptionService.isShowingOverlay = false
-        }
-        // First segment ever received this call (local OR remote) reveals the
-        // panel even if captionsCycleButton was never tapped — a device must
-        // never silently accumulate the other participant's words with
-        // nothing visible. See docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §4.
-        .adaptiveOnChange(of: transcriptionService.segments.isEmpty) { wasEmpty, isEmpty in
-            if wasEmpty, !isEmpty, !showTranscript {
-                showTranscript = true
-            }
         }
     }
 
@@ -1467,33 +1463,48 @@ struct CallView: View {
     /// My own speech is never translated for myself (`text` is already in my
     /// language); the interlocutor's speech shows `translatedText ?? text` by
     /// default, or `text` (original) when `showOriginalText` is on.
-    /// Each row also carries a small "since call start" timestamp (mm:ss)
-    /// above the text — user-requested 2026-07-11 — computed from
-    /// `segment.capturedAt` (wall clock) against `callManager.callStartDate`,
-    /// never from `startTime`/`endTime` (ASR-buffer-relative, see
-    /// `TranscriptionSegment.capturedAt` doc comment).
+    /// Rendu journalisé `displayName (heure): message` — l'heure est
+    /// l'HORLOGE MURALE de capture (`segment.capturedAt`, estampillée par le
+    /// device du locuteur et transportée par le wire), jamais
+    /// `startTime`/`endTime` (ASR-buffer-relatifs, voir le doc comment de
+    /// `TranscriptionSegment.capturedAt`). Le nom du locuteur distant vient
+    /// du roster local d'abord (source de confiance), puis du
+    /// `speakerDisplayName` transporté par le wire en fallback. Chaque ligne
+    /// porte le tag de la langue affichée : langue de transcription pour
+    /// l'original, langue cible quand la traduction est affichée — prépare
+    /// la traduction live + resynthèse TTS.
     @ViewBuilder
     private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         let isLocal = segment.speakerId == localUserId
         let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        let remoteName = callManager.remoteUsername
+            ?? segment.speakerDisplayName
+            ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
         let speakerName = isLocal ? localName : remoteName
         let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let showsTranslation = !isLocal && !showOriginalText && segment.translatedText != nil
         let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
-        let elapsed = segment.capturedAt.timeIntervalSince(callManager.callStartDate ?? segment.capturedAt)
-        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
+        let displayedLanguage = showsTranslation ? (segment.translatedLanguage ?? segment.language) : segment.language
+        let timeLabel = segment.capturedAt.formatted(date: .omitted, time: .shortened)
 
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Text(speakerName)
+                Text("\(speakerName) (\(timeLabel))")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(speakerColor)
                 Spacer()
-                Text(elapsedLabel)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.white.opacity(0.45))
-                    .accessibilityHidden(true)
+                Text(displayedLanguage.uppercased())
+                    .font(.caption2.weight(.semibold).monospaced())
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.white.opacity(0.12)))
+                    .accessibilityLabel(Text(String(
+                        localized: "call.transcript.language_tag",
+                        defaultValue: "Langue : \(displayedLanguage.uppercased())",
+                        bundle: .main
+                    )))
             }
             Text(displayText)
                 .font(.callout.weight(segment.isFinal ? .regular : .light))
@@ -1501,7 +1512,7 @@ struct CallView: View {
                 .opacity(segment.isFinal ? 1.0 : 0.7)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(speakerName), \(elapsedLabel) : \(displayText)")
+        .accessibilityLabel("\(speakerName) (\(timeLabel)) : \(displayText)")
     }
 
     // MARK: - Ended
@@ -1908,6 +1919,18 @@ struct CallView: View {
     /// awaited inside a Task — so isTranscribing is still false right after the call
     /// returns; reading it before, at tap time, is always accurate).
     private func advanceCaptionsMode() {
+        // Panneau ouvert en RÉCEPTION SEULE : le moteur local a échoué
+        // (permission refusée, langue non supportée on-device) mais le
+        // panneau est resté visible pour continuer à recevoir le pair (spec
+        // 2026-08-13). captionsMode est .off (isTranscribing=false) alors que
+        // le panneau est ouvert — sans cette branche, le cycle .off→.translated
+        // relancerait le démarrage en boucle et le panneau serait infermable.
+        // Le tap FERME (désabonnement réception) ; le suivant retentera.
+        if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+            return
+        }
         switch captionsMode.next {
         case .translated:
             showOriginalText = false
@@ -1952,12 +1975,33 @@ struct CallView: View {
             }
         }()
 
+        // Invitation : le pair transcrit alors que MES sous-titres sont
+        // désactivés — point indigo sur l'icône (même patron que le dot
+        // "video-autopaused" web). Statique, pas d'animation continue (audit
+        // P2-iOS-9 : les pulsations indéfinies brûlaient la batterie et
+        // ignoraient Reduce Motion). Disparaît dès que j'active
+        // (mode != .off) ou que le pair coupe (`active: false` / fin d'appel).
+        let showsPeerInvite = callManager.remoteTranscriptionActive && mode == .off
+
         return Button(action: advanceCaptionsMode) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(mode == .off ? .white.opacity(0.9) : tint)
                     .callControlGlass(diameter: 56, isActive: mode != .off, tint: tint)
+                    .overlay(alignment: .topTrailing) {
+                        if showsPeerInvite {
+                            Circle()
+                                .fill(MeeshyColors.indigo400)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.black.opacity(0.6), lineWidth: 2))
+                                .accessibilityLabel(Text(String(
+                                    localized: "call.control.captions.peer_active",
+                                    defaultValue: "Votre interlocuteur a activé la transcription",
+                                    bundle: .main
+                                )))
+                        }
+                    }
                 Text(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .foregroundColor(.white.opacity(0.7))

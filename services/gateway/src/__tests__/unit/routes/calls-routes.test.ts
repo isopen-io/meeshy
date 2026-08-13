@@ -22,6 +22,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const mockInitiateCall = jest.fn<any>();
 const mockGetCallSession = jest.fn<any>();
+const mockGetCallTranscript = jest.fn<any>();
 const mockEndCall = jest.fn<any>();
 const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
@@ -44,6 +45,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn<any>().mockImplementation(() => ({
     initiateCall: (...args: any[]) => mockInitiateCall(...args),
     getCallSession: (...args: any[]) => mockGetCallSession(...args),
+    getCallTranscript: (...args: any[]) => mockGetCallTranscript(...args),
     endCall: (...args: any[]) => mockEndCall(...args),
     joinCall: (...args: any[]) => mockJoinCall(...args),
     leaveCall: (...args: any[]) => mockLeaveCall(...args),
@@ -231,9 +233,16 @@ describe('callRoutes', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('route registration', () => {
-    it('registers all 8 routes', () => {
+    it('registers all 9 routes', () => {
       const { routes } = setup();
-      expect(routes).toHaveLength(8);
+      expect(routes).toHaveLength(9);
+    });
+
+    it('registers GET /calls/:callId/transcript', () => {
+      const { routes } = setup();
+      expect(
+        routes.some((r) => r.method === 'GET' && r.path === '/calls/:callId/transcript')
+      ).toBe(true);
     });
 
     it('registers POST /calls', () => {
@@ -441,6 +450,78 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/:callId')(req, reply);
 
       expect(reply._body?.error).toBe('Failed to get call');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GET /calls/:callId/transcript — getCallTranscript
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('GET /calls/:callId/transcript — getCallTranscript', () => {
+    const transcript = {
+      callId: CALL_ID,
+      conversationId: CONV_ID,
+      callStartedAt: new Date(1_765_650_000_000),
+      segments: [
+        {
+          id: 'seg-1',
+          speakerId: USER_ID,
+          speakerDisplayName: 'Alice Doe',
+          text: 'Bonjour',
+          language: 'fr',
+          confidence: 0.9,
+          capturedAtMs: 1_765_650_001_000,
+          translations: [{ targetLanguage: 'en', translatedText: 'Hello' }],
+        },
+      ],
+    };
+
+    it('returns 200 with the persisted transcript', async () => {
+      const { routes, reply } = setup();
+      mockGetCallTranscript.mockResolvedValueOnce(transcript);
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
+
+      expect(reply._body).toMatchObject({ success: true, data: transcript });
+      expect(mockGetCallTranscript).toHaveBeenCalledWith(CALL_ID, USER_ID);
+    });
+
+    it('returns 403 when the requester never took part in the call', async () => {
+      const { routes, reply } = setup();
+      mockGetCallTranscript.mockRejectedValueOnce(
+        new Error('NOT_A_PARTICIPANT: You do not have access to this call transcript')
+      );
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+    });
+
+    it('returns 404 when the call does not exist', async () => {
+      const { routes, reply } = setup();
+      mockGetCallTranscript.mockRejectedValueOnce(
+        new Error('CALL_NOT_FOUND: Call session not found')
+      );
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(404);
+      expect(reply._body?.error).toBe('CALL_NOT_FOUND');
+    });
+
+    it('returns 400 for other errors', async () => {
+      const { routes, reply } = setup();
+      mockGetCallTranscript.mockRejectedValueOnce(new Error('INVALID_ID: bad format'));
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(400);
+      expect(reply._body?.error).toBe('INVALID_ID');
     });
   });
 

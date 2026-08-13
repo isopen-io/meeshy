@@ -60,6 +60,15 @@
     "captions": {
       "region": "Live translated captions"
     },
+    "transcript": {
+      "region": "Call transcript journal",
+      "title": "Transcript",
+      "empty": "Transcribed segments will appear here",
+      "unknownSpeaker": "Participant",
+      "peerActive": "Your peer turned on transcription — turn yours on too",
+      "show": "Show transcript",
+      "hide": "Hide transcript"
+    },
     "stream": {
       "disconnected": "Disconnected",
       "participantLeft": "{name} has left",

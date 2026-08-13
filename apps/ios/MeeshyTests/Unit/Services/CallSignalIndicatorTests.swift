@@ -150,6 +150,39 @@ final class DataChannelInboundTests: XCTestCase {
         XCTAssertEqual(DataChannelInbound.decode(Data("not json".utf8)), .ignored)
         XCTAssertEqual(DataChannelInbound.decode(Data(#"{"type":"unknown-future"}"#.utf8)), .ignored)
     }
+
+    func test_decode_transcriptEntry_returnsTypedEntry() {
+        let data = Data("""
+        {"type":"transcript-entry","entry":{"id":"w-1","callId":"call-1","speakerId":"user-2",\
+        "speakerDisplayName":"Alice","text":"Bonjour","language":"fr",\
+        "capturedAtMs":1765650000000,"isFinal":true,"confidence":0.9}}
+        """.utf8)
+        let expected = DataChannelTranscriptEntry(
+            id: "w-1", callId: "call-1", speakerId: "user-2",
+            speakerDisplayName: "Alice", text: "Bonjour", language: "fr",
+            capturedAtMs: 1_765_650_000_000, isFinal: true, confidence: 0.9
+        )
+        XCTAssertEqual(DataChannelInbound.decode(data), .transcriptEntry(expected))
+    }
+
+    func test_decode_transcriptEntry_missingRequiredField_isIgnored() {
+        // A future peer sending a richer shape must degrade to .ignored, never
+        // crash or mis-route — same tolerance as unknown control types.
+        let data = Data(#"{"type":"transcript-entry","entry":{"id":"w-1"}}"#.utf8)
+        XCTAssertEqual(DataChannelInbound.decode(data), .ignored)
+    }
+
+    func test_decode_transcriptEntry_roundTripsThroughEncoder() throws {
+        // Sender (WebRTCService.sendTranscriptEntry) and receiver
+        // (DataChannelInbound.decode) must agree on the envelope.
+        let entry = DataChannelTranscriptEntry(
+            id: "w-2", callId: "call-9", speakerId: "user-1",
+            speakerDisplayName: "Bob", text: "Hola", language: "es",
+            capturedAtMs: 42, isFinal: true, confidence: 1.0
+        )
+        let encoded = try JSONEncoder().encode(DataChannelTranscriptMessage(type: "transcript-entry", entry: entry))
+        XCTAssertEqual(DataChannelInbound.decode(encoded), .transcriptEntry(entry))
+    }
 }
 
 // MARK: - Hangup fast-path wiring (source inspection)

@@ -1902,6 +1902,12 @@ model Transcription {
   /// Confidence score (0-1)
   confidence Float?
 
+  /// Stable journal id minted at capture by the speaker's device (wire
+  /// `segment.id`, 2026-08-13) — idempotency key for persistence and merge
+  /// key for clients replaying the transcript against their local journal.
+  /// Null for segments from legacy clients that predate the journal wire.
+  segmentId String?
+
   /// Timestamp in call (milliseconds from call start)
   timestamp DateTime @default(now())
   offsetMs  Int? // Offset from call start in milliseconds
