@@ -22,6 +22,7 @@ import {
   decodeSyncCursor,
   SYNC_CHECKPOINT_LAG_MS,
   SYNC_MESSAGE_RENDERABLE_KEYS,
+  SYNC_MAX_PAGE_BYTES,
 } from '../../../routes/sync';
 
 type PrismaStub = {
@@ -702,6 +703,158 @@ describe('GET /sync — le stream des disparitions personnelles', () => {
     expect(body.collections.messages.truncated).toBe(true);
     expect(body.hasMore).toBe(true);
     expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+});
+
+describe('GET /sync — plafond de POIDS de la page', () => {
+  const T = (s: string) => new Date(s);
+
+  /**
+   * Une ligne du stream `changed` d'un poids CHOISI. Le poids passe par
+   * `content` parce que c'est le champ le plus honnête à gonfler : dans la vraie
+   * vie il est rejoint par `translations` (une copie du contenu PAR langue),
+   * `metadata`, et les `transcription`/`translations` des pièces jointes — tous
+   * des blobs JSON dont la taille est écrite par l'utilisateur, jamais par le
+   * schéma.
+   */
+  const heavy = (id: string, bytes: number, seconds: number) => ({
+    id,
+    conversationId: 'c1',
+    senderId: 'u',
+    content: 'x'.repeat(bytes),
+    createdAt: T('2026-06-01T00:00:00Z'),
+    updatedAt: T(`2026-07-02T00:00:${String(seconds).padStart(2, '0')}.000Z`),
+  });
+
+  const deliveredIds = (msgs: { added: Array<{ id: string }>; modified: Array<{ id: string }> }) =>
+    [...msgs.added, ...msgs.modified].map((m) => m.id);
+
+  it('tronque la page sur le POIDS bien avant le plafond de LIGNES', async () => {
+    // Six lignes seulement — cent fois moins que le cap de 1000 — mais chacune
+    // pèse un tiers du budget. Le plafond de lignes ne peut rien voir.
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce(
+        Array.from({ length: 6 }, (_, k) => heavy(`m${k}`, Math.floor(SYNC_MAX_PAGE_BYTES / 3), k)),
+      )
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    expect(deliveredIds(msgs).length).toBeLessThan(6);
+    expect(msgs.truncated).toBe(true);
+    expect(typeof msgs.nextCursor).toBe('string');
+    // Le corps servi reste sous le budget, à une ligne près (la ligne qui fait
+    // franchir la borne est exclue, pas incluse « juste cette fois »).
+    expect(Buffer.byteLength(res.payload, 'utf8')).toBeLessThan(SYNC_MAX_PAGE_BYTES * 1.5);
+    await app.close();
+  });
+
+  it('ancre le curseur sur la dernière ligne LIVRÉE, jamais sur la dernière ligne LUE', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce(
+        Array.from({ length: 6 }, (_, k) => heavy(`m${k}`, Math.floor(SYNC_MAX_PAGE_BYTES / 3), k)),
+      )
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+    const delivered = deliveredIds(msgs);
+
+    // Une ligne écartée par le budget n'a PAS été livrée : ancrer le curseur
+    // derrière elle la perdrait définitivement (la borne serveur est stricte).
+    expect(decodeSyncCursor(msgs.nextCursor).c?.i).toBe(delivered[delivered.length - 1]);
+    await app.close();
+  });
+
+  it('sert quand même un message plus lourd À LUI SEUL que le budget — sinon le rattrapage n’avance jamais', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce([heavy('énorme', SYNC_MAX_PAGE_BYTES * 2, 1), heavy('m2', 10, 2)])
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    // Rendre une page VIDE + `truncated: true` + le curseur inchangé serait une
+    // boucle infinie : le client redemanderait la même position pour toujours.
+    expect(deliveredIds(msgs)).toEqual(['énorme']);
+    expect(msgs.truncated).toBe(true);
+    expect(decodeSyncCursor(msgs.nextCursor).c?.i).toBe('énorme');
+    await app.close();
+  });
+
+  it('parcourt tout le jeu sans trou ni doublon quand c’est le POIDS qui pagine', async () => {
+    const dataset = Array.from({ length: 5 }, (_, k) =>
+      heavy(`m${k}`, Math.floor(SYNC_MAX_PAGE_BYTES / 2), k),
+    );
+    const prisma = makePrisma({ message: { findMany: keysetMessageStore(dataset) } });
+    const app = await buildApp(prisma);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    let guard = 0;
+    for (; guard < 12; guard++) {
+      const url =
+        `/sync?since=${SINCE}&collections=messages` +
+        (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+      const res: any = await app.inject({ method: 'GET', url });
+      const msgs = res.json().data.collections.messages;
+      seen.push(...deliveredIds(msgs));
+      if (!msgs.truncated) {
+        cursor = null;
+        break;
+      }
+      cursor = msgs.nextCursor as string;
+    }
+
+    expect(guard).toBeLessThan(12);
+    expect(cursor).toBeNull();
+    expect([...seen].sort()).toEqual(['m0', 'm1', 'm2', 'm3', 'm4']);
+    expect(new Set(seen).size).toBe(seen.length);
+    await app.close();
+  });
+
+  it('ne tronque pas une page qui tient dans le budget', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce([heavy('m0', 100, 0), heavy('m1', 100, 1)])
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    expect(deliveredIds(msgs)).toEqual(['m0', 'm1']);
+    expect(msgs.truncated).toBe(false);
+    expect(msgs.nextCursor).toBeNull();
+    await app.close();
+  });
+
+  it('n’impose pas le budget aux tombstones — trois scalaires par ligne, déjà bornés par le plafond de lignes', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce([]) // changed
+      .mockResolvedValueOnce(
+        Array.from({ length: 200 }, (_, k) => ({
+          id: `d${k}`,
+          conversationId: 'c1',
+          deletedAt: T(`2026-07-02T00:00:${String(k % 60).padStart(2, '0')}.000Z`),
+        })),
+      );
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    expect(msgs.deleted).toHaveLength(200);
+    expect(msgs.truncated).toBe(false);
     await app.close();
   });
 });
