@@ -52,20 +52,27 @@ public enum MeeshyVideoWatermarkBaker {
 
     /// Taille du rendu une fois la `preferredTransform` de la piste appliquée
     /// — c'est-à-dire les dimensions telles que le spectateur les voit.
-    public static func orientedSize(natural: CGSize, transform: CGAffineTransform) -> CGSize {
+    ///
+    /// `nonisolated` : pure géométrie, appelée depuis `MeeshyMediaBrandingGeometryTests`
+    /// hors MainActor — pas de raison de porter l'isolation par défaut du module.
+    public static nonisolated func orientedSize(natural: CGSize, transform: CGAffineTransform) -> CGSize {
         let rect = CGRect(origin: .zero, size: natural).applying(transform)
         return CGSize(width: abs(rect.width), height: abs(rect.height))
     }
 
     /// Comparaison tolérante de deux gabarits — l'encodeur arrondit aux
     /// multiples de 2 px.
-    public static func sizesMatch(_ lhs: CGSize, _ rhs: CGSize, tolerance: CGFloat = 2) -> Bool {
+    public static nonisolated func sizesMatch(_ lhs: CGSize, _ rhs: CGSize, tolerance: CGFloat = 2) -> Bool {
         abs(lhs.width - rhs.width) <= tolerance && abs(lhs.height - rhs.height) <= tolerance
     }
 
     /// Instant d'animation servi pour le temps `seconds` : quantifié à
     /// `animationFPS`, ce qui rend le cache de tuiles efficace.
-    public static func animationTime(for seconds: Double) -> Double {
+    ///
+    /// `nonisolated` : appelé depuis `WatermarkTilePainter.paint`, qui tourne
+    /// hors MainActor (cf. sa propre doc) — cette fonction est de toute façon
+    /// une pure fonction de temps, sans état ni besoin d'isolation.
+    public static nonisolated func animationTime(for seconds: Double) -> Double {
         guard seconds.isFinite, seconds > 0 else { return 0 }
         return (seconds * animationFPS).rounded() / animationFPS
     }
@@ -150,24 +157,39 @@ public enum MeeshyVideoWatermarkBaker {
 private final class WatermarkTilePainter: @unchecked Sendable {
     /// `@unchecked Sendable` : tout l'état mutable est gardé par `lock`, et le
     /// filigrane lui-même ne porte que des valeurs immuables.
-    private let watermark: StoryExportWatermark
-    private let lock = NSLock()
-    private var cachedTime: Double = .nan
-    private var cachedSize: CGSize = .zero
-    private var cachedTile: CIImage?
+    ///
+    /// The module defaults to `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+    /// (SE-0466). `paint(_:)` is invoked from the `@Sendable`, non-isolated
+    /// handler closure AVFoundation hands to
+    /// `AVMutableVideoComposition(asset:applyingCIFiltersWithHandler:)` — a
+    /// synchronous call from there into an (implicitly) MainActor-isolated
+    /// method would force a hop and try to send the non-Sendable
+    /// `AVAsynchronousCIImageFilteringRequest` across it, which is exactly
+    /// what `error: sending 'request' risks causing data races` flags. So
+    /// `paint` and everything it calls before the deliberate `render(at:)`
+    /// hop (mirrors `StoryAVCompositor`'s pattern for the same AVFoundation
+    /// callback-thread constraint) must be explicitly `nonisolated`.
+    private nonisolated let watermark: StoryExportWatermark
+    private nonisolated let lock = NSLock()
+    private nonisolated(unsafe) var cachedTime: Double = .nan
+    private nonisolated(unsafe) var cachedSize: CGSize = .zero
+    private nonisolated(unsafe) var cachedTile: CIImage?
 
     /// Boîte de transport : `MainActor.assumeIsolated` exige un retour
     /// `Sendable`, or `CIImage` ne l'est pas. La boîte naît et meurt dans le
-    /// `sync`, sans jamais être partagée.
+    /// `sync`, sans jamais être partagée. `image` est lu hors de tout bloc
+    /// `assumeIsolated`, depuis `renderOnMain` (nonisolated) : il doit donc
+    /// lui-même être `nonisolated(unsafe)`, pas hériter du défaut MainActor.
     private final class TileBox {
-        var image: CIImage?
+        nonisolated(unsafe) var image: CIImage?
+        nonisolated init() {}
     }
 
-    init(watermark: StoryExportWatermark) {
+    nonisolated init(watermark: StoryExportWatermark) {
         self.watermark = watermark
     }
 
-    func paint(_ request: AVAsynchronousCIImageFilteringRequest) {
+    nonisolated func paint(_ request: AVAsynchronousCIImageFilteringRequest) {
         let source = request.sourceImage
         let extent = source.extent
         guard extent.width >= 1, extent.height >= 1, extent.isInfinite == false else {
@@ -182,7 +204,7 @@ private final class WatermarkTilePainter: @unchecked Sendable {
         request.finish(with: tile.composited(over: source).cropped(to: extent), context: nil)
     }
 
-    private func tile(at time: Double, renderSize: CGSize) -> CIImage? {
+    private nonisolated func tile(at time: Double, renderSize: CGSize) -> CIImage? {
         lock.lock()
         if time == cachedTime, cachedSize == renderSize {
             let cached = cachedTile
@@ -204,7 +226,7 @@ private final class WatermarkTilePainter: @unchecked Sendable {
     /// Le rendu du filigrane est MainActor-isolé : on y remonte en `sync`,
     /// comme `StoryAVCompositor.startRequest`. L'appelant (`bake`) est
     /// explicitement documenté comme ne devant pas bloquer le main thread.
-    private func renderOnMain(at time: Double, renderSize: CGSize) -> CIImage? {
+    private nonisolated func renderOnMain(at time: Double, renderSize: CGSize) -> CIImage? {
         let box = TileBox()
         if Thread.isMainThread {
             MainActor.assumeIsolated {
