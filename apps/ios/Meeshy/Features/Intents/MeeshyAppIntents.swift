@@ -329,10 +329,15 @@ struct ContactEntity: AppEntity {
 
 @available(iOS 16.0, *)
 struct ContactQuery: EntityQuery {
+    /// Ré-hydratation d'un contact déjà choisi (Raccourci enregistré, relance
+    /// Siri). Lit la MÊME clé que `suggestedEntities` : `favorite_contacts`,
+    /// écrite par `WidgetDataManager.publishFavoriteContacts`. Elle lisait
+    /// auparavant `contacts`, qu'AUCUN écrivain du dépôt ne pose — donc tout
+    /// raccourci enregistré perdait son destinataire au deuxième lancement,
+    /// silencieusement (une liste vide n'est pas une erreur).
     func entities(for identifiers: [String]) async throws -> [ContactEntity] {
-        // Load contacts from shared container
         guard let sharedDefaults = UserDefaults(suiteName: "group.me.meeshy.apps"),
-              let data = sharedDefaults.data(forKey: "contacts"),
+              let data = sharedDefaults.data(forKey: "favorite_contacts"),
               let contacts = try? JSONDecoder().decode([ContactData].self, from: data) else {
             return []
         }
