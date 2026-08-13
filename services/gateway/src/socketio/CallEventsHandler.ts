@@ -66,6 +66,7 @@ import type {
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
+  CallTranslatedSegmentEvent,
   CallIceServersRefreshedEvent,
   CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
@@ -1220,6 +1221,43 @@ export class CallEventsHandler {
   }
 
   /**
+   * Resolve the caller as an active participant of THIS call, returning both
+   * the authorization proof (`participantId`) and the server-trusted
+   * `displayName` (user.displayName ?? username) stamped onto relayed
+   * transcription segments. Same authorization semantics as
+   * `resolveActiveCallParticipantId`; the display name rides along because
+   * `getCallSession` already includes each participant's user record — no
+   * extra query. `null` displayName (no linked user) simply omits the field
+   * from the wire, receivers fall back to their local roster.
+   */
+  private async resolveActiveCallSpeaker(
+    userId: string,
+    callId: string
+  ): Promise<{ participantId: string; displayName: string | null } | null> {
+    try {
+      const callSession = await this.callService.getCallSession(callId);
+      const activeParticipant = callSession.participants.find(
+        (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
+      );
+      if (!activeParticipant) return null;
+      const user = activeParticipant.participant?.user;
+      return {
+        participantId: activeParticipant.participantId,
+        displayName: user?.displayName ?? user?.username ?? null
+      };
+    } catch (error) {
+      // See resolveActiveCallParticipantId — same rationale: a getCallSession
+      // failure must be logged, not silently folded into "not a participant".
+      logger.warn('resolveActiveCallSpeaker: getCallSession failed, treating caller as unauthorized', {
+        userId,
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
+  }
+
+  /**
    * Resolve the caller's own CallParticipant.participantId for THIS call,
    * regardless of `leftAt` — unlike `resolveActiveCallParticipantId`, a
    * participant who has already left this call still resolves (needed by
@@ -1503,10 +1541,43 @@ export class CallEventsHandler {
    * participant's mouth in the live-caption UI and, for final segments, in
    * the persisted call transcript.
    */
+  /**
+   * Single builder for every `TRANSLATED_SEGMENT` emission (untranslated
+   * relay, no-target, no-zmq, translation success, timeout and error paths) —
+   * the journal metadata (`id`, `speakerDisplayName`, `capturedAtMs`) must be
+   * identical on all of them for cross-transport merge on the clients.
+   * `capturedAtMs` falls back to reception time for legacy clients that don't
+   * stamp their capture wall clock yet.
+   */
+  private buildTranslatedSegment(
+    data: CallTranscriptionSegmentEvent,
+    speaker: { userId: string; displayName: string | null },
+    targetLanguage: string,
+    translatedText?: string
+  ): CallTranslatedSegmentEvent {
+    return {
+      callId: data.callId,
+      segment: {
+        ...(data.segment.id !== undefined ? { id: data.segment.id } : {}),
+        text: data.segment.text,
+        ...(translatedText !== undefined ? { translatedText } : {}),
+        speakerId: speaker.userId,
+        ...(speaker.displayName !== null ? { speakerDisplayName: speaker.displayName } : {}),
+        startMs: data.segment.startMs,
+        endMs: data.segment.endMs,
+        isFinal: data.segment.isFinal,
+        sourceLanguage: data.segment.language,
+        targetLanguage,
+        confidence: data.segment.confidence,
+        capturedAtMs: data.segment.capturedAtMs ?? Date.now()
+      }
+    };
+  }
+
   private async translateAndEmitSegment(
     socket: Socket,
     data: CallTranscriptionSegmentEvent,
-    speakerUserId: string
+    speaker: { userId: string; displayName: string | null }
   ): Promise<void> {
     const activeParticipants = await this.prisma.callParticipant.findMany({
       where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
@@ -1534,26 +1605,17 @@ export class CallEventsHandler {
     const targetLanguages: string[] = [
       ...new Set<string>(
         activeParticipants
-          .filter(p => p.participant.userId !== speakerUserId)
+          .filter(p => p.participant.userId !== speaker.userId)
           .map(p => resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined }))
           .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
       )
     ];
 
     if (targetLanguages.length === 0) {
-      socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-        callId: data.callId,
-        segment: {
-          text: data.segment.text,
-          speakerId: speakerUserId,
-          startMs: data.segment.startMs,
-          endMs: data.segment.endMs,
-          isFinal: data.segment.isFinal,
-          sourceLanguage: data.segment.language,
-          targetLanguage: data.segment.language,
-          confidence: data.segment.confidence
-        }
-      });
+      socket.to(ROOMS.call(data.callId)).emit(
+        CALL_EVENTS.TRANSLATED_SEGMENT,
+        this.buildTranslatedSegment(data, speaker, data.segment.language)
+      );
       return;
     }
 
@@ -1564,19 +1626,10 @@ export class CallEventsHandler {
     const zmqClient = this.zmqClient;
     if (!zmqClient) {
       logger.warn('[CallEventsHandler] translateAndEmitSegment called without zmqClient — relaying original', { callId: data.callId });
-      socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-        callId: data.callId,
-        segment: {
-          text: data.segment.text,
-          speakerId: speakerUserId,
-          startMs: data.segment.startMs,
-          endMs: data.segment.endMs,
-          isFinal: data.segment.isFinal,
-          sourceLanguage: data.segment.language,
-          targetLanguage: data.segment.language,
-          confidence: data.segment.confidence
-        }
-      });
+      socket.to(ROOMS.call(data.callId)).emit(
+        CALL_EVENTS.TRANSLATED_SEGMENT,
+        this.buildTranslatedSegment(data, speaker, data.segment.language)
+      );
       return;
     }
 
@@ -1608,19 +1661,10 @@ export class CallEventsHandler {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
               zmqClient.off(scopedEvent, onResult);
-              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-                callId: data.callId,
-                segment: {
-                  text: data.segment.text,
-                  speakerId: speakerUserId,
-                  startMs: data.segment.startMs,
-                  endMs: data.segment.endMs,
-                  isFinal: data.segment.isFinal,
-                  sourceLanguage: data.segment.language,
-                  targetLanguage,
-                  confidence: data.segment.confidence
-                }
-              });
+              socket.to(ROOMS.call(data.callId)).emit(
+                CALL_EVENTS.TRANSLATED_SEGMENT,
+                this.buildTranslatedSegment(data, speaker, targetLanguage)
+              );
               resolve();
             }, TIMEOUT_MS);
             timer.unref?.();
@@ -1629,39 +1673,20 @@ export class CallEventsHandler {
               if (event.taskId !== taskId) return;
               clearTimeout(timer);
               zmqClient.off(scopedEvent, onResult);
-              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-                callId: data.callId,
-                segment: {
-                  text: data.segment.text,
-                  translatedText: event.result.translatedText,
-                  speakerId: speakerUserId,
-                  startMs: data.segment.startMs,
-                  endMs: data.segment.endMs,
-                  isFinal: data.segment.isFinal,
-                  sourceLanguage: data.segment.language,
-                  targetLanguage,
-                  confidence: data.segment.confidence
-                }
-              });
+              socket.to(ROOMS.call(data.callId)).emit(
+                CALL_EVENTS.TRANSLATED_SEGMENT,
+                this.buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
+              );
               resolve();
             };
             zmqClient.on(scopedEvent, onResult);
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-            callId: data.callId,
-            segment: {
-              text: data.segment.text,
-              speakerId: speakerUserId,
-              startMs: data.segment.startMs,
-              endMs: data.segment.endMs,
-              isFinal: data.segment.isFinal,
-              sourceLanguage: data.segment.language,
-              targetLanguage,
-              confidence: data.segment.confidence
-            }
-          });
+          socket.to(ROOMS.call(data.callId)).emit(
+            CALL_EVENTS.TRANSLATED_SEGMENT,
+            this.buildTranslatedSegment(data, speaker, targetLanguage)
+          );
         }
       })
     );
@@ -3657,8 +3682,8 @@ export class CallEventsHandler {
         // — `resolveParticipantIdFromCall` only checked that, letting any
         // other conversation member broadcast arbitrary text into a call
         // they never joined). Same fix as QUALITY_REPORT / RECONNECTING.
-        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!participantId) {
+        const speaker = await this.resolveActiveCallSpeaker(userId, data.callId);
+        if (!speaker) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this call',
@@ -3674,34 +3699,39 @@ export class CallEventsHandler {
 
         if (!callSession || (CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) return;
 
+        // Journal metadata normalized once so every downstream emission
+        // (translated or not, success or timeout) stamps the SAME
+        // capturedAtMs — the clients' journal ordering key. Legacy clients
+        // that don't send it get reception time.
+        const segmentEvent: CallTranscriptionSegmentEvent = {
+          callId: data.callId,
+          segment: {
+            ...data.segment,
+            capturedAtMs: data.segment.capturedAtMs ?? Date.now()
+          }
+        };
+        const stampedSpeaker = { userId, displayName: speaker.displayName };
+
         // No callSession.metadata.translationEnabled gate — the real product
         // control is client-side (the speaker's own captions toggle; no
         // client ever emits a segment unless the user turned captions on).
         // See docs/superpowers/specs/2026-07-10-live-call-transcription-design.md.
         if (this.zmqClient && data.segment.isFinal) {
-          await this.translateAndEmitSegment(socket, data, userId);
+          await this.translateAndEmitSegment(socket, segmentEvent, stampedSpeaker);
         } else {
-          // Security fix 2026-08-13: stamp the authenticated `userId`, not
+          // Security fix 2026-08-13: stamp the authenticated `userId` (and a
+          // server-resolved displayName), never the client-supplied
           // `data.segment.speakerId` — see translateAndEmitSegment's doc
           // comment for the spoofing this closes.
-          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-            callId: data.callId,
-            segment: {
-              text: data.segment.text,
-              speakerId: userId,
-              startMs: data.segment.startMs,
-              endMs: data.segment.endMs,
-              isFinal: data.segment.isFinal,
-              sourceLanguage: data.segment.language,
-              targetLanguage: data.segment.language,
-              confidence: data.segment.confidence
-            }
-          });
+          socket.to(ROOMS.call(data.callId)).emit(
+            CALL_EVENTS.TRANSLATED_SEGMENT,
+            this.buildTranslatedSegment(segmentEvent, stampedSpeaker, data.segment.language)
+          );
         }
 
         logger.debug('Transcription segment relayed', {
           callId: data.callId,
-          speakerId: data.segment.speakerId,
+          speakerId: userId,
           isFinal: data.segment.isFinal
         });
       } catch (error) {

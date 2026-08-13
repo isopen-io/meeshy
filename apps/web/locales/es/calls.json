@@ -60,6 +60,14 @@
     "captions": {
       "region": "Subtítulos traducidos en directo"
     },
+    "transcript": {
+      "region": "Registro de transcripción de la llamada",
+      "title": "Transcripción",
+      "empty": "Los segmentos transcritos aparecerán aquí",
+      "unknownSpeaker": "Participante",
+      "show": "Mostrar transcripción",
+      "hide": "Ocultar transcripción"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} ha salido",

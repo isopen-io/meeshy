@@ -140,6 +140,24 @@ function activeCallSession(userId: string) {
   };
 }
 
+// Same shape as CallService.callSessionInclude in production: each call
+// participant carries its user record (username/displayName) — the server-side
+// source the handler must stamp speakerDisplayName from.
+function activeCallSessionWithUser(
+  userId: string,
+  user: { username?: string; displayName?: string | null }
+) {
+  return {
+    participants: [
+      {
+        participantId: 'participant-1',
+        participant: { userId, user: { id: userId, ...user } },
+        leftAt: null,
+      },
+    ],
+  };
+}
+
 function makeCallService(
   getCallSession: jest.MockedFunction<any> = jest.fn<any>().mockResolvedValue(activeCallSession(SPEAKER_ID))
 ) {
@@ -265,6 +283,99 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
 
     it('does not emit an error to the sender', () => {
       expect(directEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('journal metadata: speakerDisplayName + id + capturedAtMs', () => {
+    function setup(overrides: {
+      callSession?: unknown;
+      payload?: unknown;
+    } = {}) {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+      });
+      const { socket, handlers, roomEmit } = makeSocket();
+      const callService = makeCallService(
+        jest.fn<any>().mockResolvedValue(
+          overrides.callSession ??
+            activeCallSessionWithUser(SPEAKER_ID, { username: 'alice', displayName: 'Alice Doe' })
+        )
+      );
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      const run = () =>
+        handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](overrides.payload ?? VALID_SEGMENT);
+      return { roomEmit, run };
+    }
+
+    it('stamps speakerDisplayName server-side from the participant user record', async () => {
+      const { roomEmit, run } = setup();
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
+    });
+
+    it('falls back to the username when displayName is not set', async () => {
+      const { roomEmit, run } = setup({
+        callSession: activeCallSessionWithUser(SPEAKER_ID, { username: 'alice', displayName: null }),
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('alice');
+    });
+
+    it('omits speakerDisplayName when the participant has no user record', async () => {
+      const { roomEmit, run } = setup({ callSession: activeCallSession(SPEAKER_ID) });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment).not.toHaveProperty('speakerDisplayName');
+    });
+
+    it('ignores a client-supplied speakerDisplayName (server-stamped, anti-spoof)', async () => {
+      const { roomEmit, run } = setup({
+        payload: {
+          callId: VALID_CALL_ID,
+          segment: { ...VALID_SEGMENT.segment, speakerDisplayName: 'Spoofed Name' },
+        },
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
+    });
+
+    it('passes through the client segment id and capturedAtMs for cross-transport merge', async () => {
+      const { roomEmit, run } = setup({
+        payload: {
+          callId: VALID_CALL_ID,
+          segment: {
+            ...VALID_SEGMENT.segment,
+            id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+            capturedAtMs: 1765650000000,
+          },
+        },
+      });
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.id).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
+      expect(payload.segment.capturedAtMs).toBe(1765650000000);
+    });
+
+    it('stamps capturedAtMs at reception when the client omits it (legacy clients)', async () => {
+      const before = Date.now();
+      const { roomEmit, run } = setup();
+      await run();
+      const after = Date.now();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.capturedAtMs).toBeGreaterThanOrEqual(before);
+      expect(payload.segment.capturedAtMs).toBeLessThanOrEqual(after);
+    });
+
+    it('preserves the transcription language tag as sourceLanguage', async () => {
+      const { roomEmit, run } = setup();
+      await run();
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.sourceLanguage).toBe('fr');
+      expect(payload.segment.targetLanguage).toBe('fr');
     });
   });
 

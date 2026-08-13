@@ -439,6 +439,78 @@ describe('Call Validation Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('accepts optional journal metadata (id + capturedAtMs)', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+          text: 'Hello world',
+          speakerId: 'user-1',
+          startMs: 0,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+          capturedAtMs: 1765650000000,
+        },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an oversized segment id', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          id: 'x'.repeat(65),
+          text: 'Hello world',
+          speakerId: 'user-1',
+          startMs: 0,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects a negative capturedAtMs', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          text: 'Hello world',
+          speakerId: 'user-1',
+          startMs: 0,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+          capturedAtMs: -1,
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('strips a client-supplied speakerDisplayName (server-stamped only)', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          text: 'Hello world',
+          speakerId: 'user-1',
+          speakerDisplayName: 'Spoofed Name',
+          startMs: 0,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.segment).not.toHaveProperty('speakerDisplayName');
+      }
+    });
   });
 });
 

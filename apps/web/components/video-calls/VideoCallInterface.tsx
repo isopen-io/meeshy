@@ -13,6 +13,7 @@ import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
 import { useCallCaptions } from '@/hooks/use-call-captions';
+import { useCallTranscriptJournal } from '@/hooks/use-call-transcript-journal';
 import { useCallAnalyticsReporter } from '@/hooks/use-call-analytics-reporter';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
@@ -26,6 +27,7 @@ import { CallControls } from './CallControls';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { CallQualityOverlay } from './CallQualityOverlay';
 import { CallCaptionsOverlay } from './CallCaptionsOverlay';
+import { CallTranscriptPanel } from './CallTranscriptPanel';
 import { CallInfoOverlay } from './CallInfoOverlay';
 import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
@@ -64,6 +66,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
   // Local-only: which output the user wants remote audio on. Never synced to
   // peers (unlike controls.audioEnabled/videoEnabled) — it drives `muted` on
   // every <video> element playing a remote stream, nothing else.
@@ -140,6 +143,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // signal when the peer captures the call screen.
   const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
   const { captions } = useCallCaptions(callId);
+  // Journal de transcription (displayName (heure): message + tag de langue) —
+  // alimenté par les DEUX transports : data channel WebRTC P2P quand le pair
+  // l'a ouvert, relais serveur traduit sinon/en plus (fusion par id).
+  const { entries: transcriptEntries } = useCallTranscriptJournal(callId);
 
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
@@ -669,6 +676,19 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         }
       />
 
+      {/* Journal de transcription — displayName (heure): message + tag langue */}
+      {showTranscript && (
+        <CallTranscriptPanel
+          entries={transcriptEntries}
+          localUserId={user?.id}
+          resolveSpeakerName={(speakerId) =>
+            currentCall?.participants?.find(
+              (p) => (p.userId || p.participantId) === speakerId
+            )?.username
+          }
+        />
+      )}
+
       {/* Audio Effects Panel (Sliding from bottom) */}
       {showAudioEffects && (
         <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-4xl px-4 z-40">
@@ -799,9 +819,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         onSwitchCamera={handleSwitchCamera}
         onToggleAudioEffects={() => setShowAudioEffects(!showAudioEffects)}
         onToggleStats={() => setShowStats(!showStats)}
+        onToggleTranscript={() => setShowTranscript(!showTranscript)}
         onHangUp={handleHangUp}
         audioEffectsActive={audioEffectsActive}
         showStats={showStats}
+        showTranscript={showTranscript}
       />
 
       {/* Call Duration & Participant Count */}

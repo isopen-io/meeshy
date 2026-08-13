@@ -14,24 +14,32 @@ final class CallTranscriptionServiceTests: XCTestCase {
     }
 
     private func makeSegment(
+        wireId: String? = nil,
         text: String = "hello",
         speakerId: String = "user1",
+        speakerDisplayName: String? = nil,
         startTime: TimeInterval = 0,
         endTime: TimeInterval = 1,
         isFinal: Bool = false,
         confidence: Double = 0.9,
         language: String = "en",
+        translatedText: String? = nil,
+        translatedLanguage: String? = nil,
         capturedAt: Date = Date()
     ) -> Meeshy.TranscriptionSegment {
         Meeshy.TranscriptionSegment(
             id: UUID(),
+            wireId: wireId,
             text: text,
             speakerId: speakerId,
+            speakerDisplayName: speakerDisplayName,
             startTime: startTime,
             endTime: endTime,
             isFinal: isFinal,
             confidence: confidence,
             language: language,
+            translatedText: translatedText,
+            translatedLanguage: translatedLanguage,
             capturedAt: capturedAt
         )
     }
@@ -135,6 +143,67 @@ final class CallTranscriptionServiceTests: XCTestCase {
         sut.receiveTranslatedSegment(segment)
         XCTAssertEqual(sut.segments.count, 1)
         XCTAssertEqual(sut.segments.first?.text, "Hello")
+    }
+
+    // MARK: - Cross-Transport Journal Merge (wireId)
+
+    func test_receivePeerEntry_thenTranslatedSegment_mergesByWireId_neverDuplicates() {
+        // The same final segment reaches this device twice: instantly over
+        // the WebRTC data channel (original text + language tag), then via
+        // the gateway relay carrying the translation. One journal line, the
+        // translation ENRICHES it.
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(
+            wireId: "w-1", text: "Bonjour", speakerId: "remote-user",
+            speakerDisplayName: "Alice", isFinal: true, language: "fr",
+            capturedAt: Date(timeIntervalSince1970: 100)
+        ))
+        sut.receiveTranslatedSegment(makeSegment(
+            wireId: "w-1", text: "Bonjour", speakerId: "remote-user",
+            isFinal: true, language: "fr",
+            translatedText: "Hello", translatedLanguage: "en",
+            capturedAt: Date(timeIntervalSince1970: 105)
+        ))
+
+        XCTAssertEqual(sut.segments.count, 1, "same wireId over two transports must merge, never duplicate")
+        let merged = sut.segments.first
+        XCTAssertEqual(merged?.text, "Bonjour", "original text is never overwritten by the merge")
+        XCTAssertEqual(merged?.translatedText, "Hello")
+        XCTAssertEqual(merged?.translatedLanguage, "en")
+        XCTAssertEqual(merged?.language, "fr", "the transcription language tag survives the merge")
+        XCTAssertEqual(merged?.speakerDisplayName, "Alice", "display name from the first arrival is kept")
+        XCTAssertEqual(merged?.capturedAt, Date(timeIntervalSince1970: 100),
+                       "the earliest capture wall clock wins — receipt time never reorders the journal")
+    }
+
+    func test_receiveTranslatedSegment_withoutPriorPeerEntry_createsTheJournalLine() {
+        // Server-relay-only path (data channel absent/closed): the translated
+        // segment alone must create the line — the fallback transport is
+        // self-sufficient.
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(
+            wireId: "w-2", text: "Bonjour", speakerId: "remote-user",
+            isFinal: true, translatedText: "Hello", translatedLanguage: "en",
+            capturedAt: Date(timeIntervalSince1970: 50)
+        ))
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.translatedText, "Hello")
+    }
+
+    func test_receiveRemoteSegments_distinctWireIds_appendSeparately() {
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(wireId: "w-1", text: "un", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 1)))
+        sut.receivePeerEntry(makeSegment(wireId: "w-2", text: "deux", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 2)))
+        XCTAssertEqual(sut.segments.map(\.text), ["un", "deux"])
+    }
+
+    func test_receiveTranslatedSegment_legacyWithoutWireId_stillAppends() {
+        // Segments from pre-journal peers/gateways carry no wireId — they
+        // must keep flowing (append path), just without merge capability.
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(text: "legacy", speakerId: "remote-user", isFinal: true))
+        sut.receiveTranslatedSegment(makeSegment(text: "legacy-2", speakerId: "remote-user", isFinal: true))
+        XCTAssertEqual(sut.segments.count, 2)
     }
 
     func test_applyRecognitionResult_whenFinal_emitsSegmentOverSocket() {

@@ -18,8 +18,20 @@ private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", categor
 
 struct TranscriptionSegment: Identifiable, Equatable {
     let id: UUID
+    /// Identifiant de journal stable, partagé entre transports : minté à la
+    /// capture par le device du locuteur, il voyage sur le data channel
+    /// WebRTC ET dans `call:transcription-segment` → `call:translated-segment`.
+    /// C'est la clé de fusion (`upsertRemoteSegment`) qui évite de dupliquer
+    /// une ligne quand le même segment arrive par les deux chemins. `nil`
+    /// pour les segments d'anciens pairs/gateways qui ne l'émettent pas.
+    let wireId: String?
     let text: String
     let speakerId: String
+    /// Nom d'affichage du locuteur tel que transporté par le wire — estampillé
+    /// par le gateway sur le chemin socket (anti-usurpation), déclaratif sur
+    /// le data channel. L'affichage préfère TOUJOURS le nom résolu localement
+    /// depuis le roster de l'appel ; ce champ n'est qu'un fallback.
+    let speakerDisplayName: String?
     let startTime: TimeInterval
     let endTime: TimeInterval
     let isFinal: Bool
@@ -40,8 +52,10 @@ struct TranscriptionSegment: Identifiable, Equatable {
 
     init(
         id: UUID,
+        wireId: String? = nil,
         text: String,
         speakerId: String,
+        speakerDisplayName: String? = nil,
         startTime: TimeInterval,
         endTime: TimeInterval,
         isFinal: Bool,
@@ -52,8 +66,10 @@ struct TranscriptionSegment: Identifiable, Equatable {
         capturedAt: Date
     ) {
         self.id = id
+        self.wireId = wireId
         self.text = text
         self.speakerId = speakerId
+        self.speakerDisplayName = speakerDisplayName
         self.startTime = startTime
         self.endTime = endTime
         self.isFinal = isFinal
@@ -111,10 +127,11 @@ protocol CallTranscriptionServiceProviding {
     var isTranscribing: Bool { get }
     var permission: TranscriptionPermission { get }
     var lastError: TranscriptionError? { get }
-    func startTranscribing(callId: String, localLanguage: String, localUserId: String)
+    func startTranscribing(callId: String, localLanguage: String, localUserId: String, localDisplayName: String)
     func stopTranscribing()
     func requestPermission() async -> TranscriptionPermission
     func receiveTranslatedSegment(_ segment: TranscriptionSegment)
+    func receivePeerEntry(_ segment: TranscriptionSegment)
 }
 
 // MARK: - Call Transcription Service
@@ -163,6 +180,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private let socket: any MessageSocketProviding
     private var callId: String?
     private var localUserId = ""
+    /// Nom d'affichage local embarqué dans les entrées P2P du data channel
+    /// (pas de serveur pour l'estampiller sur ce chemin) — fourni par
+    /// `CallManager.toggleTranscription` au démarrage.
+    private var localDisplayName = ""
+    /// Envoi P2P opportuniste d'une entrée de journal sur le data channel
+    /// WebRTC — injecté par `CallManager` (→ `WebRTCService.sendTranscriptEntry`),
+    /// no-op silencieux quand le channel n'est pas ouvert. Le relais socket
+    /// reste émis systématiquement (traduction + fallback) ; le pair fusionne
+    /// par `wireId`.
+    var sendPeerEntry: ((DataChannelTranscriptEntry) -> Void)?
     private var allSegments: [TranscriptionSegment] = []
     /// Full-call accumulator for local persistence at call end — append-only,
     /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
@@ -240,7 +267,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     // MARK: - Lifecycle
 
-    func startTranscribing(callId: String, localLanguage: String, localUserId: String) {
+    func startTranscribing(callId: String, localLanguage: String, localUserId: String, localDisplayName: String = "") {
         guard !isTranscribing else {
             callsLogger.warning("startTranscribing called while already transcribing")
             return
@@ -267,6 +294,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         self.callId = callId
         self.localUserId = localUserId
+        self.localDisplayName = localDisplayName
         self.recognizer = recognizer
         lastError = nil
 
@@ -322,11 +350,14 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                 segments: persistedSegments.map { seg in
                     CallTranscriptSegment(
                         speakerId: seg.speakerId,
-                        speakerName: seg.speakerId == localUserId ? localSpeakerName : remoteSpeakerName,
+                        speakerName: seg.speakerId == localUserId
+                            ? localSpeakerName
+                            : (seg.speakerDisplayName ?? remoteSpeakerName),
                         isLocal: seg.speakerId == localUserId,
                         text: seg.text,
                         translatedText: seg.translatedText,
                         translatedLanguage: seg.translatedLanguage,
+                        language: seg.language,
                         capturedAt: seg.capturedAt
                     )
                 }
@@ -623,16 +654,23 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
 
+        // Le wireId (clé de journal inter-transports) est minté ICI, une
+        // seule fois par segment final — le même id part sur le data channel
+        // ET le socket, et reste sur le segment local pour la persistance.
+        let wireId = isFinal ? UUID().uuidString.lowercased() : nil
         let segment = TranscriptionSegment(
-            id: UUID(), text: text, speakerId: speakerId,
+            id: UUID(), wireId: wireId, text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
             isFinal: isFinal, confidence: confidence, language: language,
             capturedAt: capturedAt
         )
         appendSegment(segment)
 
-        guard isFinal else { return }
-        emitFinalSegment(text: text, speakerId: speakerId, startMs: startMs, endMs: endMs, confidence: confidence, language: language)
+        guard isFinal, let wireId else { return }
+        emitFinalSegment(
+            wireId: wireId, text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
+            confidence: confidence, language: language, capturedAt: capturedAt
+        )
         rotateRecognitionRequest(language: language)
     }
 
@@ -650,11 +688,26 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         lastError = error
     }
 
-    private func emitFinalSegment(text: String, speakerId: String, startMs: Int, endMs: Int, confidence: Double, language: String) {
+    /// Double transport, un seul segment : le data channel WebRTC porte
+    /// l'entrée de journal en P2P direct quand il est ouvert (affichage
+    /// instantané côté pair, texte original + tag de langue), le socket part
+    /// TOUJOURS (le gateway traduit par auditeur et sert de fallback quand le
+    /// channel est absent/fermé). Le pair fusionne les deux arrivées par
+    /// `wireId` — jamais de doublon.
+    private func emitFinalSegment(
+        wireId: String, text: String, speakerId: String, startMs: Int, endMs: Int,
+        confidence: Double, language: String, capturedAt: Date
+    ) {
         guard let callId else { return }
+        let capturedAtMs = Int(capturedAt.timeIntervalSince1970 * 1000)
+        sendPeerEntry?(DataChannelTranscriptEntry(
+            id: wireId, callId: callId, speakerId: speakerId,
+            speakerDisplayName: localDisplayName, text: text, language: language,
+            capturedAtMs: capturedAtMs, isFinal: true, confidence: confidence
+        ))
         let payload = CallTranscriptionSegmentPayload(
-            text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
-            isFinal: true, confidence: confidence, language: language
+            id: wireId, text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
+            isFinal: true, confidence: confidence, language: language, capturedAtMs: capturedAtMs
         )
         socket.emitCallTranscriptionSegment(callId: callId, segment: payload)
     }
@@ -673,10 +726,58 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         startRecognitionTask(language: language)
     }
 
-    // MARK: - Remote segments (déjà traduits côté gateway)
+    // MARK: - Remote segments (data channel P2P + relais serveur traduit)
 
+    /// Segment relayé par le gateway (`call:translated-segment`) — si la même
+    /// entrée est déjà arrivée en P2P par le data channel, la traduction vient
+    /// ENRICHIR la ligne existante (fusion par `wireId`), jamais la dupliquer.
     func receiveTranslatedSegment(_ segment: TranscriptionSegment) {
-        appendSegment(segment)
+        upsertRemoteSegment(segment)
+    }
+
+    /// Entrée de journal arrivée en P2P direct par le data channel WebRTC —
+    /// même sink de fusion que le relais socket : premier arrivé crée la
+    /// ligne, le suivant l'enrichit.
+    func receivePeerEntry(_ segment: TranscriptionSegment) {
+        upsertRemoteSegment(segment)
+    }
+
+    private func upsertRemoteSegment(_ segment: TranscriptionSegment) {
+        guard let wireId = segment.wireId,
+              let index = allSegments.firstIndex(where: { $0.wireId == wireId }) else {
+            appendSegment(segment)
+            return
+        }
+        let merged = mergedSegment(existing: allSegments[index], incoming: segment)
+        allSegments[index] = merged
+        segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
+        if let persistedIndex = persistedSegments.firstIndex(where: { $0.wireId == wireId }) {
+            persistedSegments[persistedIndex] = merged
+        }
+    }
+
+    /// Fusion inter-transports : le texte ORIGINAL et le tag de langue de
+    /// transcription de la première arrivée sont conservés ; la traduction,
+    /// le nom d'affichage manquant et le `capturedAt` le plus ancien (l'heure
+    /// de capture réelle, pas celle de réception) viennent de l'autre chemin.
+    private func mergedSegment(
+        existing: TranscriptionSegment, incoming: TranscriptionSegment
+    ) -> TranscriptionSegment {
+        TranscriptionSegment(
+            id: existing.id,
+            wireId: existing.wireId,
+            text: existing.text,
+            speakerId: existing.speakerId,
+            speakerDisplayName: existing.speakerDisplayName ?? incoming.speakerDisplayName,
+            startTime: existing.startTime,
+            endTime: existing.endTime,
+            isFinal: existing.isFinal || incoming.isFinal,
+            confidence: existing.confidence,
+            language: existing.language,
+            translatedText: incoming.translatedText ?? existing.translatedText,
+            translatedLanguage: incoming.translatedLanguage ?? existing.translatedLanguage,
+            capturedAt: min(existing.capturedAt, incoming.capturedAt)
+        )
     }
 
     // MARK: - Private — Result Handling

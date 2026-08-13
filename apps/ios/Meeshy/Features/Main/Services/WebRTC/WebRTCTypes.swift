@@ -837,19 +837,57 @@ nonisolated struct DataChannelControlMessage: Codable, Sendable, Equatable {
     let reason: String?
 }
 
+/// Entrée de journal de transcription poussée en P2P direct sur le data
+/// channel `"transcription"` — miroir Swift de `CallTranscriptEntryPayload`
+/// (`packages/shared/types/video-call.ts`). Transport opportuniste : le
+/// relais socket `call:transcription-segment` reste émis en parallèle (il
+/// porte la traduction ZMQ et le fallback quand le channel n'est pas ouvert
+/// — ex. pair web offreur qui ne crée pas de canal) ; le récepteur fusionne
+/// les deux arrivées par `id`. `speakerDisplayName` est déclaratif ici (pas
+/// de serveur pour l'estampiller) : les récepteurs préfèrent le nom résolu
+/// localement depuis leur roster et ne s'en servent qu'en fallback.
+nonisolated struct DataChannelTranscriptEntry: Codable, Sendable, Equatable {
+    let id: String
+    let callId: String
+    let speakerId: String
+    let speakerDisplayName: String
+    let text: String
+    /// Tag automatique de la langue de transcription — prépare la traduction
+    /// live + resynthèse TTS de l'étape suivante.
+    let language: String
+    /// Horloge murale de capture (epoch ms) — clé d'ordre du journal
+    /// `displayName (heure): message`.
+    let capturedAtMs: Int
+    let isFinal: Bool
+    let confidence: Double
+}
+
+/// Enveloppe wire du data channel pour une entrée de journal — même patron
+/// discriminé par `type` que `DataChannelControlMessage` (`bye`/`ping`).
+nonisolated struct DataChannelTranscriptMessage: Codable, Sendable, Equatable {
+    let type: String
+    let entry: DataChannelTranscriptEntry
+}
+
 /// Routage typé des messages entrants du data channel. Pur et testable :
-/// une seule passe de décodage décide bye / segment de transcription / bruit
-/// (ping keep-alive, payload inconnu d'une version future).
+/// une seule passe de décodage décide bye / entrée de journal de
+/// transcription / bruit (ping keep-alive, payload inconnu d'une version
+/// future).
 /// `nonisolated` : value type pur, décodable depuis n'importe quel contexte
 /// (le callback data channel WebRTC arrive hors main thread).
 nonisolated enum DataChannelInbound: Equatable {
     case bye(reason: String?)
+    case transcriptEntry(DataChannelTranscriptEntry)
     case ignored
 
     static func decode(_ data: Data) -> DataChannelInbound {
         if let control = try? JSONDecoder().decode(DataChannelControlMessage.self, from: data),
            control.type == "bye" {
             return .bye(reason: control.reason)
+        }
+        if let message = try? JSONDecoder().decode(DataChannelTranscriptMessage.self, from: data),
+           message.type == "transcript-entry" {
+            return .transcriptEntry(message.entry)
         }
         return .ignored
     }

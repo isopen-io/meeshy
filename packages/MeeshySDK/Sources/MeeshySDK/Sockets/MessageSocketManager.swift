@@ -979,18 +979,28 @@ public struct CallForcedLeaveData: Decodable, Sendable {
 }
 
 public struct CallTranscriptionSegmentPayload: Sendable {
+    /// Stable journal id (UUID minted at capture) — the cross-transport merge
+    /// key: the same segment can reach a peer over the WebRTC data channel
+    /// AND the server relay; receivers dedup/enrich by this id.
+    public let id: String
     public let text: String
     public let speakerId: String
     public let startMs: Int
     public let endMs: Int
     public let isFinal: Bool
     public let confidence: Double
+    /// Automatic tag of the language this segment was transcribed in — feeds
+    /// the journal badge today and the live-translate + TTS pipeline next.
     public let language: String
+    /// Wall-clock capture time (epoch ms) — the journal ordering key,
+    /// rendered as `displayName (heure): message` on every side.
+    public let capturedAtMs: Int
 
     public init(
-        text: String, speakerId: String, startMs: Int, endMs: Int,
-        isFinal: Bool, confidence: Double, language: String
+        id: String, text: String, speakerId: String, startMs: Int, endMs: Int,
+        isFinal: Bool, confidence: Double, language: String, capturedAtMs: Int
     ) {
+        self.id = id
         self.text = text
         self.speakerId = speakerId
         self.startMs = startMs
@@ -998,6 +1008,7 @@ public struct CallTranscriptionSegmentPayload: Sendable {
         self.isFinal = isFinal
         self.confidence = confidence
         self.language = language
+        self.capturedAtMs = capturedAtMs
     }
 }
 
@@ -1010,15 +1021,23 @@ public struct CallTranslatedSegmentData: Decodable, Sendable {
     public let segment: Segment
 
     public struct Segment: Decodable, Sendable {
+        /// Cross-transport merge key (absent from legacy gateways/peers).
+        public let id: String?
         public let text: String
         public let translatedText: String?
         public let speakerId: String
+        /// Server-stamped display name of the speaker (anti-spoof: resolved
+        /// by the gateway from the authenticated participant, same principle
+        /// as `speakerId`). Receivers still prefer their local roster name.
+        public let speakerDisplayName: String?
         public let startMs: Int
         public let endMs: Int
         public let isFinal: Bool
         public let sourceLanguage: String
         public let targetLanguage: String
         public let confidence: Double
+        /// Wall-clock capture time (epoch ms) — journal ordering key.
+        public let capturedAtMs: Int?
     }
 }
 
@@ -2673,13 +2692,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:transcription-segment", [
             "callId": callId,
             "segment": [
+                "id": segment.id,
                 "text": segment.text,
                 "speakerId": segment.speakerId,
                 "startMs": segment.startMs,
                 "endMs": segment.endMs,
                 "isFinal": segment.isFinal,
                 "confidence": segment.confidence,
-                "language": segment.language
+                "language": segment.language,
+                "capturedAtMs": segment.capturedAtMs
             ]
         ])
     }

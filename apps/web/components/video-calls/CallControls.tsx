@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, SwitchCamera, Volume2, VolumeX, Sparkles, BarChart3 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, SwitchCamera, Volume2, VolumeX, Sparkles, BarChart3, Captions } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
@@ -29,9 +29,11 @@ interface CallControlsProps {
   onSwitchCamera?: () => void;
   onToggleAudioEffects?: () => void;
   onToggleStats?: () => void;
+  onToggleTranscript?: () => void;
   onHangUp: () => void;
   audioEffectsActive?: boolean;
   showStats?: boolean;
+  showTranscript?: boolean;
 }
 
 export function CallControls({
@@ -45,9 +47,11 @@ export function CallControls({
   onSwitchCamera,
   onToggleAudioEffects,
   onToggleStats,
+  onToggleTranscript,
   onHangUp,
   audioEffectsActive = false,
   showStats = false,
+  showTranscript = false,
 }: CallControlsProps) {
   const { t } = useI18n('calls');
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
@@ -191,6 +195,26 @@ export function CallControls({
           title={t('controls.audioEffectsTitle')}
         >
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
+        </Button>
+      )}
+
+      {/* Transcript Journal Toggle */}
+      {onToggleTranscript && (
+        <Button
+          size="icon"
+          variant="default"
+          data-testid="toggle-transcript"
+          onClick={onToggleTranscript}
+          className={cn(
+            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
+            showTranscript
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-white'
+          )}
+          aria-label={showTranscript ? t('transcript.hide') : t('transcript.show')}
+          title={showTranscript ? t('transcript.hide') : t('transcript.show')}
+        >
+          <Captions className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
       )}
 

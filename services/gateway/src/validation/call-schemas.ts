@@ -288,13 +288,15 @@ export const socketForceLeaveSchema = z.object({
 export const socketTranscriptionSegmentSchema = z.object({
   callId: objectIdSchema,
   segment: z.object({
+    id: z.string().min(1).max(64).optional(),
     text: z.string().min(1).max(5000),
     speakerId: z.string().min(1),
     startMs: z.number().min(0),
     endMs: z.number().min(0),
     isFinal: z.boolean(),
     confidence: z.number().min(0).max(1),
-    language: z.string().min(2).max(10)
+    language: z.string().min(2).max(10),
+    capturedAtMs: z.number().int().min(0).optional()
   })
 });
 

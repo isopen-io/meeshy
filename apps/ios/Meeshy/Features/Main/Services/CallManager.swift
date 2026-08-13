@@ -2652,6 +2652,13 @@ final class CallManager: ObservableObject {
         let localUser = AuthManager.shared.currentUser
         let localLang = CallManager.preferredCallLanguage(for: localUser)
         let localUserId = localUser?.id ?? ""
+        let localDisplayName = localUser?.displayName ?? localUser?.username ?? ""
+        // Chemin P2P du journal : chaque segment final part aussi sur le data
+        // channel WebRTC quand il est ouvert (no-op silencieux sinon — le
+        // relais socket reste systématique et le pair fusionne par wireId).
+        transcriptionService.sendPeerEntry = { [weak self] entry in
+            self?.webRTCService.sendTranscriptEntry(entry)
+        }
         Task { @MainActor [weak self] in
             guard let self else { return }
             if self.transcriptionService.permission != .authorized {
@@ -2660,7 +2667,8 @@ final class CallManager: ObservableObject {
             self.transcriptionService.startTranscribing(
                 callId: callId,
                 localLanguage: localLang,
-                localUserId: localUserId
+                localUserId: localUserId,
+                localDisplayName: localDisplayName
             )
         }
     }
@@ -4188,18 +4196,50 @@ final class CallManager: ObservableObject {
     /// `TranscriptionSegment.capturedAt` doc comment).
     static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> TranscriptionSegment {
         let seg = event.segment
+        // `capturedAtMs` (horloge murale de capture, estampillée par le device
+        // du locuteur ou à défaut par le gateway à réception) est la clé
+        // d'ordre du journal — le fallback `Date()` (heure de réception
+        // locale) ne subsiste que pour les gateways antérieurs au champ.
+        let capturedAt = seg.capturedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
         return TranscriptionSegment(
             id: UUID(),
+            wireId: seg.id,
             text: seg.text,
             speakerId: seg.speakerId,
+            speakerDisplayName: seg.speakerDisplayName,
             startTime: Double(seg.startMs) / 1000,
             endTime: Double(seg.endMs) / 1000,
             isFinal: seg.isFinal,
             confidence: seg.confidence,
-            language: seg.targetLanguage,
+            // Tag de langue du Prisme : la langue dans laquelle le segment a
+            // été TRANSCRIT (sourceLanguage), jamais la langue cible — la
+            // traduction porte la sienne dans `translatedLanguage`.
+            language: seg.sourceLanguage,
             translatedText: seg.translatedText,
             translatedLanguage: seg.translatedText != nil ? seg.targetLanguage : nil,
-            capturedAt: Date()
+            capturedAt: capturedAt
+        )
+    }
+
+    /// Entrée de journal arrivée en P2P direct par le data channel WebRTC —
+    /// miroir de `makeTranscriptionSegment` pour l'autre transport. Pas de
+    /// bornes ASR sur ce chemin (`startMs`/`endMs` sont de toute façon
+    /// buffer-relatifs et inutilisables pour l'ordre) : `capturedAtMs` est la
+    /// seule horloge, et `wireId` la clé de fusion avec le relais serveur
+    /// traduit qui suit.
+    static func makeTranscriptionSegment(from entry: DataChannelTranscriptEntry) -> TranscriptionSegment {
+        TranscriptionSegment(
+            id: UUID(),
+            wireId: entry.id,
+            text: entry.text,
+            speakerId: entry.speakerId,
+            speakerDisplayName: entry.speakerDisplayName.isEmpty ? nil : entry.speakerDisplayName,
+            startTime: 0,
+            endTime: 0,
+            isFinal: entry.isFinal,
+            confidence: entry.confidence,
+            language: entry.language,
+            capturedAt: Date(timeIntervalSince1970: Double(entry.capturedAtMs) / 1000)
         )
     }
 
@@ -5146,6 +5186,15 @@ extension CallManager: WebRTCServiceDelegate {
                 guard let callId = self.currentCallId else { return }
                 Logger.calls.info("DataChannel bye received — ending call instantly (callId=\(callId))")
                 self.handleRemoteEnd(callId: callId, rawReason: reason)
+            case .transcriptEntry(let entry):
+                // Journal de transcription en P2P direct : même garde d'appel
+                // que le sink socket `callTranslatedSegmentReceived` — une
+                // entrée d'un appel déjà terminé/remplacé est ignorée. La
+                // traduction relayée par le gateway suivra et fusionnera par
+                // `wireId` dans CallTranscriptionService.
+                guard self.currentCallId == entry.callId else { return }
+                let segment = CallManager.makeTranscriptionSegment(from: entry)
+                self.transcriptionService.receivePeerEntry(segment)
             case .ignored:
                 break
             }

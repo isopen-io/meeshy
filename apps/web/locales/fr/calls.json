@@ -60,6 +60,14 @@
     "captions": {
       "region": "Sous-titres traduits en direct"
     },
+    "transcript": {
+      "region": "Journal de transcription de l'appel",
+      "title": "Transcription",
+      "empty": "Les segments transcrits apparaîtront ici",
+      "unknownSpeaker": "Participant",
+      "show": "Afficher la transcription",
+      "hide": "Masquer la transcription"
+    },
     "stream": {
       "disconnected": "Déconnecté",
       "participantLeft": "{name} a quitté l'appel",

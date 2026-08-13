@@ -1467,33 +1467,48 @@ struct CallView: View {
     /// My own speech is never translated for myself (`text` is already in my
     /// language); the interlocutor's speech shows `translatedText ?? text` by
     /// default, or `text` (original) when `showOriginalText` is on.
-    /// Each row also carries a small "since call start" timestamp (mm:ss)
-    /// above the text — user-requested 2026-07-11 — computed from
-    /// `segment.capturedAt` (wall clock) against `callManager.callStartDate`,
-    /// never from `startTime`/`endTime` (ASR-buffer-relative, see
-    /// `TranscriptionSegment.capturedAt` doc comment).
+    /// Rendu journalisé `displayName (heure): message` — l'heure est
+    /// l'HORLOGE MURALE de capture (`segment.capturedAt`, estampillée par le
+    /// device du locuteur et transportée par le wire), jamais
+    /// `startTime`/`endTime` (ASR-buffer-relatifs, voir le doc comment de
+    /// `TranscriptionSegment.capturedAt`). Le nom du locuteur distant vient
+    /// du roster local d'abord (source de confiance), puis du
+    /// `speakerDisplayName` transporté par le wire en fallback. Chaque ligne
+    /// porte le tag de la langue affichée : langue de transcription pour
+    /// l'original, langue cible quand la traduction est affichée — prépare
+    /// la traduction live + resynthèse TTS.
     @ViewBuilder
     private func transcriptSegmentRow(_ segment: TranscriptionSegment) -> some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         let isLocal = segment.speakerId == localUserId
         let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        let remoteName = callManager.remoteUsername
+            ?? segment.speakerDisplayName
+            ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
         let speakerName = isLocal ? localName : remoteName
         let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let showsTranslation = !isLocal && !showOriginalText && segment.translatedText != nil
         let displayText = isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
-        let elapsed = segment.capturedAt.timeIntervalSince(callManager.callStartDate ?? segment.capturedAt)
-        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
+        let displayedLanguage = showsTranslation ? (segment.translatedLanguage ?? segment.language) : segment.language
+        let timeLabel = segment.capturedAt.formatted(date: .omitted, time: .shortened)
 
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Text(speakerName)
+                Text("\(speakerName) (\(timeLabel))")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(speakerColor)
                 Spacer()
-                Text(elapsedLabel)
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.white.opacity(0.45))
-                    .accessibilityHidden(true)
+                Text(displayedLanguage.uppercased())
+                    .font(.caption2.weight(.semibold).monospaced())
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.white.opacity(0.12)))
+                    .accessibilityLabel(Text(String(
+                        localized: "call.transcript.language_tag",
+                        defaultValue: "Langue : \(displayedLanguage.uppercased())",
+                        bundle: .main
+                    )))
             }
             Text(displayText)
                 .font(.callout.weight(segment.isFinal ? .regular : .light))
@@ -1501,7 +1516,7 @@ struct CallView: View {
                 .opacity(segment.isFinal ? 1.0 : 0.7)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(speakerName), \(elapsedLabel) : \(displayText)")
+        .accessibilityLabel("\(speakerName) (\(timeLabel)) : \(displayText)")
     }
 
     // MARK: - Ended
