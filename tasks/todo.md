@@ -1,3 +1,117 @@
+# Tête instruite pour le cycle 102 — le gate posé à l'ÉMISSION ne vaut que si le RATTRAPAGE le tient
+
+*Le cycle 101 a porté la méthode du cycle 100 (« compter les ÉCRIVAINS d'un champ avant ses
+lecteurs ») d'un cran plus loin : quand un champ mort a des lecteurs qui le CONTOURNENT, chaque
+contournement est une réimplémentation — et les réimplémentations divergent sur ce qu'aucun test ne
+confronte.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 101 ajoute — le sixième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 trouve le sixième :
+>
+> **Une règle de confidentialité posée sur le chemin CHAUD (l'émission) n'est tenue que par les
+> chemins qui la relisent. Le chemin de RATTRAPAGE — celui qui rejoue la même vérité après coup —
+> est écrit par quelqu'un d'autre, un autre jour, et il ne la relit pas. Il n'a même pas besoin de
+> la contredire : il lui suffit de recompter.**
+>
+> `showReadReceipts` était gaté à l'émission (`message-read-status.ts` suspend le broadcast) et
+> tenu par les QUATRE lecteurs de `MessageReadStatusService`, chacun portant le commentaire
+> explicite « filtré EN AMONT, donc absent du numérateur comme du dénominateur ». Le CINQUIÈME
+> producteur du même résumé — une copie inline dans `GET /conversations/:id/messages` — reproduisait
+> l'union curseur/reçu figé, la borne `createdAt`, l'exclusion de l'expéditeur, et **pas la
+> préférence**. L'expéditeur ne voyait rien passer en direct, relançait l'application, et lisait sa
+> coche bleue.
+>
+> **La méthode qui en découle :** quand une règle de confidentialité est trouvée sur un chemin,
+> énumérer les AUTRES chemins qui servent la même donnée — en particulier le rattrapage REST, qui
+> existe pour rejouer ce que le temps réel a manqué — et vérifier que chacun la RELIT plutôt que de
+> la recalculer. Un gate ne se prouve pas sur son site de pose ; il se prouve sur le dernier chemin
+> qui sert la donnée.
+
+## Livré au cycle 101 — le rattrapage REST cesse de recompter les accusés à sa façon
+
+**Le défaut.** `GET /conversations/:id/messages` — lu à chaque démarrage à froid et à chaque
+remontée de fil — tenait une copie inline (≈70 lignes) de
+`MessageReadStatusService.getConversationReadStatuses`. Copie fidèle sur tout sauf un point :
+l'opt-out `showReadReceipts` n'y était jamais consulté. Double conséquence, toutes deux visibles :
+la lecture d'un destinataire qui l'avait explicitement tue ressortait dans `readCount` (fuite de
+métadonnée, PHASE 10), et `recipientCount` comptait ce destinataire que le socket en retire — donc
+« lu par tous » basculait ou non selon le chemin par lequel la vérité arrivait (deux vérités pour un
+même message, PHASE 2).
+
+**Livré** : la route délègue ; `computeRecipientCount` descend du module de route vers
+`utils/read-exactness.ts` et devient l'unique formule du dénominateur, employée par le service ; les
+quatre lectures indépendantes de `getConversationReadStatuses` passent séquentiel → `Promise.all`
+(la délégation coûte donc DEUX allers-retours, pas cinq) ; le repli `?? message.deliveredCount` sort
+du mapping de réponse — un champ sans écrivain ne doit pas se présenter comme valeur de secours.
+ADR : `services/gateway/decisions.md` § 2026-08-13.
+
+**Tests** : 4 nouveaux au niveau HTTP
+(`messages-list-read-receipt-optout.test.ts`, harness Fastify réel + double Prisma), **RED prouvé
+sur 3** — la route rendait 2/2/2 quel que soit l'opt-out, le 4ᵉ (« personne ne s'est retiré »)
+passait avant comme après et atteste la fidélité du harness. Trois tests de
+`messages-routes.test.ts` qui vérifiaient l'ARITHMÉTIQUE inline (désormais couverte par
+`MessageReadStatusService.test.ts` › `getConversationReadStatuses`) ont été repointés sur le
+contrat de DÉLÉGATION : l'identifiant résolu est bien celui passé au service, le mapping
+`receivedCount→deliveredCount` / `totalMembers→recipientCount` est verrouillé par trois valeurs
+distinctes (une permutation ne peut pas passer), et l'échec du service laisse la page servie.
+**Mutation-proof** : permutation `receivedCount`/`readCount` dans le mapping → exactement le test de
+mapping rougit. Gate : `tsc --noEmit` gateway propre, suite gateway complète **691 suites / 17 038
+tests** vertes.
+
+## Constats du cycle 101, NON traités — le lot naturel du cycle 102
+
+`GET /conversations/:id/status` (`routes/conversations/messages-advanced.ts`) et
+`GET /messages/:messageId` (`routes/messages.ts`) servent leur résumé d'accusés DEPUIS les colonnes
+mortes `deliveredCount` / `readCount` / `deliveredToAllAt` / `readByAllAt` : toujours
+`{0, 0, null, null}`. Le premier se contredit **dans la même charge utile** — il expose à côté les
+`entries` per-participant avec leurs `readAt` RÉELS, et **sans aucun filtre d'opt-out**, ce qui en
+fait une fuite plus directe que celle fermée ici (des horodatages nominatifs, pas un compteur).
+`getMessageStatusDetails` fait déjà exactement ce travail, opt-out compris. Aucun client connu
+n'appelle ces deux routes — d'où le report, pas l'indulgence.
+
+Troisième constat, plus petit : `receivedByAllAt` est déclaré (Prisma, deux types partagés, schéma
+OpenAPI), `select`é et relayé par trois routes, et **n'a ni écrivain ni lecteur** — aucun client des
+trois plateformes ne le décode. C'est le cas du cycle 100 à l'état pur ; il sort entier, avec ses
+déclarations, ou pas du tout.
+
+## Ce qui reste ouvert des cycles précédents (inchangé au cycle 101)
+
+- **Item 1 (rétention des posts supprimés) : toujours à poser à un humain, pas à réessayer.** Refus
+  motivé aux cycles 98, 99 et 100.
+- **L'index MongoDB `expiresAt_ephemeral_partial` n'est toujours pas appliqué** (cycle 92) —
+  COLLSCAN par minute sur `Message`. Demande un accès de déploiement que la routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : aucune toolchain Swift ici, inchangé des
+  cycles 86 à 101.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91) : les `push` passent, le
+  `push --delete` non. Purger depuis un contexte qui a le droit (`tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). Non reproduit aux cycles 88 à 101.
+- Le mode `around` de `GET /conversations/:id/messages` lit `limit + 1` sans jamais retirer de ligne
+  sonde (cycle 99) — inoffensif aujourd'hui, piège si la fenêtre s'élargit.
+- `callParticipantStatusEnum` (`utils/validation.ts`) survit sans lecteur et décrit un espace
+  d'états que `CallParticipant` ne porte pas (cycle 100).
+
 # Tête instruite pour le cycle 101 — un champ que PERSONNE n'écrit reste un contrat que TOUT LE MONDE lit
 
 *Le cycle 100 a exécuté, en un seul passage, le lot que le cycle 99 avait entièrement instruit mais

@@ -57,6 +57,10 @@ const mockGetUnreadCount = jest.fn<any>().mockResolvedValue(5);
 const mockMarkMessagesAsRead = jest.fn<any>().mockResolvedValue(undefined);
 const mockMarkMessagesAsReceived = jest.fn<any>().mockResolvedValue(undefined);
 const mockGetLatestMessageSummary = jest.fn<any>().mockResolvedValue({});
+// La liste de messages ne compte plus les accusés elle-même : elle délègue à
+// `MessageReadStatusService.getConversationReadStatuses`, seule source de vérité
+// (union curseur/reçu figé, retrait des opt-out `showReadReceipts`).
+const mockGetConversationReadStatuses = jest.fn<any>().mockResolvedValue(new Map());
 
 const mockShouldShowReadReceipts = jest.fn<any>().mockResolvedValue(false);
 
@@ -125,6 +129,7 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
     markMessagesAsRead: (...args: any[]) => mockMarkMessagesAsRead(...args),
     markMessagesAsReceived: (...args: any[]) => mockMarkMessagesAsReceived(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
+    getConversationReadStatuses: (...args: any[]) => mockGetConversationReadStatuses(...args),
   })),
 }));
 jest.mock('../../../services/PrivacyPreferencesService', () => ({
@@ -225,10 +230,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import {
   buildAfterWatermarkClause,
-  computeRecipientCount,
   SendMessageBodySchema,
   registerMessagesRoutes,
 } from '../../../routes/conversations/messages';
+import { computeRecipientCount } from '../../../utils/read-exactness';
 import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -999,56 +1004,52 @@ describe('GET /conversations/:id/messages', () => {
     expect(mockBuildPostReplyTo).toHaveBeenCalledWith(post);
   });
 
-  it('with read status cursors: deliveredCount/readCount computed from cursors', async () => {
-    const msgCreatedAt = new Date('2024-06-01');
-    const msg = makeMessage({ createdAt: msgCreatedAt });
+  it('delegates the receipt summary to getConversationReadStatuses, for the page it just read', async () => {
+    const msg = makeMessage({ createdAt: new Date('2024-06-01') });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
-    prisma.participant.findMany.mockResolvedValue([
-      { id: PART_ID },
-      { id: 'other-part', userId: OTHER_USER_ID },
-    ]);
-    prisma.conversationReadCursor.findMany.mockResolvedValue([
-      {
-        participantId: 'other-part',
-        lastDeliveredAt: new Date('2024-06-02'),
-        lastReadAt: new Date('2024-06-02'),
-      },
-    ]);
+    mockGetConversationReadStatuses.mockResolvedValue(
+      new Map([[MSG_ID, { totalMembers: 3, receivedCount: 2, readCount: 1 }]])
+    );
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    const body = reply._body;
-    expect(body.data[0].deliveredCount).toBeGreaterThan(0);
-    expect(body.data[0].readCount).toBeGreaterThan(0);
+    // L'identifiant RÉSOLU, pas celui de l'URL : la route accepte aussi un
+    // identifiant lisible (lien de partage), et le service interroge des tables
+    // qui ne connaissent que l'ObjectId.
+    expect(mockGetConversationReadStatuses).toHaveBeenCalledWith('resolved-conv-id', [MSG_ID]);
   });
 
-  it('frozen MessageStatusEntry counted even when the cursor was cleaned up (union parity with read-status endpoints)', async () => {
-    const msgCreatedAt = new Date('2024-06-01');
-    const msg = makeMessage({ createdAt: msgCreatedAt });
+  it('mappe receivedCount→deliveredCount et totalMembers→recipientCount', async () => {
+    // Trois valeurs DISTINCTES : une permutation des trois champs — le seul
+    // défaut plausible de ce câblage — ne peut pas passer inaperçue.
+    const msg = makeMessage({ createdAt: new Date('2024-06-01') });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
-    prisma.participant.findMany.mockResolvedValue([
-      { id: PART_ID },
-      { id: 'other-part' },
-    ]);
-    // Cursor for the recipient was deleted by cleanupObsoleteCursors — only the
-    // write-once frozen receipt survives. The mono-message and batch read-status
-    // endpoints still count it; the list route must agree.
-    prisma.conversationReadCursor.findMany.mockResolvedValue([]);
-    prisma.messageStatusEntry.findMany.mockResolvedValue([
-      {
-        messageId: MSG_ID,
-        participantId: 'other-part',
-        deliveredAt: new Date('2024-06-02'),
-        receivedAt: new Date('2024-06-02'),
-        readAt: new Date('2024-06-02'),
-      },
-    ]);
+    mockGetConversationReadStatuses.mockResolvedValue(
+      new Map([[MSG_ID, { totalMembers: 3, receivedCount: 2, readCount: 1 }]])
+    );
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
     const body = reply._body;
-    expect(body.data[0].deliveredCount).toBe(1);
+    expect(body.data[0].deliveredCount).toBe(2);
     expect(body.data[0].readCount).toBe(1);
+    expect(body.data[0].recipientCount).toBe(3);
+  });
+
+  it('ne compte aucun accusé quand le service échoue — la page reste servie', async () => {
+    // Le résumé est un ENRICHISSEMENT : son échec ne doit pas emporter la
+    // liste de messages, qui est le contenu que l'utilisateur attend.
+    const msg = makeMessage({ createdAt: new Date('2024-06-01') });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    mockGetConversationReadStatuses.mockRejectedValue(new Error('read statuses down'));
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const body = reply._body;
+    expect(body.data[0].id).toBe(MSG_ID);
+    expect(body.data[0].deliveredCount).toBe(0);
+    expect(body.data[0].readCount).toBe(0);
+    expect(body.data[0].recipientCount).toBe(0);
   });
 
   it('with user reactions: currentUserReactions populated from reaction.findMany', async () => {
@@ -3091,21 +3092,19 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     expect(reply.send).toHaveBeenCalled();
   });
 
-  it('readStatusMap: other-participant cursor after msg date increments counts (lines 1040-1041)', async () => {
-    const msgDate = new Date('2024-05-01');
-    const msg = makeMessage({ createdAt: msgDate });
+  it('laisse à zéro un message que le service ne décrit pas', async () => {
+    // Le service ne renvoie une entrée que pour les messages qu'il a retrouvés.
+    // Un message absent de la Map garde des compteurs nuls — jamais les champs
+    // dénormalisés de la ligne Message, qui n'ont aucun écrivain.
+    const msg = makeMessage({ createdAt: new Date('2024-05-01'), deliveredCount: 7, readCount: 7 });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
-    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID }, { id: 'other-part' }]);
-    prisma.conversationReadCursor.findMany.mockResolvedValue([{
-      participantId: 'other-part',
-      lastDeliveredAt: new Date('2024-06-01'),
-      lastReadAt: new Date('2024-06-01'),
-    }]);
+    mockGetConversationReadStatuses.mockResolvedValue(new Map());
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(reply._body.data[0].deliveredCount).toBe(1);
-    expect(reply._body.data[0].readCount).toBe(1);
+    expect(reply._body.data[0].deliveredCount).toBe(0);
+    expect(reply._body.data[0].readCount).toBe(0);
+    expect(reply._body.data[0].recipientCount).toBe(0);
   });
 
   it('sender.user=null: username/displayName/isOnline fallback chain (lines 1067-1070)', async () => {
