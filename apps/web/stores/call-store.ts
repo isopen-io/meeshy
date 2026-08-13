@@ -197,9 +197,29 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
         nextCall = { ...call, participants };
       }
     }
+
+    // `controls.videoEnabled` defaults to `true` (initialState) and is
+    // otherwise ONLY ever flipped by explicit user action (toggleVideo /
+    // setControls in handleToggleVideo). An audio call inherited that stale
+    // `true` with nothing to correct it, and every consumer that reads
+    // `controls.videoEnabled` as "does the user want video in THIS call"
+    // (useAdaptiveDegradation's `userWantsVideo` gate, chief among them) then
+    // misbehaved — a degraded audio call's adaptive-degradation "resume" step
+    // called enableVideo() and silently turned the camera on mid-call.
+    // `call.metadata.type` is the one authoritative source for a call's
+    // audio/video nature (see CallMetadata.type doc) — seed the control from
+    // it, but ONLY when this is a genuinely NEW call (previous call absent or
+    // a different id). A same-call update (status/answeredAt/participants)
+    // must never stomp a camera toggle the user made mid-call.
+    const { currentCall: previousCall, controls } = get();
+    const isNewCall = !!nextCall && previousCall?.id !== nextCall.id;
+
     set({ currentCall: nextCall });
     if (nextCall) {
       set({ isInCall: true, error: null });
+      if (isNewCall && nextCall.metadata?.type) {
+        set({ controls: { ...controls, videoEnabled: nextCall.metadata.type === 'video' } });
+      }
     }
   },
 

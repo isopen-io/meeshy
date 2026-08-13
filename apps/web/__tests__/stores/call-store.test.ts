@@ -210,6 +210,64 @@ describe('CallStore', () => {
 
         expect(useCallStore.getState().currentCall).toBeNull();
       });
+
+      // Regression: `controls.videoEnabled` defaults to `true` in initialState
+      // (it must, so a video call's local self-view renders immediately) but
+      // was NEVER reconciled against the call's actual media type. An
+      // audio-only call inherited that stale `true`, and every consumer that
+      // reads `controls.videoEnabled` as a proxy for "is this a video call"
+      // (useAdaptiveDegradation's `userWantsVideo`, the toggle-video button,
+      // call analytics, the retry-offer type) misbehaved — worst case, a
+      // degraded audio call's adaptive-degradation "resume" step called
+      // enableVideo() and silently turned the camera on mid-call.
+      it('seeds controls.videoEnabled to false for a NEW audio call (metadata.type)', () => {
+        act(() => {
+          useCallStore.getState().setCurrentCall({
+            ...mockCallSession,
+            metadata: { type: 'audio' },
+          } as CallSession);
+        });
+
+        expect(useCallStore.getState().controls.videoEnabled).toBe(false);
+      });
+
+      it('seeds controls.videoEnabled to true for a NEW video call (metadata.type)', () => {
+        // Start from a state where a previous audio call left videoEnabled false.
+        act(() => {
+          useCallStore.setState({ controls: { audioEnabled: true, videoEnabled: false, screenShareEnabled: false } });
+          useCallStore.getState().setCurrentCall({
+            ...mockCallSession,
+            metadata: { type: 'video' },
+          } as CallSession);
+        });
+
+        expect(useCallStore.getState().controls.videoEnabled).toBe(true);
+      });
+
+      it('does not re-seed controls.videoEnabled on an update to the SAME call (e.g. status change) after the user toggled it manually', () => {
+        act(() => {
+          useCallStore.getState().setCurrentCall({
+            ...mockCallSession,
+            metadata: { type: 'video' },
+          } as CallSession);
+          useCallStore.getState().setControls({ videoEnabled: false }); // user turned their camera off mid-call
+          useCallStore.getState().setCurrentCall({
+            ...mockCallSession,
+            metadata: { type: 'video' },
+            status: 'active',
+          } as CallSession); // same call id, e.g. answeredAt update
+        });
+
+        expect(useCallStore.getState().controls.videoEnabled).toBe(false);
+      });
+
+      it('leaves controls.videoEnabled untouched when the call has no metadata.type (legacy/unknown)', () => {
+        act(() => {
+          useCallStore.getState().setCurrentCall(mockCallSession); // no metadata field
+        });
+
+        expect(useCallStore.getState().controls.videoEnabled).toBe(true);
+      });
     });
 
     describe('updateCallStatus', () => {

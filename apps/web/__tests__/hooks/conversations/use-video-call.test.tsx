@@ -820,6 +820,24 @@ describe('useVideoCall', () => {
       });
     });
 
+    it('sets currentCall.metadata.type from the call type passed to startCall — the caller-side half of the audio-call-must-never-arm-video invariant', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-audio-1', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('audio');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall?.metadata?.type).toBe('audio');
+      expect(storeModule.getState().controls.videoEnabled).toBe(false);
+    });
+
     it('does not set currentCall when the ack is unsuccessful', async () => {
       mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
         cb({ success: false });

@@ -144,7 +144,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
   // reliability dashboard blind to web calls.
-  useCallAnalyticsReporter({ callId, connectionState, isReconnecting, qualityStats, isVideo: controls.videoEnabled });
+  useCallAnalyticsReporter({
+    callId,
+    connectionState,
+    isReconnecting,
+    qualityStats,
+    // `metadata.type` is the call's actual nature — a mid-call camera toggle
+    // (controls.videoEnabled) must not misreport an audio call as video (or
+    // vice versa) in the reliability dashboard.
+    isVideo: currentCall?.metadata?.type ? currentCall.metadata.type === 'video' : controls.videoEnabled,
+  });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -501,7 +510,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       if (currentCall?.conversationId) {
         offerCallRetry({
           conversationId: currentCall.conversationId,
-          type: controls.videoEnabled ? 'video' : 'audio',
+          type: currentCall.metadata?.type ?? (controls.videoEnabled ? 'video' : 'audio'),
         });
       } else {
         toast.error(t('toasts.connectTimeout'));
