@@ -16,4 +16,6 @@ Journal de transcription d'appel — `displayName (heure): message` + tag de lan
 
 **Stream de corrections (itération 2).** Les révisions partielles du moteur de l'auteur sont transmises en P2P (data channel uniquement — jamais le socket : rate limit + traduction réservée aux finals) avec un `wireId` d'énoncé partagé : chaque correction remplace la ligne en place, le final la clôt avec la dernière valeur dite, la traduction serveur l'enrichit. Fusion à trois régimes (partiel remplacé / partiel périmé ignoré / final enrichi), miroir exact shared ↔ iOS ; un énoncé finalisé par fusion entre dans l'accumulateur de persistance.
 
+**Signal de présence (itération 3).** Nouvel événement `call:transcription-active` (estampillé gateway, émetteur exclu, silent-drop) : quand un participant active sa transcription, les autres voient un badge d'invitation sur leur icône sous-titres — iOS (`CallManager.remoteTranscriptionActive`, dot statique sur le bouton captions) et web (`useRemoteTranscriptionActive`, Set par speakerId correct en groupe, dot pulsant). L'activation ne donne l'historique que depuis ce moment — aucun replay n'existe, l'abonnement lié au panneau le garantit.
+
 Prépare le palier « traduction live + resynthèse TTS » : id stable, langue source fiable, horloge de capture et canal P2P actif.

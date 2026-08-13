@@ -84,6 +84,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
     let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
     let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
+    let callTranscriptionActiveReceived = PassthroughSubject<CallTranscriptionActiveData, Never>()
 
     // MARK: - Call Tracking
 
@@ -125,6 +126,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var lastCallAnalyticsPayload: [String: Any]?
     var emitCallTranscriptionSegmentCallCount = 0
     var lastEmittedTranscriptionSegment: CallTranscriptionSegmentPayload?
+    var emitCallTranscriptionActiveCalls: [(callId: String, active: Bool)] = []
 
     // MARK: - Protocol Methods
 
@@ -272,6 +274,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastEmittedTranscriptionSegment = segment
     }
 
+    func emitCallTranscriptionActive(callId: String, active: Bool) {
+        emitCallTranscriptionActiveCalls.append((callId, active))
+    }
+
     func emitCallAnalytics(callId: String, payload: [String: Any]) {
         callAnalyticsCallCount += 1
         lastCallAnalyticsPayload = payload
@@ -341,5 +347,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         lastCallAnalyticsPayload = nil
         emitCallTranscriptionSegmentCallCount = 0
         lastEmittedTranscriptionSegment = nil
+        emitCallTranscriptionActiveCalls = []
     }
 }

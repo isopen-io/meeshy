@@ -314,10 +314,21 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         startRecognitionTask(language: localLanguage)
         isTranscribing = true
+        // Signal de présence : invite les autres participants à activer leur
+        // propre transcription (indicateur sur leur icône captions). Estampillé
+        // côté gateway, jamais gâté par la visibilité du panneau du récepteur.
+        socket.emitCallTranscriptionActive(callId: callId, active: true)
         callsLogger.info("Call transcription started — local language: \(localLanguage)")
     }
 
     func stopTranscribing() {
+        // Symétrique du signal d'activation : les pairs retirent l'indicateur
+        // d'invitation. Uniquement si une session était réellement active
+        // (stopTranscribing est aussi appelé en teardown de fin d'appel sur
+        // des devices qui n'ont jamais transcrit).
+        if let callId, isTranscribing {
+            socket.emitCallTranscriptionActive(callId: callId, active: false)
+        }
         removeConfigurationObserver()
         removeInterruptionObserver()
         stopLocalCapture()

@@ -778,6 +778,32 @@ export interface CallTranslatedSegmentEvent {
   };
 }
 
+/**
+ * Event: call:transcription-active (Client → Server, fire-and-forget)
+ * Un participant vient d'activer (`active: true`) ou de fermer
+ * (`active: false`) son panneau de transcription. Le gateway authentifie,
+ * estampille l'émetteur et rediffuse à la room — voir le broadcast ci-dessous.
+ * Signal de présence, PAS de contenu : il n'est jamais gâté par la visibilité
+ * du panneau du récepteur (c'est précisément l'invitation à l'ouvrir).
+ */
+export interface CallTranscriptionActiveEvent {
+  readonly callId: string;
+  readonly active: boolean;
+}
+
+/**
+ * Event: call:transcription-active (Server → Clients de la room, émetteur exclu)
+ * `speakerId` est estampillé CÔTÉ SERVEUR depuis le participant authentifié
+ * (même principe anti-usurpation que les segments). Les clients affichent un
+ * indicateur discret sur leur icône de transcription pour inviter à activer
+ * aussi — et le retirent quand `active: false` ou à la fin de l'appel.
+ */
+export interface CallTranscriptionActiveBroadcast {
+  readonly callId: string;
+  readonly speakerId: string;
+  readonly active: boolean;
+}
+
 // ===== CALL TRANSCRIPT — DATA CHANNEL P2P =====
 
 /**
@@ -950,6 +976,7 @@ export const CALL_EVENTS = {
   TRANSLATION: 'call:translation',
   TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   TRANSLATED_SEGMENT: 'call:translated-segment',
+  TRANSCRIPTION_ACTIVE: 'call:transcription-active',
   /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
   /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */

@@ -70,6 +70,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
     let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
     let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
+    let callTranscriptionActiveReceived = PassthroughSubject<CallTranscriptionActiveData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
     let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()

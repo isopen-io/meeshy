@@ -150,6 +150,19 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.segment.capturedAtMs, 1_765_650_000_000)
     }
 
+    func testCallTranscriptionActiveEventDecoding() throws {
+        // Signal de présence transcription (2026-08-13) : speakerId estampillé
+        // côté gateway — pilote le badge d'invitation sur l'icône captions.
+        let json = """
+        {"callId": "507f1f77bcf86cd799439011", "speakerId": "user-abc", "active": true}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(CallTranscriptionActiveData.self, from: json)
+        XCTAssertEqual(event.callId, "507f1f77bcf86cd799439011")
+        XCTAssertEqual(event.speakerId, "user-abc")
+        XCTAssertTrue(event.active)
+    }
+
     func testMessageUnpinnedEventDecoding() throws {
         let json = """
         {"messageId": "m3", "conversationId": "c3"}

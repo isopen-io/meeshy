@@ -474,6 +474,66 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     }
   );
 
+  describe('call:transcription-active — presence signal relay', () => {
+    function setup(overrides: { callSession?: unknown; status?: string } = {}) {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({
+          status: overrides.status ?? 'active',
+          metadata: null,
+        }),
+      });
+      const { socket, handlers, roomEmit, directEmit } = makeSocket();
+      const callService = makeCallService(
+        jest.fn<any>().mockResolvedValue(overrides.callSession ?? activeCallSession(SPEAKER_ID))
+      );
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      return { socket, handlers, roomEmit, directEmit };
+    }
+
+    it('relays the activation to the call room, stamped with the authenticated sender', async () => {
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+      const [eventName, payload] = roomEmit.mock.calls[0];
+      expect(eventName).toBe(CALL_EVENTS.TRANSCRIPTION_ACTIVE);
+      expect(payload).toEqual({ callId: VALID_CALL_ID, speakerId: SPEAKER_ID, active: true });
+    });
+
+    it('relays the deactivation (active: false) so peers clear their invite badge', async () => {
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: false });
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.active).toBe(false);
+    });
+
+    it('excludes the sender from the relay (socket.to, never io-wide)', async () => {
+      const { socket, handlers } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect((socket.to as jest.Mock)).toHaveBeenCalledWith(`call:${VALID_CALL_ID}`);
+    });
+
+    it('silently drops the signal from a non-participant (no relay, no error)', async () => {
+      const { handlers, roomEmit, directEmit } = setup({ callSession: { participants: [] } });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).not.toHaveBeenCalled();
+      expect(directEmit).not.toHaveBeenCalled();
+    });
+
+    it('silently drops the signal on a terminal call', async () => {
+      const { handlers, roomEmit } = setup({ status: 'ended' });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('does not relay when validation fails', async () => {
+      (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: false });
+      const { handlers, roomEmit } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: 'yes' });
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+  });
+
   describe('anonymous socket: no userId', () => {
     let roomEmit: jest.MockedFunction<any>;
     let directEmit: jest.MockedFunction<any>;

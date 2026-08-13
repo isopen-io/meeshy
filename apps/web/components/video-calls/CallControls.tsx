@@ -34,6 +34,12 @@ interface CallControlsProps {
   audioEffectsActive?: boolean;
   showStats?: boolean;
   showTranscript?: boolean;
+  /**
+   * Un pair a activé sa transcription pendant que la nôtre est fermée —
+   * badge d'invitation sur le bouton sous-titres (signal
+   * `call:transcription-active`, estampillé côté gateway).
+   */
+  transcriptInvite?: boolean;
 }
 
 export function CallControls({
@@ -52,6 +58,7 @@ export function CallControls({
   audioEffectsActive = false,
   showStats = false,
   showTranscript = false,
+  transcriptInvite = false,
 }: CallControlsProps) {
   const { t } = useI18n('calls');
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
@@ -206,15 +213,30 @@ export function CallControls({
           data-testid="toggle-transcript"
           onClick={onToggleTranscript}
           className={cn(
-            'w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
+            'relative w-12 h-12 md:w-14 md:h-14 rounded-full transition-colors touch-manipulation',
             showTranscript
               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label={showTranscript ? t('transcript.hide') : t('transcript.show')}
-          title={showTranscript ? t('transcript.hide') : t('transcript.show')}
+          aria-label={
+            transcriptInvite
+              ? t('transcript.peerActive')
+              : showTranscript
+                ? t('transcript.hide')
+                : t('transcript.show')
+          }
+          title={transcriptInvite ? t('transcript.peerActive') : showTranscript ? t('transcript.hide') : t('transcript.show')}
         >
           <Captions className="w-5 h-5 md:w-6 md:h-6" />
+          {/* Invitation : un pair transcrit, la nôtre est fermée — même
+              patron visuel que le dot video-autopaused ci-dessus. */}
+          {transcriptInvite && (
+            <span
+              data-testid="transcript-invite-dot"
+              className="absolute -right-0.5 -top-0.5 w-3 h-3 rounded-full bg-indigo-400 ring-2 ring-black/60 animate-pulse"
+              aria-hidden="true"
+            />
+          )}
         </Button>
       )}
 

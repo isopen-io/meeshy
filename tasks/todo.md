@@ -53,3 +53,17 @@ Prépare l'étape suivante : traduction live + resynthèse TTS (les champs `lang
 - iOS : tests écrits/mis à jour (service, manager, décodage data channel,
   SDK) — à exécuter sur macOS via ./apps/ios/meeshy.sh test (non exécutable
   dans cet environnement Linux)
+
+## Itération 3 (signal de présence + règle donnée sensible)
+- [x] `call:transcription-active` : signal estampillé gateway (silent-drop,
+      émetteur exclu) quand un participant active/ferme sa transcription
+- [x] Badge d'invitation sur l'icône sous-titres : iOS (dot statique,
+      remoteTranscriptionActive, reset teardown) + web
+      (useRemoteTranscriptionActive, Set par speaker, dot pulsant, aria-label)
+- [x] Émission du signal : iOS au start/stop effectif du moteur ; web à
+      l'ouverture/fermeture du panneau (transitions réelles uniquement)
+- [x] Historique depuis l'activation uniquement : garanti par l'absence de
+      replay réseau (gateway relaie sans stocker) + abonnement lié au panneau
+- [x] Règle donnée sensible gravée dans la spec : replay UNIQUEMENT depuis la
+      sauvegarde locale (GRDB chiffré iOS ; rien au repos côté web), aucun
+      texte de transcription dans les logs (audité)

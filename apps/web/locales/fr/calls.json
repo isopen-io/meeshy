@@ -65,6 +65,7 @@
       "title": "Transcription",
       "empty": "Les segments transcrits apparaîtront ici",
       "unknownSpeaker": "Participant",
+      "peerActive": "Votre interlocuteur a activé la transcription — activez la vôtre",
       "show": "Afficher la transcription",
       "hide": "Masquer la transcription"
     },

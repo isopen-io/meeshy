@@ -13,6 +13,7 @@ import {
   socketReconnectingSchema,
   socketReconnectedSchema,
   socketTranscriptionSegmentSchema,
+  socketTranscriptionActiveSchema,
   socketMediaToggleSchema,
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
@@ -488,6 +489,22 @@ describe('Call Validation Schemas', () => {
           language: 'en',
           capturedAtMs: -1,
         },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('validates a transcription-active presence signal', () => {
+      const result = socketTranscriptionActiveSchema.safeParse({
+        callId: validMongoId,
+        active: true,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects a transcription-active signal with a non-boolean active flag', () => {
+      const result = socketTranscriptionActiveSchema.safeParse({
+        callId: validMongoId,
+        active: 'yes',
       });
       expect(result.success).toBe(false);
     });

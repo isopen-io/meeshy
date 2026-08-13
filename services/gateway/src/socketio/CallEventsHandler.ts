@@ -37,6 +37,7 @@ import {
   socketReconnectedSchema,
   socketForceLeaveSchema,
   socketTranscriptionSegmentSchema,
+  socketTranscriptionActiveSchema,
   socketRequestIceServersSchema,
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
@@ -66,6 +67,7 @@ import type {
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
+  CallTranscriptionActiveEvent,
   CallTranslatedSegmentEvent,
   CallIceServersRefreshedEvent,
   CallScreenCaptureEvent,
@@ -3651,6 +3653,41 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling reconnected', { error });
+      }
+    });
+
+    /**
+     * call:transcription-active — signal de présence : un participant a
+     * activé (ou fermé) son panneau de transcription. Relayé estampillé à la
+     * room (émetteur exclu) pour afficher l'indicateur d'invitation sur
+     * l'icône de transcription des autres. Silent-drop intégral (pas de
+     * CALL_ERROR) : signal cosmétique, jamais bloquant pour l'appel — même
+     * posture que call:backgrounded/foregrounded.
+     */
+    socket.on(CALL_EVENTS.TRANSCRIPTION_ACTIVE, async (data: CallTranscriptionActiveEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+
+        const validation = validateSocketEvent(socketTranscriptionActiveSchema, data);
+        if (!validation.success) return;
+
+        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        if (!participantId) return;
+
+        const callSession = await this.prisma.callSession.findUnique({
+          where: { id: data.callId },
+          select: { status: true }
+        });
+        if (!callSession || (CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) return;
+
+        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSCRIPTION_ACTIVE, {
+          callId: data.callId,
+          speakerId: userId,
+          active: data.active
+        });
+      } catch (error) {
+        logger.error('Error handling transcription-active signal', { error });
       }
     });
 

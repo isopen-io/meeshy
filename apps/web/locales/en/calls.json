@@ -65,6 +65,7 @@
       "title": "Transcript",
       "empty": "Transcribed segments will appear here",
       "unknownSpeaker": "Participant",
+      "peerActive": "Your peer turned on transcription — turn yours on too",
       "show": "Show transcript",
       "hide": "Hide transcript"
     },

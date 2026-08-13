@@ -285,6 +285,17 @@ export const socketForceLeaveSchema = z.object({
 /**
  * Socket.IO Event: call:transcription-segment (fire-and-forget)
  */
+/**
+ * Socket.IO Event: call:transcription-active (fire-and-forget)
+ * Signal de présence : le participant a activé/fermé son panneau de
+ * transcription. L'identité de l'émetteur est estampillée côté serveur —
+ * aucun champ speaker accepté du client.
+ */
+export const socketTranscriptionActiveSchema = z.object({
+  callId: objectIdSchema,
+  active: z.boolean()
+});
+
 export const socketTranscriptionSegmentSchema = z.object({
   callId: objectIdSchema,
   segment: z.object({

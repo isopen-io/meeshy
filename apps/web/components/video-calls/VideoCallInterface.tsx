@@ -14,6 +14,7 @@ import { useCallQuality } from '@/hooks/use-call-quality';
 import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
 import { useCallCaptions } from '@/hooks/use-call-captions';
 import { useCallTranscriptJournal } from '@/hooks/use-call-transcript-journal';
+import { useRemoteTranscriptionActive } from '@/hooks/use-remote-transcription-active';
 import { useCallAnalyticsReporter } from '@/hooks/use-call-analytics-reporter';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
@@ -150,6 +151,26 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // journal accumulé reste et se réaffiche à la réouverture (reset au
   // changement d'appel uniquement).
   const { entries: transcriptEntries } = useCallTranscriptJournal(callId, { active: showTranscript });
+  // Signal de présence : un pair a activé sa transcription → badge
+  // d'invitation sur le bouton sous-titres (jamais gâté par le panneau
+  // local — c'est l'invitation à l'ouvrir).
+  const { peerTranscribing } = useRemoteTranscriptionActive(callId);
+
+  // Signale aux pairs l'ouverture/fermeture de NOTRE panneau (le gateway
+  // estampille l'émetteur et rediffuse `call:transcription-active`). Émis
+  // uniquement sur transition réelle — jamais de `active: false` au mount.
+  const transcriptActiveAnnouncedRef = useRef(false);
+  useEffect(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+    if (showTranscript && !transcriptActiveAnnouncedRef.current) {
+      transcriptActiveAnnouncedRef.current = true;
+      socket.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId, active: true });
+    } else if (!showTranscript && transcriptActiveAnnouncedRef.current) {
+      transcriptActiveAnnouncedRef.current = false;
+      socket.emit(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE, { callId, active: false });
+    }
+  }, [showTranscript, callId]);
 
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the
@@ -827,6 +848,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         audioEffectsActive={audioEffectsActive}
         showStats={showStats}
         showTranscript={showTranscript}
+        transcriptInvite={peerTranscribing && !showTranscript}
       />
 
       {/* Call Duration & Participant Count */}

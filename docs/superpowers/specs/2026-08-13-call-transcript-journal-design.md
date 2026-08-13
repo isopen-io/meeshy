@@ -201,6 +201,57 @@ DERNIÈRE valeur dite de chaque énoncé.
   stable, chaque révision dupliquerait une ligne. (Les anciens iOS n'émettent
   de toute façon jamais de partiels sur le réseau.)
 
+## Signal de présence — invitation à activer (itération 3, même jour)
+
+Quand un participant active sa transcription, les autres doivent le voir sur
+leur icône de transcription (invitation à activer aussi) ; et l'activation ne
+donne l'historique que DEPUIS ce moment (déjà garanti par l'abonnement lié au
+panneau — aucun replay n'existe, ni serveur ni pair).
+
+- **Wire** : `call:transcription-active` (client → serveur : `{callId,
+  active}` ; serveur → room, émetteur exclu : `{callId, speakerId, active}`,
+  `speakerId` estampillé côté gateway — anti-usurpation, silent-drop intégral
+  comme `call:backgrounded`).
+- **iOS** : émis par `CallTranscriptionService` au démarrage effectif du
+  moteur et à l'arrêt (uniquement si une session était active) ; reçu par
+  `CallManager.remoteTranscriptionActive` (reset au teardown, échos de ses
+  propres devices ignorés) ; badge indigo statique sur `captionsCycleButton`
+  quand un pair transcrit et que le mode local est off (pas d'animation
+  continue — audit P2-iOS-9).
+- **web** : émis par `VideoCallInterface` à l'ouverture/fermeture du panneau
+  (transitions réelles uniquement) ; reçu par `useRemoteTranscriptionActive`
+  (Set par speakerId — correct en groupe : le badge ne s'éteint que quand
+  plus AUCUN pair ne transcrit ; jamais gâté par le panneau local) ; dot
+  indigo `animate-pulse` sur le bouton sous-titres, aria-label dédié.
+- Ce signal est de la PRÉSENCE, pas du contenu : il n'est volontairement pas
+  gâté par la visibilité du panneau du récepteur — c'est l'invitation à
+  l'ouvrir.
+
+## Sensibilité des données — aucun replay réseau (règle produit, 2026-08-13)
+
+**La transcription d'appel est une donnée SENSIBLE. Le replay ne se fait
+JAMAIS depuis le réseau — uniquement depuis la donnée sauvegardée
+localement.** Conséquences vérifiées et opposables :
+
+1. **Aucune persistance serveur.** Le gateway RELAIE (`socket.to(room)`) et
+   ne stocke rien : le modèle Prisma `Transcription` reste inutilisé, aucun
+   endpoint REST de transcript n'existe, et aucun replay ne peut être servi à
+   un client qui n'était pas abonné au moment de l'émission. Un participant
+   qui active son panneau n'a donc l'historique QUE depuis son activation.
+2. **Aucun texte de transcription dans les logs** — gateway (`logger.debug`
+   ne porte que callId/speakerId/isFinal), iOS (`callsLogger` ne logge que
+   langue/états), web. Toute évolution qui loggerait `segment.text` est un
+   défaut à rejeter en revue.
+3. **Persistance locale uniquement, chiffrée** : iOS `CallTranscriptStore`
+   (GRDB `encrypted: true`, namespace `calltx`, TTL 90 j, purge logout) — le
+   replay post-appel (BubbleCallNoticeView) lit exclusivement ce store local.
+   Le web ne persiste RIEN (journal en mémoire React, perdu à la fermeture) :
+   pas de donnée sensible au repos côté navigateur.
+4. **Rétention en mémoire bornée à l'appel** : le journal in-call survit à la
+   fermeture du panneau (revisitable) mais est purgé inconditionnellement à
+   la fin d'appel (`resetForCallEnd` iOS, reset sur changement de `callId`
+   web).
+
 ## Préparation du palier suivant (traduction live + TTS)
 
 Le pipeline visé (« l'interlocuteur parle dans ma langue avec sa voix ») a

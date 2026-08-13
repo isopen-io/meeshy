@@ -1975,12 +1975,33 @@ struct CallView: View {
             }
         }()
 
+        // Invitation : le pair transcrit alors que MES sous-titres sont
+        // désactivés — point indigo sur l'icône (même patron que le dot
+        // "video-autopaused" web). Statique, pas d'animation continue (audit
+        // P2-iOS-9 : les pulsations indéfinies brûlaient la batterie et
+        // ignoraient Reduce Motion). Disparaît dès que j'active
+        // (mode != .off) ou que le pair coupe (`active: false` / fin d'appel).
+        let showsPeerInvite = callManager.remoteTranscriptionActive && mode == .off
+
         return Button(action: advanceCaptionsMode) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(mode == .off ? .white.opacity(0.9) : tint)
                     .callControlGlass(diameter: 56, isActive: mode != .off, tint: tint)
+                    .overlay(alignment: .topTrailing) {
+                        if showsPeerInvite {
+                            Circle()
+                                .fill(MeeshyColors.indigo400)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.black.opacity(0.6), lineWidth: 2))
+                                .accessibilityLabel(Text(String(
+                                    localized: "call.control.captions.peer_active",
+                                    defaultValue: "Votre interlocuteur a activé la transcription",
+                                    bundle: .main
+                                )))
+                        }
+                    }
                 Text(String(localized: "call.control.transcript.caption", defaultValue: "Sous-titres", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .foregroundColor(.white.opacity(0.7))

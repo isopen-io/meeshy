@@ -1041,6 +1041,17 @@ public struct CallTranslatedSegmentData: Decodable, Sendable {
     }
 }
 
+/// Event: call:transcription-active (Server -> Client). Mirrors
+/// `CallTranscriptionActiveBroadcast` in `packages/shared/types/video-call.ts`.
+/// `speakerId` est estampillé côté gateway (anti-usurpation). Signal de
+/// présence : jamais gâté par la visibilité du panneau du récepteur — c'est
+/// l'invitation à l'ouvrir.
+public struct CallTranscriptionActiveData: Decodable, Sendable {
+    public let callId: String
+    public let speakerId: String
+    public let active: Bool
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {
@@ -1273,6 +1284,10 @@ public protocol MessageSocketProviding: Sendable {
     /// The client must tear down the call immediately (no user confirmation needed).
     var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }
     var callTranslatedSegmentReceived: PassthroughSubject<CallTranslatedSegmentData, Never> { get }
+    /// Signal de présence transcription : un pair a activé/fermé son panneau
+    /// (`call:transcription-active`, estampillé côté gateway) — pilote
+    /// l'indicateur d'invitation sur l'icône captions.
+    var callTranscriptionActiveReceived: PassthroughSubject<CallTranscriptionActiveData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1414,6 +1429,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
     func emitCallAnalytics(callId: String, payload: [String: Any])
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)
+    func emitCallTranscriptionActive(callId: String, active: Bool)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1460,6 +1476,7 @@ public extension MessageSocketProviding {
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
     func emitCallAnalytics(callId: String, payload: [String: Any]) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
+    func emitCallTranscriptionActive(callId: String, active: Bool) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1636,6 +1653,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
     public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
     public let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
+    public let callTranscriptionActiveReceived = PassthroughSubject<CallTranscriptionActiveData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -2688,6 +2706,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Emits a final (isFinal=true only — callers must not send partials)
     /// local transcription segment. The gateway relays it, translated per
     /// listener's `systemLanguage`, as `call:translated-segment`.
+    /// Signale aux autres participants que ce device vient d'activer
+    /// (`active: true`) ou de fermer (`active: false`) son panneau de
+    /// transcription — le gateway estampille l'émetteur et rediffuse à la
+    /// room pour l'indicateur d'invitation. Fire-and-forget.
+    public func emitCallTranscriptionActive(callId: String, active: Bool) {
+        socket?.emit("call:transcription-active", [
+            "callId": callId,
+            "active": active
+        ])
+    }
+
     public func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {
         socket?.emit("call:transcription-segment", [
             "callId": callId,
@@ -3478,6 +3507,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallTranslatedSegmentData.self, from: data) { [weak self] event in
                 self?.callTranslatedSegmentReceived.send(event)
+            }
+        }
+
+        socket.on("call:transcription-active") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallTranscriptionActiveData.self, from: data) { [weak self] event in
+                self?.callTranscriptionActiveReceived.send(event)
             }
         }
 

@@ -299,6 +299,11 @@ final class CallManager: ObservableObject {
     @Published var bubbleSizeTier: CallBubbleSizeTier = .circle
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
+    /// Un pair a activé sa transcription (`call:transcription-active`, nom
+    /// estampillé gateway) — pilote l'indicateur d'invitation sur l'icône
+    /// captions de CallView. JAMAIS gâté par la visibilité du panneau local :
+    /// c'est précisément l'invitation à l'ouvrir. Reset au teardown d'appel.
+    @Published private(set) var remoteTranscriptionActive = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
     /// (sustained poor link). Distinct from `isVideoEnabled` (the user's camera
     /// intent, which stays true): the user still WANTS video, the network can't
@@ -3808,6 +3813,7 @@ final class CallManager: ObservableObject {
         emitCallAnalyticsIfNeeded(reason: reason)
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
+        remoteTranscriptionActive = false
         callStartDate = nil
         reconnectAttempt = 0
         analyticsTotalReconnects = 0
@@ -4321,6 +4327,21 @@ final class CallManager: ObservableObject {
                 guard self.transcriptionService.isShowingOverlay else { return }
                 let segment = CallManager.makeTranscriptionSegment(from: event)
                 self.transcriptionService.receiveTranslatedSegment(segment)
+            }
+            .store(in: &cancellables)
+
+        // Signal de présence transcription : le pair a activé/fermé son
+        // panneau → indicateur d'invitation sur l'icône captions. PAS de
+        // garde isShowingOverlay ici — le signal doit précisément atteindre
+        // un panneau fermé. Les échos de ses propres autres devices (même
+        // compte, exclus du fanout socket par socket.to mais possibles via
+        // un autre socket du même user) sont ignorés.
+        socket.callTranscriptionActiveReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                guard event.speakerId != AuthManager.shared.currentUser?.id else { return }
+                self.remoteTranscriptionActive = event.active
             }
             .store(in: &cancellables)
 
