@@ -393,6 +393,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Wire to hide the floating header row while true — the sticky day
     /// pill takes over that band instead (exclusion mutuelle).
     var onScrollingActiveChanged: ((Bool) -> Void)?
+    /// Header de conversation déplié. Masque la pill de jour tant qu'il est
+    /// ouvert (voir `MessageDayStickyState.isHeaderExpanded`).
+    var isHeaderExpanded: Bool = false
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Voir
     /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
@@ -483,6 +486,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.isHeaderExpanded = isHeaderExpanded
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -545,6 +549,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.isHeaderExpanded = isHeaderExpanded
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory

@@ -1,12 +1,36 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Island emergence progress (environment)
+
+/// Avancement de l'émergence, exposé au CONTENU de la capsule : `0` = fondu
+/// dans la Dynamic Island, `1` = posé sous elle.
+///
+/// Le contenu ne peut pas être re-construit par la transition (il est bâti
+/// avant que le modifier ne s'applique) : l'environnement est le seul canal
+/// qui laisse une sous-vue se colorer en fonction de sa position dans le
+/// morph. C'est ce qui permet la règle produit « blanc sur noir UNIQUEMENT
+/// dans l'îlot, couleurs de base une fois posé » sans dupliquer la vue.
+///
+/// Défaut `1` : une vue rendue hors d'un `IslandEmergingBanner` est, par
+/// définition, posée.
+private struct IslandEmergenceProgressKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 1
+}
+
+extension EnvironmentValues {
+    var islandEmergenceProgress: CGFloat {
+        get { self[IslandEmergenceProgressKey.self] }
+        set { self[IslandEmergenceProgressKey.self] = newValue }
+    }
+}
+
 // MARK: - Island Emerging Banner
 
 /// Fait émerger une capsule de bannière depuis la Dynamic Island : la forme
-/// naît en NOIR à la géométrie de l'île (invisible sur le hardware, l'île est
-/// noire), puis descend et s'étend vers sa taille, sa couleur et sa position
-/// finales juste SOUS l'île — le pattern système des Live Activities.
+/// naît EXACTEMENT à la géométrie de l'île (`IslandGeometry`), puis descend et
+/// se contracte vers sa taille, sa couleur et sa position finales juste SOUS
+/// l'île — le pattern système des Live Activities.
 ///
 /// Le mouvement est porté par une `AnyTransition` custom symétrique :
 /// - INSERTION : départ LENT (la capsule pointe hors de l'encoche), franche
@@ -22,9 +46,19 @@ import UIKit
 /// la dimension NON bornée pendant l'interpolation de la transition : sous un
 /// parent qui propose l'écran entier (`.frame(maxWidth/maxHeight: .infinity)`),
 /// la capsule de fond pouvait adopter la proposition et couvrir tout l'écran
-/// (capture user IMG_0525). Le morph passe désormais par `scaleEffect` — un
-/// effet de RENDU pur, `Animatable`, qui ne participe jamais au layout : la
-/// capsule ne peut physiquement plus dépasser sa taille naturelle posée.
+/// (capture user IMG_0525). Le morph passe par `scaleEffect` — un effet de
+/// RENDU pur, `Animatable`, qui ne participe jamais au layout.
+///
+/// Exactitude du point de naissance (retour user 2026-08-13 — « ce n'est pas
+/// envoyé exactement dedans mais toujours à côté ») : le correctif de 2026-07-04
+/// avait BORNÉ les ratios d'échelle à `min(…, 1)`, garde-fou hérité du bug de
+/// frame. Or l'île (126×37) est PLUS GRANDE qu'une pastille de jour (~103×30) :
+/// la borne forçait donc la naissance à rester plus petite que l'île — la
+/// capsule ne naissait jamais dedans, elle naissait à côté. `scaleEffect` étant
+/// un effet de rendu borné par construction (il ne peut pas adopter une
+/// proposition de layout), le ratio est désormais exact dans les deux sens, et
+/// dérivé d'une taille posée FOURNIE par l'appelant (`settledSize`) plutôt que
+/// d'une estimation figée : la naissance couvre l'île au pixel près.
 ///
 /// Placement : à utiliser dans un conteneur qui RESPECTE la safe area top ;
 /// le mouvement remonte dans la zone de l'île via un offset négatif, en
@@ -37,23 +71,18 @@ import UIKit
 struct IslandEmergingBanner<Content: View>: View {
     /// Couleur finale de la capsule (la naissance est toujours noire).
     let tint: Color
+    /// Taille naturelle de `content` une fois posé, calculée par l'appelant
+    /// (métriques de police + padding connus). C'est d'elle que dérivent le
+    /// ratio d'échelle et l'offset de naissance : une taille fausse déplace la
+    /// naissance hors de l'île. Une taille nulle neutralise le morph d'échelle
+    /// plutôt que de diviser par zéro.
+    let settledSize: CGSize
     let reduceMotion: Bool
     @ViewBuilder let content: () -> Content
 
-    /// Géométrie publique de la Dynamic Island (capsule ~126×37 pt, top ~11 pt,
-    /// centrée). Pas d'API système : constantes de facto, suffisantes car la
-    /// naissance noir-sur-noir rend l'imprécision invisible.
-    fileprivate static var islandWidth: CGFloat { 126 }
-    fileprivate static var islandHeight: CGFloat { 37 }
-    fileprivate static var islandTop: CGFloat { 11 }
-    /// Padding final sous la safe area (aligné sur la bande de chrome top).
-    fileprivate static var finalTopPadding: CGFloat { 8 }
-    /// Taille naturelle ESTIMÉE de la capsule posée (padding v8×2 + footnote ;
-    /// largeur typique d'un libellé court + icône). Le ratio d'échelle à la
-    /// naissance en dérive — ±20 % d'imprécision restent noir-sur-noir dans
-    /// l'île, donc invisibles. Jamais utilisée pour du layout.
-    fileprivate static var estimatedFinalSize: CGSize { CGSize(width: 240, height: 36) }
-    fileprivate static var estimatedFinalHalfHeight: CGFloat { estimatedFinalSize.height / 2 }
+    /// Padding final sous la safe area, plancher aligné sur la bande de chrome
+    /// top et garanti à au moins `IslandGeometry.clearanceBelow` sous l'île.
+    fileprivate static var minimumTopPadding: CGFloat { 8 }
 
     /// Inset top réel de la fenêtre active — l'île est présente à partir de 59 pt
     /// (iPhone 14 Pro → 16 Pro : 59–62 ; notch classique : 44–50).
@@ -67,16 +96,19 @@ struct IslandEmergingBanner<Content: View>: View {
 
     var body: some View {
         let topInset = Self.windowTopInset
-        let hasIsland = topInset >= 59
 
-        if hasIsland && !reduceMotion {
+        if IslandGeometry.isPresent(safeAreaTop: topInset) && !reduceMotion {
             // Le style « posé » vit dans l'identity de la transition — appliqué
             // en régime permanent, et point d'arrivée/départ des animations.
             content()
-                .transition(Self.emergenceTransition(tint: tint, topInset: topInset))
+                .transition(Self.emergenceTransition(
+                    tint: tint, settledSize: settledSize, topInset: topInset
+                ))
         } else {
             content()
-                .modifier(IslandEmergenceStyle(progress: 1, tint: tint, topInset: topInset))
+                .modifier(IslandEmergenceStyle(
+                    progress: 1, tint: tint, settledSize: settledSize, topInset: topInset
+                ))
                 .transition(.opacity)
         }
     }
@@ -85,9 +117,15 @@ struct IslandEmergingBanner<Content: View>: View {
     /// courbe. Les Béziers custom : départ plat (lent) → accélération médiane
     /// → atterrissage doux ; le retrait est légèrement plus court, la capsule
     /// se dissout dans l'île sans traîner.
-    fileprivate static func emergenceTransition(tint: Color, topInset: CGFloat) -> AnyTransition {
-        let born = IslandEmergenceStyle(progress: 0, tint: tint, topInset: topInset)
-        let settled = IslandEmergenceStyle(progress: 1, tint: tint, topInset: topInset)
+    fileprivate static func emergenceTransition(
+        tint: Color, settledSize: CGSize, topInset: CGFloat
+    ) -> AnyTransition {
+        let born = IslandEmergenceStyle(
+            progress: 0, tint: tint, settledSize: settledSize, topInset: topInset
+        )
+        let settled = IslandEmergenceStyle(
+            progress: 1, tint: tint, settledSize: settledSize, topInset: topInset
+        )
         return .asymmetric(
             insertion: AnyTransition.modifier(active: born, identity: settled)
                 .animation(.timingCurve(0.55, 0.0, 0.25, 1.0, duration: 0.7)),
@@ -97,8 +135,52 @@ struct IslandEmergingBanner<Content: View>: View {
     }
 }
 
-/// Interpolation continue entre la naissance (`progress == 0` : fondue dans
-/// l'île — noire, géométrie de l'île, contenu invisible) et l'état posé
+// MARK: - Geometry (pure, testable)
+
+/// Dérivations pures du morph — extraites du `ViewModifier` pour être
+/// vérifiables sans rendu. Toutes les valeurs sont exprimées dans le repère de
+/// l'écran, en points.
+enum IslandEmergenceGeometry {
+    /// Ordonnée du centre de la capsule une fois posée.
+    static func settledCenterY(
+        safeAreaTop: CGFloat, settledHeight: CGFloat, minimumTopPadding: CGFloat
+    ) -> CGFloat {
+        let padding = IslandGeometry.settledTopPadding(
+            safeAreaTop: safeAreaTop, minimum: minimumTopPadding
+        )
+        return safeAreaTop + padding + settledHeight / 2
+    }
+
+    /// Décalage vertical à appliquer à la capsule posée pour que son centre
+    /// coïncide avec celui de l'île. Négatif : la capsule remonte.
+    static func birthOffset(
+        safeAreaTop: CGFloat, settledHeight: CGFloat, minimumTopPadding: CGFloat
+    ) -> CGFloat {
+        IslandGeometry.centerY(safeAreaTop: safeAreaTop)
+            - settledCenterY(
+                safeAreaTop: safeAreaTop,
+                settledHeight: settledHeight,
+                minimumTopPadding: minimumTopPadding
+            )
+    }
+
+    /// Ratios d'échelle qui font rendre la capsule posée EXACTEMENT à la
+    /// taille de l'île. Jamais bornés à 1 : l'île est plus large et plus haute
+    /// qu'une pastille de jour, la naissance doit donc pouvoir grandir.
+    /// Une dimension posée nulle (contenu pas encore mesurable) neutralise le
+    /// morph sur cet axe plutôt que de produire un infini.
+    static func birthScale(settledSize: CGSize) -> CGSize {
+        CGSize(
+            width: settledSize.width > 0 ? IslandGeometry.width / settledSize.width : 1,
+            height: settledSize.height > 0 ? IslandGeometry.height / settledSize.height : 1
+        )
+    }
+}
+
+// MARK: - Style
+
+/// Interpolation continue entre la naissance (`progress == 0` : à la géométrie
+/// de l'île, capsule noire, contenu lisible en blanc dessus) et l'état posé
 /// (`progress == 1` : capsule teintée à sa taille naturelle sous l'île).
 /// `Animatable` sur `progress` : SwiftUI interpole une SEULE valeur scalaire
 /// le long de la courbe de la transition, et toute la géométrie en dérive de
@@ -106,6 +188,7 @@ struct IslandEmergingBanner<Content: View>: View {
 private struct IslandEmergenceStyle: ViewModifier, Animatable {
     var progress: CGFloat
     let tint: Color
+    let settledSize: CGSize
     let topInset: CGFloat
 
     // `body(content:)` est un @ViewBuilder : un `typealias` déclaré dedans ne
@@ -119,33 +202,33 @@ private struct IslandEmergenceStyle: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        // Naissance : centre de la capsule posé sur le centre de l'île
-        // (écran physique y = islandTop + islandHeight/2), exprimé en offset
-        // depuis la position finale (topInset + finalTopPadding + h/2).
-        let birthOffset = Banner.islandTop
-            + Banner.islandHeight / 2
-            - topInset
-            - Banner.finalTopPadding
-            - Banner.estimatedFinalHalfHeight
-        // Ratios île / taille naturelle estimée — bornés à 1 pour que la
-        // capsule ne puisse JAMAIS rendre plus grand que sa taille posée.
-        let birthScaleX = min(Banner.islandWidth / Banner.estimatedFinalSize.width, 1)
-        let birthScaleY = min(Banner.islandHeight / Banner.estimatedFinalSize.height, 1)
         let p = min(max(progress, 0), 1)
+        let birthOffset = IslandEmergenceGeometry.birthOffset(
+            safeAreaTop: topInset,
+            settledHeight: settledSize.height,
+            minimumTopPadding: Banner.minimumTopPadding
+        )
+        let birthScale = IslandEmergenceGeometry.birthScale(settledSize: settledSize)
 
         content
-            .opacity(Double(p))
+            // Le contenu se colore d'après sa position dans le morph : blanc
+            // tant qu'il est dans l'île, couleurs de base une fois posé.
+            .environment(\.islandEmergenceProgress, p)
+            // Voile noir DERRIÈRE le contenu (et devant la teinte) : dans
+            // l'île la capsule est noire et le texte reste lisible dessus —
+            // c'était un overlay AU-DESSUS du contenu jusqu'ici, qui masquait
+            // l'information au lieu de lui servir de fond.
+            .background(Capsule().fill(Color.black.opacity(Double(1 - p))))
             .background(Capsule().fill(tint))
-            // Voile noir : pleine opacité dans l'île (naissance noir-sur-noir),
-            // fondu vers la teinte finale en se posant.
-            .overlay(Capsule().fill(Color.black.opacity(Double(1 - p))))
             .clipShape(Capsule())
             .shadow(color: Color.black.opacity(0.15 * Double(p)), radius: 6, y: 2)
             .scaleEffect(
-                x: birthScaleX + (1 - birthScaleX) * p,
-                y: birthScaleY + (1 - birthScaleY) * p
+                x: birthScale.width + (1 - birthScale.width) * p,
+                y: birthScale.height + (1 - birthScale.height) * p
             )
             .offset(y: birthOffset * (1 - p))
-            .padding(.top, Banner.finalTopPadding)
+            .padding(.top, IslandGeometry.settledTopPadding(
+                safeAreaTop: topInset, minimum: Banner.minimumTopPadding
+            ))
     }
 }

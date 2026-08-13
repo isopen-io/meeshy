@@ -107,6 +107,16 @@ final class MessageListViewController: UIViewController {
     /// while this is true — the sticky day pill takes over that band instead
     /// (exclusion mutuelle, voir `MessageDayStickyPlacement`).
     var onScrollingActiveChanged: ((Bool) -> Void)?
+    /// Header de conversation déplié (tap sur l'avatar / l'icône de
+    /// conversation). Retire entièrement la pill de jour tant qu'il est
+    /// ouvert : l'utilisateur vient de demander à voir les détails de la
+    /// conversation, la pill les encombrerait.
+    var isHeaderExpanded: Bool = false {
+        didSet {
+            guard isHeaderExpanded != oldValue else { return }
+            stickyDayState.isHeaderExpanded = isHeaderExpanded
+        }
+    }
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Le gateway ne marque plus lus que les messages qu'un
     /// client lui nomme : sans ce signal, il retombe sur son chemin par fenêtre

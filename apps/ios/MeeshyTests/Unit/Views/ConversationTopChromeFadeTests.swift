@@ -135,7 +135,7 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         // flottant s'efface (`hidesFloatingHeaderForScroll`). Ils ne se
         // chevauchent donc plus jamais, quel que soit l'offset, qui peut
         // redescendre au ras de l'encoche. `IslandEmergingBanner` porte déjà
-        // ses propres 8pt d'air sous l'îlot (`finalTopPadding`) — cumuler un
+        // son propre dégagement sous l'îlot (`IslandGeometry.clearanceBelow`) — cumuler un
         // second offset ici repousserait la pill trop bas.
         XCTAssertEqual(MessageDayStickyPlacement.topOffset, 0,
                        "la pill sticky doit démarrer au ras de l'encoche, sans offset supplémentaire")
