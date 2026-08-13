@@ -231,6 +231,11 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// default) after the call has visibly ended — cancellation makes the
     /// `Task.sleep` timeout race resolve immediately instead of waiting it out.
     private var transitionTask: Task<Void, Never>?
+    /// The actuator call itself, tracked SEPARATELY from `transitionTask` (see
+    /// `performTransition`). `reset()` must cancel this directly — cancelling
+    /// only `transitionTask` would not propagate, since the actuator call is an
+    /// independent Task, not a structured child of `transitionTask`.
+    private var activeActuatorTask: Task<Bool, Never>?
 
     func reset() {
         state = .initial
@@ -239,6 +244,8 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
         generation += 1
         transitionTask?.cancel()
         transitionTask = nil
+        activeActuatorTask?.cancel()
+        activeActuatorTask = nil
     }
 
     private func performTransition(suspend: Bool) {
@@ -246,26 +253,47 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
         isTransitioning = true
         let timeoutSeconds = transitionTimeout
         let generation = self.generation
+
+        // The actuator call is spawned as its OWN independent, unstructured
+        // Task — deliberately NOT a `withTaskGroup` child of the race below.
+        // `withTaskGroup` implicitly awaits every child task before returning
+        // to its caller (`cancelAll()` only requests cooperative cancellation;
+        // it does not force a child to stop). A renegotiation that hangs inside
+        // real `AVCaptureSession`/WebRTC calls — which don't observe Swift's
+        // cooperative cancellation the way `Task.sleep` does — would therefore
+        // keep this function suspended long past `transitionTimeout`, silently
+        // breaking the "hard cap" `transitionTimeout` documents and leaving
+        // `isTransitioning` (and every CallManager path chained on it) stuck
+        // for the rest of the call. Racing two fully independent Tasks via a
+        // manual continuation lets the timeout side return WITHOUT waiting for
+        // the actuator: `actuatorTask` keeps running in the background if it's
+        // truly stuck, and a late completion is absorbed as a no-op below.
+        let actuatorTask = Task<Bool, Never> {
+            suspend
+                ? await actuator.suspendOutboundVideo()
+                : await actuator.resumeOutboundVideo()
+        }
+        activeActuatorTask = actuatorTask
+
         transitionTask = Task { [weak self] in
-            // Race the (possibly hanging) renegotiation against a timeout. A
-            // timeout is treated as a failure: we revert and let a later sustained
-            // streak retry, and crucially `isTransitioning` is always cleared.
-            let ok: Bool = await withTaskGroup(of: Bool?.self) { group in
-                group.addTask {
-                    suspend
-                        ? await actuator.suspendOutboundVideo()
-                        : await actuator.resumeOutboundVideo()
-                }
-                group.addTask {
+            let resolution = TransitionRaceResolution()
+            let ok: Bool = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                // Task hygiene: when the actuator wins, cancel the still-sleeping
+                // timeout Task instead of leaving it parked for up to
+                // `transitionTimeout` doing nothing (`Task.sleep` IS
+                // cancellation-aware, unlike the actuator call this whole
+                // mechanism exists to bound).
+                let timeoutTask = Task {
                     try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-                    return nil // timeout sentinel
+                    if await resolution.claim() { continuation.resume(returning: false) } // timeout won
                 }
-                defer { group.cancelAll() }
-                for await result in group {
-                    if let value = result { return value } // actuator finished first
-                    return false                           // timeout won
+                Task {
+                    let result = await actuatorTask.value
+                    if await resolution.claim() {
+                        timeoutTask.cancel()
+                        continuation.resume(returning: result)
+                    }
                 }
-                return false
             }
             guard let self, generation == self.generation else { return }
             if ok {
@@ -282,6 +310,19 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
             }
             self.isTransitioning = false
             self.transitionTask = nil
+            self.activeActuatorTask = nil
         }
+    }
+}
+
+/// Single-resume guard for the manual actuator-vs-timeout race in
+/// `performTransition`. Both racers run as independent Tasks and either may
+/// finish first; exactly one of them may resume the shared continuation.
+private actor TransitionRaceResolution {
+    private var claimed = false
+    func claim() -> Bool {
+        guard !claimed else { return false }
+        claimed = true
+        return true
     }
 }
