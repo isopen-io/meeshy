@@ -15,6 +15,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { CommentReactionService } from '../../services/CommentReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -278,6 +279,17 @@ export class CommentReactionHandler {
       if (callback) callback(successResponse);
 
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
+
+      // Le symétrique du `_createCommentReactionNotification` du chemin
+      // d'ajout. Le retrait couvre les DEUX familles que le commentaire
+      // produit — `comment_reaction` (ce handler) et `comment_like` (la route
+      // REST) — parce qu'il filtre sur les deux chemins d'id : quel que soit
+      // le transport qui a posé la réaction, celui qui la défait la retire.
+      void retractReactionNotifications(
+        this.prisma,
+        { subject: { kind: 'comment', id: validated.commentId }, actorId: userId, emoji: validated.emoji },
+        this.notificationService
+      ).catch(err => this.logger.error('comment reaction notification retraction failed', err, { commentId: validated.commentId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

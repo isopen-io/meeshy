@@ -12845,3 +12845,56 @@ Prépare l'étape suivante : traduction live + resynthèse TTS (les champs `lang
       suppression liée à l'historique, lecture web)
 - [x] Réparation tasks/todo.md : la résolution de fusion avait supprimé 5522
       lignes du document de main — restauré + sections annexées
+
+# Cycle — Annuler / reproduire les notifications sur retrait & édition
+
+## Constat
+Le retrait DUR était déjà couvert (famille `retract*` : message, post,
+commentaire, demande d'ami — celle-ci sur `DELETE /friend-requests/:id`, qui
+couvre l'annulation par l'expéditeur ET le retrait par le destinataire). Deux
+trous restaient, et ce sont exactement ceux de la demande :
+
+- **Retrait de réaction** — `reaction:remove` (message, post, commentaire) ne
+  retirait RIEN. « X a réagi ❤️ » survivait au ❤️ qui l'avait produit.
+- **Édition** — `message:edit`, `updatePost`, `updateComment` ne touchaient
+  aucune notification : la copie DÉNORMALISÉE (`content`, `subtitle`,
+  `metadata.messagePreview` / `messageContent` / `postPreview` /
+  `commentPreview`) gardait le texte d'AVANT, définitivement.
+
+## Fait
+- [x] `retractReactionNotifications` — jumeau « réaction » de la famille
+      `retract*`, scopé par la conjonction (type × cible × acteur × emoji), le
+      référent n'ayant pas d'id.
+- [x] Câblé sur TOUS les transports de retrait de réaction :
+      - message : handler socket, `DELETE /reactions/…`, route conversations
+        avancée — via la source unique `notifyReactionRemoved` ;
+      - post : handler socket (cible RÉSOLUE) + `unlikePost` (où vit `foundEmoji`) ;
+      - commentaire : handler socket + `DELETE …/comments/:id/like` ;
+      - SWAP d'emoji (`replacedEmojis`) sur les deux chemins d'ajout.
+- [x] `reproduceEditedMessageNotifications` — réécriture EN PLACE (donc
+      `isRead` survit) + annonce en couple `notification:deleted` +
+      `notification:new`. Substitution de PRÉFIXE (le corps est l'extrait suivi
+      des badges de pièces jointes) + purge de la traduction embarquée.
+- [x] `reproduceEditedSubjectNotifications` — jumeau post/commentaire. Ici
+      l'extrait est SERTI au milieu d'une phrase composée, donc substitution de
+      l'ANCIEN EXTRAIT lui-même, lu en métadonnée.
+- [x] Câblé sur `applyMessageEditEffects` (4 transports d'un coup),
+      `PostService.updatePost` (post/story/réel) et
+      `PostCommentService.updateComment` (borné à `contentChanged`).
+- [x] `comment_reaction` range désormais son extrait en métadonnée, VERBATIM :
+      sans cela, ce type — et lui seul du fil — n'aurait jamais pu être réécrit.
+
+## Revue
+- 4 modules neufs, 44 tests neufs. Suite gateway : **701 suites / 17 218 tests
+  vertes**, `tsc --noEmit` propre.
+- Arbitrage central : réécriture en place plutôt que `delete` + `create`. Un
+  `create` ferait repasser en NON LUE une notification consommée — la moindre
+  correction de faute de frappe re-sonnerait et remonterait le compteur.
+  L'annonce, elle, EST un couple annuler/reproduire : c'est le seul vocabulaire
+  que web et iOS savent déjà recevoir (pas d'événement « modifiée »).
+- Limite assumée : un message à pièce jointe SANS légende dont l'édition AJOUTE
+  une légende garde son libellé de pièce jointe comme corps (le libellé reste
+  exact, il ignore la légende). Documenté dans `rewriteBody`.
+- [x] Réparation tasks/todo.md : ce cycle avait ÉCRASÉ le document (12 559
+      lignes remplacées par son seul plan) — restauré depuis main + section
+      annexée. Deuxième occurrence du même geste ; cf. lessons.md.
