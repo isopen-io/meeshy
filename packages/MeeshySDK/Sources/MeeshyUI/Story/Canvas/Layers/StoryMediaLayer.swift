@@ -30,6 +30,25 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
     }
 }
 
+/// Référence faible transportable dans un bloc `@Sendable` — ici celui de
+/// l'observer `AVPlayerItemDidPlayToEndTime`, qui doit masquer le layer sans le
+/// retenir (`layer → observer → layer` serait un cycle).
+///
+/// Une variable locale `weak var` faisait le même travail, mais le compilateur
+/// la signalait « never mutated; consider changing to 'let' constant » — un
+/// conseil inapplicable : `weak let` est refusé (« 'weak' must be a mutable
+/// variable, because it may change at runtime »). La boîte porte la mutabilité
+/// que `weak` exige et se capture, elle, comme une constante.
+///
+/// NOTE — NON GÉNÉRIQUE délibérément, comme `WeakBox`/`FeedStoreWeakBox`
+/// côté app : la forme générique a fait tomber l'optimiseur Swift 6.3.2
+/// (`EarlyPerfInliner`) sur le `deinit` synthétisé en Release
+/// `-O -whole-module-optimization`. Un autre call site = une autre copie typée.
+private final class StoryMediaLayerWeakBox: @unchecked Sendable {
+    nonisolated(unsafe) weak var value: StoryMediaLayer?
+    nonisolated init(_ value: StoryMediaLayer) { self.value = value }
+}
+
 /// `CALayer` subclass that renders a single `StoryMediaObject` (image or video)
 /// inside the Story canvas. Owns its `AVPlayer`/`AVPlayerLayer` for video paths
 /// and its loop observer.
@@ -670,11 +689,11 @@ public final class StoryMediaLayer: CALayer {
             // vidéo de FOND boucle pour remplir la durée de la slide.
             player.actionAtItemEnd = .pause
             // `self` (StoryMediaLayer) est `nonisolated` donc non-Sendable : on le
-            // capture via un local `nonisolated(unsafe) weak` pour satisfaire le
+            // capture via une boîte faible `@unchecked Sendable` pour satisfaire le
             // contrôle Sendable du bloc `@Sendable` de l'observer. Sûr car le bloc
             // fire toujours sur `queue: .main` — mêmes garanties main-thread que
             // les accès `isHidden`/`CATransaction` qui suivent.
-            nonisolated(unsafe) weak var weakSelf = self
+            let weakSelf = StoryMediaLayerWeakBox(self)
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -686,7 +705,7 @@ public final class StoryMediaLayer: CALayer {
                 // persiste jusqu'au changement de slide).
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
-                weakSelf?.isHidden = true
+                weakSelf.value?.isHidden = true
                 CATransaction.commit()
             }
         }
