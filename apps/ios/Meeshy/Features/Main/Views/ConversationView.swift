@@ -70,6 +70,11 @@ struct ConversationOverlayState {
 struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
+    /// True while the message list is actively being dragged/decelerated.
+    /// Drives the floating header row's visibility — it hides during active
+    /// scrolling so the sticky day pill (which docks in the same band, just
+    /// under the notch) never overlaps it. See `MessageDayStickyPlacement`.
+    var isScrollingActiveList: Bool = false
     var scrollToBottomTrigger: Int = 0
     /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
     /// « dernier message », départ en arrière-plan. Le pont `MessageListView`
@@ -1199,6 +1204,11 @@ struct ConversationView: View {
                     // fois le seuil de présence franchi.
                     _ = wasNearBottom
                 },
+                onScrollingActiveChanged: { isActive in
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        scrollState.isScrollingActiveList = isActive
+                    }
+                },
                 onMessagesSeen: { seenIds in
                     // Seule source de vérité de la lecture : ces identifiants
                     // ont été RÉELLEMENT affichés assez longtemps.
@@ -1543,6 +1553,15 @@ struct ConversationView: View {
     // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
     // closure du VStack). Même famille que expandedHeaderMidContent — couper
     // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
+    /// Exclusion mutuelle avec la pill sticky de jour (`MessageDayStickyOverlay`) :
+    /// les deux se disputent la même bande juste sous l'encoche. Le header
+    /// s'efface pendant le défilement actif de la liste — sauf si la barre
+    /// de recherche est ouverte, qui doit rester joignable en toute
+    /// circonstance (2026-08-13, en résolution du chevauchement 2026-08-12).
+    private var hidesFloatingHeaderForScroll: Bool {
+        scrollState.isScrollingActiveList && !headerState.showSearch
+    }
+
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {
@@ -1560,9 +1579,19 @@ struct ConversationView: View {
             Spacer()
         }
         .zIndex(100)
+        // Exclusion mutuelle avec la pill sticky de jour (fade sur la VStack
+        // entière plutôt qu'un Group autour des 3 branches — ne pas toucher
+        // à leur type-erasure individuelle, voir la note "leçon 5cdde93c4"
+        // au-dessus sur le crash de mangled name). Sans effet sur la barre de
+        // recherche : `hidesFloatingHeaderForScroll` retombe à false dès que
+        // `headerState.showSearch` est vrai, donc jamais les deux en même
+        // temps.
+        .opacity(hidesFloatingHeaderForScroll ? 0 : 1)
+        .allowsHitTesting(!hidesFloatingHeaderForScroll)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+        .animation(.easeInOut(duration: 0.22), value: hidesFloatingHeaderForScroll)
     }
 
     private var typingHeaderBar: some View {
