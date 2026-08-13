@@ -7,7 +7,6 @@ import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
 import { FailedMessageBar } from '@/components/messages/FailedMessageBar';
 import { messageTranslationService } from '@/services/message-translation.service';
-import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useI18n } from '@/hooks/useI18n';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
@@ -77,9 +76,6 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   isLoadingMore = false
 }: MessagesDisplayProps) {
 
-  // Hook pour fixer les z-index des popovers Radix UI
-  useFixRadixZIndex();
-  
   // Hook pour les traductions
   const { t } = useI18n('bubbleStream');
 

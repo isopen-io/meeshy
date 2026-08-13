@@ -733,10 +733,11 @@ struct RootView: View {
             // guaranteed-fail call.
             StoryPublishService.shared.setExecutor(storyViewModel)
 
-            await storyViewModel.loadStories()
-            await statusViewModel.loadStatuses()
-            await conversationViewModel.loadConversations()
-            await notificationManager.refreshUnreadCount()
+            async let storiesLoad: Void = storyViewModel.loadStories()
+            async let statusesLoad: Void = statusViewModel.loadStatuses()
+            async let conversationsLoad: Void = conversationViewModel.loadConversations()
+            async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh)
         }
         .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(

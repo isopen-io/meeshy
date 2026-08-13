@@ -102,6 +102,7 @@ class ZMQTranslationServer:
         # OPTIMISATION: Cache CPU pour éviter le sleep(0.1) dans _publish_translation_result
         self._cached_cpu_usage = 0.0
         self._cpu_update_task = None
+        self._process = psutil.Process()
 
         logger.info(f"ZMQTranslationServer initialisé: Gateway PUSH {host}:{gateway_push_port} (PULL bind)")
         logger.info(f"ZMQTranslationServer initialisé: Gateway SUB {host}:{gateway_sub_port} (PUB bind)")
@@ -131,8 +132,8 @@ class ZMQTranslationServer:
         while self.running:
             try:
                 # Mesurer le CPU toutes les 5 secondes
-                self._cached_cpu_usage = psutil.Process().cpu_percent(interval=1.0)
-                await asyncio.sleep(4.0)  # Total: 5 secondes entre les mesures
+                self._cached_cpu_usage = self._process.cpu_percent(interval=None)
+                await asyncio.sleep(5.0)
             except Exception as e:
                 logger.debug(f"[CPU-MONITOR] Erreur: {e}")
                 await asyncio.sleep(5.0)

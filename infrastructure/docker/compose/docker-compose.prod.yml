@@ -110,6 +110,7 @@ services:
     image: redis:8-alpine
     container_name: meeshy-redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy volatile-lru
     volumes:
       - redis_data:/data
     networks:
@@ -205,6 +206,7 @@ services:
       - "traefik.http.routers.translator.rule=Host(`ml.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.translator.entrypoints=websecure"
       - "traefik.http.routers.translator.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.translator.middlewares=compress@file"
       - "traefik.http.services.translator.loadbalancer.server.port=8000"
       # Pas d'authentification pour ML service
 
@@ -437,6 +439,7 @@ services:
       - "traefik.http.routers.agent.rule=Host(`agent.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.agent.entrypoints=websecure"
       - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.agent.middlewares=compress@file"
       - "traefik.http.services.agent.loadbalancer.server.port=3200"
 
   # COTURN - TURN/STUN Server for WebRTC

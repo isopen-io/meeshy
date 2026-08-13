@@ -5,6 +5,7 @@ Inclut: Audio services, Voice API, Analytics, Pipeline async
 
 import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,7 @@ class Settings:
         """Retourne la liste des langues supportées"""
         return [lang.strip() for lang in self.supported_languages.split(",")]
 
+@lru_cache(maxsize=1)
 def get_settings():
     """Retourne une instance des paramètres"""
     return Settings()
