@@ -54,6 +54,37 @@ import { logger } from '../utils/logger';
 export const SYNC_CHECKPOINT_LAG_MS = 5_000;
 
 const MAX_ITEMS_PER_COLLECTION = 1000;
+
+/**
+ * Plafond de POIDS d'une page `/sync`, en octets, appliqué au stream `changed`.
+ *
+ * Le cap de 1000 est un plafond de LIGNES, et il a suffi tant qu'une ligne
+ * pesait ses six champs scalaires. Depuis que `syncMessageSelect` rend un
+ * message RENDABLE, la ligne porte `translations` (une copie du contenu PAR
+ * langue du Prisme), `metadata`, `reactionSummary`, le bloc expéditeur, et ses
+ * pièces jointes avec leurs propres `transcription`/`translations`. Toutes ces
+ * tailles sont écrites par l'utilisateur, aucune par le schéma : le poids d'une
+ * page n'a donc plus AUCUNE borne, et 1000 lignes peuvent faire quelques
+ * kilo-octets comme plusieurs dizaines de mégaoctets.
+ *
+ * La conséquence n'est pas seulement de la bande passante. `/sync` est le canal
+ * de RATTRAPAGE : il est appelé au retour de veille, en cellulaire, par un
+ * appareil qui vient de se reconnecter — c'est-à-dire dans le pire contexte
+ * réseau que l'application connaisse. Et la réponse est matérialisée trois fois
+ * côté serveur (les lignes Prisma, le `JSON.stringify` de l'ETag, la
+ * sérialisation Fastify) avant de partir.
+ *
+ * Le mécanisme d'arrêt anticipé, lui, existe déjà et n'attendait qu'un second
+ * critère : `truncated: true` + `nextCursor` + watermark tenu à `since`. Le
+ * budget ne fait que l'armer sur le poids en plus du nombre.
+ *
+ * 512 Ko de JSON non compressé — de l'ordre de 50 à 100 Ko sur le fil après
+ * gzip. La borne est délibérément prise sur le JSON NON compressé : c'est la
+ * grandeur que le serveur peut mesurer sans sérialiser deux fois, et c'est
+ * aussi celle qui gouverne la mémoire du client au décodage.
+ */
+export const SYNC_MAX_PAGE_BYTES = 512 * 1024;
+
 const GAP_THRESHOLD = 10_000;
 const SUPPORTED_COLLECTIONS = ['messages'] as const;
 
@@ -411,6 +442,49 @@ async function syncHiddenTombstones(opts: {
   }
 }
 
+/**
+ * Coupe `rows` au plus long préfixe qui tient dans `maxBytes`.
+ *
+ * Trois propriétés, et aucune n'est décorative :
+ *
+ * - **Un préfixe, jamais une sélection.** Les lignes sont déjà triées par le
+ *   keyset `(updatedAt, id)`. Ne garder qu'un PRÉFIXE est ce qui permet au
+ *   curseur de reprendre exactement derrière la dernière ligne livrée ; écarter
+ *   une ligne lourde « au milieu » pour en faire tenir deux légères ferait un
+ *   trou qu'aucune position keyset ne saurait réclamer.
+ *
+ * - **Au moins une ligne, TOUJOURS.** Un message plus lourd à lui seul que le
+ *   budget rendrait sinon une page vide accompagnée de `truncated: true` et
+ *   d'un curseur inchangé — c'est-à-dire la même requête, indéfiniment. Le
+ *   rattrapage ne progresserait plus jamais, et le seul symptôme côté client
+ *   serait une synchronisation qui tourne sans rien appliquer. Dépasser le
+ *   budget d'une ligne est le moindre mal ; ne plus avancer n'en est pas un.
+ *
+ * - **La ligne qui franchit la borne est EXCLUE, pas incluse.** Autrement le
+ *   budget serait un plancher déguisé.
+ *
+ * Le coût de mesure est borné par le budget lui-même : on s'arrête au premier
+ * dépassement, donc on ne sérialise jamais plus de `maxBytes` + une ligne —
+ * là où la page entière représentait, elle, un `JSON.stringify` non borné.
+ * La mesure porte sur la ligne Prisma et non sur les octets finaux du fil
+ * (`fast-json-stringify` applique encore le schéma de réponse par-dessus) :
+ * c'est une approximation par excès du même ordre de grandeur, ce qu'un budget
+ * demande, là où une comptabilité exacte imposerait de sérialiser deux fois.
+ */
+function trimToByteBudget<T>(
+  rows: readonly T[],
+  maxBytes: number,
+): { page: T[]; truncated: boolean } {
+  let total = 0;
+  for (let i = 0; i < rows.length; i++) {
+    total += Buffer.byteLength(JSON.stringify(rows[i]), 'utf8');
+    if (total <= maxBytes) continue;
+    const kept = Math.max(i, 1);
+    return { page: rows.slice(0, kept), truncated: kept < rows.length };
+  }
+  return { page: [...rows], truncated: false };
+}
+
 async function syncMessages(opts: {
   prisma: FastifyInstance['prisma'];
   userId: string;
@@ -457,8 +531,21 @@ async function syncMessages(opts: {
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
-  const changedTruncated = changedRows.length > cap;
-  const changedPage = changedTruncated ? changedRows.slice(0, cap) : changedRows;
+  const capTruncated = changedRows.length > cap;
+  const cappedRows = capTruncated ? changedRows.slice(0, cap) : changedRows;
+
+  // Le POIDS est le second critère d'arrêt de la page, et il s'applique ICI :
+  // après le plafond de lignes (dont `cap + 1` est la sonde), avant le masquage
+  // personnel. L'ordre n'est pas indifférent — voir la note du masquage juste
+  // en dessous : une ligne écartée par le BUDGET n'a pas été livrée et le
+  // curseur ne doit surtout pas passer derrière elle, là où une ligne masquée,
+  // elle, est livrée-comme-absente et doit faire avancer la position. Les deux
+  // retraits se ressemblent et ont des conséquences opposées sur le curseur ;
+  // c'est le fait de trancher AVANT que `changedPage` soit figée qui les garde
+  // distincts, `changedPage` étant précisément ce sur quoi le curseur s'ancre.
+  const budgeted = trimToByteBudget(cappedRows, SYNC_MAX_PAGE_BYTES);
+  const changedPage = budgeted.page;
+  const changedTruncated = capTruncated || budgeted.truncated;
 
   // Le masquage personnel s'applique APRÈS le keyset, jamais dedans : le
   // curseur `(updatedAt, id)` doit rester ancré sur la dernière ligne LUE,
@@ -486,6 +573,15 @@ async function syncMessages(opts: {
   // DELETED — tombstones supprimés depuis `since`. Même keyset `(deletedAt, id)`
   // avec cap+1 : le stream tombstones est désormais paginé (A3.1 le tronquait
   // silencieusement à `cap` sans signal — trou corrigé).
+  //
+  // Ce stream n'est PAS soumis au budget d'octets, et l'exemption est de
+  // nature, pas de commodité : sa ligne est faite de trois scalaires de taille
+  // fixe (deux ObjectId et une date), donc le plafond de LIGNES y est déjà un
+  // plafond de poids — une page pleine pèse de l'ordre de la centaine de
+  // kilo-octets, et elle le pèsera toujours. C'est exactement la propriété que
+  // le stream `changed` a perdue en devenant rendable, et c'est elle qui décide
+  // où le budget doit mordre. Le stream des disparitions personnelles, servi
+  // dans le même tableau, tient de lui la même forme et la même exemption.
   const deletedRows = await prisma.message.findMany({
     where: {
       conversationId: { in: conversationIds },
