@@ -2286,35 +2286,11 @@ export const callSessionMinimalSchema = {
   }
 } as const;
 
-/**
- * Call participant schema
- */
-export const callParticipantSchema = {
-  type: 'object',
-  description: 'Participant in a call session',
-  properties: {
-    id: { type: 'string', description: 'Participant record ID' },
-    callSessionId: { type: 'string', description: 'Call session ID' },
-    userId: { type: 'string', description: 'User ID' },
-    role: {
-      type: 'string',
-      enum: ['initiator', 'participant', 'observer'],
-      description: 'Participant role'
-    },
-    status: {
-      type: 'string',
-      enum: ['invited', 'ringing', 'connected', 'disconnected', 'declined'],
-      description: 'Participant status'
-    },
-    joinedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Join timestamp' },
-    leftAt: { type: 'string', format: 'date-time', nullable: true, description: 'Leave timestamp' },
-    duration: { type: 'number', nullable: true, description: 'Time in call (seconds)' },
-    isMuted: { type: 'boolean', description: 'Audio muted' },
-    isVideoOff: { type: 'boolean', description: 'Video disabled' },
-    connectionQuality: { type: 'number', nullable: true, description: 'Connection quality (0-100)' },
-    user: { ...userMinimalSchema, description: 'User info' }
-  }
-} as const;
+// `callParticipantSchema` (OpenAPI) a été retiré le 2026-08-13, pour la même
+// raison que son jumeau Zod `CallParticipantSchemas` : plus aucune route ne le
+// référençait, et il documentait des champs (`status`, `duration`, `isMuted`,
+// `isVideoOff`) absents du modèle Prisma `CallParticipant`. Publier cette forme
+// dans l'OpenAPI aurait fait coder un client contre une entité inexistante.
 
 /**
  * Start call request schema

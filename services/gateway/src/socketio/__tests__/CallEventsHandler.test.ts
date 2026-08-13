@@ -298,6 +298,11 @@ function makeParticipant(overrides: Record<string, any> = {}) {
     leftAt: null,
     isAudioEnabled: true,
     isVideoEnabled: true,
+    // Conservé À DESSEIN bien que le modèle Prisma ne déclare plus le champ :
+    // la ligne Mongo brute peut encore le porter, et c'est précisément ce que
+    // les assertions « pas de connectionQuality » doivent voir passer pour ne
+    // pas être vaines. Le retirer d'ici rendrait ces tests trivialement verts.
+    // Noter la valeur : une CHAÎNE, cinquième forme incompatible du champ.
     connectionQuality: 'good',
     participant: {
       userId: USER_ID,
@@ -2948,6 +2953,105 @@ describe('CallEventsHandler', () => {
       // The event is broadcast to member sockets, not echoed back to the initiator
       expect(memberSocket.emit).toHaveBeenCalledWith('call:initiated', expect.objectContaining({
         participants: expect.arrayContaining([expect.objectContaining({ userId: USER_ID })]),
+      }));
+    });
+  });
+
+  // ── participant payload: pas de connectionQuality serveur ────────────────
+
+  // `CallParticipant.connectionQuality` n'a JAMAIS eu d'écrivain : aucun des 12
+  // sites `callParticipant.{create,update,updateMany}` du gateway ne le pose.
+  // Les trois émissions ci-dessous le relayaient donc à `null` systématiquement,
+  // sous un `as unknown as ConnectionQuality | null` qui masquait que la forme
+  // Json n'avait jamais été validée. Aucun client ne le décode : iOS, Android et
+  // web calculent leur qualité localement depuis leur propre pile WebRTC.
+  // La qualité de connexion est ÉPHÉMÈRE — son canal est `call:quality-report` /
+  // `call:quality-alert`, qui la portent déjà par participant en temps réel.
+  describe('participant payload — la qualité de connexion n’est pas un champ serveur', () => {
+    const initiateData = { conversationId: CONV_ID, type: 'video', settings: {} };
+
+    it('n’annonce pas connectionQuality dans les participants de call:initiated (rejeu check-active)', async () => {
+      const activeCall = { id: CALL_ID, status: 'ringing', conversationId: CONV_ID };
+      const fullSession = makeCallSession({ participants: [makeParticipant()] });
+      mockCallServiceGetCallSession.mockResolvedValue(fullSession);
+      mockCallServiceGenerateIceServers.mockReturnValue([]);
+
+      const { socket } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ conversationId: CONV_ID }]),
+        },
+        callSession: {
+          findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, conversationId: CONV_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([activeCall]),
+          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        },
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([{ callSessionId: CALL_ID, leftAt: null }]),
+        },
+      });
+
+      await socket._trigger('call:check-active');
+
+      const emitted = socket.emit.mock.calls.find(([name]: any[]) => name === 'call:initiated');
+      expect(emitted).toBeDefined();
+      expect(emitted[1].participants[0]).not.toHaveProperty('connectionQuality');
+    });
+
+    it('n’annonce pas connectionQuality dans les participants de call:initiated (initiation)', async () => {
+      const callSession = makeCallSession({ participants: [makeParticipant()], status: 'ringing' });
+      mockCallServiceInitiateCall.mockResolvedValue(callSession);
+
+      const memberSocket = { emit: jest.fn<any>(), data: { appForeground: true } };
+      const { socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ userId: 'other-member-507f' }]),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([memberSocket]) });
+
+      await socket._trigger('call:initiate', initiateData);
+
+      const emitted = memberSocket.emit.mock.calls.find(([name]: any[]) => name === 'call:initiated');
+      expect(emitted).toBeDefined();
+      expect(emitted[1].participants[0]).not.toHaveProperty('connectionQuality');
+    });
+
+    it('n’annonce pas connectionQuality dans call:participant-joined', async () => {
+      const callSession = makeCallSession({ participants: [makeParticipant()] });
+      mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+
+      const otherSocket = { id: 'other-socket', emit: jest.fn<any>() };
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([otherSocket]) });
+
+      await socket._trigger('call:join', { callId: CALL_ID, settings: {} });
+
+      const emitted = otherSocket.emit.mock.calls.find(([name]: any[]) => name === 'call:participant-joined');
+      expect(emitted).toBeDefined();
+      expect(emitted[1].participant).not.toHaveProperty('connectionQuality');
+    });
+
+    // Comportement CONSERVÉ : le retrait ne touche QUE le champ mort. Les champs
+    // d'état par participant que les clients lisent réellement restent portés.
+    it('continue de porter l’état média et l’identité du participant qui rejoint', async () => {
+      const callSession = makeCallSession({ participants: [makeParticipant()] });
+      mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+
+      const otherSocket = { id: 'other-socket', emit: jest.fn<any>() };
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([otherSocket]) });
+
+      await socket._trigger('call:join', { callId: CALL_ID, settings: {} });
+
+      const emitted = otherSocket.emit.mock.calls.find(([name]: any[]) => name === 'call:participant-joined');
+      expect(emitted[1].participant).toEqual(expect.objectContaining({
+        id: PARTICIPANT_ID,
+        callSessionId: CALL_ID,
+        userId: USER_ID,
+        isAudioEnabled: true,
+        isVideoEnabled: true,
       }));
     });
   });

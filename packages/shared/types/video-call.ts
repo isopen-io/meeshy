@@ -123,7 +123,6 @@ export interface CallParticipant {
   readonly leftAt?: Date;
   readonly isAudioEnabled: boolean;
   readonly isVideoEnabled: boolean;
-  readonly connectionQuality?: ConnectionQuality;
 
   // Champs populés (non dans Prisma)
   readonly username?: string;
@@ -131,15 +130,12 @@ export interface CallParticipant {
   readonly avatar?: string;
 }
 
-/**
- * Qualité de connexion WebRTC
- */
-export interface ConnectionQuality {
-  readonly latency: number;               // ms
-  readonly packetLoss: number;            // 0-1 (percentage)
-  readonly bandwidth: number;             // kbps
-  readonly jitter?: number;               // ms
-}
+// La qualité de connexion d'un participant N'EST PAS un champ de cette entité :
+// elle est ÉPHÉMÈRE et transite par `call:quality-report` (client → serveur) puis
+// `call:quality-alert` (serveur → pairs), qui la portent déjà par participant.
+// Les statistiques instantanées ont leur type dédié : `ConnectionQualityStats`
+// plus bas — à ne pas confondre avec l'ancien `ConnectionQuality`, retiré le
+// 2026-08-13 : il décrivait un champ Prisma que rien n'a jamais écrit.
 
 // ===== CALL CONTROLS =====
 
