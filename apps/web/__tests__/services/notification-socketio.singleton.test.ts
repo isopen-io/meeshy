@@ -53,20 +53,29 @@ jest.mock('@/lib/config', () => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Minimal valid notification data the server would push */
+/**
+ * Payload `notification:new` tel que la gateway l'émet :
+ * `{...formatNotification(raw), title, subtitle}` — structure GROUPÉE, avec
+ * `title`/`subtitle` calculés serveur dans la langue résolue du destinataire.
+ * @see services/gateway/src/services/notifications/NotificationService.ts
+ */
 const makeNotificationData = (overrides: Record<string, any> = {}) => ({
   id: 'notif-1',
   userId: 'user-1',
   type: 'new_message',
   priority: 'normal',
-  content: { title: 'Hello', body: 'World' },
+  title: 'Alice',
+  subtitle: 'Équipe produit',
+  content: 'Salut !',
   actor: { id: 'actor-1', username: 'alice' },
   context: { conversationId: 'conv-1' },
   metadata: {},
-  isRead: false,
-  readAt: null,
-  createdAt: '2024-01-01T00:00:00.000Z',
-  expiresAt: null,
+  state: {
+    isRead: false,
+    readAt: null,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    expiresAt: null,
+  },
   delivery: { emailSent: false, pushSent: false },
   ...overrides,
 });
@@ -259,13 +268,12 @@ describe('notificationSocketIO singleton', () => {
   // ── setupEventListeners() → notification:new ─────────────────────────────
 
   describe('event: notification:new', () => {
-    it('parses notification data and calls registered callbacks', async () => {
+    it('decodes the emitted payload and calls registered callbacks', async () => {
       const cb = jest.fn();
       notificationSocketIO.onNotification(cb);
 
       await notificationSocketIO.connect('tok');
-      const data = makeNotificationData();
-      currentSocketMock!._emit('notification:new', data);
+      currentSocketMock!._emit('notification:new', makeNotificationData());
 
       expect(cb).toHaveBeenCalledTimes(1);
       const received = cb.mock.calls[0][0];
@@ -273,138 +281,49 @@ describe('notificationSocketIO singleton', () => {
       expect(received.userId).toBe('user-1');
       expect(received.type).toBe('new_message');
       expect(received.priority).toBe('normal');
+      expect(received.context).toEqual({ conversationId: 'conv-1' });
     });
 
-    it('builds state object with correct fields from root-level server data', async () => {
+    it('livre le title et le subtitle calculés serveur', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onNotification(cb);
+
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('notification:new', makeNotificationData());
+
+      const received = cb.mock.calls[0][0];
+      expect(received.title).toBe('Alice');
+      expect(received.subtitle).toBe('Équipe produit');
+    });
+
+    it('livre l’état lu sous state — horodatage serveur, pas horloge locale', async () => {
       const cb = jest.fn();
       notificationSocketIO.onNotification(cb);
 
       await notificationSocketIO.connect('tok');
       const createdAt = '2024-06-01T12:00:00.000Z';
       const readAt = '2024-06-01T12:30:00.000Z';
-      const data = makeNotificationData({ isRead: true, readAt, createdAt });
-      currentSocketMock!._emit('notification:new', data);
+      const expiresAt = '2024-12-31T23:59:59.000Z';
+      currentSocketMock!._emit(
+        'notification:new',
+        makeNotificationData({ state: { isRead: true, readAt, createdAt, expiresAt } })
+      );
 
       const received = cb.mock.calls[0][0];
       expect(received.state.isRead).toBe(true);
       expect(received.state.readAt).toEqual(new Date(readAt));
       expect(received.state.createdAt).toEqual(new Date(createdAt));
+      expect(received.state.expiresAt).toEqual(new Date(expiresAt));
     });
 
-    it('defaults state.readAt to null when readAt not provided', async () => {
+    it('ne livre rien quand le payload n’a pas d’identité exploitable', async () => {
       const cb = jest.fn();
       notificationSocketIO.onNotification(cb);
 
       await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ readAt: null });
-      currentSocketMock!._emit('notification:new', data);
+      currentSocketMock!._emit('notification:new', makeNotificationData({ id: undefined }));
 
-      expect(cb.mock.calls[0][0].state.readAt).toBeNull();
-    });
-
-    it('defaults state.createdAt to current date when createdAt missing', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      const before = new Date();
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ createdAt: undefined });
-      currentSocketMock!._emit('notification:new', data);
-      const after = new Date();
-
-      const received = cb.mock.calls[0][0];
-      expect(received.state.createdAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
-      expect(received.state.createdAt.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
-
-    it('parses expiresAt when provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const expiresAt = '2024-12-31T23:59:59.000Z';
-      const data = makeNotificationData({ expiresAt });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].state.expiresAt).toEqual(new Date(expiresAt));
-    });
-
-    it('leaves expiresAt undefined when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ expiresAt: null });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].state.expiresAt).toBeUndefined();
-    });
-
-    it('defaults delivery to { emailSent: false, pushSent: false } when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ delivery: undefined });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].delivery).toEqual({ emailSent: false, pushSent: false });
-    });
-
-    it('uses provided delivery data when available', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const delivery = { emailSent: true, pushSent: true };
-      const data = makeNotificationData({ delivery });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].delivery).toEqual(delivery);
-    });
-
-    it('defaults context to {} when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ context: undefined });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].context).toEqual({});
-    });
-
-    it('defaults metadata to {} when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ metadata: undefined });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].metadata).toEqual({});
-    });
-
-    it('defaults priority to normal when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ priority: undefined });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].priority).toBe('normal');
-    });
-
-    it('defaults state.isRead to false when not provided', async () => {
-      const cb = jest.fn();
-      notificationSocketIO.onNotification(cb);
-
-      await notificationSocketIO.connect('tok');
-      const data = makeNotificationData({ isRead: undefined });
-      currentSocketMock!._emit('notification:new', data);
-
-      expect(cb.mock.calls[0][0].state.isRead).toBe(false);
+      expect(cb).not.toHaveBeenCalled();
     });
 
     it('calls multiple notification callbacks', async () => {
