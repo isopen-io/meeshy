@@ -58,22 +58,27 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
   });
 
   describe('messageSchema - Champs Delivery', () => {
-    it('devrait avoir receivedByAllAt dans le schéma properties', () => {
-      expect(messageSchema.properties).toHaveProperty('receivedByAllAt');
-      expect(messageSchema.properties.receivedByAllAt).toMatchObject({
-        type: 'string',
-        format: 'date-time',
-        nullable: true,
-        description: 'Received by all recipients timestamp'
-      });
+    // `receivedByAllAt` a été RETIRÉ : la colonne n'avait aucun écrivain
+    // (`updateMessageComputedStatus` est un no-op assumé depuis le passage aux
+    // curseurs) et aucun des trois clients ne la décodait. Le schéma la
+    // documentait donc comme un horodatage qui ne pouvait jamais exister.
+    // Ses deux voisines survivent, elles : iOS et Android les décodent, et le
+    // serveur les CALCULE désormais (getConversationReadStatuses).
+    it('ne déclare plus receivedByAllAt — ni écrivain ni lecteur', () => {
+      expect(messageSchema.properties).not.toHaveProperty('receivedByAllAt');
     });
 
-    it('devrait avoir receivedByAllAt correctement typé', () => {
-      const { receivedByAllAt } = messageSchema.properties;
-
-      expect(receivedByAllAt.type).toBe('string');
-      expect(receivedByAllAt.format).toBe('date-time');
-      expect(receivedByAllAt.nullable).toBe(true);
+    it('conserve les deux dates de seuil que les clients décodent', () => {
+      expect(messageSchema.properties.deliveredToAllAt).toMatchObject({
+        type: 'string',
+        format: 'date-time',
+        nullable: true
+      });
+      expect(messageSchema.properties.readByAllAt).toMatchObject({
+        type: 'string',
+        format: 'date-time',
+        nullable: true
+      });
     });
   });
 
@@ -120,8 +125,7 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
       const requiredFields = [
         'encryptedContent',
         'encryptionMetadata',
-        'maxViewOnceCount',
-        'receivedByAllAt'
+        'maxViewOnceCount'
       ];
 
       requiredFields.forEach(field => {
@@ -145,7 +149,6 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
       expect(messageSchema.properties.encryptedContent.nullable).toBe(true);
       expect(messageSchema.properties.encryptionMetadata.nullable).toBe(true);
       expect(messageSchema.properties.maxViewOnceCount.nullable).toBe(true);
-      expect(messageSchema.properties.receivedByAllAt.nullable).toBe(true);
 
       // conversationSchema
       expect(conversationSchema.properties.serverEncryptionKeyId.nullable).toBe(true);
@@ -159,7 +162,6 @@ describe('Phase 1 - Corrections Critiques Schémas', () => {
       expect(messageSchema.properties.encryptedContent.description).toBeTruthy();
       expect(messageSchema.properties.encryptionMetadata.description).toBeTruthy();
       expect(messageSchema.properties.maxViewOnceCount.description).toBeTruthy();
-      expect(messageSchema.properties.receivedByAllAt.description).toBeTruthy();
       expect(conversationSchema.properties.serverEncryptionKeyId.description).toBeTruthy();
       expect(conversationSchema.properties.isAnnouncementChannel.description).toBeTruthy();
     });

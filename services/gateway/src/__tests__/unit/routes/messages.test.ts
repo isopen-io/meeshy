@@ -346,6 +346,60 @@ describe('GET /messages/:messageId', () => {
       expect(body.data.id).toBe(MSG_ID);
       expect(body.data.statusSummary.deliveredCount).toBe(0);
     });
+
+    // Les DATES du seuil « tous servis » partagent le défaut des compteurs :
+    // leurs colonnes n'ont aucun écrivain (`updateMessageComputedStatus` est un
+    // no-op assumé). Les servir depuis la ligne, c'était promettre `null` à un
+    // client dont le résolveur traite `readByAllAt != nil` comme la PREUVE que
+    // tout le monde a lu.
+    it('sert deliveredToAllAt / readByAllAt calculés, jamais la colonne', async () => {
+      // Deux dates que la production ne produit jamais sur cette colonne : leur
+      // réapparition dans la réponse trahirait une lecture de la ligne.
+      (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+        ...mockMessage,
+        deliveredToAllAt: new Date('1999-01-01T00:00:00Z'),
+        readByAllAt: new Date('1999-01-02T00:00:00Z'),
+      });
+      mockGetConversationReadStatuses.mockResolvedValueOnce(
+        new Map([[MSG_ID, {
+          totalMembers: 2,
+          receivedCount: 2,
+          readCount: 2,
+          deliveredToAllAt: new Date('2026-08-13T10:00:00Z'),
+          readByAllAt: new Date('2026-08-13T10:05:00Z'),
+        }]])
+      );
+
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(new Date(body.data.deliveredToAllAt)).toEqual(new Date('2026-08-13T10:00:00Z'));
+      expect(new Date(body.data.readByAllAt)).toEqual(new Date('2026-08-13T10:05:00Z'));
+    });
+
+    it('rend null pour les dates du seuil quand le service ne décrit pas le message', async () => {
+      (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+        ...mockMessage,
+        deliveredToAllAt: new Date('1999-01-01T00:00:00Z'),
+        readByAllAt: new Date('1999-01-02T00:00:00Z'),
+      });
+      mockGetConversationReadStatuses.mockResolvedValueOnce(new Map());
+
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.deliveredToAllAt).toBeNull();
+      expect(body.data.readByAllAt).toBeNull();
+    });
+
+    // `receivedByAllAt` était déclaré (Prisma, deux types partagés, schéma
+    // OpenAPI), `select`é et relayé — sans écrivain NI lecteur sur aucune des
+    // trois plateformes. Il sort entier ; la réponse ne doit plus le porter.
+    it('ne porte plus receivedByAllAt, champ sans écrivain ni lecteur', async () => {
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).not.toHaveProperty('receivedByAllAt');
+    });
   });
 });
 

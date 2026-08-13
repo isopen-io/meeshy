@@ -141,7 +141,6 @@ async function buildApp(optedOutUserIds: string[]): Promise<FastifyInstance> {
           deliveredCount: 0,
           readCount: 0,
           deliveredToAllAt: null,
-          receivedByAllAt: null,
           readByAllAt: null,
           sender: {
             id: SENDER_PARTICIPANT_ID,

@@ -153,11 +153,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           validatedMentions: true,
           createdAt: true,
           updatedAt: true,
-          deliveredToAllAt: true,
-          receivedByAllAt: true,
-          readByAllAt: true,
-          deliveredCount: true,
-          readCount: true,
+          // Aucune colonne dénormalisée de statut n'est lue : les cinq ont
+          // perdu leur écrivain au passage aux curseurs
+          // (`updateMessageComputedStatus` est un no-op assumé). Le bloc de
+          // statut est calculé plus bas.
           reactionSummary: true,
           reactionCount: true,
           encryptedContent: true,
@@ -217,7 +216,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // synchrone — ne doit pas emporter le message, qui est le contenu
       // demandé. D'où le try/catch plutôt qu'un `.catch()`, qui ne rattraperait
       // que le premier des deux.
-      let summary: { totalMembers: number; receivedCount: number; readCount: number } | undefined;
+      let summary: {
+        totalMembers: number;
+        receivedCount: number;
+        readCount: number;
+        deliveredToAllAt: Date | null;
+        readByAllAt: Date | null;
+      } | undefined;
       try {
         const { MessageReadStatusService } = await import('../services/MessageReadStatusService');
         const readStatusService = new MessageReadStatusService(prisma);
@@ -243,6 +248,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         deliveredCount: summary?.receivedCount ?? 0,
         readCount: summary?.readCount ?? 0,
         recipientCount: summary?.totalMembers ?? 0,
+        // Les DATES du seuil « tous servis » sortaient encore de la ligne, donc
+        // valaient `null` en permanence — alors que les trois clients lisent
+        // `readByAllAt != null` comme la PREUVE que tous ont lu.
+        deliveredToAllAt: summary?.deliveredToAllAt ?? null,
+        readByAllAt: summary?.readByAllAt ?? null,
+
         statusSummary: {
           deliveredCount: summary?.receivedCount ?? 0,
           readCount: summary?.readCount ?? 0,
