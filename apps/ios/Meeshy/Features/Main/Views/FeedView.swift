@@ -541,8 +541,9 @@ struct FeedView: View {
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
             // so on iPad it simply fills the space that was previously left empty.
             VStack(spacing: 0) {
-                // Compact story trail integrated inside the header (accessory
-                // slot) — reveals as the full-size trail scrolls up under it.
+                // Compact story trail that TAKES THE TITLE'S PLACE in the bar —
+                // reveals as the full-size trail scrolls up under it, so a
+                // scrolled feed shows the trail instead of « Meeshy Feed ».
                 CollapsibleHeader(
                     title: "Meeshy Feed",
                     scrollOffset: headerScrollOffset,
@@ -553,9 +554,10 @@ struct FeedView: View {
                     // Entrée de la carte des posts (retour user 2026-08-12) :
                     // un bouton toujours visible dans le header — basculement
                     // liste ↔ carte à un tap, cf. FeedPostsMapView pour le
-                    // raisonnement UX complet.
-                    trailing: { postsMapButton },
-                    accessory: {
+                    // raisonnement UX complet. Depuis 2026-08-13 elle voisine le
+                    // bouton Réels, à sa droite : deux lectures du même feed.
+                    trailing: { feedHeaderActions },
+                    titleAccessory: {
                         AnyView(
                             // Lancement unifié via StoryViewerCoordinator (cf.
                             // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
@@ -593,6 +595,33 @@ struct FeedView: View {
         viewModel.posts.filter { $0.location != nil }
     }
 
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
+    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
+    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
+    /// chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`) porte la même paire.
+    private var feedHeaderActions: some View {
+        HStack(spacing: 8) {
+            reelsButton
+            postsMapButton
+        }
+    }
+
+    private var reelsButton: some View {
+        Button {
+            HapticFeedback.medium()
+            ReelsPresenter.shared.presentFresh()
+        } label: {
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+        .accessibilityIdentifier("feed.header.reels")
+    }
+
     private var postsMapButton: some View {
         Button {
             HapticFeedback.light()
@@ -607,6 +636,7 @@ struct FeedView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
         .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
+        .accessibilityIdentifier("feed.header.map")
     }
 
     // MARK: - Composer Placeholder

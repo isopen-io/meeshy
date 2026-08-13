@@ -160,9 +160,15 @@ final class StoryTraySheetChainingTests: XCTestCase {
 
         // Supersession 2026-08-02 : le tap sur son propre anneau monte la
         // LISTE, et l'entrée de menu reste — deux chemins vers la même sheet.
+        //
+        // Troisième site depuis 2026-08-13 : le retrait du bouton « + » de tête
+        // a fait de l'avatar « Moi » l'UNIQUE entrée de composition du band, et
+        // cet avatar doit donc exister même sans aucun groupe de stories
+        // (`selfAvatarCell`). Son routage passe par le même résolveur : un
+        // historique entièrement expiré y mène aussi à la liste de gestion.
         XCTAssertEqual(
-            occurrences(of: "showMyStories = true", in: band), 2,
-            "Le tap sur l'anneau « Moi » ET l'entrée de menu montent la sheet de gestion depuis le header replié."
+            occurrences(of: "showMyStories = true", in: band), 3,
+            "Le tap sur l'anneau « Moi » (avec ou sans story) ET l'entrée de menu montent la sheet de gestion depuis le header replié."
         )
         // Boucle fermée : l'entrée de menu porte le libellé « Gérer mes
         // stories », résolu par le catalogue. Sans ce lien, renommer la
