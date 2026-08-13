@@ -208,19 +208,45 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Accès non autorisé à ce message');
       }
 
-      // Retourner le message avec les champs dénormalisés (deliveredCount, readCount, etc.)
-      // Les détails des statuts sont disponibles via GET /messages/:messageId/status-details
+      // Le résumé se CALCULE — les colonnes dénormalisées de la ligne Message
+      // n'ont aucun écrivain et valaient donc toujours `{0, 0, null, null}`.
+      // Même source de vérité que la liste de messages et que le canal socket,
+      // opt-out `showReadReceipts` compris. Le détail par participant reste
+      // derrière GET /messages/:messageId/status-details.
+      // Le résumé est un ENRICHISSEMENT : son échec — rejet comme jet
+      // synchrone — ne doit pas emporter le message, qui est le contenu
+      // demandé. D'où le try/catch plutôt qu'un `.catch()`, qui ne rattraperait
+      // que le premier des deux.
+      let summary: { totalMembers: number; receivedCount: number; readCount: number } | undefined;
+      try {
+        const { MessageReadStatusService } = await import('../services/MessageReadStatusService');
+        const readStatusService = new MessageReadStatusService(prisma);
+        const summaries = await readStatusService.getConversationReadStatuses(
+          (message as any).conversationId,
+          [messageId]
+        );
+        summary = summaries.get(messageId);
+      } catch (err) {
+        logger.warn('[MESSAGES] Failed to compute read status summary', err as Error);
+      }
+
       // hoistLocationOnto hisse metadata.location en champ top-level `location`
       // — Lot 1 : ce message est affiché en entier, sans hoist la position
       // resterait invisible même si elle a bien été validée à l'écriture.
       return sendSuccess(reply, hoistLocationOnto({
         ...message,
-        // Les compteurs sont déjà dans message via les champs dénormalisés
+        // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
+        // du `select` : les trois clients y décodent leurs coches de livraison.
+        // Les laisser au contenu de la ligne aurait servi zéro ici pendant que
+        // la liste de messages sert le compte réel — deux vérités pour un même
+        // message, selon l'endpoint interrogé.
+        deliveredCount: summary?.receivedCount ?? 0,
+        readCount: summary?.readCount ?? 0,
+        recipientCount: summary?.totalMembers ?? 0,
         statusSummary: {
-          deliveredCount: (message as any).deliveredCount || 0,
-          readCount: (message as any).readCount || 0,
-          deliveredToAllAt: (message as any).deliveredToAllAt,
-          readByAllAt: (message as any).readByAllAt
+          deliveredCount: summary?.receivedCount ?? 0,
+          readCount: summary?.readCount ?? 0,
+          recipientCount: summary?.totalMembers ?? 0
         }
       } as unknown as Record<string, unknown>));
 

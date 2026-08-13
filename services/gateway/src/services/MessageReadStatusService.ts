@@ -1072,6 +1072,27 @@ export class MessageReadStatusService {
    *
    * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
    */
+  /**
+   * Ne garde que les participants dont les accusés peuvent être MONTRÉS.
+   *
+   * Version publique de la règle ci-dessus, pour les appelants qui exposent des
+   * accusés NOMINATIFS (horodatage + identité) et non un simple compteur. Elle
+   * répond à la question telle qu'un appelant se la pose — « lesquels ai-je le
+   * droit de montrer ? » — plutôt que de lui livrer l'ensemble des exclus, dont
+   * la seule taille trahirait déjà combien de participants se sont retirés.
+   *
+   * Sans elle, un appelant hors de ce service n'a d'autre choix que de relire
+   * `UserPreference` lui-même — c'est-à-dire de réimplémenter la règle, ce qui
+   * l'a déjà fait diverger une fois (cf. `services/gateway/decisions.md`
+   * § 2026-08-13).
+   */
+  async filterReadReceiptVisible<T extends { id: string; userId?: string | null }>(
+    participants: ReadonlyArray<T>
+  ): Promise<T[]> {
+    const optedOut = await this._loadReadReceiptOptOuts(participants);
+    return participants.filter((p) => !optedOut.has(p.id));
+  }
+
   private async _loadReadReceiptOptOuts(
     participants: ReadonlyArray<{ id: string; userId?: string | null }>
   ): Promise<Set<string>> {

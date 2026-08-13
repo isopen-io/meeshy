@@ -160,6 +160,7 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
+import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -186,6 +187,17 @@ const makePrisma = (): any => ({
   },
   participant: {
     findFirst: jest.fn().mockResolvedValue(null),
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  // Lues par `MessageReadStatusService`, à qui `GET /conversations/:id/status`
+  // délègue désormais son résumé d'accusés et son filtre d'opt-out.
+  conversationReadCursor: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  messageStatusEntry: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  userPreference: {
     findMany: jest.fn().mockResolvedValue([]),
   },
   mention: {
@@ -2897,14 +2909,14 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('formats message statuses correctly', async () => {
+      // Ce test figeait autrefois les colonnes dénormalisées (`deliveredCount:
+      // 3`), c'est-à-dire une valeur que la production ne produit JAMAIS —
+      // personne ne les écrit. Il porte désormais sur la mise en forme : une
+      // ligne par message, son identité, et ses entrées nominatives.
       prisma.message.findMany.mockResolvedValue([
         {
           id: MSG_ID,
           senderId: PART_ID,
-          deliveredCount: 3,
-          readCount: 2,
-          deliveredToAllAt: new Date(),
-          readByAllAt: null,
           createdAt: new Date(),
           statusEntries: [
             {
@@ -2913,6 +2925,7 @@ describe('registerMessagesAdvancedRoutes', () => {
               readAt: new Date(),
               participant: {
                 id: PART_ID,
+                userId: USER_ID,
                 displayName: 'Alice',
                 avatar: null,
                 type: 'user',
@@ -2930,8 +2943,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       const result = mockSendSuccess.mock.calls[0][1];
       expect(result.total).toBe(1);
-      expect(result.statuses[0].summary.deliveredCount).toBe(3);
-      expect(result.statuses[0].summary.readCount).toBe(2);
+      expect(result.statuses[0].messageId).toBe(MSG_ID);
+      expect(result.statuses[0].senderId).toBe(PART_ID);
       expect(result.statuses[0].entries[0].user.username).toBe('alice');
     });
 
@@ -2966,6 +2979,129 @@ describe('registerMessagesAdvancedRoutes', () => {
       const result = mockSendSuccess.mock.calls[0][1];
       expect(result.statuses[0].summary.deliveredCount).toBe(0);
       expect(result.statuses[0].summary.readCount).toBe(0);
+    });
+
+    /**
+     * Les trois défauts que le cycle 101 avait relevés sans les traiter, dans
+     * un unique handler : un résumé lu de colonnes MORTES, des horodatages de
+     * lecture NOMINATIFS servis sans le gate d'opt-out que les cinq autres
+     * lecteurs respectent, et une requête SANS BORNE sur toute la conversation.
+     */
+    describe("le résumé se CALCULE, les accusés se TAISENT sur demande, et la page a une borne", () => {
+      const MSG_CREATED_AT = new Date('2026-08-01T10:00:00.000Z');
+      const READ_AT = new Date('2026-08-01T10:05:00.000Z');
+
+      /** Destinataire qui laisse ses accusés visibles. */
+      const OPEN_PART_ID = '507f1f77bcf86cd799439061';
+      const OPEN_USER_ID = '507f1f77bcf86cd799439062';
+      /** Destinataire qui a désactivé `showReadReceipts`. */
+      const SILENT_PART_ID = '507f1f77bcf86cd799439071';
+      const SILENT_USER_ID = '507f1f77bcf86cd799439072';
+
+      beforeEach(() => {
+        // Le cache d'opt-out a la portée du PROCESSUS : sans ce nettoyage, le
+        // premier test (personne de retiré) le remplit et les suivants lisent
+        // sa réponse périmée au lieu du double.
+        (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+      });
+
+      const entryFor = (participantId: string, userId: string, displayName: string, username: string) => ({
+        participantId,
+        deliveredAt: READ_AT,
+        receivedAt: READ_AT,
+        readAt: READ_AT,
+        messageId: MSG_ID,
+        participant: {
+          id: participantId,
+          // `userId` porte la préférence : un participant sans lui est réputé
+          // visible (anonyme/bot). L'omettre du double rendait le gate inerte.
+          userId,
+          displayName,
+          avatar: null,
+          type: 'user',
+          user: { username },
+        },
+      });
+
+      const seedConversation = (optedOutUserIds: string[] = []) => {
+        prisma.message.findMany.mockResolvedValue([
+          {
+            id: MSG_ID,
+            senderId: PART_ID,
+            createdAt: MSG_CREATED_AT,
+            // Les colonnes dénormalisées n'ont AUCUN écrivain : elles valent
+            // zéro sur toute la collection. On les stubbe ici à des valeurs
+            // IMPOSSIBLES — si elles ressortent, c'est qu'elles sont lues.
+            deliveredCount: 99,
+            readCount: 99,
+            deliveredToAllAt: null,
+            readByAllAt: null,
+            statusEntries: [
+              entryFor(OPEN_PART_ID, OPEN_USER_ID, 'Ouverte', 'ouverte'),
+              entryFor(SILENT_PART_ID, SILENT_USER_ID, 'Discrete', 'discrete'),
+            ],
+          },
+        ]);
+        prisma.participant.findMany.mockResolvedValue([
+          { id: PART_ID, userId: USER_ID, isActive: true },
+          { id: OPEN_PART_ID, userId: OPEN_USER_ID, isActive: true },
+          { id: SILENT_PART_ID, userId: SILENT_USER_ID, isActive: true },
+        ]);
+        prisma.messageStatusEntry.findMany.mockResolvedValue([
+          { messageId: MSG_ID, participantId: OPEN_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
+          { messageId: MSG_ID, participantId: SILENT_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
+        ]);
+        prisma.userPreference.findMany.mockResolvedValue(
+          optedOutUserIds.map((userId) => ({ userId }))
+        );
+      };
+
+      it('ne sert plus les colonnes mortes : le résumé vient du comptage réel', async () => {
+        seedConversation();
+        const reply = makeReply();
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), reply);
+
+        const summary = mockSendSuccess.mock.calls[0][1].statuses[0].summary;
+        expect(summary.deliveredCount).toBe(2);
+        expect(summary.readCount).toBe(2);
+        expect(summary.deliveredCount).not.toBe(99);
+      });
+
+      it("ne révèle pas l'horodatage de lecture d'un participant qui a coupé ses accusés", async () => {
+        seedConversation([SILENT_USER_ID]);
+        const reply = makeReply();
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), reply);
+
+        const entries = mockSendSuccess.mock.calls[0][1].statuses[0].entries;
+        const participantIds = entries.map((e: any) => e.participantId);
+        expect(participantIds).toContain(OPEN_PART_ID);
+        // La fuite fermée : ni la ligne, ni le nom, ni la date.
+        expect(participantIds).not.toContain(SILENT_PART_ID);
+        expect(JSON.stringify(entries)).not.toContain('discrete');
+      });
+
+      it("retire aussi l'opt-out du résumé, comme partout ailleurs", async () => {
+        seedConversation([SILENT_USER_ID]);
+        const reply = makeReply();
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), reply);
+
+        const summary = mockSendSuccess.mock.calls[0][1].statuses[0].summary;
+        expect(summary.deliveredCount).toBe(1);
+        expect(summary.readCount).toBe(1);
+      });
+
+      it('borne la page : une conversation de 100 000 messages ne se charge pas entière', async () => {
+        // Sans `take`, ce handler chargeait CHAQUE message de la conversation
+        // avec ses entrées de statut ET le participant joint sur chacune —
+        // un déni de service que n'importe quel participant pouvait déclencher.
+        seedConversation();
+        const reply = makeReply();
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), reply);
+
+        const findManyArgs = prisma.message.findMany.mock.calls[0][0];
+        expect(typeof findManyArgs.take).toBe('number');
+        expect(findManyArgs.take).toBeGreaterThan(0);
+      });
     });
   });
 

@@ -103,6 +103,9 @@ const mockMarkImageAsViewed = jest.fn().mockResolvedValue(undefined);
 const mockMarkAttachmentAsDownloaded = jest.fn().mockResolvedValue(undefined);
 
 const mockRecordMessageLanguageView = jest.fn().mockResolvedValue(undefined);
+// `GET /messages/:messageId` délègue désormais son `statusSummary` ici : ses
+// colonnes dénormalisées n'ont aucun écrivain et valaient toujours zéro.
+const mockGetConversationReadStatuses = jest.fn<any>().mockResolvedValue(new Map());
 
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
@@ -110,6 +113,7 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
     recordMessageLanguageView: (...args: any[]) => mockRecordMessageLanguageView(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
     getMessageStatusDetails: (...args: any[]) => mockGetMessageStatusDetails(...args),
+    getConversationReadStatuses: (...args: any[]) => mockGetConversationReadStatuses(...args),
     getAttachmentStatusDetails: (...args: any[]) => mockGetAttachmentStatusDetails(...args),
     markAudioAsListened: (...args: any[]) => mockMarkAudioAsListened(...args),
     markVideoAsWatched: (...args: any[]) => mockMarkVideoAsWatched(...args),
@@ -196,10 +200,23 @@ async function buildApp(): Promise<FastifyInstance> {
       update: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUniqueOrThrow: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     participant: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
       findMany: jest.fn().mockResolvedValue([{ userId: USER_ID }]),
+    },
+    // Lues par `MessageReadStatusService`, à qui `GET /messages/:messageId`
+    // délègue désormais son `statusSummary` : ses colonnes dénormalisées
+    // n'ont aucun écrivain et valaient donc toujours zéro.
+    conversationReadCursor: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    messageStatusEntry: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     messageAttachment: {
       findFirst: jest.fn().mockResolvedValue(mockAttachment),
@@ -276,6 +293,59 @@ describe('GET /messages/:messageId', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.data.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
+
+  describe('le résumé des accusés se CALCULE', () => {
+    it('ne sert plus la colonne morte de la ligne Message', async () => {
+      // `mockMessage.deliveredCount` vaut 1 — une valeur que la production ne
+      // produit jamais, personne n'écrivant ce champ. Le double la garde
+      // précisément pour que sa réapparition trahisse une lecture.
+      mockGetConversationReadStatuses.mockResolvedValueOnce(
+        new Map([[MSG_ID, { totalMembers: 3, receivedCount: 2, readCount: 1 }]])
+      );
+
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      // Trois valeurs DISTINCTES : une permutation des trois champs — le seul
+      // défaut plausible de ce câblage — ne peut pas passer inaperçue.
+      expect(body.data.statusSummary.deliveredCount).toBe(2);
+      expect(body.data.statusSummary.readCount).toBe(1);
+      expect(body.data.statusSummary.recipientCount).toBe(3);
+      // Le champ de premier niveau, que les trois clients décodent, dit la
+      // même chose que le résumé — et non plus le contenu de la colonne.
+      expect(body.data.deliveredCount).toBe(2);
+      expect(body.data.deliveredCount).not.toBe(mockMessage.deliveredCount);
+    });
+
+    it('interroge le service sur la conversation du message', async () => {
+      mockGetConversationReadStatuses.mockResolvedValueOnce(new Map());
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      expect(mockGetConversationReadStatuses).toHaveBeenCalledWith(CONV_ID, [MSG_ID]);
+    });
+
+    it('laisse le résumé à zéro pour un message que le service ne décrit pas', async () => {
+      mockGetConversationReadStatuses.mockResolvedValueOnce(new Map());
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.statusSummary.deliveredCount).toBe(0);
+      expect(body.data.statusSummary.readCount).toBe(0);
+      expect(body.data.statusSummary.recipientCount).toBe(0);
+    });
+
+    it('sert le message même quand le comptage échoue', async () => {
+      // Le résumé est un ENRICHISSEMENT : son échec ne doit pas emporter le
+      // message, qui est le contenu demandé.
+      mockGetConversationReadStatuses.mockRejectedValueOnce(new Error('read statuses down'));
+
+      const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.id).toBe(MSG_ID);
+      expect(body.data.statusSummary.deliveredCount).toBe(0);
+    });
   });
 });
 

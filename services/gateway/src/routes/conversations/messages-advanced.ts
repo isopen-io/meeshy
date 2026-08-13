@@ -53,6 +53,16 @@ const EditMessageBodySchema = z.object({
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
+/**
+ * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
+ *
+ * Cet endpoint charge, PAR message, ses entrées de statut et le participant
+ * joint sur chacune — il ne peut pas rester non borné. Le détail exhaustif
+ * d'un message précis vit derrière `GET /messages/:messageId/status-details`,
+ * qui est paginé ; ce plafond n'y retire donc aucune information.
+ */
+const CONVERSATION_STATUS_PAGE_SIZE = 50;
+
 
 /**
  * Enregistre les routes avancées de gestion des messages (edit, delete, reactions, status)
@@ -1432,7 +1442,10 @@ export function registerMessagesAdvancedRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      // Récupérer tous les messages avec leurs statuts dénormalisés
+      // BORNÉE. Sans `take`, ce handler chargeait CHAQUE message non supprimé
+      // de la conversation, chacun avec ses entrées de statut et le participant
+      // joint sur chacune — sur un fil de plusieurs dizaines de milliers de
+      // messages, un déni de service qu'un simple participant déclenchait.
       const messages = await prisma.message.findMany({
         where: {
           conversationId: conversationId,
@@ -1441,10 +1454,6 @@ export function registerMessagesAdvancedRoutes(
         select: {
           id: true,
           senderId: true,
-          deliveredCount: true,
-          readCount: true,
-          deliveredToAllAt: true,
-          readByAllAt: true,
           createdAt: true,
           statusEntries: {
             select: {
@@ -1454,6 +1463,7 @@ export function registerMessagesAdvancedRoutes(
               participant: {
                 select: {
                   id: true,
+                  userId: true,
                   displayName: true,
                   avatar: true,
                   type: true,
@@ -1463,27 +1473,53 @@ export function registerMessagesAdvancedRoutes(
             }
           }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: CONVERSATION_STATUS_PAGE_SIZE
       });
 
-      // Formater les statuts
-      const statuses = messages.map(message => ({
-        messageId: message.id,
-        senderId: message.senderId,
-        summary: {
-          deliveredCount: message.deliveredCount || 0,
-          readCount: message.readCount || 0,
-          deliveredToAllAt: message.deliveredToAllAt,
-          readByAllAt: message.readByAllAt
-        },
-        entries: message.statusEntries.map(entry => ({
-          participantId: entry.participantId,
-          isAnonymous: entry.participant.type === 'anonymous',
-          deliveredAt: entry.deliveredAt,
-          readAt: entry.readAt,
-          user: { ...entry.participant, username: entry.participant.user?.username }
-        }))
-      }));
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      // Le résumé se CALCULE. Les colonnes `deliveredCount`/`readCount`/
+      // `deliveredToAllAt`/`readByAllAt` de la ligne Message n'ont aucun
+      // écrivain : les lire revenait à servir `{0, 0, null, null}` à côté
+      // d'`entries` qui, elles, portaient les vraies dates — une charge utile
+      // qui se contredisait elle-même.
+      const summaries = await readStatusService.getConversationReadStatuses(
+        conversationId,
+        messages.map(message => message.id)
+      );
+
+      // Ces `entries` exposent des accusés NOMINATIFS — identité et horodatage
+      // de lecture. Le gate `showReadReceipts` s'y applique donc au même titre
+      // qu'au résumé ; il y manquait entièrement.
+      const visibleParticipantIds = new Set(
+        (await readStatusService.filterReadReceiptVisible(
+          messages.flatMap(message => message.statusEntries.map(entry => entry.participant))
+        )).map(participant => participant.id)
+      );
+
+      const statuses = messages.map(message => {
+        const summary = summaries.get(message.id);
+        return {
+          messageId: message.id,
+          senderId: message.senderId,
+          summary: {
+            deliveredCount: summary?.receivedCount ?? 0,
+            readCount: summary?.readCount ?? 0,
+            recipientCount: summary?.totalMembers ?? 0
+          },
+          entries: message.statusEntries
+            .filter(entry => visibleParticipantIds.has(entry.participantId))
+            .map(entry => ({
+              participantId: entry.participantId,
+              isAnonymous: entry.participant.type === 'anonymous',
+              deliveredAt: entry.deliveredAt,
+              readAt: entry.readAt,
+              user: { ...entry.participant, username: entry.participant.user?.username }
+            }))
+        };
+      });
 
       return sendSuccess(reply, {
         statuses,
