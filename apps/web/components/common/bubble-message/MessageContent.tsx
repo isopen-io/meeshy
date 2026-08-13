@@ -9,6 +9,7 @@ import { ExpandableMessageText } from './ExpandableMessageText';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { DeliveryIndicator } from './DeliveryIndicator';
+import { MessageEffects } from '@/components/common/MessageEffects';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { TFunction } from '@/hooks/use-i18n';
 
@@ -20,6 +21,8 @@ interface MessageContentProps {
     content: string;
     conversationId: string;
     forwardedFromId?: string;
+    /** Bitfield d'effets persisté par le gateway (`Message.effectFlags`). */
+    effectFlags?: number;
     replyTo?: {
       id: string;
       content: string;
@@ -62,6 +65,7 @@ export const MessageContent = memo(function MessageContent({
       "relative flex w-full max-w-full mb-1 overflow-visible",
       isOwnMessage ? "ml-auto" : "mr-auto"
     )}>
+      <MessageEffects effectFlags={message.effectFlags} className="w-full">
       <Card
         className={cn(
           "relative transition-colors duration-200 border overflow-hidden py-0 w-full rounded-2xl",
@@ -130,6 +134,7 @@ export const MessageContent = memo(function MessageContent({
           )}
         </CardContent>
       </Card>
+      </MessageEffects>
 
       {/* Réactions - Superposées en bas de la bulle */}
       <div
