@@ -196,6 +196,56 @@ final class APIResponseTests: XCTestCase {
         XCTAssertNil(response.meta?.deletedStoryIds)
     }
 
+    // MARK: - meta.deletedConversationIds (tombstones du delta des conversations)
+    //
+    // `GET /conversations?updatedSince=` est une page OFFSET-paginée, et son
+    // enveloppe ne portait pas `meta` du tout : les sorties de vue annoncées par
+    // le gateway étaient jetées au décodage, silencieusement.
+
+    func testOffsetPaginatedResponseDecodesDeletedConversationIds() throws {
+        let json = makeJSON("""
+        {
+            "success": true,
+            "data": [{"id": "1", "name": "First"}],
+            "pagination": {"total": 1, "hasMore": false, "limit": 100, "offset": 0},
+            "meta": {"deletedConversationIds": ["left-1", "banned-2"]}
+        }
+        """)
+
+        let response = try decoder.decode(OffsetPaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertEqual(response.meta?.deletedConversationIds, ["left-1", "banned-2"])
+        XCTAssertNil(response.meta?.deletedConversationIdsTruncated)
+    }
+
+    func testOffsetPaginatedResponseDecodesTombstoneTruncationFlag() throws {
+        let json = makeJSON("""
+        {
+            "success": true,
+            "data": [],
+            "meta": {"deletedConversationIds": [], "deletedConversationIdsTruncated": true}
+        }
+        """)
+
+        let response = try decoder.decode(OffsetPaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertEqual(response.meta?.deletedConversationIdsTruncated, true)
+    }
+
+    func testOffsetPaginatedResponseWithoutMetaDecodes() throws {
+        // Rétro-compatibilité : le bloc n'existe QUE sur une page delta, et un
+        // gateway antérieur ne l'envoie jamais — le décodage doit tenir, et
+        // l'absence se lire « pas de sortie, pas de troncature ».
+        let json = makeJSON("""
+        {"success": true, "data": [{"id": "1", "name": "First"}]}
+        """)
+
+        let response = try decoder.decode(OffsetPaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertNil(response.meta)
+        XCTAssertEqual(response.data.count, 1)
+    }
+
     // MARK: - CursorPagination
 
     func testCursorPaginationDecodesAllFields() throws {

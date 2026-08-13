@@ -390,6 +390,113 @@ final class ConversationSyncEngineTests: XCTestCase {
             "without a due reconcile the delta must not touch rows it did not receive")
     }
 
+    // MARK: - Cycle 114 : les SORTIES de vue annoncées par `meta.deletedConversationIds`
+
+    /// Le delta est UPSERT-ONLY : une conversation quittée, fermée, bannie ou
+    /// supprimée-pour-moi depuis un AUTRE appareil ne revient dans aucune page
+    /// (la clause serveur l'exclut, et un leave n'écrit même pas
+    /// `Conversation.updatedAt`). Le gateway l'annonce donc hors-page, et iOS
+    /// jetait ce bloc au décodage : la ligne survivait dans la liste jusqu'à la
+    /// réconciliation complète — 24 h.
+    func test_syncSinceLastCheckpoint_appliesConversationTombstones_fromDeltaMeta() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let kept = MeeshyConversation(id: "c-kept-ts", identifier: "test-c-kept-ts", type: .direct)
+        let departed = MeeshyConversation(id: "c-left-ts", identifier: "test-c-left-ts", type: .direct)
+        try? await CacheCoordinator.shared.conversations.save([kept, departed], for: "list")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0),
+            error: nil,
+            meta: APIResponseMeta(deletedConversationIds: ["c-left-ts"])
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let ids = Set((await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []).map(\.id))
+        XCTAssertFalse(ids.contains("c-left-ts"),
+            "a conversation the server says left the view must disappear on this device too")
+        XCTAssertTrue(ids.contains("c-kept-ts"),
+            "the tombstone stream must not touch conversations it did not name")
+        XCTAssertEqual(mockConvService.listCallCount, 0,
+            "a complete page with tombstones needs no escalation — the delta stays the cheap nominal path")
+    }
+
+    /// Les tombstones ont leur propre plafond serveur (500 par stream) et AUCUN
+    /// curseur de reprise : il n'existe pas de « page suivante » de disparitions.
+    /// Leur troncature est donc une preuve d'incomplétude comme une autre, et
+    /// elle se règle par le même geste — l'escalade vers la vérité serveur.
+    func test_syncSinceLastCheckpoint_truncatedTombstones_escalateToFullSync() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0),
+            error: nil,
+            meta: APIResponseMeta(deletedConversationIds: [], deletedConversationIdsTruncated: true)
+        ))
+        mockConvService.listResult = .success(OffsetPaginatedAPIResponse(
+            success: true,
+            data: [TestFactories.makeAPIConversation(id: "server-truth-ts")],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        XCTAssertGreaterThan(mockConvService.listCallCount, 0,
+            "tombstones have no resume cursor — a truncated list is only recoverable by replacing the whole list")
+    }
+
+    /// Et le curseur ne bouge pas tant que ces disparitions n'ont pas été
+    /// rattrapées : la borne serveur des tombstones est `> since`, exactement
+    /// comme celle de la page. Un curseur avancé au-dessus d'une escalade
+    /// échouée rendrait les sorties coupées irréclamables.
+    func test_syncSinceLastCheckpoint_truncatedTombstones_leaveCursorInPlace_whenEscalationFails() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        let seededCursor = Date(timeIntervalSince1970: 1_700_000_000)
+        UserDefaults.standard.set(seededCursor, forKey: "me.meeshy.lastSyncTimestamp")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "delta-ts", updatedAt: Date(timeIntervalSince1970: 1_800_000_000))],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil,
+            meta: APIResponseMeta(deletedConversationIds: [], deletedConversationIdsTruncated: true)
+        ))
+        mockConvService.listResult = .failure(MeeshyError.network(.timeout))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cursor = UserDefaults.standard.object(forKey: "me.meeshy.lastSyncTimestamp") as? Date
+        XCTAssertEqual(cursor?.timeIntervalSince1970 ?? 0, seededCursor.timeIntervalSince1970, accuracy: 1,
+            "only a `since` that stays put will re-request the tombstones the server had to cut")
+    }
+
+    /// Rétro-compatibilité : un gateway antérieur au bloc `meta` n'en envoie
+    /// aucun. L'absence doit se lire « pas de sortie, pas de troncature » — pas
+    /// déclencher une réconciliation complète à chaque delta.
+    func test_syncSinceLastCheckpoint_withoutDeltaMeta_doesNotEscalate() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [],
+            pagination: OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockConvService.listCallCount, 0,
+            "a missing meta block is the OLD behaviour, not a reason to refetch the whole list every delta")
+    }
+
     // MARK: - Cycle 79 : une page delta qui laisse du reste ne prouve pas sa complétude
 
     /// `deltaSyncCore` demandait `limit=500` à une route qui plafonne à 100 :
@@ -1576,6 +1683,65 @@ final class LastMessageSurvivorTests: XCTestCase {
     func test_mergeDeltaConversations_emptyDeltas_returnsExistingUntouched() {
         let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
             existing: [conv("a"), conv("b")], deltas: [])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a", "b"])
+        XCTAssertTrue(removedIds.isEmpty)
+    }
+
+    // MARK: - mergeDeltaConversations — tombstones (`meta.deletedConversationIds`)
+    //
+    // Une page delta ne porte que des lignes SERVIES : sa clause serveur exige
+    // une conversation active et un participant actif sans `deletedForMe`. Une
+    // conversation SORTIE de la vue (fermée, quittée, bannie, supprimée pour moi
+    // depuis un autre appareil) n'apparaît donc dans AUCUNE réponse — pas même
+    // en `isActive: false`, qui ne décrit que les sorties encore servables. Un
+    // leave ou un ban n'écrit d'ailleurs que la ligne `Participant`, sans
+    // toucher `Conversation.updatedAt`.
+
+    func test_mergeDeltaConversations_tombstoneRemovesConversationAbsentFromThePage() {
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a"), conv("b")], deltas: [], tombstoneIds: ["b"])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a"])
+        XCTAssertEqual(removedIds, ["b"],
+            "sans ce canal, une conversation quittée depuis un autre appareil survit jusqu'à la réconciliation complète")
+    }
+
+    func test_mergeDeltaConversations_tombstoneWinsOverAnUpsertOfTheSameId() {
+        // Les deux flux du même lot peuvent se contredire : la page a servi la
+        // ligne (encore visible au moment de la lecture) et le stream des
+        // sorties la déclare partie. La SORTIE est le fait le plus spécifique.
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a")],
+            deltas: [conv("a", identifier: "a-updated")],
+            tombstoneIds: ["a"])
+        XCTAssertTrue(merged.isEmpty,
+            "un upsert appliqué APRÈS la tombstone rendrait la purge inatteignable jusqu'à la réconciliation complète")
+        XCTAssertEqual(removedIds, ["a"])
+    }
+
+    func test_mergeDeltaConversations_tombstoneAlreadyRemovedByAnInactiveDelta_reportedOnce() {
+        // `removedIds` pilote une invalidation de cache par id : le même retrait
+        // annoncé par les deux canaux ne doit pas la déclencher deux fois.
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a"), conv("b")],
+            deltas: [conv("b", active: false)],
+            tombstoneIds: ["b"])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a"])
+        XCTAssertEqual(removedIds, ["b"])
+    }
+
+    func test_mergeDeltaConversations_tombstoneUnknownToTheCache_stillReportedForInvalidation() {
+        // Même règle que pour un delta inactif inconnu : la liste et le cache
+        // des messages sont deux magasins DISTINCTS, et une conversation absente
+        // de l'une peut très bien laisser un fil dans l'autre.
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a")], deltas: [], tombstoneIds: ["z"])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a"])
+        XCTAssertEqual(removedIds, ["z"])
+    }
+
+    func test_mergeDeltaConversations_noTombstones_leavesThePageUntouched() {
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a")], deltas: [conv("b")], tombstoneIds: [])
         XCTAssertEqual(Set(merged.map(\.id)), ["a", "b"])
         XCTAssertTrue(removedIds.isEmpty)
     }
