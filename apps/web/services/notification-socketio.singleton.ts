@@ -5,7 +5,11 @@
 
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
-import { SERVER_EVENTS, type NotificationReadBulkEventData } from '@meeshy/shared/types/socketio-events';
+import {
+  SERVER_EVENTS,
+  type NotificationDeletedBulkEventData,
+  type NotificationReadBulkEventData,
+} from '@meeshy/shared/types/socketio-events';
 import { initialSyncSeqState, observeSyncSeq, type SyncSeqState } from '@/lib/sync/sync-seq-state';
 import type { Notification } from '@/types/notification';
 
@@ -13,6 +17,7 @@ type NotificationCallback = (notification: Notification) => void;
 type NotificationReadCallback = (notificationId: string) => void;
 type NotificationDeletedCallback = (notificationId: string) => void;
 type NotificationReadBulkCallback = (data: NotificationReadBulkEventData) => void;
+type NotificationDeletedBulkCallback = (data: NotificationDeletedBulkEventData) => void;
 type CountsCallback = (counts: any) => void;
 
 /**
@@ -39,6 +44,7 @@ class NotificationSocketIOSingleton {
   private readCallbacks: Set<NotificationReadCallback> = new Set();
   private deletedCallbacks: Set<NotificationDeletedCallback> = new Set();
   private readBulkCallbacks: Set<NotificationReadBulkCallback> = new Set();
+  private deletedBulkCallbacks: Set<NotificationDeletedBulkCallback> = new Set();
   private countsCallbacks: Set<CountsCallback> = new Set();
   private connectCallbacks: Set<() => void> = new Set();
   private disconnectCallbacks: Set<(reason: string) => void> = new Set();
@@ -195,6 +201,13 @@ class NotificationSocketIOSingleton {
       this.deletedCallbacks.forEach(cb => cb(data.notificationId));
     });
 
+    // Lot de notifications purgées, décrit par son prédicat : `deleteMany` ne
+    // renvoie aucun id, et `notification:counts` est MUET sur cette purge
+    // (les lignes qui partent sont déjà lues).
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, (data: NotificationDeletedBulkEventData) => {
+      this.deletedBulkCallbacks.forEach(cb => cb(data));
+    });
+
     // Mise à jour des compteurs
     this.socket.on(SERVER_EVENTS.NOTIFICATION_COUNTS, (counts: any) => {
       this.countsCallbacks.forEach(cb => cb(counts));
@@ -268,6 +281,14 @@ class NotificationSocketIOSingleton {
   public onNotificationDeleted(callback: NotificationDeletedCallback): () => void {
     this.deletedCallbacks.add(callback);
     return () => this.deletedCallbacks.delete(callback);
+  }
+
+  /**
+   * Enregistre un callback pour les purges en masse (`notification:deleted-bulk`)
+   */
+  public onNotificationDeletedBulk(callback: NotificationDeletedBulkCallback): () => void {
+    this.deletedBulkCallbacks.add(callback);
+    return () => this.deletedBulkCallbacks.delete(callback);
   }
 
   /**

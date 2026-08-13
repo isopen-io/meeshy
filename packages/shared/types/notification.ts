@@ -290,6 +290,23 @@ export type NotificationReadBulkScope =
   | { readonly kind: 'types'; readonly types: readonly string[] };
 
 /**
+ * Prédicat qu'une PURGE EN MASSE vient d'appliquer côté serveur.
+ *
+ * Même raison de vivre que `NotificationReadBulkScope` — `deleteMany` ne
+ * renvoie aucun id, et les énumérer avant la purge ferait payer au chemin un
+ * coût proportionnel à l'historique (un compte ancien a des milliers de lignes
+ * lues) — mais un cas plus fort : `notification:counts` ne dit RIEN d'une purge
+ * des lues, puisque `unread` est inchangé par construction. Sans ce prédicat,
+ * rien n'annonce la purge aux autres appareils.
+ *
+ * Union discriminée à UN SEUL membre, délibérément : le geste jumeau (« tout
+ * supprimer ») ajoutera un `kind`, pas une clé optionnelle à un sac d'options
+ * — lequel rendrait représentables un scope vide et un scope contradictoire.
+ * @see notificationMatchesDeletedBulkScope (utils/notification-read-bulk.ts)
+ */
+export type NotificationDeletedBulkScope = { readonly kind: 'read' };
+
+/**
  * STATE - Statut de lecture
  * État de la notification
  */

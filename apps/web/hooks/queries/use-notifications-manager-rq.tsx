@@ -12,8 +12,14 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { NotificationService } from '@/services/notification.service';
 import type { Notification, NotificationFilters } from '@/types/notification';
-import type { NotificationReadBulkEventData } from '@meeshy/shared/types/socketio-events';
-import { notificationMatchesReadBulkScope } from '@meeshy/shared/utils/notification-read-bulk';
+import type {
+  NotificationDeletedBulkEventData,
+  NotificationReadBulkEventData,
+} from '@meeshy/shared/types/socketio-events';
+import {
+  notificationMatchesDeletedBulkScope,
+  notificationMatchesReadBulkScope,
+} from '@meeshy/shared/utils/notification-read-bulk';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
 import { useI18n } from '@/hooks/useI18n';
@@ -312,6 +318,40 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       }
     };
 
+    // `notification:deleted-bulk` — symétrique du précédent côté PURGE, et son
+    // cas est plus fort : `notification:counts` ne dit RIEN d'une purge des
+    // lues (les lignes qui partent sont déjà lues, `unread` est inchangé).
+    // Sans ce handler, vider sa cloche sur un appareil la laisse pleine ici,
+    // chaque ligne ouvrant un écran dont la notification n'existe plus.
+    //
+    // Le badge n'est pas touché — et ici ce n'est plus une précaution mais une
+    // CONSÉQUENCE du prédicat : toute ligne retirée était lue, donc jamais
+    // comptée dans `unreadCount`.
+    const handleNotificationDeletedBulk = ({ scope }: NotificationDeletedBulkEventData) => {
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[] }>; pageParams: unknown[] };
+
+          const touched = data.pages.some((page) =>
+            page.notifications?.some((n: Notification) => notificationMatchesDeletedBulkScope(scope, n))
+          );
+          if (!touched) return old;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              notifications: page.notifications?.filter(
+                (n: Notification) => !notificationMatchesDeletedBulkScope(scope, n)
+              ),
+            })),
+          };
+        }
+      );
+    };
+
     // `notification:counts` est la resync AUTORITAIRE du serveur : émise après
     // chaque marquage côté gateway (ouverture de conversation, vue d'un post,
     // action sur un autre appareil). Sans elle, la cloche ne se corrigeait
@@ -355,6 +395,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
     const unsubscribeReadBulk = notificationSocketIO.onNotificationReadBulk(handleNotificationReadBulk);
     const unsubscribeDeleted = notificationSocketIO.onNotificationDeleted(handleNotificationDeleted);
+    const unsubscribeDeletedBulk = notificationSocketIO.onNotificationDeletedBulk(handleNotificationDeletedBulk);
     const unsubscribeCounts = notificationSocketIO.onCounts(handleCounts);
     const unsubscribeDesync = notificationSocketIO.onSyncDesync(scheduleResync);
 
@@ -363,6 +404,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       unsubscribeRead();
       unsubscribeReadBulk();
       unsubscribeDeleted();
+      unsubscribeDeletedBulk();
       unsubscribeCounts();
       unsubscribeDesync();
       if (resyncTimerRef.current !== null) {

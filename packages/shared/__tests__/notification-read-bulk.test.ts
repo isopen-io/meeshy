@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+  notificationMatchesDeletedBulkScope,
   notificationMatchesReadBulkScope,
+  type NotificationDeletedBulkCandidate,
   type NotificationReadBulkCandidate,
 } from '../utils/notification-read-bulk';
-import type { NotificationReadBulkScope } from '../types/notification';
+import type {
+  NotificationDeletedBulkScope,
+  NotificationReadBulkScope,
+} from '../types/notification';
 
 // `notification:read-bulk` annonce le PRÉDICAT qu'un marquage en masse vient
 // d'appliquer côté serveur — pas la liste des lignes touchées (les chemins bulk
@@ -127,6 +132,52 @@ describe('notificationMatchesReadBulkScope', () => {
       const unknownScope = { kind: 'severity', severity: 'high' } as unknown as NotificationReadBulkScope;
 
       expect(notificationMatchesReadBulkScope(unknownScope, candidate())).toBe(false);
+    });
+  });
+});
+
+// `notification:deleted-bulk` est le symétrique de `read-bulk` côté PURGE.
+// Même raison de vivre — `deleteMany` ne renvoie aucun id — et même remède :
+// annoncer le prédicat. La différence tient au champ interrogé (l'état de
+// lecture, pas le type ni le contexte) et à ce que le client doit s'interdire :
+// ici toute ligne matchée est LUE par définition, donc aucun décrément de
+// badge n'est jamais licite.
+const deletedCandidate = (
+  isRead: boolean | null | undefined
+): NotificationDeletedBulkCandidate => ({ state: { isRead } });
+
+describe('notificationMatchesDeletedBulkScope', () => {
+  describe("scope 'read'", () => {
+    const scope: NotificationDeletedBulkScope = { kind: 'read' };
+
+    it('matche une ligne lue', () => {
+      expect(notificationMatchesDeletedBulkScope(scope, deletedCandidate(true))).toBe(true);
+    });
+
+    it('ne matche PAS une ligne non lue', () => {
+      // Le `deleteMany` serveur porte `isRead: true` : une ligne non lue n'a
+      // pas été purgée en base. La retirer du cache la ferait disparaître d'un
+      // appareil alors qu'elle vit encore — et le badge, lui, la compterait.
+      expect(notificationMatchesDeletedBulkScope(scope, deletedCandidate(false))).toBe(false);
+    });
+
+    it("ne matche pas une ligne dont l'état de lecture est absent", () => {
+      expect(notificationMatchesDeletedBulkScope(scope, deletedCandidate(null))).toBe(false);
+      expect(notificationMatchesDeletedBulkScope(scope, deletedCandidate(undefined))).toBe(false);
+      expect(notificationMatchesDeletedBulkScope(scope, {})).toBe(false);
+      expect(notificationMatchesDeletedBulkScope(scope, { state: null })).toBe(false);
+    });
+  });
+
+  describe('compatibilité ascendante', () => {
+    it("ne matche RIEN quand le scope porte un kind que ce client ne connaît pas", () => {
+      // L'union n'a qu'un membre AUJOURD'HUI ; le geste jumeau (« tout
+      // supprimer ») en ajoutera un. Un client plus vieux que son serveur doit
+      // alors ne rien retirer — retirer trop fait disparaître des lignes qui
+      // ne reviendront qu'au prochain refetch complet.
+      const unknownScope = { kind: 'all' } as unknown as NotificationDeletedBulkScope;
+
+      expect(notificationMatchesDeletedBulkScope(unknownScope, deletedCandidate(true))).toBe(false);
     });
   });
 });

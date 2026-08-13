@@ -10,7 +10,10 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type { NotificationReadBulkScope } from '@meeshy/shared/types/notification';
+import type {
+  NotificationDeletedBulkScope,
+  NotificationReadBulkScope,
+} from '@meeshy/shared/types/notification';
 import { SequenceService } from '../SequenceService';
 import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
@@ -4007,6 +4010,24 @@ export class NotificationService {
     this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_READ_BULK, { scope });
   }
 
+  /**
+   * Symétrique de `announceReadBulk` côté PURGE, avec un cas plus fort :
+   * `emitCountsUpdate` ne dit RIEN ici. Seules des lignes DÉJÀ lues partent —
+   * `unread` est inchangé par construction, et `total` n'est affiché nulle part.
+   * Sans cette annonce, rien ne signale la purge aux autres appareils : la
+   * cloche y reste pleine de lignes mortes, chacune ouvrant un écran dont la
+   * notification n'existe plus.
+   *
+   * Pas de `notification:deleted` par ligne : la purge n'est pas bornée (un
+   * compte ancien a des milliers de lignes lues), et les énumérer avant le
+   * `deleteMany` ferait payer au chemin un coût proportionnel à l'historique.
+   *
+   * Émission PLAIN, jamais `emitWithSeq` — même raison qu'au-dessus.
+   */
+  private announceDeletedBulk(userId: string, scope: NotificationDeletedBulkScope): void {
+    this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, { scope });
+  }
+
   // ==============================================
   // ANTI-SPAM & UTILITIES
   // ==============================================
@@ -4556,7 +4577,10 @@ export class NotificationService {
 
   /**
    * Supprime toutes les notifications LUES de l'utilisateur.
-   * Émet `notification:counts` (le total change) quand au moins une ligne part.
+   *
+   * Annonce le PRÉDICAT appliqué (`notification:deleted-bulk`) quand au moins
+   * une ligne part : `notification:counts`, émis juste après, ne dit rien de
+   * cette purge — `unread` est inchangé, les lignes qui partent sont lues.
    */
   async deleteAllRead(userId: string): Promise<number> {
     try {
@@ -4565,6 +4589,7 @@ export class NotificationService {
       });
 
       if (result.count > 0) {
+        this.announceDeletedBulk(userId, { kind: 'read' });
         this.emitCountsUpdate(userId).catch(() => {});
       }
 
