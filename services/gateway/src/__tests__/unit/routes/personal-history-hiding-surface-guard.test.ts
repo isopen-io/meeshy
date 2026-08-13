@@ -123,23 +123,50 @@ const NESTED_PREVIEW_SURFACES = ['conversations/core.ts', 'conversations/search.
 const SERVICES_DIR = join(__dirname, '../../../services');
 
 /**
- * La couche service, HORS périmètre du câblage livré — et dénombrée quand même.
+ * La couche service, désormais CLASSÉE et non plus seulement dénombrée.
  *
- * Le cas concret qui justifie de l'écrire : `MessageReadStatusService` compte
- * les non-lus avec pour seul plancher le curseur de lecture. Un utilisateur qui
- * efface un historique contenant des messages NON LUS garde donc un badge qui
- * compte des messages que la liste ne lui montrera plus — un compteur que
- * défiler ne peut pas éteindre. Moins grave que servir le contenu (c'est un
- * nombre, pas le message), mais c'est le même défaut, et la même famille.
- *
- * Ce test ne corrige rien : il fige l'inventaire, pour qu'un NOUVEAU lecteur de
- * messages côté service ne se glisse pas dans un angle mort que le garde
- * ci-dessus laisse croire couvert.
+ * Le cycle 108 avait figé ici un inventaire « non couvert », dont le cas
+ * nommé était `MessageReadStatusService` : il comptait les non-lus avec pour
+ * seul plancher le curseur de lecture, si bien qu'un utilisateur effaçant un
+ * historique contenant des messages NON LUS gardait un badge comptant des
+ * messages que la liste ne lui montre plus — un compteur que défiler ne peut
+ * pas éteindre, puisqu'il n'y a plus rien à défiler. Le cycle 109 l'a corrigé,
+ * et la déclaration passe de « combien de lectures » à la même classification
+ * que les routes : applique, ou exempt avec sa raison.
  */
-const SERVICE_LAYER_UNCOVERED: Record<string, number> = {
-  'ConversationMessageStatsService.ts': 1,
-  'ExpiredMessagesCleanupService.ts': 1,
-  'MessageReadStatusService.ts': 7,
+const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 7, applications: 2 },
+
+  'ConversationMessageStatsService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Statistiques agrégées d'une conversation (volumes, langues, types) " +
+      'partagées par TOUS ses participants. Un masquage est personnel : ' +
+      "l'appliquer rendrait une statistique différente par lecteur, pour une " +
+      'valeur qui est stockée une fois et lue par tout le monde.',
+  },
+  'ExpiredMessagesCleanupService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
+      "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
+      'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
+  },
+};
+
+/**
+ * Le troisième compteur de non-lus applique le masquage EN MÉMOIRE, pas par un
+ * `where` Prisma : la poussée temps réel (`conversation:unread-updated`) fait
+ * une requête pour tous les participants à la fois et découpe le résultat par
+ * lecteur. Un `applyPersonalHistoryHiding` n'y a donc rien à faire, et le
+ * balayage ci-dessus ne peut pas le voir — exactement la forme qui échappe à un
+ * dénombrement naïf, d'où sa déclaration séparée (même raison que les aperçus
+ * imbriqués plus bas).
+ */
+const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
+  'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
 };
 
 const walk = (dir: string): string[] =>
@@ -224,19 +251,49 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
     expect(unexplained).toEqual([]);
   });
 
-  it('fige l\'inventaire de la couche service, hors périmètre mais jamais tacite', () => {
-    const scanned = walk(SERVICES_DIR)
-      .map((full) => ({
-        relative: full.slice(SERVICES_DIR.length + 1),
-        reads: countMatches(readFileSync(full, 'utf8'), MESSAGE_READ),
-      }))
+  const scanServices = () =>
+    walk(SERVICES_DIR)
+      .map((full) => {
+        const source = readFileSync(full, 'utf8');
+        return {
+          relative: full.slice(SERVICES_DIR.length + 1),
+          source,
+          reads: countMatches(source, MESSAGE_READ),
+          applications: countMatches(source, APPLY_HIDING),
+        };
+      })
       .filter((file) => file.reads > 0)
       .sort((a, b) => a.relative.localeCompare(b.relative));
 
+  it('classe chaque lecteur de messages de la couche service — aucun ne reste tacite', () => {
+    const scanned = scanServices();
+
     expect(scanned.length).toBeGreaterThan(0);
-    expect(Object.fromEntries(scanned.map((f) => [f.relative, f.reads]))).toEqual(
-      SERVICE_LAYER_UNCOVERED
-    );
+    expect(scanned.map((f) => f.relative)).toEqual(Object.keys(SERVICE_LAYER_SURFACES).sort());
+  });
+
+  it('compte exactement les lectures et les applications que la couche service déclare', () => {
+    const drift = scanServices()
+      .filter((file) => {
+        const declared = SERVICE_LAYER_SURFACES[file.relative];
+        if (declared === undefined) return true;
+        if (declared.reads !== file.reads) return true;
+        return declared.kind === 'applies'
+          ? declared.applications !== file.applications
+          : file.applications > 0;
+      })
+      .map((file) => `${file.relative}: ${file.reads} lectures, ${file.applications} applications`);
+
+    expect(drift).toEqual([]);
+  });
+
+  it('tient les applications EN MÉMOIRE, que le balayage ne peut pas voir', () => {
+    const missing = Object.entries(IN_MEMORY_HIDING_SURFACES).flatMap(([relative, markers]) => {
+      const source = readFileSync(join(SERVICES_DIR, relative), 'utf8');
+      return markers.filter((marker) => !source.includes(marker)).map((marker) => `${relative}: ${marker}`);
+    });
+
+    expect(missing).toEqual([]);
   });
 
   it('resolves the nested list previews, which no prisma.message scan can see', () => {
