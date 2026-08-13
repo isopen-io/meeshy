@@ -864,9 +864,20 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       />
 
       {/* Call Duration & Participant Count */}
+      {/*
+        Vague 120 — `currentCall.participants` never includes the local user:
+        the gateway deliberately skips echoing `call:participant-joined` back
+        to the socket that just joined (CallEventsHandler.ts), and the
+        caller's own optimistic `setCurrentCall` on the `call:initiate` ack
+        seeds `participants: []` (use-video-call.ts). This component only
+        ever mounts while `isInCall` is true, so the local user is always
+        part of the call — +1 makes the visible count match reality instead
+        of showing "0 participants" while ringing, or under-counting by one
+        once connected.
+      */}
       <CallInfoOverlay
         durationLabel={callDurationLabel}
-        participantCount={currentCall?.participants.filter(p => !p.leftAt).length || 0}
+        participantCount={(currentCall?.participants.filter(p => !p.leftAt).length || 0) + 1}
       />
     </div>
   );
