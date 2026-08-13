@@ -4,6 +4,9 @@ import {
   conversationMessageStatsService,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+import { reproduceEditedMessageNotifications } from './reproduceEditedMessageNotifications';
+import type { ReproducedNotificationAnnouncer } from '../notifications/reproducedNotifications';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
 
 const log = enhancedLogger.child({ module: 'messageEditEffects' });
 
@@ -47,7 +50,12 @@ export interface EditedMessageRecord {
 
 export async function applyMessageEditEffects(
   prisma: PrismaClient,
-  message: EditedMessageRecord
+  message: EditedMessageRecord,
+  // Défaut = le service PARTAGÉ du processus, le seul câblé avec `io`. Même
+  // résolution que `applyPostRemovalEffects` : les quatre transports d'édition
+  // n'ont ainsi rien à câbler, et un appelant hors serveur (worker, script,
+  // test) réécrit quand même les lignes, sans annonce.
+  announcer: ReproducedNotificationAnnouncer | undefined = getSharedNotificationService()
 ): Promise<void> {
   try {
     await conversationMessageStatsService.onMessageEdited(
@@ -59,5 +67,22 @@ export async function applyMessageEditEffects(
     );
   } catch (err) {
     log.warn('message edit: stats adjustment failed', { messageId: message.id, err });
+  }
+
+  // Les notifications que le message a produites portent une copie
+  // DÉNORMALISÉE de son texte, qu'aucune lecture ne rafraîchit. Le second des
+  // deux effets, et le SEUL des deux dont le retard se voit : tant qu'il n'a
+  // pas eu lieu, l'inbox de tous les destinataires affiche le texte d'AVANT —
+  // y compris quand l'édition existait précisément pour retirer ce qui
+  // n'aurait pas dû être écrit. Les compteurs, eux, ne se lisent nulle part en
+  // temps réel.
+  try {
+    await reproduceEditedMessageNotifications(
+      prisma,
+      { messageId: message.id, content: message.content },
+      announcer
+    );
+  } catch (err) {
+    log.warn('message edit: notification reproduction failed', { messageId: message.id, err });
   }
 }

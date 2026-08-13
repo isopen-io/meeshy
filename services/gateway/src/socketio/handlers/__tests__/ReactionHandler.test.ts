@@ -40,6 +40,7 @@ jest.mock('../../../middleware/validation', () => ({
 
 jest.mock('../../../services/notifications/reactionNotify', () => ({
   notifyReactionAdded: jest.fn().mockResolvedValue(undefined),
+  notifyReactionRemoved: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockCheckLimit = jest.fn<any>().mockResolvedValue(true);
@@ -335,6 +336,41 @@ describe('ReactionHandler', () => {
       expect(notifyReactionAdded).not.toHaveBeenCalled();
     });
 
+    /**
+     * Un SWAP d'emoji est aussi un RETRAIT, et c'est le cas que rien d'autre ne
+     * couvre : `addReaction` détruit l'emoji précédent du même acteur (règle
+     * « une réaction par personne ») sans qu'aucun `reaction:remove` ne soit
+     * jamais émis. La notification « X a réagi 👍 » resterait donc en base pour
+     * un 👍 qui n'existe plus, et aucun autre chemin ne passerait la retirer.
+     */
+    it('retire la notification de l’emoji REMPLACÉ lors d’un swap', async () => {
+      const { notifyReactionRemoved, notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-1', emoji: '❤️' },
+            replacedEmojis: ['👍'],
+            unchanged: false,
+          }),
+          createUpdateEvent: jest.fn<any>().mockResolvedValue({}),
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '❤️' }, jest.fn<any>());
+      await new Promise(resolve => setImmediate(resolve));
+
+      // L'ANCIEN emoji est retiré…
+      expect(notifyReactionRemoved).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ messageId: MESSAGE_ID, emoji: '👍' })
+      );
+      // …et le NOUVEAU notifié : le swap produit les deux, jamais l'un sans l'autre.
+      expect(notifyReactionAdded).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ messageId: MESSAGE_ID, emoji: '❤️' })
+      );
+    });
+
     it('returns error on service exception without crashing', async () => {
       const { handler } = buildHandler({
         reactionService: { addReaction: jest.fn<any>().mockRejectedValue(new Error('db down')), createUpdateEvent: jest.fn<any>() },
@@ -421,6 +457,43 @@ describe('ReactionHandler', () => {
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(io.to).toHaveBeenCalled();
+    });
+
+    /**
+     * Le symétrique du `notifyReactionAdded` du chemin d'ajout : la réaction
+     * défaite emporte la notification qu'elle avait produite. Sans lui,
+     * « X a réagi 👍 à votre message » survit indéfiniment au 👍 — la ligne
+     * garde une copie dénormalisée que rien ne relit.
+     */
+    it('retire la notification que la réaction avait produite', async () => {
+      const { notifyReactionRemoved } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn<any>());
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(notifyReactionRemoved).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ messageId: MESSAGE_ID, emoji: '👍', isAnonymous: false })
+      );
+    });
+
+    /**
+     * Une réaction déjà absente n'a rien produit à retirer : le handler sort
+     * sur sa garde d'idempotence AVANT le retrait. Sans cette borne, un
+     * double-fire de dé-réaction relancerait une lecture Mongo par appel sur un
+     * ensemble vide.
+     */
+    it('ne retire rien quand la réaction était déjà absente', async () => {
+      const { notifyReactionRemoved } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler({
+        reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
+      });
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn<any>());
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(notifyReactionRemoved).not.toHaveBeenCalled();
     });
 
     it('replies success (not failure) when the post-write aggregation read throws — reaction already removed', async () => {

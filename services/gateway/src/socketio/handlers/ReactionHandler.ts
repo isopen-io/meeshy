@@ -7,7 +7,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
-import { notifyReactionAdded } from '../../services/notifications/reactionNotify';
+import { notifyReactionAdded, notifyReactionRemoved } from '../../services/notifications/reactionNotify';
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -210,6 +210,17 @@ export class ReactionHandler {
         // best-effort. Peers reconcile on the next reaction:sync.
         logger.error('reaction:add post-success side-effects failed', { error: sideEffectError });
       }
+      // Un SWAP d'emoji est aussi un RETRAIT. `addReaction` détruit l'emoji
+      // précédent du même acteur (règle « une réaction par personne ») et le
+      // rend dans `replacedEmojis` : la notification qu'il avait produite perd
+      // son sujet exactement comme sur un `reaction:remove` explicite, et rien
+      // d'autre ne passera jamais la retirer. Le retrait précède l'ajout —
+      // sinon le throttle par paire, qui vient d'être consommé par la nouvelle
+      // notification, n'aurait rien à voir avec l'ordre, mais l'ancienne ligne
+      // resterait affichée plus longtemps que nécessaire.
+      for (const removedEmoji of replacedEmojis) {
+        void this._retractReactionNotification(validated.messageId, removedEmoji, participantId, isAnonymous);
+      }
       // _createReactionNotification handles errors internally; void to be explicit.
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
     } catch (error: unknown) {
@@ -327,6 +338,11 @@ export class ReactionHandler {
         // best-effort. Peers reconcile on the next reaction:sync.
         logger.error('reaction:remove post-success side-effects failed', { error: sideEffectError });
       }
+      // Le symétrique exact du `void this._createReactionNotification(…)` du
+      // chemin d'ajout : la réaction défaite emporte la notification qu'elle
+      // avait produite. HORS du try/catch ci-dessus, comme l'ajout — un échec
+      // du broadcast ne doit pas sauter le retrait, ni l'inverse.
+      void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous);
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -558,5 +574,43 @@ export class ReactionHandler {
     ).catch((error) => {
       logger.error('reaction notification creation failed', { error });
     });
+  }
+
+  /**
+   * Retirer la notification qu'une réaction avait produite, quand elle est
+   * défaite.
+   *
+   * Source unique partagée avec les routes REST (cf. `notifyReactionRemoved`),
+   * pour la même raison que le jumeau d'ajout juste au-dessus : c'est la
+   * divergence entre transports qui avait fait disparaître les notifs de
+   * réaction sur le chemin outbox/REST, et rien n'empêchait la même divergence
+   * de s'installer sur le retrait.
+   *
+   * Le `try/catch` est INDISPENSABLE et non défensif : les deux appelants
+   * DÉTACHENT cette promesse par `void`, si bien qu'un rejet sans écouteur
+   * terminerait le process sous le `--unhandled-rejections=throw` par défaut de
+   * Node 22 (cf. CLAUDE.md § « `void p` exige TOUJOURS `p.catch(...)` »).
+   *
+   * `try/catch` plutôt qu'un `.catch` sur la promesse rendue, parce que les
+   * deux gardes sont DISJOINTES : un `.catch` n'attrape que le rejet, jamais un
+   * throw SYNCHRONE de l'appel lui-même — et celui-ci se produit pour de vrai
+   * dès qu'un double de test ne stub pas la fonction. Le `try/catch` couvre les
+   * deux, et c'est la seule forme qui rende la promesse non-rejetante quoi
+   * qu'il arrive, ce que le `void` des appelants EXIGE.
+   */
+  private async _retractReactionNotification(
+    messageId: string,
+    emoji: string,
+    reactorId: string,
+    isAnonymous: boolean
+  ): Promise<void> {
+    try {
+      await notifyReactionRemoved(
+        { prisma: this.prisma, notificationService: this.notificationService },
+        { messageId, reactorParticipantId: reactorId, emoji, isAnonymous }
+      );
+    } catch (error) {
+      logger.error('reaction notification retraction failed', { error });
+    }
   }
 }

@@ -22,6 +22,9 @@ import { composeStoryContent, storyTextObjectText } from './posts/storyContentCo
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { retractReactionNotifications } from './notifications/retractReactionNotifications';
+import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
@@ -1099,6 +1102,27 @@ export class PostService {
       });
     }
 
+    // Les notifications que le post a produites portent une copie DÉNORMALISÉE
+    // de son texte, qu'aucune lecture ne rafraîchit — la ligne ne relit jamais
+    // le post. Sans cette réécriture, l'inbox de toute l'audience garde le
+    // texte d'AVANT, définitivement, y compris quand l'édition existait
+    // précisément pour retirer ce qui n'aurait pas dû être publié.
+    //
+    // La source est le contenu PERSISTÉ (`updated.content`) et non celui de la
+    // requête : les deux diffèrent dès qu'une story recompose son texte
+    // (`composeStoryContent`), et c'est le persisté que le destinataire verra
+    // en ouvrant le post.
+    //
+    // BEST-EFFORT, comme la reprise d'octets ci-dessus : l'édition est déjà
+    // committée, et une ligne récalcitrante ne doit pas la transformer en 500.
+    await reproduceEditedSubjectNotifications(
+      this.prisma,
+      { subject: { kind: 'post', id: postId }, content: updated.content },
+      getSharedNotificationService()
+    ).catch((err: unknown) => {
+      log.warn('[PostService] updatePost: notification reproduction failed', { postId, err });
+    });
+
     if (languageChanged) {
       const content = data.content ?? post.content;
       if (content) {
@@ -1309,6 +1333,26 @@ export class PostService {
 
     const foundEmoji = userReactions[0].emoji;
     await this.postReactionService.removeReaction({ postId, userId, emoji: foundEmoji });
+
+    // La notification que le like avait produite (`post_like` /
+    // `story_reaction` / `status_reaction`) n'a plus de sujet. Le retrait vit
+    // ICI et non dans la route, pour la même raison que le reste de la
+    // famille : `foundEmoji` — la réaction RÉELLEMENT retirée — n'existe qu'à
+    // cet endroit. La route, elle, diffuse un '❤️' codé en dur, et un retrait
+    // câblé là-haut manquerait donc toute réaction d'un autre emoji.
+    // L'annonceur par défaut est le service PARTAGÉ du processus (le seul
+    // câblé avec `io`), exactement comme `applyPostRemovalEffects`.
+    try {
+      await retractReactionNotifications(
+        this.prisma,
+        { subject: { kind: 'post', id: postId }, actorId: userId, emoji: foundEmoji },
+        getSharedNotificationService()
+      );
+    } catch (err) {
+      // Le retrait est un EFFET du dé-like, jamais sa condition : la réaction
+      // est déjà partie de la base.
+      log.warn('post unlike: notification retraction failed', { postId, userId, err });
+    }
 
     const remainingReactions = await this.prisma.postReaction.findMany({
       where: { postId },

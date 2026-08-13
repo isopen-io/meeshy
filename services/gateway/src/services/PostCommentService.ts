@@ -10,6 +10,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
+import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -260,6 +261,28 @@ export class PostCommentService {
       where: { commentId },
       ...commentMediaInclude,
     });
+
+    // Les notifications que le commentaire a produites portent une copie
+    // DÉNORMALISÉE de son texte (corps de « X a commenté votre publication »,
+    // extrait serti dans le sous-titre d'une réaction) qu'aucune lecture ne
+    // rafraîchit. Sans cette réécriture, le destinataire garde le texte
+    // d'AVANT, définitivement.
+    //
+    // Conditionné à `contentChanged`, et c'est la même borne que celle qui
+    // décide `isEdited` : un ajustement d'effets visuels seul n'a rien changé
+    // au texte, donc rien à reproduire — et l'annonce ferait retirer puis
+    // ré-insérer la notification chez tous les destinataires pour rien.
+    //
+    // BEST-EFFORT : l'édition est déjà committée.
+    if (contentChanged) {
+      await reproduceEditedSubjectNotifications(
+        this.prisma,
+        { subject: { kind: 'comment', id: commentId }, content: comment.content },
+        getSharedNotificationService()
+      ).catch((err: unknown) => {
+        log.warn('updateComment: notification reproduction failed', { commentId, err });
+      });
+    }
 
     return { ...comment, postId: existing.postId, contentChanged, media };
   }
