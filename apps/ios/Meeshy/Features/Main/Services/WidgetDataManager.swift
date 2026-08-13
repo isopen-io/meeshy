@@ -264,6 +264,21 @@ final class WidgetDataManager: NotificationWidgetSink {
         )
     }
 
+    /// Publie les contacts épinglés (conversations DIRECTES uniquement,
+    /// plafonné à 8) dans le container `group.me.meeshy.apps` sous la clé
+    /// `favorite_contacts`.
+    ///
+    /// C'est LA SOURCE DE VÉRITÉ que `MeeshyAppIntents.ContactQuery`
+    /// (`entities(for:)` + `suggestedEntities()`) lit pour ré-hydrater les
+    /// raccourcis Siri enregistrés, et que le widget Favoris affiche. Ne
+    /// JAMAIS changer `favoritesKey` ni le format JSON (`WidgetFavoriteContact`
+    /// ↔ `ContactData`) sans mettre à jour `MeeshyAppIntents.swift` — un
+    /// désaccord rend tout raccourci silencieusement orphelin (liste vide,
+    /// pas d'erreur). Gardes : `DeepLinkSurfaceRoutingGuardTests` +
+    /// `WidgetDataManagerTests.test_publishFavoriteContacts_*`.
+    ///
+    /// - Parameter conversations: Conversations candidates (le filtre
+    ///   épinglé + directe et le cap à 8 sont appliqués ici)
     func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {
         let favorites = conversations
             .filter { $0.userState.isPinned && $0.type == .direct }

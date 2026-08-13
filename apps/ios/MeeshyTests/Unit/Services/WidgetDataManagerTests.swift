@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 @MainActor
 final class WidgetDataManagerTests: XCTestCase {
@@ -146,6 +147,68 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded[0].contactName, "A")
         XCTAssertEqual(decoded[1].contactName, "B")
         XCTAssertEqual(decoded[0].accentColor, "6366F1")
+    }
+
+    // MARK: - publishFavoriteContacts (SSOT des raccourcis Siri)
+
+    /// `favorite_contacts` est LA clé que `MeeshyAppIntents.ContactQuery` lit
+    /// pour ré-hydrater les raccourcis enregistrés. Ces tests épinglent la clé
+    /// et le contenu — une dérive rendrait tout raccourci silencieusement
+    /// orphelin (le défaut historique de la clé `contacts`, jamais écrite).
+
+    private func makeFavoritesSUT() throws -> (WidgetDataManager, UserDefaults) {
+        let suite = "group.test.meeshy.favorites.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return (WidgetDataManager(suiteName: suite, stagingDirectories: []), defaults)
+    }
+
+    private func makeDirectConversation(
+        id: String, title: String, isPinned: Bool = true, type: ConversationType = .direct
+    ) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id,
+            identifier: "ident-\(id)",
+            type: type,
+            title: title,
+            isPinned: isPinned
+        )
+    }
+
+    func test_publishFavoriteContacts_writesInCorrectKey() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+
+        sut.publishFavoriteContacts([makeDirectConversation(id: "conv-1", title: "Alice")])
+
+        let data = try XCTUnwrap(
+            defaults.data(forKey: "favorite_contacts"),
+            "favorite_contacts key should be written"
+        )
+        let decoded = try JSONDecoder().decode([WidgetFavoriteContact].self, from: data)
+        XCTAssertEqual(decoded.count, 1)
+        XCTAssertEqual(decoded[0].id, "conv-1")
+        XCTAssertEqual(decoded[0].name, "Alice")
+    }
+
+    func test_publishFavoriteContacts_limitsToEightAndDirectPinnedOnly() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let pinnedDirect = (0..<10).map {
+            makeDirectConversation(id: "direct-\($0)", title: "Contact \($0)")
+        }
+        let noise = [
+            makeDirectConversation(id: "group-1", title: "Groupe", type: .group),
+            makeDirectConversation(id: "unpinned-1", title: "Pas épinglée", isPinned: false),
+        ]
+
+        sut.publishFavoriteContacts(noise + pinnedDirect)
+
+        let data = try XCTUnwrap(defaults.data(forKey: "favorite_contacts"))
+        let decoded = try JSONDecoder().decode([WidgetFavoriteContact].self, from: data)
+        XCTAssertEqual(decoded.count, 8, "cap à 8 contacts")
+        XCTAssertTrue(
+            decoded.allSatisfy { $0.id.hasPrefix("direct-") },
+            "seules les conversations directes épinglées sont publiées, got \(decoded.map(\.id))"
+        )
     }
 }
 
