@@ -24,7 +24,11 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         guard let range = source.range(of: "var body: some View {") else {
             XCTFail("HeaderCallButtonsView must define body"); return
         }
-        let end = source.index(range.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        // 900, not 600 (2026-08-13): the per-conversation call-scoping guard
+        // (`isActiveCallForThisConversation`) inserted a doc comment + nested
+        // `if` ahead of the `else if let activeCall = reconciledActiveCall`
+        // branch this test targets, pushing it past the old 600-char window.
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[range.lowerBound..<end])
         XCTAssertTrue(
             body.contains("reconciledActiveCall"),
@@ -143,12 +147,59 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         )
     }
 
+    // 2026-08-13 — user-requested: the "call in progress" header indicator
+    // must appear ONLY in the conversation hosting the call, never in every
+    // open conversation while a call is active elsewhere.
+
+    func test_body_scopesReturnToCallIndicatorToThisConversation() throws {
+        let source = try headerSource()
+        guard let range = source.range(of: "var body: some View {") else {
+            XCTFail("HeaderCallButtonsView must define body"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        guard let activeRange = body.range(of: "if callManager.callState.isActive {"),
+              let scopeRange = body.range(of: "if isActiveCallForThisConversation {"),
+              let indicatorRange = body.range(of: "returnToCallIndicator") else {
+            XCTFail("body must branch on callState.isActive, then scope by conversation before showing returnToCallIndicator")
+            return
+        }
+        XCTAssertTrue(
+            activeRange.lowerBound < scopeRange.lowerBound && scopeRange.lowerBound < indicatorRange.lowerBound,
+            "returnToCallIndicator must be nested inside isActiveCallForThisConversation, itself " +
+            "nested inside callState.isActive — showing the pill in a conversation OTHER than the " +
+            "one hosting the active call regressed a user-reported bug (2026-08-13)."
+        )
+    }
+
+    func test_isActiveCallForThisConversation_definedAndDegradesGracefullyWhenUnknown() throws {
+        let source = try headerSource()
+        guard let range = source.range(of: "private var isActiveCallForThisConversation: Bool {") else {
+            XCTFail("isActiveCallForThisConversation not found"); return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("guard let activeConversationId = callManager.conversationId else { return true }"),
+            "When CallManager doesn't know which conversation the active call belongs to " +
+            "(VoIP-push-woken calls without that payload field), the indicator must still show " +
+            "rather than strand the user with no way back to their own call."
+        )
+        XCTAssertTrue(
+            body.contains("activeConversationId == conversationId"),
+            "When CallManager DOES know the call's conversation, it must be compared against " +
+            "this header's own conversationId — not shown unconditionally."
+        )
+    }
+
     func test_body_reconcilesOnConversationChange() throws {
         let source = try headerSource()
         guard let range = source.range(of: "var body: some View {") else {
             XCTFail("HeaderCallButtonsView must define body"); return
         }
-        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        // 1300, not 700 (2026-08-13) — same window-overflow reason as
+        // `test_body_showsRejoinIndicator_whenReconciledActiveCallIsSet` above.
+        let end = source.index(range.lowerBound, offsetBy: 1300, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[range.lowerBound..<end])
         XCTAssertTrue(
             body.contains(".task(id: conversationId)") && body.contains("await reconcileActiveCall()"),

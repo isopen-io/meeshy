@@ -59,7 +59,12 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     func test_iPadRootView_routesCallPresentationThroughSharedLayer() throws {
         let source = try source(of: "Views/iPadRootView+Sheets.swift")
         XCTAssertTrue(
-            source.contains(".modifier(CallPresentationLayer())"),
+            // 2026-08-13 — `CallPresentationLayer` gained the hoisted mini-audio-player
+            // closures (`miniPlayerOnTapBody`/`miniPlayerCurrentConversationId`), so the
+            // call site is no longer the bare zero-arg `CallPresentationLayer()`. Match
+            // the invocation prefix rather than the exact literal — same intent (route
+            // through the shared modifier), tolerant of the constructor's arguments.
+            source.contains(".modifier(CallPresentationLayer("),
             "iPadRootView must mount call presentation via the shared CallPresentationLayer " +
             "modifier (which owns the single injected `callManager` and mounts CallView/pill/" +
             "bubble internally)."
