@@ -16,6 +16,11 @@ import MeeshyUI
 //     rollback), and comment send via `addComment` — every action is wired and
 //     crash-free. (Unlike the feed, comments here are best-effort: no durable
 //     offline outbox — a failed send surfaces a toast rather than queuing.)
+//   - Real-time reconciliation of the SAME counters the feed reconciles
+//     (`post:liked`/`unliked`, `comment:added`/`deleted`, `post:reposted`,
+//     `post:bookmarked`, `post:updated`/`deleted`): the server's ABSOLUTE count
+//     becomes the base and the matching optimistic override is dropped, so the
+//     displayed number never drifts by the ±1 the override would re-apply.
 //   - Impression batching (source `"profile"`) for every card that appears, and a
 //     `viewPost` call when a post is opened or its text expanded ("voir plus").
 //   - Reels open the immersive viewer (host wires `onOpenReel`); posts open detail
@@ -42,11 +47,14 @@ struct ProfilePostsCounts: Equatable {
     let stories: Int
     let isApproximate: Bool
 
+    /// `reduce` plutôt que `filter().count` : recalculé à chaque mutation de la
+    /// liste (dont chaque like reçu en temps réel), le triple `filter` allouait
+    /// trois tableaux intermédiaires pour n'en lire que la taille.
     static func compute(from posts: [FeedPost], hasMore: Bool) -> ProfilePostsCounts {
         ProfilePostsCounts(
-            posts: posts.filter { !$0.isReel && !$0.isStory }.count,
-            reels: posts.filter(\.isReel).count,
-            stories: posts.filter(\.isStory).count,
+            posts: posts.reduce(0) { $0 + (!$1.isReel && !$1.isStory ? 1 : 0) },
+            reels: posts.reduce(0) { $0 + ($1.isReel ? 1 : 0) },
+            stories: posts.reduce(0) { $0 + ($1.isStory ? 1 : 0) },
             isApproximate: hasMore
         )
     }
@@ -220,6 +228,10 @@ struct ProfileUserPostsList: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 4)
 
+                if viewModel.visiblePosts.isEmpty {
+                    filteredEmptyState
+                }
+
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
                         .onAppear {
@@ -231,7 +243,6 @@ struct ProfileUserPostsList: View {
                             viewModel.loadMoreIfNeeded(currentPost: post)
                         }
                 }
-                .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
                     // Sentinelle de secours (le déclencheur principal est le
@@ -239,9 +250,7 @@ struct ProfileUserPostsList: View {
                     // 3 cartes sont rendues.
                     Color.clear
                         .frame(height: 1)
-                        .onAppear {
-                            Task { await viewModel.revealOrLoadMore() }
-                        }
+                        .onAppear { viewModel.scheduleReveal() }
                     if viewModel.isLoadingMore {
                         ProgressView().padding()
                     }
@@ -253,6 +262,12 @@ struct ProfileUserPostsList: View {
         .padding(.top, 8)
         .padding(.bottom, 24)
         .task { await viewModel.loadInitial() }
+        // Flush au niveau LISTE. Posé sur le `ForEach`, ce modificateur était
+        // appliqué à CHAQUE carte générée : toute carte quittant l'écran
+        // annulait le minuteur de groupement et postait un lot d'un seul id —
+        // une requête réseau par carte défilée, soit exactement l'inverse du
+        // batching que `ImpressionBatcher` existe pour faire.
+        .onDisappear { Task { await viewModel.flushImpressions() } }
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: [link.url])
                 .presentationDetents([.medium, .large])
@@ -471,6 +486,26 @@ struct ProfileUserPostsList: View {
         .padding(.top, 40)
         .padding(.bottom, 24)
     }
+
+    /// Le profil a des publications, mais AUCUNE ne passe le filtre actif. Sans
+    /// ce repli, la tuile « Réels » d'un profil sans réel ne laissait qu'un
+    /// bandeau surmontant du vide — indiscernable d'un chargement bloqué.
+    /// Muet tant que `hasMore` : la sentinelle de bas de liste porte déjà
+    /// l'indicateur de chargement, en doubler un ici afficherait deux roues.
+    @ViewBuilder
+    private var filteredEmptyState: some View {
+        if !viewModel.hasMore {
+            EmptyStateView(
+                icon: viewModel.filter == .reels ? "play.rectangle" : "square.text.square",
+                title: viewModel.filter == .reels
+                    ? String(localized: "profile.posts.empty.reels", defaultValue: "Aucun réel", bundle: .main)
+                    : String(localized: "profile.posts.empty.posts", defaultValue: "Aucun poste", bundle: .main),
+                subtitle: String(localized: "profile.posts.empty.filter.subtitle", defaultValue: "Touchez à nouveau la tuile pour tout revoir", bundle: .main),
+                compact: true
+            )
+            .padding(.vertical, 24)
+        }
+    }
 }
 
 // MARK: - Profile posts opener (shared host-side navigation)
@@ -555,13 +590,13 @@ final class PostViewThrottle {
 
 @MainActor
 final class ProfileUserPostsViewModel: ObservableObject {
-    @Published private(set) var posts: [FeedPost] = []
+    @Published private(set) var posts: [FeedPost] = [] { didSet { refreshDerivedState() } }
     /// Chargement INITIAL uniquement (plein écran). La page suivante vit dans
     /// `isLoadingMore` — un seul flag pour les deux forçait la vue à afficher
     /// des sémantiques opposées (plein écran vs pied de liste).
     @Published var isLoading = false
     @Published var isLoadingMore = false
-    @Published var hasMore = true
+    @Published var hasMore = true { didSet { refreshDerivedState() } }
     /// État de pagination consommé par le pied de liste : `.exhausted` rend la
     /// zone « plus de contenu » (on a atteint le tout premier contenu publié).
     @Published private(set) var paginationState: PaginationState = .idle
@@ -569,13 +604,25 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
     /// Number of posts actually rendered. Grows via the infinite-scroll sentinel
     /// so the nested LazyVStack never builds the whole cached list at once.
-    @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow
+    @Published private(set) var renderWindow = ProfileUserPostsViewModel.initialRenderWindow {
+        didSet { refreshDerivedState() }
+    }
 
     /// Filtre piloté par les tuiles du bandeau (Postes/Réels ; re-tap = tout).
-    @Published var filter: ProfilePostsFilter = .all
+    /// Changer de filtre REMET la fenêtre de rendu à sa taille initiale : sans
+    /// ça, passer de « tout » (fenêtre étendue à 40 cartes) à « Réels » faisait
+    /// construire d'un coup tous les réels connus dans le LazyVStack imbriqué —
+    /// exactement le pic de travail synchrone que la fenêtre existe pour éviter.
+    @Published var filter: ProfilePostsFilter = .all {
+        didSet {
+            guard oldValue != filter else { return }
+            renderWindow = Self.initialRenderWindow
+            refreshDerivedState()
+        }
+    }
     /// Stats backend du profil (compteurs de contenu exacts) — `nil` tant que
     /// `GET /users/:id/stats` n'a pas répondu.
-    @Published private(set) var userStats: UserStats?
+    @Published private(set) var userStats: UserStats? { didSet { refreshDerivedState() } }
 
     /// Optimistic engagement overrides keyed by postId (nil = use server flag).
     @Published var likedOverrides: [String: Bool] = [:]
@@ -593,6 +640,17 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let userService: UserServiceProviding
     private let languageProvider: LanguageProviding
+    private let socialSocket: SocialSocketProviding
+    private let currentUserIdProvider: @MainActor () -> String?
+
+    /// Une révélation/pagination est déjà programmée : sans cette garde, les
+    /// trois dernières cartes de la fenêtre déclenchaient chacune leur `Task`
+    /// au même frame et la fenêtre bondissait de 3 × `renderStep` d'un coup.
+    private var isRevealScheduled = false
+    /// Reposts déjà comptabilisés — `post:reposted` ne porte qu'un delta (pas
+    /// de total absolu comme `post:liked`), une re-livraison ferait dériver le
+    /// compteur.
+    private var appliedRepostIds = Set<String>()
 
     /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
     /// relance) portés par `ImpressionBatcher`.
@@ -604,39 +662,55 @@ final class ProfileUserPostsViewModel: ObservableObject {
         userId: String,
         postService: PostServiceProviding = PostService.shared,
         userService: UserServiceProviding = UserService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.userId = userId
         self.cacheKey = "user:\(userId)"
         self.postService = postService
         self.userService = userService
         self.languageProvider = languageProvider
-        subscribeToTranslationUpdates()
+        self.socialSocket = socialSocket
+        self.currentUserIdProvider = currentUserIdProvider
+        subscribeToSocketUpdates()
     }
 
     private var preferredLanguages: [String] { languageProvider.preferredLanguages }
 
     // MARK: - Derived render state
+    //
+    // MÉMOÏSÉ, pas calculé à la volée : `filteredPosts` copie jusqu'à 100
+    // `FeedPost` (chacun portant médias, commentaires, traductions) et
+    // `visiblePosts` était relu à CHAQUE évaluation de body ET à chaque
+    // `onAppear` de carte (via `loadMoreIfNeeded`) — soit une poignée de
+    // balayages complets de la liste par cran de défilement. Les trois vues
+    // dérivées sont désormais recalculées UNE fois, quand leurs entrées
+    // (`posts`, `filter`, `renderWindow`, `hasMore`, `userStats`) changent.
 
     /// Liste après application du filtre des tuiles. La fenêtre de rendu
     /// s'applique APRÈS le filtre — appliquée avant, un profil à 90 % de réels
     /// afficherait une liste vide en mode « Postes ».
-    var filteredPosts: [FeedPost] {
-        switch filter {
-        case .all: return posts
-        case .posts: return posts.filter { !$0.isReel && !$0.isStory }
-        case .reels: return posts.filter(\.isReel)
-        }
-    }
-
-    var visiblePosts: [FeedPost] { Array(filteredPosts.prefix(renderWindow)) }
-    var hasMoreToRender: Bool { renderWindow < filteredPosts.count }
-    var reels: [FeedPost] { posts.filter(\.isReel) }
-
+    @Published private(set) var filteredPosts: [FeedPost] = []
+    @Published private(set) var visiblePosts: [FeedPost] = []
+    @Published private(set) var reels: [FeedPost] = []
     /// Compteurs du bandeau : totaux backend exacts quand `GET /users/:id/stats`
     /// les fournit (phase 2), sinon dérivés des postes chargés (phase 1).
-    var postsCounts: ProfilePostsCounts {
-        .merging(derived: .compute(from: posts, hasMore: hasMore), stats: userStats)
+    @Published private(set) var postsCounts = ProfilePostsCounts(posts: 0, reels: 0, stories: 0, isApproximate: true)
+
+    var hasMoreToRender: Bool { renderWindow < filteredPosts.count }
+
+    private func refreshDerivedState() {
+        let filtered: [FeedPost]
+        switch filter {
+        case .all: filtered = posts
+        case .posts: filtered = posts.filter { !$0.isReel && !$0.isStory }
+        case .reels: filtered = posts.filter(\.isReel)
+        }
+        filteredPosts = filtered
+        visiblePosts = filtered.count > renderWindow ? Array(filtered.prefix(renderWindow)) : filtered
+        reels = filter == .reels ? filtered : posts.filter(\.isReel)
+        postsCounts = .merging(derived: .compute(from: posts, hasMore: hasMore), stats: userStats)
     }
 
     // MARK: - Derived engagement state
@@ -719,7 +793,20 @@ final class ProfileUserPostsViewModel: ObservableObject {
     func loadMoreIfNeeded(currentPost post: FeedPost) {
         guard let index = visiblePosts.firstIndex(where: { $0.id == post.id }) else { return }
         guard index >= visiblePosts.count - 3 else { return }
-        Task { await revealOrLoadMore() }
+        scheduleReveal()
+    }
+
+    /// Point d'entrée unique et COALESCÉ des déclencheurs de révélation (les
+    /// `onAppear` des dernières cartes et la sentinelle de bas de liste). Le
+    /// drapeau est posé de façon synchrone, donc les déclencheurs d'un même
+    /// frame se fondent en une seule progression de la fenêtre.
+    func scheduleReveal() {
+        guard !isRevealScheduled else { return }
+        isRevealScheduled = true
+        Task { [weak self] in
+            await self?.revealOrLoadMore()
+            self?.isRevealScheduled = false
+        }
     }
 
     /// Sentinel handler: reveal more already-cached cards first (cheap), then
@@ -908,6 +995,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
         posts.removeAll { $0.id == postId }
         do {
             try await postService.delete(postId: postId)
+            // Le cache vit sous PLUSIEURS clés (`user:<id>`, main-feed, la clé
+            // détail, bookmarks) : sans cette purge, la carte supprimée
+            // ressortait à la réouverture du profil, servie cache-first.
+            await CacheCoordinator.shared.feed.removeEverywhere(itemId: postId)
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
         } catch {
             posts = snapshot
@@ -940,7 +1031,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
         do {
             let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
-                posts[newIdx] = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
+                let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
+                posts[newIdx] = edited
+                // `post:updated` n'est pas réconcilié côté cache (contrairement
+                // aux likes/commentaires) : sans ce patch, la réouverture du
+                // profil ressert l'ANCIEN texte depuis le cache. Fraîcheur
+                // préservée — c'est une mutation locale, pas un fetch.
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) { $0 = edited }
             }
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
         } catch {
@@ -955,7 +1052,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
     /// Requests a translation for `postId` into `language`. The computed
     /// translation is delivered asynchronously via the social socket and patched
-    /// into `posts` by `subscribeToTranslationUpdates` (so the flag lights up).
+    /// into `posts` by `subscribeToSocketUpdates` (so the flag lights up).
     func requestTranslation(postId: String, language: String) async {
         do {
             try await postService.requestTranslation(postId: postId, targetLanguage: language)
@@ -965,11 +1062,98 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    private func subscribeToTranslationUpdates() {
-        // Idempotent — ensures the social socket is up so `post:translation-updated`
-        // actually arrives when the profile sheet is opened outside the feed.
-        SocialSocketManager.shared.connect()
-        SocialSocketManager.shared.postTranslationUpdated
+    // MARK: - Real-time sync (parité FeedViewModel, périmètre listing profil)
+    //
+    // Sans ces sinks, le listing du profil était un instantané mort : un like
+    // reçu, un commentaire posté depuis la feuille de commentaires hoistée, une
+    // suppression ou une édition faite ailleurs ne touchaient JAMAIS les cartes
+    // — seul l'optimisme local bougeait, et le compteur serveur restait figé sur
+    // la valeur du fetch. Le CACHE, lui, était déjà réconcilié
+    // (`CacheCoordinator.subscribeToPostEngagement`) : l'écart ne portait que
+    // sur l'exemplaire EN MÉMOIRE, donc il se voyait tant que la vue restait
+    // ouverte et disparaissait à la réouverture — la signature exacte d'un
+    // « compteur qui ne se synchronise pas ».
+
+    private func subscribeToSocketUpdates() {
+        // Idempotent — garantit que le socket social est monté quand la feuille
+        // de profil est ouverte hors du feed.
+        socialSocket.connect()
+        // Les événements post/commentaire sont diffusés vers la feed room du
+        // viewer (cf. `SocialEventsHandler.broadcastToFeedRooms`) : sans ce
+        // join, un profil ouvert depuis une conversation ou la recherche ne
+        // recevait AUCUNE mise à jour. Join idempotent, et JAMAIS quitté ici —
+        // `feed:unsubscribe` appartient au feed, le quitter depuis le profil
+        // couperait le temps réel de l'écran d'accueil.
+        socialSocket.subscribeFeed()
+
+        socialSocket.postLiked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyLike(postId: data.postId, actorId: data.userId,
+                                likeCount: data.likeCount, liked: true)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postUnliked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyLike(postId: data.postId, actorId: data.userId,
+                                likeCount: data.likeCount, liked: false)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyCommentCount(postId: data.postId, count: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyCommentCount(postId: data.postId, count: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postBookmarked
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId })
+                else { return }
+                self.posts[index].isBookmarkedByMe = data.bookmarked
+                if let count = data.bookmarkCount { self.posts[index].bookmarkCount = count }
+                self.bookmarkedOverrides[data.postId] = nil
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReposted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in self?.applyRepost(data) }
+            .store(in: &cancellables)
+
+        socialSocket.postDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] postId in self?.posts.removeAll { $0.id == postId } }
+            .store(in: &cancellables)
+
+        socialSocket.postUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apiPost in
+                guard let self, let index = self.posts.firstIndex(where: { $0.id == apiPost.id })
+                else { return }
+                var merged = apiPost.toFeedPost(preferredLanguages: self.preferredLanguages)
+                // L'état personnel n'est pas porté par un broadcast destiné à
+                // toute l'audience — le reprendre de l'exemplaire local évite
+                // que l'édition d'un poste éteigne le cœur de son lecteur.
+                merged.isLiked = self.posts[index].isLiked
+                merged.isBookmarkedByMe = self.posts[index].isBookmarkedByMe
+                merged.isRepostedByMe = self.posts[index].isRepostedByMe
+                self.posts[index] = merged
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postTranslationUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (data: SocketPostTranslationUpdatedData) in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
@@ -988,6 +1172,41 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 self.posts[index] = post
             }
             .store(in: &cancellables)
+    }
+
+    /// `post:liked` / `post:unliked` portent le total ABSOLU : il devient la
+    /// base. L'override optimiste est levé dès que l'écho de NOTRE propre
+    /// action arrive — le garder ferait dériver l'affichage de ±1, `adjusted()`
+    /// l'appliquant par-dessus un total qui inclut déjà ce like.
+    private func applyLike(postId: String, actorId: String, likeCount: Int, liked: Bool) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[index].likes = likeCount
+        guard actorId == currentUserIdProvider() else { return }
+        posts[index].isLiked = liked
+        likedOverrides[postId] = nil
+    }
+
+    private func applyCommentCount(postId: String, count: Int) {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        posts[index].commentCount = count
+    }
+
+    /// `post:reposted` ne porte PAS de total absolu (contrairement aux likes) —
+    /// d'où l'incrément gardé par `appliedRepostIds`. Le repost lui-même est un
+    /// poste de son auteur : il rejoint la tête du listing quand c'est le profil
+    /// consulté.
+    private func applyRepost(_ data: SocketPostRepostedData) {
+        guard appliedRepostIds.insert(data.repost.id).inserted else { return }
+        if let index = posts.firstIndex(where: { $0.id == data.originalPostId }) {
+            posts[index].repostCount += 1
+            if data.repost.author.id == currentUserIdProvider() {
+                posts[index].isRepostedByMe = true
+                repostedOverrides[data.originalPostId] = nil
+            }
+        }
+        guard data.repost.author.id == userId,
+              !posts.contains(where: { $0.id == data.repost.id }) else { return }
+        posts.insert(data.repost.toFeedPost(preferredLanguages: preferredLanguages), at: 0)
     }
 
     /// Optimistic share-count bump — the gateway always increments shareCount on
