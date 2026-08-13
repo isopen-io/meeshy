@@ -553,4 +553,84 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.membershipRestored, false)
         XCTAssertFalse(event.didRestoreMembership)
     }
+
+    // MARK: - `memberCount` : l'effectif ABSOLU des quatre événements d'appartenance
+    //
+    // Le gateway le porte sur les quatre, et il le documente « à POSER, pas à
+    // incrémenter » : un delta ne rattrape jamais un événement manqué, et les
+    // deux clients PERSISTENT la dérive. Le champ n'était décodé sur AUCUN des
+    // quatre — le contrat existait côté serveur et côté web, sans récepteur ici.
+
+    func test_participantJoinedEvent_decodesTheAbsoluteMemberCount() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "displayName": "Alice Dupont",
+            "joinedAt": "2026-04-09T10:00:00.000Z",
+            "memberCount": 12
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(ParticipantJoinedEvent.self, from: json).memberCount, 12)
+    }
+
+    func test_participantLeftEvent_decodesTheAbsoluteMemberCount() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "displayName": "Alice Dupont",
+            "leftAt": "2026-04-09T10:00:00.000Z",
+            "memberCount": 11
+        }
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(ParticipantLeftEvent.self, from: json).memberCount, 11)
+    }
+
+    func test_participantBannedEvent_decodesTheAbsoluteMemberCount() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "bannedBy": {"id": "u2"},
+            "bannedAt": "2026-04-09T10:00:00.000Z",
+            "membershipEnded": false,
+            "memberCount": 8
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantBannedEvent.self, from: json)
+        XCTAssertEqual(event.memberCount, 8)
+        XCTAssertFalse(event.didEndMembership,
+            "l'effectif absolu n'efface pas `membershipEnded` — il le rend seulement inutile au calcul")
+    }
+
+    func test_participantUnbannedEvent_decodesTheAbsoluteMemberCount() throws {
+        let json = """
+        {"conversationId": "conv1", "userId": "u1", "memberCount": 9}
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(ParticipantUnbannedEvent.self, from: json).memberCount, 9)
+    }
+
+    func test_participantEvents_absentMemberCount_decodesAsNil_notZero() throws {
+        // Rétro-compatibilité : un gateway antérieur au contrat n'envoie pas le
+        // champ, et `nil` est ce qui fait retomber le client sur le delta. Un
+        // zéro par défaut viderait la conversation à chaque événement.
+        let joined = """
+        {"conversationId": "c", "userId": "u", "displayName": "A", "joinedAt": "2026-04-09T10:00:00.000Z"}
+        """.data(using: .utf8)!
+        let left = """
+        {"conversationId": "c", "userId": "u", "displayName": "A", "leftAt": "2026-04-09T10:00:00.000Z"}
+        """.data(using: .utf8)!
+        let unbanned = """
+        {"conversationId": "c", "userId": "u"}
+        """.data(using: .utf8)!
+
+        XCTAssertNil(try decoder.decode(ParticipantJoinedEvent.self, from: joined).memberCount)
+        XCTAssertNil(try decoder.decode(ParticipantLeftEvent.self, from: left).memberCount)
+        XCTAssertNil(try decoder.decode(ParticipantUnbannedEvent.self, from: unbanned).memberCount)
+    }
 }

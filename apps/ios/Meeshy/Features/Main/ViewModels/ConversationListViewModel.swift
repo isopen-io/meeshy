@@ -140,6 +140,29 @@ class ConversationListViewModel: ObservableObject {
         return _convIdIndex?[id]
     }
 
+    /// Effectif à POSER sur une ligne de liste après un événement
+    /// d'appartenance (adhésion, départ, bannissement, levée).
+    ///
+    /// Les quatre événements du gateway portent un `memberCount` ABSOLU, et ils
+    /// le portent pour une raison précise : **un delta ne rattrape jamais un
+    /// événement manqué**. Hors ligne, hors room, trou de reconnexion — chaque
+    /// événement perdu laissait une dérive définitive, qu'iOS PERSISTE
+    /// (`schedulePersist` écrit la valeur fausse dans le cache disque, et rien
+    /// ne relit spontanément l'effectif ensuite). Un total, lui, se rattrape au
+    /// premier événement suivant.
+    ///
+    /// Le delta n'est donc plus qu'un REPLI pour un gateway antérieur au
+    /// contrat, jamais le chemin nominal. Jumeau web : `applyMemberCount`
+    /// (`apps/web/hooks/queries/use-socket-cache-sync.ts`), qui porte la même
+    /// règle — toute évolution touche les deux.
+    ///
+    /// Le plancher à zéro vaut pour les DEUX branches : un décrément de repli
+    /// sur un cache déjà à zéro rendrait un effectif négatif, et un absolu
+    /// aberrant n'a pas plus le droit d'en produire un.
+    static func memberCountAfterMembershipEvent(current: Int, absolute: Int?, delta: Int) -> Int {
+        max(0, absolute ?? (current + delta))
+    }
+
     // MARK: - List Mutators (centralised write surface)
     //
     // Every code path that wants to replace, extend or re-order
@@ -969,7 +992,11 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, event.userId != self.currentUserId else { return }
                 guard let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount += 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: +1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -978,7 +1005,11 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount -= 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: -1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -991,9 +1022,19 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.participantBanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard event.didEndMembership else { return }
+                // L'effectif absolu tranche `didEndMembership` de lui-même :
+                // bannir un ex-membre ne retire personne, donc le compte est
+                // simplement inchangé et le POSER est exact dans les deux cas.
+                // Le court-circuit ne subsiste que pour un gateway qui ne
+                // l'envoie pas. Miroir de `handleConversationParticipantBanned`
+                // (`apps/web/hooks/queries/use-socket-cache-sync.ts`).
+                guard event.memberCount != nil || event.didEndMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount -= 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: -1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1003,9 +1044,15 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.participantUnbanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard event.didRestoreMembership else { return }
+                // Même lecture qu'au bannissement : présent, l'effectif absolu
+                // tranche `didRestoreMembership`.
+                guard event.memberCount != nil || event.didRestoreMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount += 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: +1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
