@@ -31,7 +31,10 @@ public enum MeeshyVideoWatermarkBaker {
     /// restent fluides à 15 Hz, et une tuile rendue est réutilisée par toutes
     /// les frames du même intervalle — sur une vidéo à 60 fps, c'est 4× moins
     /// de rendus.
-    public static let animationFPS: Double = 15
+    ///
+    /// `nonisolated` : lue par `animationTime` (nonisolated, cf. sa doc) et par
+    /// `MeeshyMediaBrandingGeometryTests` hors MainActor.
+    public static nonisolated let animationFPS: Double = 15
 
     /// Marge autour du bloc, pour que l'ombre portée (offset 2, flou 6) ne
     /// soit pas coupée par les bords de la tuile.
