@@ -164,7 +164,8 @@ final class WidgetDataManagerTests: XCTestCase {
     }
 
     private func makeDirectConversation(
-        id: String, title: String, isPinned: Bool = true, type: ConversationType = .direct
+        id: String, title: String, isPinned: Bool = true,
+        type: MeeshyConversation.ConversationType = .direct
     ) -> MeeshyConversation {
         MeeshyConversation(
             id: id,
