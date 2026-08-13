@@ -1,3 +1,114 @@
+# Tête instruite pour le cycle 107 — la connaissance qui manque n'est pas toujours absente : elle peut être là, appliquée à UNE cible
+
+*Le cycle 106 a mené l'audit d'adressage promis au cycle 102 et reconduit quatre fois. Il ne l'a pas
+mené sur des appels REST comme prévu — ceux-là étaient corrects — mais sur la surface que la même
+leçon désignait sans que personne l'y applique : les `meeshy://` écrits à la main par les widgets et
+les App Shortcuts.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 106 ajoute — le onzième membre de la famille
+>
+> Le cycle 102 : *un appel réseau écrit à la main n'est confronté à la table de routage de PERSONNE.*
+> Le cycle 105 : *une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore.*
+> Le cycle 106 trouve le onzième :
+>
+> **La connaissance qui manque n'est pas toujours absente du dépôt : elle peut y être ÉCRITE,
+> testée, et appliquée à UNE SEULE cible. `ShareExtensionSourceGuardTests` interdit depuis 2026-07
+> à l'extension de partage d'émettre un deep link `contactId=`, avec la raison exacte en clair —
+> « DeepLinkParser ne comprend que text=/url= ». Pendant ce temps `MeeshyAppIntents.swift` en
+> émettait deux, et le widget cinq autres formes. La garde n'était pas fausse ; elle était
+> LOCALE, et une garde locale sur un défaut GLOBAL rassure autant qu'une garde globale.**
+>
+> **Le symptôme à reconnaître** : quand une garde nomme une limite d'un composant PARTAGÉ (« le
+> parseur ne comprend que X »), la limite ne concerne pas la cible gardée — elle concerne toutes
+> celles qui parlent à ce composant. Chercher les AUTRES émetteurs est un réflexe, pas une enquête.
+>
+> **Corollaire d'outillage, payé comptant ce cycle** : le découpeur de commentaires que ce dépôt
+> recopie de garde en garde traite `//` comme un début de commentaire — donc il EFFACE
+> `meeshy://` avant toute recherche. Une garde bâtie dessus aurait balayé zéro URL et serait
+> passée au VERT en n'ayant rien vérifié. Toute garde qui compte des occurrences doit refuser
+> explicitement un balayage vide (`XCTAssertFalse(emitted.isEmpty)`) — sans quoi son silence est
+> indiscernable d'un succès.
+
+## Livré au cycle 106 — le widget et Siri cessent d'adresser le vide
+
+**Le défaut.** Sept hosts `meeshy://` sont émis par des cibles qui ne lient pas le routeur (widget,
+App Shortcuts) ; trois seulement existaient dans la table. `quickreply/{id}?text=` (les quatre
+boutons du widget « Réponse rapide », c'est-à-dire sa raison d'être entière), `contact/{id}`,
+`send?contactId=&message=` (raccourci Siri « Message X on Meeshy », qui demande le destinataire ET
+le texte avant de les jeter), `call?contactId=`, `translate?text=`, `conversations/recent` et
+`…/unread` retombaient tous sur `.external` — l'app s'ouvre, le geste est perdu, rien ne rougit.
+
+**Livré** : les trois hosts qui portaient DÉJÀ un identifiant de conversation sont routés —
+`contact/{id}` et `send?contactId=` en portent un malgré leur nom (`publishFavoriteContacts` écrit
+`conv.id` dans `FavoriteContact.id` ; `ContactQuery` sert ses entités de la même clé). Le texte
+d'un raccourci est **déposé en brouillon** (`DraftStore`, relu par `ConversationView` à l'ouverture)
+et jamais envoyé : un tap accidenté ou une dictée Siri mal transcrite ne peut pas produire un
+message irrattrapable. Un brouillon qui porte déjà du texte n'est **jamais** écrasé.
+
+**Ce qui reste NON routé, délibérément** : `conversations` (élire « la plus récente » demande une
+destination qui n'existe pas), `call` (deux de ses trois formes sont hors d'atteinte —
+`LiveActivityBridge` est un stub), `translate` (pas d'écran pour un texte hors conversation). Ils
+ne sont plus invisibles : `DeepLinkSurfaceRoutingGuardTests` extrait les hosts réellement émis et
+exige de chacun une classification — routé avec URL témoin qui doit résoudre, ou non routé avec sa
+raison. Un huitième host inventé demain fait rougir l'égalité d'ensembles.
+
+**Correction annexe, même famille sur une clé plutôt qu'une URL** : `ContactQuery.entities(for:)`
+lisait la clé App Group `contacts`, qu'aucun écrivain du dépôt ne pose — tout Raccourci enregistré
+perdait son destinataire au deuxième lancement, sans erreur (une liste vide est un résultat valide).
+Elle lit désormais `favorite_contacts`, la seule écrite, et celle que son propre jumeau
+`suggestedEntities` lisait déjà.
+
+**Tests** : 2 suites neuves (17 témoins) sous `MeeshyTests/Unit/Navigation/`. **Réserve d'honnêteté
+sur la preuve RED** : aucune toolchain Swift n'existe dans l'environnement de la routine (constat
+inchangé des cycles 86 à 105), donc le rouge-avant n'a pas été EXÉCUTÉ — il est établi par lecture
+du `switch` (aucun `case` pour ces hosts avant le correctif, visible au diff) et l'exécution
+revient à la CI. En revanche l'extraction de hosts de la garde a été vérifiée mécaniquement, hors
+Swift, par un portage à l'identique de son algorithme : c'est CE contrôle qui a révélé le bug du
+découpeur de commentaires (`//` de `meeshy://`) avant qu'il ne soit poussé.
+
+## Constats du cycle 106, NON traités — le lot naturel du cycle 107
+
+1. **`meeshy://conversations/recent` demande une destination qui n'existe pas.** L'App Shortcut
+   s'intitule « Open Recent Conversation » : la destination juste est *la conversation la plus
+   récente*, pas la liste. Aucun `DeepLink` ne porte cette élection, et l'app-side sait l'élire
+   (`ConversationListViewModel`) sans que le routeur y ait accès. Un cas `.mostRecentConversation`
+   consommé par `RootView` est le geste naturel — décision de produit légère, mais décision.
+2. **`meeshy://call?contactId=&type=` : amorcer un appel depuis un lien n'a pas de chemin.**
+   `CallManager` démarre un appel depuis une conversation ouverte ; rien n'amorce depuis une URL.
+   Le raccourci Siri « Call X on Meeshy » restera inerte tant que ce chemin n'existe pas.
+3. **Les boutons de la Live Activity sont doublement morts.** `meeshy://call/mute` et `call/end`
+   ne sont pas routés, ET aucune Live Activity n'est jamais démarrée : `LiveActivityBridge` est un
+   stub qui journalise, bloqué depuis toujours sur le partage de `MeeshyActivityAttributes` entre
+   la cible widget et l'app. Le fichier documente lui-même les 4 étapes du déblocage. **Router les
+   deux URL sans démarrer les activités ne servirait à rien** — les deux moitiés vont ensemble.
+   Note produit : sur iOS 17+, la bonne forme n'est de toute façon pas un `Link` (qui ouvre l'app)
+   mais un `Button(intent:)` / `LiveActivityIntent`, qui agit sans premier plan.
+4. **Les libellés du widget « Réponse rapide » ne sont pas localisés.** « OK », « Thanks! », « Call
+   me » sont des littéraux anglais codés en dur, dans un widget dont tout le reste passe par
+   `String(localized:)`. Le brouillon déposé porte donc de l'anglais à un utilisateur francophone —
+   visible dès maintenant, puisque le bouton fonctionne enfin.
+5. **`ContactEntity` et le widget Favoris nomment « contact » ce qui est une conversation.** Le
+   correctif de ce cycle l'assume et le documente aux quatre sites, mais le nom continue de mentir.
+   Un renommage (`FavoriteConversation`, `ConversationEntity`) toucherait la clé App Group et donc
+   la compatibilité ascendante des widgets déjà posés — à faire avec une migration, pas à la volée.
+6. **Reconduits, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans producteur
+   (décision produit à trancher) ; `clearHistoryBefore` écrit et diffusé, jamais appliqué côté
+   serveur (change une API publique, à valider par un humain) ; l'épingle qui n'atteint pas la 3e
+   audience (aucun défaut observable tant qu'aucune ligne de liste n'affiche d'épingle) ;
+   Socket.IO sans adapter Redis (contrainte d'architecture mono-instance) ; le commentaire de
+   `handleMessage` qui affirme à tort que REST y passe ; la projection des accusés en trois
+   exemplaires inline ; `TranslationStatus` sans référent in-repo. Et l'audit d'adressage lui-même
+   n'est pas clos : **Android hors `MessageApi`** n'a toujours pas été passé au crible.
+
 # Tête instruite pour le cycle 106 — une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore
 
 *Le cycle 105 est parti d'un audit large de la pile temps réel (file hors-ligne, dédup, ordonnancement,
