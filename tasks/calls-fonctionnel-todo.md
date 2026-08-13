@@ -7863,8 +7863,72 @@ non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les
 de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device
 requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique
 de sortie audio (`setSinkId`, Vague 111, nécessite un vrai sélecteur multi-périphériques, pas un
-quick fix) ; guard `!isAnonymous` sur le poll `active-call` du bandeau (Vague 112, faible sévérité —
-401 gaspillés, aucun impact fonctionnel) ; `CallInfoOverlay`'s `participantCount` affichant
-brièvement 0 côté caller (Vague 112, cosmétique, non traité). Voir aussi
+quick fix) ; `CallInfoOverlay`'s `participantCount` affichant brièvement 0 côté caller (Vague 112,
+cosmétique, non traité). Voir aussi `tasks/2026-08-13-group-calls-gap-analysis.md` pour le chantier
+séparé « appels de groupe » (W6/W7 web, I1-I7 iOS, SFU) en cours sur une autre branche le même jour.
+
+## Vague 119 — guard `!isAnonymous` sur le poll `GET /active-call` du bandeau (web) (2026-08-13)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session déclenchée par le prompt élargi (FaceTime-quality 12-phases). Base explicite sur le
+développement précédent : `git fetch origin main`, branche locale réalignée sur `origin/main`
+(`512b0e05b`, contient la Vague 118 — PR mergée). Aucune PR ouverte sur la branche désignée de cette
+session. Contrainte de sandbox inchangée : ni `xcodebuild`/`swift` ni toolchain Android complet
+disponibles pour un build/run réel (seul `gradle` binaire présent, sans SDK Android configuré) —
+périmètre restreint à web+gateway, vérifiable localement. Repris directement le dernier item
+concret du backlog « Reste ouvert » plutôt que de relancer un audit générique du dossier calls.
+
+- **Root cause confirmée par lecture directe** : `useCallBanner` (`use-call-banner.ts`) monte un
+  `useQuery` avec `refetchInterval: 15_000` et `enabled: !!conversationId` — aucune autre condition.
+  Le hook est monté par `ConversationHeader`, donc actif sur CHAQUE conversation ouverte, y compris
+  par un visiteur anonyme (lien de partage, `X-Session-Token`, pas de JWT). Or la route qu'il
+  interroge (`GET /conversations/:id/active-call`, `routes/calls.ts:83-85`) construit son middleware
+  avec `createUnifiedAuthMiddleware(prisma, { requireAuth: true, allowAnonymous: false })` — un
+  visiteur anonyme reçoit systématiquement un 401, jamais un 200. Confirmé par le commentaire déjà
+  présent sur `calls.service.ts:13` (« anonymous users refused ») : le service le savait, le hook
+  appelant ne le respectait pas. Conséquence concrète au-delà du bruit de log : la route est
+  rate-limited 10/min (`ROUTE_RATE_LIMITS.callOperations`) — un visiteur anonyme avec plusieurs
+  onglets/conversations ouverts pouvait épuiser ce quota sans qu'aucun appel n'ait jamais pu
+  aboutir, avant même d'atteindre un besoin légitime.
+- **Fix** : le hook lit désormais l'utilisateur courant via `useUser()` (sélecteur Zustand pur,
+  `@/stores/auth-store`, déjà utilisé ailleurs dans l'app — aucun effet de bord, contrairement au
+  hook `useAuth()` plus lourd qui pilote aussi des redirections) et dérive l'anonymat avec
+  `isUserAnonymous()` (`@/utils/auth`, déjà la source de vérité unique testée pour cette question —
+  pas de logique d'anonymat réimplémentée localement). `enabled` passe à
+  `!!conversationId && !isAnonymous`. Signature du hook inchangée (`useCallBanner(conversationId)`,
+  toujours 1 paramètre) — pas de prop à faire remonter jusqu'à `ConversationHeader`/`ConversationHeaderProps`,
+  suivant le principe Single Source of Truth plutôt que de threader l'info à travers l'arbre de
+  composants. Query React Query désactivée = zéro requête émise, zéro tick de `refetchInterval` —
+  pas seulement un guard sur le résultat.
+- **Tests** (TDD, RED confirmé par `git stash` du seul fichier de production avant de committer) :
+  2 nouveaux cas dans `use-call-banner.test.tsx` — un viewer anonyme ne déclenche jamais
+  `getActiveCall` (banner reste fermé, `currentCall` reste `null`), et le polling reprend dès que le
+  même hook re-render avec un utilisateur non-anonyme (transition anonyme → authentifié en cours de
+  session, ex. connexion depuis un lien de partage). RED confirmé : les deux échouaient contre le
+  code d'avant fix avec `Received number of calls: 1` sur `getActiveCall`. Les 20 cas existants du
+  fichier passent sans modification (le store réel démarre à `user: null`, `isUserAnonymous(null)`
+  retourne `false` — comportement par défaut inchangé, zéro mock à toucher).
+  Sweep complet `--testPathPatterns="[Cc]all"` (web) : **52 suites / 464 tests verts** (+2 nets vs.
+  Vague 118), 0 régression. `npx tsc --noEmit` (apps/web) : 0 occurrence de `use-call-banner` dans
+  la sortie, avant et après le fix — aucune nouvelle erreur imputable à ce changement (le total
+  brut de la commande a dérivé depuis les Vagues 115-118, confirmé être du bruit d'environnement
+  préexistant sans rapport avec ce fichier, cf. note similaire Vague 118). Prérequis CLAUDE.md
+  rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts` (bun 1.3.11
+  disponible localement, pas 1.3.14), puis `packages/shared && npx prisma generate --generator
+  client` + `bun run build`.
+- **Portée volontairement non étendue** : dead code / god-object `CallManager.swift` (~5880 lignes),
+  `CallInfoOverlay.participantCount` à 0 transitoire, `setSinkId`, `CXSetHeldCallAction`, les 6
+  trouvailles Android de la Vague 70 — non traités ce cycle, toolchains iOS/Android toujours hors
+  d'atteinte dans ce sandbox pour vérifier un changement Swift/Kotlin avant merge.
+
+### Reste ouvert
+
+Reconduit (moins l'item `!isAnonymous` résolu ce cycle) : dead code / god-object `CallManager.swift`
+(~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall`
+UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs.
+`supportsHolding = false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans
+ce sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`, Vague 111, nécessite un
+vrai sélecteur multi-périphériques, pas un quick fix) ; `CallInfoOverlay`'s `participantCount`
+affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité). Voir aussi
 `tasks/2026-08-13-group-calls-gap-analysis.md` pour le chantier séparé « appels de groupe » (W6/W7
 web, I1-I7 iOS, SFU) en cours sur une autre branche le même jour.
