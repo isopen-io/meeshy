@@ -6,8 +6,7 @@
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type {
   MessageRequest,
-  MessageResponse,
-  MessageResponseMetadata
+  MessageResponse
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
@@ -21,19 +20,6 @@ import { getCachedParticipant, cacheParticipant } from '../../utils/participant-
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
-
-/**
- * Translation status reported in the send response. Translation is queued as
- * a post-save side effect (off the ACK path), so the response can only ever
- * report "pending" — the actual results arrive later via Socket.IO events.
- */
-const PENDING_TRANSLATION_STATUS = {
-  status: 'pending' as const,
-  languagesRequested: [] as string[],
-  languagesCompleted: [] as string[],
-  languagesFailed: [] as string[],
-  estimatedCompletionTime: 1000
-};
 
 export class MessagingService {
   private validator: MessageValidator;
@@ -82,7 +68,7 @@ export class MessagingService {
         corr
       );
       if (!validationResult.isValid) {
-        return this.createErrorResponse(validationResult.errors[0].message, requestId);
+        return this.createErrorResponse(validationResult.errors[0].message);
       }
 
       // 2. Résolution de l'ID de conversation
@@ -92,7 +78,7 @@ export class MessagingService {
         corr
       );
       if (!conversationId) {
-        return this.createErrorResponse('Conversation non trouvée', requestId);
+        return this.createErrorResponse('Conversation non trouvée');
       }
 
       // 3. Vérification des permissions via Participant
@@ -126,8 +112,7 @@ export class MessagingService {
 
       if (!participant || !participant.isActive) {
         return this.createErrorResponse(
-          'Permissions insuffisantes pour envoyer des messages',
-          requestId
+          'Permissions insuffisantes pour envoyer des messages'
         );
       }
 
@@ -179,7 +164,7 @@ export class MessagingService {
             ...corr, step: 'messaging.handleMessage', phase: 'end',
             durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
           });
-          return this.createSuccessResponse(earlyHit, requestId, startTime, undefined, PENDING_TRANSLATION_STATUS);
+          return this.createSuccessResponse(earlyHit);
         }
       }
 
@@ -238,8 +223,7 @@ export class MessagingService {
       if (isForwardRefused(forwardAdmission)) {
         logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
         return this.createErrorResponse(
-          'Un message à vue unique ne peut pas être transféré',
-          requestId
+          'Un message à vue unique ne peut pas être transféré'
         );
       }
 
@@ -293,13 +277,7 @@ export class MessagingService {
             logger.error('background re-translation failed', err as Error)
           );
         }
-        const response = await this.createSuccessResponse(
-          message,
-          requestId,
-          startTime,
-          /* stats: pas de double-comptage sur dedup hit */ undefined,
-          PENDING_TRANSLATION_STATUS
-        );
+        const response = this.createSuccessResponse(message);
         logger.info('perf:messaging.handleMessage', {
           ...corr, step: 'messaging.handleMessage', phase: 'end',
           durationMs: Date.now() - startTime,
@@ -309,13 +287,7 @@ export class MessagingService {
       }
 
       // 6. Réponse unifiée — générée immédiatement après la persistance.
-      const response = await this.createSuccessResponse(
-        message,
-        requestId,
-        startTime,
-        /* stats: calculées en arrière-plan */ undefined,
-        PENDING_TRANSLATION_STATUS
-      );
+      const response = this.createSuccessResponse(message);
 
       // 7. Effets de bord post-save — exécutés en arrière-plan, JAMAIS sur le
       //    chemin de l'ACK (cf. note ci-dessus).
@@ -341,8 +313,7 @@ export class MessagingService {
       });
       logger.error('Error handling message', error as Error);
       return this.createErrorResponse(
-        'Erreur interne lors de l\'envoi du message',
-        requestId
+        'Erreur interne lors de l\'envoi du message'
       );
     }
   }
@@ -466,47 +437,29 @@ export class MessagingService {
 
   /**
    * Génère une réponse de succès
+   *
+   * L'ACK porte le message persisté, et rien d'autre. Il traînait un bloc
+   * `metadata` que personne ne lisait : les TROIS appelants de `handleMessage`
+   * (`MessageHandler.handleMessageSend`, `handleMessageSendWithAttachments`,
+   * `MeeshySocketIOManager.handleAgentResponse`) n'utilisent que `success`,
+   * `data` et `error` — `_sendResponse` remplace même la réponse entière par
+   * `buildMessageAckData(data)` avant de rappeler le client.
+   *
+   * Ce que le bloc annonçait ne se mesurait pas : `deliveryStatus` était
+   * `{recipientCount: 1, deliveredCount: 1, readCount: 1}` en dur — un envoi
+   * dans un groupe de douze annonçait « livré à 1, lu par 1 » à l'instant de
+   * la persistance — et les sous-temps `dbQueryTime` / `translationQueueTime` /
+   * `validationTime` étaient des fractions arbitraires du temps total. Le
+   * `context`, lui, coûtait DEUX balayages du contenu (`extractMentions` +
+   * `containsLinks`) sur le chemin que cette méthode garde délibérément libre
+   * de tout effet de bord.
+   *
+   * Le compte des accusés faisant autorité vit dans
+   * `MessageReadStatusService.getConversationReadStatuses` et sort par les
+   * routes de messages ; s'il doit un jour accompagner l'ACK, c'est de là
+   * qu'il viendra.
    */
-  private async createSuccessResponse(
-    message: Message,
-    requestId: string,
-    startTime: number,
-    stats?: any,
-    translationStatus?: any
-  ): Promise<MessageResponse> {
-    const processingTime = Date.now() - startTime;
-
-    const metadata: MessageResponseMetadata = {
-      conversationStats: stats,
-      translationStatus,
-      deliveryStatus: {
-        status: 'sent',
-        sentAt: message.createdAt,
-        recipientCount: 1,
-        deliveredCount: 1,
-        readCount: 1
-      },
-      performance: {
-        processingTime,
-        dbQueryTime: processingTime * 0.6,
-        translationQueueTime: processingTime * 0.2,
-        validationTime: processingTime * 0.1
-      },
-      context: {
-        isFirstMessage: false,
-        triggerNotifications: true,
-        mentionedUsers: this.processor.extractMentions(message.content),
-        containsLinks: this.processor.containsLinks(message.content)
-      },
-      debug: {
-        requestId,
-        serverTime: new Date(),
-        userId: message.senderId,
-        conversationId: message.conversationId,
-        messageId: message.id
-      }
-    };
-
+  private createSuccessResponse(message: Message): MessageResponse {
     // CORRECTION senderId: message.senderId = Participant.id (FK Prisma).
     // Les clients comparent senderId avec leur userId → on normalise avant sérialisation.
     const senderObj = (message as any).sender;
@@ -520,28 +473,18 @@ export class MessagingService {
         senderParticipantId: message.senderId,
         timestamp: message.createdAt
       } as any,
-      message: 'Message envoyé avec succès',
-      metadata
+      message: 'Message envoyé avec succès'
     };
   }
 
   /**
    * Génère une réponse d'erreur
    */
-  private createErrorResponse(error: string, requestId: string): MessageResponse {
+  private createErrorResponse(error: string): MessageResponse {
     return {
       success: false,
       error,
-      data: null as any,
-      metadata: {
-        debug: {
-          requestId,
-          serverTime: new Date(),
-          userId: '',
-          conversationId: '',
-          messageId: ''
-        }
-      }
+      data: null as any
     };
   }
 

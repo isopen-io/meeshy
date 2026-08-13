@@ -1,3 +1,117 @@
+# Tête instruite pour le cycle 105 — un TEST peut être le seul lecteur d'un champ, et il lui donne l'apparence d'un contrat
+
+*Le cycle 104 a ouvert le lot que son prédécesseur lui avait légué : les deux dernières colonnes
+mortes de `Message` et le `deliveryStatus` codé en dur de l'ACK. Il a trouvé, sous le second, ce
+qui empêchait depuis toujours de le voir mort.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.** Le cycle 104 l'a posé deux fois (ouverture + juste avant les
+> premières éditions de production) ; `main` n'avait pas bougé, ce qui est le résultat NORMAL —
+> le réflexe ne se juge pas à ses prises.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter — ou d'imposer — un travail doublonné,
+> comparer la COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 104 ajoute — le neuvième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 : *une règle posée sur le chemin CHAUD n'est tenue que par les chemins qui la RELISENT.*
+> Le cycle 102 : *un appel réseau écrit à la main n'est confronté à la table de routage de PERSONNE.*
+> Le cycle 103 : *zéro écrivain n'implique pas zéro lecteur, et c'est le LECTEUR qui décide du geste.*
+> Le cycle 104 trouve le neuvième :
+>
+> **Un TEST peut être le seul lecteur d'un champ — et il lui donne l'apparence d'un contrat. La
+> colonne « lecteurs » de la leçon 226 doit EXCLURE les tests : ce sont des lecteurs CIRCULAIRES.
+> `expect(response.metadata.deliveryStatus).toBeDefined()` ne prouve pas qu'un client le lit ; elle
+> prouve seulement que le producteur le produit. Six assertions tenaient en vie un bloc qu'aucun
+> transport ne transmettait.**
+>
+> Et le symptôme qui va avec, plus fin que le champ mort : **le test savait**. `should include
+> delivery status in metadata` assertait `status === 'sent'` et **s'arrêtait là** — jamais
+> `deliveredCount`, jamais `readCount`. Écrire `expect(...deliveredCount).toBe(1)` aurait sauté aux
+> yeux comme absurde. Le test avait contourné la partie mensongère du champ sans le dire.
+>
+> **La méthode qui en découle :** devant un champ que seuls des tests lisent, lire les assertions
+> AVANT de conclure au contrat. Ce qu'elles ÉVITENT d'affirmer désigne la partie du champ que son
+> auteur savait déjà fausse.
+
+## Livré au cycle 104 — deux façons de mentir sur la livraison, retirées ensemble
+
+**Le défaut, moitié A (l'ACK).** `MessagingService.createSuccessResponse` composait à chaque envoi
+un bloc `metadata` de six sections. Trois ne mesuraient rien : `deliveryStatus` valait
+`{recipientCount: 1, deliveredCount: 1, readCount: 1}` **en dur** (un envoi dans un groupe de douze
+annonçait « livré à 1, lu par 1 » à l'instant de la persistance) ; `performance` rapportait
+`dbQueryTime` / `translationQueueTime` / `validationTime` comme des **fractions arbitraires** du
+temps total (× 0,6 / 0,2 / 0,1, somme = 90 %) ; `context` portait deux constantes et faisait DEUX
+balayages du contenu (`extractMentions` + `containsLinks`) — sur le chemin de l'ACK, celui que
+l'architecture garde délibérément libre de tout effet de bord.
+
+**Rien de tout cela n'atteignait un client.** Les TROIS appelants de `handleMessage` n'utilisent que
+`success` / `data` / `error`, et `MessageHandler._sendResponse` remplace la réponse entière par
+`buildMessageAckData(data)` avant de rappeler le client. Calculé puis jeté, à chaque message.
+
+**Livré** : `MessageResponse` ne porte plus de `metadata`. `createSuccessResponse` redevient
+synchrone et ne fait plus que normaliser `senderId`. Huit types disparaissent de
+`packages/shared/types/messaging.ts` faute de producteur COMME de consommateur
+(`MessageResponseMetadata`, `DeliveryStatus` local, `RecipientDeliveryDetail`, `PerformanceMetrics`,
+`MessageContext`, `DebugInfo`, `MessageBroadcastPayload`, `MessageBroadcastEvent`).
+
+**Le défaut, moitié B (le stockage).** Les quatre colonnes du bloc « COMPUTED STATUS FIELDS » de
+`Message` — `deliveredToAllAt`, `readByAllAt`, `deliveredCount`, `readCount` — n'ont plus d'écrivain
+depuis le passage aux curseurs (`updateMessageComputedStatus` est un no-op assumé). Les cycles 101 à
+103 en avaient rebranché la LECTURE (calcul dans `getConversationReadStatuses`, servi par les deux
+routes) ; le stockage restait.
+
+**Livré** : les quatre colonnes sortent de `schema.prisma`, avec un commentaire qui dit où la valeur
+se calcule — pour qu'aucun futur écrivain ne les « restaure ». **La charge utile est identique au
+bit près** : `deliveredCount`, `readCount`, `deliveredToAllAt`, `readByAllAt` RESTENT dans les types
+de charge utile, parce que trois clients les décodent (`DeliveryStatusResolver` iOS et Android,
+`MessageRecord+ToMessage`). Application directe de la leçon 226 : le lecteur lit une valeur
+CALCULÉE, pas une colonne.
+ADR : `services/gateway/decisions.md` et `packages/shared/decisions.md` § 2026-08-13 (2).
+
+**Tests** : 6 assertions neuves remplacent les 6 qui verrouillaient la fabrication. **RED prouvé** —
+la sortie d'échec est la pièce à conviction elle-même : `deliveryStatus: {deliveredCount: 1,
+readCount: 1, recipientCount: 1}`, `performance: {dbQueryTime: 3.5999999999999996, …}`.
+**Mutation-proof** : réintroduire un `metadata` — même réduit à `{}` — fait rougir **exactement 6**
+témoins, ni plus ni moins.
+Gate : `tsc --noEmit` gateway **propre** (c'est lui qui prouve qu'aucun `select` Prisma ne touchait
+les quatre colonnes), suite gateway **692 suites / 17 061 tests** vertes, `packages/shared`
+**52 fichiers / 1 506 tests** verts.
+
+## Constats du cycle 104, NON traités — le lot naturel du cycle 105
+
+1. **Le commentaire de `handleMessage` affirme que REST y passe : c'est faux.** « Both the Socket.IO
+   and the REST entry points funnel through `handleMessage`, so both inherit the fast ACK » —
+   `grep` ne trouve que TROIS appelants, tous socket (`MessageHandler` ×2,
+   `MeeshySocketIOManager.handleAgentResponse`). Le `POST /messages` REST passe ailleurs. C'est une
+   PRÉMISSE au sens du cycle 97, laissée en place ce cycle faute d'avoir instruit le chemin REST.
+   **À instruire avant de la corriger** : si REST ne passe pas par `handleMessage`, quelles des
+   garanties documentées là (ACK rapide, effets post-save, dedup) lui manquent réellement ?
+2. **La projection des accusés existe en TROIS exemplaires inline** (`conversations/messages.ts`,
+   `messages.ts`, `conversations/messages-advanced.ts`). Constat des cycles 102 et 103, **réexaminé
+   ce cycle et volontairement NON traité** : les trois sites projettent vers des FORMES différentes
+   (deux enrichissent un message, la troisième construit un endpoint de statuts avec `entries`
+   nominatives). Une extraction naïve les uniformiserait de force. Le lot reste ouvert mais demande
+   d'abord de nommer ce qui est réellement commun — vraisemblablement la seule dérivation
+   `summary → {deliveredCount, readCount, recipientCount, deliveredToAllAt, readByAllAt}`.
+3. **`TranslationStatus` (interface locale de `messaging.ts`) n'a plus aucun référent in-repo** après
+   le retrait de `MessageResponseMetadata`. Gardée délibérément : c'est un type PUBLIC du package
+   partagé, et un type exporté sans consommateur interne n'est pas du code mort au même titre qu'un
+   champ. À trancher si le cycle 105 fait une passe sur la surface publique de `@meeshy/shared`.
+4. **L'audit d'adressage promis au cycle 102 n'a toujours PAS été mené** : `MeeshyShareExtension`
+   (`ShareSender`), `MeeshyWidgets`, et tout appel Android hors `MessageApi` restent à confronter à
+   la table de routage réelle. Reconduit pour la troisième fois.
+
 # Tête instruite pour le cycle 104 — trois champs, un seul défaut, DEUX gestes opposés
 
 *Le cycle 103 a ouvert le lot que ses deux prédécesseurs lui avaient légué : les colonnes de statut
