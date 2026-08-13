@@ -1575,10 +1575,72 @@ export class CallEventsHandler {
     };
   }
 
+  /**
+   * Persiste un segment FINAL du journal (modèle Transcription) pour le
+   * replay post-appel — décision produit 2026-08-13 : le transcript survit
+   * à la suppression de l'app et de ses caches locaux. Ne REJETTE jamais
+   * (échec → null + warn, le relais temps réel n'en dépend pas) ; le texte
+   * n'est jamais loggé (donnée sensible).
+   */
+  private persistTranscriptionSegment(
+    data: CallTranscriptionSegmentEvent,
+    participantId: string
+  ): Promise<string | null> {
+    try {
+      return this.prisma.transcription.create({
+        data: {
+          callSessionId: data.callId,
+          participantId,
+          source: 'client',
+          segmentId: data.segment.id ?? null,
+          text: data.segment.text,
+          language: data.segment.language,
+          confidence: data.segment.confidence,
+          timestamp: new Date(data.segment.capturedAtMs ?? Date.now()),
+          offsetMs: data.segment.startMs
+        },
+        select: { id: true }
+      }).then(
+        (row) => row.id,
+        (err) => {
+          logger.warn('Failed to persist call transcription segment', { callId: data.callId, err });
+          return null;
+        }
+      );
+    } catch (err) {
+      logger.warn('Failed to persist call transcription segment', { callId: data.callId, err });
+      return Promise.resolve(null);
+    }
+  }
+
+  /**
+   * Accroche la traduction ZMQ réussie au segment persisté (TranslationCall).
+   * Fire-and-forget avec `.catch` propre (Leçon 230 : `void p` sans `.catch`
+   * détache la promesse — un rejet tuerait le process sous Node 22).
+   */
+  private persistTranslation(
+    persistedTranscriptionId: Promise<string | null> | null,
+    targetLanguage: string,
+    translatedText: string
+  ): void {
+    if (!persistedTranscriptionId) return;
+    persistedTranscriptionId
+      .then((transcriptionId) => {
+        if (!transcriptionId) return null;
+        return this.prisma.translationCall.create({
+          data: { transcriptionId, targetLanguage, translatedText, model: 'nllb' }
+        });
+      })
+      .catch((err) => {
+        logger.warn('Failed to persist call transcription translation', { targetLanguage, err });
+      });
+  }
+
   private async translateAndEmitSegment(
     socket: Socket,
     data: CallTranscriptionSegmentEvent,
-    speaker: { userId: string; displayName: string | null }
+    speaker: { userId: string; displayName: string | null },
+    persistedTranscriptionId: Promise<string | null> | null = null
   ): Promise<void> {
     const activeParticipants = await this.prisma.callParticipant.findMany({
       where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
@@ -1674,6 +1736,7 @@ export class CallEventsHandler {
               if (event.taskId !== taskId) return;
               clearTimeout(timer);
               zmqClient.off(scopedEvent, onResult);
+              this.persistTranslation(persistedTranscriptionId, targetLanguage, event.result.translatedText);
               socket.to(ROOMS.call(data.callId)).emit(
                 CALL_EVENTS.TRANSLATED_SEGMENT,
                 this.buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
@@ -3748,12 +3811,26 @@ export class CallEventsHandler {
         };
         const stampedSpeaker = { userId, displayName: speaker.displayName };
 
+        // Persistance serveur du journal (décision produit 2026-08-13) : les
+        // segments FINAUX sont stockés (modèle Transcription) pour le replay
+        // post-appel via GET /calls/:callId/transcript — le journal survit à
+        // la suppression de l'app et de ses caches locaux. Les partiels
+        // (révisions du stream de corrections) ne sont JAMAIS persistés :
+        // seule la dernière valeur dite compte. Fire-and-forget interne
+        // (jamais de rejet — voir persistTranscriptionSegment) : un échec de
+        // persistance ne bloque ni le relais ni la traduction. La promesse
+        // (id de ligne) est transmise au chemin de traduction pour y
+        // accrocher les TranslationCall.
+        const persistedTranscriptionId = data.segment.isFinal
+          ? this.persistTranscriptionSegment(segmentEvent, speaker.participantId)
+          : null;
+
         // No callSession.metadata.translationEnabled gate — the real product
         // control is client-side (the speaker's own captions toggle; no
         // client ever emits a segment unless the user turned captions on).
         // See docs/superpowers/specs/2026-07-10-live-call-transcription-design.md.
         if (this.zmqClient && data.segment.isFinal) {
-          await this.translateAndEmitSegment(socket, segmentEvent, stampedSpeaker);
+          await this.translateAndEmitSegment(socket, segmentEvent, stampedSpeaker, persistedTranscriptionId);
         } else {
           // Security fix 2026-08-13: stamp the authenticated `userId` (and a
           // server-resolved displayName), never the client-supplied

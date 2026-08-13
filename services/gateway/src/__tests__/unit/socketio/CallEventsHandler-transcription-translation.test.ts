@@ -118,6 +118,12 @@ function makePrisma() {
         { participant: { userId: LISTENER_ID, user: { systemLanguage: 'en' } } },
       ]),
     },
+    transcription: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' }),
+    },
+    translationCall: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'translation-row-1' }),
+    },
   } as unknown as PrismaClient;
 }
 
@@ -333,6 +339,39 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     expect(payload.segment.capturedAtMs).toBe(1765650000000);
     expect(payload.segment.translatedText).toBe('Hello world');
     expect(payload.segment.sourceLanguage).toBe('fr');
+  });
+
+  it('persists the successful translation onto the stored transcript row (TranslationCall)', async () => {
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const taskId = 'task-persist';
+    const zmqClient = makeFakeZmqClient(taskId);
+    const emitter = zmqClient as unknown as EventEmitter;
+
+    const handler = new CallEventsHandler(prisma, makeCallService());
+    handler.setZmqClient(zmqClient);
+    handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+    const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+      taskId,
+      result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+      targetLanguage: 'en',
+    });
+    await segmentPromise;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect((prisma as any).transcription.create).toHaveBeenCalledTimes(1);
+    expect((prisma as any).translationCall.create).toHaveBeenCalledTimes(1);
+    const { data } = (prisma as any).translationCall.create.mock.calls[0][0];
+    expect(data.transcriptionId).toBe('transcription-row-1');
+    expect(data.targetLanguage).toBe('en');
+    expect(data.translatedText).toBe('Hello world');
   });
 
   it('resolves the target language via the full Prisme chain (regionalLanguage), not a bare systemLanguage ?? "fr" fallback', async () => {

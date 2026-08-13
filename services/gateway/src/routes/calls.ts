@@ -329,6 +329,130 @@ export default async function callRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * GET /api/calls/:callId/transcript
+   * Replay du journal de transcription persisté pendant l'appel (décision
+   * produit 2026-08-13 : le transcript survit à la suppression de l'app et
+   * de ses caches locaux). DONNÉE SENSIBLE — accès restreint aux
+   * participants EFFECTIFS de l'appel (CallService.getCallTranscript), plus
+   * strict que les autres routes calls (membres de conversation).
+   */
+  fastify.get<{
+    Params: CallParams;
+  }>('/calls/:callId/transcript', {
+    preValidation: [requiredAuth, createValidationMiddleware(getCallSchema)],
+    ...ROUTE_RATE_LIMITS.callOperations,
+    schema: {
+      description: 'Retrieve the persisted transcription journal of a call (final segments with their translations, ordered by capture time). Restricted to users who actually took part in the call.',
+      tags: ['calls'],
+      summary: 'Get call transcript',
+      params: {
+        type: 'object',
+        required: ['callId'],
+        properties: {
+          callId: {
+            type: 'string',
+            description: 'Call session unique identifier (MongoDB ObjectId)',
+            pattern: '^[0-9a-fA-F]{24}$'
+          }
+        }
+      },
+      response: {
+        200: {
+          description: 'Call transcript retrieved successfully',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                callId: { type: 'string' },
+                conversationId: { type: 'string' },
+                callStartedAt: { type: 'string', format: 'date-time' },
+                segments: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      speakerId: { type: 'string' },
+                      speakerDisplayName: { type: 'string', nullable: true },
+                      text: { type: 'string' },
+                      language: { type: 'string' },
+                      confidence: { type: 'number', nullable: true },
+                      capturedAtMs: { type: 'number' },
+                      translations: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            targetLanguage: { type: 'string' },
+                            translatedText: { type: 'string' }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: 'Unauthorized - Authentication required',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Forbidden - User did not take part in this call',
+          ...errorResponseSchema
+        },
+        404: {
+          description: 'Not found - Call does not exist',
+          ...errorResponseSchema
+        },
+        429: {
+          description: 'Too many requests - Rate limit exceeded',
+          ...errorResponseSchema
+        },
+        500: {
+          description: 'Internal server error',
+          ...errorResponseSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
+    try {
+      const { callId } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Volontairement AUCUN log du contenu — donnée sensible.
+      logger.info('📞 REST: Getting call transcript', { callId, userId });
+
+      const transcript = await callService.getCallTranscript(callId, userId);
+
+      return sendSuccess(reply, transcript);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to get call transcript';
+      const errorCode = errorMessage.split(':')[0];
+      const message = errorMessage.includes(':')
+        ? errorMessage.split(':').slice(1).join(':').trim()
+        : errorMessage;
+
+      const statusCode = errorCode === 'CALL_NOT_FOUND'
+        ? 404
+        : errorCode === 'NOT_A_PARTICIPANT'
+          ? 403
+          : 400;
+
+      if (statusCode === 400) {
+        logger.error('❌ REST: Error getting call transcript', error);
+      }
+
+      return sendError(reply, statusCode, errorCode, { message });
+    }
+  });
+
+  /**
    * DELETE /api/calls/:callId
    * End call (force end)
    * CVE-006: Added input validation

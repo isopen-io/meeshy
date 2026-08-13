@@ -227,30 +227,46 @@ panneau — aucun replay n'existe, ni serveur ni pair).
   gâté par la visibilité du panneau du récepteur — c'est l'invitation à
   l'ouvrir.
 
-## Sensibilité des données — aucun replay réseau (règle produit, 2026-08-13)
+## Sensibilité des données et persistance serveur (itération 4, même jour)
 
-**La transcription d'appel est une donnée SENSIBLE. Le replay ne se fait
-JAMAIS depuis le réseau — uniquement depuis la donnée sauvegardée
-localement.** Conséquences vérifiées et opposables :
+**La transcription d'appel est une donnée SENSIBLE — ET le journal doit
+survivre à la suppression de l'app et de ses caches locaux** (décision
+produit 2026-08-13, qui REMPLACE la règle « local uniquement » d'une
+itération antérieure du même jour). Réconciliation des deux exigences :
 
-1. **Aucune persistance serveur.** Le gateway RELAIE (`socket.to(room)`) et
-   ne stocke rien : le modèle Prisma `Transcription` reste inutilisé, aucun
-   endpoint REST de transcript n'existe, et aucun replay ne peut être servi à
-   un client qui n'était pas abonné au moment de l'émission. Un participant
-   qui active son panneau n'a donc l'historique QUE depuis son activation.
-2. **Aucun texte de transcription dans les logs** — gateway (`logger.debug`
-   ne porte que callId/speakerId/isFinal), iOS (`callsLogger` ne logge que
-   langue/états), web. Toute évolution qui loggerait `segment.text` est un
-   défaut à rejeter en revue.
-3. **Persistance locale uniquement, chiffrée** : iOS `CallTranscriptStore`
-   (GRDB `encrypted: true`, namespace `calltx`, TTL 90 j, purge logout) — le
-   replay post-appel (BubbleCallNoticeView) lit exclusivement ce store local.
-   Le web ne persiste RIEN (journal en mémoire React, perdu à la fermeture) :
-   pas de donnée sensible au repos côté navigateur.
-4. **Rétention en mémoire bornée à l'appel** : le journal in-call survit à la
-   fermeture du panneau (revisitable) mais est purgé inconditionnellement à
-   la fin d'appel (`resetForCallEnd` iOS, reset sur changement de `callId`
-   web).
+1. **Persistance serveur des segments FINAUX** : `CallEventsHandler` stocke
+   chaque segment final relayé dans le modèle Prisma `Transcription`
+   (jusqu'ici « prepared for future ») — `segmentId` (id de journal wire,
+   clé de fusion côté clients), texte, langue de transcription, confiance,
+   `timestamp` = horloge murale de capture, `offsetMs`. Les traductions ZMQ
+   réussies s'y accrochent (`TranslationCall`). Les révisions PARTIELLES ne
+   sont JAMAIS persistées : seule la dernière valeur dite compte. La
+   persistance est fire-and-forget avec `.catch` (Leçon 230) — un échec de
+   stockage ne bloque jamais le relais live.
+2. **Replay REST restreint** : `GET /api/v1/calls/:callId/transcript`
+   (`CallService.getCallTranscript`) — accès limité aux participants
+   EFFECTIFS de l'appel, plus strict que `getCallSession` (membres de
+   conversation). 403 pour un membre qui n'a pas pris part à l'appel.
+   Le LIVE, lui, reste « depuis l'activation uniquement » : le replay est
+   une lecture post-appel explicite, pas un rattrapage du stream.
+3. **Aucun texte de transcription dans les logs** — gateway (`logger.debug`
+   ne porte que callId/speakerId/isFinal ; la route transcript ne logge que
+   callId/userId), iOS, web. Toute évolution qui loggerait `segment.text`
+   est un défaut à rejeter en revue.
+4. **Cache local chiffré en première intention** : iOS `CallTranscriptStore`
+   (GRDB `encrypted: true`, TTL 90 j, purge logout) reste la source primaire
+   du replay post-appel (BubbleCallNoticeView) ; le distant
+   (`CallTranscriptRemoteService`, SDK) n'est interrogé qu'en fallback (app
+   réinstallée, cache purgé) puis ré-ensemence le cache local. La traduction
+   affichée y est résolue AU PRISME (jamais `translations.first`).
+5. **Rétention en mémoire bornée à l'appel** : le journal in-call survit à la
+   fermeture du panneau (revisitable) mais est purgé à la fin d'appel
+   (`resetForCallEnd` iOS, reset sur changement de `callId` web).
+
+Dette assumée (follow-ups notés, non bloquants) : politique de rétention
+serveur (TTL/purge des `Transcription` au-delà d'un horizon), suppression du
+transcript quand l'utilisateur supprime son historique d'appel, et lecture
+web du replay (le endpoint est prêt).
 
 ## Préparation du palier suivant (traduction live + TTS)
 

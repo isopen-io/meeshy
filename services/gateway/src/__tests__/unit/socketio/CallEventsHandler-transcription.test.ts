@@ -117,6 +117,7 @@ const SPOOFED_SEGMENT = {
 function makePrisma(overrides: {
   callSessionFindUnique?: jest.MockedFunction<any>;
   participantFindFirst?: jest.MockedFunction<any>;
+  transcriptionCreate?: jest.MockedFunction<any>;
 } = {}) {
   return {
     callSession: {
@@ -124,6 +125,12 @@ function makePrisma(overrides: {
     },
     participant: {
       findFirst: overrides.participantFindFirst ?? jest.fn<any>(),
+    },
+    transcription: {
+      create: overrides.transcriptionCreate ?? jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' }),
+    },
+    translationCall: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'translation-row-1' }),
     },
   } as unknown as PrismaClient;
 }
@@ -473,6 +480,60 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       });
     }
   );
+
+  describe('server-side transcript persistence (replay post-appel)', () => {
+    function setup(overrides: { transcriptionCreate?: jest.MockedFunction<any> } = {}) {
+      const transcriptionCreate =
+        overrides.transcriptionCreate ?? jest.fn<any>().mockResolvedValue({ id: 'transcription-row-1' });
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
+        transcriptionCreate,
+      });
+      const { socket, handlers, roomEmit } = makeSocket();
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+      return { handlers, roomEmit, transcriptionCreate };
+    }
+
+    it('persists a FINAL segment with its journal metadata and the resolved participantId', async () => {
+      const { handlers, transcriptionCreate } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT]({
+        callId: VALID_CALL_ID,
+        segment: {
+          ...VALID_SEGMENT.segment,
+          id: 'f81d4fae-7dec-4b57-b93a-2c675ddac001',
+          capturedAtMs: 1765650000000,
+        },
+      });
+      expect(transcriptionCreate).toHaveBeenCalledTimes(1);
+      const { data } = transcriptionCreate.mock.calls[0][0];
+      expect(data.callSessionId).toBe(VALID_CALL_ID);
+      expect(data.participantId).toBe('participant-1');
+      expect(data.source).toBe('client');
+      expect(data.segmentId).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
+      expect(data.text).toBe(VALID_SEGMENT.segment.text);
+      expect(data.language).toBe('fr');
+      expect(data.timestamp).toEqual(new Date(1765650000000));
+    });
+
+    it('never persists a partial revision — only the last spoken value of an utterance lands in storage', async () => {
+      const { handlers, transcriptionCreate } = setup();
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT]({
+        callId: VALID_CALL_ID,
+        segment: { ...VALID_SEGMENT.segment, isFinal: false },
+      });
+      expect(transcriptionCreate).not.toHaveBeenCalled();
+    });
+
+    it('still relays the segment when persistence fails (storage never blocks live captions)', async () => {
+      const { handlers, roomEmit } = setup({
+        transcriptionCreate: jest.fn<any>().mockRejectedValue(new Error('db down')),
+      });
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+    });
+  });
 
   describe('call:transcription-active — presence signal relay', () => {
     function setup(overrides: { callSession?: unknown; status?: string } = {}) {
