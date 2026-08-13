@@ -8,11 +8,32 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
 const USER_ID = '507f1f77bcf86cd799439000';
+/** Un `Participant.id` — c'est CE que porte `authContext.userId` d'un anonyme. */
+const PARTICIPANT_ID = '507f1f77bcf86cd799439aaa';
 
-// createUnifiedAuthMiddleware est mocké pour injecter un authContext.
+type TestAuthContext = {
+  userId?: string;
+  type?: 'user' | 'anonymous';
+  participantId?: string;
+};
+
+/**
+ * L'authContext servi à la requête suivante, et les options avec lesquelles la
+ * route a construit son middleware.
+ *
+ * Le middleware réel est mocké (il exige une base) : c'est donc le seul endroit
+ * où l'ouverture aux sessions anonymes est observable — `allowAnonymous` est un
+ * argument, pas un comportement de handler.
+ */
+let mockAuthContext: TestAuthContext = { userId: USER_ID, type: 'user' };
+const mockAuthMiddlewareOptions: unknown[] = [];
+
 jest.mock('../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: () => async (req: FastifyRequest) => {
-    (req as unknown as { authContext: { userId: string } }).authContext = { userId: USER_ID };
+  createUnifiedAuthMiddleware: (_prisma: unknown, options: unknown) => {
+    mockAuthMiddlewareOptions.push(options);
+    return async (req: FastifyRequest) => {
+      (req as unknown as { authContext: TestAuthContext }).authContext = mockAuthContext;
+    };
   },
 }));
 
@@ -28,6 +49,7 @@ import {
 type PrismaStub = {
   participant: { findMany: jest.Mock };
   message: { findMany: jest.Mock };
+  conversationShareLink: { findMany: jest.Mock };
   userEventSeq: { findUnique: jest.Mock };
   // `UserMessageDeletion` porte DEUX rôles disjoints dans cette route et le
   // stub doit servir les deux : le filtre de lecture (masquer les bulles du
@@ -46,6 +68,9 @@ function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
     message: {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    conversationShareLink: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     userEventSeq: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
     },
@@ -59,7 +84,11 @@ function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
   } as PrismaStub;
 }
 
-async function buildApp(prisma: PrismaStub): Promise<FastifyInstance> {
+async function buildApp(
+  prisma: PrismaStub,
+  authContext: TestAuthContext = { userId: USER_ID, type: 'user' },
+): Promise<FastifyInstance> {
+  mockAuthContext = authContext;
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma as never);
   await app.register(syncRoutes);
@@ -855,6 +884,233 @@ describe('GET /sync — plafond de POIDS de la page', () => {
 
     expect(msgs.deleted).toHaveLength(200);
     expect(msgs.truncated).toBe(false);
+    await app.close();
+  });
+});
+
+/**
+ * Sessions anonymes — le rattrapage des participants par lien de partage.
+ *
+ * Trois choses distinctes se jouent ici, et aucune n'est le simple retrait d'un
+ * `allowAnonymous: false` :
+ *
+ * 1. **L'identité n'a pas la même colonne.** `authContext.userId` d'un anonyme
+ *    porte un `Participant.id`, pas un `User.id` : la RLS de `/sync` filtrait
+ *    `Participant.userId`, qui est NULL pour un anonyme — la clause n'aurait
+ *    jamais matché et l'ouverture aurait rendu des streams vides en silence.
+ * 2. **Les tables personnelles ne le concernent pas.** `UserMessageDeletion` et
+ *    `UserConversationPreferences` sont attachées à `User` : les interroger avec
+ *    un id de participant est une faute de catégorie.
+ * 3. **L'historique d'un lien `allowViewHistory: false` reste interdit.** Et le
+ *    plancher se pose sur `createdAt`, jamais sur le watermark `since` : un
+ *    message ANCIEN édité aujourd'hui porte un `updatedAt` d'aujourd'hui, donc
+ *    remonter `since` ne l'exclut pas — il fuirait par le stream `changed`.
+ */
+describe('GET /sync — sessions anonymes (lien de partage)', () => {
+  const anonymous = (): TestAuthContext => ({
+    userId: PARTICIPANT_ID,
+    type: 'anonymous',
+    participantId: PARTICIPANT_ID,
+  });
+
+  const anonymousPrisma = (
+    membership: Record<string, unknown> = {
+      conversationId: 'c1',
+      joinedAt: new Date('2026-06-15T00:00:00Z'),
+      shareLinkId: null,
+    },
+  ): PrismaStub => {
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([membership]);
+    return prisma;
+  };
+
+  it('la route déclare son middleware avec `allowAnonymous: true`', async () => {
+    const before = mockAuthMiddlewareOptions.length;
+    const app = await buildApp(makePrisma());
+    expect(mockAuthMiddlewareOptions.slice(before)).toEqual([
+      { requireAuth: true, allowAnonymous: true },
+    ]);
+    await app.close();
+  });
+
+  it('scope la RLS sur le `Participant.id` de la session, jamais sur `userId`', async () => {
+    const prisma = anonymousPrisma();
+    const app = await buildApp(prisma, anonymous());
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const where = prisma.participant.findMany.mock.calls[0]![0]!.where as Record<string, unknown>;
+    expect(where).toEqual({ id: PARTICIPANT_ID, isActive: true });
+    await app.close();
+  });
+
+  it('honore `scope` en INTERSECTION du participant — jamais à sa place', async () => {
+    const prisma = anonymousPrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildApp(prisma, anonymous());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${SINCE}&collections=messages&scope=c-autre`,
+    });
+
+    expect(prisma.participant.findMany.mock.calls[0]![0]!.where).toEqual({
+      id: PARTICIPANT_ID,
+      isActive: true,
+      conversationId: 'c-autre',
+    });
+    const msgs = res.json().data.collections.messages;
+    expect(msgs.added).toEqual([]);
+    expect(msgs.deleted).toEqual([]);
+    expect(prisma.message.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('n’interroge pas `UserEventSeq` — le curseur `_seq` est indexé par `User.id`', async () => {
+    const prisma = anonymousPrisma();
+    const app = await buildApp(prisma, anonymous());
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.userEventSeq.findUnique).not.toHaveBeenCalled();
+    expect(res.json().data.checkpointSeq).toBe(0);
+    expect(res.json().data.hasGap).toBe(false);
+    await app.close();
+  });
+
+  it('n’interroge aucune table personnelle et n’en annonce pas la page tronquée', async () => {
+    const prisma = anonymousPrisma();
+    prisma.userMessageDeletion.findMany = jest.fn<any>(async () => {
+      throw new Error('UserMessageDeletion ne doit pas être interrogée pour un anonyme');
+    });
+    const app = await buildApp(prisma, anonymous());
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+    expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
+    // Le stream personnel absent ne doit pas se lire comme « exhaustivité non
+    // garantie » : il n'y a rien à garantir.
+    expect(res.json().data.collections.messages.truncated).toBe(false);
+    await app.close();
+  });
+
+  it('sans identité de participant, refuse plutôt que de retomber sur la clause `userId`', async () => {
+    const prisma = anonymousPrisma();
+    const app = await buildApp(prisma, { userId: PARTICIPANT_ID, type: 'anonymous' });
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(res.statusCode).toBe(401);
+    expect(prisma.participant.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+/**
+ * Le plancher d'historique d'un lien de partage — la règle que `GET
+ * /conversations/:id/messages` applique depuis toujours (`historyStartDate =
+ * participant.joinedAt` quand `allowViewHistory` est faux) et que `/sync`
+ * n'appliquait pas.
+ *
+ * Elle est portée par la LIGNE PARTICIPANT, pas par le type d'identité : un
+ * utilisateur INSCRIT qui rejoint par un lien sans historique porte le même
+ * `shareLinkId`, et le trou était le même pour lui — le fait qu'il ait un
+ * `User.id` ne lui donne aucun droit sur l'avant-jointure.
+ */
+describe('GET /sync — plancher d’historique des liens de partage', () => {
+  const JOINED = new Date('2026-06-15T00:00:00Z');
+
+  const linkedPrisma = (allowViewHistory: boolean | undefined): PrismaStub => {
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([
+      { conversationId: 'c1', joinedAt: JOINED, shareLinkId: 'sl-1' },
+    ]);
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue(
+      allowViewHistory === undefined ? [] : [{ id: 'sl-1', allowViewHistory }],
+    );
+    return prisma;
+  };
+
+  const scopeClause = (prisma: PrismaStub, callIndex: number): unknown =>
+    (prisma.message.findMany.mock.calls[callIndex]![0]! as Record<string, any>).where.AND;
+
+  it('borne les DEUX streams sur `createdAt >= joinedAt` quand l’historique est fermé', async () => {
+    const prisma = linkedPrisma(false);
+    const app = await buildApp(prisma, {
+      userId: PARTICIPANT_ID,
+      type: 'anonymous',
+      participantId: PARTICIPANT_ID,
+    });
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const expected = [{ OR: [{ conversationId: 'c1', createdAt: { gte: JOINED } }] }];
+    expect(scopeClause(prisma, 0)).toEqual(expected); // changed
+    expect(scopeClause(prisma, 1)).toEqual(expected); // deleted (tombstones)
+    await app.close();
+  });
+
+  it('applique le même plancher à un utilisateur INSCRIT entré par le même lien', async () => {
+    const prisma = linkedPrisma(false);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.participant.findMany.mock.calls[0]![0]!.where).toEqual({
+      userId: USER_ID,
+      isActive: true,
+    });
+    expect(scopeClause(prisma, 0)).toEqual([
+      { OR: [{ conversationId: 'c1', createdAt: { gte: JOINED } }] },
+    ]);
+    await app.close();
+  });
+
+  it('ne borne rien quand le lien autorise l’historique', async () => {
+    const prisma = linkedPrisma(true);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledTimes(1);
+    expect(scopeClause(prisma, 0)).toBeUndefined();
+    await app.close();
+  });
+
+  it('le plancher ne touche PAS le watermark `since` — un message ancien réédité doit rester exclu', async () => {
+    const prisma = linkedPrisma(false);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    // Remonter `since` à `joinedAt` aurait laissé passer un message créé avant
+    // la jointure mais édité après : c'est `createdAt` qui porte la borne.
+    const changed = prisma.message.findMany.mock.calls[0]![0]! as Record<string, any>;
+    expect(changed.where.updatedAt).toEqual({ gt: new Date(SINCE) });
+    await app.close();
+  });
+
+  it('un participant SANS lien de partage ne paie aucune requête et garde sa clause intacte', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.conversationShareLink.findMany).not.toHaveBeenCalled();
+    expect(scopeClause(prisma, 0)).toBeUndefined();
+    expect(prisma.message.findMany.mock.calls[0]![0]!.where.conversationId).toEqual({ in: ['c1'] });
+    await app.close();
+  });
+
+  it('un lien introuvable ne borne pas — même posture que GET messages', async () => {
+    const prisma = linkedPrisma(undefined);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(scopeClause(prisma, 0)).toBeUndefined();
     await app.close();
   });
 });
