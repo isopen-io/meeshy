@@ -701,13 +701,30 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // firstIndex / removeAll scan per delta — measurable on a foreground
             // reconnect with hundreds of conversations. The merge order is
             // irrelevant: `saveSorted` below re-sorts the result deterministically.
-            let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: deltaConversations)
+            let (merged, removedIds) = Self.mergeDeltaConversations(
+                existing: existing,
+                deltas: deltaConversations,
+                tombstoneIds: response.meta?.deletedConversationIds ?? []
+            )
+            let removedSet = Set(removedIds)
             for removedId in removedIds {
                 await cache.messages.invalidate(for: removedId)
+                // Une conversation sortie de la vue doit aussi cesser d'être
+                // TROUVABLE : l'index FTS local est une projection, et rien ne
+                // le purgeait — la ligne y survivait au retrait de la liste, et
+                // la recherche rendait un id qui ne résout plus.
+                await SearchIndex.shared.removeConversation(id: removedId)
             }
 
             await saveSorted(merged, to: "list", baseline: existing)
-            await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
+            // `removedSet` filtre ici aussi, et pas seulement par symétrie : une
+            // conversation SERVIE par la page puis déclarée partie par les
+            // tombstones du même lot est active dans `deltaConversations`. La
+            // ré-indexer après l'avoir retirée la ressusciterait dans l'index,
+            // seule — retirée de la liste, toujours trouvable.
+            await SearchIndex.shared.indexConversations(
+                deltaConversations.filter { $0.isActive && !removedSet.contains($0.id) }
+            )
             _conversationsDidChange.send()
 
             // Advance the delta cursor to the newest SERVER `updatedAt` seen, not
@@ -731,7 +748,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // déclenche donc AUCUNE escalade, là où `count >= limit` en aurait
             // imposé une pour rien. Repli sur l'heuristique si le bloc pagination
             // manque : conservateur, on suppose qu'il en reste.
-            let mayHaveMore = response.pagination?.hasMore ?? (response.data.count >= Self.deltaPageLimit)
+            let pageMayHaveMore = response.pagination?.hasMore ?? (response.data.count >= Self.deltaPageLimit)
+
+            // Les tombstones ont leur PROPRE plafond (500 par stream côté
+            // gateway) et, contrairement à la page, aucun curseur de reprise :
+            // il n'existe pas de « page suivante » de disparitions à demander.
+            // Leur troncature est donc, elle aussi, une preuve d'incomplétude —
+            // et elle se règle par le MÊME geste, l'escalade vers `fullSync`,
+            // dont le remplacement de la liste purge les fantômes restants.
+            //
+            // La replier dans `mayHaveMore` retient aussi le curseur, et c'est
+            // voulu : seul un `since` qui reste en place redemandera les
+            // disparitions coupées si l'escalade échoue (offline, panne). Un
+            // curseur avancé les rendrait irréclamables — la borne serveur des
+            // tombstones est `> since`, exactement comme celle de la page.
+            let tombstonesTruncated = response.meta?.deletedConversationIdsTruncated ?? false
+            let mayHaveMore = pageMayHaveMore || tombstonesTruncated
             lastSyncTimestamp = SyncWatermark.advancedAfterDeltaPage(
                 previous: lastSyncTimestamp,
                 receivedUpdatedAt: deltaConversations.map(\.updatedAt),
@@ -750,19 +782,45 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// message caches, exactly as the previous per-delta loop did). The merged
     /// order is intentionally unspecified — callers re-sort via `saveSorted`.
     /// O(existing + deltas) instead of O(deltas × existing).
+    ///
+    /// `tombstoneIds` (`meta.deletedConversationIds`) est le TROISIÈME canal, et
+    /// le seul par lequel une SORTIE de vue parvient au client : `deltas` ne
+    /// porte que des lignes servies, et la clause serveur exclut précisément une
+    /// conversation fermée, quittée, bannie ou supprimée-pour-moi depuis un
+    /// autre appareil. Un `isActive: false` ne suffisait donc pas — il ne décrit
+    /// que les sorties que la page peut encore SERVIR.
+    ///
+    /// Les tombstones s'appliquent APRÈS les upserts, jamais avant : quand les
+    /// deux flux du même lot se contredisent (la page a servi une ligne encore
+    /// visible à la lecture, le stream des sorties la déclare partie), la SORTIE
+    /// est le fait le plus spécifique. La garder affichée rendrait la purge
+    /// inatteignable jusqu'à la réconciliation complète (24 h).
     static func mergeDeltaConversations(
         existing: [MeeshyConversation],
-        deltas: [MeeshyConversation]
+        deltas: [MeeshyConversation],
+        tombstoneIds: [String] = []
     ) -> (merged: [MeeshyConversation], removedIds: [String]) {
         var byId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         var removedIds: [String] = []
+        // `removedIds` pilote une invalidation par id chez l'appelant : un même
+        // retrait annoncé par les DEUX canaux ne doit la déclencher qu'une fois.
+        var alreadyRemoved = Set<String>()
         for delta in deltas {
             if delta.isActive {
                 byId[delta.id] = delta
             } else {
                 byId.removeValue(forKey: delta.id)
-                removedIds.append(delta.id)
+                if alreadyRemoved.insert(delta.id).inserted { removedIds.append(delta.id) }
             }
+        }
+        // Un id inconnu de la liste est rapporté quand même — même règle que
+        // pour un delta inactif inconnu : la liste et le cache des messages sont
+        // deux magasins DISTINCTS, et une conversation absente de l'une peut
+        // très bien laisser un fil dans l'autre. (Divergence assumée avec le
+        // web, dont le cache dérivé est indexé par la même clé que la liste.)
+        for tombstoneId in tombstoneIds {
+            byId.removeValue(forKey: tombstoneId)
+            if alreadyRemoved.insert(tombstoneId).inserted { removedIds.append(tombstoneId) }
         }
         return (Array(byId.values), removedIds)
     }
