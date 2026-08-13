@@ -2,6 +2,12 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import {
+  loadPersonalHistoryHiding,
+  applyPersonalHistoryHiding,
+  NO_PERSONAL_HIDING,
+  type PersonalHistoryHiding
+} from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
@@ -204,8 +210,19 @@ export function registerThreadsRoutes(
         return sendForbidden(reply, 'You do not have access to this conversation');
       }
 
+      // La racine du fil est soumise au même masquage que ses réponses : un
+      // fil dont la racine est masquée n'est pas un fil tronqué, il n'existe
+      // plus pour ce lecteur — d'où le 404 plutôt qu'une racine vide.
+      const hiding = await loadPersonalHistoryHiding(prisma, {
+        userId: authContext.type === 'anonymous' ? null : authContext.userId,
+        conversationId
+      });
+
       const parent = await prisma.message.findFirst({
-        where: { id: messageId, conversationId, deletedAt: null },
+        where: applyPersonalHistoryHiding(
+          { id: messageId, conversationId, deletedAt: null },
+          hiding
+        ),
         select: threadMessageSelect
       });
 
@@ -213,7 +230,7 @@ export function registerThreadsRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      const replies = await collectThreadReplies(prisma, conversationId, messageId);
+      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding);
 
       return sendSuccess(reply, {
         parent: formatThreadMessage(parent as unknown as Record<string, unknown>),
@@ -228,9 +245,17 @@ export function registerThreadsRoutes(
   });
 }
 
-function findReplies(prisma: PrismaClient, conversationId: string, parentIds: string[]) {
+function findReplies(
+  prisma: PrismaClient,
+  conversationId: string,
+  parentIds: string[],
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+) {
   return prisma.message.findMany({
-    where: { conversationId, replyToId: { in: parentIds }, deletedAt: null },
+    where: applyPersonalHistoryHiding(
+      { conversationId, replyToId: { in: parentIds }, deletedAt: null },
+      hiding
+    ),
     select: threadMessageSelect,
     orderBy: { createdAt: 'asc' as const }
   });
@@ -241,7 +266,8 @@ type ThreadMessage = Awaited<ReturnType<typeof findReplies>>[number];
 async function collectThreadReplies(
   prisma: PrismaClient,
   conversationId: string,
-  rootMessageId: string
+  rootMessageId: string,
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
 ): Promise<ThreadMessage[]> {
   const allReplies: ThreadMessage[] = [];
   let frontier = [rootMessageId];
@@ -250,7 +276,11 @@ async function collectThreadReplies(
     /* istanbul ignore next -- frontier is always non-empty here: initially [rootMessageId]; updated only when batch.length>0 (else we break first) */
     if (frontier.length === 0) break;
 
-    const batch = await findReplies(prisma, conversationId, frontier);
+    // Le masquage s'applique à CHAQUE niveau, pas seulement au premier : une
+    // réponse masquée coupe aussi la branche qu'elle porte, ce qui est le
+    // comportement voulu — ses filles descendent d'un message que ce lecteur
+    // ne voit plus.
+    const batch = await findReplies(prisma, conversationId, frontier, hiding);
 
     if (batch.length === 0) break;
 
