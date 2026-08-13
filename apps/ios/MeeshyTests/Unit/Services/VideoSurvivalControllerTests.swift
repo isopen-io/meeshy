@@ -151,11 +151,20 @@ final class MockVideoSurvivalActuator: VideoSurvivalActuating {
     /// Fired right after the simulated hang's `Task.sleep` returns (cancelled or
     /// not) — lets tests observe whether the hang was cut short by cancellation.
     var onHangComplete: (() -> Void)?
+    /// When true, the actuator blocks on a continuation that is NEVER resumed
+    /// until the test calls `releaseUncooperativeHang()` — unlike `Task.sleep`,
+    /// this does NOT observe Task cancellation. Simulates a real
+    /// `AVCaptureSession`/WebRTC call that ignores Swift's cooperative
+    /// cancellation, exercising the controller's "abandon on timeout" contract
+    /// rather than its "cancellation cuts the hang short" contract.
+    var hangsUncooperatively = false
+    private var uncooperativeContinuation: CheckedContinuation<Void, Never>?
 
     func suspendOutboundVideo() async -> Bool {
         suspendCallCount += 1
         onTransition?()
         if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
+        if hangsUncooperatively { await waitUncooperatively() }
         onHangComplete?()
         return suspendResult
     }
@@ -163,14 +172,30 @@ final class MockVideoSurvivalActuator: VideoSurvivalActuating {
         resumeCallCount += 1
         onTransition?()
         if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
+        if hangsUncooperatively { await waitUncooperatively() }
         onHangComplete?()
         return resumeResult
+    }
+    private func waitUncooperatively() async {
+        await withCheckedContinuation { continuation in
+            uncooperativeContinuation = continuation
+        }
+    }
+    /// Releases a call parked in `waitUncooperatively()`, if any. Tests MUST
+    /// call this before finishing (even after proving the timeout abandons the
+    /// wait) — an un-resumed `CheckedContinuation` triggers a runtime "leaked
+    /// its continuation" diagnostic.
+    func releaseUncooperativeHang() {
+        uncooperativeContinuation?.resume()
+        uncooperativeContinuation = nil
     }
     func reset() {
         suspendCallCount = 0
         resumeCallCount = 0
         onTransition = nil
         onHangComplete = nil
+        hangsUncooperatively = false
+        releaseUncooperativeHang()
     }
 }
 
@@ -310,6 +335,49 @@ final class VideoSurvivalControllerTests: XCTestCase {
         await fulfillment(of: [retry], timeout: 1)
         XCTAssertGreaterThanOrEqual(mock.suspendCallCount, 2)
         XCTAssertTrue(sut.isVideoSuspended)
+    }
+
+    /// Regression guard for the "abandon on timeout" contract. `Task.sleep`
+    /// (used by `test_handle_hungTransition_timesOutWithoutFreezing` above) is
+    /// itself cancellation-aware, so it can't tell apart a real hard cap from a
+    /// timeout that merely REQUESTS cancellation and then waits for the
+    /// actuator anyway (Swift's `withTaskGroup` does exactly the latter: it
+    /// implicitly awaits every child task before returning, and cancellation is
+    /// only cooperative). Real production hangs — `AVCaptureSession`
+    /// start/stop, WebRTC `createOffer` — do not observe cooperative
+    /// cancellation the way `Task.sleep` does. This mock reproduces THAT: it
+    /// blocks on a continuation nothing but the test can resume.
+    func test_handle_uncooperativeHang_abandonsWaitAtTimeoutAndUnblocksRetry() async {
+        let (sut, mock, advance) = makeSUT(transitionTimeout: 0.05)
+        mock.hangsUncooperatively = true
+
+        let attempt = expectation(description: "suspend attempt")
+        mock.onTransition = { attempt.fulfill() }
+        feed(sut, .poor); advance(6); feed(sut, .poor) // trigger suspend
+        await fulfillment(of: [attempt], timeout: 1)
+
+        // The stuck actuator call is NEVER released here. If the controller's
+        // timeout still (bug) waits for it via `withTaskGroup`'s implicit
+        // "await all children", the retry below can only happen after this
+        // test's own timeout — proving the controller genuinely abandoned the
+        // wait, rather than merely requesting cancellation and hoping.
+        let retry = expectation(description: "retry suspend after timeout abandons the uncooperative hang")
+        mock.onTransition = { retry.fulfill() }
+        mock.hangsUncooperatively = false // the RETRY call must succeed normally
+        for _ in 0..<40 {
+            advance(6)
+            feed(sut, .poor)
+            if mock.suspendCallCount >= 2 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        await fulfillment(of: [retry], timeout: 1)
+        XCTAssertGreaterThanOrEqual(mock.suspendCallCount, 2)
+        await waitForSuspendedState(true, in: sut)
+
+        // Cleanup: release the first call's still-parked continuation so it
+        // doesn't leak past the test (harmless no-op — the race already
+        // resolved via timeout, generation-guarded on the controller side).
+        mock.releaseUncooperativeHang()
     }
 }
 
