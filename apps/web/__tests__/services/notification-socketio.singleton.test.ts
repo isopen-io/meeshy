@@ -490,6 +490,32 @@ describe('notificationSocketIO singleton', () => {
     });
   });
 
+  // ── setupEventListeners() → notification:deleted-bulk ────────────────────
+
+  describe('event: notification:deleted-bulk', () => {
+    it('relaie le scope tel quel aux callbacks', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onNotificationDeletedBulk(cb);
+
+      await notificationSocketIO.connect('tok');
+      const payload = { scope: { kind: 'read' } };
+      currentSocketMock!._emit('notification:deleted-bulk', payload);
+
+      expect(cb).toHaveBeenCalledWith(payload);
+    });
+
+    it('se désabonne proprement', async () => {
+      const cb = jest.fn();
+      const unsub = notificationSocketIO.onNotificationDeletedBulk(cb);
+
+      await notificationSocketIO.connect('tok');
+      unsub();
+      currentSocketMock!._emit('notification:deleted-bulk', { scope: { kind: 'read' } });
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
   // ── setupEventListeners() → notification:deleted ─────────────────────────
 
   describe('event: notification:deleted', () => {
