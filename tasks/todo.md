@@ -1,3 +1,141 @@
+# Tête instruite pour le cycle 101 — un champ que PERSONNE n'écrit reste un contrat que TOUT LE MONDE lit
+
+*Le cycle 100 a exécuté, en un seul passage, le lot que le cycle 99 avait entièrement instruit mais
+refusé de livrer faute de pouvoir prouver l'innocuité côté clients. La preuve manquante a été
+produite autrement que par la compilation — et c'est la méthode que ce cycle lègue.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch. Un bloc de trois correctifs, ce sont TROIS fetchs.** Deux secondes
+> contre une heure. Détail et les deux motifs techniques rescapés : leçon 142.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter un travail doublonné, comparer la
+> COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 100 ajoute — le cinquième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 trouve le cinquième :
+>
+> **Un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE. Chaque couche qui le redéclare
+> le fait depuis sa propre intuition, et rien ne les confronte jamais — parce qu'aucune donnée
+> réelle ne traverse la chaîne pour les mettre en contradiction.**
+>
+> `CallParticipant.connectionQuality` était déclaré **quatre fois, de quatre façons mutuellement
+> incompatibles** — `Json?` (Prisma), une interface objet `{ latency, packetLoss, bandwidth }`
+> (type partagé), `z.number()` (Zod), `{ type: 'number', 0-100 }` (OpenAPI) — et les fixtures de
+> test en portaient une **cinquième**, une CHAÎNE (`'good'`). Ces cinq formes ont coexisté sans
+> qu'aucun test ne tombe, précisément parce que **rien ne l'écrivait** : la valeur était toujours
+> `null`, et `null` satisfait les cinq. Un champ mort n'est pas de la dette dormante, c'est de la
+> dette qui **se ramifie** — chaque nouvelle couche ajoute une déclaration de plus, jamais une
+> vérification.
+>
+> **La méthode qui en découle :** quand un champ paraît suspect, compter ses ÉCRIVAINS avant ses
+> lecteurs. Zéro écrivain ⇒ énumérer toutes ses DÉCLARATIONS (Prisma, types, Zod, OpenAPI,
+> fixtures) et les comparer entre elles. Leur divergence est la mesure du temps pendant lequel
+> personne n'a rien fait passer dedans.
+
+## Livré au cycle 100 — `CallParticipant` cesse de décrire une qualité que personne ne mesure
+
+**Le défaut.** Zéro écrivain (aucun des 12 sites `callParticipant.{create,update,updateMany}` du
+gateway ne pose le champ), TROIS émissions socket qui le relayaient donc à `null` à tout client,
+toujours — deux `call:initiated` (rejeu `call:check-active` et initiation) et
+`call:participant-joined`, toutes trois sous un double cast `as unknown as ConnectionQuality | null`
+qui masquait que la forme Json n'avait jamais été validée. ZÉRO consommateur : les trois clients
+calculent leur qualité LOCALEMENT depuis leur propre pile WebRTC (iOS `PeerConnectionState`,
+Android `ConnectionQuality.from(sample.level())`, web `ConnectionQualityLevel`) — trois types
+distincts, aucun n'étant celui du serveur.
+
+**Retiré** : le champ du modèle Prisma, du type partagé `CallParticipant`, l'interface
+`ConnectionQuality` devenue orpheline, les trois émissions et l'import correspondant. **Lot joint**,
+comme le cycle 99 l'avait prescrit (« ils sortent entiers, pas champ par champ ») :
+`CallParticipantSchemas` (Zod) et `callParticipantSchema` (OpenAPI), sans aucune référence dans le
+dépôt, et qui déclaraient en outre `status`, `duration`, `isMuted`, `isVideoOff` — **quatre champs
+absents du modèle Prisma**. Deux descriptions entières d'une entité qui n'a jamais existé.
+
+**Pourquoi RETIRER et non CÂBLER** (argument à ne pas rejouer) : le signal existe déjà et circule
+en temps réel. `call:quality-report` porte `rtt`, `packetLoss`, `level` par participant, et sur
+dégradation soutenue le handler émet `call:quality-alert` par participant aux pairs. Persister le
+même signal coûterait jusqu'à **30 écritures/min/participant** (plafond
+`SOCKET_RATE_LIMITS.CALL_QUALITY_REPORT`) sur le chemin CHAUD de l'appel, dans une ligne que
+personne ne lit. La qualité de connexion est ÉPHÉMÈRE : sa place est le canal transitoire qui
+existe. ADR consigné : `packages/shared/decisions.md` § 2026-08.
+
+**Tests** : 4 (`CallEventsHandler.test.ts`, describe « la qualité de connexion n'est pas un champ
+serveur »), **RED prouvé sur 3** (les trois émissions rendaient `'good'`) ; la 4ᵉ ancre le
+comportement CONSERVÉ (l'état média et l'identité du participant restent portés). Gate :
+`tsc --noEmit` gateway **propre**, suite gateway complète verte, `packages/shared` **1 506 tests /
+52 fichiers** verts, build shared propre, client Prisma régénéré sans le champ.
+
+### La méthode que ce cycle lègue vraiment — prouver une non-régression quand le typage est ÉTEINT
+
+Le cycle 99 avait refusé ce lot pour une raison honnête : la suppression touche `packages/shared`,
+donc la surface de compilation du web et du SDK, or `tsc --noEmit` sur `apps/web` rend un mur de
+diagnostics pré-existants — **le signal y est éteint**, et aucune toolchain Swift n'existe ici.
+« Très probablement nul » n'était pas la barre.
+
+**La barre a été franchie sans réparer le signal, en le DIFFÉRENÇANT.** `tsc --noEmit` a été exécuté
+sur `apps/web` **deux fois** — une fois avec le lot appliqué, une fois sur la base restaurée par
+`git stash` (avec, à chaque fois, `prisma generate` + `bun run build` de `packages/shared`, sans
+quoi la comparaison porterait sur un `dist` qui ne correspond à aucune des deux versions) — et les
+deux sorties ont été comparées ligne à ligne. **1 760 diagnostics des deux côtés, mêmes sites.** Les
+seules différences sont **cinq** messages où TypeScript énumère les membres d'une union dans un
+ordre différent d'une exécution à l'autre (`"USER" | "ADMIN" | …` vs `"BIGBOSS" | "ADMIN" | …`) —
+du bruit d'affichage, aucun diagnostic ajouté ni retiré.
+
+**À réutiliser tel quel** : un compteur de diagnostics pré-existants n'interdit pas de prouver une
+non-régression de typage ; il interdit seulement de la prouver par un vert. Le DIFF de deux sorties
+bruitées est une preuve, à trois conditions — reconstruire les dépendances des deux côtés,
+comparer les sites et non le total, et savoir que l'ordre des unions est instable.
+
+**Côté Swift, aucune compilation n'était nécessaire ici**, et c'est vérifiable : le grep du champ
+sur tout le dépôt montre que `packages/MeeshySDK` ne le déclare NULLE PART. Le modèle `CallParticipant`
+du SDK ne l'a jamais décodé — le serveur émettait un champ que le décodeur Swift ignorait déjà.
+
+**Réserve d'honnêteté** : les 1 760 diagnostics web relevés ici ne recoupent pas les « 1 224, tous
+dans `__tests__` » consignés au cycle 99 — le chiffre a monté et déborde désormais hors des tests.
+Ce cycle n'a **pas** instruit d'où vient l'écart (dérive du dépôt depuis le cycle 99, ou artefact
+d'un conteneur neuf où `bun install` a dû tourner en `--ignore-scripts`, le postinstall de
+`grpc-tools` échouant à télécharger son binaire à travers le proxy). Les deux mesures de CE cycle
+sont prises dans le MÊME environnement, ce qui suffit au diff ; mais **le chiffre absolu n'est pas
+comparable d'un cycle à l'autre** et personne ne devrait le traiter comme un indicateur de santé.
+
+## Constat annexe du cycle 100, NON traité
+
+`callParticipantStatusEnum` (`utils/validation.ts`) survit à la sortie de `CallParticipantSchemas` :
+son unique usage restant est son propre alias `VCallParticipantStatus`, lui-même sans lecteur. Il
+énumère `invited | ringing | connected | disconnected | declined` — **un espace d'états que le modèle
+Prisma `CallParticipant` ne porte pas** (il n'a aucun champ `status`). C'est le même défaut que celui
+fermé ici, en plus petit. Laissé en place **délibérément** : il n'était pas dans le lot instruit, et
+l'impact minimal prime. Son voisin `callParticipantRoleEnum` est dans le même cas mais décrit, lui,
+un champ RÉEL (`role`) — les deux ne se valent pas et ne doivent pas être retirés du même geste.
+
+## Ce qui reste ouvert des cycles précédents (inchangé au cycle 100)
+
+- **Item 1 (rétention des posts supprimés) : toujours à poser à un humain, pas à réessayer.** Refus
+  motivé aux cycles 98 et 99, confirmé ici (geste irréversible hors dépôt ; `N` est une décision
+  produit).
+- **L'index MongoDB `expiresAt_ephemeral_partial` n'est toujours pas appliqué** (cycle 92) —
+  COLLSCAN par minute sur `Message`. Demande un accès de déploiement que la routine n'a pas.
+- **Les 242 « source guards » iOS** (tête du cycle 86) : aucune toolchain Swift ici, inchangé des
+  cycles 86 à 100.
+- La porte `actions: write` reste close (cycle 82) : pas de `workflow_dispatch` à la demande.
+- **La SUPPRESSION de branche distante est refusée en 403** (cycle 91) : les `push` passent, le
+  `push --delete` non. Purger depuis un contexte qui a le droit (`tasks/branch-purge-*.sh`).
+- Le couple de mesure PR↔`dev` sur la même lignée de clés DerivedData (cycle 84, item 2) n'existe
+  toujours pas.
+- **`UploadProcessor.test.ts` › `should upload a valid file successfully` est flaky sous charge**
+  (cycle 87). Non reproduit aux cycles 88 à 100.
+- Le mode `around` de `GET /conversations/:id/messages` lit `limit + 1` sans jamais retirer de ligne
+  sonde (cycle 99) — inoffensif aujourd'hui, piège si la fenêtre s'élargit.
+
 # Tête instruite pour le cycle 100 — le curseur qui pointait dans le mauvais SENS
 
 *Le cycle 99 a porté la méthode du cycle 98 (« un CURSEUR est une promesse de couverture ») de

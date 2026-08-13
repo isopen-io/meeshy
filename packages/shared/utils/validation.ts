@@ -1725,26 +1725,11 @@ export const CallSessionSchemas = {
   }),
 };
 
-/**
- * Schémas pour les participants d'appel
- */
-export const CallParticipantSchemas = {
-  // Participant complet
-  full: z.object({
-    id: z.string(),
-    callSessionId: z.string(),
-    userId: z.string(),
-    role: callParticipantRoleEnum,
-    status: callParticipantStatusEnum,
-    joinedAt: z.iso.datetime().nullable().optional(),
-    leftAt: z.iso.datetime().nullable().optional(),
-    duration: z.number().nullable().optional(),
-    isMuted: z.boolean(),
-    isVideoOff: z.boolean(),
-    connectionQuality: z.number().nullable().optional(),
-    user: UserSchemas.minimal.optional(),
-  }),
-};
+// `CallParticipantSchemas` a été retiré le 2026-08-13 : il n'avait AUCUNE
+// référence dans le dépôt et décrivait une entité qui n'a jamais existé —
+// `status`, `duration`, `isMuted`, `isVideoOff` n'ont aucun équivalent sur le
+// modèle Prisma `CallParticipant` (qui porte `isAudioEnabled`, `isVideoEnabled`,
+// `leftAt`). Le décrire à nouveau demande de partir du modèle, pas de ce texte.
 
 // =============================================================================
 // REPORT SCHEMAS
@@ -2575,7 +2560,6 @@ export type VCallParticipantStatus = z.infer<typeof callParticipantStatusEnum>;
 export type VCallSessionFull = z.infer<typeof CallSessionSchemas.full>;
 export type VCallSessionMinimal = z.infer<typeof CallSessionSchemas.minimal>;
 export type VCallSessionStart = z.infer<typeof CallSessionSchemas.start>;
-export type VCallParticipantFull = z.infer<typeof CallParticipantSchemas.full>;
 
 // Report types
 export type VReportType = z.infer<typeof reportTypeEnum>;

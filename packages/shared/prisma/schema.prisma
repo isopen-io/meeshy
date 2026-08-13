@@ -1862,8 +1862,12 @@ model CallParticipant {
   isAudioEnabled Boolean @default(true)
   isVideoEnabled Boolean @default(true)
 
-  /// Connection quality metadata
-  connectionQuality Json? // { latency, packetLoss, bandwidth }
+  /// La qualité de connexion N'EST PAS persistée ici : c'est une donnée
+  /// ÉPHÉMÈRE, portée en temps réel par participant sur `call:quality-report`
+  /// / `call:quality-alert`. Le champ `connectionQuality Json?` a existé sans
+  /// jamais recevoir d'écriture (retiré 2026-08-13) ; le persister coûterait
+  /// jusqu'à 30 écritures/min/participant sur le chemin chaud de l'appel.
+  /// Le bilan de fin d'appel, lui, vit dans `analytics` ci-dessus.
 
   /// Indexes
   @@index([callSessionId])

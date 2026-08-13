@@ -92,7 +92,6 @@ jest.mock('../../../utils/response', () => {
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   callSessionSchema: { type: 'object' },
   callSessionMinimalSchema: { type: 'object' },
-  callParticipantSchema: { type: 'object' },
   startCallRequestSchema: { type: 'object' },
   errorResponseSchema: { type: 'object' },
 }));
