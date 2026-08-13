@@ -65,7 +65,7 @@ export const MessageContent = memo(function MessageContent({
       "relative flex w-full max-w-full mb-1 overflow-visible",
       isOwnMessage ? "ml-auto" : "mr-auto"
     )}>
-      <MessageEffects effectFlags={message.effectFlags} messageId={message.id} className="w-full">
+      <MessageEffects effectFlags={message.effectFlags} className="w-full">
       <Card
         className={cn(
           "relative transition-colors duration-200 border overflow-hidden py-0 w-full rounded-2xl",

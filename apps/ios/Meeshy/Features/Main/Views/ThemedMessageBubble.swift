@@ -314,7 +314,7 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        .messageEffects(message.effects, messageId: message.id)
+        .messageEffects(message.effects)
         .opacity(isEphemeralExpired ? 0 : 1)
         .scaleEffect(isEphemeralExpired ? 0.8 : 1)
         .onAppear {

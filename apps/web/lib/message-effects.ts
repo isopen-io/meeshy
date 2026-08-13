@@ -15,7 +15,7 @@ export type AppearanceEffect = 'shake' | 'zoom' | 'explode' | 'confetti' | 'fire
 export type PersistentEffect = 'glow' | 'pulse' | 'rainbow' | 'sparkle';
 
 export interface MessageEffectPlan {
-  /** Effets one-shot à jouer MAINTENANT (vide s'ils ont déjà joué). */
+  /** Effets one-shot à jouer à chaque venue à l'écran. */
   readonly appearance: readonly AppearanceEffect[];
   /** Effets continus à rendre. */
   readonly persistent: readonly PersistentEffect[];
@@ -50,19 +50,24 @@ const PERSISTENT_BITS: ReadonlyArray<readonly [PersistentEffect, number]> = [
  */
 const REDUCE_MOTION_SAFE: ReadonlySet<PersistentEffect> = new Set<PersistentEffect>(['glow', 'rainbow']);
 
+/**
+ * Un effet d'apparition joue une fois PAR AFFICHAGE À L'ÉCRAN, pas une fois par
+ * message : c'est l'horloge d'affichage (celle du flou, qui se déclenche à
+ * l'ouverture), pas celle de réception (celle du compteur éphémère, qui part à
+ * l'arrivée du message). Le plan ne porte donc aucune mémoire de lecture.
+ */
 export interface ResolveOptions {
-  readonly hasPlayedAppearance: boolean;
   readonly reduceMotion: boolean;
 }
 
 export function resolveMessageEffectPlan(
   effectFlags: number | undefined | null,
-  { hasPlayedAppearance, reduceMotion }: ResolveOptions,
+  { reduceMotion }: ResolveOptions,
 ): MessageEffectPlan {
   const flags = typeof effectFlags === 'number' && Number.isFinite(effectFlags) ? effectFlags : 0;
 
   const appearance: AppearanceEffect[] =
-    flags <= 0 || hasPlayedAppearance || reduceMotion
+    flags <= 0 || reduceMotion
       ? []
       : APPEARANCE_BITS.filter(([, bit]) => hasEffect(flags, bit)).map(([name]) => name);
 

@@ -346,10 +346,16 @@ Le bitfield `effectFlags` est persisté par le gateway et lu par TOUS les client
 
 Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEffectFlags`.
 
+### Deux horloges — ne jamais les confondre
+| Horloge | Déclencheur | Exemples |
+|---|---|---|
+| **Réception** | arrivée du message (donnée) | compteur d'un message éphémère, `expiresAt` |
+| **Affichage** | venue à l'écran (vue) | flou d'un message protégé (se déclenche à l'ouverture), **tous les effets d'apparition** |
+
 ### Règles
-1. **Un effet d'apparition joue exactement UNE fois par message**, sur l'arrivée du message — pas sur l'arrivée de ses pixels. Les listes sont paresseuses : un `@State` local repart à `false` à chaque recyclage et rejouerait l'effet à chaque scroll. La mémoire est portée par `MessageEffectPlaybackStore` (iOS, borné FIFO 500) et par le `Set` de module de `MessageEffects.tsx` (web).
-2. **Ne JAMAIS basculer le drapeau « déjà joué » dans un `.onAppear` frère de celui qui démarre l'animation.** C'est le défaut corrigé le 2026-08-13 : `ThemedMessageBubble` posait `.messageEffects(...)` puis `.onAppear { hasPlayedAppearance = true }`, donc le changement d'état re-rendait la bulle avec `active == false` dans la MÊME passe et coupait chaque animation avant la première frame — aucun effet d'apparition n'était jamais visible en conversation. L'état est lu UNE fois à la construction ; `markPlayed` écrit dans le store sans toucher au `@State` local.
-3. **`transferPlayback(from:to:)` à la réconciliation `tempId → serverId`** (`ConversationViewModel.finalizeSuccessfulSend`) : `MeeshyMessage.id` vaut `serverId ?? localId`, donc la ligne change d'identité à l'ack et SwiftUI la reconstruit — sans report, l'expéditeur voit son propre effet repartir de zéro.
+1. **Un effet d'apparition joue une fois PAR AFFICHAGE À L'ÉCRAN**, pas une fois par message. Rouvrir la conversation, ou refaire défiler la bulle à l'écran, le rejoue. « Une fois » borne l'effet à une exécution PENDANT un affichage : il ne boucle pas. Il n'existe donc **aucune mémoire de lecture** — ni store, ni Set, ni booléen persisté ; exactement comme `BubbleBlurRevealController`, qui n'en a pas non plus.
+2. **Ne JAMAIS basculer un drapeau « déjà joué » dans un `.onAppear` frère de celui qui démarre l'animation.** C'est le défaut corrigé le 2026-08-13 : `ThemedMessageBubble` posait `.messageEffects(...)` puis `.onAppear { hasPlayedAppearance = true }`, donc le changement d'état re-rendait la bulle avec `active == false` dans la MÊME passe et coupait chaque animation avant la première frame — aucun effet d'apparition n'était jamais visible en conversation.
+3. **Un effet one-shot doit être REJOUABLE, pas seulement jouable au montage.** `onAppear` peut retrouver la phase déjà à `1` (vue conservée, conversation rouverte) : la remettre à `0` puis l'animer dans le même tour synchrone ne produit rien, faute de frame de départ à interpoler. iOS réarme via `AppearancePhaseDriver` (phase `0 → 1` + délai d'une frame) ; le web, dont une animation CSS ne rejoue qu'au montage, réarme via `IntersectionObserver` + retrait/repose des classes à la frame suivante — jamais en remontant `children`, ce qui réinitialiserait le DOM de la bulle.
 4. **Une secousse se fait avec un `GeometryEffect`, jamais avec un `.offset` calculé.** `.offset(x: sin(phase * .pi * 4) * 8)` animé `phase: 0 → 1` ne bouge PAS : SwiftUI interpole la valeur produite, et `sin(0) == sin(4π) == 0`. Seul `animatableData` fait parcourir la courbe.
 5. **Les particules se décrivent en coordonnées relatives figées + une progression animée**, jamais en mutant un `@State` vide depuis `onAppear` puis en l'animant dans le même tour : sans frame initiale rendue, il n'y a rien à interpoler.
 6. **`reduceMotion` : le message perd son mouvement, pas son intention.** Aucune apparition ne joue ; `glow` et `rainbow` sont rendus FIXES (`reduceMotionSafeMask`) ; `pulse` et `sparkle` sont du mouvement pur et sont retirés.

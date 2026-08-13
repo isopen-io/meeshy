@@ -2,7 +2,17 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Appearance Effects (one-shot, play once on appear)
+// MARK: - Appearance Effects (one-shot, rejoués à CHAQUE venue à l'écran)
+
+/// Laisse passer une frame avant d'animer.
+///
+/// Un effet d'apparition se rejoue à chaque affichage, donc `onAppear` peut
+/// retrouver la phase déjà à `1` (vue conservée en mémoire, conversation
+/// rouverte). La remettre à `0` puis l'animer vers `1` dans le MÊME tour
+/// synchrone ne produit rien : SwiftUI ne voit qu'un état net inchangé, sans
+/// frame de départ à interpoler. Ce délai d'une frame est ce qui rend le rejeu
+/// possible ; sans lui, seule la toute première apparition serait animée.
+private let appearanceFrameDelay = Duration.milliseconds(16)
 
 /// Oscillation horizontale réelle.
 ///
@@ -25,92 +35,88 @@ struct ShakeGeometryEffect: GeometryEffect {
     }
 }
 
+/// Toutes les apparitions suivent la même mécanique : une phase `0 → 1` remise
+/// à zéro puis relancée à chaque `onAppear`, dont chaque effet DÉRIVE son rendu.
+/// Animer une phase unique plutôt que plusieurs propriétés indépendantes est ce
+/// qui rend le rejeu fiable — il n'y a qu'un état à réarmer.
+private struct AppearancePhaseDriver: ViewModifier {
+    let active: Bool
+    let animation: Animation
+    @Binding var phase: CGFloat
+
+    func body(content: Content) -> some View {
+        content.onAppear {
+            guard active else { return }
+            phase = 0
+            Task { @MainActor in
+                try? await Task.sleep(for: appearanceFrameDelay)
+                withAnimation(animation) { phase = 1 }
+            }
+        }
+    }
+}
+
+private extension View {
+    func replayingAppearance(active: Bool, animation: Animation, phase: Binding<CGFloat>) -> some View {
+        modifier(AppearancePhaseDriver(active: active, animation: animation, phase: phase))
+    }
+}
+
 struct ShakeEffect: ViewModifier {
     let active: Bool
     @State private var phase: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .modifier(ShakeGeometryEffect(animatableData: phase))
-            .onAppear {
-                guard active else { return }
-                withAnimation(.easeOut(duration: 0.6)) { phase = 1 }
-            }
+            .modifier(ShakeGeometryEffect(animatableData: active ? phase : 0))
+            .replayingAppearance(active: active, animation: .easeOut(duration: 0.6), phase: $phase)
     }
 }
 
 struct ZoomEffect: ViewModifier {
     let active: Bool
-    @State private var scale: CGFloat
-
-    init(active: Bool) {
-        self.active = active
-        _scale = State(initialValue: active ? 0.3 : 1)
-    }
+    @State private var phase: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(scale)
-            .onAppear {
-                guard active else { return }
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) { scale = 1 }
-            }
+            .scaleEffect(active ? 0.3 + 0.7 * phase : 1)
+            .replayingAppearance(active: active,
+                                 animation: .spring(response: 0.5, dampingFraction: 0.6),
+                                 phase: $phase)
     }
 }
 
 struct ExplodeEffect: ViewModifier {
     let active: Bool
-    @State private var scale: CGFloat
-    @State private var opacity: Double
-
-    init(active: Bool) {
-        self.active = active
-        _scale = State(initialValue: active ? 0.1 : 1)
-        _opacity = State(initialValue: active ? 0 : 1)
-    }
+    @State private var phase: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(scale)
-            .opacity(opacity)
-            .onAppear {
-                guard active else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                    scale = 1.15
-                    opacity = 1
-                }
-                withAnimation(.easeOut(duration: 0.2).delay(0.3)) {
-                    scale = 1
-                }
-            }
+            .scaleEffect(active ? 0.1 + 0.9 * phase : 1)
+            .opacity(active ? Double(min(1, phase * 3)) : 1)
+            .replayingAppearance(active: active,
+                                 animation: .spring(response: 0.4, dampingFraction: 0.55),
+                                 phase: $phase)
     }
 }
 
 struct WaooEffect: ViewModifier {
     let active: Bool
-    @State private var scale: CGFloat
-    @State private var glowOpacity: Double = 0
+    @State private var phase: CGFloat = 0
 
-    init(active: Bool) {
-        self.active = active
-        _scale = State(initialValue: active ? 0.5 : 1)
-    }
+    /// Le halo enfle puis retombe : il culmine à mi-parcours, contrairement à
+    /// l'échelle qui rejoint son repos. Le ressort dépasse `1`, donc la sinusoïde
+    /// repasse sous zéro — d'où le plancher, une opacité négative n'ayant pas de
+    /// sens.
+    private var glowOpacity: Double { active ? max(0, Double(sin(phase * .pi))) * 0.6 : 0 }
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(scale)
+            .scaleEffect(active ? 0.5 + 0.5 * phase : 1)
             .shadow(color: .yellow.opacity(glowOpacity), radius: 20)
-            .onAppear {
-                guard active else { return }
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.4)) {
-                    scale = 1.1
-                    glowOpacity = 0.6
-                }
-                withAnimation(.easeOut(duration: 0.3).delay(0.4)) {
-                    scale = 1
-                    glowOpacity = 0
-                }
-            }
+            .replayingAppearance(active: active,
+                                 animation: .spring(response: 0.5, dampingFraction: 0.45),
+                                 phase: $phase)
     }
 }
 
@@ -179,7 +185,14 @@ struct ConfettiOverlay: View {
         .opacity(opacity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear {
+        .onAppear { replay() }
+    }
+
+    private func replay() {
+        progress = 0
+        opacity = 1
+        Task { @MainActor in
+            try? await Task.sleep(for: appearanceFrameDelay)
             withAnimation(.easeIn(duration: 1.5)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.5).delay(1.2)) { opacity = 0 }
         }
@@ -226,7 +239,14 @@ struct FireworksOverlay: View {
         .opacity(opacity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear {
+        .onAppear { replay() }
+    }
+
+    private func replay() {
+        progress = 0
+        opacity = 1
+        Task { @MainActor in
+            try? await Task.sleep(for: appearanceFrameDelay)
             withAnimation(.easeOut(duration: 0.8)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.4).delay(0.6)) { opacity = 0 }
         }
@@ -246,10 +266,17 @@ struct ExplodeOverlay: View {
             .opacity(opacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.5)) { scale = 2.5 }
-                withAnimation(.easeIn(duration: 0.3).delay(0.3)) { opacity = 0 }
-            }
+            .onAppear { replay() }
+    }
+
+    private func replay() {
+        scale = 0.3
+        opacity = 1
+        Task { @MainActor in
+            try? await Task.sleep(for: appearanceFrameDelay)
+            withAnimation(.easeOut(duration: 0.5)) { scale = 2.5 }
+            withAnimation(.easeIn(duration: 0.3).delay(0.3)) { opacity = 0 }
+        }
     }
 }
 
@@ -267,13 +294,20 @@ struct WaooOverlay: View {
             .opacity(opacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .onAppear {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { scale = 1.5 }
-                withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
-                    scale = 0
-                    opacity = 0
-                }
+            .onAppear { replay() }
+    }
+
+    private func replay() {
+        scale = 0.5
+        opacity = 1
+        Task { @MainActor in
+            try? await Task.sleep(for: appearanceFrameDelay)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { scale = 1.5 }
+            withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
+                scale = 0
+                opacity = 0
             }
+        }
     }
 }
 
@@ -382,42 +416,29 @@ struct SparkleEffect: ViewModifier {
 
 // MARK: - Orchestration
 
-/// Applique les effets d'un message, une seule fois, sans se saborder.
+/// Applique les effets d'un message : une exécution par affichage à l'écran.
 ///
-/// Le point délicat est le « une seule fois ». L'implémentation précédente
-/// exposait un `hasPlayedAppearance: Bool` que l'appelant basculait à `true`
-/// dans un `.onAppear` frère — donc dans la MÊME passe de mise à jour que les
-/// `.onAppear` internes qui démarrent les animations. Le changement d'état
-/// re-rendait immédiatement la vue avec `active == false`, ce qui remettait
-/// chaque modifier à l'identité et retirait les overlays de particules AVANT
-/// qu'une frame animée n'ait été produite : en conversation, aucun effet
-/// d'apparition n'était jamais visible.
+/// L'implémentation précédente exposait un `hasPlayedAppearance: Bool` que
+/// l'appelant basculait à `true` dans un `.onAppear` frère — donc dans la MÊME
+/// passe de mise à jour que les `.onAppear` internes qui démarrent les
+/// animations. Le changement d'état re-rendait immédiatement la vue avec
+/// `active == false`, remettait chaque modifier à l'identité et retirait les
+/// overlays de particules AVANT qu'une frame animée n'ait été produite : en
+/// conversation, aucun effet d'apparition n'était jamais visible.
 ///
-/// Ici, l'état « déjà joué » est lu UNE fois, à la construction, depuis
-/// `MessageEffectPlaybackStore` — et il n'est plus jamais relu pendant la vie de
-/// la vue. `markPlayed` écrit dans le store sans toucher au `@State` local :
-/// l'animation en cours n'est donc pas interrompue, et c'est la PROCHAINE
-/// construction de la cellule (recyclage au scroll) qui lira `true` et
-/// s'abstiendra.
+/// Il n'y a désormais AUCUNE mémoire de lecture, ni ici ni ailleurs. Un effet
+/// se déclenche à l'affichage, comme le flou d'un message protégé se déclenche
+/// à l'ouverture — et non à la réception, qui est l'horloge du compteur
+/// éphémère. Revenir sur la conversation, ou refaire défiler la bulle à
+/// l'écran, rejoue l'effet ; chaque déclenchement s'exécute une fois et ne
+/// boucle pas.
 struct MessageEffectsModifier: ViewModifier {
-    private let effects: MessageEffects
-    private let messageId: String
-    private let playbackStore: MessageEffectPlaybackStore
+    let effects: MessageEffects
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var alreadyPlayed: Bool
-
-    init(effects: MessageEffects,
-         messageId: String,
-         playbackStore: MessageEffectPlaybackStore = .shared) {
-        self.effects = effects
-        self.messageId = messageId
-        self.playbackStore = playbackStore
-        _alreadyPlayed = State(initialValue: playbackStore.hasPlayed(messageId))
-    }
 
     func body(content: Content) -> some View {
-        let plan = effects.playbackPlan(hasPlayedAppearance: alreadyPlayed, reduceMotion: reduceMotion)
+        let plan = effects.playbackPlan(reduceMotion: reduceMotion)
 
         // L'écrasante majorité des messages n'a aucun effet : ils ne doivent pas
         // payer huit ViewModifier inertes par cellule de liste.
@@ -440,7 +461,6 @@ struct MessageEffectsModifier: ViewModifier {
                     if plan.appearance.contains(.confetti) { ConfettiOverlay() }
                     if plan.appearance.contains(.fireworks) { FireworksOverlay() }
                 }
-                .onAppear { playbackStore.markPlayed(messageId) }
         }
     }
 }
@@ -448,12 +468,9 @@ struct MessageEffectsModifier: ViewModifier {
 // MARK: - Convenience Extension
 
 extension View {
-    /// Applique les effets du message identifié par `messageId`.
-    ///
-    /// L'identifiant est requis : c'est lui qui porte le « une seule fois ». Un
-    /// appelant qui n'en fournit pas rejouerait l'effet à chaque recyclage de
-    /// cellule.
-    func messageEffects(_ effects: MessageEffects, messageId: String) -> some View {
-        modifier(MessageEffectsModifier(effects: effects, messageId: messageId))
+    /// Applique les effets du message. Les effets d'apparition rejouent à
+    /// chaque venue à l'écran — il n'y a rien à mémoriser.
+    func messageEffects(_ effects: MessageEffects) -> some View {
+        modifier(MessageEffectsModifier(effects: effects))
     }
 }

@@ -201,31 +201,38 @@ final class MessageEffectsTests: XCTestCase {
     // MARK: - MessageEffectPlan — ce qui est RÉELLEMENT rendu
 
     private func makePlan(_ flags: MessageEffectFlags,
-                          hasPlayedAppearance: Bool = false,
                           reduceMotion: Bool = false) -> MessageEffectPlan {
-        MessageEffects(flags: flags).playbackPlan(hasPlayedAppearance: hasPlayedAppearance,
-                                                  reduceMotion: reduceMotion)
+        MessageEffects(flags: flags).playbackPlan(reduceMotion: reduceMotion)
     }
 
-    func test_plan_freshMessage_playsItsAppearanceEffect() {
+    func test_plan_displayedMessage_playsItsAppearanceEffect() {
         let plan = makePlan([.confetti])
-        XCTAssertTrue(plan.plays(.confetti), "Un message qui vient d'arriver DOIT jouer son effet")
+        XCTAssertTrue(plan.plays(.confetti), "Un message affiché DOIT jouer son effet")
         XCTAssertFalse(plan.isEmpty)
     }
 
-    func test_plan_appearanceEffect_neverPlaysTwice() {
-        let plan = makePlan([.confetti, .shake], hasPlayedAppearance: true)
-        XCTAssertFalse(plan.plays(.confetti))
-        XCTAssertFalse(plan.plays(.shake))
-        XCTAssertTrue(plan.isEmpty, "Sans effet persistant, un message déjà joué n'a plus rien à rendre")
+    /// L'effet suit l'horloge d'AFFICHAGE — celle du flou qui se déclenche à
+    /// l'ouverture — et non celle de RÉCEPTION, qui pilote le compteur d'un
+    /// message éphémère. Le plan ne porte donc aucune mémoire : deux affichages
+    /// successifs du même message produisent le même plan, tous deux jouants.
+    func test_plan_carriesNoPlaybackMemory_soEachDisplayReplays() {
+        let effects = MessageEffects(flags: [.confetti, .shake])
+
+        let firstDisplay = effects.playbackPlan(reduceMotion: false)
+        let secondDisplay = effects.playbackPlan(reduceMotion: false)
+
+        XCTAssertEqual(firstDisplay, secondDisplay,
+                       "Rien ne distingue un premier affichage d'un retour à l'écran")
+        XCTAssertTrue(secondDisplay.plays(.confetti))
+        XCTAssertTrue(secondDisplay.plays(.shake))
     }
 
-    func test_plan_persistentEffect_survivesReplay() {
-        // Le halo n'est pas une apparition : il définit le message, il reste.
-        let plan = makePlan([.confetti, .glow], hasPlayedAppearance: true)
-        XCTAssertFalse(plan.plays(.confetti))
+    func test_plan_mixesAppearanceAndPersistentWithoutLosingEither() {
+        let plan = makePlan([.confetti, .glow])
+        XCTAssertTrue(plan.plays(.confetti))
         XCTAssertTrue(plan.plays(.glow))
-        XCTAssertFalse(plan.isEmpty)
+        XCTAssertEqual(plan.appearance, [.confetti])
+        XCTAssertEqual(plan.persistent, [.glow])
     }
 
     func test_plan_noFlags_isEmpty_soCallersSkipTheWrapper() {

@@ -114,7 +114,7 @@ function CommentItem({
           )}
         </div>
 
-        <MessageEffects effectFlags={comment.effectFlags} messageId={comment.id}>
+        <MessageEffects effectFlags={comment.effectFlags}>
           {hasTranslations ? (
             <TranslationToggle
               originalContent={comment.content}

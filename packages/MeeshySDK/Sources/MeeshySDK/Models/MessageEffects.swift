@@ -86,8 +86,8 @@ public struct MessageEffects: Codable, Sendable, Hashable {
     ///
     /// Règle pure, partagée par toutes les surfaces (bulle de conversation,
     /// commentaire de post, commentaire de story) — voir `MessageEffectPlan`.
-    public func playbackPlan(hasPlayedAppearance: Bool, reduceMotion: Bool) -> MessageEffectPlan {
-        MessageEffectPlan(effects: self, hasPlayedAppearance: hasPlayedAppearance, reduceMotion: reduceMotion)
+    public func playbackPlan(reduceMotion: Bool) -> MessageEffectPlan {
+        MessageEffectPlan(effects: self, reduceMotion: reduceMotion)
     }
 }
 
@@ -95,17 +95,19 @@ public struct MessageEffects: Codable, Sendable, Hashable {
 
 /// Décide quels effets d'un message doivent être rendus à un instant donné.
 ///
-/// Trois entrées, aucune dépendance : les flags du message, le fait que son
-/// animation d'apparition a DÉJÀ joué, et la préférence système « Réduire les
-/// animations ». Séparé des `ViewModifier` pour être testable sans SwiftUI, et
-/// partagé pour que les trois surfaces qui affichent des effets (conversation,
-/// commentaires de post, commentaires de story) ne puissent pas diverger.
+/// Deux entrées, aucune dépendance : les flags du message et la préférence
+/// système « Réduire les animations ». Séparé des `ViewModifier` pour être
+/// testable sans SwiftUI, et partagé pour que les trois surfaces qui affichent
+/// des effets (conversation, commentaires de post, commentaires de story) ne
+/// puissent pas diverger.
 ///
-/// **Les effets d'apparition ne jouent qu'UNE fois par message.** C'est ce que
-/// `hasPlayedAppearance` encode : une cellule recyclée par une liste paresseuse
-/// est reconstruite avec `true` et ne rejoue rien. L'appelant est responsable de
-/// la persistance de ce booléen entre deux instanciations (côté app :
-/// `MessageEffectPlaybackStore`).
+/// **Un effet d'apparition joue une fois PAR AFFICHAGE À L'ÉCRAN**, pas une
+/// fois par message. C'est l'horloge d'AFFICHAGE, celle du flou qui se
+/// déclenche à l'ouverture — et non celle de RÉCEPTION, qui pilote le compteur
+/// d'un message éphémère dès son arrivée. Rouvrir la conversation, ou faire
+/// revenir la bulle à l'écran, rejoue l'effet ; ce plan ne porte donc aucune
+/// mémoire, exactement comme `BubbleBlurRevealController`. « Une fois » borne
+/// l'effet à une seule exécution PENDANT un affichage : il ne boucle pas.
 ///
 /// **Sous `reduceMotion`, le message ne perd pas son intention, il perd son
 /// mouvement** : aucune apparition one-shot ne joue, et seuls les effets
@@ -117,7 +119,7 @@ public struct MessageEffectPlan: Equatable, Sendable {
     /// Effets persistants qui gardent du sens sans animation.
     public static let reduceMotionSafeMask: MessageEffectFlags = [.glow, .rainbow]
 
-    /// Effets d'apparition one-shot à jouer MAINTENANT (vide si déjà joués).
+    /// Effets d'apparition one-shot à jouer à chaque venue à l'écran.
     public let appearance: MessageEffectFlags
     /// Effets persistants à rendre en continu.
     public let persistent: MessageEffectFlags
@@ -125,11 +127,11 @@ public struct MessageEffectPlan: Equatable, Sendable {
     /// (pas de `repeatForever`), sans être supprimés.
     public let animatesPersistent: Bool
 
-    public init(effects: MessageEffects, hasPlayedAppearance: Bool, reduceMotion: Bool) {
+    public init(effects: MessageEffects, reduceMotion: Bool) {
         let requestedAppearance = effects.flags.intersection(.appearanceMask)
         let requestedPersistent = effects.flags.intersection(.persistentMask)
 
-        appearance = (hasPlayedAppearance || reduceMotion) ? MessageEffectFlags() : requestedAppearance
+        appearance = reduceMotion ? MessageEffectFlags() : requestedAppearance
         persistent = reduceMotion
             ? requestedPersistent.intersection(Self.reduceMotionSafeMask)
             : requestedPersistent

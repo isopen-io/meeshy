@@ -6,11 +6,10 @@ import {
   resolveMessageEffectPlan,
   messageEffectClassNames,
   messageEffectOverlays,
-  type AppearanceEffect,
 } from '@/lib/message-effects';
 
 /**
- * Applique les effets d'un message, une seule fois, sur le web.
+ * Applique les effets d'un message sur le web.
  *
  * Avant ce composant, `effectFlags` était persisté par le gateway, transporté
  * par REST et par socket, exposé dans `@meeshy/shared/types` — et rendu par
@@ -18,36 +17,15 @@ import {
  * message envoyé avec des confettis depuis iOS arrivait inerte dans le
  * navigateur.
  *
- * Le « une seule fois » est porté par un `Set` de `messageId` au niveau du
- * module, et non par un `useState` local : React démonte et remonte librement
- * les lignes d'une liste virtualisée, et un état local rejouerait l'effet à
- * chaque retour à l'écran. Le `Set` est borné en FIFO — un message assez vieux
- * pour en sortir est hors écran depuis longtemps.
+ * **Un effet d'apparition joue une fois par AFFICHAGE À L'ÉCRAN**, pas une fois
+ * par message — l'horloge du flou qui se déclenche à l'ouverture, pas celle du
+ * compteur éphémère qui part à la réception. Une animation CSS ne rejouant
+ * qu'au montage, un `IntersectionObserver` fournit ici l'équivalent du
+ * `onAppear` d'iOS : quand la bulle ressort puis revient dans le viewport, les
+ * classes d'apparition sont retirées puis reposées à la frame suivante, ce qui
+ * relance l'animation sans jamais remonter `children` (un remontage
+ * réinitialiserait le DOM de la bulle — lecture vidéo, sélection de texte).
  */
-
-const PLAYED_LIMIT = 500;
-const playedIds = new Set<string>();
-const playedOrder: string[] = [];
-
-function hasPlayed(messageId: string): boolean {
-  return playedIds.has(messageId);
-}
-
-function markPlayed(messageId: string): void {
-  if (!messageId || playedIds.has(messageId)) return;
-  playedIds.add(messageId);
-  playedOrder.push(messageId);
-  while (playedOrder.length > PLAYED_LIMIT) {
-    const evicted = playedOrder.shift();
-    if (evicted !== undefined) playedIds.delete(evicted);
-  }
-}
-
-/** Exposé pour les tests — remet la mémoire « déjà joué » à zéro. */
-export function __resetMessageEffectPlayback(): void {
-  playedIds.clear();
-  playedOrder.length = 0;
-}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -64,14 +42,57 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
+/**
+ * Réarme les animations d'apparition à chaque retour dans le viewport.
+ *
+ * `armed` passe à `false` le temps d'une frame : c'est ce trou qui permet au
+ * navigateur de repartir de zéro. Sans lui, retirer et reposer la classe dans
+ * le même commit React ne relancerait rien.
+ */
+function useReplayOnVisible(enabled: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [run, setRun] = useState(0);
+  const [armed, setArmed] = useState(true);
+  const isVisible = useRef(true);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (!entry.isIntersecting) {
+          isVisible.current = false;
+          return;
+        }
+        if (isVisible.current) return;
+        isVisible.current = true;
+        setArmed(false);
+        requestAnimationFrame(() => {
+          setArmed(true);
+          setRun((r) => r + 1);
+        });
+      },
+      { threshold: 0.01 },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [enabled]);
+
+  return { ref, run, armed };
+}
+
 const CONFETTI_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#EAB308', '#A855F7', '#F97316', '#EC4899'];
 const FIREWORK_COLORS = ['#6366F1', '#818CF8', '#EAB308', '#F97316', '#FFFFFF'];
-
 const OVERLAY_WRAPPER = 'pointer-events-none absolute inset-0 overflow-visible z-[2]';
 
 const ConfettiOverlay = memo(function ConfettiOverlay() {
-  // Les particules sont tirées une seule fois : un re-render ne doit pas
-  // relancer une gerbe différente au milieu de l'animation.
+  // Tirées une seule fois par montage : un re-render ne doit pas relancer une
+  // gerbe différente au milieu de l'animation.
   const particles = useMemo(
     () =>
       Array.from({ length: 24 }, (_, i) => ({
@@ -141,60 +162,48 @@ const FireworksOverlay = memo(function FireworksOverlay() {
   );
 });
 
-function ParticleOverlay({ kind }: { kind: AppearanceEffect }) {
-  if (kind === 'confetti') return <ConfettiOverlay />;
-  if (kind === 'fireworks') return <FireworksOverlay />;
-  return null;
-}
-
 export interface MessageEffectsProps {
   /** Bitfield persisté par le gateway (`Message.effectFlags`). */
   effectFlags?: number | null;
-  /** Identifiant du message — c'est lui qui porte le « une seule fois ». */
-  messageId: string;
   className?: string;
   children: ReactNode;
 }
 
 export const MessageEffects = memo(function MessageEffects({
   effectFlags,
-  messageId,
   className,
   children,
 }: MessageEffectsProps) {
   const reduceMotion = usePrefersReducedMotion();
-
-  // Lu UNE fois par montage : marquer le message comme joué ne doit pas
-  // re-rendre le composant et couper l'animation en cours.
-  const alreadyPlayedRef = useRef<boolean | null>(null);
-  if (alreadyPlayedRef.current === null) {
-    alreadyPlayedRef.current = hasPlayed(messageId);
-  }
-
   const plan = useMemo(
-    () =>
-      resolveMessageEffectPlan(effectFlags, {
-        hasPlayedAppearance: alreadyPlayedRef.current ?? false,
-        reduceMotion,
-      }),
+    () => resolveMessageEffectPlan(effectFlags, { reduceMotion }),
     [effectFlags, reduceMotion],
   );
 
-  useEffect(() => {
-    if (!plan.isEmpty) markPlayed(messageId);
-  }, [plan.isEmpty, messageId]);
+  const hasAppearance = plan.appearance.length > 0;
+  const { ref, run, armed } = useReplayOnVisible(hasAppearance);
 
   // L'écrasante majorité des messages n'a aucun effet : pas de wrapper du tout.
   if (plan.isEmpty) return <>{children}</>;
 
+  const persistentClasses = messageEffectClassNames({ ...plan, appearance: [] });
+  const appearanceClasses = messageEffectClassNames({ ...plan, persistent: [] });
   const overlays = messageEffectOverlays(plan);
 
   return (
-    <div className={cn('relative', messageEffectClassNames(plan), className)}>
+    <div
+      ref={ref}
+      className={cn('relative', persistentClasses, armed && appearanceClasses, className)}
+    >
       {children}
-      {overlays.map((kind) => (
-        <ParticleOverlay key={kind} kind={kind} />
-      ))}
+      {armed &&
+        overlays.map((kind) =>
+          kind === 'confetti' ? (
+            <ConfettiOverlay key={`confetti-${run}`} />
+          ) : (
+            <FireworksOverlay key={`fireworks-${run}`} />
+          ),
+        )}
     </div>
   );
 });

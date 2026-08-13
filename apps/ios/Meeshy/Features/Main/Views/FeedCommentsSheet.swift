@@ -2293,7 +2293,7 @@ struct CommentRowView: View, Equatable {
                     .tint(Color(hex: accentColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
-                    .messageEffects(comment.effects, messageId: comment.id)
+                    .messageEffects(comment.effects)
                     .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
 
                 // Média unique du commentaire (image/vidéo/audio) — inline + plein
