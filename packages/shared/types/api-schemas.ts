@@ -1529,6 +1529,28 @@ export const conversationListResponseSchema = {
         hasMore: { type: 'boolean', description: 'More conversations available beyond this cursor' },
         nextCursor: { type: ['string', 'null'], description: 'Opaque cursor (last conversation id) for the next page; null when exhausted' }
       }
+    },
+    // Présent UNIQUEMENT sur une page delta (`updatedSince`). Le delta est
+    // upsert-only : une conversation fermée, quittée, supprimée-pour-moi depuis
+    // un autre appareil ou dont l'utilisateur a été banni ne revient dans
+    // AUCUNE réponse, donc rien ne la retire du cache client avant la
+    // réconciliation complète (24 h sur iOS comme sur le web). Ces deux champs
+    // sont le canal de sortie — symétrique de `meta.deletedStoryIds` sur le
+    // tray stories. Même piège que `cursorPagination` ci-dessus : non déclarés
+    // ici, `fast-json-stringify` les retire du fil en silence.
+    meta: {
+      type: 'object',
+      properties: {
+        deletedConversationIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Conversations that LEFT this user\'s view since `updatedSince` (closed, left, banned, deleted-for-me). Delta pages only.'
+        },
+        deletedConversationIdsTruncated: {
+          type: 'boolean',
+          description: 'The tombstone list is incomplete — the client must reconcile the full list.'
+        }
+      }
     }
   }
 } as const;

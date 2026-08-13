@@ -35,7 +35,17 @@ jest.mock('@/stores/notification-store', () => ({
 const getConversations = jest.fn();
 jest.mock('@/services/conversations.service', () => ({
   conversationsService: {
-    getConversations: (...args: unknown[]) => getConversations(...args),
+    // Le double honore le CONTRAT du service, pas seulement ce que chaque
+    // témoin prend la peine d'écrire : `getConversations` rend toujours les
+    // deux champs de tombstones (vides hors mode delta, cf. `crud.service.ts`).
+    // Sans ce défaut, un double partiel ferait échouer des témoins qui ne
+    // parlent pas de tombstones — et surtout, il laisserait croire qu'un
+    // `undefined` est une valeur que la production peut produire.
+    getConversations: async (...args: unknown[]) => ({
+      deletedConversationIds: [],
+      deletedConversationIdsTruncated: false,
+      ...(await getConversations(...args)),
+    }),
   },
 }));
 
@@ -213,6 +223,99 @@ describe('useConversationsDeltaSync', () => {
       expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a'])
     );
     expect(queryClient.getQueryData(queryKeys.conversations.detail('b'))).toBeUndefined();
+  });
+
+  it('purges a conversation the server declares as GONE, and its derived caches with it', async () => {
+    // Fermée, quittée, bannie, ou supprimée-pour-moi depuis un autre appareil :
+    // aucune de ces sorties ne peut revenir dans le lot `conversations` (la
+    // clause serveur les exclut), et un leave ne bouge même pas
+    // `Conversation.updatedAt`. `meta.deletedConversationIds` est le seul canal.
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a'), conv('gone')]]));
+    queryClient.setQueryData(queryKeys.conversations.detail('gone'), conv('gone'));
+    queryClient.setQueryData(queryKeys.messages.infinite('gone'), { pages: [], pageParams: [] });
+
+    getConversations.mockResolvedValue({
+      conversations: [],
+      pagination: { limit: 100, offset: 0, total: 0, hasMore: false },
+      deletedConversationIds: ['gone'],
+      deletedConversationIdsTruncated: false,
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() =>
+      expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a'])
+    );
+    expect(queryClient.getQueryData(queryKeys.conversations.detail('gone'))).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.messages.infinite('gone'))).toBeUndefined();
+  });
+
+  it('escalates to a full reconcile when the tombstone list is truncated', async () => {
+    // La liste de tombstones est plafonnée et n'a AUCUN curseur de reprise :
+    // il n'existe pas de « page suivante » de disparitions à demander. Le seul
+    // geste qui fasse sortir les fantômes restants est la relecture complète.
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a')]]));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    getConversations.mockResolvedValue({
+      conversations: [],
+      pagination: { limit: 100, offset: 0, total: 0, hasMore: false },
+      deletedConversationIds: ['gone'],
+      deletedConversationIdsTruncated: true,
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.conversations.infinite() })
+    );
+  });
+
+  it('purges on a delta whose conversation list is EMPTY', async () => {
+    // Le garde `conversations.length > 0` qui protège la fusion ne doit pas
+    // couvrir la purge : un compte calme dont la seule nouvelle est un départ
+    // rend exactement zéro conversation et une tombstone.
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a'), conv('gone')]]));
+
+    getConversations.mockResolvedValue({
+      conversations: [],
+      pagination: { limit: 100, offset: 0, total: 0, hasMore: false },
+      deletedConversationIds: ['gone'],
+      deletedConversationIdsTruncated: false,
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() =>
+      expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a'])
+    );
+  });
+
+  it('does not escalate when the tombstone list is complete', async () => {
+    const queryClient = makeClient();
+    queryClient.setQueryData(queryKeys.conversations.infinite(), pagedCache([[conv('a'), conv('gone')]]));
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    getConversations.mockResolvedValue({
+      conversations: [],
+      pagination: { limit: 100, offset: 0, total: 0, hasMore: false },
+      deletedConversationIds: ['gone'],
+      deletedConversationIdsTruncated: false,
+    });
+
+    const { rerender } = renderDeltaSync(queryClient);
+    await reconnect(rerender);
+
+    await waitFor(() =>
+      expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['a'])
+    );
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('preserves the page structure so infinite scroll keeps advancing', async () => {

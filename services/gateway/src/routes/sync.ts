@@ -4,6 +4,9 @@ import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middlew
 import { SequenceService } from '../services/SequenceService';
 import { computeETag, ifNoneMatchMatches } from '../utils/etag';
 import { loadPersonalHistoryHidingByConversation } from '../services/personalHistoryFilter';
+import { Prisma } from '@meeshy/shared/prisma/client';
+import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { messageSenderUserSelect } from './conversations/utils/message-sender-select';
 
 /**
  * SyncEngine unifié (spec §7, sous-tâche A3.1) — endpoint delta `/sync`
@@ -97,25 +100,90 @@ const syncQuerySchema = z.object({
   cursor: z.string().optional(),
 });
 
-type SyncMessage = {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  content: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
 type DeletedRef = { id: string; conversationId: string; deletedAt: Date };
 
-const messageSelect = {
+/**
+ * Ce que le client DOIT recevoir pour pouvoir écrire une ligne rendable dans sa
+ * base locale.
+ *
+ * Le select de `/sync` s'est longtemps limité à six champs (`id`,
+ * `conversationId`, `senderId`, `content`, `createdAt`, `updatedAt`). Un client
+ * qui appliquerait `added`/`modified` sur cette base écrirait des lignes qu'il
+ * ne peut pas afficher : sans `translations` ni `originalLanguage`, la
+ * résolution du Prisme Linguistique n'a RIEN à résoudre et le message
+ * s'affiche dans la langue de l'expéditeur ; sans `attachments`, la bulle perd
+ * sa pièce jointe ; sans `clientMessageId`, la réconciliation optimiste ne peut
+ * pas apparier sa ligne et duplique la bulle.
+ *
+ * Cette liste est le contrat, et le témoin de forme l'oppose au select réel :
+ * une projection amaigrie pour économiser de la bande passante doit d'abord
+ * faire rougir un test plutôt que rendre le rattrapage inapplicable en silence.
+ */
+export const SYNC_MESSAGE_RENDERABLE_KEYS = [
+  'id',
+  'conversationId',
+  'senderId',
+  'content',
+  'clientMessageId',
+  'originalLanguage',
+  'translations',
+  'messageType',
+  'metadata',
+  'isEdited',
+  'editedAt',
+  'replyToId',
+  'reactionSummary',
+  'reactionCount',
+  'attachments',
+  'sender',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+/**
+ * Projection du stream `changed`. `Prisma.validator` fait échouer le BUILD sur
+ * un nom de champ périmé, là où un objet nu échouerait à l'exécution.
+ *
+ * `attachments` et le bloc `user` de l'expéditeur reprennent les formes
+ * canoniques du dépôt (`attachmentMediaSelect`, `messageSenderUserSelect`)
+ * plutôt que d'en recopier une variante — c'est exactement la dérive que
+ * `attachmentIncludes.ts` documente en tête de fichier.
+ */
+export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   id: true,
   conversationId: true,
   senderId: true,
   content: true,
+  clientMessageId: true,
+  originalLanguage: true,
+  translations: true,
+  messageType: true,
+  messageSource: true,
+  metadata: true,
+  isEdited: true,
+  editedAt: true,
+  replyToId: true,
+  reactionSummary: true,
+  reactionCount: true,
+  validatedMentions: true,
   createdAt: true,
   updatedAt: true,
-} as const;
+  attachments: { select: attachmentMediaSelect },
+  sender: {
+    select: {
+      id: true,
+      userId: true,
+      displayName: true,
+      avatar: true,
+      type: true,
+      role: true,
+      language: true,
+      user: { select: messageSenderUserSelect },
+    },
+  },
+});
+
+type SyncMessage = Prisma.MessageGetPayload<{ select: typeof syncMessageSelect }>;
 
 export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
@@ -269,7 +337,7 @@ async function syncMessages(opts: {
           }
         : { updatedAt: { gt: sinceDate } }),
     },
-    select: messageSelect,
+    select: syncMessageSelect,
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
