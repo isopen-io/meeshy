@@ -17,6 +17,7 @@ import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
+import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostReactionService } from '../../services/PostReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -350,6 +351,18 @@ export class PostReactionHandler {
 
       this.broadcastReactionChange(targetPostId, validated.emoji, 'remove', userId, updateEvent)
         .catch(err => this.logger.error('post reaction:remove broadcast failed', err, { postId: targetPostId }));
+
+      // Le symétrique du `createPostLikeNotification` du chemin d'ajout : la
+      // réaction défaite emporte la notification qu'elle avait produite. Le
+      // retrait vise la CIBLE réelle (`targetPostId`, racine résolue depuis un
+      // éventuel repost) et non `validated.postId` — c'est sur elle que la
+      // notification a été écrite. Fire-and-forget : le dé-réagir est déjà
+      // persisté et déjà ACKé.
+      void retractReactionNotifications(
+        this.prisma,
+        { subject: { kind: 'post', id: targetPostId }, actorId: userId, emoji: validated.emoji },
+        this.notificationService
+      ).catch(err => this.logger.error('post reaction notification retraction failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

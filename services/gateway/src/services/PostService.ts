@@ -22,6 +22,8 @@ import { composeStoryContent, storyTextObjectText } from './posts/storyContentCo
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { retractReactionNotifications } from './notifications/retractReactionNotifications';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
@@ -1221,6 +1223,26 @@ export class PostService {
 
     const foundEmoji = userReactions[0].emoji;
     await this.postReactionService.removeReaction({ postId, userId, emoji: foundEmoji });
+
+    // La notification que le like avait produite (`post_like` /
+    // `story_reaction` / `status_reaction`) n'a plus de sujet. Le retrait vit
+    // ICI et non dans la route, pour la même raison que le reste de la
+    // famille : `foundEmoji` — la réaction RÉELLEMENT retirée — n'existe qu'à
+    // cet endroit. La route, elle, diffuse un '❤️' codé en dur, et un retrait
+    // câblé là-haut manquerait donc toute réaction d'un autre emoji.
+    // L'annonceur par défaut est le service PARTAGÉ du processus (le seul
+    // câblé avec `io`), exactement comme `applyPostRemovalEffects`.
+    try {
+      await retractReactionNotifications(
+        this.prisma,
+        { subject: { kind: 'post', id: postId }, actorId: userId, emoji: foundEmoji },
+        getSharedNotificationService()
+      );
+    } catch (err) {
+      // Le retrait est un EFFET du dé-like, jamais sa condition : la réaction
+      // est déjà partie de la base.
+      log.warn('post unlike: notification retraction failed', { postId, userId, err });
+    }
 
     const remainingReactions = await this.prisma.postReaction.findMany({
       where: { postId },
