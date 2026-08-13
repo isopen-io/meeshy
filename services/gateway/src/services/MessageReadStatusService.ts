@@ -20,6 +20,14 @@ import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt } fro
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
 import { BoundedTtlCache } from '../utils/bounded-cache';
+import {
+  NO_PERSONAL_HIDING,
+  applyPersonalHistoryHiding,
+  exclusiveFloorMsFor,
+  loadPersonalHistoryHiding,
+  loadPersonalHistoryHidingByConversation,
+  loadPersonalHistoryHidingByUser,
+} from './personalHistoryFilter';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
   appendPlaybackStretches,
@@ -222,6 +230,11 @@ export class MessageReadStatusService {
    * messages counted (design lecture-exacte §3 : « le badge reste haut »).
    * A new participant therefore sees only messages received since they
    * joined, NOT the entire historical backlog of the conversation.
+   *
+   * The count is also narrowed by the reader's PERSONAL hiding — the messages
+   * they removed from their own view, and the history they cleared. A badge
+   * counting messages the list refuses to show is a badge scrolling cannot put
+   * out: there is nothing left to scroll.
    */
   async getUnreadCount(
     participantIdOrUserId: string,
@@ -252,7 +265,7 @@ export class MessageReadStatusService {
             { userId: participantIdOrUserId },
           ],
         },
-        select: { id: true, joinedAt: true },
+        select: { id: true, userId: true, joinedAt: true },
       });
 
       if (!participant) {
@@ -288,13 +301,21 @@ export class MessageReadStatusService {
       const floor: Date | null =
         cursor?.lastReadMessageCreatedAt ?? cursor?.lastReadAt ?? participant.joinedAt ?? null;
 
+      const hiding = await loadPersonalHistoryHiding(this.prisma, {
+        userId: participant.userId,
+        conversationId,
+      });
+
       return await this.prisma.message.count({
-        where: {
-          conversationId,
-          deletedAt: null,
-          senderId: { not: participant.id },
-          ...(floor ? { createdAt: { gt: floor } } : {}),
-        },
+        where: applyPersonalHistoryHiding(
+          {
+            conversationId,
+            deletedAt: null,
+            senderId: { not: participant.id },
+            ...(floor ? { createdAt: { gt: floor } } : {}),
+          },
+          hiding
+        ),
       });
     } catch (error) {
       logger.error("[MessageReadStatus] Error getting unread count", error);
@@ -326,11 +347,29 @@ export class MessageReadStatusService {
    * messages any participant could count are fetched once; a `null` floor (never read,
    * no `joinedAt`) drops the bound entirely.
    *
+   * Personal hiding is loaded IN PARALLEL with the cursors (2 extra indexed queries,
+   * zero extra latency, and none at all for a conversation whose participants are all
+   * anonymous — the normal shape behind a share link). It then splits in two, because
+   * the two halves of the hiding cost very differently:
+   *
+   *   - a **history cut-off** is just a stricter floor. It folds into the participant's
+   *     own `floorMs` via `exclusiveFloorMsFor`, so those participants stay on the shared
+   *     binary search AND raise the query's lower bound — strictly less work than before;
+   *   - **individually hidden messages** cannot be expressed as a bound, so those
+   *     participants — and only those — take a linear pass over the rows, and only they
+   *     make the query select message ids.
+   *
+   * Applying the hiding HERE and not only on the list path is what keeps the two badges
+   * from contradicting each other: this method feeds `conversation:unread-updated`, the
+   * live push, while `getUnreadCountsForUser` feeds the list. Fixing one alone would
+   * replace a wrong-but-stable badge with a badge that changes value depending on which
+   * path last spoke.
+   *
    * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
-   * (id + joinedAt) to avoid redundant participant lookups.
+   * (id + userId + joinedAt) to avoid redundant participant lookups.
    */
   async getUnreadCountsForParticipants(
-    participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
+    participants: ReadonlyArray<{ id: string; userId?: string | null; joinedAt: Date | null }>,
     conversationId: string
   ): Promise<Map<string, number>> {
     if (participants.length === 0) return new Map();
@@ -338,11 +377,19 @@ export class MessageReadStatusService {
     try {
       const participantIds = participants.map((p) => p.id);
 
-      // Batch fetch all cursors in a single query
-      const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: { participantId: { in: participantIds }, conversationId },
-        select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
-      });
+      // Batch fetch all cursors in a single query, alongside the personal hiding of
+      // every participant who owns an account. Both are needed before the message
+      // query — the cut-off narrows its lower bound — so they run together.
+      const [cursors, hidingByUser] = await Promise.all([
+        this.prisma.conversationReadCursor.findMany({
+          where: { participantId: { in: participantIds }, conversationId },
+          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+        }),
+        loadPersonalHistoryHidingByUser(this.prisma, {
+          userIds: participants.map((p) => p.userId),
+          conversationId,
+        }),
+      ]);
       // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
       // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
       // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
@@ -352,11 +399,26 @@ export class MessageReadStatusService {
 
       // Per-participant counting floor (ms). `cursor position → joinedAt → null`
       // — identical reduction to the single-participant
-      // `(lastReadMessageCreatedAt ?? lastReadAt) ?? p.joinedAt ?? null`.
-      const floors = participants.map((p) => ({
-        id: p.id,
-        floorMs: ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null,
-      }));
+      // `(lastReadMessageCreatedAt ?? lastReadAt) ?? p.joinedAt ?? null` — then
+      // raised by the reader's own history cut-off, which is nothing but a
+      // stricter floor once restated as an exclusive bound.
+      const floors = participants.map((p) => {
+        const hiding = (p.userId ? hidingByUser.get(p.userId) : undefined) ?? NO_PERSONAL_HIDING;
+        const readFloorMs = ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null;
+        const cutoffMs = exclusiveFloorMsFor(hiding);
+        const floorMs =
+          cutoffMs === null ? readFloorMs : readFloorMs === null ? cutoffMs : Math.max(readFloorMs, cutoffMs);
+        return {
+          id: p.id,
+          floorMs,
+          hiddenMessageIds: hiding.hiddenMessageIds.length > 0 ? new Set(hiding.hiddenMessageIds) : null,
+        };
+      });
+
+      // Only a reader who hid INDIVIDUAL messages needs the rows to carry their ids.
+      // Everyone else — the overwhelming majority — keeps the exact projection this
+      // method has always fetched.
+      const needsMessageIds = floors.some((f) => f.hiddenMessageIds !== null);
 
       // A null floor counts every candidate message (no lower bound). If ANY participant
       // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
@@ -378,15 +440,17 @@ export class MessageReadStatusService {
       // ONE query for all participants. No `senderId` filter here — the "exclude my own
       // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
       // walks the index in order, so per-sender buckets stay ascending.
-      const rows = await this.prisma.message.findMany({
+      const rows = (await this.prisma.message.findMany({
         where: {
           conversationId,
           deletedAt: null,
           ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
         },
-        select: { createdAt: true, senderId: true },
+        select: needsMessageIds
+          ? { id: true, createdAt: true, senderId: true }
+          : { createdAt: true, senderId: true },
         orderBy: { createdAt: "asc" },
-      });
+      })) as Array<{ id?: string; createdAt: Date; senderId: string }>;
 
       // All candidate timestamps (ascending) + per-sender buckets, so each participant's
       // own messages can be subtracted. `countAbove` is a binary search that assumes
@@ -424,8 +488,22 @@ export class MessageReadStatusService {
       // unread(p) = (all messages after p's floor) − (p's OWN messages after p's floor).
       // Both `allTimestamps` and each bucket are sorted ascending above, so the same
       // binary search is valid on either.
+      //
+      // A reader who hid individual messages cannot be counted by a bound — set
+      // membership is not an interval — so they fall to a linear pass over the same
+      // rows. `hiddenMessageIds !== null` implies `needsMessageIds`, so `r.id` is
+      // present exactly where it is read.
+      const countExcludingHidden = (f: (typeof floors)[number], hidden: Set<string>): number =>
+        rows.filter(
+          (r) =>
+            r.senderId !== f.id &&
+            (f.floorMs === null || r.createdAt.getTime() > f.floorMs) &&
+            !hidden.has(r.id as string)
+        ).length;
+
       return new Map(
         floors.map((f) => {
+          if (f.hiddenMessageIds !== null) return [f.id, countExcludingHidden(f, f.hiddenMessageIds)];
           const own = bySender.get(f.id) ?? [];
           return [f.id, countAbove(allTimestamps, f.floorMs) - countAbove(own, f.floorMs)];
         })
@@ -443,6 +521,11 @@ export class MessageReadStatusService {
    *   2. cursor.findMany       — batch tous les cursors (1 query)
    *   3. message.count × N    — comptage en parallèle (N queries)
    * Returns 0 for any conversation in which the participant cannot be resolved.
+   *
+   * Le masquage personnel est chargé PAR CONVERSATION (2 requêtes batchées) :
+   * une coupure d'historique appartient à un couple (utilisateur, conversation),
+   * jamais à l'utilisateur seul. Appliquer la coupure d'une conversation aux
+   * autres viderait des badges qui n'ont rien à se reprocher.
    */
   async getUnreadCountsForUser(
     userId: string,
@@ -460,7 +543,7 @@ export class MessageReadStatusService {
           isActive: true,
           OR: [{ id: userId }, { userId }],
         },
-        select: { id: true, conversationId: true, joinedAt: true },
+        select: { id: true, userId: true, conversationId: true, joinedAt: true },
       });
 
       if (participants.length === 0) return unreadCounts;
@@ -470,6 +553,16 @@ export class MessageReadStatusService {
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { participantId: { in: participantIds } },
         select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+      });
+
+      // `userId` peut être un Participant.id (appelant anonyme) : la résolution
+      // passe par la ligne Participant, seule à connaître le compte réel. Un
+      // participant sans compte ne possède ni préférence ni suppression
+      // personnelle — la recherche est alors sautée entièrement.
+      const resolvedUserId = participants.find((p) => p.userId)?.userId ?? null;
+      const hidingByConversation = await loadPersonalHistoryHidingByConversation(this.prisma, {
+        userId: resolvedUserId,
+        conversationIds: participants.map((p) => p.conversationId),
       });
       // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
       // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
@@ -484,12 +577,15 @@ export class MessageReadStatusService {
           const cursorFloor = cursorMap.get(p.id) ?? null;
           const floor: Date | null = cursorFloor ?? p.joinedAt ?? null;
           const count = await this.prisma.message.count({
-            where: {
-              conversationId: p.conversationId,
-              deletedAt: null,
-              senderId: { not: p.id },
-              ...(floor ? { createdAt: { gt: floor } } : {}),
-            },
+            where: applyPersonalHistoryHiding(
+              {
+                conversationId: p.conversationId,
+                deletedAt: null,
+                senderId: { not: p.id },
+                ...(floor ? { createdAt: { gt: floor } } : {}),
+              },
+              hidingByConversation.get(p.conversationId) ?? NO_PERSONAL_HIDING
+            ),
           });
           unreadCounts.set(p.conversationId, count);
         })

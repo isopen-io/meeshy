@@ -22,6 +22,7 @@ import {
   applyPersonalHistoryHiding,
   loadPersonalHistoryHiding,
   loadPersonalHistoryHidingByConversation,
+  loadPersonalHistoryHidingByUser,
   type PersonalHistoryHiding,
 } from '../../../services/personalHistoryFilter';
 
@@ -30,8 +31,8 @@ const CONV_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
 const makePrisma = (over: {
   prefs?: { clearHistoryBefore: Date | null } | null;
-  prefsMany?: Array<{ conversationId: string; clearHistoryBefore: Date | null }>;
-  deletions?: Array<{ messageId: string; message?: { conversationId: string } }>;
+  prefsMany?: Array<{ userId?: string; conversationId?: string; clearHistoryBefore: Date | null }>;
+  deletions?: Array<{ userId?: string; messageId: string; message?: { conversationId: string } }>;
 }) => ({
   userConversationPreferences: {
     findFirst: jest.fn(async (_args: unknown) => over.prefs ?? null),
@@ -274,6 +275,86 @@ describe('loadPersonalHistoryHidingByConversation', () => {
 
     expect(map.size).toBe(0);
     expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadPersonalHistoryHidingByUser', () => {
+  const OTHER_USER = 'cccccccccccccccccccccccc';
+
+  it('returns one entry per user that hides something in this conversation', async () => {
+    const cutoff = new Date('2026-01-01T00:00:00.000Z');
+    const prisma = makePrisma({
+      prefsMany: [{ userId: USER_ID, clearHistoryBefore: cutoff }],
+      deletions: [{ userId: OTHER_USER, messageId: 'm1' }],
+    });
+
+    const map = await loadPersonalHistoryHidingByUser(prisma as never, {
+      userIds: [USER_ID, OTHER_USER],
+      conversationId: CONV_ID,
+    });
+
+    expect(map.get(USER_ID)).toEqual({ clearHistoryBefore: cutoff, hiddenMessageIds: [] });
+    expect(map.get(OTHER_USER)).toEqual({ clearHistoryBefore: null, hiddenMessageIds: ['m1'] });
+  });
+
+  it('leaves a user who hides nothing out of the map entirely', async () => {
+    const prisma = makePrisma({ prefsMany: [], deletions: [] });
+
+    const map = await loadPersonalHistoryHidingByUser(prisma as never, {
+      userIds: [USER_ID],
+      conversationId: CONV_ID,
+    });
+
+    expect(map.size).toBe(0);
+  });
+
+  it('ignores anonymous participants and queries nothing when they are the only audience', async () => {
+    const prisma = makePrisma({});
+
+    const map = await loadPersonalHistoryHidingByUser(prisma as never, {
+      userIds: [null, undefined],
+      conversationId: CONV_ID,
+    });
+
+    expect(map.size).toBe(0);
+    expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+  });
+
+  it('scopes both lookups to this conversation and these users', async () => {
+    const prisma = makePrisma({});
+
+    await loadPersonalHistoryHidingByUser(prisma as never, {
+      userIds: [USER_ID, null],
+      conversationId: CONV_ID,
+    });
+
+    expect(prisma.userConversationPreferences.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: CONV_ID,
+          userId: { in: [USER_ID] },
+          clearHistoryBefore: { not: null },
+        },
+      })
+    );
+    expect(prisma.userMessageDeletion.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: { in: [USER_ID] }, message: { conversationId: CONV_ID } },
+      })
+    );
+  });
+
+  it('degrades to an empty map rather than failing the fan-out when the lookup throws', async () => {
+    const prisma = makePrisma({});
+    prisma.userMessageDeletion.findMany.mockRejectedValue(new Error('mongo down') as never);
+
+    const map = await loadPersonalHistoryHidingByUser(prisma as never, {
+      userIds: [USER_ID],
+      conversationId: CONV_ID,
+    });
+
+    expect(map.size).toBe(0);
   });
 });
 

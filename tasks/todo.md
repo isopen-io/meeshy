@@ -1,3 +1,118 @@
+# Tête instruite pour le cycle 110 — un compteur n'est pas un résumé de la liste, c'est une SECONDE réponse à la même question
+
+*Le cycle 109 a pris l'item 3 que le 108 avait désigné « le lot naturel immédiat » — les compteurs
+de non-lus ignorent le masquage personnel — et l'a trouvé exact. Mais en le corrigeant, il est tombé
+sur ce qui rendait ce défaut différent de celui du cycle 108, et pire à réparer à moitié.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 109 ajoute — le quatorzième membre de la famille
+>
+> Le cycle 107 : *la réponse juste est un DÉNOMBREMENT, jamais un exemple.*
+> Le cycle 108 : *une fonctionnalité dont personne ne lit l'écriture RÉPOND SUCCÈS.*
+> Le cycle 109 trouve le cas où le dénombrement est bon mais où le nombre lui-même est un second
+> lecteur, oublié parce qu'il ne rend aucun contenu :
+>
+> **Un COMPTEUR est une réponse à la même question que la liste, donnée par un autre chemin. Tant
+> qu'il ne dit pas la même chose qu'elle, il n'est pas « approximatif » — il est FAUX, et il l'est
+> d'une façon que l'utilisateur ne peut pas corriger : on éteint un badge en défilant, et il n'y a
+> plus rien à défiler.** `getUnreadCount`, `getUnreadCountsForUser` et
+> `getUnreadCountsForParticipants` comptaient avec pour seul plancher le curseur de lecture. Effacer
+> un historique contenant cinq messages non lus laissait un badge à 5 sur une liste vide.
+>
+> **Le corollaire, et la vraie raison de ne pas découper ce lot** : les trois compteurs sont TROIS
+> CHEMINS vers le MÊME badge — la liste de conversations, le retour d'un marquage de lecture, et la
+> poussée `conversation:unread-updated` à chaque message. En corriger un seul aurait remplacé un
+> badge faux mais STABLE par un badge dont la valeur dépend du dernier chemin ayant parlé : la liste
+> à 0, la poussée temps réel à 6 au message suivant. **Un défaut réparti sur N chemins équivalents
+> se répare sur les N ou sur aucun ; une réparation partielle troque une erreur contre une
+> incohérence, et l'incohérence est le pire des deux.**
+>
+> **Le symptôme à reconnaître** : un dénombrement de surfaces qui balaie ce qui rend du CONTENU
+> (`findMany` de messages) et laisse dehors ce qui rend un NOMBRE sur la même donnée. Le nombre est
+> une projection de la liste ; toute règle qui vaut pour l'une vaut pour l'autre.
+
+## Livré au cycle 109 — les trois compteurs de non-lus comptent ce que la liste montre
+
+**Le défaut.** `SERVICE_LAYER_UNCOVERED`, écrit par le cycle 108, nommait le cas : la couche service
+était hors du périmètre du câblage, et `MessageReadStatusService` y comptait sept lectures dont
+trois de non-lus, toutes plancher-curseur et rien d'autre. Ni `UserMessageDeletion` ni
+`UserConversationPreferences.clearHistoryBefore` n'y entraient.
+
+**Livré** :
+
+- `loadPersonalHistoryHidingByUser` — image miroir de `loadPersonalHistoryHidingByConversation` :
+  UNE conversation, PLUSIEURS utilisateurs, la forme dont la diffusion temps réel a besoin. Même
+  contrat, même posture d'échec (dégrader vers « rien de masqué », jamais faire échouer une
+  lecture), même convention d'absence (`map.get(id) ?? NO_PERSONAL_HIDING`). Une conversation dont
+  tous les participants sont anonymes — la forme normale derrière un lien de partage — n'émet
+  aucune requête.
+- `exclusiveFloorMsFor` — la coupure d'historique reformulée en borne basse EXCLUSIVE, en
+  millisecondes entières. `applyPersonalHistoryHiding` émet `createdAt: { gte: cutoff }` tandis que
+  le plancher de lecture est strict (`> lastRead`) ; les deux bornes ne fusionnent en un seul
+  `Math.max` qu'une fois ramenées au même langage. `Date#getTime()` étant un entier de
+  millisecondes, `>= c` **est** `> c − 1` — une égalité, pas une approximation.
+- Les deux chemins qui comptent en base (`getUnreadCount`, `getUnreadCountsForUser`) passent leur
+  `where` par `applyPersonalHistoryHiding`, donc héritent de son invariant : ce filtre ne peut que
+  RÉTRÉCIR. `getUnreadCountsForUser` charge le masquage **par conversation** : une coupure
+  appartient au couple (utilisateur, conversation), jamais à l'utilisateur seul, et l'appliquer
+  ailleurs viderait des badges irréprochables.
+- Le chemin CHAUD (`getUnreadCountsForParticipants`, une fois par `message:new` et par
+  destinataire) se scinde selon ce que coûte chaque moitié du masquage. Une **coupure
+  d'historique** n'est qu'un plancher plus strict : elle se replie dans le `floorMs` du
+  participant, qui reste donc sur la recherche binaire partagée **et remonte la borne basse de la
+  requête** — strictement moins de travail qu'avant. Des **messages masqués un par un** ne
+  s'expriment pas en borne : ces participants-là, et eux seuls, prennent une passe linéaire, et eux
+  seuls font sélectionner les `id` de messages. Les deux requêtes de masquage partent dans le même
+  `Promise.all` que les curseurs : deux requêtes indexées de plus, zéro latence de plus.
+
+**Le dénombrement suit.** `SERVICE_LAYER_UNCOVERED` (une table de nombres) devient
+`SERVICE_LAYER_SURFACES` (la même classification que les routes : applique avec son compte
+d'applications, ou exempt avec sa raison écrite) ; `ConversationMessageStatsService` et
+`ExpiredMessagesCleanupService` y gagnent la leur. Et parce que le troisième compteur applique le
+masquage **en mémoire** — aucun `applyPersonalHistoryHiding` à voir pour un balayage textuel —
+`IN_MEMORY_HIDING_SURFACES` le déclare séparément, exactement comme les aperçus imbriqués : la forme
+qui échappe au dénombrement naïf est celle qu'il faut déclarer à la main.
+
+**Preuve RED exécutée** (environnement TypeScript, contrairement aux lots Swift) : suite rouge avant
+le module — 15 témoins de comportement + 5 sur le nouveau chargeur, dont un échec de compilation sur
+la signature élargie. Puis **deux mutations vérifiées** : retirer la passe linéaire et la fusion de
+coupure du chemin chaud fait tomber 4 témoins ; retirer l'`applyPersonalHistoryHiding` de
+`getUnreadCount` en fait tomber 3 (2 de comportement + la dérive du dénombrement, 2 applications
+déclarées contre 1 trouvée). Suite gateway complète : **699 suites, 17184 tests, verts** ;
+`tsc --noEmit` propre.
+
+## Constats du cycle 109, NON traités — le lot naturel du cycle 110
+
+1. **Le badge APNs/FCM compte des NOTIFICATIONS, pas des messages.** `NotificationService` remplit
+   `aps.badge` depuis `prisma.notification.count(visibleNotificationsWhere(...))`. Effacer un
+   historique ou supprimer un message pour soi ne touche pas la table `Notification` : l'icône de
+   l'app peut donc porter un nombre qu'aucune conversation ne justifie, et c'est le SEUL compteur
+   visible quand l'app est fermée. C'est la même famille que le lot livré ici, sur une autre table
+   — et il faut trancher un point de produit avant de coder : une notification déjà REÇUE pour un
+   message ensuite masqué doit-elle disparaître, ou reste-t-elle l'archive d'un évènement qui a bien
+   eu lieu ?
+2. **Reconduits du 108, inchangés** : aucun client n'appelle `delete-for-me` / `clear-history`
+   (entrée produit à câbler — décision de produit, pas travail mécanique) ; `userPreferences` du
+   wire déclare `isDeletedForUser: boolean` là où le select rend `deletedForUserAt: DateTime`
+   (fast-json-stringify strippe en silence, et c'est une violation de la règle « pas de paire
+   booléen + timestamp ») ; `lastMessageAt` non ajusté quand l'aperçu est masqué (demanderait un tri
+   PAR LECTEUR) ; flux `deleted` de `/sync` non filtré à dessein ; `me/export.ts` exempt à dessein.
+3. **Reconduits plus anciens, inchangés** : catalogue de chaînes / destinations d'URL des widgets
+   iOS ; `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans producteur ; l'épingle qui
+   n'atteint pas la 3ᵉ audience ; **Socket.IO sans adapter Redis** (le plus gros risque temps-réel
+   encore ouvert : en multi-instance, un évènement ne franchit pas la frontière du process) ; le
+   commentaire de `handleMessage` qui affirme à tort que REST y passe ; la projection des accusés en
+   trois exemplaires inline ; `TranslationStatus` sans référent in-repo ; l'audit d'adressage
+   **Android hors `MessageApi`**.
+
 # Tête instruite pour le cycle 109 — sept maillons sur huit ne font pas une fonctionnalité, ils font une réponse qui ment
 
 *Le cycle 108 a repris la liste de reconduits du 107 (item 8) et y a trouvé, sous « `clearHistoryBefore`
