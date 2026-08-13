@@ -77,6 +77,20 @@ enum DeepLinkParser {
         userSegments.contains(segment)
     }
 
+    /// Value of a query item, trimmed, or `nil` when absent/blank.
+    ///
+    /// Shared by the parser and `DeepLinkRouter` so the two read the SAME
+    /// query key the same way — the widget and App Shortcut surfaces carry
+    /// their payload in the query string, not in the path.
+    static func queryValue(_ name: String, in url: URL) -> String? {
+        let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == name })?
+            .value
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : nil
+    }
+
     /// Parse any URL into a deep link destination.
     ///
     /// Universal Links (https://meeshy.me/...):
@@ -94,6 +108,9 @@ enum DeepLinkParser {
     /// - `meeshy://me`, `meeshy://links`
     /// - `meeshy://u/{username}`, `meeshy://users/{username}`
     /// - `meeshy://c/{id}`
+    /// - `meeshy://contact/{conversationId}`            (widget Favoris)
+    /// - `meeshy://quickreply/{conversationId}?text=…`  (widget Réponse rapide)
+    /// - `meeshy://send?contactId=…&message=…`          (App Shortcut Siri)
     /// - `meeshy://post/{id}`, `meeshy://p/{id}`
     /// - `meeshy://feeds/post/{id}`, `meeshy://feeds/p/{id}`
     /// - `meeshy://story/{id}`, `meeshy://stories/{id}`, `meeshy://s/{id}`
@@ -180,6 +197,27 @@ enum DeepLinkParser {
             if components.count >= 2 { return .chatLink(identifier: components[1]) }
         case "c", "conversation":
             if components.count >= 2 { return .conversation(id: components[1]) }
+        case "contact":
+            // meeshy://contact/{id} — ligne du widget Favoris. L'identifiant
+            // est celui d'une CONVERSATION, pas d'un utilisateur :
+            // `WidgetDataManager.publishFavoriteContacts` écrit `conv.id` dans
+            // `FavoriteContact.id`. Le nom du host décrit ce que la ligne
+            // MONTRE, pas ce qu'elle porte.
+            if components.count >= 2 { return .conversation(id: components[1]) }
+        case "quickreply":
+            // meeshy://quickreply/{conversationId}?text=… — boutons du widget
+            // Réponse rapide. Le texte est déposé en brouillon par le ROUTEUR
+            // (`DeepLinkRouter.stageDraft`) ; le parseur reste pur et ne rend
+            // que la destination.
+            if components.count >= 2 { return .conversation(id: components[1]) }
+        case "send":
+            // meeshy://send?contactId=…&message=… — App Shortcut « Send
+            // Message ». `ContactEntity.id` provient de la même clé App Group
+            // `favorite_contacts` que le widget : c'est donc, là aussi, un
+            // identifiant de conversation.
+            if let conversationId = queryValue("contactId", in: url) {
+                return .conversation(id: conversationId)
+            }
         case "post", "p":
             // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
             // shortcut to a post detail view.
@@ -319,7 +357,14 @@ final class DeepLinkRouter: ObservableObject {
 
     @Published var pendingDeepLink: DeepLink?
 
-    init() {}
+    /// Brouillons par conversation. Injecté pour que le dépôt du texte d'un
+    /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
+    /// soit observable en test sans toucher aux `UserDefaults` du simulateur.
+    private let drafts: DraftStore
+
+    init(drafts: DraftStore = .shared) {
+        self.drafts = drafts
+    }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
 
@@ -535,6 +580,35 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .conversation(id: conversationId)
             return true
 
+        case "contact":
+            // meeshy://contact/{id} — ligne du widget Favoris. L'identifiant
+            // porté est celui d'une CONVERSATION (cf. `DeepLinkParser`), donc
+            // la destination est la même que `meeshy://c/{id}`.
+            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "quickreply":
+            // meeshy://quickreply/{conversationId}?text=… — les quatre boutons
+            // du widget Réponse rapide. Le texte n'est pas ENVOYÉ : il est
+            // déposé en brouillon et le composer s'ouvre pré-rempli. Envoyer
+            // sans confirmation ferait d'un tap accidenté sur l'écran d'accueil
+            // un message irrattrapable.
+            guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            stageDraft(DeepLinkParser.queryValue("text", in: url), for: conversationId)
+            pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "send":
+            // meeshy://send?contactId=…&message=… — App Shortcut « Send
+            // Message » (Siri / Spotlight / Raccourcis). Même dépôt de
+            // brouillon que la réponse rapide, même refus d'envoyer sans
+            // confirmation : Siri a pu mal transcrire la dictée.
+            guard let conversationId = DeepLinkParser.queryValue("contactId", in: url) else { return false }
+            stageDraft(DeepLinkParser.queryValue("message", in: url), for: conversationId)
+            pendingDeepLink = .conversation(id: conversationId)
+            return true
+
         case "me":
             // meeshy://me — single-host shortcut to own profile.
             pendingDeepLink = .ownProfile
@@ -581,6 +655,22 @@ final class DeepLinkRouter: ObservableObject {
         default:
             return false
         }
+    }
+
+    /// Dépose le texte d'un raccourci dans le brouillon de la conversation.
+    /// `ConversationView` le relit à l'ouverture (`DraftStore.load` quand le
+    /// champ de saisie est vide) : aucune nouvelle voie de pré-remplissage
+    /// n'est introduite, c'est le mécanisme existant qui sert.
+    ///
+    /// **Ne remplace JAMAIS un brouillon qui porte déjà du texte.** Ce texte
+    /// est de la saisie utilisateur non envoyée ; un tap sur « OK » depuis
+    /// l'écran d'accueil dit ce que l'utilisateur veut écrire, pas qu'il
+    /// consent à détruire ce qu'il avait commencé. Dans ce cas on navigue
+    /// seulement — il voit son brouillon et tranche lui-même.
+    private func stageDraft(_ text: String?, for conversationId: String) {
+        guard let text else { return }
+        if let existing = drafts.load(for: conversationId), existing.hasDraftText { return }
+        drafts.saveText(text, for: conversationId)
     }
 
     // MARK: - Consume

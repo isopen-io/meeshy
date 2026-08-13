@@ -156,7 +156,9 @@ export async function emitConversationPreviewUpdate(
       updatedBy: { id: updatedByUserId },
       lastMessageAt: latest?.createdAt ?? null,
       lastMessageId: latest?.id ?? null,
-      lastMessagePreview: latest?.content ?? null,
+      // `lastMessagePreview` n'est PAS ici : il sort de
+      // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
+      // comme elle.
       senderId: latest?.senderId ?? null,
       updatedAt: new Date().toISOString(),
       ...(place ? { location: place } : {}),

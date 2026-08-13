@@ -2294,7 +2294,8 @@ export class MeeshySocketIOManager {
             updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
             lastMessageAt: message.createdAt || new Date(),
             lastMessageId: message.id,
-            lastMessagePreview: message.content,
+            // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
+            // avec le reste de la paire, sous le même plafond qu'elle.
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };

@@ -409,6 +409,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { filterMessagePayloadForLanguages as filterMessagePayloadForLanguagesSpy } from '../utils/message-payload-filter';
+import { LAST_MESSAGE_PREVIEW_MAX_LENGTH } from '../../routes/conversations/utils/last-message-preview';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -2122,6 +2123,33 @@ describe('MeeshySocketIOManager', () => {
       const fr = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-fr'));
       expect(fr.lastMessageTranslations).toBeNull();
       expect(fr.lastMessagePreview).toBe('Hello');
+    });
+
+    // Le chemin d'ENVOI est le plus chaud du service : ce payload part une fois
+    // PAR participant, à chaque message. Il portait le contenu ENTIER là où la
+    // liste REST (`GET /conversations`) et la carte de traductions du MÊME
+    // payload plafonnent à 300 points de code.
+    it('caps the base preview it fans to every participant on the send path', async () => {
+      const huge = 'a'.repeat(LAST_MESSAGE_PREVIEW_MAX_LENGTH + 500);
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: huge,
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const payload = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-recipient'));
+      expect(payload.lastMessagePreview).toHaveLength(LAST_MESSAGE_PREVIEW_MAX_LENGTH);
     });
 
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {

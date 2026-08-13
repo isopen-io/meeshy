@@ -9,6 +9,15 @@ import type { MessageTranslationJSON } from '../../../utils/translation-transfor
  * (CoreText cost is O(total length), `lineLimit` does not bound it).
  * Truncation iterates code points, never splitting a surrogate pair.
  * The full content still flows through GET /conversations/:id/messages.
+ *
+ * Le plafond ne vaut pas que pour la LISTE REST : il gouverne toute surface
+ * d'aperçu de ligne, temps réel compris. Les trois émetteurs de
+ * `conversation:updated` (envoi WS, envoi REST/ZMQ, édition/suppression) le
+ * respectent en passant par `resolveLastMessagePreviewPrism`
+ * (`socketio/utils/lastMessagePreviewPrism.ts`), qui rend l'aperçu de base ET
+ * sa carte de traductions plafonnés ensemble. Un nouvel émetteur qui composerait
+ * `lastMessagePreview` à la main rouvrirait le défaut : le plafond redeviendrait
+ * fonction de la langue du lecteur.
  */
 export const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 300;
 
