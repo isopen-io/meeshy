@@ -235,8 +235,18 @@ export class PostReactionHandler {
 
       this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent)
         .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: targetPostId }));
-      // _createPostReactionNotification handles errors internally; void to be explicit.
-      void this._createPostReactionNotification(targetPostId, validated.emoji, userId);
+      // Le `.catch` est OBLIGATOIRE, exactement comme sur le broadcast juste
+      // au-dessus et sur le jumeau `CommentReactionHandler`. Le lot est détaché :
+      // le `try/catch` de cette méthode ne le couvre pas, et un rejet que
+      // personne n'écoute termine le process sous le
+      // `--unhandled-rejections=throw` par défaut de Node 22 — toutes les
+      // WebSockets de la gateway tombées pour un aléa DB sur un canal latéral.
+      // Le commentaire précédent affirmait que le callee « gère ses erreurs en
+      // interne » : il n'en gère que la MOITIÉ (l'appel de notification porte un
+      // `.catch`, le `prisma.post.findUnique` qui le précède est nu). Garantir
+      // la promesse ICI ne dépend d'aucune promesse du callee.
+      this._createPostReactionNotification(targetPostId, validated.emoji, userId)
+        .catch(err => this.logger.error('post reaction notification failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

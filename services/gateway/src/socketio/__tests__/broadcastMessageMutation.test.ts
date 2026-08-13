@@ -174,6 +174,51 @@ describe('broadcastMessageMutation', () => {
     // The live emit happened before the failing channel — it is not lost.
     expect(emitted.some((e) => e.event === SERVER_EVENTS.MESSAGE_DELETED)).toBe(true);
   });
+
+  /**
+   * Le témoin au-dessus ne couvre que la moitié SYNCHRONE : un `enqueue` qui
+   * `throw` avant de rendre sa promesse, ce que le `try/catch` attrape. Une
+   * implémentation `async` qui REJETTE passe à côté — le `try/catch` ne voit
+   * rien, la promesse est détachée par `void`, et Node 22
+   * (`--unhandled-rejections=throw` par défaut) termine le process.
+   *
+   * `MessageMutationManager` est une interface STRUCTURELLE : tout ce qui porte
+   * la méthode est un manager valide, donc « l'implémentation actuelle avale
+   * ses erreurs » n'est pas une garantie que ce fichier possède. Le jumeau
+   * `broadcastReactionMutation` la possède, lui, via
+   * `Promise.resolve(...).catch(...)` sur l'appel identique — ce témoin est
+   * l'exact miroir de cette garantie, du côté des messages.
+   */
+  it('reports, but does not abandon, an enqueue that rejects asynchronously', async () => {
+    const emitted: Emitted[] = [];
+    const onError = jest.fn();
+    const enqueue = jest.fn(async (_params: any) => {
+      throw new Error('redis unreachable');
+    });
+
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await broadcastMessageMutation({
+        prisma: makePrisma(),
+        manager: makeManager(emitted, { enqueue }),
+        ...base,
+        eventType: 'deleted',
+        payload: {},
+        onError,
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+
+    expect(unhandled).toEqual([]);
+    expect(onError).toHaveBeenCalled();
+    // Le canal latéral a échoué ; l'émission live reste livrée.
+    expect(emitted.some((e) => e.event === SERVER_EVENTS.MESSAGE_DELETED)).toBe(true);
+  });
 });
 
 /**

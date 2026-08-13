@@ -421,6 +421,50 @@ describe('PostReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
+    /**
+     * Le lot de notification est DÉTACHÉ (fire-and-forget) : le `try/catch` de
+     * `handleAddReaction` ne peut donc rien pour lui, et l'ACK de succès est
+     * déjà parti. Si sa promesse rejette sans que personne ne l'écoute, Node 22
+     * (`--unhandled-rejections=throw` par défaut) termine le PROCESS — soit
+     * toutes les WebSockets de la gateway tombées pour un aléa DB sur un
+     * chemin latéral.
+     *
+     * Le test au-dessus ne le prouve pas : il fait rejeter
+     * `createPostLikeNotification`, qui est le SEUL appel du callee portant
+     * déjà un `.catch`. Le `prisma.post.findUnique` qui le précède, lui, est
+     * nu — c'est la moitié du callee qu'aucun témoin ne regardait, et c'est
+     * elle qui rejette quand MongoDB bascule ou que le pool est saturé.
+     *
+     * Le témoin est donc l'événement `unhandledRejection` lui-même, et non la
+     * valeur de retour : un `void` sur une promesse rejetée résout quand même
+     * `handleAddReaction`. On sonde après deux tours de boucle, Node ne
+     * signalant le rejet non traité qu'une fois la file de microtâches vidée.
+     */
+    it('n\'abandonne aucun rejet du lot de notification quand la lecture du post échoue', async () => {
+      const { handler } = buildHandler({
+        prisma: {
+          post: {
+            findUnique: jest.fn<any>().mockRejectedValue(new Error('replica set stepped down')),
+          },
+        },
+      });
+      const callback = jest.fn<any>();
+
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        await handler.handleAddReaction(makeSocket(), { postId: POST_ID, emoji: '👍' }, callback);
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+
+      expect(unhandled).toEqual([]);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
     it('does not throw when no callback provided', async () => {
       const { handler } = buildHandler();
 
