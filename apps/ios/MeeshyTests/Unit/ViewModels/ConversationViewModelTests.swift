@@ -1533,9 +1533,8 @@ final class ConversationViewModelTests: XCTestCase {
         // `makeSUT` appelle `start()`, comme le `.task` de la vue.
         let sut = makeSUT(unreadCount: 99)
 
-        withExtendedLifetime(sut) {
-            wait(for: [marked], timeout: 1.0)
-        }
+        wait(for: [marked], timeout: 1.0)
+        XCTAssertEqual(sut.conversationId, expectedId)
     }
 
     // MARK: - markAsRead Tests
