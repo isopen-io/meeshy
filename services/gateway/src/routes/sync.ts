@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { SequenceService } from '../services/SequenceService';
 import { computeETag, ifNoneMatchMatches } from '../utils/etag';
+import { loadPersonalHistoryHidingByConversation } from '../services/personalHistoryFilter';
 
 /**
  * SyncEngine unifié (spec §7, sous-tâche A3.1) — endpoint delta `/sync`
@@ -275,9 +276,28 @@ async function syncMessages(opts: {
   const changedTruncated = changedRows.length > cap;
   const changedPage = changedTruncated ? changedRows.slice(0, cap) : changedRows;
 
+  // Le masquage personnel s'applique APRÈS le keyset, jamais dedans : le
+  // curseur `(updatedAt, id)` doit rester ancré sur la dernière ligne LUE,
+  // sinon une page entièrement masquée ferait reculer la position et la
+  // synchronisation boucherait sur place. Filtrer la livraison suffit — c'est
+  // le seul stream où un message masqué reviendrait sans que l'utilisateur ait
+  // rien demandé, la synchronisation étant déclenchée par l'app, pas par lui.
+  const hidingByConversation = await loadPersonalHistoryHidingByConversation(prisma, {
+    userId,
+    conversationIds,
+  });
+  const visible = hidingByConversation.size === 0
+    ? changedPage
+    : changedPage.filter((m) => {
+        const hiding = hidingByConversation.get(m.conversationId);
+        if (!hiding) return true;
+        if (hiding.hiddenMessageIds.includes(m.id)) return false;
+        return hiding.clearHistoryBefore === null || m.createdAt >= hiding.clearHistoryBefore;
+      });
+
   // added = créé après `since` ; modified = pré-existant mais modifié.
-  const added = changedPage.filter((m) => m.createdAt > sinceDate);
-  const modified = changedPage.filter((m) => m.createdAt <= sinceDate);
+  const added = visible.filter((m) => m.createdAt > sinceDate);
+  const modified = visible.filter((m) => m.createdAt <= sinceDate);
 
   // DELETED — tombstones supprimés depuis `since`. Même keyset `(deletedAt, id)`
   // avec cap+1 : le stream tombstones est désormais paginé (A3.1 le tronquait

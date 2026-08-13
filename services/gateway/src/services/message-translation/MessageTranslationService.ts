@@ -848,7 +848,16 @@ export class MessageTranslationService extends EventEmitter {
             displayName: true,
             type: true,
             language: true,
-            user: true
+            user: {
+              select: {
+                id: true,
+                username: true,
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true,
+                deviceLocale: true
+              }
+            }
           }
         })
       ]);
@@ -864,7 +873,7 @@ export class MessageTranslationService extends EventEmitter {
       for (const participant of participants) {
         if (participant.type === 'user' && participant.user) {
           const u = participant.user;
-          logger.info(
+          logger.debug(
             `   [LANG-TRACE] Registered: ${u.username} (${u.id}) | ` +
             `systemLang=${u.systemLanguage} | regionalLang=${u.regionalLanguage} | ` +
             `customDest=${u.customDestinationLanguage ?? '-'} | deviceLocale=${u.deviceLocale ?? '-'}`
@@ -883,7 +892,7 @@ export class MessageTranslationService extends EventEmitter {
           }
         } else {
           // Anonymous or bot participant — use participant.language
-          logger.info(
+          logger.debug(
             `   [LANG-TRACE] ${participant.type}: ${participant.displayName} (${participant.id}) | ` +
             `language=${participant.language}`
           );

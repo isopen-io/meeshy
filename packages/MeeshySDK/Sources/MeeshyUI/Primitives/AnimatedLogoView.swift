@@ -82,6 +82,5 @@ public struct AnimatedLogoView: View {
                 breathe = false
             }
         }
-        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: breathe)
     }
 }

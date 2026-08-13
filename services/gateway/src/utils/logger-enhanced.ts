@@ -269,6 +269,9 @@ export const enhancedLogger = {
    * Trace level - very detailed, disabled in production
    */
   trace(message: string, context?: Record<string, any>) {
+    if (!logger.isLevelEnabled('trace')) {
+      return;
+    }
     if (shouldSample('trace')) {
       logger.trace(context ? redactPII(context) : {}, message);
     }
@@ -278,6 +281,9 @@ export const enhancedLogger = {
    * Debug level - detailed information for debugging
    */
   debug(message: string, context?: Record<string, any>) {
+    if (!logger.isLevelEnabled('debug')) {
+      return;
+    }
     if (shouldSample('debug')) {
       logger.debug(context ? redactPII(context) : {}, message);
     }
@@ -338,11 +344,17 @@ export const enhancedLogger = {
     // Return enhanced logger interface wrapping the child logger
     return {
       trace(message: string, context?: Record<string, any>) {
+        if (!childLogger.isLevelEnabled('trace')) {
+          return;
+        }
         if (shouldSample('trace')) {
           childLogger.trace(context ? redactPII(context) : {}, message);
         }
       },
       debug(message: string, context?: Record<string, any>) {
+        if (!childLogger.isLevelEnabled('debug')) {
+          return;
+        }
         if (shouldSample('debug')) {
           childLogger.debug(context ? redactPII(context) : {}, message);
         }

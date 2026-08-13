@@ -262,6 +262,10 @@ public final class AppDatabase: @unchecked Sendable {
         // GRDBCacheStore persists. Defined in `SearchIndexMigrations`.
         SearchIndexMigrations.registerAll(in: &migrator)
 
+        migrator.registerMigration("v7_cache_entries_itemId_index") { db in
+            try db.create(index: "idx_cache_entries_itemId", on: "cache_entries", columns: ["itemId"])
+        }
+
         try migrator.migrate(writer)
     }
 }

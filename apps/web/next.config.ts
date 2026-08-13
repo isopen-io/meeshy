@@ -40,16 +40,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  
-  // Optimisation des bundles
-  modularizeImports: {
-    'lucide-react': {
-      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
-      skipDefaultConversion: true,
-    },
-  },
-  
-  
+
   // Configuration des images
   images: {
     remotePatterns: [

@@ -181,6 +181,49 @@ E2EE à traiter via Insertable Streams / `FrameEncrypting`.
 - Le reste de l'analyse (mesh iOS mono-PC, états scalaires web W4/W5, UI de
   groupe, SFU) demeure inchangé et à traiter.
 
+## Mise à jour 2026-08-13 (2) — W4 corrigé (agrégation par pair)
+
+**W4 levé** : `connectionState`/`iceConnectionState` (`use-webrtc-p2p.ts`)
+étaient des `useState` scalaires écrits en dernier-arrivé-gagne par le
+callback `onConnectionStateChange`/`onIceConnectionStateChange` de CHAQUE
+pair. Avec le cap 1:1 encore en vigueur c'était latent (documenté « bug
+latent, même en 1:1 » dans l'analyse d'origine) ; le cap levé (S1 ci-dessus)
+le rend réel : dans un appel de groupe à 3+ pairs, UN pair qui échoue sa
+négociation (retardataire qui rejoint, réseau dégradé) écrasait l'état de
+TOUT l'appel — `toast.error('Connection failed')`, `setError`, et
+`onError?.()` se déclenchaient pour l'appel entier alors que les autres
+pairs restaient connectés.
+
+Fix : deux `Map<participantId, State>` (`connectionStatesRef`,
+`iceConnectionStatesRef`) réduites par un agrégateur à priorité fixe
+(`connected` > `connecting` > `new` > `disconnected` > `closed` > `failed`,
+et l'équivalent ICE avec `completed`/`checking`) — un pair `failed` ne fait
+jamais gagner `'failed'` tant qu'au moins un autre pair est dans un meilleur
+état ; `'failed'` ne peut gagner que lorsque TOUS les pairs connus ont
+échoué. Les effets de bord globaux (toast, `setError`, `onError`) sont
+maintenant gatés sur la TRANSITION de l'agrégat (comparé à la dernière
+valeur émise), pas sur l'événement par-pair — un `'Connected!'` par appel,
+pas par participant qui rejoint. `removeParticipant` retire l'entrée du pair
+parti et ré-agrège (un pair `failed` qui quitte ne laisse plus l'appel bloqué
+`failed`). Signature de l'API du hook inchangée (toujours un scalaire
+`RTCPeerConnectionState`/`RTCIceConnectionState`) — aucun changement côté
+`VideoCallInterface.tsx` / `use-call-analytics-reporter.ts`.
+
+Tests : 7 nouveaux cas dans `use-webrtc-p2p.test.tsx` (« Multi-peer
+connection state aggregation (W4) ») — reste connecté avec un pair en échec,
+ne bascule `failed` qu'une fois TOUS les pairs échoués (idempotent sur un
+second échec), récupère après reconnexion d'un pair, un seul toast succès
+pour l'appel, ré-agrégation correcte après le départ d'un pair, même
+garanties côté ICE. Suite complète `apps/web` (566 suites / 12153 tests)
+verte après le fix.
+
+**W5 (`useActivePeerConnection` ne suit que le 1er pair — qualité/dégradation
+adaptative pilotée par un seul pair en groupe) reste À TRAITER** : contrairement
+à W4, le corriger correctement demande d'étendre `useCallQuality` (aujourd'hui
+`peerConnection: RTCPeerConnection | null` unique) pour agréger les stats de
+TOUS les pairs — pas un simple changement de sélecteur. C'est un chantier de
+la Phase 2 web (UI de groupe), pas un fix ponctuel ; laissé pour cette phase.
+
 ## Récapitulatif
 
 | Capacité demandée | État |

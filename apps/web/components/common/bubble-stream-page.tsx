@@ -21,7 +21,6 @@ import { toast } from 'sonner';
 
 // Hooks personnalisés extraits
 import { useI18n } from '@/hooks/useI18n';
-import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useNotificationActions } from '@/stores/notification-store';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
@@ -91,9 +90,6 @@ export function BubbleStreamPage({
 
   // Limite de caractères
   const maxMessageLength = getMaxMessageLength(user?.role);
-
-  // Fix z-index Radix UI
-  useFixRadixZIndex();
 
   // Notifications
   const { setActiveConversationId } = useNotificationActions();

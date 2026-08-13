@@ -42,6 +42,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -108,10 +109,84 @@ export const conversationUserPreferencesSelect = {
   isMuted: true,
   isArchived: true,
   deletedForUserAt: true,
+  // Lu SERVEUR-side pour masquer l'aperçu d'un historique effacé (cf.
+  // `resolveVisibleLastMessages`). Non déclaré dans le schema wire, donc
+  // strippé de la réponse — même sort que `deletedForUserAt`, qui n'y figure
+  // que sous la forme `isDeletedForUser`.
+  clearHistoryBefore: true,
   tags: true,
   categoryId: true,
   reaction: true,
   customName: true
+} as const;
+
+/**
+ * Le message d'aperçu de la ligne de liste. Extrait en constante parce qu'il
+ * est désormais lu par DEUX requêtes : la sélection imbriquée `take: 1` de la
+ * liste, et la reprise ciblée qui cherche le dernier message ENCORE VISIBLE
+ * quand celui-là est masqué pour ce lecteur (`clear-history` /
+ * `delete-for-me`). Deux copies auraient dérivé, et l'aperçu de repli aurait
+ * rendu une bulle amputée de la moitié de ses champs.
+ */
+export const conversationLastMessagePreviewSelect = {
+  id: true,
+  content: true,
+  createdAt: true,
+  senderId: true,
+  messageType: true,
+  isBlurred: true,
+  isViewOnce: true,
+  effectFlags: true,
+  expiresAt: true,
+  // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
+  // MÊME document Mongo que le message (`translations` est une
+  // colonne JSON, pas une relation) : les sélectionner ne coûte ni
+  // jointure ni requête. Sans eux, la ligne de liste restait dans la
+  // langue de l'expéditeur pour tout le monde — cf.
+  // `utils/last-message-preview.ts`.
+  translations: true,
+  originalLanguage: true,
+  // Lot 3 : aperçu de conversation — sans `metadata`, un dernier
+  // message géolocalisé n'affiche jamais sa position dans la
+  // liste des conversations.
+  metadata: true,
+  sender: {
+    select: {
+      id: true,
+      userId: true,
+      displayName: true,
+      avatar: true,
+      type: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatar: true
+        }
+      }
+    }
+  },
+  attachments: {
+    take: 1, // Optimized: only first attachment for preview
+    select: {
+      id: true,
+      mimeType: true,
+      thumbnailUrl: true,
+      originalName: true,
+      fileSize: true,
+      // Media metadata for proper display
+      duration: true,    // Audio/Video duration in ms
+      width: true,       // Image/Video width
+      height: true,      // Image/Video height
+      bitrate: true,     // Audio/Video bitrate
+      sampleRate: true,  // Audio sample rate
+      metadata: true     // Additional metadata (effects, etc.)
+    }
+  },
+  _count: {
+    select: { attachments: true }
+  }
 } as const;
 
 /**
@@ -219,7 +294,8 @@ export function registerCoreRoutes(
             equals: identifier,
             mode: 'insensitive'
           }
-        }
+        },
+        select: { id: true }
       });
 
       return sendSuccess(reply, {
@@ -469,66 +545,7 @@ export function registerCoreRoutes(
             },
             orderBy: { createdAt: 'desc' },
             take: 1,
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
-              senderId: true,
-              messageType: true,
-              isBlurred: true,
-              isViewOnce: true,
-              effectFlags: true,
-              expiresAt: true,
-              // Prisme Linguistique de l'aperçu. Les deux champs vivent dans le
-              // MÊME document Mongo que le message (`translations` est une
-              // colonne JSON, pas une relation) : les sélectionner ne coûte ni
-              // jointure ni requête. Sans eux, la ligne de liste restait dans la
-              // langue de l'expéditeur pour tout le monde — cf.
-              // `utils/last-message-preview.ts`.
-              translations: true,
-              originalLanguage: true,
-              // Lot 3 : aperçu de conversation — sans `metadata`, un dernier
-              // message géolocalisé n'affiche jamais sa position dans la
-              // liste des conversations.
-              metadata: true,
-              sender: {
-                select: {
-                  id: true,
-                  userId: true,
-                  displayName: true,
-                  avatar: true,
-                  type: true,
-                  user: {
-                    select: {
-                      id: true,
-                      username: true,
-                      displayName: true,
-                      avatar: true
-                    }
-                  }
-                }
-              },
-              attachments: {
-                take: 1, // Optimized: only first attachment for preview
-                select: {
-                  id: true,
-                  mimeType: true,
-                  thumbnailUrl: true,
-                  originalName: true,
-                  fileSize: true,
-                  // Media metadata for proper display
-                  duration: true,    // Audio/Video duration in ms
-                  width: true,       // Image/Video width
-                  height: true,      // Image/Video height
-                  bitrate: true,     // Audio/Video bitrate
-                  sampleRate: true,  // Audio sample rate
-                  metadata: true     // Additional metadata (effects, etc.)
-                }
-              },
-              _count: {
-                select: { attachments: true }
-              }
-            }
+            select: conversationLastMessagePreviewSelect
           }
         },
         orderBy
@@ -537,6 +554,36 @@ export function registerCoreRoutes(
 
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
+
+      // L'aperçu de la ligne de liste obéit au masquage personnel du lecteur.
+      // Le `take: 1` imbriqué ne peut pas porter de filtre par conversation
+      // (Prisma applique UN `where` à toute la sélection imbriquée), donc la
+      // question est tranchée après coup — et seules les conversations dont
+      // l'aperçu est effectivement masqué paient une requête de reprise. Un
+      // lecteur qui n'a rien masqué paie une lecture indexée qui ne rend rien.
+      t0 = performance.now();
+      const visibleLastMessages = await resolveVisibleLastMessages(prisma, {
+        // `authContext.userId` porte le jeton de session pour un participant
+        // anonyme, pas un ObjectId — le passer ferait échouer les deux lectures
+        // (rattrapées, mais une erreur par requête de liste pour rien). Un
+        // anonyme ne possède de ligne dans NI l'une NI l'autre table.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        candidates: conversations.map(c => {
+          const preview = (c as any).messages?.[0];
+          return {
+            conversationId: c.id,
+            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null,
+            clearHistoryBefore: (c as any).userPreferences?.[0]?.clearHistoryBefore ?? null
+          };
+        }),
+        query: { select: conversationLastMessagePreviewSelect as unknown as Record<string, unknown> }
+      });
+      for (const conversation of conversations) {
+        if (!visibleLastMessages.has(conversation.id)) continue;
+        const replacement = visibleLastMessages.get(conversation.id);
+        (conversation as any).messages = replacement ? [replacement] : [];
+      }
+      perfTimings.personalPreviewHiding = performance.now() - t0;
 
       // Extract current user's participant data from already-fetched participants (take:5 per conv).
       // For DMs and small groups the current user is always in the first 5 — zero extra DB queries.

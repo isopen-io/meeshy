@@ -15,6 +15,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { WebRTCService } from '@/services/webrtc-service';
+import { toast } from 'sonner';
 
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
@@ -1204,6 +1205,133 @@ describe('useWebRTCP2P', () => {
       unmount();
 
       expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard for W4 (group-calls gap analysis, 2026-08-13):
+  // connectionState/iceConnectionState used to be bare useState scalars,
+  // last-writer-wins across every participant's onConnectionStateChange —
+  // now that the participant cap is lifted, one peer failing mid-call must
+  // not flip the whole call to 'failed' (toast + onError) while the others
+  // stay healthy, and the recovery/success side effects must fire once per
+  // call, not once per participant.
+  describe('Multi-peer connection state aggregation (W4)', () => {
+    const secondTargetUserId = `${'user-789'}-2`;
+
+    // `createOffer` constructs TWO `WebRTCService`s per call: one options-less
+    // instance from `ensureLocalStream`/`initializeLocalStream` (the mocked
+    // store's `localStream` is always `null`, so this fires every time), and
+    // the real per-peer one from `getWebRTCService`, which is the only one
+    // carrying the callback options this test drives. Filter down to those.
+    const peerCallOptions = (index: number) =>
+      (WebRTCService as unknown as jest.Mock).mock.calls.filter((call) => call[0])[index][0];
+
+    const connectTwoPeers = async () => {
+      const onError = jest.fn();
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      await act(async () => {
+        await result.current.createOffer(secondTargetUserId);
+      });
+      return { result, onError, peer1: peerCallOptions(0), peer2: peerCallOptions(1) };
+    };
+
+    it('reports the call connected once ANY peer connects, and stays connected when a second peer later fails', async () => {
+      const { result, onError, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('connected'));
+      expect(result.current.connectionState).toBe('connected');
+
+      (toast.error as jest.Mock).mockClear();
+      act(() => peer2.onConnectionStateChange('failed'));
+
+      expect(result.current.connectionState).toBe('connected');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('only reports the call failed once EVERY peer has failed', async () => {
+      const { result, onError, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('failed'));
+      expect(result.current.connectionState).toBe('failed');
+      expect(toast.error).toHaveBeenCalledWith('Connection failed. Please try again.');
+      expect(onError).toHaveBeenCalledTimes(1);
+
+      // A second, already-failed peer must not re-fire the same global
+      // error a second time — the aggregate did not change.
+      (toast.error as jest.Mock).mockClear();
+      onError.mockClear();
+      act(() => peer2.onConnectionStateChange('failed'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('recovers from failed once at least one peer connects again', async () => {
+      const { result, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('failed'));
+      act(() => peer2.onConnectionStateChange('failed'));
+      expect(result.current.connectionState).toBe('failed');
+
+      act(() => peer2.onConnectionStateChange('connected'));
+      expect(result.current.connectionState).toBe('connected');
+    });
+
+    it('fires the "Connected!" toast once for the call, not once per participant', async () => {
+      const { peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('connected'));
+      act(() => peer2.onConnectionStateChange('connected'));
+
+      expect(toast.success).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a departed failed peer out of the aggregate instead of leaving the call stuck failed', async () => {
+      const { result, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('connected'));
+      act(() => peer2.onConnectionStateChange('failed'));
+      expect(result.current.connectionState).toBe('connected');
+
+      act(() => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+      // Only the failed peer (peer2) remains registered — the call must now
+      // read as failed, not silently stay 'connected' on a stale entry.
+      expect(result.current.connectionState).toBe('failed');
+    });
+
+    it('same aggregation applies to iceConnectionState: one peer failing does not fail the call', async () => {
+      const { result, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onIceConnectionStateChange('connected'));
+      act(() => peer2.onIceConnectionStateChange('failed'));
+
+      expect(result.current.iceConnectionState).toBe('connected');
+    });
+
+    it('only surfaces the ICE "Connection failed. Retrying..." toast once every peer has failed', async () => {
+      const { onError, peer1, peer2 } = await connectTwoPeers();
+
+      // Both peers must be registered in the aggregate BEFORE either fails —
+      // otherwise a lone peer failing while the other has never reported any
+      // ICE state would trivially aggregate to 'failed' on its own, which is
+      // not what this test is exercising.
+      act(() => peer1.onIceConnectionStateChange('connected'));
+      act(() => peer2.onIceConnectionStateChange('connected'));
+
+      act(() => peer1.onIceConnectionStateChange('failed'));
+      expect(toast.error).not.toHaveBeenCalledWith('Connection failed. Retrying...');
+      expect(onError).not.toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
+
+      act(() => peer2.onIceConnectionStateChange('failed'));
+      expect(toast.error).toHaveBeenCalledWith('Connection failed. Retrying...');
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
     });
   });
 

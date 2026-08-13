@@ -27,9 +27,13 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
                       "ImageFullscreen must force autoLoad:true — a manual tap overrides the network policy gate (contract §14.1); otherwise Low Data Mode leaves the fullscreen viewer spinning forever.")
     }
 
-    func test_imageFullscreen_savesToPhotos_withExplicitImageKind() throws {
+    func test_imageFullscreen_savesTheStampedImage_withRawBytesFallback() throws {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveFromURL(url.absoluteString, kind: .image)"),
-                      "ImageFullscreen always saves an image — the call site must pass an explicit AttachmentKind, not rely on PhotoLibraryManager's (former) substring sniffing.")
+        XCTAssertTrue(source.contains("MeeshyImageWatermark.stamped("),
+                      "ImageFullscreen enregistre l'image MARQUÉE — même règle que le flux unifié de l'app (MediaSaveBranding) : le viewer passe par l'atome de filigrane avant d'écrire en photothèque.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(stamped)"),
+                      "Le chemin nominal écrit l'image marquée via saveImage — plus de saveFromURL : les octets viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
+                      "Un marquage impossible (format animé, décodage raté) n'empêche JAMAIS l'enregistrement : repli sur les octets d'origine.")
     }
 }

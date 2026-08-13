@@ -554,6 +554,7 @@ model Participant {
 
   @@unique([conversationId, userId], name: "unique_conversation_user")
   @@index([conversationId])
+  @@index([conversationId, isActive])
   @@index([userId])
   @@index([userId, isActive])
   @@index([type])

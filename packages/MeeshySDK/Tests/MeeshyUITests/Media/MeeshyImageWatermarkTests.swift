@@ -21,6 +21,9 @@ final class MeeshyImageWatermarkTests: XCTestCase {
         }
     }
 
+    /// Échantillonne le pixel (x, y) en repère UIKit (origine HAUT-gauche) —
+    /// le même que `blockRect` : le rendu CGImage étant bas-vers-haut, la
+    /// ligne `y` depuis le haut est la ligne `height - 1 - y` depuis le bas.
     private func pixel(_ image: UIImage, x: Int, y: Int) throws -> (r: UInt8, g: UInt8, b: UInt8) {
         let cg = try XCTUnwrap(image.cgImage)
         var bytes = [UInt8](repeating: 0, count: 4)
@@ -28,7 +31,7 @@ final class MeeshyImageWatermarkTests: XCTestCase {
             data: &bytes, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        context.draw(cg, in: CGRect(x: -CGFloat(x), y: -CGFloat(y),
+        context.draw(cg, in: CGRect(x: -CGFloat(x), y: CGFloat(y) + 1 - CGFloat(cg.height),
                                     width: CGFloat(cg.width), height: CGFloat(cg.height)))
         return (bytes[0], bytes[1], bytes[2])
     }

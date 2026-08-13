@@ -1,3 +1,118 @@
+# Tête instruite pour le cycle 109 — sept maillons sur huit ne font pas une fonctionnalité, ils font une réponse qui ment
+
+*Le cycle 108 a repris la liste de reconduits du 107 (item 8) et y a trouvé, sous « `clearHistoryBefore`
+écrit et diffusé, jamais appliqué côté serveur », un défaut deux fois plus large que sa formulation :
+la MÊME chose vaut pour « supprimer pour moi », et les deux surfaces de lecture concernées sont sept.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 108 ajoute — le treizième membre de la famille
+>
+> Le cycle 105 : *une règle que TOUTES les lectures appliquent n'est pas tenue tant qu'une ÉCRITURE l'ignore.*
+> Le cycle 107 : *une règle appliquée par ses lecteurs CANONIQUES est plus dure à auditer qu'une règle
+> appliquée nulle part — la réponse juste est un dénombrement, jamais un exemple.*
+> Le cycle 108 trouve le cas où le dénombrement vaut **zéro sur N**, et où rien ne le signale :
+>
+> **Une fonctionnalité dont personne ne lit l'écriture ne rate pas discrètement — elle RÉPOND SUCCÈS.**
+> `DELETE /api/messages/:id/delete-for-me` renvoyait `{"success": true, "message": "Message deleted from
+> your view"}`. `POST /api/conversations/:id/clear-history` renvoyait `Chat history cleared before X`.
+> Les deux étaient des réponses que l'API n'avait aucun moyen d'honorer : la route existait, la colonne
+> existait, le bump de version existait, la diffusion Socket.IO vers les autres appareils existait, le
+> décodeur iOS existait, et `@meeshy/shared` exportait même `filterDeletedMessages`. **Sept maillons sur
+> huit**, et le huitième — la lecture — était le seul à produire un effet observable.
+>
+> **Le symptôme à reconnaître** : un grep du nom de la fonctionnalité qui rend une dizaine de fichiers
+> et rassure. Le grep qui tranche est celui de la COLONNE restreint aux chemins de lecture. Un résultat
+> vide côté lecture, avec des résultats côté écriture, est le diagnostic complet.
+>
+> **Corollaire de conception** : un filtre de confidentialité recopié à N sites est un filtre que le
+> N+1ᵉ site oubliera. Il doit être UNE fonction dont la propriété centrale est qu'elle ne peut que
+> RÉTRÉCIR — fusionner par spread écrase la borne du curseur de pagination et l'allowlist d'ids du
+> mode `around`, et rend alors PLUS de lignes qu'avant le « filtre ».
+
+## Livré au cycle 108 — le masquage personnel est lu partout, et un dénombrement le prouve
+
+**Le défaut.** Zéro requête de lecture sur sept surfaces consultait `UserMessageDeletion` ou
+`UserConversationPreferences.clearHistoryBefore`. `deletedAt: null` — la pierre tombale du « supprimer
+pour TOUT LE MONDE » — était le seul filtre de la liste de messages, du COUNT de pagination, des
+sous-requêtes du mode `around`, des compteurs `older`/`newer`, des messages épinglés (+ leur total), de
+la recherche dans la conversation, du fil de discussion, du delta `/sync` et des DEUX aperçus de ligne
+de liste.
+
+**Livré** : `services/personalHistoryFilter.ts` — une SSOT qui charge les deux faits et les fusionne
+dans un `where` Prisma en garantissant de ne pouvoir que RÉTRÉCIR (deux bornes basses → la plus
+stricte ; un `id` scalaire → allowlist d'un élément, jamais un `notIn` ; une allowlist `around` →
+soustraction, jamais un couple `in`/`notIn` dont le lecteur doit calculer l'intersection). Un lecteur
+qui n'a rien masqué reçoit sa propre clause, référence identique : les plans de requête de l'écrasante
+majorité sont inchangés. `services/resolveVisibleLastMessage.ts` traite le cas que Prisma ne sait pas
+exprimer — la sélection imbriquée `messages: { take: 1 }` ne peut pas porter un curseur DIFFÉRENT par
+conversation — et fait tomber l'aperçu sur le message précédent après un `delete-for-me`, à blanc après
+un `clear-history`, sans cas particulier : la différence sort de la donnée.
+
+**Tests** : 33 témoins de comportement sur les deux services, 7 témoins de câblage sur la route de
+liste réelle (via `app.inject`, assertions sur le `where` réellement envoyé à Prisma), 8 témoins de
+dénombrement. **Preuve RED exécutée** (contrairement aux cycles 86–107, côté iOS) : suite rouge avant
+le module, verte après ; et deux mutations vérifiées — retirer un `applyPersonalHistoryHiding` de
+`threads.ts` fait tomber le dénombrement, remettre `where: whereClause` sur la liste fait tomber 3 des
+7 témoins de câblage. Suite gateway complète : **697 suites, 17126 tests, verts**.
+
+**Le dénombrement** (`personal-history-hiding-surface-guard.test.ts`) balaie chaque
+`prisma.message.findMany|count` sous `src/routes/` et exige de CHAQUE fichier une classification —
+applique (avec son nombre exact d'applications) ou exempt (avec sa raison écrite). Il refuse un
+balayage vide, refuse un fichier non déclaré, refuse une application dans un fichier déclaré exempt, et
+déclare séparément les deux aperçus imbriqués — précisément la forme qu'aucun balayage de
+`prisma.message.*` ne peut voir.
+
+## Constats du cycle 108, NON traités — le lot naturel du cycle 109
+
+1. **AUCUN client n'appelle ces deux routes.** Ni iOS, ni web, ni Android n'ont de chemin vers
+   `delete-for-me` (message), `restore-for-me`, `bulk/delete-for-me` ni `clear-history`. Le cycle 108
+   a rendu le serveur honnête ; l'entrée produit reste à câbler. C'est une décision de produit
+   (WhatsApp met « Supprimer pour moi » dans le menu long-press du message et « Effacer la discussion »
+   dans les réglages de conversation), pas un travail mécanique.
+2. **`userPreferences` du wire déclare `isDeletedForUser: boolean` là où le select rend
+   `deletedForUserAt: DateTime`.** fast-json-stringify strippe donc le champ en silence : le client ne
+   reçoit RIEN pour cette préférence, ni booléen ni date. C'est aussi une violation directe de la règle
+   `CLAUDE.md` « pas de paire booléen + timestamp ». `clearHistoryBefore` a été ajouté au select par le
+   cycle 108 pour un usage serveur seul et subit le même sort — délibérément, et documenté sur place.
+   Corriger le wire est un changement de contrat client : à instruire, pas à faire à l'aveugle.
+3. **Les compteurs de non-lus ignorent le masquage — le lot naturel immédiat.**
+   `MessageReadStatusService.getUnreadCount`/`getUnreadCountsForUser` comptent avec pour seul
+   plancher le curseur de lecture. Effacer un historique qui contenait des messages NON LUS laisse
+   donc un badge comptant des messages que la liste ne montre plus : un compteur que défiler ne peut
+   pas éteindre. Moins grave que servir le contenu (c'est un nombre, pas le message), mais c'est le
+   même défaut. La couche service entière est hors du périmètre du dénombrement livré — elle y est
+   dénombrée quand même (`SERVICE_LAYER_UNCOVERED` : 3 fichiers, 9 lectures), pour que « non
+   couvert » reste un fait écrit. La difficulté réelle est le chemin BATCHÉ, qui itère sur des
+   participants de conversations différentes : il lui faut les curseurs par conversation, pas un seul.
+4. **`lastMessageAt` n'est pas ajusté quand l'aperçu est masqué.** La conversation garde sa place
+   dans l'ordre de la liste au timestamp d'un message que le lecteur ne voit plus. Corriger
+   demanderait un tri PAR LECTEUR — changement d'une autre ampleur ; noté, pas tenté.
+5. **Le flux `deleted` de `/sync` n'est pas filtré, à dessein.** Une pierre tombale sur un message déjà
+   masqué est un no-op client. À reconsidérer seulement si un client se met à traiter un tombstone
+   inconnu comme une anomalie.
+6. **`me/export.ts` est exempt à dessein** (export RGPD des messages ÉCRITS par l'utilisateur : le
+   masquage est une préférence d'affichage, pas un effacement). Si le produit décide un jour que
+   « supprimer pour moi » doit aussi retirer de l'export, c'est une décision juridique, pas technique.
+7. **Reconduits du 107, inchangés** : catalogue de chaînes absent de la cible `MeeshyWidgets` ;
+   `WidgetDataManager` qui compose `"[N attachment(s)]"` en anglais et `"Offline"` à côté d'un
+   `lastSeenText` français codé en dur dans le SDK ; `meeshy://conversations/recent` sans destination ;
+   `meeshy://call?contactId=` sans chemin ; boutons de Live Activity doublement morts ; `ContactEntity`
+   qui nomme « contact » une conversation ; garde du Prisme limitée à `apps/ios/Meeshy/`.
+8. **Reconduits plus anciens, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans
+   producteur ; l'épingle qui n'atteint pas la 3ᵉ audience ; Socket.IO sans adapter Redis (le plus gros
+   risque temps-réel encore ouvert : en multi-instance, un événement ne franchit pas la frontière du
+   process) ; le commentaire de `handleMessage` qui affirme à tort que REST y passe ; la projection des
+   accusés en trois exemplaires inline ; `TranslationStatus` sans référent in-repo ; l'audit d'adressage
+   **Android hors `MessageApi`**, toujours pas passé au crible.
+
 # Tête instruite pour le cycle 108 — la bonne question n'est jamais « la règle est-elle appliquée ? », c'est « par combien de lecteurs sur combien ? »
 
 *Le cycle 107 a repris le lot laissé par le 106 et n'y a pas trouvé son défaut. Il l'a trouvé à côté,

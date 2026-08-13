@@ -40,6 +40,57 @@ export interface UseWebRTCP2POptions {
 // refresh after that (see `scheduleTurnRefresh` below).
 const DEFAULT_TURN_CREDENTIAL_TTL_SECONDS = 3600;
 
+// Aggregation order for `RTCPeerConnectionState` across every participant in
+// the call — best state present wins. Checking 'connected' first means a
+// group call where one peer is healthy and another has just failed still
+// reads as 'connected' overall; 'failed' can only win when it is the ONLY
+// state left in the map, i.e. every participant's connection has failed.
+const CONNECTION_STATE_PRIORITY: RTCPeerConnectionState[] = [
+  'connected',
+  'connecting',
+  'new',
+  'disconnected',
+  'closed',
+  'failed',
+];
+
+// Same idea for `RTCIceConnectionState` (a superset with 'completed'/'checking').
+const ICE_CONNECTION_STATE_PRIORITY: RTCIceConnectionState[] = [
+  'connected',
+  'completed',
+  'checking',
+  'new',
+  'disconnected',
+  'closed',
+  'failed',
+];
+
+/**
+ * Reduces one `RTCPeerConnectionState` per participant to a single call-wide
+ * value. Group calls (Vague — cap lifted 2026-08-13) hold one
+ * `RTCPeerConnection` per remote participant; before this, `connectionState`
+ * was a bare `useState` last-writer-wins across every `onConnectionStateChange`
+ * callback, so ONE peer failing (e.g. a straggler still negotiating) flipped
+ * the whole call to 'failed' and fired the global error toast/`onError` even
+ * while every other peer stayed connected.
+ */
+function aggregateConnectionState(
+  states: Map<string, RTCPeerConnectionState>
+): RTCPeerConnectionState {
+  if (states.size === 0) return 'new';
+  const present = new Set(states.values());
+  return CONNECTION_STATE_PRIORITY.find((candidate) => present.has(candidate)) ?? 'new';
+}
+
+/** ICE counterpart of {@link aggregateConnectionState} — same last-writer-wins bug (W4). */
+function aggregateIceConnectionState(
+  states: Map<string, RTCIceConnectionState>
+): RTCIceConnectionState {
+  if (states.size === 0) return 'new';
+  const present = new Set(states.values());
+  return ICE_CONNECTION_STATE_PRIORITY.find((candidate) => present.has(candidate)) ?? 'new';
+}
+
 export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const {
     localStream,
@@ -59,6 +110,16 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   // string 'reconnecting'), this is what callers (e.g. call:analytics'
   // reconnectionCount) must observe to detect an actual reconnect.
   const [isReconnecting, setIsReconnecting] = useState(false);
+
+  // Per-participant connection/ICE state, reduced to the call-wide scalars
+  // returned below via aggregateConnectionState/aggregateIceConnectionState
+  // (W4 fix — see their doc comments). lastAggregated*Ref tracks the
+  // previously EMITTED aggregate so the global error/success side effects
+  // (toast, setError, onError) fire only on a genuine transition, never once
+  // per participant.
+  const connectionStatesRef = useRef<Map<string, RTCPeerConnectionState>>(new Map());
+  const iceConnectionStatesRef = useRef<Map<string, RTCIceConnectionState>>(new Map());
+  const lastAggregatedConnectionStateRef = useRef<RTCPeerConnectionState>('new');
 
   // Store WebRTC services per participant
   const webrtcServicesRef = useRef<Map<string, WebRTCService>>(new Map());
@@ -237,16 +298,29 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               participantId,
               state,
             });
-            setConnectionState(state);
 
-            if (state === 'failed') {
+            connectionStatesRef.current.set(participantId, state);
+            const aggregated = aggregateConnectionState(connectionStatesRef.current);
+            const previousAggregated = lastAggregatedConnectionStateRef.current;
+            lastAggregatedConnectionStateRef.current = aggregated;
+            setConnectionState(aggregated);
+
+            // Gated on the AGGREGATE transition, not this one participant's
+            // state: in a group call, one peer failing must not toast/kill
+            // the call while others are still connected, and 'Connected!'
+            // must fire once for the call, not once per participant join.
+            if (aggregated === 'failed' && previousAggregated !== 'failed') {
               setError('Connection failed');
               toast.error('Connection failed. Please try again.');
               onError?.(new Error('PEER_CONNECTION_FAILED'));
-            } else if (state === 'connected') {
+            } else if (aggregated === 'connected' && previousAggregated !== 'connected') {
               setConnecting(false);
               toast.success('Connected!');
-              // Bound the receive jitter buffers now that media flows.
+            }
+
+            if (state === 'connected') {
+              // Bound the receive jitter buffers now that media flows —
+              // scoped to THIS peer, unrelated to the call-wide aggregate.
               webrtcServicesRef.current.get(participantId)?.setJitterBufferTargets();
             }
           },
@@ -256,7 +330,9 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               participantId,
               state,
             });
-            setIceConnectionState(state);
+
+            iceConnectionStatesRef.current.set(participantId, state);
+            setIceConnectionState(aggregateIceConnectionState(iceConnectionStatesRef.current));
 
             if (state === 'connected' || state === 'completed') {
               connectedPeersRef.current.add(participantId);
@@ -298,7 +374,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
                 // exactly when a stale TURN credential most likely bites — get
                 // ahead of it instead of waiting for the periodic refresh.
                 requestFreshTurnCredentials();
-              } else {
+              } else if (aggregateIceConnectionState(iceConnectionStatesRef.current) === 'failed') {
+                // Only surface the global "Connection failed" error once
+                // EVERY participant's ICE has failed — one peer failing in a
+                // group call while others are still connected must not toast
+                // an error for (or call onError on) the whole call.
                 setError('ICE connection failed');
                 toast.error('Connection failed. Retrying...');
                 onError?.(new Error('ICE_CONNECTION_FAILED'));
@@ -421,6 +501,16 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       offerInFlightRef.current.delete(participantId);
       negotiationIdsRef.current.delete(participantId);
       removePeerConnection(participantId);
+
+      // Recompute the aggregate now that this participant is gone — a
+      // participant who left while 'failed' or 'disconnected' must not keep
+      // dragging the call-wide state down forever.
+      connectionStatesRef.current.delete(participantId);
+      iceConnectionStatesRef.current.delete(participantId);
+      const aggregated = aggregateConnectionState(connectionStatesRef.current);
+      lastAggregatedConnectionStateRef.current = aggregated;
+      setConnectionState(aggregated);
+      setIceConnectionState(aggregateIceConnectionState(iceConnectionStatesRef.current));
     },
     [removePeerConnection]
   );
@@ -834,6 +924,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     setIsReconnecting(false);
     negotiationIdsRef.current.clear();
     reconnectAttemptRef.current = 0;
+    connectionStatesRef.current.clear();
+    iceConnectionStatesRef.current.clear();
+    lastAggregatedConnectionStateRef.current = 'new';
+    setConnectionState('new');
+    setIceConnectionState('new');
 
     logger.info('[useWebRTCP2P]', 'Cleanup completed', { callId });
   }, [callId, removePeerConnection]);
@@ -861,6 +956,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         currentServices.clear();
         iceCandidateQueueRef.current.clear();
         remoteDescriptionSetRef.current.clear();
+        connectionStatesRef.current.clear();
+        iceConnectionStatesRef.current.clear();
+        lastAggregatedConnectionStateRef.current = 'new';
+        setConnectionState('new');
+        setIceConnectionState('new');
       }
     }
   }, [userId, callId, removePeerConnection]);
