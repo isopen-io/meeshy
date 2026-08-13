@@ -203,3 +203,36 @@ lecture traîne encore n'est PAS réconcilié, faute de frontière de lecture (`
 charge utile de la liste — le substitut basé sur `unreadCount` rendrait un `mark-unread` fait sur un
 autre appareil définitivement invisible (cf. `tasks/todo.md`, cycle 76b : deux sessions y sont
 arrivées indépendamment).
+
+## 2026-08-13: Le delta de la liste apprend à annoncer les DÉPARTS (`meta.deletedConversationIds`)
+
+**Décision**: `getConversations` remonte désormais `deletedConversationIds` /
+`deletedConversationIdsTruncated` (bloc `meta` de la réponse gateway), et
+`useConversationsDeltaSync` les applique : `mergeConversationDelta({ tombstoneIds })` retire les
+lignes du cache infini et rend leurs ids, le hook purge les caches dérivés (détail, fil de
+messages) par le MÊME chemin que les retraits `isActive: false`, et une liste TRONQUÉE escalade vers
+la réconciliation complète.
+
+**Pourquoi**: le lot `conversations` d'une réponse delta ne porte que des lignes SERVIES, et la
+clause serveur exclut par construction ce qui vient de partir (conversation `isActive`, participant
+actif sans `deletedForMe`). Un leave ou un ban n'écrit même pas `Conversation.updatedAt` : aucune
+trace ne pouvait remonter. Ces sorties attendaient donc la réconciliation de 24 h — jusqu'à un jour
+entier de conversation fantôme, cliquable, sur laquelle le serveur répondra 403.
+
+**Trois points de conception**:
+- La purge n'est PAS gardée par `conversations.length > 0`. Un compte calme dont la seule nouvelle
+  est un départ rend exactement zéro conversation et une tombstone — c'est lui qui garde son
+  fantôme le plus longtemps. Même raisonnement que la réconciliation « MÊME sur un delta vide ».
+- Les tombstones s'appliquent APRÈS les upserts du même lot. Les deux flux se contredisent rarement
+  (une fermeture ne ressort pas de la page) ; quand ils le font, la sortie est le fait le plus
+  spécifique, et la garder affichée rendrait la purge inatteignable jusqu'aux 24 h suivantes.
+- Une tombstone pour une conversation absente du cache n'est pas rapportée dans `removedIds` :
+  rapporter une purge qui n'a rien retiré ferait supprimer des caches dérivés inexistants.
+
+**Alternatives rejetées**: laisser la réconciliation de 24 h faire le travail (elle le fait — un jour
+trop tard, et elle relit la liste entière quand une seule ligne devait partir) ; un troisième
+canal socket dédié aux sorties (les events `conversation:closed` existent déjà et couvrent l'app
+OUVERTE ; le trou est précisément l'app fermée, que seul le rattrapage voit).
+
+**Cons**: reste la borne d'origine — une conversation HARD-supprimée en base ne laisse de trace dans
+aucun des deux canaux, et attend toujours la réconciliation complète.
