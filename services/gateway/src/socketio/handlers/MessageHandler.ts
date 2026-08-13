@@ -1352,7 +1352,8 @@ export class MessageHandler {
           updatedBy: { id: senderUserId ?? message.senderId },
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
-          lastMessagePreview: message.content,
+          // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
+          // le reste de la paire, sous le même plafond qu'elle.
           // Un message position-seule a un `content` vide : hisser
           // `metadata.location` (même règle que la liste REST et
           // emitConversationPreviewUpdate) pour que la ligne d'aperçu du

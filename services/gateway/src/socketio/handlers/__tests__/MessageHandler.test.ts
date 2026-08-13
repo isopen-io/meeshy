@@ -117,6 +117,7 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 // ── After all mocks, import the class ──────────────────────────────────────
 
 import { MessageHandler, type MessageHandlerDependencies } from '../MessageHandler';
+import { LAST_MESSAGE_PREVIEW_MAX_LENGTH } from '../../../routes/conversations/utils/last-message-preview';
 
 // ── Helpers & factories ────────────────────────────────────────────────────
 
@@ -2276,6 +2277,37 @@ describe('MessageHandler', () => {
       // is what left their conversation list frozen at its old sort order while
       // the unread badge — emitted one helper away with the right key — moved.
       expect(updateRooms).toContain('user:part-anonymous');
+    });
+  });
+
+  // ── Plafond de l'aperçu de ligne de liste sur le chemin WS primaire ───────
+
+  describe('broadcastNewMessage — last-message preview cap in conversation:updated', () => {
+    it('caps the base preview like the REST list and like the translated previews', async () => {
+      const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
+      const chain = (rooms: string[]): any => ({
+        to: (room: string) => chain([...rooms, room]),
+        except: () => chain(rooms),
+        emit: (event: string, payload: any) => { sent.push({ rooms, event, payload }); },
+      });
+      const localDeps = makeDeps({ io: { to: (room: string) => chain([room]), sockets: { adapter: { rooms: new Map() } }, emit: jest.fn() } as any });
+      (localDeps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([{ id: 'part-registered', userId: USER_ID, joinedAt: new Date() }])
+        .mockResolvedValue([]);
+      (localDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      const h = new MessageHandler(localDeps);
+
+      const msg = {
+        id: 'msg-huge-preview', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'a'.repeat(LAST_MESSAGE_PREVIEW_MAX_LENGTH + 500),
+        originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: [],
+      };
+
+      await h.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const update = sent.find((s) => s.event === 'conversation:updated');
+      expect(update?.payload.lastMessagePreview).toHaveLength(LAST_MESSAGE_PREVIEW_MAX_LENGTH);
     });
   });
 
