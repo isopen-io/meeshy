@@ -7,6 +7,7 @@ import { loadPersonalHistoryHidingByConversation } from '../services/personalHis
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from './conversations/utils/message-sender-select';
+import { logger } from '../utils/logger';
 
 /**
  * SyncEngine unifié (spec §7, sous-tâche A3.1) — endpoint delta `/sync`
@@ -57,22 +58,39 @@ const GAP_THRESHOLD = 10_000;
 const SUPPORTED_COLLECTIONS = ['messages'] as const;
 
 type CursorKey = { u: string; i: string };
-export type SyncCursor = { c?: CursorKey; d?: CursorKey };
+/**
+ * Position keyset des TROIS streams de la collection `messages` :
+ * `c` = modifiés, `d` = supprimés pour TOUS, `h` = masqués pour CE lecteur.
+ *
+ * `h` est resté absent longtemps, et son absence n'était pas un oubli de
+ * pagination : le stream lui-même n'existait pas. Voir `syncHiddenTombstones`.
+ */
+export type SyncCursor = { c?: CursorKey; d?: CursorKey; h?: CursorKey };
 
 /** Encode une position keyset en token opaque (base64url JSON versionné). */
 export function encodeSyncCursor(cursor: SyncCursor): string {
   const payload: Record<string, unknown> = { v: 1 };
   if (cursor.c) payload.c = cursor.c;
   if (cursor.d) payload.d = cursor.d;
+  if (cursor.h) payload.h = cursor.h;
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 }
 
-/** Décode un token opaque ; jette sur version/forme/date invalide (→ 400). */
+/**
+ * Décode un token opaque ; jette sur version/forme/date invalide (→ 400).
+ *
+ * `h` reste FACULTATIF sous la même version 1 : un client déjà en vol porte un
+ * token sans lui, et le rejeter ferait repartir sa fenêtre de zéro pour un
+ * champ purement additif. Un `h` absent démarre simplement son stream au
+ * plancher `since`, ce qui est la position correcte pour un client qui n'avait
+ * jamais rien reçu de ce stream.
+ */
 export function decodeSyncCursor(token: string): SyncCursor {
   const parsed = JSON.parse(Buffer.from(token, 'base64url').toString('utf8')) as {
     v?: unknown;
     c?: unknown;
     d?: unknown;
+    h?: unknown;
   };
   if (parsed.v !== 1) throw new Error('unsupported cursor version');
   const key = (v: unknown): CursorKey | undefined => {
@@ -86,8 +104,10 @@ export function decodeSyncCursor(token: string): SyncCursor {
   const out: SyncCursor = {};
   const c = key(parsed.c);
   const d = key(parsed.d);
+  const h = key(parsed.h);
   if (c) out.c = c;
   if (d) out.d = d;
+  if (h) out.h = h;
   return out;
 }
 
@@ -295,6 +315,102 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
   });
 }
 
+/**
+ * Le stream des disparitions PERSONNELLES — `UserMessageDeletion`, c'est-à-dire
+ * « supprimer pour moi ».
+ *
+ * Pourquoi un TROISIÈME stream et pas un `where` de plus. Le stream `changed`
+ * applique déjà le masquage : un message masqué en est simplement RETIRÉ. Or un
+ * retrait ne dit rien — c'est la leçon 234, une lecture plus bas. Le client qui
+ * détient déjà la bulle ne re-lit pas la fenêtre où elle n'apparaît plus ; il
+ * ne la re-lit jamais, et la bulle reste. Le filtre de lecture ne peut que
+ * rétrécir ce qu'une NOUVELLE requête rend, il n'a aucune prise sur une ligne
+ * déjà écrite chez le client. La disparition avait donc besoin d'un vocabulaire
+ * à elle, exactement comme les tombstones de la liste de conversations.
+ *
+ * Deux détails que le tri et la pagination rendent non négociables :
+ *
+ * - **La table interrogée n'est pas `Message`.** Un `delete-for-me` n'écrit QUE
+ *   la ligne `UserMessageDeletion` ; `Message.updatedAt` ne bouge pas. Un
+ *   stream qui interrogerait le MESSAGE ne verrait jamais ces disparitions —
+ *   c'est le corollaire « chercher quelle TABLE l'événement a touchée » de la
+ *   leçon 234, et il s'applique ici mot pour mot.
+ * - **L'id SERVI et l'id du CURSEUR sont deux ids différents.** Le client
+ *   indexe par message, donc la tombstone porte `messageId`. Le keyset, lui,
+ *   ordonne les lignes de `UserMessageDeletion` et doit donc départager par
+ *   l'id de CETTE table : deux masquages estampillés à la même milliseconde
+ *   (un lot de 100 en écrit exactement autant) se départagent par la ligne, pas
+ *   par le message qu'elle désigne.
+ *
+ * Ce que ce stream ne portera JAMAIS : le retour en vue (`restore-for-me`). Il
+ * SUPPRIME la ligne, donc il ne reste rien à interroger « depuis `since` », et
+ * le client qui avait retiré la bulle n'en détient plus le contenu de toute
+ * façon. Une apparition ne s'écrit pas comme une tombstone inversée : elle
+ * voyage en temps réel (`MESSAGE_RESTORED_FOR_ME`, une ADRESSE à relire), et un
+ * appareil hors ligne au moment du restore la retrouve à sa prochaine lecture
+ * du fil — où le filtre de `personalHistoryFilter` ne la masque plus.
+ */
+async function syncHiddenTombstones(opts: {
+  prisma: FastifyInstance['prisma'];
+  userId: string;
+  sinceDate: Date;
+  conversationIds: readonly string[];
+  cap: number;
+  cursor?: CursorKey;
+}): Promise<{ tombstones: DeletedRef[]; truncated: boolean; nextKey: CursorKey | undefined }> {
+  const { prisma, userId, sinceDate, conversationIds, cap, cursor } = opts;
+
+  try {
+    const rows = await prisma.userMessageDeletion.findMany({
+      where: {
+        userId,
+        message: { conversationId: { in: [...conversationIds] } },
+        ...(cursor
+          ? {
+              OR: [
+                { deletedAt: { gt: new Date(cursor.u) } },
+                { deletedAt: new Date(cursor.u), id: { gt: cursor.i } },
+              ],
+            }
+          : { deletedAt: { gt: sinceDate } }),
+      },
+      select: {
+        id: true,
+        deletedAt: true,
+        messageId: true,
+        message: { select: { conversationId: true } },
+      },
+      orderBy: [{ deletedAt: 'asc' }, { id: 'asc' }],
+      take: cap + 1,
+    });
+
+    const truncated = rows.length > cap;
+    const page = truncated ? rows.slice(0, cap) : rows;
+    const last = page[page.length - 1];
+
+    return {
+      tombstones: page.map((row) => ({
+        id: row.messageId,
+        conversationId: row.message.conversationId,
+        deletedAt: row.deletedAt,
+      })),
+      truncated,
+      nextKey: last ? { u: last.deletedAt.toISOString(), i: last.id } : cursor,
+    };
+  } catch (error) {
+    // Même posture que les tombstones de la liste de conversations : servir le
+    // rattrapage reste le produit, en retirer une bulle est une courtoisie. On
+    // ne fait donc PAS échouer `/sync` — on rend « je ne peux pas affirmer
+    // l'exhaustivité » (`truncated`), ce que le client traduit par « redemande
+    // depuis la même position », et le curseur reste où il était pour que la
+    // reprise ne saute rien.
+    logger.warn('[sync] personal hiding tombstones unavailable, page announced truncated', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { tombstones: [], truncated: true, nextKey: cursor };
+  }
+}
+
 async function syncMessages(opts: {
   prisma: FastifyInstance['prisma'];
   userId: string;
@@ -388,13 +504,43 @@ async function syncMessages(opts: {
   });
   const deletedTruncated = deletedRows.length > cap;
   const deletedPage = deletedTruncated ? deletedRows.slice(0, cap) : deletedRows;
-  const deleted: DeletedRef[] = deletedPage.map((d) => ({
+  const globalTombstones: DeletedRef[] = deletedPage.map((d) => ({
     id: d.id,
     conversationId: d.conversationId,
     deletedAt: d.deletedAt as Date,
   }));
 
-  const truncated = changedTruncated || deletedTruncated;
+  // HIDDEN — disparitions PERSONNELLES. Servies dans le MÊME tableau que les
+  // suppressions globales : côté client le geste est identique (retirer la
+  // bulle), et deux tableaux auraient obligé chaque client à écrire deux fois
+  // le même retrait. La distinction reste lisible sur le serveur, où elle porte
+  // — deux tables, deux keysets.
+  const hidden = await syncHiddenTombstones({
+    prisma,
+    userId,
+    sinceDate,
+    conversationIds,
+    cap,
+    cursor: cursor?.h,
+  });
+
+  // Un message peut être masqué pour moi PUIS supprimé pour tous : il sort des
+  // deux streams. Dédupliquer par message évite d'annoncer deux fois la même
+  // disparition, la première rencontrée (la plus ancienne après tri) gagnant.
+  //
+  // Le `Set` n'est pas de la coquetterie : les deux streams sont cappés à 1000
+  // chacun, et un `findIndex` par élément ferait 4 millions de comparaisons de
+  // chaînes sur une page pleine.
+  const seenDeleted = new Set<string>();
+  const deleted: DeletedRef[] = [...globalTombstones, ...hidden.tombstones]
+    .sort((a, b) => a.deletedAt.getTime() - b.deletedAt.getTime() || a.id.localeCompare(b.id))
+    .filter((ref) => {
+      if (seenDeleted.has(ref.id)) return false;
+      seenDeleted.add(ref.id);
+      return true;
+    });
+
+  const truncated = changedTruncated || deletedTruncated || hidden.truncated;
 
   // Report par stream : on avance la clé si cette page a livré des items, sinon
   // on conserve la clé entrante — un stream épuisé reste sur sa dernière position
@@ -410,6 +556,7 @@ async function syncMessages(opts: {
   const nextKey: SyncCursor = {};
   if (cKey) nextKey.c = cKey;
   if (dKey) nextKey.d = dKey;
+  if (hidden.nextKey) nextKey.h = hidden.nextKey;
   const nextCursor = truncated ? encodeSyncCursor(nextKey) : null;
 
   return { added, modified, deleted, truncated, nextCursor };

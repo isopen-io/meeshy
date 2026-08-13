@@ -41,6 +41,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       capturedDeleteListener = listener;
       return () => { capturedDeleteListener = null; };
     }),
+    onMessageRestoredForMe: jest.fn(() => () => {}),
     onTranslation: jest.fn((listener: (data: any) => void) => {
       capturedTranslationListener = listener;
       return () => { capturedTranslationListener = null; };

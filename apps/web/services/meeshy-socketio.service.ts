@@ -22,7 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
-import type { AudioTranslationReadyEventData, LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, LinkMessageNewEventData, MessageRestoredForMeEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
 import type { ConnectionStatus } from './socketio/types';
@@ -257,6 +257,17 @@ class MeeshySocketIOService {
 
   public onMessageDeleted(listener: (messageId: string) => void): () => void {
     return this.orchestrator.onMessageDeleted(listener);
+  }
+
+  /**
+   * Un message que j'avais masqué pour moi est revenu en vue depuis un autre
+   * de mes appareils. L'événement ne porte que l'adresse : le contenu doit
+   * être re-demandé (cf. `MESSAGE_RESTORED_FOR_ME`).
+   */
+  public onMessageRestoredForMe(
+    listener: (data: MessageRestoredForMeEventData) => void
+  ): () => void {
+    return this.orchestrator.onMessageRestoredForMe(listener);
   }
 
   public onTranslation(listener: (data: TranslationEvent) => void): () => void {

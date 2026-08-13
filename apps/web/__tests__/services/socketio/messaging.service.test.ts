@@ -23,6 +23,8 @@ const SERVER_EVENTS_MOCK = {
   LINK_MESSAGE_NEW: 'link:message:new',
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
+  MESSAGE_HIDDEN_FOR_ME: 'message:hidden-for-me',
+  MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -68,6 +70,8 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     LINK_MESSAGE_NEW: 'link:message:new',
     MESSAGE_PINNED: 'message:pinned',
     MESSAGE_UNPINNED: 'message:unpinned',
+    MESSAGE_HIDDEN_FOR_ME: 'message:hidden-for-me',
+    MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -1960,6 +1964,85 @@ describe('MessagingService', () => {
       const cb = jest.fn();
       svc.setGetMessageByIdCallback(cb);
       expect((svc as any).getMessageByIdCallback).toBe(cb);
+    });
+  });
+  // ─── Disparition PERSONNELLE (« supprimer pour moi », multi-appareil) ──────
+
+  describe('message:hidden-for-me', () => {
+    it('retire chaque message nommé par le MÊME chemin qu’une suppression', () => {
+      const svc = new MessagingService();
+      const removed: string[] = [];
+      svc.onMessageDeleted((id) => removed.push(id));
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_HIDDEN_FOR_ME, {
+        userId: 'user-me',
+        messages: [
+          { messageId: 'm-1', conversationId: 'conv-1' },
+          { messageId: 'm-2', conversationId: 'conv-2' },
+        ],
+        hiddenAt: '2026-08-13T10:00:00.000Z',
+      });
+
+      // Réutiliser les écouteurs de suppression est délibéré : l'effet local est
+      // identique, et un second retrait aurait dérivé de celui-ci.
+      expect(removed).toEqual(['m-1', 'm-2']);
+    });
+
+    it('ne casse pas sur une charge utile sans liste', () => {
+      const svc = new MessagingService();
+      const removed: string[] = [];
+      svc.onMessageDeleted((id) => removed.push(id));
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+      expect(() =>
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_HIDDEN_FOR_ME, { userId: 'user-me' })
+      ).not.toThrow();
+      expect(removed).toEqual([]);
+    });
+  });
+
+  describe('message:restored-for-me', () => {
+    it('notifie ses propres écouteurs, PAS ceux de la suppression', () => {
+      const svc = new MessagingService();
+      const removed: string[] = [];
+      const restored: unknown[] = [];
+      svc.onMessageDeleted((id) => removed.push(id));
+      svc.onMessageRestoredForMe((data) => restored.push(data));
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+      const payload = {
+        userId: 'user-me',
+        messages: [{ messageId: 'm-1', conversationId: 'conv-1' }],
+        restoredAt: '2026-08-13T10:00:00.000Z',
+      };
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_RESTORED_FOR_ME, payload);
+
+      expect(restored).toEqual([payload]);
+      expect(removed).toEqual([]);
+    });
+
+    it('se désabonne proprement', () => {
+      const svc = new MessagingService();
+      const restored: unknown[] = [];
+      const off = svc.onMessageRestoredForMe((data) => restored.push(data));
+      off();
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_RESTORED_FOR_ME, {
+        userId: 'user-me',
+        messages: [{ messageId: 'm-1', conversationId: 'conv-1' }],
+        restoredAt: '2026-08-13T10:00:00.000Z',
+      });
+
+      expect(restored).toEqual([]);
     });
   });
 });

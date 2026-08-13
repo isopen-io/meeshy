@@ -26,6 +26,9 @@ import type { TranslationEvent } from '@meeshy/shared/types';
 let newMessageCallback: ((message: Message) => void) | null = null;
 let messageEditedCallback: ((message: Message) => void) | null = null;
 let messageDeletedCallback: ((messageId: string) => void) | null = null;
+let messageRestoredForMeCallback:
+  | ((data: { messages: Array<{ messageId: string; conversationId: string }> }) => void)
+  | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
@@ -79,6 +82,12 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onMessageDeleted: (callback: (messageId: string) => void) => {
       messageDeletedCallback = callback;
       return mockUnsubscribeDelete;
+    },
+    onMessageRestoredForMe: (
+      callback: (data: { messages: Array<{ messageId: string; conversationId: string }> }) => void
+    ) => {
+      messageRestoredForMeCallback = callback;
+      return jest.fn();
     },
     onTranslation: (callback: (data: TranslationEvent) => void) => {
       translationCallback = callback;
@@ -1682,5 +1691,57 @@ describe('useInvalidateOnReconnect', () => {
     unmount();
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('online', expect.any(Function));
+  });
+  // ─── message:restored-for-me ───────────────────────────────────────────────
+  //
+  // Un message masqué pour moi est revenu en vue depuis un AUTRE de mes
+  // appareils. Le masquage avait retiré la bulle du cache : il n'y a rien à
+  // fusionner, seulement une adresse à re-demander.
+  describe('message:restored-for-me', () => {
+    it('invalidates only the named conversations, plus the list', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      act(() => {
+        messageRestoredForMeCallback?.({
+          messages: [
+            { messageId: 'm-1', conversationId: 'conv-1' },
+            { messageId: 'm-2', conversationId: 'conv-2' },
+            { messageId: 'm-3', conversationId: 'conv-1' },
+          ],
+        });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-1', 'infinite'],
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-2', 'infinite'],
+      });
+      // Deux messages nomment `conv-1` : une seule invalidation, pas deux.
+      const messageInvalidations = invalidateSpy.mock.calls.filter((call) =>
+        Array.isArray((call[0] as { queryKey?: unknown })?.queryKey)
+          ? ((call[0] as { queryKey: unknown[] }).queryKey[0] === 'messages')
+          : false
+      );
+      expect(messageInvalidations).toHaveLength(2);
+      // L'aperçu de la liste peut redevenir le message qu'on avait masqué.
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['conversations'] });
+    });
+
+    it('does nothing when the payload names no message', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      act(() => {
+        messageRestoredForMeCallback?.({ messages: [] });
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    });
   });
 });

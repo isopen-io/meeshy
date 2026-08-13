@@ -16,7 +16,7 @@ import { extractPreviewTranslations } from '@/services/conversations/transformer
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
-import type { AudioTranslationReadyEventData, TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -762,6 +762,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(closedId) });
     };
 
+    // Handler for message:restored-for-me — un message que j'avais masqué pour
+    // moi est revenu en vue depuis un autre de mes appareils.
+    //
+    // Aucune donnée à fusionner : le masquage a RETIRÉ la bulle des caches, et
+    // l'événement ne porte que l'adresse. Une apparition ne peut pas s'écrire
+    // comme une tombstone inversée — il faut aller rechercher. On invalide donc
+    // les conversations nommées, jamais tout le cache, et la liste avec elles
+    // (l'aperçu du dernier message peut redevenir celui qu'on avait masqué).
+    const handleMessagesRestoredForMe = (data: MessageRestoredForMeEventData) => {
+      const affected = new Set((data?.messages ?? []).map((m) => m.conversationId).filter(Boolean));
+      if (affected.size === 0) return;
+      for (const convId of affected) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    };
+
     // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
     const handleCategoryChanged = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
@@ -1029,6 +1046,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
     const unsubscribeDelete = meeshySocketIOService.onMessageDeleted(handleMessageDeleted);
+    const unsubscribeRestoredForMe = meeshySocketIOService.onMessageRestoredForMe(
+      handleMessagesRestoredForMe
+    );
     const unsubscribeTranslation = meeshySocketIOService.onTranslation(handleTranslation);
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
@@ -1079,6 +1099,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeMessage?.();
       unsubscribeEdit?.();
       unsubscribeDelete?.();
+      unsubscribeRestoredForMe?.();
       unsubscribeTranslation?.();
       unsubscribeUnread?.();
       unsubscribeTranscription?.();
