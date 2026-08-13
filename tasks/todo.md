@@ -1,3 +1,108 @@
+# Tête instruite pour le cycle 111 — un filtre à la LECTURE ne rattrape jamais une COPIE
+
+*Le cycle 110 a pris l'item 1 que le 109 avait laissé — « le badge APNs compte des notifications,
+pas des messages » — et l'a trouvé mal formulé par son propre auteur. Le problème n'était pas le
+NOMBRE. C'était que la ligne comptée détient une copie du texte que le lecteur a demandé à ne plus
+voir.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 110 ajoute — le quinzième membre de la famille
+>
+> Les cycles 105 à 109 ont construit une règle et l'ont étendue de lecteur en lecteur : sept
+> surfaces de contenu (108), puis les trois compteurs (109). Chaque fois, le geste était le même —
+> un `where` de plus. Le cycle 110 trouve le lecteur sur lequel ce geste n'a AUCUNE prise :
+>
+> **Un filtre à la lecture ne peut rattraper qu'une donnée qu'on relit. Une ligne qui détient sa
+> propre COPIE du contenu est hors de portée de toute règle de lecture, pour toujours.**
+> `Notification.content` et `metadata.messagePreview` sont un extrait du message, dénormalisé à la
+> création. Masquer le message ne les touche pas : la conversation cesse de le montrer, et la
+> cloche continue d'en afficher le texte, avec un `action: view_message` qui ouvre une conversation
+> sur un message que ce lecteur ne verra pas.
+>
+> **Le symptôme à reconnaître** : une table qui porte un champ dont le nom dit CONTENU
+> (`content`, `preview`, `excerpt`, `snapshot`, `title`) à côté d'une clé étrangère vers l'entité
+> d'où ce contenu vient. Le champ est une copie ; la clé étrangère donne l'illusion qu'on pourrait
+> relire. Pour ces lignes, la seule règle qui tienne est une règle d'ÉCRITURE — retirer la ligne
+> quand la source cesse d'avoir le droit d'être montrée.
+>
+> **Corollaire, et la raison de ne pas avoir inventé un geste** : le dépôt avait DÉJÀ tranché deux
+> fois. `retractMessageNotifications` (rappel d'un message) et
+> `NotificationService.retractFriendRequestNotifications` (demande d'amitié supprimée) retirent la
+> ligne au lieu de la neutraliser, avec le même argument écrit à chaque fois : « rien à afficher ET
+> rien où mener ». Le cycle 110 est la troisième instance de la même décision, pas une nouvelle.
+> Une famille de gestes déjà nommée deux fois est une réponse, pas un précédent à discuter.
+
+## Livré au cycle 110 — la cloche cesse de garder ce que la conversation a masqué
+
+**Le défaut.** Ni `DELETE /api/messages/:id/delete-for-me`, ni son frère en lot, ni
+`POST /api/conversations/:id/clear-history` ne touchaient la table `Notification`. Les trois
+écrivaient le masquage et laissaient derrière eux, pour chaque message concerné, une ligne portant
+l'extrait du texte et un lien vers lui.
+
+**Livré** : `services/messaging/retractHiddenMessageNotifications.ts` — deux intentions sur un seul
+geste (lire les lignes visées, les détruire, les annoncer via `notification:deleted`) :
+
+- `retractNotificationsForHiddenMessages({ userId, messageIds })` — « supprimer pour moi »,
+  unitaire ou en lot. Filtré sur `userId` **et** `messageId`, à la différence exacte du rappel qui
+  filtre sur `messageId` seul : les autres participants gardent les leurs.
+- `retractNotificationsForClearedHistory({ userId, conversationId, before })` — « effacer
+  l'historique ». Le filtre passe par la RELATION `Notification.message` plutôt que par le chemin
+  JSON `context.conversationId` : `messageId` est une vraie clé étrangère indexée, et une
+  notification qui ne pointe aucun message — demande d'amitié, rappel d'appel — ne matche pas une
+  relation absente, ce qui est le comportement voulu. La borne est strictement antérieure, miroir
+  exact de la borne inclusive appliquée à la lecture (`createdAt: { gte: cutoff }`).
+
+Le filtre de destruction est celui de la LECTURE, pas la liste d'ids relus — une notification créée
+entre les deux part avec les autres, non annoncée (un écran en retard) plutôt que conservée (une
+copie du contenu en base). Même arbitrage, mot pour mot, que `retractMessageNotifications`.
+
+**Posture d'échec, et pourquoi elle diffère de celle du filtre de lecture.** Ces fonctions ne lèvent
+jamais : elles sont appelées APRÈS une écriture qui a déjà réussi, et faire échouer « supprimer pour
+moi » parce qu'un nettoyage de cloche a échoué dirait au lecteur que sa suppression n'a pas eu lieu
+alors qu'elle a eu lieu. L'échec est journalisé et la copie survit jusqu'au prochain masquage — un
+état dégradé, pas un mensonge.
+
+**Ce que le lot ne fait PAS, écrit sur place** : `restore-for-me` ne ressuscite pas la notification.
+La copie a été détruite, et la reconstruire depuis le message fabriquerait une notification jamais
+émise, avec un `createdAt` qui mentirait sur l'instant de l'évènement. Le message redevient visible
+dans la conversation ; sa notification appartient au passé.
+
+**Preuve RED exécutée** : 8 témoins de comportement sur le module + 5 témoins de CÂBLAGE sur les
+routes réelles (via `app.inject`, assertions sur le `where` réellement envoyé à Prisma).
+**Mutation vérifiée** : retirer les trois appels des routes fait tomber exactement les 3 témoins de
+câblage positifs. Suite gateway complète : **700 suites, 17197 tests, verts** ; `tsc --noEmit`
+propre.
+
+## Constats du cycle 110, NON traités — le lot naturel du cycle 111
+
+1. **Le badge APNs reste un compte de notifications.** Le lot livré retire les lignes dont le
+   contenu est masqué, ce qui corrige le badge PAR EFFET — mais la question de fond posée au cycle
+   109 tient toujours : `aps.badge` compte `Notification`, la liste compte des conversations non
+   lues, et rien ne garantit que les deux nombres coïncident. Les mesurer l'un contre l'autre est
+   un dénombrement à faire, pas une intuition à suivre.
+2. **`Mention` et `TrackingLink` sont la même famille, non auditées sous cet angle.** Le dépôt note
+   déjà que la cascade Prisma ne se déclenche pas sur un retrait doux et qu'elles survivent. La
+   question du cycle 110 leur est applicable telle quelle : portent-elles une COPIE du contenu, ou
+   seulement une clé étrangère ? La réponse décide du geste (règle d'écriture ou garde de lecture)
+   et personne ne l'a écrite.
+3. **Reconduits, inchangés** : aucun client n'appelle `delete-for-me` / `clear-history` (entrée
+   produit à câbler) ; `userPreferences` du wire déclare `isDeletedForUser: boolean` là où le select
+   rend `deletedForUserAt: DateTime` ; `lastMessageAt` non ajusté quand l'aperçu est masqué ; flux
+   `deleted` de `/sync` non filtré à dessein ; `me/export.ts` exempt à dessein ; catalogue de
+   chaînes / destinations d'URL des widgets iOS ; `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED`
+   sans producteur ; l'épingle qui n'atteint pas la 3ᵉ audience ; **Socket.IO sans adapter Redis**
+   (le plus gros risque temps-réel encore ouvert) ; le commentaire de `handleMessage` qui affirme à
+   tort que REST y passe ; la projection des accusés en trois exemplaires inline ;
+   `TranslationStatus` sans référent in-repo ; l'audit d'adressage **Android hors `MessageApi`**.
+
 # Tête instruite pour le cycle 110 — un compteur n'est pas un résumé de la liste, c'est une SECONDE réponse à la même question
 
 *Le cycle 109 a pris l'item 3 que le 108 avait désigné « le lot naturel immédiat » — les compteurs
