@@ -22,6 +22,13 @@
  * `resolveVisibleLastMessage` couvrent la sémantique ; celui-ci couvre la
  * COUVERTURE.
  *
+ * ET SURTOUT — la limite du périmètre, déclarée plutôt que subie : le balayage
+ * porte sur `src/routes/`. La COUCHE SERVICE lit elle aussi des messages, et
+ * `SERVICE_LAYER_UNCOVERED` ci-dessous la dénombre pour que « non couvert »
+ * reste un fait écrit, jamais un angle mort. Un dénombrement qui tairait sa
+ * propre frontière serait la version « garde locale sur défaut global » que
+ * cette famille de gardes existe pour éviter.
+ *
  * @jest-environment node
  */
 
@@ -113,6 +120,28 @@ const SURFACES: Record<string, Classification> = {
  */
 const NESTED_PREVIEW_SURFACES = ['conversations/core.ts', 'conversations/search.ts'];
 
+const SERVICES_DIR = join(__dirname, '../../../services');
+
+/**
+ * La couche service, HORS périmètre du câblage livré — et dénombrée quand même.
+ *
+ * Le cas concret qui justifie de l'écrire : `MessageReadStatusService` compte
+ * les non-lus avec pour seul plancher le curseur de lecture. Un utilisateur qui
+ * efface un historique contenant des messages NON LUS garde donc un badge qui
+ * compte des messages que la liste ne lui montrera plus — un compteur que
+ * défiler ne peut pas éteindre. Moins grave que servir le contenu (c'est un
+ * nombre, pas le message), mais c'est le même défaut, et la même famille.
+ *
+ * Ce test ne corrige rien : il fige l'inventaire, pour qu'un NOUVEAU lecteur de
+ * messages côté service ne se glisse pas dans un angle mort que le garde
+ * ci-dessus laisse croire couvert.
+ */
+const SERVICE_LAYER_UNCOVERED: Record<string, number> = {
+  'ConversationMessageStatsService.ts': 1,
+  'ExpiredMessagesCleanupService.ts': 1,
+  'MessageReadStatusService.ts': 7,
+};
+
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
@@ -193,6 +222,21 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
       .map(([relative]) => relative);
 
     expect(unexplained).toEqual([]);
+  });
+
+  it('fige l\'inventaire de la couche service, hors périmètre mais jamais tacite', () => {
+    const scanned = walk(SERVICES_DIR)
+      .map((full) => ({
+        relative: full.slice(SERVICES_DIR.length + 1),
+        reads: countMatches(readFileSync(full, 'utf8'), MESSAGE_READ),
+      }))
+      .filter((file) => file.reads > 0)
+      .sort((a, b) => a.relative.localeCompare(b.relative));
+
+    expect(scanned.length).toBeGreaterThan(0);
+    expect(Object.fromEntries(scanned.map((f) => [f.relative, f.reads]))).toEqual(
+      SERVICE_LAYER_UNCOVERED
+    );
   });
 
   it('resolves the nested list previews, which no prisma.message scan can see', () => {

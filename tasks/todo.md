@@ -83,18 +83,30 @@ déclare séparément les deux aperçus imbriqués — précisément la forme qu
    `CLAUDE.md` « pas de paire booléen + timestamp ». `clearHistoryBefore` a été ajouté au select par le
    cycle 108 pour un usage serveur seul et subit le même sort — délibérément, et documenté sur place.
    Corriger le wire est un changement de contrat client : à instruire, pas à faire à l'aveugle.
-3. **Le flux `deleted` de `/sync` n'est pas filtré, à dessein.** Une pierre tombale sur un message déjà
+3. **Les compteurs de non-lus ignorent le masquage — le lot naturel immédiat.**
+   `MessageReadStatusService.getUnreadCount`/`getUnreadCountsForUser` comptent avec pour seul
+   plancher le curseur de lecture. Effacer un historique qui contenait des messages NON LUS laisse
+   donc un badge comptant des messages que la liste ne montre plus : un compteur que défiler ne peut
+   pas éteindre. Moins grave que servir le contenu (c'est un nombre, pas le message), mais c'est le
+   même défaut. La couche service entière est hors du périmètre du dénombrement livré — elle y est
+   dénombrée quand même (`SERVICE_LAYER_UNCOVERED` : 3 fichiers, 9 lectures), pour que « non
+   couvert » reste un fait écrit. La difficulté réelle est le chemin BATCHÉ, qui itère sur des
+   participants de conversations différentes : il lui faut les curseurs par conversation, pas un seul.
+4. **`lastMessageAt` n'est pas ajusté quand l'aperçu est masqué.** La conversation garde sa place
+   dans l'ordre de la liste au timestamp d'un message que le lecteur ne voit plus. Corriger
+   demanderait un tri PAR LECTEUR — changement d'une autre ampleur ; noté, pas tenté.
+5. **Le flux `deleted` de `/sync` n'est pas filtré, à dessein.** Une pierre tombale sur un message déjà
    masqué est un no-op client. À reconsidérer seulement si un client se met à traiter un tombstone
    inconnu comme une anomalie.
-4. **`me/export.ts` est exempt à dessein** (export RGPD des messages ÉCRITS par l'utilisateur : le
+6. **`me/export.ts` est exempt à dessein** (export RGPD des messages ÉCRITS par l'utilisateur : le
    masquage est une préférence d'affichage, pas un effacement). Si le produit décide un jour que
    « supprimer pour moi » doit aussi retirer de l'export, c'est une décision juridique, pas technique.
-5. **Reconduits du 107, inchangés** : catalogue de chaînes absent de la cible `MeeshyWidgets` ;
+7. **Reconduits du 107, inchangés** : catalogue de chaînes absent de la cible `MeeshyWidgets` ;
    `WidgetDataManager` qui compose `"[N attachment(s)]"` en anglais et `"Offline"` à côté d'un
    `lastSeenText` français codé en dur dans le SDK ; `meeshy://conversations/recent` sans destination ;
    `meeshy://call?contactId=` sans chemin ; boutons de Live Activity doublement morts ; `ContactEntity`
    qui nomme « contact » une conversation ; garde du Prisme limitée à `apps/ios/Meeshy/`.
-6. **Reconduits plus anciens, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans
+8. **Reconduits plus anciens, inchangés** : `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED` sans
    producteur ; l'épingle qui n'atteint pas la 3ᵉ audience ; Socket.IO sans adapter Redis (le plus gros
    risque temps-réel encore ouvert : en multi-instance, un événement ne franchit pas la frontière du
    process) ; le commentaire de `handleMessage` qui affirme à tort que REST y passe ; la projection des
