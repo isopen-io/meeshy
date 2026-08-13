@@ -2260,6 +2260,12 @@ class ConversationViewModel: ObservableObject {
         // persistence → store observation.
         pendingServerIds[tempId] = serverId
 
+        // `MeeshyMessage.id` passe de `tempId` à `serverId` : la ligne change
+        // d'identité et SwiftUI la reconstruit. Sans ce report, l'effet
+        // d'apparition que l'expéditeur vient de voir démarrer repartirait de
+        // zéro sur la nouvelle ligne.
+        MessageEffectPlaybackStore.shared.transferPlayback(from: tempId, to: serverId)
+
         // GRDB server ack — state machine transitions to .sent. `try?` swallows
         // both errors AND a nil return (state machine rejected / record missing),
         // logged so the ⏱→✓ transition is observable.

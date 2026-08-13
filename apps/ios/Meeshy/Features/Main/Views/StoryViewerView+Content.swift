@@ -2890,7 +2890,7 @@ struct StoryCommentRowView: View, Equatable {
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
-            .messageEffects(comment.effects, hasPlayedAppearance: true)
+            .messageEffects(comment.effects, messageId: comment.id)
             // Halo renforcé sur le corps du commentaire — c'est le texte le plus
             // long, donc le plus exposé à un fond clair/chargé. Le sens du halo
             // suit `colorScheme` : noir pour détacher un texte clair d'un fond

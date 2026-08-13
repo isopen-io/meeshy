@@ -165,7 +165,6 @@ struct ThemedMessageBubble: View {
     @State private var carouselIndex: Int = 0
     @State private var revealedAttachmentIds: Set<String> = []
     @State private var fullscreenLocationAttachment: MessageAttachment? = nil
-    @State private var hasPlayedAppearance = false
 
     // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
@@ -315,8 +314,7 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
-        .onAppear { hasPlayedAppearance = true }
+        .messageEffects(message.effects, messageId: message.id)
         .opacity(isEphemeralExpired ? 0 : 1)
         .scaleEffect(isEphemeralExpired ? 0.8 : 1)
         .onAppear {

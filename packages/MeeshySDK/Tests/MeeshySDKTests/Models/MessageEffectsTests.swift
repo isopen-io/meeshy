@@ -197,4 +197,71 @@ final class MessageEffectsTests: XCTestCase {
         set.insert(flags2)
         XCTAssertEqual(set.count, 1)
     }
+
+    // MARK: - MessageEffectPlan — ce qui est RÉELLEMENT rendu
+
+    private func makePlan(_ flags: MessageEffectFlags,
+                          hasPlayedAppearance: Bool = false,
+                          reduceMotion: Bool = false) -> MessageEffectPlan {
+        MessageEffects(flags: flags).playbackPlan(hasPlayedAppearance: hasPlayedAppearance,
+                                                  reduceMotion: reduceMotion)
+    }
+
+    func test_plan_freshMessage_playsItsAppearanceEffect() {
+        let plan = makePlan([.confetti])
+        XCTAssertTrue(plan.plays(.confetti), "Un message qui vient d'arriver DOIT jouer son effet")
+        XCTAssertFalse(plan.isEmpty)
+    }
+
+    func test_plan_appearanceEffect_neverPlaysTwice() {
+        let plan = makePlan([.confetti, .shake], hasPlayedAppearance: true)
+        XCTAssertFalse(plan.plays(.confetti))
+        XCTAssertFalse(plan.plays(.shake))
+        XCTAssertTrue(plan.isEmpty, "Sans effet persistant, un message déjà joué n'a plus rien à rendre")
+    }
+
+    func test_plan_persistentEffect_survivesReplay() {
+        // Le halo n'est pas une apparition : il définit le message, il reste.
+        let plan = makePlan([.confetti, .glow], hasPlayedAppearance: true)
+        XCTAssertFalse(plan.plays(.confetti))
+        XCTAssertTrue(plan.plays(.glow))
+        XCTAssertFalse(plan.isEmpty)
+    }
+
+    func test_plan_noFlags_isEmpty_soCallersSkipTheWrapper() {
+        XCTAssertTrue(makePlan([]).isEmpty)
+    }
+
+    func test_plan_lifecycleFlagsAlone_areNotVisualEffects() {
+        // ephemeral/blurred/viewOnce sont gérés par les contrôleurs de cycle de
+        // vie de la bulle, pas par les modifiers visuels.
+        XCTAssertTrue(makePlan([.ephemeral, .blurred, .viewOnce]).isEmpty)
+    }
+
+    // MARK: - Reduce Motion
+
+    func test_plan_reduceMotion_suppressesEveryAppearanceEffect() {
+        let plan = makePlan([.shake, .zoom, .explode, .confetti, .fireworks, .waoo], reduceMotion: true)
+        XCTAssertTrue(plan.appearance.isEmpty, "Aucune apparition one-shot sous « Réduire les animations »")
+    }
+
+    func test_plan_reduceMotion_keepsStaticallyMeaningfulPersistentEffects() {
+        let plan = makePlan([.glow, .rainbow], reduceMotion: true)
+        XCTAssertTrue(plan.plays(.glow))
+        XCTAssertTrue(plan.plays(.rainbow))
+        XCTAssertFalse(plan.animatesPersistent, "Ils sont rendus FIXES, pas animés")
+    }
+
+    func test_plan_reduceMotion_dropsPureMotionEffects() {
+        // pulse et sparkle ne sont QUE du mouvement : figés, ils ne veulent plus
+        // rien dire — on les retire au lieu de les laisser inertes.
+        let plan = makePlan([.pulse, .sparkle], reduceMotion: true)
+        XCTAssertFalse(plan.plays(.pulse))
+        XCTAssertFalse(plan.plays(.sparkle))
+        XCTAssertTrue(plan.isEmpty)
+    }
+
+    func test_plan_animatesPersistent_isTrueWithoutReduceMotion() {
+        XCTAssertTrue(makePlan([.glow]).animatesPersistent)
+    }
 }

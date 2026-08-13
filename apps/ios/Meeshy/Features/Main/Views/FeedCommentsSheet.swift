@@ -2117,7 +2117,6 @@ struct CommentRowView: View, Equatable {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
-    @State private var hasPlayedAppearanceEffect = false
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
     /// Demande de traduction envoyée pour cette ligne (feedback immédiat,
@@ -2294,15 +2293,8 @@ struct CommentRowView: View, Equatable {
                     .tint(Color(hex: accentColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
-                    .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)
+                    .messageEffects(comment.effects, messageId: comment.id)
                     .accessibilityLabel(String(format: String(localized: "a11y.comment.body", defaultValue: "%1$@ : %2$@", bundle: .main), RelativeTimeFormatter.shortString(for: comment.timestamp), effectiveCommentContent))
-                    .onAppear {
-                        if comment.effects.hasAnyEffect && !hasPlayedAppearanceEffect {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                hasPlayedAppearanceEffect = true
-                            }
-                        }
-                    }
 
                 // Média unique du commentaire (image/vidéo/audio) — inline + plein
                 // écran « comme dans une conversation ». Le commentaire ne porte

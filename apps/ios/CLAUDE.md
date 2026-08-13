@@ -336,6 +336,25 @@ Le MP4 export (`StoryVideoExportService` + `StoryExporter`) est une feature **au
 
 Source : `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`
 
+## Effets de message (`Message.effectFlags`)
+
+Le bitfield `effectFlags` est persisté par le gateway et lu par TOUS les clients. Trois axes : cycle de vie (`ephemeral`/`blurred`/`viewOnce`, gérés par les contrôleurs de bulle), apparition one-shot (`shake`/`zoom`/`explode`/`confetti`/`fireworks`/`waoo`), persistants (`glow`/`pulse`/`rainbow`/`sparkle`).
+
+**Sources de vérité jumelles — toute évolution de la règle touche les deux :**
+- Swift : `MessageEffectPlan` (`packages/MeeshySDK/.../Models/MessageEffects.swift`)
+- TypeScript : `resolveMessageEffectPlan()` (`apps/web/lib/message-effects.ts`)
+
+Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEffectFlags`.
+
+### Règles
+1. **Un effet d'apparition joue exactement UNE fois par message**, sur l'arrivée du message — pas sur l'arrivée de ses pixels. Les listes sont paresseuses : un `@State` local repart à `false` à chaque recyclage et rejouerait l'effet à chaque scroll. La mémoire est portée par `MessageEffectPlaybackStore` (iOS, borné FIFO 500) et par le `Set` de module de `MessageEffects.tsx` (web).
+2. **Ne JAMAIS basculer le drapeau « déjà joué » dans un `.onAppear` frère de celui qui démarre l'animation.** C'est le défaut corrigé le 2026-08-13 : `ThemedMessageBubble` posait `.messageEffects(...)` puis `.onAppear { hasPlayedAppearance = true }`, donc le changement d'état re-rendait la bulle avec `active == false` dans la MÊME passe et coupait chaque animation avant la première frame — aucun effet d'apparition n'était jamais visible en conversation. L'état est lu UNE fois à la construction ; `markPlayed` écrit dans le store sans toucher au `@State` local.
+3. **`transferPlayback(from:to:)` à la réconciliation `tempId → serverId`** (`ConversationViewModel.finalizeSuccessfulSend`) : `MeeshyMessage.id` vaut `serverId ?? localId`, donc la ligne change d'identité à l'ack et SwiftUI la reconstruit — sans report, l'expéditeur voit son propre effet repartir de zéro.
+4. **Une secousse se fait avec un `GeometryEffect`, jamais avec un `.offset` calculé.** `.offset(x: sin(phase * .pi * 4) * 8)` animé `phase: 0 → 1` ne bouge PAS : SwiftUI interpole la valeur produite, et `sin(0) == sin(4π) == 0`. Seul `animatableData` fait parcourir la courbe.
+5. **Les particules se décrivent en coordonnées relatives figées + une progression animée**, jamais en mutant un `@State` vide depuis `onAppear` puis en l'animant dans le même tour : sans frame initiale rendue, il n'y a rien à interpoler.
+6. **`reduceMotion` : le message perd son mouvement, pas son intention.** Aucune apparition ne joue ; `glow` et `rainbow` sont rendus FIXES (`reduceMotionSafeMask`) ; `pulse` et `sparkle` sont du mouvement pur et sont retirés.
+7. **Plan vide ⇒ vue intacte.** `plan.isEmpty` doit court-circuiter tout wrapper : l'écrasante majorité des messages a `effectFlags == 0` et ne doit pas payer huit ViewModifier inertes par cellule.
+
 ## TDD & Testing Standards
 
 ### Test Organization

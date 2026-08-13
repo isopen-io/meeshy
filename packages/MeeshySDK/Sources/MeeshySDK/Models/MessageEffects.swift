@@ -81,6 +81,69 @@ public struct MessageEffects: Codable, Sendable, Hashable {
 
     public static let none = MessageEffects()
     public var hasAnyEffect: Bool { flags.hasAnyEffect }
+
+    /// Ce qu'il faut RÉELLEMENT rendre pour ce message, ici et maintenant.
+    ///
+    /// Règle pure, partagée par toutes les surfaces (bulle de conversation,
+    /// commentaire de post, commentaire de story) — voir `MessageEffectPlan`.
+    public func playbackPlan(hasPlayedAppearance: Bool, reduceMotion: Bool) -> MessageEffectPlan {
+        MessageEffectPlan(effects: self, hasPlayedAppearance: hasPlayedAppearance, reduceMotion: reduceMotion)
+    }
+}
+
+// MARK: - MessageEffectPlan (règle de lecture — pure, sans dépendance UI)
+
+/// Décide quels effets d'un message doivent être rendus à un instant donné.
+///
+/// Trois entrées, aucune dépendance : les flags du message, le fait que son
+/// animation d'apparition a DÉJÀ joué, et la préférence système « Réduire les
+/// animations ». Séparé des `ViewModifier` pour être testable sans SwiftUI, et
+/// partagé pour que les trois surfaces qui affichent des effets (conversation,
+/// commentaires de post, commentaires de story) ne puissent pas diverger.
+///
+/// **Les effets d'apparition ne jouent qu'UNE fois par message.** C'est ce que
+/// `hasPlayedAppearance` encode : une cellule recyclée par une liste paresseuse
+/// est reconstruite avec `true` et ne rejoue rien. L'appelant est responsable de
+/// la persistance de ce booléen entre deux instanciations (côté app :
+/// `MessageEffectPlaybackStore`).
+///
+/// **Sous `reduceMotion`, le message ne perd pas son intention, il perd son
+/// mouvement** : aucune apparition one-shot ne joue, et seuls les effets
+/// persistants qui gardent un sens en rendu FIXE survivent (halo, bordure
+/// arc-en-ciel). `pulse` et `sparkle` sont du mouvement pur — sans animation
+/// ils ne veulent plus rien dire — donc ils sont retirés plutôt que figés.
+public struct MessageEffectPlan: Equatable, Sendable {
+
+    /// Effets persistants qui gardent du sens sans animation.
+    public static let reduceMotionSafeMask: MessageEffectFlags = [.glow, .rainbow]
+
+    /// Effets d'apparition one-shot à jouer MAINTENANT (vide si déjà joués).
+    public let appearance: MessageEffectFlags
+    /// Effets persistants à rendre en continu.
+    public let persistent: MessageEffectFlags
+    /// `false` sous `reduceMotion` : les effets persistants sont rendus FIXES
+    /// (pas de `repeatForever`), sans être supprimés.
+    public let animatesPersistent: Bool
+
+    public init(effects: MessageEffects, hasPlayedAppearance: Bool, reduceMotion: Bool) {
+        let requestedAppearance = effects.flags.intersection(.appearanceMask)
+        let requestedPersistent = effects.flags.intersection(.persistentMask)
+
+        appearance = (hasPlayedAppearance || reduceMotion) ? MessageEffectFlags() : requestedAppearance
+        persistent = reduceMotion
+            ? requestedPersistent.intersection(Self.reduceMotionSafeMask)
+            : requestedPersistent
+        animatesPersistent = !reduceMotion
+    }
+
+    /// `true` quand il n'y a strictement rien à rendre — l'appelant DOIT alors
+    /// laisser sa vue intacte plutôt que l'envelopper dans des modifiers inertes
+    /// (cas de l'écrasante majorité des messages, `effectFlags == 0`).
+    public var isEmpty: Bool { appearance.isEmpty && persistent.isEmpty }
+
+    public func plays(_ flag: MessageEffectFlags) -> Bool {
+        !appearance.intersection(flag).isEmpty || !persistent.intersection(flag).isEmpty
+    }
 }
 
 // MARK: - Supporting Enums
