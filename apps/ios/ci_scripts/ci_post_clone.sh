@@ -34,27 +34,4 @@
 set -eu
 
 echo "[ci_post_clone] No signing patch — the Xcode Cloud archive signs ad hoc WITH entitlements (see header)."
-
-# ─── XcodeGen regeneration (incident: "Cannot find type X in scope" on Xcode
-# Cloud, 2026-08-13) ───────────────────────────────────────────────────────
-#
-# apps/ios/project.yml is the source of truth (XcodeGen); the committed
-# Meeshy.xcodeproj/project.pbxproj is a generated artifact that lags behind
-# it — new files under Meeshy/ are auto-globbed by `xcodegen generate` but
-# are NOT retroactively added to the committed pbxproj by hand (CLAUDE.md:
-# "jamais d'édition manuelle du pbxproj"). Every other CI path already
-# regenerates before building (see .github/workflows/ios-tests.yml,
-# ios-release.yml, ios-fastlane-release.yml: `brew install xcodegen &&
-# xcodegen generate`) — this hook was the one path that built straight off
-# the possibly-stale committed pbxproj, since Xcode Cloud does not run
-# meeshy.sh (which also skips xcodegen on purpose, for local dev speed).
-# Symptom: newly added sources (e.g. MediaSaveBranding.swift) compile fine
-# locally and in GitHub Actions, but Xcode Cloud fails with "Cannot find
-# type 'MediaSaveBranding' in scope" because the file was never a member of
-# any PBXSourcesBuildPhase in the committed project.
-cd "$CI_PRIMARY_REPOSITORY_PATH/apps/ios"
-command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
-xcodegen generate
-echo "[ci_post_clone] XcodeGen regenerated project.pbxproj from project.yml."
-
 exit 0
