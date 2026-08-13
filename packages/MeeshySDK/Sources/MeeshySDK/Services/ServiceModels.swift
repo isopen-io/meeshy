@@ -86,8 +86,15 @@ public struct CreatePostRequest: Encodable {
     /// pour un message ou un commentaire, hissée par le gateway depuis
     /// `metadata.location` (Task 9).
     public let location: SharedPlace?
+    /// Pistes audio de composition (`audioPlayerObjects`). Permet à un POST ou
+    /// un REEL de porter un son EMPRUNTÉ (`soundId`) sans média uploadé — même
+    /// blob que `CreateStoryRequest.storyEffects`, même schéma gateway.
+    public let storyEffects: StoryEffects?
+    /// Opt-in auteur : extraction de la bande-son des VIDÉOS du post vers la
+    /// bibliothèque de sons (miroir de `CreatePostSchema.allowSoundExtraction`).
+    public let allowSoundExtraction: Bool?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -95,6 +102,8 @@ public struct CreatePostRequest: Encodable {
         self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
         self.repostOfId = repostOfId
         self.location = location
+        self.storyEffects = storyEffects
+        self.allowSoundExtraction = allowSoundExtraction
     }
 }
 

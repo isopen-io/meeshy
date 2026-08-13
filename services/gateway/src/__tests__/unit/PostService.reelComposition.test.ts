@@ -151,7 +151,13 @@ describe('PostService — règle de composition REEL', () => {
 
       await service.createPost({ ...baseCreate, type: PostType.POST, mediaIds: ['m1'] }, 'user-1');
 
-      expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
+      // La capture de la bibliothèque de sons lit désormais les médias
+      // ATTACHÉS (`where: { postId }`) sur tout post avec `mediaIds` — c'est
+      // légitime. La CLASSIFICATION, elle, lit par `where: { id: { in } }` et
+      // ne doit jamais tourner pour un non-REEL.
+      const classificationReads = prisma.postMedia.findMany.mock.calls
+        .filter((call: unknown[]) => Boolean((call[0] as { where?: { id?: unknown } } | undefined)?.where?.id));
+      expect(classificationReads).toHaveLength(0);
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.POST }) }),
       );

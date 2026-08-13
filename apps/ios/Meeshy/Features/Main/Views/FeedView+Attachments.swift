@@ -464,6 +464,33 @@ extension FeedView {
         }
     }
 
+    /// Publie un post/réel dont l'audio est un son EMPRUNTÉ à la bibliothèque
+    /// (porte « Bibliothèque » de la feuille unifiée d'enregistrement).
+    ///
+    /// Aucun upload : la piste construite référence `sound.id` + l'URL serveur
+    /// du fichier — exactement la forme produite par
+    /// `StoryComposerViewModel.addBorrowedSound`, pour que lecteur, export et
+    /// capture serveur (usage, crédit) suivent le même chemin. Le type suit la
+    /// règle de composition : un son ≥ 3 s qualifie un RÉEL (miroir gateway).
+    func publishBorrowedSoundPost(_ sound: APISound) async {
+        await MainActor.run { isUploading = true }
+        await viewModel.createBorrowedSoundPost(
+            type: BorrowedSoundPost.type(for: sound, forcePlainPost: composerForcePlainPost),
+            storyEffects: BorrowedSoundPost.effects(for: sound)
+        )
+
+        await MainActor.run {
+            isUploading = false
+            if viewModel.publishError == nil {
+                HapticFeedback.success()
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
+            } else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+            }
+        }
+    }
+
     // MARK: - Cleanup
     private func feedCleanupAttachments() {
         pendingAttachments.removeAll()
@@ -1033,12 +1060,18 @@ struct FeedComposerSheet: View {
             onIngest: { handleSheetComposerIngest($0) }
         ))
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
-                showAudioComposer = false
-                Task {
-                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
+            AudioPostComposerView(
+                onPublish: { audioURL, mimeType, durationMs, transcription in
+                    showAudioComposer = false
+                    Task {
+                        await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
+                    }
+                },
+                onPublishBorrowed: { sound in
+                    showAudioComposer = false
+                    Task { await publishBorrowedSoundFromSheet(sound) }
                 }
-            }
+            )
         }
         .sheet(isPresented: $showLanguagePicker) {
             AudioLanguagePickerView(
@@ -1643,6 +1676,28 @@ struct FeedComposerSheet: View {
         }
     }
 
+    /// Variante sheet de `FeedView.publishBorrowedSoundPost` — mêmes helpers
+    /// purs (`BorrowedSoundPost`), mais l'état (`isUploading`, `forcePlainPost`,
+    /// `onDismiss`) est celui du composer sheet.
+    private func publishBorrowedSoundFromSheet(_ sound: APISound) async {
+        await MainActor.run { isUploading = true }
+        await viewModel.createBorrowedSoundPost(
+            type: BorrowedSoundPost.type(for: sound, forcePlainPost: forcePlainPost),
+            storyEffects: BorrowedSoundPost.effects(for: sound)
+        )
+        await MainActor.run {
+            isUploading = false
+            if viewModel.publishError == nil {
+                onDismiss()
+                HapticFeedback.success()
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
+            } else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+            }
+        }
+    }
+
     private func cleanupAndDismiss() {
         for (_, url) in pendingMediaFiles { try? FileManager.default.removeItem(at: url) }
         onDismiss()
@@ -1688,4 +1743,45 @@ struct FeedComposerSheet: View {
 private struct EditingAttachmentItem: Identifiable {
     let id: String
     let image: UIImage
+}
+
+// MARK: - Borrowed sound post building
+
+/// Construction PURE d'un post/réel « son emprunté seul », partagée par les
+/// deux surfaces de publication (`FeedView.publishBorrowedSoundPost` et
+/// `FeedComposerSheet.publishBorrowedSoundFromSheet`).
+enum BorrowedSoundPost {
+    /// Blob `storyEffects` portant l'unique piste empruntée — exactement la
+    /// forme produite par `StoryComposerViewModel.addBorrowedSound` (`soundId`
+    /// + `mediaURL` serveur, `postMediaId` vide), pour que lecteur, export et
+    /// capture serveur (usage, crédit) suivent le même chemin.
+    static func effects(for sound: APISound) -> StoryEffects {
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [
+            StoryAudioPlayerObject(
+                postMediaId: "",
+                placement: "overlay",
+                x: 0.5,
+                y: 0.65,
+                volume: 1.0,
+                waveformSamples: sound.waveform,
+                isBackground: true,
+                duration: sound.durationSeconds.map { Float($0) },
+                name: sound.hasAuthoredTitle ? sound.title : nil,
+                mediaURL: sound.fileUrl,
+                soundId: sound.id,
+                soundAuthorUsername: sound.uploader?.username
+            ),
+        ]
+        return effects
+    }
+
+    /// Un son ≥ 3 s qualifie un RÉEL (`ReelComposition`, miroir de la règle
+    /// gateway étendue aux sons empruntés) ; `forcePlainPost` reste respecté.
+    static func type(for sound: APISound, forcePlainPost: Bool) -> String {
+        let qualifiesAsReel = (sound.durationMs ?? 0) >= ReelComposition.minQualifyingDurationMs
+        return (!forcePlainPost && qualifiesAsReel)
+            ? PostType.reel.rawValue
+            : PostType.post.rawValue
+    }
 }

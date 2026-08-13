@@ -6045,3 +6045,12 @@ lockfile réellement modifié par un `bun install` de confort, qu'un `git add -A
 **Corollaire de réparation** : restaurer depuis `git show <base>:<chemin>` et RE-ANNEXER sa
 section, plutôt que de rejouer le geste dans l'autre sens. Le document appartient au dépôt, pas
 au cycle en cours ; un cycle n'y ajoute qu'un chapitre.
+
+---
+
+## Leçon (2026-08-13) — `tasks/todo.md` est ÉPHÉMÈRE : vide en fin de session
+
+Directive user : `tasks/todo.md` doit être remis À VIDE après chaque session — c'est un
+brouillon de travail, pas une archive. Ne JAMAIS y préserver/concaténer l'historique des
+sessions précédentes (et donc ne pas s'alarmer de l'« écraser ») ; la mémoire durable du
+projet vit dans `tasks/lessons.md`, les specs et les CLAUDE.md.

@@ -117,17 +117,41 @@ describe('PostService — câblage de la capture', () => {
   /**
    * `UpdatePostSchema` a tous ses champs optionnels : un PUT partiel (audience,
    * légende) arrive sans `storyEffects`, et le blob en base n'est alors PAS
-   * réécrit. Sans cette garde, la capture recevrait `tracks: []` et
-   * `dropRemovedUsages` effacerait tous les usages d'une story qui joue
-   * pourtant toujours son audio, en faussant `usageCount`.
+   * réécrit. Deux protections se composent depuis l'extension médias :
+   * 1. la capture ne se relance que si l'édition EXPRIME quelque chose sur les
+   *    sons (blob envoyé, composition média touchée, opt-in d'extraction) ;
+   * 2. quand elle se relance SANS blob envoyé, les pistes sont relues du blob
+   *    EN BASE (`updated.storyEffects`) — jamais `tracks: []` par défaut, qui
+   *    ferait effacer les usages d'une story qui joue toujours son audio.
    */
   it('test_updatePost_withoutStoryEffects_doesNotTouchUsages', () => {
     const start = code.indexOf('async updatePost');
     const end = code.indexOf('async deletePost');
     const body = code.slice(start, end);
-    const guard = body.indexOf('if (data.storyEffects !== undefined)');
+    const guard = body.indexOf(
+      'if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined)');
     const call = body.indexOf('this.soundCaptureService.captureSounds');
     expect(guard).toBeGreaterThan(-1);
     expect(call).toBeGreaterThan(guard);
+    expect(body).toContain('?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined');
+  });
+
+  /**
+   * Chemin des posts VOCAUX (AudioPostComposer) : l'audio arrive par
+   * `mediaIds`, sans blob `storyEffects`. Les deux sites de capture doivent
+   * passer par `collectCaptureTracks` (blob + synthèse médias) — revenir à
+   * `extractCaptureTracks` seul ferait sortir ces posts de la bibliothèque.
+   */
+  it('test_bothCaptureSites_collectMediaTracksToo', () => {
+    expect(code.split('this.collectCaptureTracks(').length).toBe(3);
+  });
+
+  /**
+   * L'extraction vidéo est un OPT-IN par post : le drapeau transmis à la
+   * collecte doit venir du champ persisté/demandé, jamais d'une constante.
+   */
+  it('test_videoExtraction_isGatedOnTheAuthorOptIn', () => {
+    expect(code).toContain('data.allowSoundExtraction ?? false');
+    expect(code).toContain('updated.allowSoundExtraction === true');
   });
 });

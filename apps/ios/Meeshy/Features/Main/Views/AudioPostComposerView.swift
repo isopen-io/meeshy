@@ -1,14 +1,26 @@
 import SwiftUI
 import Combine
+import AVFoundation
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
 // MARK: - Audio Post Composer
 
+/// Composer d'un post/réel audio. Depuis 2026-08-13 la CAPTURE passe par la
+/// feuille unifiée (`UnifiedAudioRecorderSheet`, MeeshyUI) — le même composant
+/// que le composer de story — qui apporte aussi les portes « Fichiers » et
+/// « Bibliothèque » : un post/réel peut désormais RÉUTILISER un son de la
+/// bibliothèque au lieu d'enregistrer. La transcription on-device, le sélecteur
+/// de locale et le flux de publication restent propres à ce composer.
 struct AudioPostComposerView: View {
     /// Duration (ms) feeds `ReelComposition`'s 3-second qualification floor —
     /// without it the composer couldn't tell a short clip from a long one.
     let onPublish: (URL, String, Int, MobileTranscriptionPayload?) -> Void
+    /// Publication d'un son EMPRUNTÉ à la bibliothèque : aucun fichier à
+    /// uploader — le parent publie un post/réel dont la piste référence
+    /// `sound.id` (voir `FeedView+Attachments.publishBorrowedSoundPost`).
+    let onPublishBorrowed: (APISound) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -19,9 +31,13 @@ struct AudioPostComposerView: View {
     @State private var transcriptionError: String?
     @State private var recordedURL: URL?
     @State private var recordedDuration: TimeInterval = 0
+    @State private var recordedMimeType = "audio/mp4"
+    @State private var borrowedSound: APISound?
     @State private var phase: ComposerPhase = .idle
     @State private var selectedLocale: Locale = AudioPostComposerView.initialLocale()
     @State private var showLanguagePicker = false
+    @State private var showAudioImporter = false
+    @State private var showSoundLibrary = false
 
     private enum ComposerPhase {
         case idle, recording, transcribing, preview
@@ -42,13 +58,42 @@ struct AudioPostComposerView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 24) {
-                        recordingCard
-                        languageSelector
+                        if phase == .idle || phase == .recording {
+                            // LA feuille unifiée d'enregistrement (partagée avec
+                            // le composer de story) : record/stop/cancel,
+                            // waveform live, durée sans plafond, chips Fichiers
+                            // et Bibliothèque. La strip de langue est masquée —
+                            // ce composer possède son propre sélecteur de locale
+                            // de transcription, plus riche (disponibilité
+                            // on-device + picker complet).
+                            UnifiedAudioRecorderSheet(
+                                recorder: audioRecorder,
+                                preferredLanguage: Self.shortDisplayName(for: selectedLocale).lowercased(),
+                                showsLanguageStrip: false,
+                                onImportAudioFile: { showAudioImporter = true },
+                                onOpenSoundLibrary: { showSoundLibrary = true },
+                                onRecordComplete: { url, _ in
+                                    acceptRecording(url: url, mimeType: "audio/mp4")
+                                }
+                            )
+                            .frame(minHeight: 320)
+                        } else {
+                            statusCard
+                        }
+                        if borrowedSound == nil {
+                            languageSelector
+                        }
                         contentPanel
                         Color.clear.frame(height: 100)
                     }
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.lg)
+                }
+                .fileImporter(isPresented: $showAudioImporter,
+                              allowedContentTypes: [.audio]) { result in
+                    if case .success(let url) = result {
+                        importAudioFile(from: url)
+                    }
                 }
 
                 VStack {
@@ -74,6 +119,23 @@ struct AudioPostComposerView: View {
                     }
                     .foregroundColor(theme.textSecondary)
                 }
+            }
+        }
+        .sheet(isPresented: $showSoundLibrary) {
+            SoundLibraryPicker(
+                onPick: { sound in
+                    borrowedSound = sound
+                    phase = .preview
+                    showSoundLibrary = false
+                },
+                onCancel: { showSoundLibrary = false }
+            )
+        }
+        .adaptiveOnChange(of: audioRecorder.isRecording) { _, isRecording in
+            // La feuille unifiée possède le flux record/stop ; le composer ne
+            // fait que suivre pour griser son sélecteur de langue.
+            if phase == .idle || phase == .recording {
+                phase = isRecording ? .recording : .idle
             }
         }
         .adaptiveOnChange(of: colorScheme) { _, newScheme in
@@ -109,24 +171,27 @@ struct AudioPostComposerView: View {
         .ignoresSafeArea()
     }
 
-    // MARK: - Recording Card
+    // MARK: - Status Card (transcription / préview)
 
-    private var recordingCard: some View {
+    /// Carte d'état hors capture : la phase idle/recording est entièrement
+    /// portée par la feuille unifiée (`UnifiedAudioRecorderSheet`).
+    private var statusCard: some View {
         VStack(spacing: 18) {
             ZStack {
                 Circle()
-                    .fill(haloColor.opacity(audioRecorder.isRecording ? 0.28 : 0.12))
+                    .fill(haloColor.opacity(0.12))
                     .frame(width: 168, height: 168)
-                    .blur(radius: audioRecorder.isRecording ? 10 : 4)
+                    .blur(radius: 4)
 
                 Circle()
                     .fill(haloColor.opacity(0.08))
                     .frame(width: 132, height: 132)
 
                 centerContent
-                    // Visualisation d'état purement décorative (waveform / sceau / micro /
-                    // spinner). L'état parlé est porté par `durationLabel` juste en dessous
-                    // → on masque le décor pour éviter le bruit VoiceOver.
+                    // Visualisation d'état purement décorative (sceau / note /
+                    // spinner). L'état parlé est porté par `durationLabel` juste
+                    // en dessous → on masque le décor pour éviter le bruit
+                    // VoiceOver.
                     .accessibilityHidden(true)
             }
             .frame(height: 168)
@@ -148,14 +213,15 @@ struct AudioPostComposerView: View {
 
     @ViewBuilder
     private var centerContent: some View {
-        if audioRecorder.isRecording {
-            WaveformView(levels: audioRecorder.audioLevels)
-                .frame(width: 100, height: 60)
-        } else if phase == .transcribing {
+        if phase == .transcribing {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
                 .scaleEffect(1.6)
-        } else if phase == .preview {
+        } else if borrowedSound != nil {
+            Image(systemName: "music.note.list")
+                .font(MeeshyFont.relative(56))
+                .foregroundStyle(MeeshyColors.brandGradient)
+        } else {
             Image(systemName: "checkmark.seal.fill")
                 .font(MeeshyFont.relative(56))
                 .foregroundStyle(
@@ -164,34 +230,40 @@ struct AudioPostComposerView: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 )
-        } else {
-            Image(systemName: "mic.fill")
-                .font(MeeshyFont.relative(48))
-                .foregroundStyle(MeeshyColors.brandGradient)
         }
     }
 
     private var haloColor: Color {
-        if audioRecorder.isRecording { return MeeshyColors.error }
-        if phase == .preview { return MeeshyColors.success }
+        if phase == .preview { return borrowedSound != nil ? MeeshyColors.indigo500 : MeeshyColors.success }
         return MeeshyColors.indigo500
     }
 
     @ViewBuilder
     private var durationLabel: some View {
-        if audioRecorder.isRecording || phase == .preview {
+        if phase == .preview, let borrowedSound {
+            VStack(spacing: 4) {
+                Text(borrowedSound.hasAuthoredTitle
+                     ? borrowedSound.title
+                     : String(localized: "Son original", defaultValue: "Son original"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                Text(borrowedSound.authorLabel.map { "@\($0)" } ?? "")
+                    .font(.caption)
+                    .foregroundColor(theme.textSecondary)
+                Text(formattedDuration)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(theme.textMuted)
+            }
+        } else if phase == .preview {
             Text(formattedDuration)
                 .font(.system(.largeTitle, design: .monospaced).weight(.light))
                 .foregroundColor(theme.textPrimary)
                 // A bare monospaced "0:34" reads to VoiceOver as a context-less
-                // number. Name what the timer measures via the label (elapsed
-                // while recording vs. the recorded length in preview) and expose
+                // number. Name what the timer measures via the label and expose
                 // the running time as the value.
-                .accessibilityLabel(audioRecorder.isRecording
-                    ? String(localized: "Durée d'enregistrement",
-                             defaultValue: "Dur\u{00E9}e d'enregistrement")
-                    : String(localized: "Durée enregistrée",
-                             defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
+                .accessibilityLabel(String(localized: "Durée enregistrée",
+                                           defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
                 .accessibilityValue(formattedDuration)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
@@ -202,10 +274,6 @@ struct AudioPostComposerView: View {
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
-        } else {
-            Text(String(localized: "Appuyez pour enregistrer", defaultValue: "Appuyez pour enregistrer"))
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textSecondary)
         }
     }
 
@@ -491,43 +559,8 @@ struct AudioPostComposerView: View {
                 )
             }
         case .idle, .recording:
-            HStack {
-                Spacer()
-                Button(action: toggleRecording) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                audioRecorder.isRecording
-                                    ? AnyShapeStyle(MeeshyColors.error)
-                                    : AnyShapeStyle(MeeshyColors.brandGradient)
-                            )
-                            .frame(width: 76, height: 76)
-                            .shadow(
-                                color: (audioRecorder.isRecording
-                                            ? MeeshyColors.error
-                                            : MeeshyColors.indigo500).opacity(0.45),
-                                radius: 16, y: 6
-                            )
-                        if audioRecorder.isRecording {
-                            RoundedRectangle(cornerRadius: 5)
-                                .fill(.white)
-                                .frame(width: 26, height: 26)
-                        } else {
-                            Image(systemName: "mic.fill")
-                                .font(.title)
-                                .foregroundColor(.white)
-                        }
-                    }
-                }
-                .accessibilityLabel(
-                    audioRecorder.isRecording
-                        ? String(localized: "Arreter l'enregistrement",
-                                 defaultValue: "Arr\u{00EA}ter l'enregistrement")
-                        : String(localized: "Demarrer l'enregistrement",
-                                 defaultValue: "D\u{00E9}marrer l'enregistrement")
-                )
-                Spacer()
-            }
+            // Le bouton record vit dans la feuille unifiée — plus de doublon.
+            EmptyView()
         }
     }
 
@@ -547,39 +580,61 @@ struct AudioPostComposerView: View {
     }
 
     private var formattedDuration: String {
-        let d = audioRecorder.isRecording ? audioRecorder.duration : recordedDuration
+        let d = borrowedSound?.durationSeconds ?? recordedDuration
         let minutes = Int(d) / 60
         let seconds = Int(d) % 60
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    private func toggleRecording() {
-        if audioRecorder.isRecording {
-            stopAndTranscribe()
-        } else {
-            startRecording()
-        }
-    }
-
-    private func startRecording() {
+    /// Entrée UNIQUE des fichiers audio propres — enregistrement (feuille
+    /// unifiée) comme import Fichiers : durée native lue de l'asset (même
+    /// méthode que le composer de story), puis transcription on-device.
+    private func acceptRecording(url: URL, mimeType: String) {
         transcription = nil
         transcriptionError = nil
-        recordedURL = nil
-        phase = .recording
-        audioRecorder.startRecording()
-        HapticFeedback.medium()
-    }
-
-    private func stopAndTranscribe() {
-        recordedDuration = audioRecorder.duration
-        guard let url = audioRecorder.stopRecording() else {
-            phase = .idle
-            return
-        }
+        borrowedSound = nil
         recordedURL = url
+        recordedMimeType = mimeType
+        recordedDuration = audioRecorder.duration
         phase = .transcribing
         HapticFeedback.light()
-        runTranscription(url: url)
+        Task {
+            if let seconds = try? await AVURLAsset(url: url).load(.duration).seconds,
+               seconds.isFinite, seconds > 0 {
+                recordedDuration = seconds
+            }
+            runTranscription(url: url)
+        }
+    }
+
+    /// Import depuis Fichiers : copie locale (l'URL security-scoped du picker
+    /// ne survit pas à la feuille), MIME dérivé de l'extension.
+    private func importAudioFile(from pickedURL: URL) {
+        let accessing = pickedURL.startAccessingSecurityScopedResource()
+        defer { if accessing { pickedURL.stopAccessingSecurityScopedResource() } }
+        let ext = pickedURL.pathExtension.isEmpty ? "m4a" : pickedURL.pathExtension
+        let localURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + ext)
+        do {
+            try? FileManager.default.removeItem(at: localURL)
+            try FileManager.default.copyItem(at: pickedURL, to: localURL)
+        } catch {
+            transcriptionError = String(localized: "Import du fichier audio impossible",
+                                        defaultValue: "Import du fichier audio impossible")
+            phase = .preview
+            return
+        }
+        acceptRecording(url: localURL, mimeType: Self.mimeType(forExtension: ext))
+    }
+
+    private static func mimeType(forExtension ext: String) -> String {
+        switch ext.lowercased() {
+        case "mp3": return "audio/mpeg"
+        case "wav": return "audio/wav"
+        case "aac": return "audio/aac"
+        case "ogg", "oga": return "audio/ogg"
+        default: return "audio/mp4"
+        }
     }
 
     private func retryTranscription() {
@@ -624,6 +679,7 @@ struct AudioPostComposerView: View {
             try? FileManager.default.removeItem(at: url)
         }
         recordedURL = nil
+        borrowedSound = nil
         transcription = nil
         transcriptionError = nil
         phase = .idle
@@ -643,9 +699,13 @@ struct AudioPostComposerView: View {
     }
 
     private func publish() {
+        if let borrowedSound {
+            onPublishBorrowed(borrowedSound)
+            return
+        }
         guard let url = recordedURL else { return }
         let payload = transcription.map { buildPayload($0) }
-        onPublish(url, "audio/mp4", Int(recordedDuration * 1000), payload)
+        onPublish(url, recordedMimeType, Int(recordedDuration * 1000), payload)
     }
 
     private func buildPayload(_ t: OnDeviceTranscription) -> MobileTranscriptionPayload {
@@ -662,23 +722,6 @@ struct AudioPostComposerView: View {
             confidence: t.confidence,
             segments: segments
         )
-    }
-}
-
-// MARK: - Waveform View
-
-private struct WaveformView: View {
-    let levels: [CGFloat]
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 3) {
-            ForEach(levels.indices, id: \.self) { i in
-                Capsule()
-                    .fill(MeeshyColors.error)
-                    .frame(width: 4, height: max(4, levels[i] * 56))
-                    .animation(.easeInOut(duration: 0.08), value: levels[i])
-            }
-        }
     }
 }
 

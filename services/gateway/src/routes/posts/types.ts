@@ -201,6 +201,10 @@ export const CreatePostSchema = z.object({
   communityId: z.string().optional(),
   // Story-specific
   storyEffects: StoryEffectsSchema.optional(),
+  // Opt-in AUTEUR : autorise l'extraction de la bande-son des VIDÉOS du post
+  // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
+  // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
+  allowSoundExtraction: z.boolean().optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),
@@ -293,6 +297,9 @@ export const UpdatePostSchema = z.object({
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   storyEffects: StoryEffectsSchema.optional(),
+  // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
+  // Basculer à false libère l'usage vidéo à la prochaine passe de capture.
+  allowSoundExtraction: z.boolean().optional(),
   moodEmoji: z.string().max(10).optional(),
   // ISO 639-1 (or BCP-47) source language. Changing it re-runs the Prisme
   // translation pipeline from the new source and discards stale translations.

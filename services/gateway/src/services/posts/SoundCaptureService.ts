@@ -1,5 +1,7 @@
+import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import fsp from 'fs/promises';
 import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -9,6 +11,42 @@ import { servableExtension, staticFileUrl } from './soundFormats';
 const log = enhancedLogger.child({ module: 'SoundCaptureService' });
 
 const AUDIO_MIME_PREFIX = 'audio/';
+const VIDEO_MIME_PREFIX = 'video/';
+
+/**
+ * Démuxe la piste audio d'une vidéo vers un `.m4a` AAC.
+ *
+ * Injectable (tests) ; l'implémentation par défaut spawn le ffmpeg du
+ * conteneur — même binaire que `UploadProcessor`. Rejette sur échec : c'est
+ * l'appelant (`captureOneFromVideo`) qui décide que l'échec est non bloquant.
+ */
+export type VideoAudioExtractor = (inputPath: string, outputPath: string) => Promise<void>;
+
+function spawnFfmpegExtract(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', [
+      '-y',
+      '-i', inputPath,
+      '-vn',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-f', 'ipod',
+      outputPath,
+    ]);
+    let stderr = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error('ffmpeg extraction timeout'));
+    }, 5 * 60_000);
+    proc.stderr.on('data', (d) => { stderr += String(d); });
+    proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
+    });
+  });
+}
 
 export interface CaptureTrack {
   /** `StoryAudioPlayerObject.id`. */
@@ -28,6 +66,12 @@ export interface CaptureTrack {
   waveform?: number[];
   /** L'auteur a lui-même déplacé la fenêtre de source (pas le défaut accepté). */
   windowAdjusted?: boolean;
+  /**
+   * Média VIDÉO dont la bande-son doit être démuxée vers la bibliothèque.
+   * Posé UNIQUEMENT par `mediaCaptureTracks` quand l'auteur a opté pour
+   * `Post.allowSoundExtraction` — jamais lu depuis le blob client.
+   */
+  extractFromVideo?: boolean;
 }
 
 export interface CaptureContext {
@@ -55,6 +99,7 @@ export class SoundCaptureService {
     private soundsDir: string = process.env.UPLOAD_DIR ?? '/app/sounds',
     /** `PostMedia.filePath` est RELATIF à cette racine (tus-handler.ts:129). */
     private uploadsRoot: string = process.env.UPLOAD_PATH ?? '/app/uploads',
+    private extractVideoAudio: VideoAudioExtractor = spawnFfmpegExtract,
   ) {}
 
   /** SHA-256 lu EN FLUX : la durée est illimitée, charger en mémoire ferait tomber le gateway. */
@@ -366,8 +411,102 @@ export class SoundCaptureService {
     for (const track of owned) {
       const media = byId.get(track.postMediaId!);
       if (!media) continue;
-      if (!media.mimeType.startsWith(AUDIO_MIME_PREFIX)) continue;
-      await this.captureOne(ctx, track, media, cover);
+      if (media.mimeType.startsWith(AUDIO_MIME_PREFIX)) {
+        await this.captureOne(ctx, track, media, cover);
+        continue;
+      }
+      // Bande-son d'une VIDÉO (réel) : capture UNIQUEMENT sur opt-in auteur —
+      // `extractFromVideo` n'est posé que par `mediaCaptureTracks`, jamais lu
+      // du blob client (`extractCaptureTracks` ne le produit pas).
+      if (track.extractFromVideo === true && media.mimeType.startsWith(VIDEO_MIME_PREFIX)) {
+        await this.captureOneFromVideo(ctx, track, media, cover);
+      }
+    }
+  }
+
+  /**
+   * Capture la bande-son d'un média VIDÉO : démuxage ffmpeg vers un `.m4a`
+   * AAC, puis même pipeline que `captureOne` — dédoublonnage par SHA-256,
+   * nom de fichier opaque, `Sound` crédité à l'auteur avec provenance
+   * (`sourcePostId`, `canonicalPostMediaId`).
+   *
+   * Le hash porte sur le FLUX EXTRAIT, pas sur le mp4 source : c'est le
+   * fichier extrait qui vit en bibliothèque, et deux vidéos partageant la
+   * même bande-son doivent se dédoublonner entre elles.
+   *
+   * Une vidéo SANS piste audio fait échouer ffmpeg (ou produit un conteneur
+   * vide) : les deux cas se soldent par un `warn`, jamais un rejet — publier
+   * ne dépend pas de la bibliothèque.
+   */
+  private async captureOneFromVideo(
+    ctx: CaptureContext,
+    track: CaptureTrack,
+    media: { id: string; filePath: string; mimeType: string; duration: number | null; language?: string | null },
+    cover: { url: string | null; thumbHash: string | null },
+  ): Promise<void> {
+    const extracted = path.join(os.tmpdir(), `sound-extract-${crypto.randomUUID()}.m4a`);
+    try {
+      const absolute = path.isAbsolute(media.filePath)
+        ? media.filePath
+        : path.join(this.uploadsRoot, media.filePath);
+
+      await this.extractVideoAudio(absolute, extracted);
+
+      const size = (await fsp.stat(extracted).catch(() => ({ size: 0 }))).size;
+      if (size === 0) {
+        log.warn('extraction vidéo sans piste audio — capture ignorée',
+          { postId: ctx.postId, trackId: track.trackId });
+        return;
+      }
+
+      const hash = await SoundCaptureService.hashFile(extracted);
+      const existing = await this.prisma.sound.findFirst({
+        where: { uploaderId: ctx.authorId, contentHash: hash },
+        select: { id: true },
+      });
+      if (existing) {
+        await this.recordUsage(ctx, existing.id, track);
+        return;
+      }
+
+      // Même règle que `captureOne` : nom OPAQUE, jamais le hash (oracle de
+      // possession — cf. commentaire de `captureOne`).
+      const filename = `${crypto.randomUUID()}.m4a`;
+      await fsp.mkdir(this.soundsDir, { recursive: true });
+      await fsp.copyFile(extracted, path.join(this.soundsDir, filename));
+
+      const sound = await this.prisma.sound.create({
+        data: {
+          uploaderId: ctx.authorId,
+          fileUrl: staticFileUrl(filename),
+          // Même doctrine que `captureOne` : titre vide + isAutoGenerated,
+          // le client compose « Son original · @pseudo » dans sa langue.
+          title: '',
+          isAutoGenerated: true,
+          duration: Math.round((media.duration ?? 0) / 1000),
+          durationMs: media.duration ?? 0,
+          waveform: track.waveform ?? [],
+          contentHash: hash,
+          sourcePostId: ctx.postId,
+          canonicalPostMediaId: media.id,
+          coverUrl: cover.url,
+          coverThumbHash: cover.thumbHash,
+          mimeType: 'audio/mp4',
+          sourceLanguage: media.language ?? null,
+          isPublic: true,
+        },
+        select: { id: true },
+      });
+
+      await this.recordUsage(ctx, sound.id, track);
+    } catch (error) {
+      log.warn('Extraction de bande-son impossible — la publication n\'est pas affectée', {
+        postId: ctx.postId,
+        trackId: track.trackId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      await fsp.unlink(extracted).catch(() => undefined);
     }
   }
 
