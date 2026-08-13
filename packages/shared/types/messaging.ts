@@ -6,7 +6,6 @@
  */
 
 import type { ApiResponse } from './api-responses.js';
-import type { ConversationStats } from './conversation.js';
 import type { SocketIOMessage } from './socketio-events.js';
 import type { EncryptedPayload } from './encryption.js';
 
@@ -185,15 +184,6 @@ export type TranslationProcessStatus = ProcessStatus | 'cached';
 export type DeliveryStatusType = CanonicalDeliveryStatus;
 
 /**
- * Détails de livraison pour un destinataire
- */
-export interface RecipientDeliveryDetail {
-  readonly userId: string;
-  readonly status: DeliveryStatusType;
-  readonly timestamp: Date;
-}
-
-/**
  * Statut de traduction pour un message
  */
 export interface TranslationStatus {
@@ -207,91 +197,26 @@ export interface TranslationStatus {
 }
 
 /**
- * Statut de livraison pour un message
- */
-export interface DeliveryStatus {
-  readonly status: DeliveryStatusType;
-  readonly sentAt: Date;
-  readonly deliveredAt?: Date;
-  readonly readAt?: Date;
-  readonly failedAt?: Date;
-  readonly recipientCount: number;           // Nombre de destinataires
-  readonly deliveredCount: number;           // Nombre ayant reçu le message
-  readonly readCount: number;                // Nombre ayant lu le message
-  readonly recipientDetails?: readonly RecipientDeliveryDetail[];
-}
-
-/**
- * Métriques de performance d'une requête
- */
-export interface PerformanceMetrics {
-  readonly processingTime: number;         // Temps total de traitement en ms
-  readonly dbQueryTime: number;           // Temps des requêtes DB en ms
-  readonly translationQueueTime: number;  // Temps ajout à queue traduction en ms
-  readonly validationTime: number;        // Temps de validation en ms
-}
-
-/**
- * Contexte d'un message
- */
-export interface MessageContext {
-  readonly isFirstMessage: boolean;       // Premier message de la conversation
-  readonly triggerNotifications: boolean; // Déclenche des notifications push
-  readonly mentionedUsers: readonly string[];      // IDs utilisateurs mentionnés (@user)
-  readonly containsLinks: boolean;        // Message contient des liens
-  readonly spamScore?: number;           // Score anti-spam (0-1)
-}
-
-/**
- * Informations de debugging (development only)
- */
-export interface DebugInfo {
-  readonly requestId: string;
-  readonly serverTime: Date;
-  readonly userId: string;
-  readonly conversationId: string;
-  readonly messageId: string;
-  readonly error?: string;
-  readonly stack?: string;
-  readonly socketId?: string;
-  readonly source?: string;
-  // Note: Pour des champs additionnels de debug, utiliser un objet séparé 'extra'
-  readonly extra?: Readonly<Record<string, string | number | boolean | null>>;
-}
-
-/**
- * Metadata complète pour une réponse de message
- */
-export interface MessageResponseMetadata {
-  // Stats de conversation mises à jour
-  readonly conversationStats?: ConversationStats;
-  
-  // Statut de traduction
-  readonly translationStatus?: TranslationStatus;
-  
-  // Statut de livraison
-  readonly deliveryStatus?: DeliveryStatus;
-  
-  // Performance metrics
-  readonly performance?: PerformanceMetrics;
-  
-  // Informations contextuelles
-  readonly context?: MessageContext;
-  
-  // Debugging info (development only)
-  readonly debug?: DebugInfo;
-}
-
-/**
  * Réponse pour l'envoi de messages
- * Étend ApiResponse avec metadata complète
+ *
+ * L'ACK d'envoi porte le message persisté, et RIEN d'autre. Il a longtemps
+ * traîné un bloc `metadata` — statut de livraison, métriques de performance,
+ * contexte du contenu, debug — qu'AUCUN des trois appelants de
+ * `MessagingService.handleMessage` ne lisait : le transport Socket.IO le
+ * remplace par `buildMessageAckData(data)` avant de rappeler le client, et les
+ * deux autres n'utilisent que `success` / `data` / `error`.
+ *
+ * Ce bloc ne mesurait rien : `deliveryStatus` valait `{recipientCount: 1,
+ * deliveredCount: 1, readCount: 1}` en dur, et les sous-temps de `performance`
+ * étaient des FRACTIONS du temps total (0,6 / 0,2 / 0,1), pas des mesures. Le
+ * compte réel des accusés se calcule — `MessageReadStatusService
+ * .getConversationReadStatuses` — et se sert par les routes de messages ; s'il
+ * doit un jour accompagner l'ACK, c'est de là qu'il devra venir, jamais d'une
+ * constante.
  */
 export interface MessageResponse extends ApiResponse<SocketIOMessage> {
   // Message complet avec toutes les relations
   readonly data: SocketIOMessage;  // Includes sender, translations, replyTo, etc.
-  
-  // Metadata enrichie
-  readonly metadata: MessageResponseMetadata;
 }
 
 // ===== ÉVÉNEMENTS WEBSOCKET UNIFIÉS =====
@@ -320,24 +245,6 @@ export interface MessageSendEvent {
  */
 export interface MessageSendCallback {
   (response: MessageResponse): void;
-}
-
-/**
- * Payload pour l'événement de diffusion
- */
-export interface MessageBroadcastPayload {
-  readonly message: SocketIOMessage;
-  readonly conversationId: string;
-  readonly targetLanguage: string;        // Langue pour ce destinataire spécifique
-  readonly metadata: Omit<MessageResponseMetadata, 'debug'>;
-}
-
-/**
- * Événement de diffusion temps réel vers autres clients
- */
-export interface MessageBroadcastEvent {
-  readonly type: MessageBroadcastEventType;
-  readonly payload: MessageBroadcastPayload;
 }
 
 // ===== VALIDATION TYPES =====

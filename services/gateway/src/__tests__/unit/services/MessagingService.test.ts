@@ -350,16 +350,15 @@ describe('MessagingService', () => {
       });
     });
 
-    it('should include metadata in successful response', async () => {
+    it('carries no metadata envelope on the ACK — the send response is the message and nothing else', async () => {
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
-      expect(response.metadata).toBeDefined();
-      expect(response.metadata.debug).toBeDefined();
-      expect(response.metadata.debug?.requestId).toMatch(/^msg_/);
-      expect(response.metadata.performance).toBeDefined();
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
 
     it('flags an early-dedup hit as isDuplicate and skips re-save', async () => {
@@ -979,15 +978,14 @@ describe('MessagingService', () => {
       );
     });
 
-    it('should include translation status in response metadata', async () => {
+    it('acknowledges without announcing a translation status the sender cannot use', async () => {
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.translationStatus).toBeDefined();
-      expect(response.metadata.translationStatus?.status).toBe('pending');
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
 
     it('should use provided originalLanguage when matching detected language', async () => {
@@ -1217,10 +1215,10 @@ describe('MessagingService', () => {
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.translationStatus?.status).toBe('pending');
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
 
-    it('should include requestId in error responses', async () => {
+    it('reports a failed send as an error string, without a debug envelope', async () => {
       mockPrisma.conversation.findFirst.mockRejectedValue(new Error('Database error'));
 
       const response = await service.handleMessage(
@@ -1229,8 +1227,8 @@ describe('MessagingService', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.metadata.debug?.requestId).toBeDefined();
-      expect(response.metadata.debug?.requestId).toMatch(/^msg_/);
+      expect(typeof response.error).toBe('string');
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
   });
 
@@ -1264,38 +1262,48 @@ describe('MessagingService', () => {
       mockPrisma.conversation.update.mockResolvedValue({});
     });
 
-    it('should include delivery status in metadata', async () => {
+    it('does not announce a delivery status the ACK path never measured', async () => {
+      // Le bloc `deliveryStatus` valait `{recipientCount: 1, deliveredCount: 1,
+      // readCount: 1}` — trois CONSTANTES, pas une mesure : un envoi dans un
+      // groupe de douze annonçait « livré à 1 / lu par 1 » à l'instant même de
+      // la persistance, avant que le moindre destinataire ait reçu quoi que ce
+      // soit. Le compte réel se calcule (getConversationReadStatuses) et se
+      // sert par les routes d'accusés ; il n'a rien à faire sur l'ACK.
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.deliveryStatus).toBeDefined();
-      expect(response.metadata.deliveryStatus?.status).toBe('sent');
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
 
-    it('should include context metadata', async () => {
+    it('does not scan the sent content to build a context nobody reads', async () => {
+      // `validRequest.content` porte un lien : l'ancien `context.containsLinks`
+      // le prouvait, au prix de deux balayages du contenu (extractMentions +
+      // containsLinks) sur le chemin de l'ACK — celui que l'architecture garde
+      // délibérément libre de tout effet de bord.
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.context).toBeDefined();
-      expect(response.metadata.context?.containsLinks).toBe(true);
-      expect(response.metadata.context?.triggerNotifications).toBe(true);
+      expect(validRequest.content).toContain('https://');
+      expect((response as unknown as Record<string, unknown>).metadata).toBeUndefined();
     });
 
-    it('should calculate performance metrics', async () => {
+    it('acknowledges with the persisted message the socket layer actually forwards', async () => {
+      // Ce que les TROIS appelants de handleMessage consomment réellement :
+      // `success`, `data` (id + horodatage serveur), `error`. Rien d'autre.
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.performance).toBeDefined();
-      expect(response.metadata.performance?.processingTime).toBeGreaterThanOrEqual(0);
+      expect(response.data.id).toBe(testMessageId);
+      expect(response.data.conversationId).toBe(testConversationId);
     });
   });
 

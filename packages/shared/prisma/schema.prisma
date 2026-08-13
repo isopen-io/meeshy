@@ -642,17 +642,24 @@ model Message {
   updatedAt         DateTime @updatedAt
 
   // ============================================
-  // COMPUTED STATUS FIELDS (denormalized for performance)
-  // Updated when all conversation participants complete each action
+  // STATUTS AGRÉGÉS — PLUS AUCUN N'EST STOCKÉ
+  //
+  // `deliveredToAllAt`, `readByAllAt`, `deliveredCount` et `readCount` étaient
+  // dénormalisés ici « for performance », mis à jour par
+  // `MessageReadStatusService.updateMessageComputedStatus`. Cette méthode est un
+  // no-op assumé depuis le passage aux curseurs de lecture : les quatre colonnes
+  // n'avaient plus AUCUN écrivain et valaient donc `0` / `null` sur toute
+  // message écrit depuis. Les servir revenait à répondre « personne n'a reçu,
+  // personne n'a lu » à des clients qui lisent `readByAllAt != null` comme la
+  // preuve que tous ont lu.
+  //
+  // Les quatre valeurs se CALCULENT désormais à la lecture, dans l'unique
+  // source de vérité `MessageReadStatusService.getConversationReadStatuses`
+  // (union curseur / reçu figé, opt-out `showReadReceipts` retiré du numérateur
+  // comme du dénominateur), et sont servies telles quelles par
+  // `GET /conversations/:id/messages` et `GET /messages/:messageId`. La charge
+  // utile est donc inchangée : seul le STOCKAGE mort disparaît.
   // ============================================
-  /// Date when message was delivered to ALL participants
-  deliveredToAllAt DateTime?
-  /// Date when message was read by ALL participants
-  readByAllAt      DateTime?
-  /// Number of participants who have received this message
-  deliveredCount   Int       @default(0)
-  /// Number of participants who have read this message
-  readCount        Int       @default(0)
 
   // ============================================
   // REACTION SUMMARY (denormalized for performance)
