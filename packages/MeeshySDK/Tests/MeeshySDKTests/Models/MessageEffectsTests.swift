@@ -197,4 +197,78 @@ final class MessageEffectsTests: XCTestCase {
         set.insert(flags2)
         XCTAssertEqual(set.count, 1)
     }
+
+    // MARK: - MessageEffectPlan — ce qui est RÉELLEMENT rendu
+
+    private func makePlan(_ flags: MessageEffectFlags,
+                          reduceMotion: Bool = false) -> MessageEffectPlan {
+        MessageEffects(flags: flags).playbackPlan(reduceMotion: reduceMotion)
+    }
+
+    func test_plan_displayedMessage_playsItsAppearanceEffect() {
+        let plan = makePlan([.confetti])
+        XCTAssertTrue(plan.plays(.confetti), "Un message affiché DOIT jouer son effet")
+        XCTAssertFalse(plan.isEmpty)
+    }
+
+    /// L'effet suit l'horloge d'AFFICHAGE — celle du flou qui se déclenche à
+    /// l'ouverture — et non celle de RÉCEPTION, qui pilote le compteur d'un
+    /// message éphémère. Le plan ne porte donc aucune mémoire : deux affichages
+    /// successifs du même message produisent le même plan, tous deux jouants.
+    func test_plan_carriesNoPlaybackMemory_soEachDisplayReplays() {
+        let effects = MessageEffects(flags: [.confetti, .shake])
+
+        let firstDisplay = effects.playbackPlan(reduceMotion: false)
+        let secondDisplay = effects.playbackPlan(reduceMotion: false)
+
+        XCTAssertEqual(firstDisplay, secondDisplay,
+                       "Rien ne distingue un premier affichage d'un retour à l'écran")
+        XCTAssertTrue(secondDisplay.plays(.confetti))
+        XCTAssertTrue(secondDisplay.plays(.shake))
+    }
+
+    func test_plan_mixesAppearanceAndPersistentWithoutLosingEither() {
+        let plan = makePlan([.confetti, .glow])
+        XCTAssertTrue(plan.plays(.confetti))
+        XCTAssertTrue(plan.plays(.glow))
+        XCTAssertEqual(plan.appearance, [.confetti])
+        XCTAssertEqual(plan.persistent, [.glow])
+    }
+
+    func test_plan_noFlags_isEmpty_soCallersSkipTheWrapper() {
+        XCTAssertTrue(makePlan([]).isEmpty)
+    }
+
+    func test_plan_lifecycleFlagsAlone_areNotVisualEffects() {
+        // ephemeral/blurred/viewOnce sont gérés par les contrôleurs de cycle de
+        // vie de la bulle, pas par les modifiers visuels.
+        XCTAssertTrue(makePlan([.ephemeral, .blurred, .viewOnce]).isEmpty)
+    }
+
+    // MARK: - Reduce Motion
+
+    func test_plan_reduceMotion_suppressesEveryAppearanceEffect() {
+        let plan = makePlan([.shake, .zoom, .explode, .confetti, .fireworks, .waoo], reduceMotion: true)
+        XCTAssertTrue(plan.appearance.isEmpty, "Aucune apparition one-shot sous « Réduire les animations »")
+    }
+
+    func test_plan_reduceMotion_keepsStaticallyMeaningfulPersistentEffects() {
+        let plan = makePlan([.glow, .rainbow], reduceMotion: true)
+        XCTAssertTrue(plan.plays(.glow))
+        XCTAssertTrue(plan.plays(.rainbow))
+        XCTAssertFalse(plan.animatesPersistent, "Ils sont rendus FIXES, pas animés")
+    }
+
+    func test_plan_reduceMotion_dropsPureMotionEffects() {
+        // pulse et sparkle ne sont QUE du mouvement : figés, ils ne veulent plus
+        // rien dire — on les retire au lieu de les laisser inertes.
+        let plan = makePlan([.pulse, .sparkle], reduceMotion: true)
+        XCTAssertFalse(plan.plays(.pulse))
+        XCTAssertFalse(plan.plays(.sparkle))
+        XCTAssertTrue(plan.isEmpty)
+    }
+
+    func test_plan_animatesPersistent_isTrueWithoutReduceMotion() {
+        XCTAssertTrue(makePlan([.glow]).animatesPersistent)
+    }
 }

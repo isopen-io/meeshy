@@ -336,6 +336,31 @@ Le MP4 export (`StoryVideoExportService` + `StoryExporter`) est une feature **au
 
 Source : `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`
 
+## Effets de message (`Message.effectFlags`)
+
+Le bitfield `effectFlags` est persisté par le gateway et lu par TOUS les clients. Trois axes : cycle de vie (`ephemeral`/`blurred`/`viewOnce`, gérés par les contrôleurs de bulle), apparition one-shot (`shake`/`zoom`/`explode`/`confetti`/`fireworks`/`waoo`), persistants (`glow`/`pulse`/`rainbow`/`sparkle`).
+
+**Sources de vérité jumelles — toute évolution de la règle touche les deux :**
+- Swift : `MessageEffectPlan` (`packages/MeeshySDK/.../Models/MessageEffects.swift`)
+- TypeScript : `resolveMessageEffectPlan()` (`apps/web/lib/message-effects.ts`)
+
+Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEffectFlags`.
+
+### Deux horloges — ne jamais les confondre
+| Horloge | Déclencheur | Exemples |
+|---|---|---|
+| **Réception** | arrivée du message (donnée) | compteur d'un message éphémère, `expiresAt` |
+| **Affichage** | venue à l'écran (vue) | flou d'un message protégé (se déclenche à l'ouverture), **tous les effets d'apparition** |
+
+### Règles
+1. **Un effet d'apparition joue une fois PAR AFFICHAGE À L'ÉCRAN**, pas une fois par message. Rouvrir la conversation, ou refaire défiler la bulle à l'écran, le rejoue. « Une fois » borne l'effet à une exécution PENDANT un affichage : il ne boucle pas. Il n'existe donc **aucune mémoire de lecture** — ni store, ni Set, ni booléen persisté ; exactement comme `BubbleBlurRevealController`, qui n'en a pas non plus.
+2. **Ne JAMAIS basculer un drapeau « déjà joué » dans un `.onAppear` frère de celui qui démarre l'animation.** C'est le défaut corrigé le 2026-08-13 : `ThemedMessageBubble` posait `.messageEffects(...)` puis `.onAppear { hasPlayedAppearance = true }`, donc le changement d'état re-rendait la bulle avec `active == false` dans la MÊME passe et coupait chaque animation avant la première frame — aucun effet d'apparition n'était jamais visible en conversation.
+3. **Un effet one-shot doit être REJOUABLE, pas seulement jouable au montage.** `onAppear` peut retrouver la phase déjà à `1` (vue conservée, conversation rouverte) : la remettre à `0` puis l'animer dans le même tour synchrone ne produit rien, faute de frame de départ à interpoler. iOS réarme via `AppearancePhaseDriver` (phase `0 → 1` + délai d'une frame) ; le web, dont une animation CSS ne rejoue qu'au montage, réarme via `IntersectionObserver` + retrait/repose des classes à la frame suivante — jamais en remontant `children`, ce qui réinitialiserait le DOM de la bulle.
+4. **Une secousse se fait avec un `GeometryEffect`, jamais avec un `.offset` calculé.** `.offset(x: sin(phase * .pi * 4) * 8)` animé `phase: 0 → 1` ne bouge PAS : SwiftUI interpole la valeur produite, et `sin(0) == sin(4π) == 0`. Seul `animatableData` fait parcourir la courbe.
+5. **Les particules se décrivent en coordonnées relatives figées + une progression animée**, jamais en mutant un `@State` vide depuis `onAppear` puis en l'animant dans le même tour : sans frame initiale rendue, il n'y a rien à interpoler.
+6. **`reduceMotion` : le message perd son mouvement, pas son intention.** Aucune apparition ne joue ; `glow` et `rainbow` sont rendus FIXES (`reduceMotionSafeMask`) ; `pulse` et `sparkle` sont du mouvement pur et sont retirés.
+7. **Plan vide ⇒ vue intacte.** `plan.isEmpty` doit court-circuiter tout wrapper : l'écrasante majorité des messages a `effectFlags == 0` et ne doit pas payer huit ViewModifier inertes par cellule.
+
 ## TDD & Testing Standards
 
 ### Test Organization

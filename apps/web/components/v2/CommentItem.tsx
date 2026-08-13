@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import type { TranslationItem } from './TranslationToggle';
+import { MessageEffects } from '@/components/common/MessageEffects';
 import type { PostComment } from '@meeshy/shared/types/post';
 
 export interface CommentItemProps {
@@ -113,30 +114,32 @@ function CommentItem({
           )}
         </div>
 
-        {hasTranslations ? (
-          <TranslationToggle
-            originalContent={comment.content}
-            originalLanguage={comment.originalLanguage ?? 'unknown'}
-            translations={translationItems}
-            userLanguage={userLanguage}
-            variant="inline"
-          />
-        ) : (
-          <div>
-            <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
-              {comment.content}
-            </p>
-            {onTranslate && userLanguage && comment.originalLanguage !== userLanguage && (
-              <button
-                onClick={() => onTranslate(comment.id)}
-                className="mt-0.5 text-xs text-[var(--gp-terracotta)] hover:underline"
-                aria-label="Translate comment"
-              >
-                Translate
-              </button>
-            )}
-          </div>
-        )}
+        <MessageEffects effectFlags={comment.effectFlags}>
+          {hasTranslations ? (
+            <TranslationToggle
+              originalContent={comment.content}
+              originalLanguage={comment.originalLanguage ?? 'unknown'}
+              translations={translationItems}
+              userLanguage={userLanguage}
+              variant="inline"
+            />
+          ) : (
+            <div>
+              <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
+                {comment.content}
+              </p>
+              {onTranslate && userLanguage && comment.originalLanguage !== userLanguage && (
+                <button
+                  onClick={() => onTranslate(comment.id)}
+                  className="mt-0.5 text-xs text-[var(--gp-terracotta)] hover:underline"
+                  aria-label="Translate comment"
+                >
+                  Translate
+                </button>
+              )}
+            </div>
+          )}
+        </MessageEffects>
 
         {/* Actions row */}
         <div className="flex items-center gap-4 mt-1.5">
