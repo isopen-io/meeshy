@@ -23,6 +23,7 @@ import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
+import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
@@ -1018,6 +1019,27 @@ export class PostService {
         log.warn('[PostService] updatePost: media byte reclamation failed', { postId, err });
       });
     }
+
+    // Les notifications que le post a produites portent une copie DÉNORMALISÉE
+    // de son texte, qu'aucune lecture ne rafraîchit — la ligne ne relit jamais
+    // le post. Sans cette réécriture, l'inbox de toute l'audience garde le
+    // texte d'AVANT, définitivement, y compris quand l'édition existait
+    // précisément pour retirer ce qui n'aurait pas dû être publié.
+    //
+    // La source est le contenu PERSISTÉ (`updated.content`) et non celui de la
+    // requête : les deux diffèrent dès qu'une story recompose son texte
+    // (`composeStoryContent`), et c'est le persisté que le destinataire verra
+    // en ouvrant le post.
+    //
+    // BEST-EFFORT, comme la reprise d'octets ci-dessus : l'édition est déjà
+    // committée, et une ligne récalcitrante ne doit pas la transformer en 500.
+    await reproduceEditedSubjectNotifications(
+      this.prisma,
+      { subject: { kind: 'post', id: postId }, content: updated.content },
+      getSharedNotificationService()
+    ).catch((err: unknown) => {
+      log.warn('[PostService] updatePost: notification reproduction failed', { postId, err });
+    });
 
     if (languageChanged) {
       const content = data.content ?? post.content;

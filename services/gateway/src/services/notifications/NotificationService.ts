@@ -1806,8 +1806,13 @@ export class NotificationService {
     // commentaire qui a reçu la réaction. Permet au destinataire de savoir
     // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
     // notification.
-    const subtitle = params.commentPreview && params.commentPreview.trim() !== ''
-      ? `« ${params.commentPreview.trim()} »`
+    // Extrait NORMALISÉ une fois : il sert au sertissage du sous-titre ET, en
+    // métadonnée, de clé de réécriture quand le commentaire est édité. Les
+    // dériver deux fois les ferait diverger au premier changement de troncature,
+    // et la substitution ne retrouverait alors plus sa chaîne.
+    const trimmedCommentPreview = params.commentPreview?.trim() ?? '';
+    const subtitle = trimmedCommentPreview !== ''
+      ? `« ${trimmedCommentPreview} »`
       : undefined;
 
     await this.createNotification({
@@ -1840,6 +1845,24 @@ export class NotificationService {
         // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
         // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
         postType: params.postType ?? 'POST',
+        // L'extrait est SERTI dans le `subtitle` composé juste au-dessus
+        // (« « … » »), et le sertissage n'est pas inversible. Le ranger aussi
+        // ici rend la ligne AUTO-DESCRIPTIVE : c'est la seule chose qui permet
+        // à `reproduceEditedSubjectNotifications` de savoir quelle portion du
+        // sous-titre décrivait le commentaire, donc de la réécrire quand
+        // celui-ci est édité. Sans elle, ce type — et lui seul de toute la
+        // famille du fil — garderait l'ancien texte pour toujours. Même clé
+        // que ses voisins `comment_like` / `post_comment`.
+        //
+        // Stocké VERBATIM, et non re-tronqué : la réécriture cherche cette
+        // chaîne DANS le sous-titre, donc les deux doivent être identiques au
+        // caractère près. `truncateMessage` coupe aux MOTS — l'appliquer ici
+        // ferait diverger la copie du sertissage sur tout extrait long, et la
+        // substitution ne trouverait plus rien. Les appelants bornent déjà à
+        // ~80 caractères.
+        ...(trimmedCommentPreview !== ''
+          ? { commentPreview: trimmedCommentPreview }
+          : {}),
       },
     });
   }
@@ -4586,6 +4609,81 @@ export class NotificationService {
     for (const { id, userId } of retracted) {
       affectedUserIds.add(userId);
       this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+    }
+
+    await Promise.all(
+      [...affectedUserIds].map((userId) => this.emitCountsUpdate(userId).catch(() => {}))
+    );
+  }
+
+  /**
+   * ANNULE puis REPRODUIT des notifications dont le texte vient d'être réécrit
+   * par une édition du contenu qu'elles annoncent.
+   *
+   * Le jumeau d'`announceNotificationsRetracted`, et c'est ici que le geste
+   * demandé — « annuler la notification envoyée ET reproduire une notification
+   * de la mise à jour » — devient littéral sur le fil : pour chaque ligne, un
+   * `notification:deleted` puis un `notification:new` portant le texte
+   * D'APRÈS. Le couple est employé faute d'un événement « modifiée » : il n'en
+   * existe pas dans le contrat client, et en introduire un demanderait de le
+   * câbler sur web, iOS et Android avant que quoi que ce soit ne s'affiche.
+   * Ces deux verbes-là, les clients les traitent déjà.
+   *
+   * La ligne est RELUE plutôt que reçue en paramètre : l'appelant a écrit un
+   * `metadata`/`context` partiel, alors que la charge socket doit être celle
+   * que `formatNotification` produit à la création — même forme, mêmes clés,
+   * même cadrage `title`/`subtitle`. Une charge reconstruite au point d'appel
+   * divergerait de celle du chemin nominal, et c'est cette divergence-là que
+   * les clients verraient.
+   *
+   * `notification:counts` est émis UNE fois par destinataire, comme pour le
+   * retrait. Le total ne change pourtant pas — la reproduction ne crée ni ne
+   * détruit de ligne, et n'altère pas `isRead` : c'est le `notification:deleted`
+   * intermédiaire qui l'exige, puisqu'un client qui décrémente son badge en le
+   * recevant doit pouvoir se recaler.
+   */
+  async announceNotificationsReproduced(
+    reproduced: readonly { readonly id: string; readonly userId: string }[]
+  ): Promise<void> {
+    if (!this.io || reproduced.length === 0) return;
+
+    const affectedUserIds = new Set<string>();
+
+    for (const { id, userId } of reproduced) {
+      affectedUserIds.add(userId);
+
+      const row = await this.prisma.notification.findUnique({ where: { id } }).catch(() => null);
+      // Retirée entre la réécriture et l'annonce : le `notification:deleted`
+      // reste dû — la ligne n'existe effectivement plus — mais il n'y a rien à
+      // reproduire.
+      this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+      if (!row) continue;
+
+      const formatted = this.formatNotification(row);
+      const { title, subtitle } = buildPushHeader({
+        type: row.type,
+        customTitle: row.title ?? undefined,
+        actor: (row.actor ?? undefined) as any,
+        context: {
+          conversationType: (row.context as any)?.conversationType,
+          conversationTitle: (row.context as any)?.conversationTitle,
+        },
+      });
+      const socketPayload = {
+        ...formatted,
+        title,
+        subtitle: (row.subtitle && row.subtitle.trim() !== '')
+          ? row.subtitle.trim().slice(0, 120)
+          : subtitle,
+      };
+
+      await emitWithSeq(
+        this.io,
+        this.sequenceService,
+        userId,
+        SERVER_EVENTS.NOTIFICATION_NEW,
+        socketPayload as unknown as Record<string, unknown>
+      );
     }
 
     await Promise.all(
