@@ -11,6 +11,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
+import type { NotificationReadBulkScope } from '@meeshy/shared/types/notification';
 
 const mockFetchNotifications = jest.fn();
 
@@ -31,6 +32,7 @@ jest.mock('@/services/notification.service', () => ({
 let capturedReadHandler: ((notificationId: string) => void) | null = null;
 let capturedNotificationHandler: ((notification: unknown) => void) | null = null;
 let capturedDeletedHandler: ((notificationId: string) => void) | null = null;
+let capturedReadBulkHandler: ((data: { scope: NotificationReadBulkScope }) => void) | null = null;
 let capturedCountsHandler: ((counts: { unread?: number; total?: number }) => void) | null = null;
 let capturedDesyncHandler: ((reason: 'gap' | 'reconnect') => void) | null = null;
 const desyncUnsubscribe = jest.fn();
@@ -48,6 +50,10 @@ jest.mock('@/services/notification-socketio.singleton', () => ({
     }),
     onNotificationDeleted: jest.fn((cb: (id: string) => void) => {
       capturedDeletedHandler = cb;
+      return () => {};
+    }),
+    onNotificationReadBulk: jest.fn((cb: (data: { scope: NotificationReadBulkScope }) => void) => {
+      capturedReadBulkHandler = cb;
       return () => {};
     }),
     onCounts: jest.fn((cb: (counts: { unread?: number; total?: number }) => void) => {
@@ -291,6 +297,151 @@ describe('useNotificationsManagerRQ — notification:counts (resync autoritaire)
     });
 
     expect(result.current.unreadCount).toBe(2);
+  });
+});
+
+/**
+ * `notification:read-bulk` — les marquages EN MASSE côté gateway (tout lire,
+ * ouvrir une conversation, consommer un post, répondre à une demande d'ami)
+ * passent par un `updateMany`/`$runCommandRaw` qui ne renvoie aucun id : ils ne
+ * peuvent pas émettre un `notification:read` par ligne. L'événement annonce le
+ * PRÉDICAT appliqué, que ce client rejoue sur ses pages en cache.
+ *
+ * Le badge n'est PAS touché ici : un cache partiel matche moins de lignes que
+ * le serveur n'en a marquées. `notification:counts`, émis juste après, reste la
+ * seule autorité sur les compteurs.
+ */
+describe('useNotificationsManagerRQ — notification:read-bulk (marquage en masse)', () => {
+  const scopedPage = () => ({
+    data: {
+      notifications: [
+        { ...makeNotification('conv-a-1', false), type: 'new_message', context: { conversationId: 'conv-a' } },
+        { ...makeNotification('conv-b-1', false), type: 'new_message', context: { conversationId: 'conv-b' } },
+        { ...makeNotification('friend-1', false), type: 'friend_request', context: { friendRequestId: 'fr-9' } },
+      ],
+      pagination: { limit: 20, offset: 0, total: 3, hasMore: false },
+      unreadCount: 3,
+    },
+  });
+
+  const isRead = (result: { current: { notifications: Array<{ id: string; state: { isRead: boolean } }> } }, id: string) =>
+    result.current.notifications.find((n) => n.id === id)?.state.isRead;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedReadBulkHandler = null;
+  });
+
+  it("marque toutes les lignes en cache pour le scope 'all'", async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({ scope: { kind: 'all' } });
+    });
+
+    await waitFor(() => expect(isRead(result, 'conv-a-1')).toBe(true));
+    expect(isRead(result, 'conv-b-1')).toBe(true);
+    expect(isRead(result, 'friend-1')).toBe(true);
+  });
+
+  it("ne marque QUE la conversation annoncée pour le scope 'context'", async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({
+        scope: { kind: 'context', contextKey: 'conversationId', contextValue: 'conv-a' },
+      });
+    });
+
+    await waitFor(() => expect(isRead(result, 'conv-a-1')).toBe(true));
+    expect(isRead(result, 'conv-b-1')).toBe(false);
+    expect(isRead(result, 'friend-1')).toBe(false);
+  });
+
+  it('couvre friendRequestId — la clé que le sac d\'options aurait laissée muette', async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({
+        scope: { kind: 'context', contextKey: 'friendRequestId', contextValue: 'fr-9' },
+      });
+    });
+
+    await waitFor(() => expect(isRead(result, 'friend-1')).toBe(true));
+    expect(isRead(result, 'conv-a-1')).toBe(false);
+  });
+
+  it("ne marque que les types annoncés pour le scope 'types'", async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({ scope: { kind: 'types', types: ['friend_request'] } });
+    });
+
+    await waitFor(() => expect(isRead(result, 'friend-1')).toBe(true));
+    expect(isRead(result, 'conv-a-1')).toBe(false);
+    expect(isRead(result, 'conv-b-1')).toBe(false);
+  });
+
+  it("laisse le badge à notification:counts — il ne décrémente pas lui-même", async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({
+        scope: { kind: 'context', contextKey: 'conversationId', contextValue: 'conv-a' },
+      });
+    });
+
+    await waitFor(() => expect(isRead(result, 'conv-a-1')).toBe(true));
+    expect(result.current.unreadCount).toBe(3);
+
+    act(() => {
+      capturedCountsHandler!({ unread: 2, total: 3 });
+    });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+  });
+
+  it("ne touche à rien quand le scope porte un kind inconnu", async () => {
+    mockFetchNotifications.mockResolvedValue(scopedPage());
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    await waitFor(() => expect(capturedReadBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedReadBulkHandler!({ scope: { kind: 'severity', severity: 'high' } as never });
+    });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(3));
+    expect(isRead(result, 'conv-a-1')).toBe(false);
+    expect(isRead(result, 'friend-1')).toBe(false);
   });
 });
 

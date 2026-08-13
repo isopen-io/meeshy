@@ -10,6 +10,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { NotificationReadBulkScope } from '@meeshy/shared/types/notification';
 import { SequenceService } from '../SequenceService';
 import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
@@ -3987,6 +3988,25 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Annonce aux AUTRES appareils le prédicat qu'un marquage en masse vient
+   * d'appliquer. Les chemins bulk (`updateMany`, `$runCommandRaw`) ne renvoient
+   * aucun id : il n'y a pas de `notification:read` par ligne à émettre, et les
+   * refetcher annulerait le gain d'un update unique. Le client rejoue le
+   * prédicat sur son cache (`notificationMatchesReadBulkScope`, @meeshy/shared).
+   *
+   * Émission PLAIN, jamais `emitWithSeq` : tant qu'aucun client n'observe `_seq`
+   * sur cet événement, l'estampiller ferait avancer `lastSeq` sans lecteur —
+   * donc des faux trous de séquence au prochain event observé (cf. gwcontract-01).
+   *
+   * Les compteurs restent tenus par `emitCountsUpdate`, émis juste après par
+   * chaque appelant : un cache partiel matche moins de lignes que le serveur
+   * n'en a marquées, un décrément déduit de ce prédicat dériverait.
+   */
+  private announceReadBulk(userId: string, scope: NotificationReadBulkScope): void {
+    this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_READ_BULK, { scope });
+  }
+
   // ==============================================
   // ANTI-SPAM & UTILITIES
   // ==============================================
@@ -4295,6 +4315,9 @@ export class NotificationService {
         },
       });
 
+      if (result.count > 0) {
+        this.announceReadBulk(userId, { kind: 'all' });
+      }
       this.emitCountsUpdate(userId).catch(() => {});
       return result.count;
     } catch (error) {
@@ -4347,6 +4370,10 @@ export class NotificationService {
       const count = result?.nModified ?? 0;
 
       if (count > 0) {
+        // Le scope et la requête Mongo sont dérivés du MÊME couple
+        // (contextKey, contextValue) : aucun client ne peut rejouer un
+        // prédicat différent de celui qui vient d'être appliqué en base.
+        this.announceReadBulk(userId, { kind: 'context', contextKey, contextValue });
         // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
         this.emitCountsUpdate(userId).catch(() => {});
       }
@@ -4503,6 +4530,7 @@ export class NotificationService {
       });
 
       if (result.count > 0) {
+        this.announceReadBulk(userId, { kind: 'types', types });
         this.emitCountsUpdate(userId).catch(() => {});
       }
 

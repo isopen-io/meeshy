@@ -5,13 +5,14 @@
 
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, type NotificationReadBulkEventData } from '@meeshy/shared/types/socketio-events';
 import { initialSyncSeqState, observeSyncSeq, type SyncSeqState } from '@/lib/sync/sync-seq-state';
 import type { Notification } from '@/types/notification';
 
 type NotificationCallback = (notification: Notification) => void;
 type NotificationReadCallback = (notificationId: string) => void;
 type NotificationDeletedCallback = (notificationId: string) => void;
+type NotificationReadBulkCallback = (data: NotificationReadBulkEventData) => void;
 type CountsCallback = (counts: any) => void;
 
 /**
@@ -37,6 +38,7 @@ class NotificationSocketIOSingleton {
   private notificationCallbacks: Set<NotificationCallback> = new Set();
   private readCallbacks: Set<NotificationReadCallback> = new Set();
   private deletedCallbacks: Set<NotificationDeletedCallback> = new Set();
+  private readBulkCallbacks: Set<NotificationReadBulkCallback> = new Set();
   private countsCallbacks: Set<CountsCallback> = new Set();
   private connectCallbacks: Set<() => void> = new Set();
   private disconnectCallbacks: Set<(reason: string) => void> = new Set();
@@ -182,6 +184,12 @@ class NotificationSocketIOSingleton {
       this.readCallbacks.forEach(cb => cb(data.notificationId));
     });
 
+    // Lot de notifications marquées lues, décrit par son prédicat : les
+    // chemins bulk de la gateway ne renvoient aucun id à égrener.
+    this.socket.on(SERVER_EVENTS.NOTIFICATION_READ_BULK, (data: NotificationReadBulkEventData) => {
+      this.readBulkCallbacks.forEach(cb => cb(data));
+    });
+
     // Notification supprimée
     this.socket.on(SERVER_EVENTS.NOTIFICATION_DELETED, (data: { notificationId: string }) => {
       this.deletedCallbacks.forEach(cb => cb(data.notificationId));
@@ -247,6 +255,14 @@ class NotificationSocketIOSingleton {
   }
 
   /**
+   * Enregistre un callback pour les marquages en masse (`notification:read-bulk`)
+   */
+  public onNotificationReadBulk(callback: NotificationReadBulkCallback): () => void {
+    this.readBulkCallbacks.add(callback);
+    return () => this.readBulkCallbacks.delete(callback);
+  }
+
+  /**
    * Enregistre un callback pour les notifications supprimées
    */
   public onNotificationDeleted(callback: NotificationDeletedCallback): () => void {
@@ -298,6 +314,7 @@ class NotificationSocketIOSingleton {
     this.desyncCallbacks.clear();
     this.notificationCallbacks.clear();
     this.readCallbacks.clear();
+    this.readBulkCallbacks.clear();
     this.deletedCallbacks.clear();
     this.countsCallbacks.clear();
     this.connectCallbacks.clear();

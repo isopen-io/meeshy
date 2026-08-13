@@ -131,15 +131,69 @@ sur le stream `deleted`, court-circuit du masquage) — aucune n'est portée par
 **Gates.** `tsc --noEmit` propre ; suite gateway complète **710/710 suites, 17 344 tests** verts.
 
 ### Reste ouvert après ce cycle
-- **`gwcontract-12` (nouveau, P3/S)** : `messages.ts` garde sa copie inline de la règle de plancher
+- **`gwcontract-14` (nouveau, P3/S — renuméroté au cycle 116, collision avec la fiche `gwcontract-12-message-consumed-literal` préexistante)** : `messages.ts` garde sa copie inline de la règle de plancher
   (il y ajoute les 403 `SHARE_LINK_EXPIRED`/`SHARE_LINK_MAX_USES`). Deux lecteurs d'une même règle —
   la famille de défauts des cycles 105-111. La convergence demande de séparer le FILTRE de la
   DÉCISION DE RÉPONSE, pas de les empiler.
 - **`/sync` n'applique pas les 403 expiry/maxUses** qu'applique `GET messages` : un lien expiré
   garde son canal delta tant que la session reste `isActive`. Non traité ici (la fiche ne le demande
-  pas, et c'est une décision de réponse, pas un filtre) — c'est l'objet de `gwcontract-12`.
+  pas, et c'est une décision de réponse, pas un filtre) — c'est l'objet de `gwcontract-14`.
 - **`net-02` (P1, iOS)** : le volet client du même Lot 7. Non livrable depuis un runner Linux.
 - **`sync-01`** : aucun client n'appelle encore `/sync` — l'impact de tout ce lot reste prospectif
   tant que le backfill iOS n'est pas câblé.
 - Hérités : scope communauté de `user:preferences-updated` non routé côté iOS ; arbitrage
   `delete-for-me` du cycle 12 en attente de validation humaine.
+
+## Livré au cycle 116 — `notification:read-bulk` : les marquages EN MASSE ne disaient rien aux autres appareils
+
+**Le défaut.** Fiche `gwcontract-05`, P2/S. Les étapes 1-2 (émission unitaire `notification:read` /
+`notification:deleted`) étaient déjà livrées (`3152326c`). Restait l'étape 3 : les **quatre chemins
+de marquage groupé** — `markAllAsRead`, les trois clés de `markContextNotificationsAsRead` (ouvrir
+une conversation, consommer un post, répondre à une demande d'ami), `markNotificationsByTypesAsRead`
+— n'émettaient que `notification:counts`. Le badge de l'iPad tombait à zéro pendant que sa cloche
+gardait les lignes en NON LUES, jusqu'au refetch complet. Discret précisément parce que le geste
+unitaire, lui, se propageait : l'appareil se corrigeait ligne à ligne, jamais par lot.
+
+**Livré (gateway + shared + web).**
+- `NotificationReadBulkScope` (`packages/shared/types/notification.ts`) : union discriminée
+  `{kind:'all'} | {kind:'context', contextKey, contextValue} | {kind:'types', types}`.
+- `notificationMatchesReadBulkScope` (`packages/shared/utils/notification-read-bulk.ts`) — énoncé
+  UNIQUE du prédicat, importé par le web, miroir Swift à venir.
+- Gateway : `NotificationService.announceReadBulk()`, appelé par les 4 chemins quand `count > 0`,
+  en PLAIN `io.to(...)` (jamais `emitWithSeq` — lockstep gwcontract-01).
+- Web : `notificationSocketIO.onNotificationReadBulk` + handler dans `use-notifications-manager-rq`
+  qui rejoue le prédicat sur les pages React Query, **sans toucher au badge**.
+
+**Les TROIS écarts assumés vs la fiche** (documentés dans `06-reseau-et-contrat-gateway.md`) :
+1. *Le sac d'options prescrit (`{conversationId?, postId?, types?, all?}`) n'a pas de place pour
+   `friendRequestId`* — la 3e clé sur laquelle la gateway marque en masse, omise par la fiche. Un
+   client l'aurait ignorée EN SILENCE. Union discriminée à la place ; le `contextKey` émis est celui
+   que la requête Mongo interpole, les deux dérivant du même couple.
+2. *Pas de `count` dans le payload.* Un cache client est PARTIEL : il matche moins de lignes que le
+   serveur n'en a marquées. Fournir le champ, c'était offrir le double-décrément dont la fiche
+   avertit elle-même deux étapes plus loin. `notification:counts` reste seul autoritaire.
+3. *Un `kind` inconnu ne matche RIEN* — repli sûr pour un client plus vieux que son serveur.
+
+**TDD.** 5 tests gateway rouges d'abord (`NotificationService.readSyncEvents.test.ts`, nouveau
+`describe`), 9 sur le prédicat partagé, 6 sur le hook web + 2 sur le singleton — tous vus rouges.
+
+**Gates.** `tsc --noEmit` gateway propre ; shared 54 fichiers / 1 538 tests verts ; 28 suites
+NotificationService gateway (534 tests) vertes ; suites web « notification » (33 suites / 478 tests)
+vertes ; web `tsc` inchangé (1 229 erreurs préexistantes, identiques avant/après).
+
+### Reste ouvert après ce cycle
+- **Volet iOS de `gwcontract-05`** : décoder `notification:read-bulk` (`MessageSocketManager` +
+  `NotificationToastManager`) et porter le prédicat en Swift. Non livrable depuis un runner Linux.
+  L'événement est additif — un client qui l'ignore se comporte exactement comme avant.
+- **`gwcontract-13` (nouvelle fiche écrite ce cycle, P2/S)** : symétrique exact côté SUPPRESSIONS.
+  « Supprimer toutes les lues » n'émet que `notification:counts`, **qui ne dit rien ici** — seules des
+  lignes DÉJÀ lues partent, `unread` est inchangé — et les lignes purgées restent listées sur les
+  autres appareils. Le prédicat à diffuser est DÉJÀ écrit côté acteur
+  (`useDeleteAllReadNotificationsMutation`, optimiste) : le correctif ne demande aucune règle
+  nouvelle. Fiche complète dans `06-reseau-et-contrat-gateway.md` (événement additif
+  `notification:deleted-bulk { scope: {kind:'read'} }`, union à un membre par anticipation).
+- **`apps/web/utils/socket-validator.ts` est du code mort** : zéro appelant hors de son propre
+  fichier de test. Il n'a délibérément PAS été étendu au nouvel événement (ajouter un schéma à un
+  validateur inutilisé, c'est ajouter du code mort). À retirer ou à brancher — décision à instruire.
+- Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
+  (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`).

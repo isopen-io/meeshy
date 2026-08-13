@@ -462,6 +462,34 @@ describe('notificationSocketIO singleton', () => {
     });
   });
 
+  // ── setupEventListeners() → notification:read-bulk ───────────────────────
+
+  describe('event: notification:read-bulk', () => {
+    it('relaie le scope tel quel aux callbacks', async () => {
+      const cb = jest.fn();
+      notificationSocketIO.onNotificationReadBulk(cb);
+
+      await notificationSocketIO.connect('tok');
+      const payload = {
+        scope: { kind: 'context', contextKey: 'conversationId', contextValue: 'conv-1' },
+      };
+      currentSocketMock!._emit('notification:read-bulk', payload);
+
+      expect(cb).toHaveBeenCalledWith(payload);
+    });
+
+    it('se désabonne proprement', async () => {
+      const cb = jest.fn();
+      const unsub = notificationSocketIO.onNotificationReadBulk(cb);
+
+      await notificationSocketIO.connect('tok');
+      unsub();
+      currentSocketMock!._emit('notification:read-bulk', { scope: { kind: 'all' } });
+
+      expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
   // ── setupEventListeners() → notification:deleted ─────────────────────────
 
   describe('event: notification:deleted', () => {
@@ -688,12 +716,14 @@ describe('notificationSocketIO singleton', () => {
       const notifCb = jest.fn();
       const readCb = jest.fn();
       const deletedCb = jest.fn();
+      const readBulkCb = jest.fn();
       const countsCb = jest.fn();
       const connectCb = jest.fn();
       const disconnectCb = jest.fn();
 
       notificationSocketIO.onNotification(notifCb);
       notificationSocketIO.onNotificationRead(readCb);
+      notificationSocketIO.onNotificationReadBulk(readBulkCb);
       notificationSocketIO.onNotificationDeleted(deletedCb);
       notificationSocketIO.onCounts(countsCb);
       notificationSocketIO.onConnect(connectCb);
@@ -713,11 +743,13 @@ describe('notificationSocketIO singleton', () => {
       currentSocketMock!._emit('disconnect', 'r');
       currentSocketMock!._emit('notification:new', makeNotificationData());
       currentSocketMock!._emit('notification:read', { notificationId: 'x' });
+      currentSocketMock!._emit('notification:read-bulk', { scope: { kind: 'all' } });
       currentSocketMock!._emit('notification:deleted', { notificationId: 'y' });
       currentSocketMock!._emit('notification:counts', { total: 0, unread: 0 });
 
       expect(notifCb).not.toHaveBeenCalled();
       expect(readCb).not.toHaveBeenCalled();
+      expect(readBulkCb).not.toHaveBeenCalled();
       expect(deletedCb).not.toHaveBeenCalled();
       expect(countsCb).not.toHaveBeenCalled();
       expect(connectCb).not.toHaveBeenCalled();
