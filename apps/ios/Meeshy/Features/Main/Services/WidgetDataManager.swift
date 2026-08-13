@@ -20,7 +20,20 @@ struct WidgetFavoriteContact: Codable, Identifiable {
     let id: String
     let name: String
     let avatar: String
-    let status: String
+    /// État de présence sous forme de JETON STABLE (`PresenceState.rawValue` :
+    /// `online` / `away` / `idle` / `offline`), jamais un libellé humain.
+    ///
+    /// Le champ s'appelait `status` et transportait `lastSeenText` — du
+    /// FRANÇAIS codé en dur (« En ligne », « Vu il y a 3min ») — pendant que
+    /// le widget, seul lecteur, décidait d'allumer sa pastille verte sur
+    /// `status == "Online"`. La comparaison ne pouvait donc jamais être vraie :
+    /// la pastille de présence du widget Favoris était inatteignable, et un
+    /// utilisateur anglophone lisait du français par-dessus le marché.
+    ///
+    /// Un libellé est une SORTIE ; ce qui franchit un processus doit être une
+    /// donnée. Le widget mappe le jeton sur la règle 1/3/5 (`CLAUDE.md` §
+    /// User Presence) au moment du rendu, dans sa propre langue.
+    let presence: String
     let accentColor: String
 }
 
@@ -97,12 +110,24 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// bundle de tests publie dans une suite jetable sans compte connecté.
     private let preferredContentLanguagesProvider: @MainActor () -> [String]
 
+    /// Même autorité de présence que la liste de conversations
+    /// (`ConversationListView` → `PresenceManager.presenceState(for:)`), et
+    /// pour la même raison que le prisme ci-dessus : ce que le widget affiche
+    /// doit être ce que l'app affiche.
+    ///
+    /// Repli sur `conv.lastSeenPresence` quand le manager ne suit pas ce
+    /// pair — un contact épinglé jamais croisé depuis le lancement n'est pas
+    /// « hors ligne », il est simplement inconnu du temps réel, et son
+    /// horodatage REST reste la meilleure donnée disponible.
+    private let presenceStateProvider: @MainActor (String) -> PresenceState?
+
     private init() {
         self.suiteName = "group.me.meeshy.apps"
         self.stagingDirectoriesOverride = nil
         self.preferredContentLanguagesProvider = {
             AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         }
+        self.presenceStateProvider = { PresenceManager.shared.knownPresenceState(for: $0) }
     }
 
     /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
@@ -112,9 +137,13 @@ final class WidgetDataManager: NotificationWidgetSink {
         stagingDirectories: [URL],
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
             AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        },
+        presenceState: @escaping @MainActor (String) -> PresenceState? = {
+            PresenceManager.shared.knownPresenceState(for: $0)
         }
     ) {
         self.preferredContentLanguagesProvider = preferredContentLanguages
+        self.presenceStateProvider = presenceState
         self.suiteName = suiteName
         self.stagingDirectoriesOverride = stagingDirectories
     }
@@ -311,7 +340,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     id: conv.id,
                     name: conv.displayName,
                     avatar: "person.circle.fill",
-                    status: conv.lastSeenText ?? "Offline",
+                    presence: resolvePresence(conv).rawValue,
                     accentColor: conv.accentColor
                 )
             }
@@ -351,6 +380,19 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     // MARK: - Private
 
+    /// Présence d'un pair, temps réel d'abord, horodatage REST ensuite.
+    ///
+    /// L'ordre compte : `PresenceManager` intègre `presence:snapshot`,
+    /// `user:status` et la preuve d'activité `typing:start`, donc il sait des
+    /// choses que `lastSeenAt` — figé à la dernière réponse REST — ignore.
+    private func resolvePresence(_ conv: MeeshyConversation) -> PresenceState {
+        if let userId = conv.participantUserId,
+           let live = presenceStateProvider(userId) {
+            return live
+        }
+        return conv.lastSeenPresence ?? .offline
+    }
+
     /// B1 (Prisme Linguistique) — l'aperçu publié dans l'App Group passe par
     /// `resolvedLastMessagePreview`, comme la ligne de liste in-app.
     ///
@@ -370,7 +412,15 @@ final class WidgetDataManager: NotificationWidgetSink {
             return preview
         }
         if conv.lastMessageAttachmentCount > 0 {
-            return "[\(conv.lastMessageAttachmentCount) attachment\(conv.lastMessageAttachmentCount > 1 ? "s" : "")]"
+            // Composé DANS l'app, donc localisable ici : la cible widget n'a
+            // pas de catalogue pour les sept langues, celle-ci l'a. Le pluriel
+            // passe par le catalogue (`.xcstrings` porte les variations) et
+            // non par un `count > 1 ? "s" : ""` — qui ne vaut que pour
+            // l'anglais et se trompe déjà en français pour zéro.
+            return String(
+                localized: "widget.lastMessage.attachments",
+                defaultValue: "[\(conv.lastMessageAttachmentCount) attachments]"
+            )
         }
         return ""
     }

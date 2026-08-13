@@ -44,3 +44,43 @@ public extension PresenceState {
         }
     }
 }
+
+// MARK: - Libelle « vu il y a … » (localise)
+
+public extension MeeshyConversation {
+    /// Libelle humain de la derniere activite du pair, LOCALISE.
+    ///
+    /// Vit ici et non sur le modele : la cible `MeeshySDK` n'embarque aucun
+    /// catalogue de chaines, si bien que son predecesseur (`lastSeenText`)
+    /// servait du francais code en dur — « En ligne », « Vu il y a 3min » — a
+    /// tous les utilisateurs, y compris les six autres langues de l'app.
+    ///
+    /// `nil` quand la conversation ne porte aucun `lastSeenAt` : l'absence de
+    /// donnee ne se rend pas, elle ne s'affiche pas.
+    var lastSeenLabel: String? {
+        guard let lastSeenAt else { return nil }
+        let elapsed = Date().timeIntervalSince(lastSeenAt)
+        if elapsed < 60 {
+            return PresenceState.online.localizedLabel
+        }
+        if elapsed < 3600 {
+            return String(
+                localized: "presence.lastSeen.minutes",
+                defaultValue: "Vu il y a \(Int(elapsed / 60))min",
+                bundle: .module
+            )
+        }
+        if elapsed < 86400 {
+            return String(
+                localized: "presence.lastSeen.hours",
+                defaultValue: "Vu il y a \(Int(elapsed / 3600))h",
+                bundle: .module
+            )
+        }
+        return String(
+            localized: "presence.lastSeen.days",
+            defaultValue: "Vu il y a \(Int(elapsed / 86400))j",
+            bundle: .module
+        )
+    }
+}

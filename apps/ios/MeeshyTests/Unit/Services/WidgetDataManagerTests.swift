@@ -221,7 +221,7 @@ final class WidgetDataManagerTests: XCTestCase {
             id: "fav1",
             name: "Charlie",
             avatar: "person.crop.circle.fill",
-            status: "Online",
+            presence: "online",
             accentColor: "34D399"
         )
 
@@ -231,7 +231,7 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertEqual(decoded.id, "fav1")
         XCTAssertEqual(decoded.name, "Charlie")
         XCTAssertEqual(decoded.avatar, "person.crop.circle.fill")
-        XCTAssertEqual(decoded.status, "Online")
+        XCTAssertEqual(decoded.presence, "online")
         XCTAssertEqual(decoded.accentColor, "34D399")
     }
 
@@ -240,7 +240,7 @@ final class WidgetDataManagerTests: XCTestCase {
             id: "contact-id",
             name: "Dana",
             avatar: "person.fill",
-            status: "Offline",
+            presence: "offline",
             accentColor: "6366F1"
         )
 

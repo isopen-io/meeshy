@@ -793,7 +793,7 @@ private struct ConversationAvatarView: View {
             )
 
             // Last seen tooltip
-            if showLastSeenTooltip, let text = conversation.lastSeenText {
+            if showLastSeenTooltip, let text = conversation.lastSeenLabel {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundColor(.white)
