@@ -18,7 +18,7 @@ import {
   sendInternalError,
 } from '../utils/response.js';
 import { ReactionService } from '../services/ReactionService.js';
-import { notifyReactionAdded } from '../services/notifications/reactionNotify.js';
+import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
 import type {
   ReactionAddData,
   ReactionRemoveData,
@@ -243,6 +243,19 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       // `REACTION_ADDED` à la room mais ne créait AUCUNE notification/push : les
       // réactions envoyées via l'outbox/REST (chemin iOS) ne déclenchaient donc
       // jamais de notif. Fire-and-forget : ne bloque pas la réponse 201.
+      // Un SWAP d'emoji est aussi un RETRAIT : `addReaction` a détruit l'emoji
+      // précédent du même acteur, dont la notification perd son sujet. Parité
+      // avec le handler socket `reaction:add`, qui draine `replacedEmojis` de
+      // la même façon.
+      for (const removedEmoji of replacedEmojis) {
+        void notifyReactionRemoved(
+          { prisma, notificationService: fastify.notificationService },
+          { messageId, reactorParticipantId: participantId, emoji: removedEmoji, isAnonymous }
+        ).catch((error: unknown) => {
+          fastify.log.error({ error }, 'REST replaced-emoji notification retraction failed');
+        });
+      }
+
       void notifyReactionAdded(
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: participantId, emoji, isAnonymous }
@@ -406,6 +419,18 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           onError: (error) => fastify.log.error({ error }, 'REST reaction removal broadcast failed'),
         });
       }
+
+      // Retirer la notification que l'ajout avait produite — PARITÉ avec le
+      // handler socket `reaction:remove` via la source unique
+      // `notifyReactionRemoved`, exactement comme la route d'ajout ci-dessus
+      // passe par `notifyReactionAdded`. Fire-and-forget : ne bloque pas la
+      // réponse, et le `.catch` est obligatoire sous le `void`.
+      void notifyReactionRemoved(
+        { prisma, notificationService: fastify.notificationService },
+        { messageId, reactorParticipantId: removeParticipantId, emoji: decodedEmoji, isAnonymous }
+      ).catch((error: unknown) => {
+        fastify.log.error({ error }, 'REST reaction notification retraction failed');
+      });
 
       return sendSuccess(reply, { message: 'Reaction removed successfully' });
     } catch (error) {

@@ -2990,6 +2990,15 @@ model Post {
   storyEffects Json?
 
   // ============================================
+  // BIBLIOTHÈQUE DE SONS
+  // ============================================
+  /// Opt-in AUTEUR : autorise l'extraction de la bande-son des VIDÉOS de ce
+  /// post/réel vers la bibliothèque de sons (Sound crédité à l'auteur).
+  /// Les PISTES AUDIO, elles, suivent la règle dérivée `feedsSoundLibrary`
+  /// (PUBLIC/COMMUNITY) sans ce flag — il ne gouverne que le démuxage vidéo.
+  allowSoundExtraction Boolean @default(false)
+
+  // ============================================
   // STATUS/MOOD-SPECIFIC
   // ============================================
   /// Emoji mood (ex: "😴", "🎉", "💪", "☕")

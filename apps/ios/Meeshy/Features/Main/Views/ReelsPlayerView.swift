@@ -566,6 +566,20 @@ struct ReelPageView: View {
         return media
     }
 
+    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel/poste SANS média
+    /// propre : l'audio vit alors dans la composition (`storyEffects`), sous la
+    /// forme produite par `publishBorrowedSoundPost` / `addBorrowedSound`
+    /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
+    /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
+    /// par cette page.
+    private var borrowedSoundTrack: StoryAudioPlayerObject? {
+        guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
+        let track = effects.resolvedBackgroundAudio
+            ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
+        guard let track, !(track.mediaURL ?? "").isEmpty else { return nil }
+        return track
+    }
+
     /// The "original" language for the meta-row flag strip: the audio
     /// transcription language for an audio reel, else the post's original
     /// language. Listed first in the strip.
@@ -638,6 +652,16 @@ struct ReelPageView: View {
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)
+                }
+
+                // Crédit du son EMPRUNTÉ (réel « son de bibliothèque seul ») —
+                // même doctrine que le header de story : le crédit est dû dès
+                // que `soundId` existe (AudioChipDisplay), affiché en pill
+                // discrète au-dessus de la rangée auteur.
+                if let track = borrowedSoundTrack, isActive {
+                    borrowedSoundBadge(track)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
                 }
 
                 HStack(alignment: .bottom, spacing: 12) {
@@ -747,7 +771,11 @@ struct ReelPageView: View {
     /// audio reel playing (the inactive page's `stopAllAudio()` cuts the previous
     /// one); the `isCallActive` gate keeps the call's audio session intact.
     private func startActiveAudioIfNeeded() {
-        guard shouldStartActiveMedia, let audioMedia else { return }
+        guard shouldStartActiveMedia else { return }
+        guard let audioMedia else {
+            startBorrowedSoundIfNeeded()
+            return
+        }
         let attachment = audioMedia.toMessageAttachment()
         let url = resolvedAudioUrl(for: audioMedia)
         // F6 — compare against the value the engine WILL store, not the raw url:
@@ -763,6 +791,47 @@ struct ReelPageView: View {
         } else {
             audioPlayer.play(urlString: url)
         }
+    }
+
+    /// Pill de crédit d'un son emprunté : « titre · @auteur » (ou le libellé
+    /// « Son original » localisé quand l'auteur n'a pas nommé son son).
+    private func borrowedSoundBadge(_ track: StoryAudioPlayerObject) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .font(.caption.weight(.semibold))
+                .accessibilityHidden(true)
+            Text(borrowedSoundLabel(track))
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(String(localized: "Son utilisé", defaultValue: "Son utilis\u{00E9}"))
+        .accessibilityValue(borrowedSoundLabel(track))
+    }
+
+    private func borrowedSoundLabel(_ track: StoryAudioPlayerObject) -> String {
+        let authored = track.name.flatMap { $0.isEmpty ? nil : $0 }
+        let title = authored ?? String(localized: "Son original", defaultValue: "Son original")
+        if let author = track.soundAuthorUsername, !author.isEmpty {
+            return "\(title) · @\(author)"
+        }
+        return title
+    }
+
+    /// Analogue de la branche `audioMedia` pour un réel « son emprunté seul » :
+    /// même moteur (`AudioPlaybackManager`, cache-first + auth), même garde
+    /// d'idempotence. `play(urlString:)` stocke la chaîne TELLE QUE PASSÉE dans
+    /// `currentUrl` et résout l'URL relative en interne — la comparaison se
+    /// fait donc sur la valeur brute de la piste.
+    private func startBorrowedSoundIfNeeded() {
+        guard let track = borrowedSoundTrack, let url = track.mediaURL, !url.isEmpty else { return }
+        guard ReelMediaAutostart.shouldLoadAudio(currentUrl: audioPlayer.currentUrl, url: url) else { return }
+        audioPlayer.attachmentId = track.soundId ?? track.id
+        audioPlayer.play(urlString: url)
     }
 
     /// Prisme — for an audio reel, default to the viewer's preferred language if a

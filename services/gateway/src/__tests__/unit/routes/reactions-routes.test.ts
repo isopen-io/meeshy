@@ -50,6 +50,7 @@ const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => {
 });
 
 const mockNotifyReactionAdded = jest.fn<any>().mockResolvedValue(undefined);
+const mockNotifyReactionRemoved = jest.fn<any>().mockResolvedValue(undefined);
 
 // Auth mock: configurable per-test via authContextOverride
 let authContextOverride: Record<string, any> = {};
@@ -69,6 +70,7 @@ jest.mock('../../../services/ReactionService', () => ({
 
 jest.mock('../../../services/notifications/reactionNotify', () => ({
   notifyReactionAdded: (...args: any[]) => mockNotifyReactionAdded(...args),
+  notifyReactionRemoved: (...args: any[]) => mockNotifyReactionRemoved(...args),
 }));
 
 jest.mock('../../../middleware/auth', () => ({
@@ -234,6 +236,7 @@ describe('reactionRoutes', () => {
     jest.clearAllMocks();
     mockCreateUpdateEvent.mockResolvedValue({ messageId: MESSAGE_ID, emoji: '👍' });
     mockNotifyReactionAdded.mockResolvedValue(undefined);
+    mockNotifyReactionRemoved.mockResolvedValue(undefined);
     mockEmit.mockClear();
     mockTo.mockClear();
     mockGetIO.mockClear();
@@ -697,6 +700,59 @@ describe('reactionRoutes', () => {
         reply,
         { message: 'Reaction removed successfully' }
       );
+      expect(reply.statusCode).toBe(200);
+    });
+
+    /**
+     * Le symétrique du `notifyReactionAdded` de la route de pose. Sans lui,
+     * « X a réagi 👍 à votre message » survit au 👍 : la notification garde une
+     * copie dénormalisée que rien ne relit, donc aucun filtre à la lecture ne
+     * peut la rattraper.
+     */
+    it('fires notifyReactionRemoved as fire-and-forget after successful remove', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
+
+      mockRemoveReaction.mockResolvedValue(true);
+      mockCreateUpdateEvent.mockResolvedValue(updateEvent);
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+
+      const req = makeRequest({ params: { messageId: MESSAGE_ID, emoji: encodedEmoji } });
+      await handler(req, reply);
+      await Promise.resolve();
+
+      expect(mockNotifyReactionRemoved).toHaveBeenCalledWith(
+        expect.objectContaining({ prisma: fastify.prisma }),
+        expect.objectContaining({
+          messageId: MESSAGE_ID,
+          // L'emoji DÉCODÉ, comme celui passé à `removeReaction` : la
+          // notification porte le caractère, pas son échappement d'URL.
+          emoji: '👍',
+          reactorParticipantId: PARTICIPANT_ID,
+          isAnonymous: false,
+        })
+      );
+    });
+
+    /**
+     * Le retrait est un EFFET du dé-réagir, jamais sa condition : la réaction
+     * est déjà partie de la base quand il s'exécute. Un rejet ne doit donc pas
+     * transformer un dé-réagir réussi en 500 — c'est ce que ferait un `void`
+     * sans `.catch`, et pire : sous Node 22 le rejet non écouté tue le process.
+     */
+    it('reste en 200 quand la rétractation de notification rejette', async () => {
+      const { fastify, reply } = setup(true);
+      const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
+
+      mockRemoveReaction.mockResolvedValue(true);
+      mockCreateUpdateEvent.mockResolvedValue(updateEvent);
+      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
+      mockNotifyReactionRemoved.mockRejectedValue(new Error('retraction failed'));
+
+      const req = makeRequest({ params: { messageId: MESSAGE_ID, emoji: encodedEmoji } });
+      await handler(req, reply);
+      await Promise.resolve();
+
       expect(reply.statusCode).toBe(200);
     });
 

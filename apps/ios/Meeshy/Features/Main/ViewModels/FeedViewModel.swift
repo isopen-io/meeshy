@@ -594,6 +594,44 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// Publie un post/réel dont l'audio est un son EMPRUNTÉ à la bibliothèque.
+    ///
+    /// Aucun média à uploader : la piste `soundId` du blob `storyEffects` porte
+    /// tout — le serveur enregistre un usage (`SoundUsage`) au lieu de capturer,
+    /// et la règle de composition REEL compte la durée du son (miroir gateway).
+    /// Passe par `APIClient` directement : `PostServiceProviding.create` ne
+    /// transporte pas de `storyEffects`, et élargir le protocole pour un seul
+    /// appel imposerait le champ à tous ses mocks.
+    func createBorrowedSoundPost(type: String, visibility: String = "PUBLIC", storyEffects: StoryEffects) async {
+        publishError = nil
+        publishSuccess = false
+        do {
+            let request = CreatePostRequest(
+                type: type,
+                visibility: visibility,
+                storyEffects: storyEffects.sanitizedForServerPublish()
+            )
+            let response: APIResponse<APIPost> = try await api.request(
+                endpoint: "/posts",
+                method: "POST",
+                body: try JSONEncoder().encode(request)
+            )
+            let apiPost = response.data
+            let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+            posts.insert(feedPost, at: 0)
+            debouncedCacheSave()
+            publishSuccess = true
+
+            if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
+                Task.detached(priority: .utility) {
+                    try? await persistence.insertPost(record)
+                }
+            }
+        } catch {
+            publishError = error.localizedDescription
+        }
+    }
+
     /// U1 ST3 — inserts an optimistic post keyed by a fresh cmid and enqueues a
     /// durable `.createPost` row. The post appears instantly; the OutboxFlusher
     /// dispatches it (POST /posts with `X-Client-Mutation-Id`) and the gateway

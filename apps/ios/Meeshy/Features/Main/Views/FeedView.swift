@@ -1247,12 +1247,18 @@ struct FeedView: View {
             Task { await impressions.flushNow() }
         }
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
-                showAudioComposer = false
-                Task {
-                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
+            AudioPostComposerView(
+                onPublish: { audioURL, mimeType, durationMs, transcription in
+                    showAudioComposer = false
+                    Task {
+                        await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
+                    }
+                },
+                onPublishBorrowed: { sound in
+                    showAudioComposer = false
+                    Task { await publishBorrowedSoundPost(sound) }
                 }
-            }
+            )
         }
         // Story viewer présentation : unifiée via StoryViewerCoordinator au
         // niveau root (`.fullScreenCover(item:)`). L'ancien cover local

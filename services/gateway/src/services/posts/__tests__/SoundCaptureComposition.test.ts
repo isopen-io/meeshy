@@ -153,6 +153,83 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     expect(captureSounds.mock.calls[0][0].tracks).toEqual([]);
   });
 
+  /**
+   * Chemin des posts VOCAUX (AudioPostComposer) : l'audio arrive par
+   * `mediaIds`, SANS blob `storyEffects`. La capture doit recevoir une piste
+   * SYNTHÉTISÉE depuis le PostMedia — c'est elle qui fait entrer les sons des
+   * posts/réels publics dans la bibliothèque.
+   */
+  it('test_createPost_audioMediaWithoutStoryEffects_forwardsASynthesizedTrack', async () => {
+    const { spy, captureSounds } = buildCaptureSpy();
+    const prisma = buildPrisma();
+    (prisma as any).postMedia.findMany = jest.fn<() => Promise<unknown[]>>()
+      .mockResolvedValue([{ id: 'media-audio', mimeType: 'audio/mp4', duration: 4000 }]);
+    const service = new PostService(prisma, undefined, undefined, undefined, undefined, spy);
+
+    await service.createPost(
+      { type: 'POST' as never, visibility: 'PUBLIC' as never, mediaIds: ['media-audio'] },
+      'user-1',
+    );
+
+    expect(captureSounds.mock.calls[0][0].tracks).toEqual([
+      { trackId: 'media:media-audio', postMediaId: 'media-audio', startMs: 0, endMs: 4000 },
+    ]);
+  });
+
+  /**
+   * Une VIDÉO n'entre en bibliothèque que sur opt-in auteur : sans
+   * `allowSoundExtraction`, aucune piste synthétisée ; avec, une piste marquée
+   * `extractFromVideo` que `SoundCaptureService` démuxera.
+   */
+  it('test_createPost_videoMedia_followsTheExtractionOptIn', async () => {
+    const video = { id: 'media-video', mimeType: 'video/mp4', duration: 9000 };
+    for (const { allow, expected } of [
+      { allow: undefined, expected: [] },
+      {
+        allow: true,
+        expected: [{
+          trackId: 'media:media-video', postMediaId: 'media-video',
+          extractFromVideo: true, startMs: 0, endMs: 9000,
+        }],
+      },
+    ]) {
+      const { spy, captureSounds } = buildCaptureSpy();
+      const prisma = buildPrisma();
+      (prisma as any).postMedia.findMany = jest.fn<() => Promise<unknown[]>>()
+        .mockResolvedValue([video]);
+      const service = new PostService(prisma, undefined, undefined, undefined, undefined, spy);
+
+      await service.createPost(
+        {
+          type: 'POST' as never, visibility: 'PUBLIC' as never,
+          mediaIds: ['media-video'], allowSoundExtraction: allow,
+        },
+        'user-1',
+      );
+
+      expect(captureSounds.mock.calls[0][0].tracks).toEqual(expected);
+    }
+  });
+
+  /**
+   * La lecture des médias qui échoue ne doit NI bloquer la publication NI
+   * perdre les pistes du blob : `collectCaptureTracks` dégrade sur
+   * `extractCaptureTracks` seul. `mediaIds` est REQUIS ici — sans média
+   * attaché la lecture est sautée et le repli ne serait jamais exercé
+   * (le `buildPrisma` par défaut n'a pas de `postMedia.findMany`).
+   */
+  it('test_createPost_mediaReadFailure_stillForwardsBlobTracks', async () => {
+    const { spy, captureSounds } = buildCaptureSpy();
+    await buildService(spy).createPost(
+      {
+        type: 'STORY' as never, visibility: 'PUBLIC' as never,
+        storyEffects: STORY_EFFECTS, mediaIds: ['media-a'],
+      },
+      'user-1',
+    );
+    expect(captureSounds.mock.calls[0][0].tracks).toHaveLength(2);
+  });
+
   it('test_createPost_captureFailure_doesNotBreakPublishing', async () => {
     const captureSounds = jest.fn<(ctx: CaptureContext) => Promise<void>>()
       .mockRejectedValue(new Error('bibliothèque HS'));
@@ -161,5 +238,65 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
       { type: 'STORY' as never, visibility: 'PUBLIC' as never, storyEffects: STORY_EFFECTS },
       'user-1',
     )).resolves.toBeDefined();
+  });
+
+  // MARK: - Qualification REEL par son emprunté (réutilisation d'audio)
+
+  /**
+   * Un réel « son de bibliothèque seul » est légitime : la piste `soundId` du
+   * blob compte comme audio dans `qualifiesAsReel` (durée du `Sound`), au lieu
+   * de dégrader systématiquement en POST faute de médias.
+   */
+  const borrowedOnlyEffects = {
+    audioPlayerObjects: [{ id: 'track-b', soundId: '507f1f77bcf86cd799439011' }],
+  };
+
+  function buildReelPrisma(sound: Record<string, unknown> | null) {
+    const prisma = buildPrisma();
+    (prisma as any).sound = {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue(sound ? [sound] : []),
+    };
+    return prisma;
+  }
+
+  async function createdTypeFor(sound: Record<string, unknown> | null) {
+    const { spy } = buildCaptureSpy();
+    const prisma = buildReelPrisma(sound);
+    const service = new PostService(prisma, undefined, undefined, undefined, undefined, spy);
+    await service.createPost(
+      { type: 'REEL' as never, visibility: 'PUBLIC' as never, storyEffects: borrowedOnlyEffects },
+      'user-1',
+    );
+    const createArgs = (prisma as any).post.create.mock.calls[0][0];
+    return createArgs.data.type as string;
+  }
+
+  it('test_createPost_borrowedSoundOfThreeSeconds_keepsTheReel', async () => {
+    expect(await createdTypeFor({
+      durationMs: 5000, isPublic: true, uploaderId: 'someone-else', mutedAt: null,
+    })).toBe('REEL');
+  });
+
+  it('test_createPost_borrowedSoundTooShort_degradesToPost', async () => {
+    expect(await createdTypeFor({
+      durationMs: 2000, isPublic: true, uploaderId: 'someone-else', mutedAt: null,
+    })).toBe('POST');
+  });
+
+  it('test_createPost_privateForeignSound_doesNotQualifyTheReel', async () => {
+    // Même garde que `recordBorrowed` : un son privé d'autrui (ou coupé) ne
+    // qualifie pas plus un réel qu'il ne se laisse emprunter.
+    expect(await createdTypeFor({
+      durationMs: 5000, isPublic: false, uploaderId: 'someone-else', mutedAt: null,
+    })).toBe('POST');
+    expect(await createdTypeFor({
+      durationMs: 5000, isPublic: true, uploaderId: 'someone-else', mutedAt: new Date(),
+    })).toBe('POST');
+  });
+
+  it('test_createPost_ownPrivateSound_qualifiesTheReel', async () => {
+    expect(await createdTypeFor({
+      durationMs: 5000, isPublic: false, uploaderId: 'user-1', mutedAt: null,
+    })).toBe('REEL');
   });
 });

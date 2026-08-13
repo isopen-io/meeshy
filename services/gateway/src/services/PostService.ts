@@ -22,8 +22,12 @@ import { composeStoryContent, storyTextObjectText } from './posts/storyContentCo
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { retractReactionNotifications } from './notifications/retractReactionNotifications';
+import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
+import { getSharedNotificationService } from './notifications/notification-service-registry';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
+import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
@@ -124,6 +128,8 @@ export class PostService {
     mediaIds?: string[];
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
+    /** Opt-in auteur : extraction de la bande-son des VIDÉOS vers la bibliothèque de sons. */
+    allowSoundExtraction?: boolean;
     /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
     location?: unknown;
     /**
@@ -200,7 +206,13 @@ export class PostService {
             select: { mimeType: true, duration: true },
           })
         : [];
-      if (!qualifiesAsReel(claimableMedia)) {
+      // Un son EMPRUNTÉ à la bibliothèque (piste `soundId` de storyEffects)
+      // compte comme audio dans la règle de composition : un réel « son de
+      // bibliothèque seul » est légitime — c'est la réutilisation d'audio.
+      const borrowedEntries = qualifiesAsReel(claimableMedia)
+        ? []
+        : await this.borrowedSoundReelEntries(data.storyEffects, userId);
+      if (!qualifiesAsReel([...claimableMedia, ...borrowedEntries])) {
         effectiveType = PostType.POST;
         log.info('createPost: REEL non qualifiant dégradé en POST', {
           authorId: userId,
@@ -220,6 +232,7 @@ export class PostService {
         originalLanguage,
         communityId: data.communityId,
         storyEffects: (data.storyEffects as any) ?? undefined,
+        allowSoundExtraction: data.allowSoundExtraction ?? false,
         moodEmoji: data.moodEmoji,
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,
@@ -285,9 +298,14 @@ export class PostService {
       }
     }
 
-    // Bibliothèque de sons : capture des pistes audio du blob storyEffects.
+    // Bibliothèque de sons : capture des pistes audio du blob storyEffects ET
+    // des médias audio/vidéo attachés (posts vocaux sans storyEffects, réels
+    // avec opt-in d'extraction — `collectCaptureTracks`, résiliente).
     // HORS de la garde médias — une story peut réutiliser un média déjà attaché
     // — et fire-and-forget : publier ne dépend jamais de la bibliothèque.
+    const captureTracks = await this.collectCaptureTracks(
+      post.id, data.storyEffects, data.allowSoundExtraction ?? false,
+      Boolean(data.mediaIds?.length));
     this.soundCaptureService.captureSounds({
       postId: post.id,
       authorId: post.authorId,
@@ -296,7 +314,7 @@ export class PostService {
       // déjà été oubliée une fois — c'était la troisième porte du piège
       // d'attribution.
       feedsLibrary: feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId }),
-      tracks: extractCaptureTracks(data.storyEffects),
+      tracks: captureTracks,
     }).catch((err: unknown) => {
       log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
     });
@@ -785,6 +803,63 @@ export class PostService {
     }
   }
 
+  /**
+   * Pistes de capture COMPLÈTES d'un post : celles du blob `storyEffects`
+   * (composer riche) + celles synthétisées depuis ses médias attachés (posts
+   * vocaux sans blob, vidéos sous opt-in d'extraction). Les médias déjà
+   * référencés par une piste du blob restent à cette piste-là
+   * (`mediaCaptureTracks` les exclut).
+   */
+  private async collectCaptureTracks(
+    postId: string,
+    storyEffects: Record<string, unknown> | undefined,
+    allowVideoExtraction: boolean,
+    /** Épargne la lecture Prisma quand l'appelant SAIT qu'aucun média n'est attaché. */
+    hasAttachedMedia: boolean,
+  ) {
+    const effectTracks = extractCaptureTracks(storyEffects);
+    if (!hasAttachedMedia) return effectTracks;
+    try {
+      const media = await this.prisma.postMedia.findMany({
+        where: { postId },
+        select: { id: true, mimeType: true, duration: true },
+      });
+      return [
+        ...effectTracks,
+        ...mediaCaptureTracks({ media, storyEffectsTracks: effectTracks, allowVideoExtraction }),
+      ];
+    } catch (error) {
+      // RÉSILIENTE : publier/éditer ne dépend jamais de la bibliothèque. Sans
+      // la lecture des médias, les pistes du blob restent capturables.
+      log.error('collectCaptureTracks: lecture des médias impossible',
+        error instanceof Error ? error : new Error(String(error)), { postId });
+      return effectTracks;
+    }
+  }
+
+  /**
+   * Entrées « audio » synthétiques pour `qualifiesAsReel` : les sons EMPRUNTÉS
+   * du blob (pistes `soundId`), avec la même garde d'autorisation que
+   * `recordBorrowed` — un son privé d'autrui ou coupé ne qualifie pas plus un
+   * réel qu'il ne se laisse emprunter.
+   */
+  private async borrowedSoundReelEntries(
+    storyEffects: Record<string, unknown> | undefined,
+    authorId: string,
+  ): Promise<Array<{ mimeType: string; duration: number | null }>> {
+    const soundIds = extractCaptureTracks(storyEffects)
+      .map((t) => t.soundId)
+      .filter((id): id is string => Boolean(id));
+    if (soundIds.length === 0) return [];
+    const sounds = await this.prisma.sound.findMany({
+      where: { id: { in: soundIds } },
+      select: { durationMs: true, isPublic: true, uploaderId: true, mutedAt: true },
+    });
+    return sounds
+      .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === authorId))
+      .map((s) => ({ mimeType: 'audio/mp4', duration: s.durationMs ?? null }));
+  }
+
   async updatePost(postId: string, userId: string, data: {
     content?: string;
     visibility?: PostVisibility;
@@ -795,6 +870,8 @@ export class PostService {
     type?: PostType;
     removeMediaIds?: string[];
     mediaIds?: string[];
+    /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
+    allowSoundExtraction?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
     /// Déjà validé par `parseSharedPlace` côté route — jamais un bloc client brut.
     location?: SharedPlace | null;
@@ -910,11 +987,19 @@ export class PostService {
     const editTouchesComposition =
       requestedType !== undefined || mediaIdsToRemove.length > 0 || mediaIdsToAttach.length > 0;
     if (finalType === PostType.REEL && editTouchesComposition && !qualifiesAsReel(finalMedia)) {
-      // Assertion locale justifiée : porte le `statusCode` que la route
-      // traduit en 422 INVALID_POST_UPDATE — sans élargir le type en `any`.
-      const err = new Error('A reel requires a video, an audio, or at least two images') as Error & { statusCode: number };
-      err.statusCode = 422;
-      throw err;
+      // Même extension qu'à la création : un son EMPRUNTÉ (piste `soundId` du
+      // blob effectif — celui de l'édition, sinon celui en base) compte comme
+      // audio dans la composition.
+      const effectiveEffects = data.storyEffects
+        ?? (post.storyEffects as Record<string, unknown> | null) ?? undefined;
+      const borrowedEntries = await this.borrowedSoundReelEntries(effectiveEffects, userId);
+      if (!qualifiesAsReel([...finalMedia, ...borrowedEntries])) {
+        // Assertion locale justifiée : porte le `statusCode` que la route
+        // traduit en 422 INVALID_POST_UPDATE — sans élargir le type en `any`.
+        const err = new Error('A reel requires a video, an audio, or at least two images') as Error & { statusCode: number };
+        err.statusCode = 422;
+        throw err;
+      }
     }
 
     // A language change re-runs the Prisme translation pipeline from the new
@@ -1017,6 +1102,27 @@ export class PostService {
       });
     }
 
+    // Les notifications que le post a produites portent une copie DÉNORMALISÉE
+    // de son texte, qu'aucune lecture ne rafraîchit — la ligne ne relit jamais
+    // le post. Sans cette réécriture, l'inbox de toute l'audience garde le
+    // texte d'AVANT, définitivement, y compris quand l'édition existait
+    // précisément pour retirer ce qui n'aurait pas dû être publié.
+    //
+    // La source est le contenu PERSISTÉ (`updated.content`) et non celui de la
+    // requête : les deux diffèrent dès qu'une story recompose son texte
+    // (`composeStoryContent`), et c'est le persisté que le destinataire verra
+    // en ouvrant le post.
+    //
+    // BEST-EFFORT, comme la reprise d'octets ci-dessus : l'édition est déjà
+    // committée, et une ligne récalcitrante ne doit pas la transformer en 500.
+    await reproduceEditedSubjectNotifications(
+      this.prisma,
+      { subject: { kind: 'post', id: postId }, content: updated.content },
+      getSharedNotificationService()
+    ).catch((err: unknown) => {
+      log.warn('[PostService] updatePost: notification reproduction failed', { postId, err });
+    });
+
     if (languageChanged) {
       const content = data.content ?? post.content;
       if (content) {
@@ -1047,23 +1153,29 @@ export class PostService {
     // Édition : même contrat qu'à la création. Le service retire aussi les
     // usages des pistes disparues, sinon elles surcompteraient pour toujours.
     //
-    // GARDE 1 — `storyEffects` ABSENT ≠ « plus aucune piste ». `UpdatePostSchema`
-    // a tous ses champs optionnels : un changement d'audience ou une retouche de
-    // légende arrive ici sans `storyEffects`, et le blob en base n'est alors pas
-    // réécrit. Appeler la capture avec `tracks: []` ferait supprimer TOUS les
-    // usages d'une story qui joue toujours son audio, en faussant `usageCount`.
-    // Une édition qui n'exprime rien sur les pistes ne doit rien décider.
+    // GARDE 1 — l'édition ne repasse par la capture que si elle EXPRIME quelque
+    // chose sur les sons : blob `storyEffects` envoyé, composition média
+    // touchée, ou bascule de l'opt-in d'extraction. Et quand le blob n'est PAS
+    // envoyé, les pistes sont relues du blob EN BASE (`updated.storyEffects`) :
+    // un changement d'audience seul ne doit jamais faire croire « plus aucune
+    // piste » et supprimer les usages d'une story qui joue toujours son audio.
     //
-    // GARDE 2 — `!updated.repostOfId` : troisième porte du piège d'attribution.
+    // GARDE 2 — repost : troisième porte du piège d'attribution.
     // `repostPost` snapshotte les médias de la source SOUS le reposteur ; un PUT
     // sur le repost passerait donc le scope `postId` et créerait un `Sound`
-    // crédité au reposteur avec l'audio d'autrui.
-    if (data.storyEffects !== undefined) {
+    // crédité au reposteur avec l'audio d'autrui. `feedsSoundLibrary` renvoie
+    // false sur tout repost, et `captureSounds` libère alors les usages.
+    if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
+      const effectiveEffects = data.storyEffects
+        ?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined;
+      const editedTracks = await this.collectCaptureTracks(
+        updated.id, effectiveEffects, updated.allowSoundExtraction === true,
+        finalMedia.length > 0);
       this.soundCaptureService.captureSounds({
         postId: updated.id,
         authorId: updated.authorId,
         feedsLibrary: feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId }),
-        tracks: extractCaptureTracks(data.storyEffects),
+        tracks: editedTracks,
       }).catch((err: unknown) => {
         log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
       });
@@ -1221,6 +1333,26 @@ export class PostService {
 
     const foundEmoji = userReactions[0].emoji;
     await this.postReactionService.removeReaction({ postId, userId, emoji: foundEmoji });
+
+    // La notification que le like avait produite (`post_like` /
+    // `story_reaction` / `status_reaction`) n'a plus de sujet. Le retrait vit
+    // ICI et non dans la route, pour la même raison que le reste de la
+    // famille : `foundEmoji` — la réaction RÉELLEMENT retirée — n'existe qu'à
+    // cet endroit. La route, elle, diffuse un '❤️' codé en dur, et un retrait
+    // câblé là-haut manquerait donc toute réaction d'un autre emoji.
+    // L'annonceur par défaut est le service PARTAGÉ du processus (le seul
+    // câblé avec `io`), exactement comme `applyPostRemovalEffects`.
+    try {
+      await retractReactionNotifications(
+        this.prisma,
+        { subject: { kind: 'post', id: postId }, actorId: userId, emoji: foundEmoji },
+        getSharedNotificationService()
+      );
+    } catch (err) {
+      // Le retrait est un EFFET du dé-like, jamais sa condition : la réaction
+      // est déjà partie de la base.
+      log.warn('post unlike: notification retraction failed', { postId, userId, err });
+    }
 
     const remainingReactions = await this.prisma.postReaction.findMany({
       where: { postId },

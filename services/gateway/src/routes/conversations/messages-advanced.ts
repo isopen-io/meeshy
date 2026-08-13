@@ -33,6 +33,7 @@ import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
+import { notifyReactionRemoved } from '../../services/notifications/reactionNotify';
 import type {
   ConversationParams,
   EditMessageBody
@@ -1370,6 +1371,16 @@ export function registerMessagesAdvancedRoutes(
         logger.warn('[REACTION-REST] Error broadcasting reaction removal via Socket.IO', socketError);
         // Do not fail the response if broadcast fails
       }
+
+      // Retirer la notification que l'ajout avait produite — troisième et
+      // dernier transport du dé-réagir, sur la même source unique que le
+      // handler socket et que `DELETE /reactions/…`.
+      void notifyReactionRemoved(
+        { prisma, notificationService: fastify.notificationService },
+        { messageId, reactorParticipantId: currentParticipant.id, emoji, isAnonymous }
+      ).catch((error: unknown) => {
+        logger.warn('[REACTION-REST] reaction notification retraction failed', error);
+      });
 
       return sendSuccess(reply, { removed: true });
 
