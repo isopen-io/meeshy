@@ -86,6 +86,21 @@ const VALID_SEGMENT = {
   },
 };
 
+// The authenticated sender is SPEAKER_ID, but the client-controlled segment
+// claims to be spoken by LISTENER_ID — a different, real participant.
+const SPOOFED_SEGMENT = {
+  callId: VALID_CALL_ID,
+  segment: {
+    text: 'Bonjour le monde',
+    speakerId: LISTENER_ID,
+    startMs: 0,
+    endMs: 1500,
+    isFinal: true,
+    confidence: 0.95,
+    language: 'fr',
+  },
+};
+
 function makePrisma() {
   return {
     callSession: {
@@ -195,6 +210,38 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
 
     // The scoped listener must be removed once resolved — no leak.
     expect(emitter.listenerCount(`translationCompleted:${MESSAGE_ID}`)).toBe(0);
+  });
+
+  it('stamps the relayed speakerId with the authenticated sender, ignoring a spoofed client-supplied speakerId', async () => {
+    const prisma = makePrisma();
+    const { socket, handlers, roomEmit } = makeSocket();
+    const taskId = 'task-spoof';
+    const zmqClient = makeFakeZmqClient(taskId);
+    const emitter = zmqClient as unknown as EventEmitter;
+
+    const handler = new CallEventsHandler(prisma, makeCallService());
+    handler.setZmqClient(zmqClient);
+    // Authenticated sender is SPEAKER_ID; SPOOFED_SEGMENT.segment.speakerId
+    // claims LISTENER_ID instead.
+    handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+    const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](SPOOFED_SEGMENT);
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+
+    emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+      taskId,
+      result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+      targetLanguage: 'en',
+    });
+    await segmentPromise;
+
+    expect(roomEmit).toHaveBeenCalledTimes(1);
+    const [, payload] = roomEmit.mock.calls[0];
+    expect(payload.segment.speakerId).toBe(SPEAKER_ID);
+    expect(payload.segment.speakerId).not.toBe(LISTENER_ID);
   });
 
   it('attempts translation even when callSession.metadata has no translationEnabled flag', async () => {
