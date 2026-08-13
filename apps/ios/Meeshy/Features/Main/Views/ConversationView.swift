@@ -1545,6 +1545,21 @@ struct ConversationView: View {
 
     private var isAnonymous: Bool { anonymousSession != nil }
 
+    /// Exclusion mutuelle avec la pill sticky de jour (`MessageDayStickyOverlay`) :
+    /// les deux se disputent la même bande juste sous l'encoche. Le header
+    /// s'efface pendant le défilement actif de la liste — sauf si la barre
+    /// de recherche est ouverte, qui doit rester joignable en toute
+    /// circonstance (2026-08-13, en résolution du chevauchement 2026-08-12).
+    ///
+    /// Déclaré AVANT le `@ViewBuilder` ci-dessous, et pas entre lui et la
+    /// propriété qu'il décore : inséré au milieu, l'attribut s'appliquait à ce
+    /// `Bool` (« static method 'buildExpression' requires that 'Bool' conform
+    /// to 'View' »). Un attribut se lit sur la déclaration SUIVANTE, les
+    /// commentaires ne l'en séparent pas.
+    private var hidesFloatingHeaderForScroll: Bool {
+        scrollState.isScrollingActiveList && !headerState.showSearch
+    }
+
     @ViewBuilder
     // Enfants en AnyView : le type structurel du tuple (branches anonymous /
     // typing / bande + searchBar) gonflait le mangled name de
@@ -1553,15 +1568,6 @@ struct ConversationView: View {
     // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
     // closure du VStack). Même famille que expandedHeaderMidContent — couper
     // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
-    /// Exclusion mutuelle avec la pill sticky de jour (`MessageDayStickyOverlay`) :
-    /// les deux se disputent la même bande juste sous l'encoche. Le header
-    /// s'efface pendant le défilement actif de la liste — sauf si la barre
-    /// de recherche est ouverte, qui doit rester joignable en toute
-    /// circonstance (2026-08-13, en résolution du chevauchement 2026-08-12).
-    private var hidesFloatingHeaderForScroll: Bool {
-        scrollState.isScrollingActiveList && !headerState.showSearch
-    }
-
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {
