@@ -25,6 +25,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation, resolveCallerParticipant } from './utils/access-control';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
+import { loadConversationTombstones } from './utils/delta-tombstones';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -458,13 +459,33 @@ export function registerCoreRoutes(
       // est STRICTE (`gt`) : un client qui repasse son dernier `updatedAt` ne
       // re-télécharge pas la ligne qu'il détient déjà.
       let isDeltaPage = false;
+      let deltaSince: Date | null = null;
       if (updatedSince) {
         const sinceDate = new Date(updatedSince);
         if (!isNaN(sinceDate.getTime())) {
           whereClause.updatedAt = { gt: sinceDate };
           isDeltaPage = true;
+          deltaSince = sinceDate;
         }
       }
+
+      // Le delta ci-dessus est UPSERT-ONLY : son `whereClause` exige une
+      // conversation `isActive` et un participant actif sans `deletedForMe`,
+      // donc une conversation qui SORT de la vue (fermée, quittée, bannie,
+      // supprimée-pour-moi depuis un autre appareil) ne revient dans aucune
+      // réponse. Rien ne la retirait du cache client avant la réconciliation
+      // complète — 24 h sur iOS (`fullReconcileInterval`) comme sur le web
+      // (`FULL_RECONCILE_INTERVAL_MS`).
+      //
+      // Les tombstones partent EN PARALLÈLE de la page (elles ne dépendent que
+      // de `since`), sont ids-only, cappées, et n'existent QUE sur une page
+      // delta : le chemin chaud de l'écran de liste ne paie rien.
+      const tombstonesPromise = deltaSince
+        ? loadConversationTombstones(prisma, {
+            userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+            since: deltaSince
+          })
+        : null;
 
       // L'ORDRE d'une page delta n'est pas cosmétique : il décide si une page
       // TRONQUÉE est rattrapable.
@@ -837,6 +858,8 @@ export function registerCoreRoutes(
       // `cursorPagination` fields that iOS SDK (ConversationListResponse) and web
       // (conversations.service.ts) parse at root level. Migration to sendSuccess requires
       // a coordinated client update (breaking change).
+      const tombstones = tombstonesPromise ? await tombstonesPromise : null;
+
       const responseBody = {
         success: true,
         data: conversationsWithUnreadCount,
@@ -846,7 +869,18 @@ export function registerCoreRoutes(
           total: totalCount,
           hasMore
         },
-        cursorPagination: cursorPaginationMeta
+        cursorPagination: cursorPaginationMeta,
+        // Bloc additif, présent UNIQUEMENT sur une page delta. Il entre dans le
+        // corps hashé par `sendWithETag` : un 304 ne peut donc pas masquer une
+        // sortie de vue qui vient d'apparaître.
+        ...(tombstones
+          ? {
+              meta: {
+                deletedConversationIds: tombstones.ids,
+                deletedConversationIdsTruncated: tombstones.truncated
+              }
+            }
+          : {})
       };
       // T15 — ETag + If-None-Match→304: don't re-send an unchanged conversation
       // list body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
