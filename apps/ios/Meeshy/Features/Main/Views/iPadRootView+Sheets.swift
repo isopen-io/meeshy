@@ -210,7 +210,19 @@ extension iPadRootView {
             // call-waiting) extraite dans `CallPresentationLayer` (partagé avec
             // RootView) : découple le churn CallManager de `iPadRootView.body` —
             // même correctif watchdog 0x8BADF00D. Toute la logique détaillée vit
-            // dans le ViewModifier (cf. RootView.swift).
-            .modifier(CallPresentationLayer())
+            // dans le ViewModifier (cf. RootView.swift). Le mini-lecteur audio
+            // (ex-`overlays`, cf. iPadRootView+Overlays.swift) y est hoisté
+            // depuis 2026-08-13 — même point de montage que la bannière
+            // d'appel, l'appel primant visuellement au-dessus.
+            .modifier(CallPresentationLayer(
+                miniPlayerOnTapBody: {
+                    guard let convId = ConversationAudioCoordinator.shared
+                        .activeContext?.conversationId else { return }
+                    navigateToConversationById(convId)
+                },
+                // iPad two-column tracks the active conversation via
+                // `activeConversation` @State rather than `router.path`.
+                miniPlayerCurrentConversationId: { activeConversation?.id }
+            ))
     }
 }
