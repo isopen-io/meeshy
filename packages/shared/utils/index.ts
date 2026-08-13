@@ -10,6 +10,7 @@ export * from './conversation-helpers.js';
 export * from './attachment-validators.js';
 export * from './language-normalize.js';
 export * from './notification-strings.js';
+export * from './notification-read-bulk.js';
 export * from './duration-format.js';
 export * from './call-transcript.js';
 export * from './relative-time.js';

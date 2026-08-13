@@ -6,6 +6,9 @@
 // Import unified Participant types
 import type { ParticipantType } from './participant.js';
 
+// Prédicat des marquages de notifications en masse
+import type { NotificationReadBulkScope } from './notification.js';
+
 // Import pour les événements d'appels vidéo
 import type {
   CallInitiateEvent,
@@ -154,6 +157,9 @@ export const SERVER_EVENTS = {
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
+  /** Marquage EN MASSE : annonce le PRÉDICAT appliqué, pas la liste des ids —
+   *  les chemins bulk ne les renvoient pas. @see NotificationReadBulkScope */
+  NOTIFICATION_READ_BULK: 'notification:read-bulk',
   NOTIFICATION_DELETED: 'notification:deleted',
   NOTIFICATION_COUNTS: 'notification:counts',
   SYSTEM_MESSAGE: 'system:message',
@@ -755,6 +761,17 @@ export interface UserUpdatedEventData {
  */
 export interface NotificationReadEventData {
   readonly notificationId: string;
+}
+
+/**
+ * Lot de notifications marquées comme lues, décrit par son PRÉDICAT.
+ *
+ * Aucun `count` : il ferait croire à un décrément utilisable, alors qu'un cache
+ * partiel matche moins de lignes que le serveur n'en a marquées. Les compteurs
+ * restent tenus par `notification:counts`, émis juste après.
+ */
+export interface NotificationReadBulkEventData {
+  readonly scope: NotificationReadBulkScope;
 }
 
 /**
@@ -1672,6 +1689,7 @@ export interface ServerToClientEvents {
   // Notifications
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_READ]: (data: NotificationReadEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION_READ_BULK]: (data: NotificationReadBulkEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 

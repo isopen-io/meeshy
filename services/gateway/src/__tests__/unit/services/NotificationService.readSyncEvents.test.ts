@@ -180,6 +180,125 @@ describe('NotificationService — événements de sync de lecture multi-appareil
     });
   });
   /**
+   * Les marquages EN MASSE ne peuvent pas émettre `notification:read` : ni
+   * `updateMany` ni `$runCommandRaw` ne renvoient les ids touchés, et les
+   * refetcher annulerait le gain d'un update unique. `notification:read-bulk`
+   * annonce donc le PRÉDICAT appliqué ; chaque client le rejoue sur son cache.
+   * Le compteur reste tenu par `notification:counts`, émis juste après (un
+   * cache partiel matcherait un nombre de lignes différent du serveur).
+   */
+  describe('notification:read-bulk', () => {
+    const readBulkEmits = () =>
+      mockIO.emit.mock.calls.filter(([event]: [string]) => event === 'notification:read-bulk');
+
+    describe('markAllAsRead', () => {
+      it("annonce le scope 'all' vers la room de l'utilisateur", async () => {
+        prisma.notification.updateMany.mockResolvedValue({ count: 7 });
+
+        await service.markAllAsRead(USER_ID);
+        await flushAsync();
+
+        expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+        expect(readBulkEmits()).toEqual([['notification:read-bulk', { scope: { kind: 'all' } }]]);
+      });
+
+      it("n'annonce rien quand aucune ligne n'était non lue", async () => {
+        prisma.notification.updateMany.mockResolvedValue({ count: 0 });
+
+        await service.markAllAsRead(USER_ID);
+        await flushAsync();
+
+        expect(readBulkEmits()).toHaveLength(0);
+      });
+    });
+
+    describe('markConversationNotificationsAsRead', () => {
+      it("annonce le scope 'context' avec la clé ET la valeur interrogées", async () => {
+        prisma.$runCommandRaw.mockResolvedValue({ nModified: 3 });
+
+        await service.markConversationNotificationsAsRead(USER_ID, 'conv-1');
+        await flushAsync();
+
+        expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+        expect(readBulkEmits()).toEqual([
+          [
+            'notification:read-bulk',
+            { scope: { kind: 'context', contextKey: 'conversationId', contextValue: 'conv-1' } },
+          ],
+        ]);
+      });
+
+      it("n'annonce rien quand la conversation n'avait aucune notification non lue", async () => {
+        prisma.$runCommandRaw.mockResolvedValue({ nModified: 0 });
+
+        await service.markConversationNotificationsAsRead(USER_ID, 'conv-1');
+        await flushAsync();
+
+        expect(readBulkEmits()).toHaveLength(0);
+      });
+    });
+
+    it('markPostNotificationsAsRead annonce la clé postId', async () => {
+      prisma.$runCommandRaw.mockResolvedValue({ nModified: 1 });
+
+      await service.markPostNotificationsAsRead(USER_ID, 'post-42');
+      await flushAsync();
+
+      expect(readBulkEmits()).toEqual([
+        [
+          'notification:read-bulk',
+          { scope: { kind: 'context', contextKey: 'postId', contextValue: 'post-42' } },
+        ],
+      ]);
+    });
+
+    it('markFriendRequestNotificationsAsRead annonce la clé friendRequestId', async () => {
+      prisma.$runCommandRaw.mockResolvedValue({ nModified: 1 });
+
+      await service.markFriendRequestNotificationsAsRead(USER_ID, 'fr-9');
+      await flushAsync();
+
+      expect(readBulkEmits()).toEqual([
+        [
+          'notification:read-bulk',
+          { scope: { kind: 'context', contextKey: 'friendRequestId', contextValue: 'fr-9' } },
+        ],
+      ]);
+    });
+
+    describe('markNotificationsByTypesAsRead', () => {
+      it("annonce le scope 'types' avec la liste interrogée", async () => {
+        prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+
+        await service.markNotificationsByTypesAsRead(USER_ID, ['friend_request', 'friend_accepted']);
+        await flushAsync();
+
+        expect(readBulkEmits()).toEqual([
+          [
+            'notification:read-bulk',
+            { scope: { kind: 'types', types: ['friend_request', 'friend_accepted'] } },
+          ],
+        ]);
+      });
+
+      it("n'annonce rien pour une liste de types vide (aucun update n'est tenté)", async () => {
+        await service.markNotificationsByTypesAsRead(USER_ID, []);
+        await flushAsync();
+
+        expect(readBulkEmits()).toHaveLength(0);
+      });
+    });
+
+    it("reste silencieux et sans erreur quand aucun socket n'est câblé", async () => {
+      const offline = new NotificationService(prisma);
+      prisma.notification.updateMany.mockResolvedValue({ count: 5 });
+
+      await expect(offline.markAllAsRead(USER_ID)).resolves.toBe(5);
+      expect(mockIO.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
    * Le RAPPEL d'un message retire en base les notifications qu'il avait
    * produites (`applyMessageRemovalEffects`). Ce service n'en tient que la
    * moitié volatile : sans elle, la ligne resterait affichée sur les écrans

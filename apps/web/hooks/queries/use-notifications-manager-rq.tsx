@@ -12,6 +12,8 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { NotificationService } from '@/services/notification.service';
 import type { Notification, NotificationFilters } from '@/types/notification';
+import type { NotificationReadBulkEventData } from '@meeshy/shared/types/socketio-events';
+import { notificationMatchesReadBulkScope } from '@meeshy/shared/utils/notification-read-bulk';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
 import { useI18n } from '@/hooks/useI18n';
@@ -235,6 +237,46 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       }
     };
 
+    // `notification:read-bulk` — un marquage EN MASSE côté gateway
+    // (`updateMany`/`$runCommandRaw`) ne renvoie aucun id : l'événement annonce
+    // le PRÉDICAT appliqué, rejoué ici sur les pages en cache via l'énoncé
+    // partagé du prédicat (aucune réécriture locale — web et iOS marqueraient
+    // sinon des lignes différentes de celles marquées en base).
+    //
+    // Le badge n'est pas touché : ce cache est PARTIEL (pagination), il matche
+    // donc moins de lignes que le serveur n'en a marquées, et décrémenter d'ici
+    // le ferait dériver. `notification:counts`, émis juste après, est
+    // autoritaire et absolu.
+    const handleNotificationReadBulk = ({ scope }: NotificationReadBulkEventData) => {
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[] }>; pageParams: unknown[] };
+
+          const touched = data.pages.some((page) =>
+            page.notifications?.some(
+              (n: Notification) => !n.state.isRead && notificationMatchesReadBulkScope(scope, n)
+            )
+          );
+          if (!touched) return old;
+
+          const readAt = new Date();
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              notifications: page.notifications?.map((n: Notification) =>
+                !n.state.isRead && notificationMatchesReadBulkScope(scope, n)
+                  ? { ...n, state: { ...n.state, isRead: true, readAt } }
+                  : n
+              ),
+            })),
+          };
+        }
+      );
+    };
+
     const handleNotificationDeleted = (notificationId: string) => {
       let wasUnread = false;
 
@@ -311,6 +353,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
+    const unsubscribeReadBulk = notificationSocketIO.onNotificationReadBulk(handleNotificationReadBulk);
     const unsubscribeDeleted = notificationSocketIO.onNotificationDeleted(handleNotificationDeleted);
     const unsubscribeCounts = notificationSocketIO.onCounts(handleCounts);
     const unsubscribeDesync = notificationSocketIO.onSyncDesync(scheduleResync);
@@ -318,6 +361,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     return () => {
       unsubscribeNotification();
       unsubscribeRead();
+      unsubscribeReadBulk();
       unsubscribeDeleted();
       unsubscribeCounts();
       unsubscribeDesync();

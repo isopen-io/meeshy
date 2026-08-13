@@ -259,6 +259,37 @@ export interface NotificationContext {
 }
 
 /**
+ * Clés de `NotificationContext` sur lesquelles la gateway sait marquer un LOT
+ * de notifications comme lues en un seul update (`context.<clé>` indexé par
+ * [userId, isRead]). @see NotificationService.markContextNotificationsAsRead
+ */
+export type NotificationReadBulkContextKey = 'conversationId' | 'postId' | 'friendRequestId';
+
+/**
+ * Prédicat qu'un marquage EN MASSE vient d'appliquer côté serveur.
+ *
+ * Les chemins bulk (`updateMany`, `$runCommandRaw`) ne renvoient AUCUN id : il
+ * n'y a pas de `notification:read` par ligne à émettre, et les refetcher
+ * annulerait le gain d'un update unique. L'événement annonce donc le prédicat,
+ * que chaque client rejoue sur son propre cache via
+ * `notificationMatchesReadBulkScope` (@see utils/notification-read-bulk.ts).
+ *
+ * Union DISCRIMINÉE et non sac d'options `{conversationId?, postId?, types?,
+ * all?}` : ce dernier rend représentables un scope vide (« rien » ou « tout »
+ * ?) et un scope contradictoire (`{all:true, conversationId}`), et il n'a pas
+ * de place pour `friendRequestId` — qu'un client ignorerait alors en silence,
+ * laissant la ligne non lue sur les autres appareils.
+ */
+export type NotificationReadBulkScope =
+  | { readonly kind: 'all' }
+  | {
+      readonly kind: 'context';
+      readonly contextKey: NotificationReadBulkContextKey;
+      readonly contextValue: string;
+    }
+  | { readonly kind: 'types'; readonly types: readonly string[] };
+
+/**
  * STATE - Statut de lecture
  * État de la notification
  */
