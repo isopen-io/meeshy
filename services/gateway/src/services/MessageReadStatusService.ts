@@ -548,22 +548,26 @@ export class MessageReadStatusService {
 
       if (participants.length === 0) return unreadCounts;
 
-      // 2. Batch cursor lookup for all resolved participants
-      const participantIds = participants.map((p) => p.id);
-      const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: { participantId: { in: participantIds } },
-        select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
-      });
-
+      // 2. Batch cursor lookup for all resolved participants, alongside the
+      // personal hiding of each conversation — neither depends on the other, and
+      // both must land before the counts.
+      //
       // `userId` peut être un Participant.id (appelant anonyme) : la résolution
       // passe par la ligne Participant, seule à connaître le compte réel. Un
       // participant sans compte ne possède ni préférence ni suppression
       // personnelle — la recherche est alors sautée entièrement.
+      const participantIds = participants.map((p) => p.id);
       const resolvedUserId = participants.find((p) => p.userId)?.userId ?? null;
-      const hidingByConversation = await loadPersonalHistoryHidingByConversation(this.prisma, {
-        userId: resolvedUserId,
-        conversationIds: participants.map((p) => p.conversationId),
-      });
+      const [cursors, hidingByConversation] = await Promise.all([
+        this.prisma.conversationReadCursor.findMany({
+          where: { participantId: { in: participantIds } },
+          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+        }),
+        loadPersonalHistoryHidingByConversation(this.prisma, {
+          userId: resolvedUserId,
+          conversationIds: participants.map((p) => p.conversationId),
+        }),
+      ]);
       // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
       // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
       // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
