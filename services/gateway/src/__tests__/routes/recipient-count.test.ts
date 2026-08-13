@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { computeRecipientCount } from '../../routes/conversations/messages';
+import { computeRecipientCount } from '../../utils/read-exactness';
 
 // The sender's all-or-nothing delivery indicator (✓✓ delivered / read) must use
 // the server's authoritative active-recipient count as the denominator: active

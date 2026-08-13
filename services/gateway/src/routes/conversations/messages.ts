@@ -23,8 +23,6 @@ import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { MarkReadBodySchema } from '../../validation/messages-schemas';
-import { resolveReadAt } from '../../utils/read-exactness';
-import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
 import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
@@ -275,27 +273,6 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
   const d = new Date(after);
   if (isNaN(d.getTime())) return null;
   return { createdAt: { gt: d } };
-}
-
-/**
- * Active-recipient denominator for a message's all-or-nothing delivery
- * indicator: the count of active participants EXCLUDING the message's sender.
- * Mirrors `MessageReadStatusService.totalMembers`. Returned to clients per
- * message so the sender's ✓✓ / read tier lights up only once EVERY recipient
- * has received / read it, using the server's authoritative count instead of a
- * possibly-stale local member count.
- *
- * @param activeParticipantIds set of `Participant.id` for active members
- * @param senderParticipantId  the message's raw `senderId` (a `Participant.id`)
- */
-export function computeRecipientCount(
-  activeParticipantIds: Set<string>,
-  senderParticipantId: string
-): number {
-  return Math.max(
-    0,
-    activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
-  );
 }
 
 /**
@@ -1077,81 +1054,37 @@ export function registerMessagesRoutes(
         logger.info(`📊 [CONVERSATIONS] Statistiques audio: totalMessages=${messages.length}, audioAttachments=${audioAttachmentCount}, audioWithTranscription=${audioWithTranscriptionCount}, audioWithTranslatedAudios=${audioWithTranslatedAudiosCount}, transcriptionRate=${transcriptionRate}`);
       }
 
-      // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
-      // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
-      // On les calcule dynamiquement ici depuis ConversationReadCursor
+      // Enrichir les messages avec les vrais statuts de lecture.
+      // Les champs dénormalisés en base (`deliveredCount`, `readCount`) n'ont
+      // AUCUN écrivain : ils valent toujours zéro. Le comptage vit dans
+      // `MessageReadStatusService.getConversationReadStatuses`, l'unique
+      // source de vérité partagée avec les trois autres lecteurs d'accusés
+      // (`getMessageReadStatus`, `getMessageStatusDetails`,
+      // `getLatestMessageSummary`). Cette route en tenait une COPIE, qui avait
+      // dérivé sur un point décisif : elle ne consultait pas la préférence
+      // `showReadReceipts`, si bien que le rattrapage REST révélait à
+      // l'expéditeur la lecture d'un destinataire qui l'avait explicitement
+      // tue — et comptait ce même destinataire dans le dénominateur, que le
+      // canal socket en retire.
       const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
-          const messageIds = (messages as any[]).map((m: any) => m.id);
-          const [activeParticipants, cursors, frozenEntries] = await Promise.all([
-            prisma.participant.findMany({
-              where: { conversationId, isActive: true },
-              select: { id: true }
-            }),
-            prisma.conversationReadCursor.findMany({
-              where: { conversationId },
-              select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
-            }),
-            // Reçus figés (write-once) par message. Sans cette union, un curseur
-            // supprimé par `cleanupObsoleteCursors` (son `lastReadMessageId` pointe
-            // vers un message effacé) ferait disparaître un reçu de livraison/lecture
-            // toujours valide — parité exacte avec `getMessageReadStatus` /
-            // `getConversationReadStatuses`, qui unissent curseur + reçu figé.
-            prisma.messageStatusEntry.findMany({
-              where: { conversationId, messageId: { in: messageIds } },
-              select: { messageId: true, participantId: true, deliveredAt: true, receivedAt: true, readAt: true }
-            })
-          ]);
-          const activeIds = new Set(activeParticipants.map((p: any) => p.id));
-          const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
-          const cursorByParticipant = new Map(activeCursors.map((c: any) => [c.participantId, c]));
-          const frozenByMessage = new Map<string, Map<string, any>>();
-          for (const e of (frozenEntries as any[])) {
-            let inner = frozenByMessage.get(e.messageId);
-            if (!inner) { inner = new Map(); frozenByMessage.set(e.messageId, inner); }
-            inner.set(e.participantId, e);
-          }
-
-          for (const msg of (messages as any[])) {
-            let deliveredCount = 0;
-            let readCount = 0;
-            // Union des participants ayant un curseur actif ET de ceux ayant un reçu
-            // figé actif pour CE message (sender exclu). Un participant figé-seul
-            // (curseur nettoyé) reste compté ; un figé d'un participant inactif est
-            // ignoré — parité exacte avec les endpoints read-status.
-            const frozenForMsg = frozenByMessage.get(msg.id);
-            const evaluatedParticipantIds = new Set<string>();
-            for (const cursor of activeCursors) {
-              if (cursor.participantId !== msg.senderId) evaluatedParticipantIds.add(cursor.participantId);
-            }
-            if (frozenForMsg) {
-              for (const participantId of frozenForMsg.keys()) {
-                if (participantId !== msg.senderId && activeIds.has(participantId)) {
-                  evaluatedParticipantIds.add(participantId);
-                }
-              }
-            }
-            for (const participantId of evaluatedParticipantIds) {
-              const cursor = cursorByParticipant.get(participantId);
-              const cursorDelivered = cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt ? cursor.lastDeliveredAt : null;
-              const frozen = frozenForMsg?.get(participantId);
-              const deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-              const readAt = resolveReadAt({
-                frozenReadAt: frozen?.readAt ?? null,
-                cursorLastReadAt: cursor?.lastReadAt ?? null,
-                messageCreatedAt: msg.createdAt,
-                cutover: getExactReadTrackingCutover(),
-              });
-              if (deliveredAt) deliveredCount++;
-              if (readAt) readCount++;
-            }
-            // Authoritative all-or-nothing denominator: active participants
-            // EXCLUDING this message's sender. Lets the client render the group
-            // ✓✓ / read tier from the real recipient count instead of a stale
-            // local memberCount.
-            const recipientCount = computeRecipientCount(activeIds, msg.senderId);
-            readStatusMap.set(msg.id, { deliveredCount, readCount, recipientCount });
+          const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+          const readStatusService = new MessageReadStatusService(prisma);
+          const statuses = await readStatusService.getConversationReadStatuses(
+            conversationId,
+            (messages as any[]).map((m: any) => m.id)
+          );
+          for (const [messageId, status] of statuses) {
+            readStatusMap.set(messageId, {
+              deliveredCount: status.receivedCount,
+              readCount: status.readCount,
+              // Dénominateur all-or-nothing faisant autorité : les
+              // destinataires actifs, expéditeur exclu, opt-out exclus. Permet
+              // au client d'allumer ✓✓ / « lu » sur le compte réel du serveur
+              // plutôt que sur un `memberCount` local périmé.
+              recipientCount: status.totalMembers,
+            });
           }
         } catch (err) {
           logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
@@ -1216,15 +1149,19 @@ export function registerMessagesRoutes(
           pinnedAt: message.pinnedAt,
           pinnedBy: message.pinnedBy,
 
-          // Statuts agrégés (calculés dynamiquement depuis les cursors)
+          // Statuts agrégés — CALCULÉS, jamais lus de la ligne Message : ses
+          // champs `deliveredCount`/`readCount` n'ont aucun écrivain et valent
+          // toujours zéro. Les garder en repli donnait à un compteur mort
+          // l'apparence d'une valeur de secours.
           deliveredToAllAt: message.deliveredToAllAt,
           receivedByAllAt: message.receivedByAllAt,
           readByAllAt: message.readByAllAt,
-          deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
-          readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
-          // Server-authoritative active-recipient denominator (participants
-          // excluding the sender). `0` when not computed (no auth context) — the
-          // client then falls back to its local member count.
+          deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? 0,
+          readCount: readStatusMap.get(message.id)?.readCount ?? 0,
+          // Dénominateur des destinataires actifs faisant autorité côté serveur
+          // (participants moins l'expéditeur, opt-out retirés). `0` quand rien
+          // n'a été calculé (pas de contexte d'authentification) — le client
+          // retombe alors sur son compte de membres local.
           recipientCount: readStatusMap.get(message.id)?.recipientCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)

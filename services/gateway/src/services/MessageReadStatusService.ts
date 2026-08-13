@@ -16,7 +16,7 @@
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { computeContiguousReadPrefix, resolveReadAt } from '../utils/read-exactness';
+import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
 import { BoundedTtlCache } from '../utils/bounded-cache';
@@ -1691,15 +1691,42 @@ export class MessageReadStatusService {
     messageIds: string[]
   ): Promise<Map<string, { totalMembers: number; receivedCount: number; readCount: number }>> {
     try {
-      const messages = await this.prisma.message.findMany({
-        where: { id: { in: messageIds }, conversationId },
-        select: { id: true, createdAt: true, senderId: true },
-      });
-
-      const allActiveParticipants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true },
-      });
+      // Les quatre lectures ne dépendent pas les unes des autres : les tenir en
+      // séquence coûtait quatre allers-retours sur le chemin de rattrapage le
+      // plus chaud du produit (la liste de messages les demande à chaque
+      // démarrage à froid). Seul `_loadReadReceiptOptOuts` doit attendre — il
+      // lui faut les participants.
+      const [messages, allActiveParticipants, cursors, frozenEntries] = await Promise.all([
+        this.prisma.message.findMany({
+          where: { id: { in: messageIds }, conversationId },
+          select: { id: true, createdAt: true, senderId: true },
+        }),
+        this.prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: { id: true, userId: true },
+        }),
+        this.prisma.conversationReadCursor.findMany({
+          where: { conversationId },
+          select: { participantId: true, lastReadAt: true, lastDeliveredAt: true },
+        }),
+        // Précision absolue : les dates FIGÉES par message (write-once) priment sur
+        // la dérivation curseur — même règle que `getMessageReadStatus` /
+        // `getMessageStatusDetails`. Sans cette union, un curseur supprimé par
+        // `cleanupObsoleteCursors` (son `lastReadMessageId` pointe vers un message
+        // effacé) ferait disparaître un reçu de livraison/lecture figé toujours
+        // valide → cette variante batch sous-comptait par rapport aux deux
+        // méthodes mono-message pour EXACTEMENT les mêmes données.
+        this.prisma.messageStatusEntry.findMany({
+          where: { messageId: { in: messageIds }, conversationId },
+          select: {
+            messageId: true,
+            participantId: true,
+            deliveredAt: true,
+            receivedAt: true,
+            readAt: true,
+          },
+        }),
+      ]);
 
       // Même règle que les trois autres lecteurs : l'opt-out est retiré avant
       // tout comptage, donc absent du numérateur comme du dénominateur.
@@ -1708,32 +1735,10 @@ export class MessageReadStatusService {
         allActiveParticipants.filter(p => !optedOut.has(p.id)).map(p => p.id)
       );
 
-      const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: { conversationId },
-        select: { participantId: true, lastReadAt: true, lastDeliveredAt: true },
-      });
-
       // Only consider cursors from active participants
       const activeCursors = cursors.filter(c => activeParticipantIds.has(c.participantId));
       const cursorByParticipant = new Map(activeCursors.map(c => [c.participantId, c]));
 
-      // Précision absolue : les dates FIGÉES par message (write-once) priment sur
-      // la dérivation curseur — même règle que `getMessageReadStatus` /
-      // `getMessageStatusDetails`. Sans cette union, un curseur supprimé par
-      // `cleanupObsoleteCursors` (son `lastReadMessageId` pointe vers un message
-      // effacé) ferait disparaître un reçu de livraison/lecture figé toujours
-      // valide → cette variante batch sous-comptait par rapport aux deux
-      // méthodes mono-message pour EXACTEMENT les mêmes données.
-      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
-        where: { messageId: { in: messageIds }, conversationId },
-        select: {
-          messageId: true,
-          participantId: true,
-          deliveredAt: true,
-          receivedAt: true,
-          readAt: true,
-        },
-      });
       const frozenByMessage = new Map<
         string,
         Map<string, { deliveredAt: Date | null; receivedAt: Date | null; readAt: Date | null }>
@@ -1753,7 +1758,7 @@ export class MessageReadStatusService {
       >();
 
       for (const msg of messages) {
-        const totalMembers = Math.max(0, activeParticipantIds.size - (activeParticipantIds.has(msg.senderId) ? 1 : 0));
+        const totalMembers = computeRecipientCount(activeParticipantIds, msg.senderId);
         let receivedCount = 0;
         let readCount = 0;
 

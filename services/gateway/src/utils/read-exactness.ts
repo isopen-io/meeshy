@@ -76,3 +76,31 @@ export function resolveReadAt({
     ? cursorLastReadAt
     : null;
 }
+
+/**
+ * Dénominateur « tout ou rien » d'un message : les participants actifs de la
+ * conversation MOINS son expéditeur. Renvoyé au client par message pour que la
+ * coche ✓✓ / « lu » ne s'allume qu'une fois TOUS les destinataires servis, sur
+ * le compte du serveur plutôt que sur un `memberCount` local possiblement
+ * périmé.
+ *
+ * Soustraire aveuglément 1 est faux : quand l'expéditeur a QUITTÉ la
+ * conversation, il ne figure plus dans l'ensemble, et la soustraction retirerait
+ * un destinataire bien réel — la coche « reçu/lu par tous » s'allumerait un
+ * destinataire trop tôt. D'où le test d'appartenance.
+ *
+ * @param activeParticipantIds `Participant.id` des membres actifs, opt-out
+ *   d'accusés de lecture DÉJÀ retirés (ils disparaissent du dénominateur comme
+ *   du numérateur — cf. `MessageReadStatusService._loadReadReceiptOptOuts`)
+ * @param senderParticipantId `Message.senderId` brut, c'est-à-dire un
+ *   `Participant.id`
+ */
+export function computeRecipientCount(
+  activeParticipantIds: ReadonlySet<string>,
+  senderParticipantId: string
+): number {
+  return Math.max(
+    0,
+    activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
+  );
+}
