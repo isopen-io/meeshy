@@ -69,23 +69,24 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
     /// y chercher de commentaire) — corollaire de la leçon 231 : un découpeur
     /// qui avale trop rend un balayage vide indiscernable d'un succès.
     private func strippingComments(_ code: String) -> String {
-        var output = ""
+        let characters = Array(code)
+        var output = String()
+        var index = 0
         var inBlockComment = false
         var inLineComment = false
         var inString = false
-        var index = code.startIndex
 
-        while index < code.endIndex {
-            let character = code[index]
-            let next = code.index(after: index) < code.endIndex ? code[code.index(after: index)] : Character(" ")
+        while index < characters.count {
+            let character = characters[index]
+            let next: Character? = index + 1 < characters.count ? characters[index + 1] : nil
 
             if inBlockComment {
                 if character == "*" && next == "/" {
                     inBlockComment = false
-                    index = code.index(index, offsetBy: 2)
-                    continue
+                    index += 2
+                } else {
+                    index += 1
                 }
-                index = code.index(after: index)
                 continue
             }
             if inLineComment {
@@ -93,33 +94,36 @@ final class ConversationPreviewPrismSourceGuardTests: XCTestCase {
                     inLineComment = false
                     output.append(character)
                 }
-                index = code.index(after: index)
+                index += 1
                 continue
             }
             if inString {
+                // Une séquence échappée est neutralisée EN BLOC : sans ça,
+                // `\"` refermerait le littéral et la suite du fichier serait
+                // lue comme du code.
                 if character == "\\" {
                     output.append("  ")
-                    index = code.index(index, offsetBy: 2, limitedBy: code.endIndex) ?? code.endIndex
+                    index += 2
                     continue
                 }
                 if character == "\"" { inString = false }
                 output.append(character)
-                index = code.index(after: index)
+                index += 1
                 continue
             }
             if character == "/" && next == "/" {
                 inLineComment = true
-                index = code.index(index, offsetBy: 2)
+                index += 2
                 continue
             }
             if character == "/" && next == "*" {
                 inBlockComment = true
-                index = code.index(index, offsetBy: 2)
+                index += 2
                 continue
             }
             if character == "\"" { inString = true }
             output.append(character)
-            index = code.index(after: index)
+            index += 1
         }
         return output
     }
