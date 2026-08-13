@@ -59,8 +59,9 @@ export const CallSystemMessage = memo(function CallSystemMessage({
     conversation: { id: conversationId, type: conversationType } as never,
   });
   const requestJoin = useCallStore((s) => s.requestJoin);
-  const canCallBack = !isLive && conversationType === 'direct';
-  const canJoin = isLive && conversationType === 'direct' && !isAnonymous;
+  const conversationSupportsCalls = conversationType === 'direct' || conversationType === 'group';
+  const canCallBack = !isLive && conversationSupportsCalls;
+  const canJoin = isLive && conversationSupportsCalls && !isAnonymous;
 
   // Unknown future outcome → neutral (indigo) tint instead of a TypeError.
   const tint = (isLive ? TINT_BY_OUTCOME.completed : TINT_BY_OUTCOME[metadata.outcome]) ?? TINT_BY_OUTCOME.completed;
