@@ -220,6 +220,50 @@ describe('CallManager — handleAcceptCall gates UI on CALL_JOIN ack', () => {
     );
   });
 
+  it('privacy: accepting an AUDIO call seeds controls.videoEnabled to false (so adaptive-degradation never resumes the camera mid-call)', async () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_INITIATED, incomingCallEvent('audio'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accept-call-btn'));
+    });
+
+    await act(async () => {
+      socket.resolveJoin({ success: true, data: { iceServers: [] } });
+    });
+
+    expect(useCallStore.getState().currentCall?.metadata?.type).toBe('audio');
+    expect(useCallStore.getState().controls.videoEnabled).toBe(false);
+  });
+
+  it('accepting a VIDEO call seeds controls.videoEnabled to true', async () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_INITIATED, incomingCallEvent('video'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accept-call-btn'));
+    });
+
+    await act(async () => {
+      socket.resolveJoin({ success: true, data: { iceServers: [] } });
+    });
+
+    expect(useCallStore.getState().currentCall?.metadata?.type).toBe('video');
+    expect(useCallStore.getState().controls.videoEnabled).toBe(true);
+  });
+
   it('re-entrancy: a second Accept click while the join ack is still pending does not acquire a second stream', async () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);

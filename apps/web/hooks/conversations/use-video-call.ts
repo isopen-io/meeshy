@@ -212,6 +212,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
           initiatorId: user.id,
           startedAt: new Date(),
           participants: [],
+          metadata: { type },
         });
       }
 
