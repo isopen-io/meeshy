@@ -1114,3 +1114,66 @@ describe('GET /sync — plancher d’historique des liens de partage', () => {
     await app.close();
   });
 });
+
+describe('GET /sync — le plancher ILLISIBLE ne se dégrade pas en silence', () => {
+  const withFailingFloor = (): PrismaStub => {
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([
+      { conversationId: 'c1', joinedAt: new Date('2026-06-15T00:00:00Z'), shareLinkId: 'sl-1' },
+    ]);
+    prisma.conversationShareLink.findMany = jest.fn<any>(async () => {
+      throw new Error('mongo down');
+    });
+    return prisma;
+  };
+
+  it('retire la conversation ET annonce la page incomplète — jamais un checkpoint adoptable', async () => {
+    const prisma = withFailingFloor();
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const body = res.json().data;
+
+    // Servie sans borne, elle fuirait ; retirée en silence, la page passerait
+    // pour complète et la fenêtre ne serait JAMAIS redemandée (la borne serveur
+    // est stricte). Les deux à la fois : retirée, et page déclarée incomplète.
+    expect(prisma.message.findMany).not.toHaveBeenCalled();
+    expect(body.collections.messages.truncated).toBe(true);
+    expect(body.hasMore).toBe(true);
+    expect(body.checkpoint).toBe(SINCE);
+    expect(body.nextCursor).not.toBeNull();
+    await app.close();
+  });
+
+  it('reprend AU MÊME endroit — le curseur entrant est rendu tel quel', async () => {
+    const prisma = withFailingFloor();
+    const app = await buildApp(prisma);
+    const cursor = encodeSyncCursor({ c: { u: '2026-07-03T00:00:00.000Z', i: 'm-1' } });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${SINCE}&collections=messages&cursor=${cursor}`,
+    });
+
+    expect(decodeSyncCursor(res.json().data.nextCursor).c).toEqual({
+      u: '2026-07-03T00:00:00.000Z',
+      i: 'm-1',
+    });
+    await app.close();
+  });
+
+  it('une conversation SANS lien reste servie à côté de celle qu’on a dû retirer', async () => {
+    const prisma = withFailingFloor();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([
+      { conversationId: 'c1', joinedAt: new Date('2026-06-15T00:00:00Z'), shareLinkId: 'sl-1' },
+      { conversationId: 'c2', joinedAt: new Date('2026-06-15T00:00:00Z'), shareLinkId: null },
+    ]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    expect(prisma.message.findMany.mock.calls[0]![0]!.where.conversationId).toEqual({ in: ['c2'] });
+    expect(res.json().data.collections.messages.truncated).toBe(true);
+    await app.close();
+  });
+});

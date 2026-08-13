@@ -571,6 +571,16 @@ async function syncMessages(opts: {
   // Ce que le lien d'entrée interdit de relire. La lecture est un CONTRÔLE
   // D'ACCÈS : quand elle échoue, les conversations concernées sortent de
   // l'ensemble plutôt que d'être servies sans borne.
+  //
+  // Mais un retrait SILENCIEUX serait un trou définitif, et pour la raison que
+  // documente `SYNC_CHECKPOINT_LAG_MS` : une page non tronquée fait adopter le
+  // checkpoint, et la borne serveur est stricte — la fenêtre écartée ne serait
+  // jamais redemandée. La conversation retirée fait donc de la page une page
+  // INCOMPLÈTE (`truncated`), ce que le client traduit par « redemande depuis
+  // la même position ». C'est la posture du stream des masquages, pour la même
+  // raison, et elle ne se confond pas avec le budget de poids : ici on ne
+  // reprendra pas « plus loin », on reprendra AU MÊME endroit jusqu'à ce que la
+  // lecture du plancher redevienne possible.
   const { floors, unreadableConversationIds } = await loadShareLinkHistoryFloorsOrFail(
     prisma,
     memberships,
@@ -580,7 +590,13 @@ async function syncMessages(opts: {
     .map((m) => m.conversationId)
     .filter((id) => !dropped.has(id));
   if (conversationIds.length === 0) {
-    return { added: [], modified: [], deleted: [], truncated: false, nextCursor: null };
+    return {
+      added: [],
+      modified: [],
+      deleted: [],
+      truncated: dropped.size > 0,
+      nextCursor: dropped.size > 0 ? encodeSyncCursor(cursor ?? {}) : null,
+    };
   }
   const historyFloor = historyFloorClause(conversationIds, floors);
 
@@ -730,7 +746,10 @@ async function syncMessages(opts: {
       return true;
     });
 
-  const truncated = changedTruncated || deletedTruncated || hidden.truncated;
+  // `dropped.size` compte ici au même titre que les trois autres : une
+  // conversation écartée faute de pouvoir lire son plancher n'a rien livré, et
+  // la page ne peut donc pas se déclarer complète.
+  const truncated = changedTruncated || deletedTruncated || hidden.truncated || dropped.size > 0;
 
   // Report par stream : on avance la clé si cette page a livré des items, sinon
   // on conserve la clé entrante — un stream épuisé reste sur sa dernière position
