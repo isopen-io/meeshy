@@ -21,6 +21,7 @@ import {
   encodeSyncCursor,
   decodeSyncCursor,
   SYNC_CHECKPOINT_LAG_MS,
+  SYNC_MESSAGE_RENDERABLE_KEYS,
 } from '../../../routes/sync';
 
 type PrismaStub = {
@@ -134,6 +135,93 @@ describe('GET /sync — messages collection', () => {
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ conversationId: 'cX' }) }),
     );
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Le select de `/sync` est le CONTRAT de rendabilité du rattrapage : ce qu'il
+// omet, le client l'écrit tel quel dans sa base locale et l'affiche tel quel.
+// Six champs (id, conversationId, senderId, content, createdAt, updatedAt) ne
+// suffisent pas — sans `translations` le Prisme Linguistique n'a rien à
+// résoudre et le message s'affiche dans la langue de l'expéditeur ; sans
+// `attachments` la bulle perd sa pièce jointe ; sans `clientMessageId` la
+// réconciliation optimiste ne peut pas apparier sa ligne.
+// ---------------------------------------------------------------------------
+describe('GET /sync — contrat de rendabilité du select messages', () => {
+  it('sert les champs du Prisme, la pièce jointe et l’expéditeur', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'm1', conversationId: 'c1', senderId: 's1', content: 'Hello',
+          clientMessageId: 'cid_x', originalLanguage: 'en',
+          translations: { fr: { text: 'Bonjour' } },
+          messageType: 'text', metadata: null, isEdited: false, editedAt: null,
+          replyToId: null, reactionSummary: null, reactionCount: 0,
+          attachments: [{ id: 'a1', fileUrl: '/f.jpg' }],
+          sender: { id: 's1', displayName: 'Ana' },
+          createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z'),
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const added = res.json().data.collections.messages.added[0];
+
+    expect(added.translations).toEqual({ fr: { text: 'Bonjour' } });
+    expect(added.originalLanguage).toBe('en');
+    expect(added.attachments).toHaveLength(1);
+    expect(added.sender).toEqual({ id: 's1', displayName: 'Ana' });
+    expect(added.clientMessageId).toBe('cid_x');
+    await app.close();
+  });
+
+  it('DEMANDE ces champs à Prisma — une charge utile vide ne prouve rien', async () => {
+    // Le témoin ci-dessus passerait sur un select maigre si le double rendait
+    // les champs de lui-même : c'est la REQUÊTE qui porte le contrat.
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const select = prisma.message.findMany.mock.calls[0]![0]!.select as Record<string, unknown>;
+    for (const key of SYNC_MESSAGE_RENDERABLE_KEYS) {
+      expect(select[key]).toBeDefined();
+    }
+    await app.close();
+  });
+
+  it('garde le stream `deleted` maigre — un tombstone n’a rien à rendre', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const deletedSelect = prisma.message.findMany.mock.calls[1]![0]!.select as Record<string, unknown>;
+    expect(Object.keys(deletedSelect).sort()).toEqual(['conversationId', 'deletedAt', 'id']);
+    await app.close();
+  });
+
+  it('n’avance pas le cursor sur une clé absente du select enrichi', async () => {
+    // Le keyset reste `(updatedAt, id)` : enrichir la projection ne doit pas
+    // déplacer la position de reprise.
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce([
+        { id: 'm1', conversationId: 'c1', senderId: 's1', content: '', translations: null,
+          createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z') },
+        { id: 'm2', conversationId: 'c1', senderId: 's1', content: '', translations: null,
+          createdAt: new Date('2026-07-02T11:00:00Z'), updatedAt: new Date('2026-07-02T11:00:00Z') },
+      ])
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&limit=1` });
+    const token = res.json().data.collections.messages.nextCursor as string;
+
+    expect(decodeSyncCursor(token).c).toEqual({ u: '2026-07-02T10:00:00.000Z', i: 'm1' });
     await app.close();
   });
 });

@@ -151,6 +151,9 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../routes/conversations/core';
+// Le cap n'est pas recopié ici : un témoin de troncature qui invente son propre
+// seuil passe au vert le jour où le vrai bouge.
+import { CONVERSATION_TOMBSTONE_LIMIT } from '../../../routes/conversations/utils/delta-tombstones';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -731,6 +734,101 @@ describe('registerCoreRoutes', () => {
 
       const call = prisma.conversation.findMany.mock.calls[0][0];
       expect(call.where.updatedAt).toBeUndefined();
+    });
+
+    // ─── Pierres tombales du delta ────────────────────────────────────────
+    //
+    // Le delta réutilise le `whereClause` de la liste (conversation
+    // `isActive: true`, participant actif sans `deletedForMe`) : il sait
+    // servir une ligne, jamais annoncer sa DISPARITION. Une conversation
+    // fermée, quittée, supprimée-pour-moi depuis un autre appareil ou dont
+    // l'utilisateur a été banni pendant sa coupure restait en cache jusqu'à la
+    // réconciliation complète — 24 h sur iOS comme sur le web.
+    //
+    // La règle du calcul vit dans `utils/delta-tombstones.ts` (testée à part) ;
+    // ce qui se vérifie ICI est le CÂBLAGE : présent sur une page delta,
+    // totalement absent sinon.
+    const tombstoneCalls = (p: ReturnType<typeof makePrisma>) => ({
+      closed: p.conversation.findMany.mock.calls.filter((c: any) => c[0]?.where?.closedAt),
+      participant: p.participant.findMany.mock.calls.filter(
+        (c: any) => c[0]?.where?.deletedForMe || c[0]?.where?.OR
+      ),
+    });
+
+    it('declares the conversations that LEFT the view on a delta page', async () => {
+      prisma.conversation.findMany.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.closedAt ? [{ id: 'c-closed' }] : [])
+      );
+      prisma.participant.findMany.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.deletedForMe ? [{ conversationId: 'c-dfm' }] : [])
+      );
+
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect([...reply._body.meta.deletedConversationIds].sort()).toEqual(['c-closed', 'c-dfm']);
+      expect(reply._body.meta.deletedConversationIdsTruncated).toBe(false);
+    });
+
+    it('carries the truncation flag through to the client', async () => {
+      // Le drapeau est le SEUL signal qui fait escalader le client vers la
+      // relecture complète : le perdre entre le calcul et l'enveloppe rendrait
+      // une liste partielle indiscernable d'une liste exhaustive.
+      const overflow = Array.from({ length: CONVERSATION_TOMBSTONE_LIMIT + 1 }, (_, n) => ({ id: `c${n}` }));
+      prisma.conversation.findMany.mockImplementation((args: any) =>
+        Promise.resolve(args?.where?.closedAt ? overflow : [])
+      );
+
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(reply._body.meta.deletedConversationIdsTruncated).toBe(true);
+    });
+
+    it('issues NO tombstone query on a normal (non-delta) page', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const calls = tombstoneCalls(prisma);
+      expect(calls.closed).toHaveLength(0);
+      expect(calls.participant).toHaveLength(0);
+      expect(reply._body.meta).toBeUndefined();
+    });
+
+    it('issues NO tombstone query when updatedSince is unusable', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: { updatedSince: 'not-a-date' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const calls = tombstoneCalls(prisma);
+      expect(calls.closed).toHaveLength(0);
+      expect(calls.participant).toHaveLength(0);
+      expect(reply._body.meta).toBeUndefined();
+    });
+
+    it('bounds the tombstone window on the same `since` as the delta itself', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      const req = makeRequest({ query: { updatedSince: '2024-01-01T00:00:00Z' } });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      // Deux bornes distinctes ouvriraient un trou entre elles : une
+      // conversation fermée dans l'écart ne serait ni servie ni enterrée.
+      const closedCall = tombstoneCalls(prisma).closed[0][0];
+      expect(closedCall.where.closedAt).toEqual({ gt: new Date('2024-01-01T00:00:00Z') });
     });
 
     it('returns early (no send) when sendWithETag returns true (304)', async () => {

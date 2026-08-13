@@ -209,7 +209,8 @@ function isFullReconcileDue(guard: DeltaGuard, now: number): boolean {
  */
 function mergeDeltaIntoCache(
   queryClient: QueryClient,
-  conversations: readonly Conversation[]
+  conversations: readonly Conversation[],
+  tombstoneIds: readonly string[]
 ): void {
   // Accumulateur local du seul résultat de la fusion qui intéresse un AUTRE
   // cache. `setQueryData` appelle son updater synchronement et une seule fois :
@@ -234,6 +235,7 @@ function mergeDeltaIntoCache(
       const merge = mergeConversationDelta(existing, conversations, {
         hasMore,
         openConversationId,
+        tombstoneIds,
       });
       removedIds = merge.removedIds;
       return rebuildInfiniteConversationPages(old, merge.merged);
@@ -275,13 +277,23 @@ export function useConversationsDeltaSync(enabled: boolean): void {
     guard.inFlight = true;
     guard.lastRunAt = now;
     try {
-      const { conversations, pagination } = await conversationsService.getConversations({
+      const {
+        conversations,
+        pagination,
+        deletedConversationIds,
+        deletedConversationIdsTruncated,
+      } = await conversationsService.getConversations({
         limit: DELTA_PAGE_LIMIT,
         offset: 0,
         updatedSince: watermark.toISOString(),
       });
-      if (conversations.length > 0) {
-        mergeDeltaIntoCache(queryClient, conversations);
+      // La purge n'est PAS gardée par `conversations.length > 0` : un compte
+      // calme dont la seule nouvelle est un départ (conversation fermée,
+      // quittée, bannie, supprimée-pour-moi ailleurs) rend exactement zéro
+      // conversation et une tombstone — c'est précisément celui qui garde son
+      // fantôme le plus longtemps.
+      if (conversations.length > 0 || deletedConversationIds.length > 0) {
+        mergeDeltaIntoCache(queryClient, conversations, deletedConversationIds);
       }
 
       // Réconciliation complète, chaînée APRÈS un delta RÉUSSI. Deux raisons de
@@ -300,7 +312,13 @@ export function useConversationsDeltaSync(enabled: boolean): void {
       //
       // Sur delta ÉCHOUÉ : rien. Offline ou panne gateway, on garde le cache
       // intact (local-first) et on retentera au prochain déclenchement.
-      const reconcile = pagination.hasMore || isFullReconcileDue(guard, now);
+      // Troisième raison d'escalader : la liste de tombstones a débordé son
+      // plafond. Contrairement à la page de conversations, elle n'a AUCUN
+      // curseur de reprise — il n'existe pas de « page suivante » de
+      // disparitions à demander. Le seul geste qui fasse sortir les fantômes
+      // restants est la relecture complète.
+      const reconcile =
+        pagination.hasMore || deletedConversationIdsTruncated || isFullReconcileDue(guard, now);
       if (reconcile) {
         stampFullReconcile(guard, now);
         void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.infinite() });

@@ -426,6 +426,15 @@ model Conversation {
   @@index([lastMessageAt]) // Optimisation: trier par activité récente
   @@index([isActive, lastMessageAt]) // iter-4: tri post-filtre participants (isActive+lastMessageAt DESC)
   @@index([isActive, updatedAt]) // delta-sync: GET /conversations?updatedSince → where isActive AND updatedAt > since
+  // delta-sync (tombstones) : `closedAt > since` est le SEUL des trois streams
+  // de `utils/delta-tombstones.ts` qui ne parte pas d'un `userId` indexé — sans
+  // cet index il balaie la collection entière. Les deux autres streams lisent
+  // `Participant` par `userId` (index existant), qui borne déjà le scan aux
+  // quelques centaines de lignes de l'utilisateur : leur ajouter des index
+  // composites taxerait chaque écriture de participant pour un gain nul.
+  // EXPLOITATION : l'entrypoint prod ne joue aucune migration — créer cet index
+  // à la main sur la prod.
+  @@index([closedAt])
 }
 
 /// Share/forward a conversation to a community or another context

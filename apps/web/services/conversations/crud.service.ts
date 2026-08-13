@@ -51,6 +51,12 @@ export class ConversationsCrudService {
         hasMore: boolean;
       };
       cursorPagination?: CursorPaginationMeta;
+      // Présent uniquement sur une page delta (`updatedSince`) — cf.
+      // `conversationListResponseSchema` côté gateway.
+      meta?: {
+        deletedConversationIds?: string[];
+        deletedConversationIdsTruncated?: boolean;
+      };
     }>('/conversations', queryParams);
 
     if (!response.data?.success || !Array.isArray(response.data?.data)) {
@@ -77,6 +83,13 @@ export class ConversationsCrudService {
         hasMore: conversations.length >= limit
       },
       cursorPagination,
+      // Absence de `meta` = page non delta, ou gateway antérieur au canal des
+      // tombstones. Les deux valent « rien à purger, et je le sais » : forcer
+      // `truncated: true` par prudence ferait relire la liste entière à chaque
+      // page normale.
+      deletedConversationIds: response.data.meta?.deletedConversationIds ?? [],
+      deletedConversationIdsTruncated:
+        response.data.meta?.deletedConversationIdsTruncated ?? false,
     };
   }
 
