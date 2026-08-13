@@ -173,7 +173,8 @@ export function registerSearchRoutes(
       // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
       // dans les candidats — le résolveur charge alors les curseurs lui-même.
       const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
-        userId,
+        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
         candidates: conversations.map(c => {
           const preview = (c as any).messages?.[0];
           return {

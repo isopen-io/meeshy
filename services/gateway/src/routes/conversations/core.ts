@@ -562,7 +562,11 @@ export function registerCoreRoutes(
       // lecteur qui n'a rien masqué paie une lecture indexée qui ne rend rien.
       t0 = performance.now();
       const visibleLastMessages = await resolveVisibleLastMessages(prisma, {
-        userId,
+        // `authContext.userId` porte le jeton de session pour un participant
+        // anonyme, pas un ObjectId — le passer ferait échouer les deux lectures
+        // (rattrapées, mais une erreur par requête de liste pour rien). Un
+        // anonyme ne possède de ligne dans NI l'une NI l'autre table.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
         candidates: conversations.map(c => {
           const preview = (c as any).messages?.[0];
           return {
