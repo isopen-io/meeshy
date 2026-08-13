@@ -53,8 +53,16 @@ import me.meeshy.ui.theme.hexColor
  * **Deliberately minimal**, same posture as the two sibling widgets: static/
  * OS-triggered refresh only, Room-only read (no network), no presence/online
  * status badge (Android's `ApiConversation.participants` carries no presence
- * fields the way `MeeshyConversation.lastSeenText` does on iOS — a real,
+ * fields the way `MeeshyConversation.lastSeenAt` does on iOS — a real,
  * documented gap, not an oversight; see `PROGRESS.md`).
+ *
+ * That gap is narrower than it reads. Until 2026-08-13, iOS shipped a presence
+ * dot here that could never light: the app published a human label
+ * (`lastSeenText`, hardcoded French) across the App Group while the widget
+ * gated the dot on `status == "Online"`. iOS now publishes a stable
+ * `PresenceState` token instead — so when Android closes this gap, the thing to
+ * mirror is that TOKEN and the 1/3/5 colour rule (`Presence.kt`), never a
+ * display string. What crosses a process boundary is data, not a label.
  */
 internal class FavoriteContactsWidget : GlanceAppWidget() {
 
