@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
+import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
@@ -625,6 +626,21 @@ export function registerCommentRoutes(
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
+
+      // Le symétrique du `createCommentLikeNotification` de la route de pose :
+      // la réaction défaite emporte la notification qu'elle avait produite.
+      // Fire-and-forget, comme la notification jumelle — le dé-like est déjà
+      // persisté et ne doit pas dépendre du retrait.
+      const notifService = fastify.notificationService;
+      void retractReactionNotifications(
+        prisma,
+        {
+          subject: { kind: 'comment', id: commentId },
+          actorId: authContext.registeredUser.id,
+          emoji,
+        },
+        notifService
+      ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId/like]: retract comment like notification failed'));
 
       return sendSuccess(reply, { liked: false, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
