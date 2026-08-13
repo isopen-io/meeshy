@@ -7813,3 +7813,58 @@ impact fonctionnel) ; `CallInfoOverlay`'s `participantCount` affichant brièveme
 code en dur le mot anglais `"connection"` et n'appelle pas `useI18n`, seul point de l'UI d'appel encore
 non localisé (Vague 116, nécessite 4 nouvelles clés de catalogue par locale, pas un simple retrait de
 préfixe).
+
+## Vague 118 — `ConnectionQualityBadgeCompact` retiré : dead code non traduit plutôt que traduit (2026-08-13)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle session.
+Base explicite sur le développement précédent : `git fetch origin main`, branche réalignée sur
+`origin/main` (`95835097`, contient la Vague 117 + le lot `gwcontract-04`/`03` — PRs mergées). Aucune
+PR ouverte sur la branche désignée de cette session (`list_pull_requests` vide, 2 PR ouvertes sans
+rapport avec les appels). Ce cycle a aussi lu `tasks/2026-08-13-group-calls-gap-analysis.md` (analyse
+d'écart infra appels de groupe, S1/W1-W5 déjà levés le même jour sur une autre branche) — hors scope
+ici, item repris indépendamment sur le backlog « Reste ouvert » ci-dessus.
+
+- **Root cause confirmée par lecture directe** : `ConnectionQualityBadgeCompact`
+  (`ConnectionQualityBadge.tsx:107`) n'était exporté ni par le barrel `index.ts`, ni importé nulle
+  part — `grep -rn "ConnectionQualityBadgeCompact" apps/web` ne remontait que sa propre définition.
+  Le backlog (Vague 116) le décrivait comme « seul point de l'UI d'appel encore non localisé,
+  nécessite 4 nouvelles clés de catalogue » — en résolvant d'abord la question « ce composant a-t-il
+  seulement un appelant ? » (le réflexe de la Vague 117 : chercher TOUS les call sites avant de
+  corriger), la vraie réponse est que non : le composant est mort, donc le localiser aurait traduit
+  du code que personne ne rend, en ajoutant 16 clés (4 langues × 4 chaînes) mortes dès leur ajout.
+- **Fix** : suppression pure de la fonction (le composant `ConnectionQualityBadge`, seul réellement
+  monté par `CallQualityOverlay`, est inchangé — `getQualityLabel`/`getQualityIcon` restent utilisés
+  par lui). Aucun export de barrel à retirer (jamais exporté). Aucune clé de locale à retirer (jamais
+  ajoutée). Suit le même précédent que `useWebRTC` (Vague 33), `useVideoFilters` (Vague 68) et
+  `CallStatusIndicator` (Vague 117) — documenté dans le même doc-comment de garde du barrel plutôt que
+  dans `index.ts` lui-même.
+- **Tests** (TDD, RED confirmé avant fix) : 2 nouveaux cas dans `index.test.ts` — le barrel ne
+  mentionne pas `ConnectionQualityBadgeCompact` (déjà vrai, garde de non-régression future) et le
+  fichier `ConnectionQualityBadge.tsx` lui-même ne l'exporte plus. RED confirmé par exécution avant
+  le retrait : `Received: "...export function ConnectionQualityBadgeCompact..."` sur le second cas.
+  Sweep complet `--testPathPatterns="[Cc]all"` (web) : **52 suites / 462 tests verts**, 0 régression.
+  `npx tsc --noEmit` (apps/web) : **1764 erreurs, baseline identique confirmée par `git stash`**
+  (compté avec ET sans le fix — même chiffre, donc 0 nouvelle erreur ; le delta apparent vs. le
+  chiffre 1757 des Vagues 115/116/117 est un bruit d'environnement préexistant, sans rapport avec ce
+  fichier — `grep ConnectionQualityBadge` sur la sortie tsc : 0 occurrence avant et après). Prérequis
+  CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts` (bun
+  1.3.11 disponible localement, pas 1.3.14 — sans impact observé sur les résultats), puis
+  `packages/shared && npx prisma generate --generator client` + `bun run build`.
+- **Portée volontairement non étendue** : les autres items « Reste ouvert » (god-object
+  `CallManager.swift`, `CallInfoOverlay.participantCount`, guard `!isAnonymous`, `setSinkId`) non
+  traités ce cycle — un seul fix substantiel, cohérent avec le rythme des vagues récentes.
+  iOS/Android non touchés (aucune toolchain dans ce sandbox).
+
+### Reste ouvert
+
+Reconduit (moins `ConnectionQualityBadgeCompact` résolu ce cycle, retiré du dernier item de la liste
+ci-dessus) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue`
+non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android
+de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device
+requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique
+de sortie audio (`setSinkId`, Vague 111, nécessite un vrai sélecteur multi-périphériques, pas un
+quick fix) ; guard `!isAnonymous` sur le poll `active-call` du bandeau (Vague 112, faible sévérité —
+401 gaspillés, aucun impact fonctionnel) ; `CallInfoOverlay`'s `participantCount` affichant
+brièvement 0 côté caller (Vague 112, cosmétique, non traité). Voir aussi
+`tasks/2026-08-13-group-calls-gap-analysis.md` pour le chantier séparé « appels de groupe » (W6/W7
+web, I1-I7 iOS, SFU) en cours sur une autre branche le même jour.

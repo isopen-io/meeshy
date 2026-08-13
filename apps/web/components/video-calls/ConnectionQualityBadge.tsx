@@ -100,39 +100,3 @@ export function ConnectionQualityBadge({
     </TooltipProvider>
   );
 }
-
-/**
- * Compact version for smaller displays
- */
-export function ConnectionQualityBadgeCompact({
-  stats,
-  className,
-}: ConnectionQualityBadgeProps) {
-  if (!stats || stats.level === 'excellent') return null;
-
-  const qualityIcon = getQualityIcon(stats.level);
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={cn(
-              'w-8 h-8 flex items-center justify-center rounded-full',
-              'bg-black/60 backdrop-blur-sm',
-              className
-            )}
-          >
-            <span className="text-base">{qualityIcon}</span>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="bg-gray-900 border-gray-700 text-white text-sm">
-          <div>{getQualityLabel(stats.level)} connection</div>
-          <div className="text-xs text-gray-400 mt-1">
-            {stats.packetLoss.toFixed(1)}% loss, {stats.rtt}ms latency
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}

@@ -25,6 +25,15 @@
  * rounded-corner boxes rendered on top of each other the moment the connection
  * degraded or stats were opened. Its `callDuration` prop was dead (destructured
  * as `_callDuration`, never read). Removed outright. See Vague 117.
+ *
+ * `ConnectionQualityBadgeCompact` (components/video-calls/ConnectionQualityBadge.tsx)
+ * was never exported from this barrel and had zero production callers — the only
+ * component `CallQualityOverlay` renders is `ConnectionQualityBadge` (the full
+ * variant). It was also the sole spot in the call UI left un-internationalized
+ * (`{getQualityLabel(stats.level)} connection`, `{packetLoss}% loss, {rtt}ms
+ * latency` hardcoded in English, no `useI18n` call) — flagged in the Vague 116/117
+ * backlog as needing 4 new locale keys per locale, which would have localized code
+ * nothing renders. Removed outright rather than translated. See Vague 118.
  */
 import fs from 'fs';
 import path from 'path';
@@ -33,6 +42,7 @@ const indexPath = path.join(__dirname, '../../../components/video-calls/index.ts
 const deadHookPath = path.join(__dirname, '../../../components/video-calls/hooks/useWebRTC.ts');
 const deadFiltersHookPath = path.join(__dirname, '../../../components/video-calls/hooks/useVideoFilters.ts');
 const deadStatusIndicatorPath = path.join(__dirname, '../../../components/video-calls/CallStatusIndicator.tsx');
+const connectionQualityBadgePath = path.join(__dirname, '../../../components/video-calls/ConnectionQualityBadge.tsx');
 
 describe('video-calls index barrel', () => {
   it('does not export the dead/buggy useWebRTC hook', () => {
@@ -67,5 +77,21 @@ describe('video-calls index barrel', () => {
 
   it('does not ship the dead CallStatusIndicator file', () => {
     expect(fs.existsSync(deadStatusIndicatorPath)).toBe(false);
+  });
+
+  // Vague 118: ConnectionQualityBadgeCompact was never exported from this barrel
+  // and had zero production callers (grep across apps/web confirms only its own
+  // definition site) — the only component CallQualityOverlay renders is
+  // ConnectionQualityBadge. It was also the sole un-internationalized surface in
+  // the call UI (hardcoded English "connection"/"loss"/"latency" strings, no
+  // useI18n call). Removed outright rather than translated dead code.
+  it('does not export the dead ConnectionQualityBadgeCompact', () => {
+    const indexSource = fs.readFileSync(indexPath, 'utf-8');
+    expect(indexSource).not.toMatch(/ConnectionQualityBadgeCompact/);
+  });
+
+  it('does not ship the dead ConnectionQualityBadgeCompact export', () => {
+    const source = fs.readFileSync(connectionQualityBadgePath, 'utf-8');
+    expect(source).not.toMatch(/ConnectionQualityBadgeCompact/);
   });
 });
