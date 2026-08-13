@@ -23,7 +23,7 @@ export interface UnreadCountEmitter {
 
 export interface UnreadCountReader {
   getUnreadCountsForParticipants(
-    participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
+    participants: ReadonlyArray<{ id: string; userId?: string | null; joinedAt: Date | null }>,
     conversationId: string
   ): Promise<Map<string, number>>;
 }
