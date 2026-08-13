@@ -17,8 +17,7 @@
 gateway/generated/
 
 # === ML Models (downloaded at runtime, not in image) ===
-**/models/
-services/translator/models/
+services/translator/models/*
 # Exception: pyannote diarization models are small (~31MB) and bundled in the image
 !services/translator/models/pyannote/
 
@@ -90,7 +89,7 @@ docker-compose*.yml
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/
 translator/
-tests/
+**/tests/
 
 # === Uploads (will be volume-mounted) ===
 gateway/uploads/

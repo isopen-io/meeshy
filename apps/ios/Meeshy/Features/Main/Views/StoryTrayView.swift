@@ -320,8 +320,9 @@ struct StoryRingCell: View {
                 // Compte les stories VIVANTES uniquement : le groupe self garde
                 // ses stories expirées (archive auteur, exemptées de la purge)
                 // — les compter gonflait les points avec des stories éteintes.
-                if group.stories.filter({ !$0.isExpired() }).count > 1 {
-                    storyCountDots(count: group.stories.filter { !$0.isExpired() }.count, unviewed: group.hasUnviewed)
+                let liveCount = group.stories.filter { !$0.isExpired() }.count
+                if liveCount > 1 {
+                    storyCountDots(count: liveCount, unviewed: group.hasUnviewed)
                         .offset(y: context.size * 0.318)
                 }
             }

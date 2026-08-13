@@ -9,6 +9,7 @@ import json
 import logging
 import psutil
 import re
+import socket
 import time
 import uuid
 from typing import Dict, Optional
@@ -72,6 +73,8 @@ class TranslationHandler:
         self.db = database_service
         self.gateway_push_port = gateway_push_port
         self.gateway_sub_port = gateway_sub_port
+        self._hostname = socket.gethostname()
+        self._process = psutil.Process()
 
         # Tâches en vol (taskId → échéance time.monotonic()). Le gateway
         # re-pushe la même tâche toutes les ~30 s tant qu'aucun résultat
@@ -381,15 +384,11 @@ class TranslationHandler:
         try:
             # DEBUG: Logs réduits de 60% - Suppression des vérifications détaillées
             
-            # Récupérer les informations techniques du système
-            import socket
-            import uuid
-            
             # Calculer le temps d'attente en queue
             queue_time = time.time() - result.get('created_at', time.time())
             
             # Récupérer les métriques système
-            memory_usage = psutil.Process().memory_info().rss / 1024 / 1024  # MB
+            memory_usage = self._process.memory_info().rss / 1024 / 1024  # MB
             # OPTIMISATION: Suppression du sleep(0.1) qui ajoutait 100ms de latence
             # Utiliser la valeur CPU mise en cache ou 0.0 si non disponible
             cpu_usage = getattr(self, '_cached_cpu_usage', 0.0)
@@ -429,7 +428,7 @@ class TranslationHandler:
                 'metadata': {
                     'translatorVersion': '1.0.0',
                     'modelVersion': result.get('modelType', 'basic'),
-                    'processingNode': socket.gethostname(),
+                    'processingNode': self._hostname,
                     'sessionId': str(uuid.uuid4()),
                     'requestId': task_id,
                     'protocol': 'ZMQ_PUB_SUB',
