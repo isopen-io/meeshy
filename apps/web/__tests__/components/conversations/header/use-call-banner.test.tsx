@@ -24,6 +24,9 @@
  *   (Vague 115 — the latter is always stripped by the REST whitelist, so every banner join
  *   silently forced audio-only regardless of the call's real nature)
  * - handleDismissCallBanner: hides the banner for that call id only
+ * - anonymous viewer: never polls GET /active-call at all (route requires
+ *   full auth, `allowAnonymous: false` — every prior poll was a guaranteed
+ *   wasted 401 against the route's rate limit)
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -31,7 +34,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useCallBanner } from '@/components/conversations/header/use-call-banner';
 import { useCallStore } from '@/stores/call-store';
+import { useAuthStore } from '@/stores/auth-store';
 import type { CallSession, CallParticipant } from '@meeshy/shared/types/video-call';
+import type { User } from '@meeshy/shared/types';
 
 const mockGetActiveCall = jest.fn();
 
@@ -98,6 +103,7 @@ describe('useCallBanner', () => {
     jest.clearAllMocks();
     act(() => {
       useCallStore.setState({ isInCall: false, joinRequest: null });
+      useAuthStore.getState().setUser(null);
     });
   });
 
@@ -322,6 +328,43 @@ describe('useCallBanner', () => {
           result.current.handleDismissCallBanner();
         });
       }).not.toThrow();
+    });
+  });
+
+  describe('when the current viewer is anonymous', () => {
+    it('never calls GET /active-call — the route requires full auth and always refuses anonymous', async () => {
+      mockGetActiveCall.mockResolvedValue({ success: true, data: makeCallSession() });
+      act(() => {
+        useAuthStore.getState().setUser({ id: 'anon-1', isAnonymous: true } as unknown as User);
+      });
+
+      const { result } = renderBanner();
+
+      // Give the query a tick to fire if it were going to.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(mockGetActiveCall).not.toHaveBeenCalled();
+      expect(result.current.showCallBanner).toBe(false);
+      expect(result.current.currentCall).toBeNull();
+    });
+
+    it('starts polling again once the viewer is no longer anonymous', async () => {
+      mockGetActiveCall.mockResolvedValue({ success: true, data: makeCallSession() });
+      act(() => {
+        useAuthStore.getState().setUser({ id: 'anon-1', isAnonymous: true } as unknown as User);
+      });
+
+      const { result, rerender } = renderBanner();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(mockGetActiveCall).not.toHaveBeenCalled();
+
+      act(() => {
+        useAuthStore.getState().setUser({ id: 'user-1', isAnonymous: false } as unknown as User);
+      });
+      rerender();
+
+      await waitFor(() => expect(mockGetActiveCall).toHaveBeenCalledWith('conv-123'));
+      await waitFor(() => expect(result.current.showCallBanner).toBe(true));
     });
   });
 });

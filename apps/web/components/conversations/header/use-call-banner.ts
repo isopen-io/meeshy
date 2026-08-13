@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCallStore } from '@/stores/call-store';
+import { useUser } from '@/stores';
+import { isUserAnonymous } from '@/utils/auth';
 import { callsService } from '@/services/calls.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
@@ -22,6 +24,12 @@ const ACTIVE_CALL_POLL_MS = 15_000;
 export function useCallBanner(conversationId: string) {
   const isInCall = useCallStore((s) => s.isInCall);
   const requestJoin = useCallStore((s) => s.requestJoin);
+  // Gateway route backing this poll requires full auth (`allowAnonymous:
+  // false`, see `calls.service.ts`) — an anonymous viewer can never get a
+  // 200 here. Left ungated, every conversation header polled it every 15s
+  // for the lifetime of the page, each call a guaranteed 401 that also
+  // burns against the route's 10/min rate limit for nothing.
+  const isAnonymous = isUserAnonymous(useUser());
   const [callDuration, setCallDuration] = useState(0);
   const [dismissedCallId, setDismissedCallId] = useState<string | null>(null);
 
@@ -31,7 +39,7 @@ export function useCallBanner(conversationId: string) {
       const response = await callsService.getActiveCall(conversationId);
       return response.success ? (response.data ?? null) : null;
     },
-    enabled: !!conversationId,
+    enabled: !!conversationId && !isAnonymous,
     refetchInterval: ACTIVE_CALL_POLL_MS,
   });
 
