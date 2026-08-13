@@ -1637,6 +1637,7 @@ struct CallView: View {
                 color: videoAutoPaused ? MeeshyColors.warning : MeeshyColors.indigo400,
                 bgColor: videoAutoPaused ? MeeshyColors.warning : MeeshyColors.indigo400,
                 isActive: videoAutoPaused ? true : !callManager.isVideoEnabled,
+                toggleValue: callManager.isVideoEnabled,
                 caption: videoAutoPaused
                     ? String(localized: "call.control.video.paused.caption", defaultValue: "En pause", bundle: .main)
                     : String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
@@ -1657,14 +1658,20 @@ struct CallView: View {
             // pilule in-app, pas une fenêtre vidéo.
             if callManager.canActivateSystemPiP {
                 callControlButton(
-                    icon: "pip.enter",
+                    icon: callManager.isSystemPiPActive ? "pip.exit" : "pip.enter",
                     color: .white,
                     bgColor: .white,
                     isActive: callManager.isSystemPiPActive,
                     caption: String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main),
-                    label: String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main)
+                    label: callManager.isSystemPiPActive
+                        ? String(localized: "call.control.pip.exit", defaultValue: "Quitter le mode Picture-in-Picture", bundle: .main)
+                        : String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main)
                 ) {
-                    callManager.startSystemPiP()
+                    if callManager.isSystemPiPActive {
+                        callManager.stopSystemPiP()
+                    } else {
+                        callManager.startSystemPiP()
+                    }
                 }
             }
 
@@ -1865,7 +1872,7 @@ struct CallView: View {
     /// what lets every column stay the same width so the row reads as an even,
     /// intelligently-aligned glass bar instead of one button ballooning to fit a
     /// long French label.
-    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, hint: String? = nil, isToggle: Bool = false, action: @escaping () -> Void) -> some View {
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, toggleValue: Bool? = nil, caption: String, label: String, hint: String? = nil, isToggle: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
@@ -1886,7 +1893,7 @@ struct CallView: View {
         .pressable()
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
-        .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
+        .callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)
     }
 
     /// Derived from `transcriptionService.isTranscribing` (authoritative on/off) and

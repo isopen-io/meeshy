@@ -349,6 +349,50 @@ final class CallViewAccessibilityTests: XCTestCase {
         XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
     }
 
+    // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
+
+    func test_callControlButton_hasSeparateToggleValueParameter() throws {
+        // The video button reuses `isActive` for its CTA visual highlight (true
+        // when video is OFF, to draw the eye toward turning it on) — the OPPOSITE
+        // of the real feature state. Reusing that same boolean for the VoiceOver
+        // on/off value would announce the state backwards. callControlButton must
+        // expose a dedicated toggleValue so a caller can decouple "highlight" from
+        // "actual state" while every other caller keeps today's behaviour.
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("toggleValue: Bool? = nil"),
+            "callControlButton must accept an optional toggleValue parameter, " +
+            "separate from isActive, so the accessibility value can differ from " +
+            "the visual highlight state."
+        )
+        XCTAssertTrue(
+            source.contains("callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)"),
+            "callControlButton must feed toggleValue (falling back to isActive) into " +
+            "callToggleAccessibility — callers that don't pass toggleValue must keep " +
+            "today's behaviour (mute/speaker/PiP), only the video button overrides it."
+        )
+    }
+
+    func test_videoButton_accessibilityValueReflectsCameraIntent_notCTAHighlight() throws {
+        // Regression guard: `isActive` on this call site is
+        // `videoAutoPaused ? true : !callManager.isVideoEnabled` — a CTA highlight,
+        // not the real camera state. Without toggleValue, VoiceOver announced
+        // "Désactiver la vidéo, Désactivé" while video was ON, and "Activer la
+        // vidéo, Activé" while OFF — exactly backwards.
+        let source = try callViewSource()
+        guard let range = source.range(of: "callManager.toggleVideo()") else {
+            XCTFail("CallView must wire the video toggle action")
+            return
+        }
+        let start = source.index(range.lowerBound, offsetBy: -1200, limitedBy: source.startIndex) ?? source.startIndex
+        let vicinity = String(source[start..<range.upperBound])
+        XCTAssertTrue(
+            vicinity.contains("toggleValue: callManager.isVideoEnabled"),
+            "The video callControlButton call must pass toggleValue: callManager.isVideoEnabled " +
+            "so VoiceOver announces the camera's real on/off state, not the inverted CTA highlight."
+        )
+    }
+
     // MARK: - hasActiveEffects — advanced filters without a colorimetry preset
 
     func test_hasActiveEffects_alsoChecksAdvancedFilters_notIsEnabledAlone() throws {
