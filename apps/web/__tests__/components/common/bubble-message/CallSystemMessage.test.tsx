@@ -4,9 +4,9 @@
  * Invariants durcis ici :
  *  - le kind est lu AVANT l'outcome : un payload live (kind 'call-live') ne
  *    rend JAMAIS l'état terminal, même avec outcome 'completed' (placeholder) ;
- *  - « Rejoindre » n'apparaît que pour une conversation directe ET un
- *    utilisateur NON anonyme (le gate serveur refuse les anonymes — leur
- *    montrer le bouton serait un mensonge) ;
+ *  - « Rejoindre » n'apparaît que pour une conversation directe ou de groupe
+ *    (levée du verrou 1:1, 2026-08-13) ET un utilisateur NON anonyme (le gate
+ *    serveur refuse les anonymes — leur montrer le bouton serait un mensonge) ;
  *  - « annulé » est par-spectateur : initiateur → « Appel annulé »,
  *    destinataire → « Appel manqué » ;
  *  - un kind/outcome inconnu futur dégrade en rendu neutre (plus de TypeError
@@ -100,8 +100,13 @@ describe('CallSystemMessage — état vivant (kind call-live)', () => {
     expect(screen.queryByRole('button', { name: 'Rejoindre' })).not.toBeInTheDocument();
   });
 
-  it('masque « Rejoindre » hors conversation directe (état affiché sans action)', () => {
+  it('offre « Rejoindre » en conversation de groupe (verrou 1:1 levé)', () => {
     renderCall(liveMetadata(), { conversationType: 'group' });
+    expect(screen.getByRole('button', { name: 'Rejoindre' })).toBeInTheDocument();
+  });
+
+  it('masque « Rejoindre » pour un type de conversation sans appels (public)', () => {
+    renderCall(liveMetadata(), { conversationType: 'public' });
     expect(screen.queryByRole('button', { name: 'Rejoindre' })).not.toBeInTheDocument();
   });
 
