@@ -31,11 +31,17 @@ public enum MeeshyAudioSignature {
 
     /// Silence entre le contenu et la signature : sans lui, le carillon
     /// s'enchaîne au ras du dernier mot et s'entend comme une coupure.
-    public static let gap: TimeInterval = 0.4
+    ///
+    /// `nonisolated` : le module (`MeeshyUI`) a `SWIFT_DEFAULT_ACTOR_ISOLATION
+    /// = MainActor` (SE-0466), qui isolerait sinon implicitement cette
+    /// constante et les fonctions de timing pures ci-dessous — elles sont
+    /// appelées hors MainActor par `MeeshyMediaBrandingGeometryTests`, comme
+    /// leurs équivalentes de `MeeshyVideoWatermarkBaker`.
+    public static nonisolated let gap: TimeInterval = 0.4
 
     /// Durée de la signature effectivement posée, selon le placement — les
     /// deux motifs de `MeeshyBrandJingle` n'ont pas la même longueur.
-    public static func signatureDuration(for placement: Placement) -> TimeInterval {
+    public static nonisolated func signatureDuration(for placement: Placement) -> TimeInterval {
         switch placement {
         case .leading: return MeeshyBrandJingle.duration
         case .trailing: return MeeshyBrandJingle.outroDuration
@@ -52,7 +58,7 @@ public enum MeeshyAudioSignature {
     // MARK: - Timings (purs, testables sans AVFoundation)
 
     /// Instant d'entrée de la signature dans le fichier produit.
-    public static func signatureStart(contentDuration: TimeInterval,
+    public static nonisolated func signatureStart(contentDuration: TimeInterval,
                                       placement: Placement = .leading,
                                       gap: TimeInterval = MeeshyAudioSignature.gap) -> TimeInterval {
         switch placement {
@@ -62,7 +68,7 @@ public enum MeeshyAudioSignature {
     }
 
     /// Instant d'entrée du CONTENU dans le fichier produit.
-    public static func contentStart(signatureDuration: TimeInterval = MeeshyBrandJingle.duration,
+    public static nonisolated func contentStart(signatureDuration: TimeInterval = MeeshyBrandJingle.duration,
                                     placement: Placement = .leading,
                                     gap: TimeInterval = MeeshyAudioSignature.gap) -> TimeInterval {
         switch placement {
@@ -73,7 +79,7 @@ public enum MeeshyAudioSignature {
 
     /// Durée totale du fichier produit — dans les deux placements, le contenu,
     /// le silence et la signature s'enchaînent sans se recouvrir.
-    public static func totalDuration(contentDuration: TimeInterval,
+    public static nonisolated func totalDuration(contentDuration: TimeInterval,
                                      signatureDuration: TimeInterval = MeeshyBrandJingle.duration,
                                      gap: TimeInterval = MeeshyAudioSignature.gap) -> TimeInterval {
         contentDuration + gap + signatureDuration

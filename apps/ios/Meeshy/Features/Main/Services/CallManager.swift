@@ -2328,6 +2328,12 @@ final class CallManager: ObservableObject {
     /// Démarre le PiP manuellement (bouton). No-op si impossible/déjà actif.
     func startSystemPiP() { pip.start() }
 
+    /// Quitte le PiP manuellement (bouton, second tap). No-op si aucun PiP
+    /// n'est actif. Symétrique de `startSystemPiP()` — sans ce wrapper, le
+    /// bouton in-app n'avait aucun moyen de fermer une fenêtre PiP déjà
+    /// ouverte hormis le chrome système de la fenêtre flottante elle-même.
+    func stopSystemPiP() { pip.stop() }
+
     /// Libère le PiP (fin d'appel / éligibilité perdue).
     func detachSystemPiP() {
         pip.tearDown()
