@@ -106,18 +106,20 @@ final class StoryVoiceRecorderSourceChipsTests: XCTestCase {
     /// perdrait la prise en cours (le dismiss annule le micro) : les chips
     /// n'existent que hors enregistrement, structurellement.
     func test_theRecorderMountsTheChipsOnlyOutsideARecording() throws {
-        let code = try ComposerSourceGuard.source("StoryVoiceRecorder.swift")
+        // La feuille d'enregistrement est UNIFIÉE (stories + posts/réels) depuis
+        // 2026-08-13 : elle vit dans `MeeshyUI/Media`, la garde la suit.
+        let code = try ComposerSourceGuard.source("../Media/UnifiedAudioRecorderSheet.swift")
         let gated = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "if !recorder.isRecording", in: code),
             "Le gate hors-enregistrement des chips a disparu.")
 
         XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "StoryVoiceRecorderSourceChips(", in: code),
-            ComposerSourceGuard.occurrences(of: "StoryVoiceRecorderSourceChips(", in: gated),
+            ComposerSourceGuard.occurrences(of: "AudioRecorderSourceChips(", in: code),
+            ComposerSourceGuard.occurrences(of: "AudioRecorderSourceChips(", in: gated),
             "Un montage des chips vit hors du gate : il resterait tapable mid-recording."
         )
         XCTAssertGreaterThan(
-            ComposerSourceGuard.occurrences(of: "StoryVoiceRecorderSourceChips(", in: gated), 0,
+            ComposerSourceGuard.occurrences(of: "AudioRecorderSourceChips(", in: gated), 0,
             "L'assertion de parité ci-dessus ne vaut que si les chips sont encore montées."
         )
     }
