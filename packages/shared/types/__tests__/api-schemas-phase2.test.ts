@@ -286,7 +286,6 @@ describe('Phase 2 - Corrections Haute Priorité Schémas', () => {
       expect(messageSchema.properties).toHaveProperty('encryptedContent');
       expect(messageSchema.properties).toHaveProperty('encryptionMetadata');
       expect(messageSchema.properties).toHaveProperty('maxViewOnceCount');
-      expect(messageSchema.properties).toHaveProperty('receivedByAllAt');
 
       // Champs Phase 1 conversationSchema
       expect(conversationSchema.properties).toHaveProperty('serverEncryptionKeyId');

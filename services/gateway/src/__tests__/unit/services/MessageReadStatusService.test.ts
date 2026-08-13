@@ -2795,6 +2795,163 @@ describe('MessageReadStatusService', () => {
         expect.objectContaining({ receivedCount: 0, readCount: 0 })
       );
     });
+
+    // ------------------------------------------------------------------
+    // `deliveredToAllAt` / `readByAllAt` — les DATES du seuil « tous servis ».
+    // Les colonnes homonymes de la ligne `Message` n'ont aucun écrivain
+    // (`updateMessageComputedStatus` est un no-op assumé depuis le passage aux
+    // curseurs) : les trois routes qui les servaient rendaient donc toujours
+    // `null`, y compris quand la conversation entière avait lu. C'est le même
+    // défaut que les compteurs — corrigé au cycle 102 — une couche plus haut.
+    // La date se DÉRIVE de la même union curseur/reçu figé que les compteurs.
+    // ------------------------------------------------------------------
+    it('stamps deliveredToAllAt with the LAST recipient receipt once every recipient has one', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-1' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: null
+        },
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:09:00Z'),
+          receivedAt: new Date('2025-01-01T10:09:00Z'),
+          readAt: null
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      // « Livré à TOUS » date du DERNIER servi, pas du premier.
+      expect(result.get(testMessageId)?.deliveredToAllAt).toEqual(new Date('2025-01-01T10:09:00Z'));
+      // Personne n'a lu : le seuil de lecture n'est pas franchi.
+      expect(result.get(testMessageId)?.readByAllAt).toBeNull();
+    });
+
+    it('leaves deliveredToAllAt null while one recipient is still missing', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-1' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:05:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 1, readCount: 1 })
+      );
+      // Un destinataire sur deux : ni « livré à tous » ni « lu par tous ».
+      expect(result.get(testMessageId)?.deliveredToAllAt).toBeNull();
+      expect(result.get(testMessageId)?.readByAllAt).toBeNull();
+    });
+
+    it('stamps readByAllAt with the LAST recipient read once every recipient has read', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-1' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:20:00Z')
+        },
+        {
+          messageId: testMessageId,
+          participantId: testParticipantId2,
+          deliveredAt: new Date('2025-01-01T10:09:00Z'),
+          receivedAt: new Date('2025-01-01T10:09:00Z'),
+          readAt: new Date('2025-01-01T10:11:00Z')
+        }
+      ]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)?.deliveredToAllAt).toEqual(new Date('2025-01-01T10:09:00Z'));
+      expect(result.get(testMessageId)?.readByAllAt).toEqual(new Date('2025-01-01T10:20:00Z'));
+    });
+
+    // Le dénominateur est `computeRecipientCount` — expéditeur exclu. Une
+    // conversation sans AUCUN destinataire actif (l'expéditeur est resté seul)
+    // a `totalMembers === 0`, donc un seuil `count >= totalMembers`
+    // trivialement franchi. Ce témoin fige que « livré/lu par tous » ne
+    // s'allume pas pour autant sur un message que personne n'a reçu.
+    it('never stamps the all-served dates when the message has no active recipient', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: testParticipantId }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: testParticipantId }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)?.totalMembers).toBe(0);
+      expect(result.get(testMessageId)?.deliveredToAllAt).toBeNull();
+      expect(result.get(testMessageId)?.readByAllAt).toBeNull();
+    });
+
+    // Même règle que les compteurs : l'opt-out `showReadReceipts` sort du
+    // numérateur ET du dénominateur. Il ne doit donc pas RETENIR le seuil —
+    // sinon un seul destinataire discret empêcherait à jamais l'expéditeur de
+    // voir « lu par tous », alors que le compteur, lui, affiche déjà 1/1.
+    it('does not let a read-receipt opt-out hold back the all-read date', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-p' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-optout', userId: 'u-optout' },
+        { id: 'p-normal', userId: 'u-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          messageId: testMessageId,
+          participantId: 'p-normal',
+          deliveredAt: new Date('2025-01-01T10:04:00Z'),
+          receivedAt: new Date('2025-01-01T10:04:00Z'),
+          readAt: new Date('2025-01-01T10:05:00Z')
+        }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue([{ userId: 'u-optout' }]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ totalMembers: 1, receivedCount: 1, readCount: 1 })
+      );
+      expect(result.get(testMessageId)?.deliveredToAllAt).toEqual(new Date('2025-01-01T10:04:00Z'));
+      expect(result.get(testMessageId)?.readByAllAt).toEqual(new Date('2025-01-01T10:05:00Z'));
+    });
   });
 
   // ==============================================

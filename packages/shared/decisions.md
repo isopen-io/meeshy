@@ -97,3 +97,30 @@
 **Decision**: RETIRER le champ — du modele Prisma, du type partage `CallParticipant`, de l'interface `ConnectionQuality` devenue orpheline, et des trois emissions socket. Le signal par participant existe deja et circule EN TEMPS REEL: `call:quality-report` porte `rtt`, `packetLoss`, `level` par participant, et sur degradation soutenue le handler emet `call:quality-alert` par participant aux pairs. Les statistiques instantanees gardent leur type dedie `ConnectionQualityStats`, a ne pas confondre avec le `ConnectionQuality` retire. Le bilan de fin d'appel reste dans `CallParticipant.analytics`. Retires dans le meme lot: `CallParticipantSchemas` (Zod) et `callParticipantSchema` (OpenAPI), sans aucune reference dans le depot, et qui decrivaient en outre `status`, `duration`, `isMuted`, `isVideoOff` — quatre champs absents du modele Prisma (qui porte `isAudioEnabled`, `isVideoEnabled`, `leftAt`). Ce n'etaient pas des contrats perimes sur un champ, mais deux descriptions entieres d'une entite qui n'a jamais existe sous cette forme.
 **Alternatives rejetees**: CABLER le champ (le remplir depuis `call:quality-report`) — couterait jusqu'a 30 ecritures/min/participant (plafond `SOCKET_RATE_LIMITS.CALL_QUALITY_REPORT`) sur le chemin CHAUD de l'appel, pour persister une donnee dont la valeur expire en quelques secondes et que trois clients sur trois calculent deja eux-memes. Laisser le champ en place «au cas ou» — c'est precisement ce qui a produit quatre declarations divergentes et un `null` diffuse a tous les clients pendant toute la vie de la feature.
 **Cons**: Aucune migration MongoDB n'accompagne le retrait (rien n'a jamais ete ecrit, il n'y a aucune donnee a perdre); des documents `CallParticipant` anterieurs pourraient theoriquement porter la cle, que Prisma ignore desormais. Une future qualite PERSISTEE devra repartir du modele, pas de ces schemas: c'est l'objet des commentaires laisses aux quatre sites.
+
+## 2026-08: Message.receivedByAllAt — retire; deliveredToAllAt/readByAllAt restent, mais CALCULES
+**Statut**: Accepte
+**Contexte**: Le modele `Message` porte cinq champs de statut denormalises (`deliveredToAllAt`,
+`receivedByAllAt`, `readByAllAt`, `deliveredCount`, `readCount`). Le passage au suivi par curseurs a
+vide leur unique ecrivain: `MessageReadStatusService.updateMessageComputedStatus` est depuis un
+no-op documente («Computed fields are no longer stored on Message to improve write performance»).
+Sur toute la collection, les trois dates valent donc `null` et les deux compteurs zero. Les
+compteurs ont ete rebranches sur la source de verite aux deux cycles precedents; les DATES ne
+l'avaient pas ete.
+**Decision**: `receivedByAllAt` SORT — modele Prisma, `MessageEntity` (`types/message-types.ts`),
+`ConversationMessage` (`types/conversation.ts`), `messageSchema` (`types/api-schemas.ts`) et les deux
+`select` du gateway. Il n'a ni ecrivain NI lecteur: aucun client des quatre plateformes ne le decode
+(verifie par grep sur `apps/web`, `apps/ios`, `apps/android`, `packages/MeeshySDK`). Ses deux
+voisines RESTENT declarees et servies, mais CALCULEES par
+`MessageReadStatusService.getConversationReadStatuses` — l'instant du dernier destinataire servi,
+`null` tant qu'il en manque un.
+**Alternatives rejetees**: Retirer les trois d'un meme geste — `deliveredToAllAt` et `readByAllAt`
+ont de VRAIS lecteurs (`DeliveryStatusResolver` iOS et Android, `MessageRecord+ToMessage`,
+`MessagePersistenceActor`), qui traitent `!= null` comme la preuve que tous ont lu; les retirer
+casserait trois decodeurs pour un defaut qui se repare. Reactiver l'ecriture des colonnes —
+c'est la decision d'archi que le passage aux curseurs a prise a l'envers; deriver a la lecture ne
+coute aucune requete de plus.
+**Cons**: Retrait d'un champ d'API publiee. Sans consequence connue: il ne pouvait valoir que `null`
+et n'avait aucun decodeur. Aucune migration MongoDB — Prisma cesse de mapper la cle, les documents
+existants la gardent inerte. `deliveredCount` / `readCount` restent declares sans ecrivain: ils ont,
+eux, des lecteurs clients et sont deja servis calcules; leur retrait est un lot distinct.

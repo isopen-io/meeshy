@@ -39,6 +39,20 @@ Les champs suivants existent dans `schema.prisma` (model Message) et dans `Gatew
 
 **Decision**: Supprimer ces champs du schema Message et de GatewayMessage. Les statuts sont calcules dynamiquement via `ConversationReadCursor`. L'event socket enrichi fournira un `summary` pour eviter les REST calls.
 
+> **REVISION 2026-08-13 — la suppression en bloc ne s'applique qu'a UN des cinq.**
+> Depuis la redaction de ce plan, iOS, Android et le SDK ont appris a DECODER
+> `deliveredToAllAt` et `readByAllAt` : leurs resolveurs (`DeliveryStatusResolver` sur
+> les deux plateformes, `MessageRecord+ToMessage`, `MessagePersistenceActor`) traitent
+> `readByAllAt != null` comme la preuve que tous les destinataires ont lu. Le verdict
+> « MORT » de la table ci-dessus porte sur l'ECRITURE ; il ne vaut plus pour la LECTURE.
+>
+> Etat livre : `receivedByAllAt` — le seul des cinq sans aucun decodeur — a ete RETIRE
+> (Prisma, `message-types.ts`, `conversation.ts`, `api-schemas.ts`). `deliveredToAllAt`
+> et `readByAllAt` restent au contrat mais sont desormais CALCULES a la lecture par
+> `MessageReadStatusService.getConversationReadStatuses`. `deliveredCount` / `readCount`
+> sont deja servis calcules ; seul leur STOCKAGE reste a retirer.
+> ADR : `services/gateway/decisions.md` et `packages/shared/decisions.md` § 2026-08-13.
+
 ### 1.2 Socket Event `ReadStatusUpdatedEventData` — Trop maigre
 
 **Actuel** (`socketio-events.ts:335-340`) :
@@ -244,10 +258,13 @@ io.to(room).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
 #### 3.1.3 Supprimer les champs morts du Message model
 
 Dans `schema.prisma`, retirer du model Message :
-- `deliveredToAllAt`, `receivedByAllAt`, `readByAllAt`
-- `deliveredCount`, `readCount`
+- ~~`deliveredToAllAt`~~, `receivedByAllAt` (FAIT 2026-08-13), ~~`readByAllAt`~~
+- `deliveredCount`, `readCount` (reste a faire — stockage seul, la valeur est deja calculee)
 
 Et `updateMessageComputedStatus()` (deja no-op).
+
+> Les deux champs barres ne sortent PAS : trois clients les decodent. Voir la revision
+> du 2026-08-13 en § 1.1.
 
 #### 3.1.4 Presence Heartbeat
 
@@ -267,7 +284,8 @@ Ajouter un handler socket `heartbeat` :
 
 #### 3.2.2 `message-types.ts`
 
-- Retirer de `GatewayMessage` : `deliveredToAllAt`, `receivedByAllAt`, `readByAllAt`, `deliveredCount`, `readCount`
+- Retirer de `GatewayMessage` : `receivedByAllAt` (FAIT 2026-08-13), `deliveredCount`, `readCount`.
+  `deliveredToAllAt` / `readByAllAt` RESTENT — trois clients les decodent (revision § 1.1).
 - Garder `statusEntries` (pour fetch on-demand dans detail view)
 
 ### 3.3 MeeshySDK

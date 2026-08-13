@@ -1705,12 +1705,32 @@ export class MessageReadStatusService {
   }
 
   /**
-   * Récupère les statuts de lecture pour plusieurs messages via les curseurs
+   * Récupère les statuts de lecture pour plusieurs messages via les curseurs.
+   *
+   * Rend AUSSI les deux dates de seuil `deliveredToAllAt` / `readByAllAt` —
+   * l'instant où le DERNIER destinataire a été servi, `null` tant qu'il en
+   * manque un. Les colonnes homonymes de la ligne `Message` n'ont aucun
+   * écrivain (`updateMessageComputedStatus` est un no-op assumé depuis le
+   * passage aux curseurs) : les routes qui les lisaient servaient donc `null`
+   * en permanence, y compris quand toute la conversation avait lu. Les dates se
+   * dérivent ici de la MÊME union curseur/reçu figé que les compteurs, et
+   * respectent donc le même retrait des opt-out `showReadReceipts`.
    */
   async getConversationReadStatuses(
     conversationId: string,
     messageIds: string[]
-  ): Promise<Map<string, { totalMembers: number; receivedCount: number; readCount: number }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        totalMembers: number;
+        receivedCount: number;
+        readCount: number;
+        deliveredToAllAt: Date | null;
+        readByAllAt: Date | null;
+      }
+    >
+  > {
     try {
       // Les quatre lectures ne dépendent pas les unes des autres : les tenir en
       // séquence coûtait quatre allers-retours sur le chemin de rattrapage le
@@ -1775,13 +1795,23 @@ export class MessageReadStatusService {
 
       const statusMap = new Map<
         string,
-        { totalMembers: number; receivedCount: number; readCount: number }
+        {
+          totalMembers: number;
+          receivedCount: number;
+          readCount: number;
+          deliveredToAllAt: Date | null;
+          readByAllAt: Date | null;
+        }
       >();
 
       for (const msg of messages) {
         const totalMembers = computeRecipientCount(activeParticipantIds, msg.senderId);
         let receivedCount = 0;
         let readCount = 0;
+        // Le seuil « tous servis » date du DERNIER destinataire servi, jamais
+        // du premier : c'est l'instant où la promesse devient vraie.
+        let lastReceivedAt: Date | null = null;
+        let lastReadAt: Date | null = null;
 
         // Union des participants ayant un curseur actif ET de ceux ayant un reçu
         // figé actif pour CE message (sender exclu). Un participant figé-seul
@@ -1815,11 +1845,28 @@ export class MessageReadStatusService {
             cutover: getExactReadTrackingCutover(),
           });
 
-          if (receivedAt) receivedCount++;
-          if (readAt) readCount++;
+          if (receivedAt) {
+            receivedCount++;
+            if (!lastReceivedAt || receivedAt > lastReceivedAt) lastReceivedAt = receivedAt;
+          }
+          if (readAt) {
+            readCount++;
+            if (!lastReadAt || readAt > lastReadAt) lastReadAt = readAt;
+          }
         }
 
-        statusMap.set(msg.id, { totalMembers, receivedCount, readCount });
+        // Aucune garde `totalMembers > 0` n'est nécessaire, et en ajouter une
+        // serait du code qu'aucun test ne peut rougir : `totalMembers` ne vaut
+        // zéro que si l'ensemble des destinataires évalués est vide, auquel cas
+        // les deux maxima sont `null` de toute façon. Le seuil trivialement
+        // franchi rend donc déjà `null`.
+        statusMap.set(msg.id, {
+          totalMembers,
+          receivedCount,
+          readCount,
+          deliveredToAllAt: receivedCount >= totalMembers ? lastReceivedAt : null,
+          readByAllAt: readCount >= totalMembers ? lastReadAt : null,
+        });
       }
 
       return statusMap;

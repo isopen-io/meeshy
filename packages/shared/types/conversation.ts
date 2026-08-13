@@ -146,7 +146,6 @@ export interface Message {
 
   // ===== DELIVERY STATUS (denormalized) =====
   readonly deliveredToAllAt?: Date;
-  readonly receivedByAllAt?: Date;
   readonly readByAllAt?: Date;
   readonly deliveredCount: number;
   readonly readCount: number;

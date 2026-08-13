@@ -647,8 +647,6 @@ model Message {
   // ============================================
   /// Date when message was delivered to ALL participants
   deliveredToAllAt DateTime?
-  /// Date when message was received (acknowledged) by ALL participants
-  receivedByAllAt  DateTime?
   /// Date when message was read by ALL participants
   readByAllAt      DateTime?
   /// Number of participants who have received this message

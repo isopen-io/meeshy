@@ -742,12 +742,13 @@ export function registerMessagesRoutes(
         pinnedAt: true,
         pinnedBy: true,
 
-        // ===== STATUTS AGRÉGÉS (dénormalisés) =====
-        deliveredToAllAt: true,
-        receivedByAllAt: true,
-        readByAllAt: true,
-        deliveredCount: true,
-        readCount: true,
+        // ===== STATUTS AGRÉGÉS =====
+        // Aucune colonne dénormalisée n'est lue ici : les cinq
+        // (`deliveredToAllAt`, `receivedByAllAt`, `readByAllAt`,
+        // `deliveredCount`, `readCount`) ont perdu leur écrivain quand le suivi
+        // est passé aux curseurs — `updateMessageComputedStatus` est un no-op
+        // assumé. Tout le bloc de statut vient de
+        // `MessageReadStatusService.getConversationReadStatuses`.
 
         // ===== RÉACTIONS (dénormalisées - toujours incluses) =====
         reactionSummary: true,
@@ -1066,7 +1067,13 @@ export function registerMessagesRoutes(
       // l'expéditeur la lecture d'un destinataire qui l'avait explicitement
       // tue — et comptait ce même destinataire dans le dénominateur, que le
       // canal socket en retire.
-      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
+      const readStatusMap = new Map<string, {
+        deliveredCount: number;
+        readCount: number;
+        recipientCount: number;
+        deliveredToAllAt: Date | null;
+        readByAllAt: Date | null;
+      }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1084,6 +1091,10 @@ export function registerMessagesRoutes(
               // au client d'allumer ✓✓ / « lu » sur le compte réel du serveur
               // plutôt que sur un `memberCount` local périmé.
               recipientCount: status.totalMembers,
+              // Les DATES du même seuil, dérivées de la même union — l'instant
+              // du DERNIER destinataire servi, `null` tant qu'il en manque un.
+              deliveredToAllAt: status.deliveredToAllAt,
+              readByAllAt: status.readByAllAt,
             });
           }
         } catch (err) {
@@ -1153,9 +1164,15 @@ export function registerMessagesRoutes(
           // champs `deliveredCount`/`readCount` n'ont aucun écrivain et valent
           // toujours zéro. Les garder en repli donnait à un compteur mort
           // l'apparence d'une valeur de secours.
-          deliveredToAllAt: message.deliveredToAllAt,
-          receivedByAllAt: message.receivedByAllAt,
-          readByAllAt: message.readByAllAt,
+          //
+          // Les DATES du seuil « tous servis » avaient gardé ce repli une
+          // couche de plus : `deliveredToAllAt`/`readByAllAt` sortaient encore
+          // de la ligne, donc valaient `null` en permanence — et les trois
+          // clients lisent `readByAllAt != null` comme la PREUVE que tous les
+          // destinataires ont lu (`DeliveryStatusResolver`, iOS et Android).
+          // `receivedByAllAt`, lui, n'avait aucun lecteur nulle part : il sort.
+          deliveredToAllAt: readStatusMap.get(message.id)?.deliveredToAllAt ?? null,
+          readByAllAt: readStatusMap.get(message.id)?.readByAllAt ?? null,
           deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? 0,
           readCount: readStatusMap.get(message.id)?.readCount ?? 0,
           // Dénominateur des destinataires actifs faisant autorité côté serveur

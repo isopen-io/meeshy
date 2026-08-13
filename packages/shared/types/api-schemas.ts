@@ -813,14 +813,6 @@ export const messageSchema = {
       description: 'Maximum unique viewers allowed for view-once messages'
     },
 
-    // Delivery status (extended)
-    receivedByAllAt: {
-      type: 'string',
-      format: 'date-time',
-      nullable: true,
-      description: 'Received by all recipients timestamp'
-    },
-
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Message creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last update timestamp' },

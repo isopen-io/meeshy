@@ -393,7 +393,6 @@ const makeMessage = (overrides: any = {}) => ({
   pinnedAt: null,
   pinnedBy: null,
   deliveredToAllAt: null,
-  receivedByAllAt: null,
   readByAllAt: null,
   deliveredCount: 0,
   readCount: 0,
@@ -1034,6 +1033,62 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].deliveredCount).toBe(2);
     expect(body.data[0].readCount).toBe(1);
     expect(body.data[0].recipientCount).toBe(3);
+  });
+
+  // Les DATES du seuil « tous servis » partagent le défaut des compteurs : la
+  // ligne `Message` n'a aucun écrivain pour elles (`updateMessageComputedStatus`
+  // est un no-op assumé depuis le passage aux curseurs). Les relayer telles
+  // quelles servait `null` à un client dont le résolveur lit `readByAllAt != nil`
+  // comme la PREUVE que tous les destinataires ont lu.
+  it('sert deliveredToAllAt / readByAllAt calculés, jamais la colonne morte', async () => {
+    // Deux dates que la production ne produit jamais sur ces colonnes.
+    const msg = makeMessage({
+      createdAt: new Date('2024-06-01'),
+      deliveredToAllAt: new Date('1999-01-01T00:00:00Z'),
+      readByAllAt: new Date('1999-01-02T00:00:00Z'),
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    mockGetConversationReadStatuses.mockResolvedValue(
+      new Map([[MSG_ID, {
+        totalMembers: 2,
+        receivedCount: 2,
+        readCount: 2,
+        deliveredToAllAt: new Date('2026-08-13T10:00:00Z'),
+        readByAllAt: new Date('2026-08-13T10:05:00Z'),
+      }]])
+    );
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const body = reply._body;
+    expect(body.data[0].deliveredToAllAt).toEqual(new Date('2026-08-13T10:00:00Z'));
+    expect(body.data[0].readByAllAt).toEqual(new Date('2026-08-13T10:05:00Z'));
+  });
+
+  it('rend null pour les dates du seuil quand le service ne décrit pas le message', async () => {
+    const msg = makeMessage({
+      createdAt: new Date('2024-06-01'),
+      deliveredToAllAt: new Date('1999-01-01T00:00:00Z'),
+      readByAllAt: new Date('1999-01-02T00:00:00Z'),
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    mockGetConversationReadStatuses.mockResolvedValue(new Map());
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    expect(reply._body.data[0].deliveredToAllAt).toBeNull();
+    expect(reply._body.data[0].readByAllAt).toBeNull();
+  });
+
+  // `receivedByAllAt` n'a ni écrivain ni lecteur sur aucune des trois
+  // plateformes : il sort entier, déclarations comprises.
+  it('ne porte plus receivedByAllAt, champ sans écrivain ni lecteur', async () => {
+    const msg = makeMessage({ createdAt: new Date('2024-06-01') });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    expect(reply._body.data[0]).not.toHaveProperty('receivedByAllAt');
   });
 
   it('ne compte aucun accusé quand le service échoue — la page reste servie', async () => {

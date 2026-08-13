@@ -1,3 +1,102 @@
+# Tête instruite pour le cycle 104 — trois champs, un seul défaut, DEUX gestes opposés
+
+*Le cycle 103 a ouvert le lot que ses deux prédécesseurs lui avaient légué : les colonnes de statut
+dénormalisées de `Message`. Il a trouvé sous la note ce que la note ne pouvait pas voir — que les
+trois champs qu'elle rassemblait ne se traitaient pas du même geste.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.** Le cycle 102 en a fait la démonstration en direct (deux lots livrés
+> en parallèle sur les MÊMES fichiers). Le cycle 103 a repris le réflexe : le fetch posé avant les
+> premières éditions de production a ramené **#2932**, livré pendant l'audit.
+> Corollaire du cycle 91 (leçon 143) : **avant de jeter — ou d'imposer — un travail doublonné,
+> comparer la COUVERTURE, pas l'intitulé.**
+
+> ## La leçon que le cycle 103 ajoute — le huitième membre de la famille
+>
+> Le cycle 96 : *un commentaire qui NOMME un suivi est une promesse.*
+> Le cycle 97 : *un commentaire qui JUSTIFIE un geste destructeur est une PRÉMISSE périssable.*
+> Le cycle 98 : *un CURSEUR est une promesse de couverture, et rien ne la vérifie.*
+> Le cycle 99 : *un champ de pagination PARTAGÉ porte le contrat du mode qui l'a créé.*
+> Le cycle 100 : *un champ SANS ÉCRIVAIN ne reste pas neutre : il se DIVERGE.*
+> Le cycle 101 : *une règle posée sur le chemin CHAUD n'est tenue que par les chemins qui la RELISENT.*
+> Le cycle 102 : *un appel réseau écrit à la main n'est confronté à la table de routage de PERSONNE.*
+> Le cycle 103 trouve le huitième :
+>
+> **Zéro écrivain n'implique pas zéro lecteur, et c'est le LECTEUR qui décide du geste. Des champs
+> que la déclaration rassemble — même bloc, même commentaire, même défaut d'écriture — peuvent
+> exiger deux gestes opposés : le retrait pour celui que personne ne décode, le CALCUL pour celui
+> dont trois clients lisent la valeur. Trier sur la déclaration, c'est casser des décodeurs pour
+> supprimer un défaut qui se répare.**
+>
+> Et le symptôme qui va avec : un champ mort à l'écriture mais LU ne casse pas ses lecteurs — il les
+> fait tourner à vide. `if readByAllAt != nil || readCount >= recipientCount` : la première moitié
+> n'était plus jamais vraie depuis le passage aux curseurs, et rien ne l'a signalé parce que la
+> seconde couvrait tous les cas.
+>
+> **La méthode qui en découle :** devant un groupe de champs morts, ne pas décider par lot. Faire la
+> COLONNE « lecteurs clients » avant la colonne « écrivains », plateforme par plateforme. Le lot
+> livrable est le sous-ensemble qui a la même réponse dans CETTE colonne-là.
+
+## Livré au cycle 103 — les dates du seuil « tous servis » cessent de mentir
+
+**Le défaut.** `MessageReadStatusService.updateMessageComputedStatus` est un no-op documenté depuis
+le passage aux curseurs : aucune des cinq colonnes de statut de `Message` n'a d'écrivain. Les cycles
+101 et 102 avaient rebranché les COMPTEURS ; les DATES `deliveredToAllAt` / `readByAllAt` sortaient
+encore de la ligne dans `GET /conversations/:id/messages` et `GET /messages/:messageId`, donc
+valaient `null` en permanence — alors que les résolveurs iOS, Android et SDK traitent
+`readByAllAt != null` comme la PREUVE que tous les destinataires ont lu.
+
+**Livré** : `getConversationReadStatuses` rend aussi les deux dates, dérivées de la MÊME union
+curseur/reçu figé que les compteurs (donc opt-out `showReadReceipts` retiré du numérateur comme du
+dénominateur) — l'instant du DERNIER destinataire servi, `null` tant qu'il en manque un. Les deux
+routes les servent de là et ne `select`ent plus AUCUNE des cinq colonnes mortes.
+**`receivedByAllAt` sort entier** — Prisma, `message-types.ts`, `conversation.ts`, `api-schemas.ts`,
+les deux `select` — parce qu'il est le seul des trois à n'avoir aucun lecteur nulle part.
+ADR : `services/gateway/decisions.md` et `packages/shared/decisions.md` § 2026-08-13.
+
+**Correction portée au dossier** : la note du cycle 102 affirmait que les trois champs étaient
+« sans aucun écrivain ni lecteur client » et « sortent ensemble ». Faux pour deux d'entre eux —
+`DeliveryStatusResolver` (iOS et Android), `MessageRecord+ToMessage` et `MessagePersistenceActor`
+les décodent. La relecture du code, et non de la note, est ce qui l'a montré (méthode du cycle 102).
+
+**Tests** : 11 neufs — 5 sur le service (dernier servi vs premier, seuil non franchi, aucun
+destinataire actif, opt-out qui ne retient plus le seuil), 6 sur les deux routes. **RED prouvé sur
+les 11**. **Mutation-proof** : garder le PREMIER reçu au lieu du dernier → exactement les 2 témoins
+« LAST » rougissent ; retirer le seuil `count >= totalMembers` → exactement le témoin « un
+destinataire manquant » rougit ; remettre les routes à lire la colonne → exactement les 4 témoins de
+route rougissent. **Une garde a été RETIRÉE parce que sa mutation ne rougissait rien**
+(`totalMembers > 0`, structurellement inatteignable) — cf. leçon 226.
+Gate : `tsc --noEmit` gateway **propre**, suite gateway **692 suites / 17 061 tests** vertes,
+`packages/shared` **52 fichiers / 1 506 tests** verts.
+
+## Constats du cycle 103, NON traités — le lot naturel du cycle 104
+
+1. **`deliveredCount` / `readCount` sont les deux dernières colonnes mortes de `Message`.** Même
+   absence d'écrivain, mais — contrairement à `receivedByAllAt` — elles ont des lecteurs clients et
+   sont DÉJÀ servies calculées par les deux routes. Leur retrait du modèle Prisma et des types
+   partagés est donc un lot propre, purement déclaratif : il ne change aucune charge utile. À
+   instruire avec la colonne « lecteurs » de la leçon 226, plateforme par plateforme — la valeur
+   circule, seul son STOCKAGE est mort.
+2. **`MessagingService.createSuccessResponse` code en dur `{recipientCount: 1, deliveredCount: 1,
+   readCount: 1}`** dans `metadata.deliveryStatus` de la réponse d'envoi (`services/messaging/
+   MessagingService.ts:483-487`). Ce sont des constantes, pas une mesure : un envoi dans un groupe
+   de douze annonce « livré à 1 / lu par 1 » au moment même où le serveur sait compter. Consommateur
+   non vérifié ce cycle — le vérifier AVANT de décider entre câbler et retirer.
+3. **La projection des accusés existe en TROIS exemplaires inline** (`conversations/messages.ts`,
+   `messages.ts`, `conversations/messages-advanced.ts`). Constat du cycle 102, inchangé : une
+   extraction (`services/messaging/messageReceipts.ts`) avait été écrite puis retenue pour ne pas
+   churner du code livré depuis moins d'une heure. **#2931 a maintenant reposé** — le lot est
+   reprenable, et ce cycle vient d'ajouter deux champs à la projection, donc à la duplication.
+4. **L'audit d'adressage promis au cycle 102 n'a toujours PAS été mené** : `MeeshyShareExtension`
+   (`ShareSender`), `MeeshyWidgets`, et tout appel Android hors `MessageApi` restent à confronter à
+   la table de routage réelle.
+
 # Tête instruite pour le cycle 103 — un CLIENT peut appeler une route qui n'existe pas, et rien ne devient rouge
 
 *Le cycle 102 a trouvé la septième forme de la famille. Les six premières venaient d'un producteur

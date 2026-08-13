@@ -170,8 +170,6 @@ export interface GatewayMessage {
   // ===== STATUTS AGRÉGÉS (dénormalisés pour performance) =====
   /** Date de livraison à TOUS les participants */
   readonly deliveredToAllAt?: Date;
-  /** Date de réception par TOUS les participants */
-  readonly receivedByAllAt?: Date;
   /** Date de lecture par TOUS les participants */
   readonly readByAllAt?: Date;
   /** Nombre de participants ayant reçu le message */
