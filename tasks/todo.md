@@ -32,9 +32,6 @@ Prépare l'étape suivante : traduction live + resynthèse TTS (les champs `lang
       (Linux) — tests écrits, à valider par `./apps/ios/meeshy.sh test` sur macOS
 - [x] Commit + push sur `claude/transcription-metadata-language-d6bawp`
 
-## Revue
-(à compléter en fin de chantier)
-
 ## Itération 2 (exigences produit reçues en cours de chantier)
 - [x] Réception liée au panneau : caché ⇒ désabonnement réception + émission
       (gardes isShowingOverlay iOS, option `active` du hook web)
