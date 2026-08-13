@@ -90,7 +90,14 @@ export const CallTranscriptPanel = memo(function CallTranscriptPanel({
                     {languageTag}
                   </span>
                 </span>
-                <span className="block text-sm leading-snug text-white">{text}</span>
+                {/* Révision partielle (stream de corrections du moteur de
+                    l'auteur) : atténuée, remplacée en place jusqu'au final —
+                    le journal historique ne garde que la dernière valeur. */}
+                <span
+                  className={`block text-sm leading-snug text-white ${entry.isFinal ? '' : 'font-light opacity-70'}`}
+                >
+                  {text}
+                </span>
               </div>
             );
           })

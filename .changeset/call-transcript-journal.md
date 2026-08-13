@@ -12,4 +12,8 @@ Journal de transcription d'appel — `displayName (heure): message` + tag de lan
 
 **Web.** Nouveau panneau journalisé `CallTranscriptPanel` (toggle dans les contrôles) alimenté par `useCallTranscriptJournal` — fusion des deux transports via le réducteur partagé ; `webrtc-service` écoute enfin `ondatachannel` et publie les entrées `transcript-entry` du pair iOS.
 
+**Cycle de vie du panneau (itération 2).** La réception des transcriptions du pair est liée à la visibilité du panneau : caché ⇒ désabonnement des canaux de réception et d'émission (gardes `isShowingOverlay` iOS, option `active` du hook web) ; le journal accumulé est conservé et se réaffiche à la réouverture — la purge n'a plus qu'un seul site, `resetForCallEnd`. Échec du moteur local ⇒ panneau en réception seule, fermable au tap suivant.
+
+**Stream de corrections (itération 2).** Les révisions partielles du moteur de l'auteur sont transmises en P2P (data channel uniquement — jamais le socket : rate limit + traduction réservée aux finals) avec un `wireId` d'énoncé partagé : chaque correction remplace la ligne en place, le final la clôt avec la dernière valeur dite, la traduction serveur l'enrichit. Fusion à trois régimes (partiel remplacé / partiel périmé ignoré / final enrichi), miroir exact shared ↔ iOS ; un énoncé finalisé par fusion entre dans l'accumulateur de persistance.
+
 Prépare le palier « traduction live + resynthèse TTS » : id stable, langue source fiable, horloge de capture et canal P2P actif.

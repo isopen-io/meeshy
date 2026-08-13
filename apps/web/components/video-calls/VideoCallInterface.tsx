@@ -146,7 +146,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Journal de transcription (displayName (heure): message + tag de langue) —
   // alimenté par les DEUX transports : data channel WebRTC P2P quand le pair
   // l'a ouvert, relais serveur traduit sinon/en plus (fusion par id).
-  const { entries: transcriptEntries } = useCallTranscriptJournal(callId);
+  // Abonnement lié au panneau : caché → désabonné des deux canaux ; le
+  // journal accumulé reste et se réaffiche à la réouverture (reset au
+  // changement d'appel uniquement).
+  const { entries: transcriptEntries } = useCallTranscriptJournal(callId, { active: showTranscript });
 
   // Report per-call reliability telemetry at teardown (parité iOS/Android) —
   // the web was the one client that never emitted call:analytics, leaving the

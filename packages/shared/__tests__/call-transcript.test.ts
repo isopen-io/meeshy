@@ -120,6 +120,35 @@ describe('upsertCallTranscriptEntry', () => {
     expect(merged[0].language).toBe('fr');
   });
 
+  it('replaces the text of a non-final entry with the next revision (live correction stream)', () => {
+    const partial = baseEntry({ text: 'Bonj', isFinal: false, capturedAtMs: 1000 });
+    const corrected = baseEntry({ text: 'Bonjour', isFinal: false, capturedAtMs: 1200 });
+    const result = upsertCallTranscriptEntry([partial], corrected);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('Bonjour');
+    expect(result[0].isFinal).toBe(false);
+    expect(result[0].capturedAtMs).toBe(1000);
+  });
+
+  it('finalizes a streamed utterance in place — the journal keeps the LAST spoken value', () => {
+    const partial = baseEntry({ text: 'Bonjour le mond', isFinal: false, capturedAtMs: 1000 });
+    const final = baseEntry({ text: 'Bonjour le monde.', isFinal: true, capturedAtMs: 1600 });
+    const result = upsertCallTranscriptEntry([partial], final);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('Bonjour le monde.');
+    expect(result[0].isFinal).toBe(true);
+    expect(result[0].capturedAtMs).toBe(1000);
+  });
+
+  it('ignores a stale partial arriving after the utterance was finalized', () => {
+    const final = baseEntry({ text: 'Bonjour le monde.', isFinal: true, capturedAtMs: 1000 });
+    const stale = baseEntry({ text: 'Bonjour le', isFinal: false, capturedAtMs: 1400 });
+    const result = upsertCallTranscriptEntry([final], stale);
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('Bonjour le monde.');
+    expect(result[0].isFinal).toBe(true);
+  });
+
   it('does not mutate the input array', () => {
     const entries = [baseEntry({ id: 'a' })];
     const result = upsertCallTranscriptEntry(entries, baseEntry({ id: 'b' }));

@@ -12,25 +12,47 @@ Prépare l'étape suivante : traduction live + resynthèse TTS (les champs `lang
 
 ## Plan
 - [x] Explorer l'existant (iOS, web, gateway, shared) — 2 agents
-- [ ] `packages/shared` : étendre `CallTranscriptionSegmentEvent`/`CallTranslatedSegmentEvent`
+- [x] `packages/shared` : étendre `CallTranscriptionSegmentEvent`/`CallTranslatedSegmentEvent`
       (`id`, `speakerDisplayName`, `capturedAtMs`), nouveau `CallTranscriptEntryPayload` +
       message data channel `transcript-entry`, util `formatCallTranscriptLine` (+ tests vitest)
-- [ ] `services/gateway` (TDD jest/bun) : schéma zod (id/capturedAtMs optionnels),
+- [x] `services/gateway` (TDD jest/bun) : schéma zod (id/capturedAtMs optionnels),
       estampillage serveur de `speakerDisplayName` (via getCallSession, anti-usurpation,
       même principe que speakerId), passthrough id/capturedAtMs dans les 6 branches
       d'émission (factorisées)
-- [ ] `apps/web` : hook journal `useCallTranscriptJournal` (fusion par id, ordre capturedAt),
+- [x] `apps/web` : hook journal `useCallTranscriptJournal` (fusion par id, ordre capturedAt),
       panneau `CallTranscriptPanel` (`displayName (HH:MM): message` + badge langue),
       réception data channel (`ondatachannel`) dans webrtc-service, toggle UI
-- [ ] `packages/MeeshySDK` : payloads socket enrichis (émission + décodage)
-- [ ] `apps/ios` : envoi data channel (P2PWebRTCClient/WebRTCService), décodage
+- [x] `packages/MeeshySDK` : payloads socket enrichis (émission + décodage)
+- [x] `apps/ios` : envoi data channel (P2PWebRTCClient/WebRTCService), décodage
       `DataChannelInbound.transcriptEntry`, émission enrichie (id/capturedAtMs),
       fusion par id dans CallTranscriptionService, rendu `displayName (heure)` + badge
       langue dans CallView, persistance `language` dans CallTranscriptSegment
-- [ ] Docs : spec `docs/superpowers/specs/2026-08-13-call-transcript-journal-design.md`
-- [ ] Tests : shared (vitest), gateway (bun jest), build shared ; iOS non exécutable ici
+- [x] Docs : spec `docs/superpowers/specs/2026-08-13-call-transcript-journal-design.md`
+- [x] Tests : shared (vitest), gateway (bun jest), build shared ; iOS non exécutable ici
       (Linux) — tests écrits, à valider par `./apps/ios/meeshy.sh test` sur macOS
-- [ ] Commit + push sur `claude/transcription-metadata-language-d6bawp`
+- [x] Commit + push sur `claude/transcription-metadata-language-d6bawp`
 
 ## Revue
 (à compléter en fin de chantier)
+
+## Itération 2 (exigences produit reçues en cours de chantier)
+- [x] Réception liée au panneau : caché ⇒ désabonnement réception + émission
+      (gardes isShowingOverlay iOS, option `active` du hook web)
+- [x] Journal conservé panneau fermé, revisitable à la réouverture ; purge
+      uniquement dans resetForCallEnd
+- [x] Stream de corrections : partiels transmis en P2P (data channel seul),
+      wireId d'énoncé partagé, remplacement en place, final = dernière valeur
+      dite, fusion à trois régimes (miroir shared ↔ iOS)
+- [x] Panneau en réception seule sur échec moteur local, fermable au tap
+      suivant ; retrait de l'auto-révélation (caduque)
+
+## Revue
+- shared : 1523 tests vitest verts (53 fichiers), build tsc OK
+- gateway : 534 tests verts sur les 28 suites CallEventsHandler + schémas ;
+  tsc --noEmit propre
+- web : 113 tests verts (13 suites video-calls + hooks) ; les nouveaux
+  fichiers sont sans erreur tsc (les ~1760 erreurs --noEmit du package web
+  sont un existant hors périmètre)
+- iOS : tests écrits/mis à jour (service, manager, décodage data channel,
+  SDK) — à exécuter sur macOS via ./apps/ios/meeshy.sh test (non exécutable
+  dans cet environnement Linux)

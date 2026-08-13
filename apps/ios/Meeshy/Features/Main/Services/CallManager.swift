@@ -4314,6 +4314,11 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
+                // Réception liée au panneau : panneau caché ⇒ désabonné du
+                // canal (le segment est ignoré, pas accumulé en silence). Le
+                // journal déjà reçu reste dans le service et se réaffiche à
+                // la réouverture — seule resetForCallEnd le purge.
+                guard self.transcriptionService.isShowingOverlay else { return }
                 let segment = CallManager.makeTranscriptionSegment(from: event)
                 self.transcriptionService.receiveTranslatedSegment(segment)
             }
@@ -5189,10 +5194,14 @@ extension CallManager: WebRTCServiceDelegate {
             case .transcriptEntry(let entry):
                 // Journal de transcription en P2P direct : même garde d'appel
                 // que le sink socket `callTranslatedSegmentReceived` — une
-                // entrée d'un appel déjà terminé/remplacé est ignorée. La
-                // traduction relayée par le gateway suivra et fusionnera par
-                // `wireId` dans CallTranscriptionService.
+                // entrée d'un appel déjà terminé/remplacé est ignorée, et la
+                // réception est liée au panneau (caché ⇒ désabonné, comme le
+                // chemin socket). Révisions partielles et final d'un même
+                // énoncé partagent leur `wireId` : chaque correction remplace
+                // la précédente en place, puis la traduction relayée par le
+                // gateway fusionne dans CallTranscriptionService.
                 guard self.currentCallId == entry.callId else { return }
+                guard self.transcriptionService.isShowingOverlay else { return }
                 let segment = CallManager.makeTranscriptionSegment(from: entry)
                 self.transcriptionService.receivePeerEntry(segment)
             case .ignored:

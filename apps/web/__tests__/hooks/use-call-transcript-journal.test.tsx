@@ -220,6 +220,89 @@ describe('useCallTranscriptJournal', () => {
     expect(result.current.entries).toHaveLength(1);
   });
 
+  it('streams live corrections: each partial revision replaces the previous one in place', () => {
+    const { result } = renderHook(() => useCallTranscriptJournal(CALL_ID));
+
+    act(() => {
+      callTranscriptChannel.publish({ ...peerEntry({ id: 'u-1', text: 'Bonj', capturedAtMs: 1_000 }), isFinal: false });
+      callTranscriptChannel.publish({ ...peerEntry({ id: 'u-1', text: 'Bonjour le mon', capturedAtMs: 1_300 }), isFinal: false });
+    });
+
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].text).toBe('Bonjour le mon');
+    expect(result.current.entries[0].isFinal).toBe(false);
+
+    act(() => {
+      callTranscriptChannel.publish(peerEntry({ id: 'u-1', text: 'Bonjour le monde.', capturedAtMs: 1_900 }));
+    });
+
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].text).toBe('Bonjour le monde.');
+    expect(result.current.entries[0].isFinal).toBe(true);
+    expect(result.current.entries[0].capturedAtMs).toBe(1_000);
+  });
+
+  it('ignores legacy non-final socket segments without a wire id (unkeyable revisions)', () => {
+    const { result } = renderHook(() => useCallTranscriptJournal(CALL_ID));
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translatedSegment({ isFinal: false }));
+    });
+
+    expect(result.current.entries).toHaveLength(0);
+  });
+
+  it('journals a non-final socket segment when it carries a wire id (streamed correction)', () => {
+    const { result } = renderHook(() => useCallTranscriptJournal(CALL_ID));
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translatedSegment({ id: 'u-2', text: 'Bonj', isFinal: false, capturedAtMs: 500 }));
+    });
+
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].isFinal).toBe(false);
+  });
+
+  it('does not subscribe while the panel is inactive', () => {
+    const { result } = renderHook(() => useCallTranscriptJournal(CALL_ID, { active: false }));
+
+    act(() => {
+      callTranscriptChannel.publish(peerEntry());
+      socket.fire(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translatedSegment({ id: 'seg-1' }));
+    });
+
+    expect(result.current.entries).toHaveLength(0);
+    expect(socket.on).not.toHaveBeenCalled();
+  });
+
+  it('keeps the accumulated journal when the panel closes and shows it again on reopen', () => {
+    const { result, rerender } = renderHook(
+      ({ active }: { active: boolean }) => useCallTranscriptJournal(CALL_ID, { active }),
+      { initialProps: { active: true } }
+    );
+
+    act(() => {
+      callTranscriptChannel.publish(peerEntry({ id: 'kept', text: 'gardé' }));
+    });
+    expect(result.current.entries).toHaveLength(1);
+
+    rerender({ active: false });
+    expect(result.current.entries).toHaveLength(1);
+
+    act(() => {
+      callTranscriptChannel.publish(peerEntry({ id: 'missed', text: 'perdu — panneau fermé' }));
+    });
+    expect(result.current.entries).toHaveLength(1);
+
+    rerender({ active: true });
+    expect(result.current.entries.map((e) => e.text)).toEqual(['gardé']);
+
+    act(() => {
+      callTranscriptChannel.publish(peerEntry({ id: 'resumed', text: 'repris', capturedAtMs: 9_000 }));
+    });
+    expect(result.current.entries.map((e) => e.text)).toEqual(['gardé', 'repris']);
+  });
+
   it('resets the journal when the call changes', () => {
     const { result, rerender } = renderHook(
       ({ callId }: { callId: string | null }) => useCallTranscriptJournal(callId),

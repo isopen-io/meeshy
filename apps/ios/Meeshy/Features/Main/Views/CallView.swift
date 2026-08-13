@@ -788,20 +788,16 @@ struct CallView: View {
         // never falls back to Apple's server-side recognizer, privacy decision)
         // left the panel open and empty with zero feedback — user-reported
         // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        // Échec du moteur LOCAL (permission refusée, langue non supportée
+        // on-device…) : toast explicite, mais le panneau RESTE ouvert en
+        // réception seule — la réception des transcriptions du pair est liée
+        // à la visibilité du panneau (spec 2026-08-13), le fermer ici
+        // couperait aussi ce flux. L'ancien auto-reveal du panneau au premier
+        // segment reçu est retiré par la même spec : panneau caché ⇒
+        // désabonné, aucun segment ne peut plus arriver panneau fermé.
         .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
             guard let newError else { return }
             FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
-            showTranscript = false
-            transcriptionService.isShowingOverlay = false
-        }
-        // First segment ever received this call (local OR remote) reveals the
-        // panel even if captionsCycleButton was never tapped — a device must
-        // never silently accumulate the other participant's words with
-        // nothing visible. See docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §4.
-        .adaptiveOnChange(of: transcriptionService.segments.isEmpty) { wasEmpty, isEmpty in
-            if wasEmpty, !isEmpty, !showTranscript {
-                showTranscript = true
-            }
         }
     }
 
@@ -1923,6 +1919,18 @@ struct CallView: View {
     /// awaited inside a Task — so isTranscribing is still false right after the call
     /// returns; reading it before, at tap time, is always accurate).
     private func advanceCaptionsMode() {
+        // Panneau ouvert en RÉCEPTION SEULE : le moteur local a échoué
+        // (permission refusée, langue non supportée on-device) mais le
+        // panneau est resté visible pour continuer à recevoir le pair (spec
+        // 2026-08-13). captionsMode est .off (isTranscribing=false) alors que
+        // le panneau est ouvert — sans cette branche, le cycle .off→.translated
+        // relancerait le démarrage en boucle et le panneau serait infermable.
+        // Le tap FERME (désabonnement réception) ; le suivant retentera.
+        if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+            return
+        }
         switch captionsMode.next {
         case .translated:
             showOriginalText = false

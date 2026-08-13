@@ -75,16 +75,50 @@ export function upsertCallTranscriptEntry(
   return next.sort((a, b) => a.capturedAtMs - b.capturedAtMs);
 }
 
+/**
+ * Fusion d'un même énoncé (`id` partagé) à travers ses révisions et ses
+ * transports. Trois régimes :
+ *
+ * 1. L'entrée existante est PARTIELLE (stream de corrections du moteur de
+ *    transcription de l'auteur) : la révision entrante REMPLACE le texte —
+ *    le journal ne montre jamais que la dernière valeur dite. Le final qui
+ *    clôt l'énoncé passe par le même chemin.
+ * 2. L'entrée existante est FINALE et l'entrante est partielle : révision
+ *    périmée arrivée en retard (deux transports, pas d'ordre garanti entre
+ *    eux) — ignorée.
+ * 3. Final + final (data channel puis relais serveur traduit) : le texte
+ *    original est conservé, la traduction/le nom manquant viennent enrichir.
+ *
+ * Dans tous les régimes, `capturedAtMs` garde la valeur la plus ancienne
+ * (le début de l'énoncé — l'heure de capture réelle, jamais la réception).
+ */
 function mergeEntries(
   existing: CallTranscriptJournalEntry,
   incoming: CallTranscriptJournalEntry
 ): CallTranscriptJournalEntry {
+  const displayName = existing.displayName || incoming.displayName;
+  const capturedAtMs = Math.min(existing.capturedAtMs, incoming.capturedAtMs);
+  if (!existing.isFinal) {
+    return {
+      ...existing,
+      displayName,
+      text: incoming.text,
+      language: incoming.language,
+      translatedText: incoming.translatedText ?? existing.translatedText,
+      targetLanguage: incoming.targetLanguage ?? existing.targetLanguage,
+      capturedAtMs,
+      isFinal: incoming.isFinal,
+    };
+  }
+  if (!incoming.isFinal) {
+    return { ...existing, displayName, capturedAtMs };
+  }
   return {
     ...existing,
-    displayName: existing.displayName || incoming.displayName,
+    displayName,
     translatedText: incoming.translatedText ?? existing.translatedText,
     targetLanguage: incoming.targetLanguage ?? existing.targetLanguage,
-    capturedAtMs: Math.min(existing.capturedAtMs, incoming.capturedAtMs),
-    isFinal: existing.isFinal || incoming.isFinal,
+    capturedAtMs,
+    isFinal: true,
   };
 }

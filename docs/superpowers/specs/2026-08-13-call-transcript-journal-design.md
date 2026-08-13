@@ -139,6 +139,68 @@ format et le client retombe sur `Date()`/roster.
    inutilisé, le transcript demeure local-only (GRDB chiffré iOS), décision
    privacy du spec 2026-07-11 inchangée.
 
+## Cycle de vie du panneau et stream de corrections (itération 2, même jour)
+
+Exigences produit ajoutées après la première itération :
+
+### 1. Abonnement lié au panneau
+
+La réception des transcriptions des autres participants n'a lieu QUE lorsque
+le panneau de transcription est ouvert. Panneau caché ⇒ désabonnement des
+canaux de réception ET d'émission :
+
+- **iOS** : l'émission s'arrête avec le moteur (le cycle captions off appelle
+  `stopTranscribing`) ; la réception est gardée par
+  `transcriptionService.isShowingOverlay` aux DEUX points d'entrée
+  (`callTranslatedSegmentReceived` et routage data channel dans
+  `CallManager`). L'auto-révélation du panneau au premier segment reçu
+  (spec 2026-07-11 §4) est RETIRÉE — panneau caché ⇒ plus aucun segment ne
+  peut arriver, la règle n'a plus d'objet.
+- **web** : `useCallTranscriptJournal(callId, { active: showTranscript })` —
+  les handlers socket + data channel ne sont abonnés que panneau ouvert.
+- **Échec du moteur local** (permission refusée, langue non supportée
+  on-device) : le panneau reste ouvert en RÉCEPTION SEULE (toast explicite) —
+  le fermer couperait aussi le flux du pair. Le tap suivant sur le bouton
+  captions ferme le panneau (branche dédiée dans `advanceCaptionsMode`,
+  sinon le cycle .off→.translated relancerait le démarrage en boucle et le
+  panneau serait infermable).
+
+### 2. Journal revisitable
+
+Le journal accumulé est CONSERVÉ quand le panneau se ferme en cours d'appel
+et se réaffiche à la réouverture. `stopTranscribing` ne purge plus ; la purge
+n'a qu'un seul site, `resetForCallEnd` (fin d'appel définitive, après
+persistance locale). Les segments émis pendant que le panneau était fermé ne
+sont pas reçus (désabonnement) — par design, pas par accident.
+
+### 3. Stream vivant avec corrections
+
+La transcription défile comme un stream : les révisions PARTIELLES du moteur
+de l'auteur sont transmises au pair et remplacent la ligne en place jusqu'au
+final — le journal historique (scroll vers le haut) ne montre jamais que la
+DERNIÈRE valeur dite de chaque énoncé.
+
+- **wireId d'énoncé** : minté au premier résultat d'un énoncé et partagé par
+  toutes ses révisions et son final (`currentUtteranceWireId`, libéré au
+  final). C'est la clé du remplacement en place côté récepteur.
+- **Transport des partiels : data channel UNIQUEMENT.** Jamais le socket : le
+  rate limit gateway (60/10 s) ne survivrait pas au débit des révisions, et
+  le pipeline de traduction ne consomme que les finals. Sans data channel
+  (pair web offreur, channel fermé), l'énoncé apparaît d'un coup au final via
+  le relais serveur — dégradation gracieuse.
+- **Fusion à trois régimes** (`mergeEntries` shared / `mergedSegment` iOS,
+  miroirs) : existant partiel ⇒ la révision entrante REMPLACE le texte ;
+  existant final + entrant partiel ⇒ révision périmée ignorée (aucun ordre
+  garanti entre transports) ; final + final ⇒ enrichissement (traduction,
+  nom manquant). `capturedAt` garde toujours la valeur la plus ancienne —
+  l'énoncé est ancré à l'heure de sa première révision.
+- **Persistance** : un énoncé entré au journal comme partiel (jamais
+  persisté) gagne sa place dans l'accumulateur au moment où le final le clôt
+  par fusion.
+- **Partiels socket sans id** (anciens clients) : ignorés côté web — sans clé
+  stable, chaque révision dupliquerait une ligne. (Les anciens iOS n'émettent
+  de toute façon jamais de partiels sur le réseau.)
+
 ## Préparation du palier suivant (traduction live + TTS)
 
 Le pipeline visé (« l'interlocuteur parle dans ma langue avec sa voix ») a

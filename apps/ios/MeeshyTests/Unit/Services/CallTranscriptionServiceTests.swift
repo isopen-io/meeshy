@@ -197,6 +197,110 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.segments.map(\.text), ["un", "deux"])
     }
 
+    func test_receivePeerEntry_partialRevisions_replaceInPlace_untilFinal() {
+        // Stream vivant : les révisions partielles du moteur de l'auteur
+        // corrigent la ligne EN PLACE (jamais d'empilement), le final la clôt
+        // avec la dernière valeur dite, la traduction serveur l'enrichit.
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(
+            wireId: "u-1", text: "Bonj", speakerId: "remote-user",
+            isFinal: false, capturedAt: Date(timeIntervalSince1970: 100)
+        ))
+        sut.receivePeerEntry(makeSegment(
+            wireId: "u-1", text: "Bonjour le mon", speakerId: "remote-user",
+            isFinal: false, capturedAt: Date(timeIntervalSince1970: 101)
+        ))
+
+        XCTAssertEqual(sut.segments.count, 1, "each revision replaces the previous one — never a new line")
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour le mon")
+        XCTAssertEqual(sut.segments.first?.isFinal, false)
+
+        sut.receivePeerEntry(makeSegment(
+            wireId: "u-1", text: "Bonjour le monde.", speakerId: "remote-user",
+            isFinal: true, capturedAt: Date(timeIntervalSince1970: 103)
+        ))
+
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour le monde.",
+                       "the journal history keeps the LAST spoken value of the utterance")
+        XCTAssertEqual(sut.segments.first?.isFinal, true)
+        XCTAssertEqual(sut.segments.first?.capturedAt, Date(timeIntervalSince1970: 100),
+                       "the utterance is anchored at its FIRST revision's capture clock")
+    }
+
+    func test_receivePeerEntry_stalePartialAfterFinal_isIgnored() {
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(
+            wireId: "u-1", text: "Bonjour le monde.", speakerId: "remote-user",
+            isFinal: true, capturedAt: Date(timeIntervalSince1970: 100)
+        ))
+        sut.receivePeerEntry(makeSegment(
+            wireId: "u-1", text: "Bonjour le", speakerId: "remote-user",
+            isFinal: false, capturedAt: Date(timeIntervalSince1970: 99)
+        ))
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour le monde.")
+        XCTAssertEqual(sut.segments.first?.isFinal, true)
+    }
+
+    func test_utteranceFinalizedByMerge_entersThePersistenceAccumulator() {
+        // Un énoncé entré au journal comme révision partielle (jamais
+        // persistée) doit gagner sa place dans l'accumulateur quand le final
+        // le clôt PAR FUSION — sinon le transcript persisté perdrait tous les
+        // énoncés arrivés en stream.
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Bonj", speakerId: "remote-user", isFinal: false))
+        XCTAssertTrue(sut.persistedSegmentsForTesting.isEmpty)
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Bonjour.", speakerId: "remote-user", isFinal: true))
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 1)
+        XCTAssertEqual(sut.persistedSegmentsForTesting.first?.text, "Bonjour.")
+    }
+
+    func test_stopTranscribing_retainsJournal_forPanelReopen() {
+        // Fermer le panneau en cours d'appel désabonne les canaux mais doit
+        // laisser le journal revisitable à la réouverture — la purge n'a
+        // qu'un seul site : resetForCallEnd (spec 2026-08-13).
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(text: "gardé", speakerId: "remote-user", isFinal: true))
+        sut.stopTranscribing()
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.text, "gardé")
+        XCTAssertFalse(sut.persistedSegmentsForTesting.isEmpty)
+    }
+
+    func test_applyRecognitionResult_partialRevisions_shareOneUtteranceWireId_andStreamOverDataChannel() {
+        // Les révisions successives d'un même énoncé local partagent leur
+        // wireId (le pair les remplace en place) et partent en P2P sur le
+        // data channel uniquement — jamais par le socket (rate limit +
+        // traduction réservée aux finals).
+        let (sut, socket) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.setCallIdForTesting("call-1")
+        sut.isShowingOverlay = true
+        var peerEntries: [DataChannelTranscriptEntry] = []
+        sut.sendPeerEntry = { peerEntries.append($0) }
+
+        sut.applyRecognitionResult(
+            text: "Bonj", speakerId: "user-1", startMs: 0, endMs: 400,
+            isFinal: false, confidence: 0.5, language: "fr",
+            capturedAt: Date(timeIntervalSince1970: 100), callId: "call-1"
+        )
+        sut.applyRecognitionResult(
+            text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 900,
+            isFinal: false, confidence: 0.7, language: "fr",
+            capturedAt: Date(timeIntervalSince1970: 101), callId: "call-1"
+        )
+
+        XCTAssertEqual(peerEntries.count, 2)
+        XCTAssertEqual(peerEntries.first?.id, peerEntries.last?.id,
+                       "all revisions of one utterance must share the same wireId")
+        XCTAssertEqual(peerEntries.last?.text, "Bonjour")
+        XCTAssertEqual(peerEntries.last?.isFinal, false)
+        XCTAssertEqual(peerEntries.last?.language, "fr")
+        XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0,
+                       "partials never ride the socket")
+        XCTAssertEqual(sut.segments.count, 1, "local panel shows the stream as one correcting line")
+    }
+
     func test_receiveTranslatedSegment_legacyWithoutWireId_stillAppends() {
         // Segments from pre-journal peers/gateways carry no wireId — they
         // must keep flowing (append path), just without merge capability.
