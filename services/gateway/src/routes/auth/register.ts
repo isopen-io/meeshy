@@ -6,6 +6,8 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
+import { MeeshyError } from '@meeshy/shared/utils/errors';
+import { ErrorCode } from '@meeshy/shared/types/errors';
 import { RegisterData } from '../../services/AuthService';
 import { getRequestContext } from '../../services/GeoIPService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
@@ -150,6 +152,20 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      if (error instanceof MeeshyError && error.code === ErrorCode.VALIDATION_ERROR) {
+        const violations = Array.isArray(error.details?.errors) ? error.details.errors : [];
+        const fieldSummary = violations
+          .map((v) => `${(v as { path?: string }).path}: ${(v as { message?: string }).message}`)
+          .join(' — ');
+
+        logger.warn('Registration payload rejected by validation', { violations });
+
+        return sendError(reply, 400, fieldSummary ? `Données invalides — ${fieldSummary}` : 'Données invalides', {
+          code: 'VALIDATION_ERROR',
+          violations
+        });
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 

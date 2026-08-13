@@ -2858,6 +2858,19 @@ export const validationErrorResponseSchema = {
   properties: {
     success: { type: 'boolean', example: false },
     error: { type: 'string', description: 'Validation error message' },
+    message: { type: 'string', description: 'Human-readable validation error message' },
+    code: { type: 'string', description: 'Machine-readable error code (e.g. VALIDATION_ERROR)' },
+    violations: {
+      type: 'array',
+      description: 'Per-field validation violations (path + message)',
+      items: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Field path that failed validation' },
+          message: { type: 'string', description: 'Validation error message' }
+        }
+      }
+    },
     details: {
       type: 'array',
       items: {
@@ -2899,6 +2912,21 @@ export const loginRequestSchema = {
 /**
  * Register request body schema
  */
+/**
+ * Nom de personne (prénom / nom) : au moins une lettre, uniquement lettres,
+ * marques combinantes (NFD), espaces, apostrophes — droite `'` ET
+ * typographiques `’` (U+2019, insérée par défaut par le clavier iOS) / `ʼ`
+ * (U+02BC) — points et tirets. ANCRÉ (`^...$`) : JSON Schema `pattern` est une
+ * recherche partielle, sans ancres Ajv accepterait n'importe quelle chaîne
+ * contenant une sous-chaîne valide alors que le Zod (anchored) la refuserait —
+ * les deux couches doivent rendre le même verdict.
+ *
+ * Source unique partagée : consommée telle quelle ci-dessous (Ajv) et compilée
+ * en RegExp par `AuthSchemas.register` (utils/validation.ts). Miroir iOS :
+ * `RegistrationViewModel.isNameValidLocally`.
+ */
+export const personNamePatternSource = "^(?=.*\\p{L})[\\p{L}\\p{M}\\s'’ʼ.-]+$";
+
 export const registerRequestSchema = {
   type: 'object',
   required: ['username', 'password', 'firstName', 'lastName', 'email'],
@@ -2918,14 +2946,14 @@ export const registerRequestSchema = {
       type: 'string',
       minLength: 1,
       maxLength: 50,
-      pattern: '(?=.*\\p{L})[\\p{L}\\s\'.\\-]+',
+      pattern: personNamePatternSource,
       description: 'User first name (must contain at least one Unicode letter)'
     },
     lastName: {
       type: 'string',
       minLength: 1,
       maxLength: 50,
-      pattern: '(?=.*\\p{L})[\\p{L}\\s\'.\\-]+',
+      pattern: personNamePatternSource,
       description: 'User last name (must contain at least one Unicode letter)'
     },
     email: {

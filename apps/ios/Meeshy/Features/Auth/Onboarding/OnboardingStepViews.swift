@@ -548,6 +548,10 @@ struct StepIdentityView: View {
                     .focused($focusedField, equals: .firstName)
                     .textContentType(.givenName)
 
+                    if let error = viewModel.firstNameError {
+                        fieldErrorLabel(error)
+                    }
+
                     GlassTextField(
                         icon: "person.2",
                         placeholder: String(localized: "onboarding.step.identity.last-name", defaultValue: "Ton nom de famille", bundle: .main),
@@ -556,6 +560,10 @@ struct StepIdentityView: View {
                     )
                     .focused($focusedField, equals: .lastName)
                     .textContentType(.familyName)
+
+                    if let error = viewModel.lastNameError {
+                        fieldErrorLabel(error)
+                    }
                 }
 
                 tipsCard
@@ -568,6 +576,16 @@ struct StepIdentityView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { focusedField = .firstName }
         }
+    }
+
+    private func fieldErrorLabel(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.circle")
+            Text(message)
+        }
+        .font(.caption)
+        .foregroundColor(.red)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var tipsCard: some View {
