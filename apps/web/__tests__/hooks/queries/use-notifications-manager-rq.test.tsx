@@ -11,7 +11,10 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
-import type { NotificationReadBulkScope } from '@meeshy/shared/types/notification';
+import type {
+  NotificationDeletedBulkScope,
+  NotificationReadBulkScope,
+} from '@meeshy/shared/types/notification';
 
 const mockFetchNotifications = jest.fn();
 
@@ -33,6 +36,7 @@ let capturedReadHandler: ((notificationId: string) => void) | null = null;
 let capturedNotificationHandler: ((notification: unknown) => void) | null = null;
 let capturedDeletedHandler: ((notificationId: string) => void) | null = null;
 let capturedReadBulkHandler: ((data: { scope: NotificationReadBulkScope }) => void) | null = null;
+let capturedDeletedBulkHandler: ((data: { scope: NotificationDeletedBulkScope }) => void) | null = null;
 let capturedCountsHandler: ((counts: { unread?: number; total?: number }) => void) | null = null;
 let capturedDesyncHandler: ((reason: 'gap' | 'reconnect') => void) | null = null;
 const desyncUnsubscribe = jest.fn();
@@ -54,6 +58,10 @@ jest.mock('@/services/notification-socketio.singleton', () => ({
     }),
     onNotificationReadBulk: jest.fn((cb: (data: { scope: NotificationReadBulkScope }) => void) => {
       capturedReadBulkHandler = cb;
+      return () => {};
+    }),
+    onNotificationDeletedBulk: jest.fn((cb: (data: { scope: NotificationDeletedBulkScope }) => void) => {
+      capturedDeletedBulkHandler = cb;
       return () => {};
     }),
     onCounts: jest.fn((cb: (counts: { unread?: number; total?: number }) => void) => {
@@ -442,6 +450,90 @@ describe('useNotificationsManagerRQ — notification:read-bulk (marquage en mass
     await waitFor(() => expect(result.current.unreadCount).toBe(3));
     expect(isRead(result, 'conv-a-1')).toBe(false);
     expect(isRead(result, 'friend-1')).toBe(false);
+  });
+});
+
+/**
+ * `notification:deleted-bulk` — symétrique du bloc ci-dessus côté PURGE, et son
+ * cas est plus fort : `notification:counts` ne dit RIEN d'une purge des lues
+ * (les lignes qui partent sont déjà lues, `unread` est inchangé). Sans cet
+ * événement, vider sa cloche sur un appareil la laisse pleine sur les autres.
+ *
+ * Ne pas toucher au badge n'est plus une précaution comme pour le read-bulk :
+ * c'est une CONSÉQUENCE du prédicat — toute ligne retirée était lue, donc
+ * jamais comptée.
+ */
+describe('useNotificationsManagerRQ — notification:deleted-bulk (purge des lues)', () => {
+  const ids = (result: { current: { notifications: Array<{ id: string }> } }) =>
+    result.current.notifications.map((n) => n.id);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedDeletedBulkHandler = null;
+  });
+
+  it("retire les lignes LUES du cache pour le scope 'read'", async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(3));
+    await waitFor(() => expect(capturedDeletedBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedBulkHandler!({ scope: { kind: 'read' } });
+    });
+
+    await waitFor(() => expect(ids(result)).toEqual(['notif-1', 'notif-2']));
+  });
+
+  it('ne retire AUCUNE ligne non lue', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(3));
+    await waitFor(() => expect(capturedDeletedBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedBulkHandler!({ scope: { kind: 'read' } });
+    });
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    expect(ids(result)).not.toContain('notif-3');
+    expect(result.current.notifications.every((n) => !n.state.isRead)).toBe(true);
+  });
+
+  it('laisse le badge INTACT — les lignes retirées étaient lues', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedDeletedBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedBulkHandler!({ scope: { kind: 'read' } });
+    });
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    expect(result.current.unreadCount).toBe(2);
+  });
+
+  it("ne touche à rien quand le scope porte un kind inconnu", async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(3));
+    await waitFor(() => expect(capturedDeletedBulkHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedBulkHandler!({ scope: { kind: 'all' } as never });
+    });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    expect(ids(result)).toEqual(['notif-1', 'notif-2', 'notif-3']);
   });
 });
 

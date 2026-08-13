@@ -7,7 +7,10 @@
 import type { ParticipantType } from './participant.js';
 
 // Prédicat des marquages de notifications en masse
-import type { NotificationReadBulkScope } from './notification.js';
+import type {
+  NotificationDeletedBulkScope,
+  NotificationReadBulkScope,
+} from './notification.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -161,6 +164,10 @@ export const SERVER_EVENTS = {
    *  les chemins bulk ne les renvoient pas. @see NotificationReadBulkScope */
   NOTIFICATION_READ_BULK: 'notification:read-bulk',
   NOTIFICATION_DELETED: 'notification:deleted',
+  /** Purge EN MASSE : annonce le PRÉDICAT appliqué, pas la liste des ids. Sans
+   *  lui rien n'annonce la purge — `notification:counts` est MUET ici, les
+   *  lignes qui partent sont déjà lues. @see NotificationDeletedBulkScope */
+  NOTIFICATION_DELETED_BULK: 'notification:deleted-bulk',
   NOTIFICATION_COUNTS: 'notification:counts',
   SYSTEM_MESSAGE: 'system:message',
   CONVERSATION_STATS: 'conversation:stats',
@@ -779,6 +786,17 @@ export interface NotificationReadBulkEventData {
  */
 export interface NotificationDeletedEventData {
   readonly notificationId: string;
+}
+
+/**
+ * Lot de notifications SUPPRIMÉES, décrit par son PRÉDICAT.
+ *
+ * Aucun `count`, pour la même raison que `read-bulk` — et le client ne doit de
+ * toute façon toucher à aucun compteur ici : toute ligne matchée était lue,
+ * donc jamais comptée dans `unread`.
+ */
+export interface NotificationDeletedBulkEventData {
+  readonly scope: NotificationDeletedBulkScope;
 }
 
 /**
@@ -1690,6 +1708,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_READ]: (data: NotificationReadEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_READ_BULK]: (data: NotificationReadBulkEventData) => void;
+  [SERVER_EVENTS.NOTIFICATION_DELETED_BULK]: (data: NotificationDeletedBulkEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 

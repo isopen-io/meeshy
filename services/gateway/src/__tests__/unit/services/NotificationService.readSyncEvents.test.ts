@@ -299,6 +299,63 @@ describe('NotificationService — événements de sync de lecture multi-appareil
   });
 
   /**
+   * Symétrique exact du bloc ci-dessus, côté PURGE — et son cas est plus fort :
+   * `notification:counts` ne dit littéralement RIEN d'une purge des lues (seules
+   * des lignes déjà lues partent, `unread` est inchangé), là où il recalait au
+   * moins le badge après un marquage. Sans `notification:deleted-bulk`, vider sa
+   * cloche sur un appareil la laisse pleine sur les autres, chaque ligne y
+   * ouvrant un écran dont la notification n'existe plus.
+   */
+  describe('notification:deleted-bulk', () => {
+    const deletedBulkEmits = () =>
+      mockIO.emit.mock.calls.filter(([event]: [string]) => event === 'notification:deleted-bulk');
+
+    describe('deleteAllRead', () => {
+      it("annonce le scope 'read' vers la room de l'utilisateur quand des lignes partent", async () => {
+        prisma.notification.deleteMany.mockResolvedValue({ count: 4 });
+
+        await service.deleteAllRead(USER_ID);
+        await flushAsync();
+
+        expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+        expect(deletedBulkEmits()).toEqual([
+          ['notification:deleted-bulk', { scope: { kind: 'read' } }],
+        ]);
+      });
+
+      it("n'annonce rien quand aucune ligne n'a été purgée", async () => {
+        prisma.notification.deleteMany.mockResolvedValue({ count: 0 });
+
+        await service.deleteAllRead(USER_ID);
+        await flushAsync();
+
+        expect(deletedBulkEmits()).toHaveLength(0);
+      });
+
+      it("n'égrène AUCUN notification:deleted par ligne", async () => {
+        // La purge n'est pas bornée — un compte ancien en a des milliers. Le
+        // fan-out par ligne ferait payer au chemin de purge un coût
+        // proportionnel à l'historique, et exigerait de lister les ids avant
+        // le `deleteMany`. C'est précisément ce que l'annonce du prédicat évite.
+        prisma.notification.deleteMany.mockResolvedValue({ count: 1200 });
+
+        await service.deleteAllRead(USER_ID);
+        await flushAsync();
+
+        expect(mockIO.emit).not.toHaveBeenCalledWith('notification:deleted', expect.anything());
+      });
+
+      it("survit à l'absence de socket (io non configuré)", async () => {
+        const offline = new NotificationService(prisma);
+        prisma.notification.deleteMany.mockResolvedValue({ count: 2 });
+
+        await expect(offline.deleteAllRead(USER_ID)).resolves.toBe(2);
+        expect(mockIO.emit).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  /**
    * Le RAPPEL d'un message retire en base les notifications qu'il avait
    * produites (`applyMessageRemovalEffects`). Ce service n'en tient que la
    * moitié volatile : sans elle, la ligne resterait affichée sur les écrans

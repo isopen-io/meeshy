@@ -254,3 +254,97 @@ vertes ; web `tsc` inchangé (1 229 erreurs préexistantes, identiques avant/apr
   validateur inutilisé, c'est ajouter du code mort). À retirer ou à brancher — décision à instruire.
 - Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
   (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`).
+
+---
+
+# Cycle 117 — la purge annonçait un compteur qui ne bougeait pas
+
+*Entrée de cycle : `main` == branche, arbre propre, `git fetch origin main` fait. Le cycle 116
+laissait un successeur ÉCRIT — la fiche `gwcontract-13`, rédigée par lui-même en fin de course.
+Ce cycle l'a exécutée telle quelle : c'est le cas nominal de la routine, le backlog d'audit
+servant de source de conception et non de registre à cocher (leçon 122).*
+
+## Audit
+
+Le défaut est le symétrique de celui du cycle 116, et il vaut d'être énoncé dans le sens qui le
+rend visible : **`deleteAllRead` émettait bien un événement — `notification:counts` — et cet
+événement ne dit rien.** Une purge des lues ne retire que des lignes déjà lues : `unread` est
+inchangé PAR CONSTRUCTION, et `total` n'est affiché nulle part. Le chemin avait donc l'apparence
+complète d'un chemin annoncé, sans qu'aucun bit d'information ne parte.
+
+C'est ce qui le rend plus grave que son jumeau du cycle 116, pas moins :
+
+| | marquage en masse (cycle 116) | purge des lues (ce cycle) |
+|---|---|---|
+| ce que `counts` recale | le badge (juste) | **rien** |
+| ce qui dérive | les lignes affichées | les lignes affichées |
+| récupération | refetch complet | refetch complet |
+
+Conséquence produit : vider sa cloche sur l'iPhone la laisse pleine sur l'iPad, et **chaque ligne
+survivante ouvre un écran dont la notification n'existe plus**.
+
+## Livré — `notification:deleted-bulk` (gateway + shared + web)
+
+- **shared** — `NotificationDeletedBulkScope = { kind: 'read' }` (`types/notification.ts`),
+  `SERVER_EVENTS.NOTIFICATION_DELETED_BULK` + `NotificationDeletedBulkEventData` + entrée dans
+  `ServerToClientEvents` (`types/socketio-events.ts`), et le prédicat
+  `notificationMatchesDeletedBulkScope` dans `utils/notification-read-bulk.ts` — **même module que
+  son jumeau, parce que c'est la même famille** (le fiche le proposait ; l'alternative « un voisin »
+  aurait scindé une famille de deux membres).
+- **gateway** — `announceDeletedBulk()`, appelé par `deleteAllRead` quand `count > 0`, en PLAIN
+  `io.to(ROOMS.user(userId))` (jamais `emitWithSeq` — lockstep gwcontract-01). `emitCountsUpdate`
+  est CONSERVÉ : `total` reste juste, même si sa variation n'est affichée nulle part.
+- **web** — `onNotificationDeletedBulk` sur le singleton + handler dans
+  `use-notifications-manager-rq` qui filtre les pages React Query par le prédicat, **sans toucher
+  au badge**.
+
+### Ce qui change de nature par rapport au cycle 116
+
+L'abstention sur le badge n'est plus la même chose. Au cycle 116 c'était une **précaution** — un
+cache paginé matche moins de lignes que le serveur n'en a marquées, décrémenter d'après le prédicat
+ferait dériver. Ici c'est une **conséquence** du prédicat lui-même : toute ligne retirée était lue,
+donc n'a jamais été comptée dans `unread`. Le même geste, avec une justification strictement plus
+forte — et c'est cette différence qui est écrite dans les commentaires, pas la ressemblance.
+
+### Ce qui a été REFUSÉ, et pourquoi c'est le cœur de la fiche
+
+Égrener un `notification:deleted` par ligne aurait fermé l'écart **et** la divergence transitoire
+(une ligne lue localement dont le `PATCH` a échoué). Refusé : la purge n'est pas bornée — un compte
+ancien a des milliers de lignes lues — et cela demanderait d'énumérer les ids AVANT le `deleteMany`.
+Le chemin de purge paierait alors un coût proportionnel à l'historique pour fermer un écart
+transitoire, récupérable, et **déjà accepté aujourd'hui sur l'appareil acteur** par l'optimiste de
+`useDeleteAllReadNotificationsMutation`. Un test gateway fige ce refus (`count: 1200` ⇒ zéro
+`notification:deleted`) : c'est le genre de décision qu'une optimisation future annulerait sans le
+savoir.
+
+## TDD
+
+11 tests vus ROUGES avant toute ligne de production : 4 sur le prédicat partagé, 4 gateway
+(annonce, silence à `count === 0`, non-égrènement, survie sans socket), 6 web (4 sur le hook —
+retrait des lues, préservation des non lues, badge intact, `kind` inconnu inerte — et 2 sur le
+singleton).
+
+## Gates
+
+| Gate | Résultat |
+|---|---|
+| shared `bun run build` | OK |
+| shared vitest (complet) | 54 fichiers / **1 542 tests** verts |
+| gateway `tsc --noEmit` | propre |
+| gateway jest `[Nn]otification` | 47 suites / **983 tests** verts |
+| web jest (`hooks/queries` + singleton notif) | 18 suites / **550 tests** verts |
+| web `tsc --noEmit` | **1 229 erreurs — baseline identique** avant/après |
+
+## Reste ouvert après ce cycle
+
+- **Volet iOS de `gwcontract-13`** — miroir Swift du prédicat + décodage. **Même chantier que le
+  volet iOS de `gwcontract-05`** : les deux événements sont jumeaux, les livrer séparément ferait
+  écrire deux fois le même câblage dans `MessageSocketManager`/`NotificationToastManager`. Non
+  livrable depuis un runner Linux.
+- **`apps/web/utils/socket-validator.ts` est du code mort** (constat du cycle 116, reconduit) :
+  zéro appelant hors de son propre test. Il n'a, là encore, délibérément PAS été étendu au nouvel
+  événement. À retirer ou à brancher — décision à instruire, et deux cycles de suite qu'elle se
+  repose : c'est le signal qu'elle mérite un cycle à elle.
+- Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
+  (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`), arbitrage produit `delete-for-me`
+  au niveau message (cycle 114, constat 2).
