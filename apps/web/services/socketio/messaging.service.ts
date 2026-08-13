@@ -19,6 +19,8 @@ import type {
   MessageConsumedEventData,
   MessagePinnedEventData,
   MessageUnpinnedEventData,
+  MessageHiddenForMeEventData,
+  MessageRestoredForMeEventData,
   ReactionUpdateEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -55,6 +57,7 @@ export class MessagingService {
   private linkMessageNewListeners: Set<(data: LinkMessageNewEventData) => void> = new Set();
   private messagePinnedListeners: Set<(data: MessagePinnedEventData) => void> = new Set();
   private messageUnpinnedListeners: Set<(data: MessageUnpinnedEventData) => void> = new Set();
+  private messageRestoredForMeListeners: Set<(data: MessageRestoredForMeEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -184,6 +187,36 @@ export class MessagingService {
     socket.on(SERVER_EVENTS.MESSAGE_DELETED, (data) => {
       logger.debug('[MessagingService]', 'Message deleted', { messageId: data.messageId });
       this.deleteListeners.forEach(listener => listener(data.messageId));
+    });
+
+    // « Supprimer pour moi » venu d'un AUTRE appareil du même utilisateur.
+    //
+    // L'effet local est mot pour mot celui d'une suppression : la bulle s'en
+    // va. On réutilise donc les mêmes écouteurs plutôt que d'écrire un second
+    // retrait — deux implémentations du même geste auraient dérivé (l'aperçu de
+    // la liste, les réponses qui pointent vers la bulle retirée).
+    //
+    // L'appareil qui a ÉMIS la requête reçoit l'événement lui aussi : la room
+    // est celle de l'utilisateur, pas du socket. Le retrait y est idempotent —
+    // il a déjà retiré la bulle en optimiste, et re-filtrer une liste qui ne la
+    // contient plus ne change rien.
+    socket.on(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, (data: MessageHiddenForMeEventData) => {
+      logger.debug('[MessagingService]', 'Messages hidden for me', {
+        count: data?.messages?.length ?? 0,
+      });
+      (data?.messages ?? []).forEach(({ messageId }) => {
+        this.deleteListeners.forEach(listener => listener(messageId));
+      });
+    });
+
+    // L'inverse. Une APPARITION ne peut pas être servie comme une tombstone :
+    // l'appareil qui a retiré la bulle n'en détient plus le contenu. L'événement
+    // ne porte donc que l'adresse, et le consommateur va rechercher.
+    socket.on(SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, (data: MessageRestoredForMeEventData) => {
+      logger.debug('[MessagingService]', 'Messages restored for me', {
+        count: data?.messages?.length ?? 0,
+      });
+      this.messageRestoredForMeListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.MESSAGE_CONSUMED, (data: MessageConsumedEventData) => {
@@ -576,6 +609,17 @@ export class MessagingService {
   onMessageDeleted(listener: MessageDeleteListener): UnsubscribeFn {
     this.deleteListeners.add(listener);
     return () => this.deleteListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: un message masqué pour moi est revenu en vue.
+   *
+   * Pas de pendant `onMessageHiddenForMe` : le masquage est routé vers
+   * `onMessageDeleted`, dont l'effet local est identique.
+   */
+  onMessageRestoredForMe(listener: (data: MessageRestoredForMeEventData) => void): UnsubscribeFn {
+    this.messageRestoredForMeListeners.add(listener);
+    return () => this.messageRestoredForMeListeners.delete(listener);
   }
 
   /**

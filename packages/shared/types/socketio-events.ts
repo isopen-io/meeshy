@@ -107,6 +107,30 @@ export const SERVER_EVENTS = {
   MESSAGE_DELETED: 'message:deleted',
   MESSAGE_TRANSLATION: 'message:translation',
   MESSAGE_TRANSLATED: 'message:translated',
+  /**
+   * PER-USER "delete for me" on a MESSAGE (`DELETE /api/messages/:id/delete-for-me`
+   * and its bulk sibling): a `UserMessageDeletion` row now hides the message from
+   * THIS user's view, on every one of their devices. The message itself is
+   * untouched and every other participant keeps seeing it — contrast with
+   * `MESSAGE_DELETED` (delete for EVERYONE, `Message.deletedAt`), which is
+   * broadcast to the conversation room.
+   *
+   * Broadcast to the caller's **user room** (`ROOMS.user`) only. Without it the
+   * hiding was a per-DEVICE illusion: the device that issued the request removed
+   * the bubble optimistically, and the user's other devices kept showing the
+   * message indefinitely — the read filter only shrinks what a *new* query
+   * returns, it cannot reach a row a client already holds.
+   */
+  MESSAGE_HIDDEN_FOR_ME: 'message:hidden-for-me',
+  /**
+   * Inverse of `MESSAGE_HIDDEN_FOR_ME` (`POST /api/messages/:id/restore-for-me`):
+   * the `UserMessageDeletion` row is gone and the message is visible again.
+   *
+   * The payload deliberately carries no message body. An APPEARANCE cannot be
+   * expressed as a tombstone: a client that dropped the bubble no longer holds
+   * the content, so the only honest instruction is "refetch this conversation".
+   */
+  MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
@@ -1294,6 +1318,42 @@ export interface ConversationDeletedEventData {
 }
 
 /**
+ * One message named by a personal-visibility event, with the conversation it
+ * belongs to.
+ *
+ * `conversationId` is not decoration: every client cache in this repo is keyed
+ * by conversation, so a bare `messageId` would force a scan of every cached
+ * list to find the one page holding it.
+ */
+export interface PersonalMessageVisibilityRef {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Payload of `MESSAGE_HIDDEN_FOR_ME`.
+ *
+ * A list, not a single id: the bulk route hides up to 100 messages in one
+ * request, and one event per message would make a "clear these 100" gesture
+ * cost 100 broadcasts. The single-message route emits a one-element list, so
+ * clients have exactly one shape to handle.
+ */
+export interface MessageHiddenForMeEventData {
+  readonly userId: string;
+  readonly messages: readonly PersonalMessageVisibilityRef[];
+  /** ISO-8601 instant the hiding was recorded. */
+  readonly hiddenAt: string;
+}
+
+/** Payload of `MESSAGE_RESTORED_FOR_ME`. Same shape, opposite direction. */
+export interface MessageRestoredForMeEventData {
+  readonly userId: string;
+  readonly messages: readonly PersonalMessageVisibilityRef[];
+  /** ISO-8601 instant the restore was recorded. */
+  readonly restoredAt: string;
+}
+
+/**
  * Données pour l'événement d'épinglage d'un message
  */
 export interface MessagePinnedEventData {
@@ -1479,6 +1539,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
+  [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATED]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;

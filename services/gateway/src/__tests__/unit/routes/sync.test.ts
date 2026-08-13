@@ -28,6 +28,13 @@ type PrismaStub = {
   participant: { findMany: jest.Mock };
   message: { findMany: jest.Mock };
   userEventSeq: { findUnique: jest.Mock };
+  // `UserMessageDeletion` porte DEUX rôles disjoints dans cette route et le
+  // stub doit servir les deux : le filtre de lecture (masquer les bulles du
+  // stream `changed`) et le stream de tombstones personnelles. Un stub qui
+  // omet la table fait dégrader les deux — silencieusement pour le premier,
+  // en `truncated: true` pour le second.
+  userMessageDeletion: { findMany: jest.Mock };
+  userConversationPreferences: { findMany: jest.Mock };
 };
 
 function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
@@ -40,6 +47,12 @@ function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
     },
     userEventSeq: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
+    userMessageDeletion: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    userConversationPreferences: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     ...over,
   } as PrismaStub;
@@ -524,6 +537,171 @@ describe('GET /sync — checkpoint vs truncation', () => {
     expect(body.hasMore).toBe(false);
     expect(body.nextCursor).toBeNull();
     expect(new Date(body.checkpoint).getTime()).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);
+    await app.close();
+  });
+});
+
+// ─── Disparitions PERSONNELLES (« supprimer pour moi ») ──────────────────────
+
+/**
+ * `userMessageDeletion.findMany` sert DEUX appels dans cette route, et un stub
+ * ordonné par `mockResolvedValueOnce` casserait dès qu'on réordonne le code.
+ * On distingue donc par la FORME de la requête : le stream de tombstones est le
+ * seul à sélectionner `id` (la ligne de masquage) et à trier.
+ */
+function makeHidingPrisma(rows: Array<{
+  id: string;
+  messageId: string;
+  deletedAt: Date;
+  conversationId?: string;
+}>): PrismaStub {
+  const prisma = makePrisma();
+  prisma.userMessageDeletion.findMany = jest.fn<any>(async (args: any) => {
+    if (args?.select?.id) {
+      return rows.map((r) => ({
+        id: r.id,
+        messageId: r.messageId,
+        deletedAt: r.deletedAt,
+        message: { conversationId: r.conversationId ?? 'c1' },
+      }));
+    }
+    return [];
+  });
+  return prisma;
+}
+
+describe('GET /sync — le stream des disparitions personnelles', () => {
+  it('rend un « supprimer pour moi » comme tombstone, portant l’id du MESSAGE', async () => {
+    const prisma = makeHidingPrisma([
+      { id: 'umd-1', messageId: 'm-hidden', deletedAt: new Date('2026-07-03T00:00:00Z') },
+    ]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    // L'id servi est celui du message — la ligne `UserMessageDeletion` n'existe
+    // pas côté client et ne sert qu'au keyset.
+    expect(msgs.deleted).toEqual([
+      {
+        id: 'm-hidden',
+        conversationId: 'c1',
+        deletedAt: new Date('2026-07-03T00:00:00Z').toISOString(),
+      },
+    ]);
+    await app.close();
+  });
+
+  it('interroge `UserMessageDeletion` et non `Message` — un delete-for-me ne bouge pas `Message.updatedAt`', async () => {
+    const prisma = makeHidingPrisma([
+      { id: 'umd-1', messageId: 'm-hidden', deletedAt: new Date('2026-07-03T00:00:00Z') },
+    ]);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const call = (prisma.userMessageDeletion.findMany as jest.Mock).mock.calls
+      .map((c) => c[0] as any)
+      .find((a) => a?.select?.id);
+    expect(call.where.userId).toBe(USER_ID);
+    expect(call.where.message.conversationId).toEqual({ in: ['c1'] });
+    expect(call.where.deletedAt).toEqual({ gt: new Date(SINCE) });
+    await app.close();
+  });
+
+  it('fusionne les deux origines de disparition dans UN tableau, triées et dédupliquées', async () => {
+    const prisma = makeHidingPrisma([
+      { id: 'umd-1', messageId: 'm-both', deletedAt: new Date('2026-07-05T00:00:00Z') },
+      { id: 'umd-2', messageId: 'm-hidden', deletedAt: new Date('2026-07-02T00:00:00Z') },
+    ]);
+    prisma.message.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'm-both', conversationId: 'c1', deletedAt: new Date('2026-07-04T00:00:00Z') },
+      ]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const msgs = res.json().data.collections.messages;
+
+    // `m-both` est masqué pour moi PUIS supprimé pour tous : une seule ligne,
+    // la plus ancienne des deux dates.
+    expect(msgs.deleted.map((d: { id: string }) => d.id)).toEqual(['m-hidden', 'm-both']);
+    expect(msgs.deleted[1].deletedAt).toBe(new Date('2026-07-04T00:00:00Z').toISOString());
+    await app.close();
+  });
+
+  it('tronque sur `cap + 1` et reprend le keyset par l’id de la LIGNE de masquage', async () => {
+    const sameInstant = new Date('2026-07-03T00:00:00Z');
+    const prisma = makeHidingPrisma(
+      // Deux masquages à la MÊME milliseconde : seul l'id de la ligne les
+      // départage (un lot de 100 en produit exactement autant).
+      Array.from({ length: 3 }, (_, i) => ({
+        id: `umd-${i}`,
+        messageId: `m-${i}`,
+        deletedAt: sameInstant,
+      }))
+    );
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${SINCE}&collections=messages&limit=2`,
+    });
+    const body = res.json().data;
+
+    expect(body.collections.messages.truncated).toBe(true);
+    expect(body.hasMore).toBe(true);
+    expect(decodeSyncCursor(body.nextCursor).h).toEqual({
+      u: sameInstant.toISOString(),
+      i: 'umd-1',
+    });
+    await app.close();
+  });
+
+  it('reprend STRICTEMENT après la position portée par le curseur', async () => {
+    const prisma = makeHidingPrisma([]);
+    const app = await buildApp(prisma);
+    const cursor = encodeSyncCursor({ h: { u: '2026-07-03T00:00:00.000Z', i: 'umd-1' } });
+
+    await app.inject({
+      method: 'GET',
+      url: `/sync?since=${SINCE}&collections=messages&cursor=${cursor}`,
+    });
+
+    const call = (prisma.userMessageDeletion.findMany as jest.Mock).mock.calls
+      .map((c) => c[0] as any)
+      .find((a) => a?.select?.id);
+    expect(call.where.OR).toEqual([
+      { deletedAt: { gt: new Date('2026-07-03T00:00:00.000Z') } },
+      { deletedAt: new Date('2026-07-03T00:00:00.000Z'), id: { gt: 'umd-1' } },
+    ]);
+    await app.close();
+  });
+
+  it('accepte un curseur SANS `h` — un client en vol ne doit pas repartir de zéro', () => {
+    const legacy = encodeSyncCursor({ c: { u: '2026-07-03T00:00:00.000Z', i: 'm-1' } });
+    expect(decodeSyncCursor(legacy).h).toBeUndefined();
+    expect(decodeSyncCursor(legacy).c).toEqual({ u: '2026-07-03T00:00:00.000Z', i: 'm-1' });
+  });
+
+  it('annonce la page TRONQUÉE plutôt que d’échouer quand la recherche de masquages tombe', async () => {
+    const prisma = makePrisma();
+    prisma.userMessageDeletion.findMany = jest.fn<any>(async (args: any) => {
+      if (args?.select?.id) throw new Error('mongo down');
+      return [];
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    // Servir le rattrapage reste le produit ; on rend « je ne peux pas
+    // affirmer l'exhaustivité », jamais un 500.
+    expect(res.statusCode).toBe(200);
+    const body = res.json().data;
+    expect(body.collections.messages.truncated).toBe(true);
+    expect(body.hasMore).toBe(true);
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
     await app.close();
   });
 });

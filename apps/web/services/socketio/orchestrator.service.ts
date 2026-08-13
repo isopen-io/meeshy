@@ -19,7 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
-import type { LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
+import type { LinkMessageNewEventData, MessageRestoredForMeEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -589,6 +589,12 @@ export class SocketIOOrchestrator {
 
   onMessageDeleted(listener: (messageId: string) => void): UnsubscribeFn {
     return this.messagingService.onMessageDeleted(listener);
+  }
+
+  onMessageRestoredForMe(
+    listener: (data: MessageRestoredForMeEventData) => void
+  ): UnsubscribeFn {
+    return this.messagingService.onMessageRestoredForMe(listener);
   }
 
   onAttachmentStatusUpdated(listener: (data: any) => void): UnsubscribeFn {

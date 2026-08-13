@@ -14,10 +14,11 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
+import { retractNotificationsForClearedHistory } from '../services/messaging/retractHiddenMessageNotifications';
 import {
-  retractNotificationsForClearedHistory,
-  retractNotificationsForHiddenMessages,
-} from '../services/messaging/retractHiddenMessageNotifications';
+  hideMessagesForUser,
+  restoreMessageForUser,
+} from '../services/personalMessageVisibilitySync';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -357,25 +358,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Not a member of this conversation');
         }
 
-        // Create user message deletion record
-        await prisma.userMessageDeletion.upsert({
-          where: {
-            userId_messageId: { userId, messageId },
-          },
-          create: {
-            userId,
-            messageId,
-          },
-          update: {
-            deletedAt: new Date(),
-          },
+        // Persiste la ligne, rétracte la notification qui garde une COPIE de
+        // l'extrait, et DIFFUSE à `user:{id}` — les trois d'un seul geste. Le
+        // troisième manquait : le masquage n'atteignait que l'appareil qui
+        // l'avait demandé (cf. `personalMessageVisibilitySync`).
+        await hideMessagesForUser(fastify, {
+          userId,
+          messages: [{ messageId, conversationId: message.conversationId }],
         });
-
-        // La notification que ce message a produite garde une COPIE de son
-        // extrait : aucun filtre de lecture ne la rattrape. Cf.
-        // `retractHiddenMessageNotifications` — ne lève jamais, la suppression
-        // a déjà eu lieu.
-        await retractNotificationsForHiddenMessages(prisma, { userId, messageIds: [messageId] });
 
         logger.info('Message deleted');
 
@@ -430,22 +420,24 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const authRequest = request as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
-        // Check if deletion record exists
+        // La conversation du message est chargée ICI et pas après coup : la
+        // diffusion du retour en vue en a besoin (les caches clients sont
+        // indexés par conversation), et cette lecture est la seule qui touche
+        // encore la ligne avant sa suppression.
         const deletion = await prisma.userMessageDeletion.findUnique({
           where: {
             userId_messageId: { userId, messageId },
           },
+          select: { message: { select: { conversationId: true } } },
         });
 
         if (!deletion) {
           return sendBadRequest(reply, 'Message is not deleted');
         }
 
-        // Remove the deletion record
-        await prisma.userMessageDeletion.delete({
-          where: {
-            userId_messageId: { userId, messageId },
-          },
+        await restoreMessageForUser(fastify, {
+          userId,
+          message: { messageId, conversationId: deletion.message.conversationId },
         });
 
         logger.info('Message restored');
@@ -528,7 +520,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
               },
             },
           },
-          select: { id: true },
+          select: { id: true, conversationId: true },
         });
 
         const validMessageIds = messages.map((m) => m.id);
@@ -537,19 +529,16 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'No accessible messages found');
         }
 
-        // Create deletion records for all valid messages (MongoDB doesn't support skipDuplicates)
-        // Use Promise.allSettled to handle existing records gracefully
-        await Promise.allSettled(
-          validMessageIds.map((messageId) =>
-            prisma.userMessageDeletion.upsert({
-              where: { userId_messageId: { userId, messageId } },
-              create: { userId, messageId },
-              update: { deletedAt: new Date() },
-            })
-          )
-        );
-
-        await retractNotificationsForHiddenMessages(prisma, { userId, messageIds: validMessageIds });
+        // UNE diffusion pour tout le lot, jamais une par message : le lot va
+        // jusqu'à 100 ids, et un fanout par message ferait payer 100 événements
+        // à un seul geste.
+        await hideMessagesForUser(fastify, {
+          userId,
+          messages: messages.map((m) => ({
+            messageId: m.id,
+            conversationId: m.conversationId,
+          })),
+        });
 
         logger.info('Messages bulk deleted', { count: validMessageIds.length });
 

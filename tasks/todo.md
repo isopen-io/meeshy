@@ -1,3 +1,120 @@
+# Tête instruite pour le cycle 113 — un filtre de LECTURE répond à une question ; il ne prévient personne
+
+*Le cycle 112 a pris le lot que le 111 lui désignait par son ESPRIT plutôt que par sa lettre : il a
+appliqué le réflexe de la leçon 234 (« quelle valeur ferait SORTIR la ligne, et par quel canal le
+client l'apprend-il ? ») au canal immédiatement en dessous — non plus la liste de conversations,
+mais le MESSAGE. La réponse était « aucun canal », deux fois.*
+
+> ## La leçon qui doit ouvrir chaque cycle, parce qu'elle a échoué TROIS fois (132, 137, 142)
+>
+> ```bash
+> git fetch origin main && git log --oneline -5 origin/main
+> ```
+>
+> **Avant chaque `Write`/`Edit` de production, et de toute façon si plus de ~15 min ont passé
+> depuis le dernier fetch.**
+
+> ## La leçon que le cycle 112 ajoute — le dix-septième membre de la famille
+>
+> Les cycles 105 à 110 cherchaient un lecteur manquant. Le 111 a trouvé un VOCABULAIRE manquant. Le
+> 112 trouve le cas où rien ne manque et où le défaut subsiste :
+>
+> **Un filtre de lecture ne peut que rétrécir ce qu'une NOUVELLE requête rend. Il n'a AUCUNE prise
+> sur une ligne que le client détient déjà.**
+>
+> `personalHistoryFilter` était complet et câblé partout. Les trois routes qui ÉCRIVENT
+> `UserMessageDeletion` ne diffusaient rien. « Supprimer pour moi » sur un message était donc une
+> illusion PAR APPAREIL : l'appareil émetteur retirait la bulle en optimiste, l'iPad et le web la
+> gardaient indéfiniment.
+>
+> **Le symptôme à reconnaître** : une table dont la clé porte `userId` (et non `deviceId`), écrite
+> par une route qui s'arrête après le `INSERT`. Compter les CANAUX, pas les lecteurs. Il en faut
+> deux, et aucun ne subsume l'autre : une diffusion `user:{id}` pour les appareils en ligne, un
+> stream de rattrapage pour ceux qui étaient hors ligne.
+>
+> **Corollaire — une APPARITION n'est pas une tombstone inversée.** Le restore SUPPRIME la ligne :
+> rien ne reste à interroger « depuis `since` », et le client qui a retiré la bulle n'en détient
+> plus le contenu. Le seul message honnête est une ADRESSE (« relis cette conversation »), pas une
+> donnée. Ne pas chercher la symétrie entre les deux directions.
+
+## Livré au cycle 112 — « supprimer pour moi » cesse d'être une illusion par appareil
+
+**Le défaut.** `DELETE /api/messages/:id/delete-for-me`, son lot (jusqu'à 100 ids) et
+`POST /api/messages/:id/restore-for-me` écrivaient `UserMessageDeletion`, rétractaient la
+notification qui en détient une copie… et s'arrêtaient là. Aucune diffusion, et le stream `deleted`
+de `/sync` ne pouvait pas porter le fait : il interroge `Message.deletedAt` (suppression pour TOUS),
+alors qu'un masquage personnel n'écrit QUE la ligne `UserMessageDeletion` et ne bouge pas
+`Message.updatedAt`. Le stream `changed`, lui, RETIRE le message masqué — et un retrait ne dit rien.
+Résultat : un message masqué sur un appareil restait affiché sur tous les autres, indéfiniment.
+
+**Livré (shared)** : `MESSAGE_HIDDEN_FOR_ME` / `MESSAGE_RESTORED_FOR_ME` + `MessageHiddenForMeEventData`
+/ `MessageRestoredForMeEventData` / `PersonalMessageVisibilityRef`, déclarés dans
+`ServerToClientEvents`. Charge utile en LISTE : le lot en couvre 100, un événement par message
+aurait fait payer 100 diffusions à un seul geste ; la route unitaire émet une liste d'un élément
+pour que les clients n'aient qu'UNE forme à lire.
+
+**Livré (gateway, écrivain unique)** : `services/personalMessageVisibilitySync.ts` — persiste,
+rétracte la notification, diffuse vers `user:{id}`, les trois d'un seul geste, sur le modèle
+exact de `conversationPreferencesSync`. Postures d'échec disjointes et délibérées : la persistance
+est le produit (elle remonte, 500) ; la rétraction et la diffusion sont des canaux latéraux (loguées
+et avalées — un masquage effectif ne doit pas être rapporté en échec, l'utilisateur rejouerait un
+geste déjà pris). Le restore, lui, ne diffuse PAS si son `delete` échoue : annoncer un retour en vue
+qui n'a pas eu lieu ferait relire une conversation pour rien, visiblement.
+
+**Livré (gateway, rattrapage)** : `/sync` gagne un TROISIÈME stream, `syncHiddenTombstones`, keyset
+`(UserMessageDeletion.deletedAt, UserMessageDeletion.id)` sous la clé de curseur `h`. Deux détails
+non négociables : la table interrogée est `UserMessageDeletion` et non `Message` (corollaire de la
+leçon 234, repayé) ; l'id SERVI est le `messageId` tandis que l'id du CURSEUR est celui de la ligne
+de masquage (un lot de 100 écrit 100 lignes à la même milliseconde — seule la ligne les départage).
+Les deux origines de disparition sont fusionnées dans le MÊME tableau `deleted`, triées et
+dédupliquées : côté client le geste est identique, et deux tableaux auraient fait écrire deux fois
+le même retrait. `h` reste facultatif sous la version 1 du token : un client en vol ne repart pas
+de zéro pour un champ additif.
+
+**Livré (web)** : `message:hidden-for-me` est routé vers les écouteurs de SUPPRESSION existants —
+l'effet local est mot pour mot le même (retirer la bulle, avancer l'aperçu de la liste), et un
+second retrait aurait dérivé du premier. `message:restored-for-me` a ses propres écouteurs et
+n'invalide que les conversations NOMMÉES (plus la liste, dont l'aperçu peut redevenir le message
+qu'on avait masqué), jamais tout le cache.
+
+**Vérifié** : gateway `tsc --noEmit` propre, suites `sync` (33), `user-deletions-routes` (45),
+`user-deletions-broadcast` (6, neuve) et `personalMessageVisibilitySync` (7, neuve) vertes ; shared
+53 fichiers / 1529 tests verts + build tsc ; web 17 suites / 577 tests sur le périmètre socketio +
+cache-sync, et les 14 erreurs `tsc` de `orchestrator.service.test.ts` sont pré-existantes (mesurées
+identiques sur la base). Mutation-proof des trois moitiés : retirer la diffusion, retirer le stream
+`hidden`, retirer le routage web font rougir 5, 2 et 1 tests respectivement.
+
+## Constats du cycle 112, NON traités — le lot naturel du cycle 113
+
+1. **Le client iOS des deux canaux.** `MESSAGE_HIDDEN_FOR_ME` doit retirer la bulle dans
+   `MessageStore` (même chemin que `MESSAGE_DELETED`), `MESSAGE_RESTORED_FOR_ME` invalider le fil
+   nommé, et `ConversationSyncEngine` lire les tombstones de `/sync`. Non livrable depuis un runner
+   Linux (ni `meeshy.sh build` ni XCTest n'y tournent). Les deux événements étant additifs, l'app
+   se comporte exactement comme avant en attendant.
+2. **Le `clear-history` a le même trou, mais à moitié seulement.** Il diffuse déjà
+   (`USER_PREFERENCES_UPDATED` porte `clearHistoryBefore`), donc les appareils EN LIGNE convergent.
+   Le rattrapage, lui, n'existe pas davantage que pour le masquage unitaire : le stream `hidden`
+   livré ici ne couvre QUE `UserMessageDeletion`. Un appareil hors ligne pendant un « effacer
+   l'historique » ne l'apprend qu'au prochain rechargement complet des préférences. Vérifier par
+   quel chemin le snapshot de préférences atteint un client froid AVANT d'ajouter un quatrième
+   stream — il existe peut-être déjà.
+3. **Reconduits du cycle 111, intacts** : `gwcontract-04` étape 7 (client iOS des tombstones de
+   conversation) ; `gwcontract-02` (documenter le partage `?after=` / `/sync` + gardes) ; `meta`
+   des tombstones de conversation non typé côté `@meeshy/shared` (à poser AVANT le client Swift,
+   sinon il naîtra en double) ; le POIDS de la charge utile `/sync` jamais mesuré (le select porte
+   `translations` et les pièces jointes sur un cap de 1000 — à peser avant le premier client, pas
+   après).
+4. **Reconduits du cycle 110, intacts** : badge APNs (compte de notifications vs conversations non
+   lues) ; `Mention` / `TrackingLink` sous l'angle « copie du contenu ou simple clé étrangère ? » ;
+   aucun client n'appelle `delete-for-me` / `clear-history` ; `isDeletedForUser: boolean` vs
+   `deletedForUserAt: DateTime` ; `lastMessageAt` non ajusté quand l'aperçu est masqué ; flux
+   `deleted` de `/sync` non filtré à dessein ; `me/export.ts` exempt à dessein ; catalogue de
+   chaînes / destinations d'URL des widgets iOS ; `NotificationType.MESSAGE_PINNED`/`MESSAGE_UNPINNED`
+   sans producteur ; l'épingle qui n'atteint pas la 3ᵉ audience ; **Socket.IO sans adapter Redis**
+   (le plus gros risque temps-réel encore ouvert) ; le commentaire de `handleMessage` qui affirme à
+   tort que REST y passe ; la projection des accusés en trois exemplaires inline ;
+   `TranslationStatus` sans référent in-repo ; l'audit d'adressage **Android hors `MessageApi`**.
+
 # Tête instruite pour le cycle 112 — un delta qui ne sait dire que « voici ce qui a changé » ne dit rien de ce qui a DISPARU
 
 *Le cycle 111 n'a pas pris le lot que le 110 lui désignait (badge APNs, `Mention`/`TrackingLink`).

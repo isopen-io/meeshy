@@ -93,7 +93,12 @@ type PrismaMessage = {
   content: string;
   conversation: { participants: PrismaParticipant[] };
 };
-type PrismaMessageDeletion = { userId: string; messageId: string; deletedAt: Date };
+type PrismaMessageDeletion = {
+  userId: string;
+  messageId: string;
+  deletedAt: Date;
+  message: { conversationId: string };
+};
 
 const ACTIVE_PARTICIPANT: PrismaParticipant = {
   id: 'part-1',
@@ -138,7 +143,7 @@ type PrismaOpts = {
   msgDeletionFindUnique?: PrismaMessageDeletion | null | Error;
   msgDeletionUpsert?: PrismaMessageDeletion | Error;
   msgDeletionDelete?: object | Error;
-  msgFindMany?: Array<{ id: string }> | Error;
+  msgFindMany?: Array<{ id: string; conversationId: string }> | Error;
   convPrefFindMany?: PrismaConvPref[] | Error;
   notificationFindMany?: Array<{ id: string; userId: string }> | Error;
 };
@@ -154,7 +159,15 @@ function resolve<T>(v: T | Error): jest.Mock {
 }
 
 function makePrisma(opts: PrismaOpts = {}) {
-  const DEFAULT_MSG_DELETION = { userId: USER_ID, messageId: MSG_ID, deletedAt: new Date() };
+  // `message.conversationId` n'est pas décoratif : la diffusion du retour en
+  // vue en a besoin (les caches clients sont indexés par conversation), et la
+  // route le lit sur CETTE ligne, la dernière avant sa suppression.
+  const DEFAULT_MSG_DELETION = {
+    userId: USER_ID,
+    messageId: MSG_ID,
+    deletedAt: new Date(),
+    message: { conversationId: CONV_ID },
+  };
 
   return {
     participant: {
@@ -167,7 +180,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     },
     message: {
       findUnique: resolve(opt(opts.messageFindUnique, MESSAGE)),
-      findMany: resolve(opt(opts.msgFindMany, [{ id: MSG_ID }])),
+      findMany: resolve(opt(opts.msgFindMany, [{ id: MSG_ID, conversationId: CONV_ID }])),
     },
     userMessageDeletion: {
       findUnique: resolve(opt(opts.msgDeletionFindUnique, DEFAULT_MSG_DELETION)),
@@ -556,7 +569,7 @@ describe('DELETE /api/messages/bulk/delete-for-me', () => {
   it('returns 200 with deleted count when given valid messageIds', async () => {
     const messageIds = [MSG_ID, 'cccccccccccccccccccccccc'];
     const appBulk = await buildApp({
-      msgFindMany: messageIds.map((id) => ({ id })),
+      msgFindMany: messageIds.map((id) => ({ id, conversationId: CONV_ID })),
     });
     const res = await appBulk.inject({
       method: 'DELETE',
@@ -746,7 +759,7 @@ describe('le masquage personnel retire la copie que la cloche détient', () => {
   });
 
   it('le lot « supprimer pour moi » retire celles des messages RÉELLEMENT accessibles', async () => {
-    const app = await buildApp({ msgFindMany: [{ id: MSG_ID }] });
+    const app = await buildApp({ msgFindMany: [{ id: MSG_ID, conversationId: CONV_ID }] });
 
     const res = await app.inject({
       method: 'DELETE',
