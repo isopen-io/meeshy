@@ -140,6 +140,7 @@ type PrismaOpts = {
   msgDeletionDelete?: object | Error;
   msgFindMany?: Array<{ id: string }> | Error;
   convPrefFindMany?: PrismaConvPref[] | Error;
+  notificationFindMany?: Array<{ id: string; userId: string }> | Error;
 };
 
 // Use explicit key presence check so null is a valid mock return value
@@ -172,6 +173,13 @@ function makePrisma(opts: PrismaOpts = {}) {
       findUnique: resolve(opt(opts.msgDeletionFindUnique, DEFAULT_MSG_DELETION)),
       upsert: resolve(opt(opts.msgDeletionUpsert, DEFAULT_MSG_DELETION)),
       delete: resolve(opt(opts.msgDeletionDelete, {})),
+    },
+    // La cloche : masquer un message pour soi doit aussi retirer la
+    // notification qui en détient une COPIE de l'extrait. Le défaut est « une
+    // notification à retirer », pour que le câblage se voie.
+    notification: {
+      findMany: resolve(opt(opts.notificationFindMany, [{ id: 'notif-1', userId: USER_ID }])),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     '$transaction': jest.fn().mockResolvedValue(undefined),
   };
@@ -704,5 +712,101 @@ describe('GET /api/user/deleted-conversations', () => {
     expect(firstItem.conversation).toHaveProperty('id');
     expect(firstItem.conversation).toHaveProperty('identifier');
     expect(firstItem.conversation).toHaveProperty('type');
+  });
+});
+
+// ─── Câblage : masquer un message retire aussi sa notification ────────────────
+
+/**
+ * Un message masqué pour soi disparaît de la conversation — les sept surfaces
+ * de lecture l'appliquent, et les trois compteurs de non-lus depuis peu. Sa
+ * NOTIFICATION, elle, détient une copie dénormalisée de l'extrait
+ * (`Notification.content`, `metadata.messagePreview`), qu'aucun filtre de
+ * lecture ne peut rattraper. Ces témoins tiennent le geste sur la route réelle,
+ * en observant le `where` réellement envoyé à Prisma.
+ */
+describe('le masquage personnel retire la copie que la cloche détient', () => {
+  const notificationOf = (app: FastifyInstance) =>
+    (app as unknown as { prisma: { notification: { deleteMany: jest.Mock } } }).prisma.notification;
+
+  it('« supprimer pour moi » retire les notifications de CE lecteur pour CE message', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(notificationOf(app).deleteMany).toHaveBeenCalledWith({
+      where: { userId: USER_ID, messageId: { in: [MSG_ID] } },
+    });
+    await app.close();
+  });
+
+  it('le lot « supprimer pour moi » retire celles des messages RÉELLEMENT accessibles', async () => {
+    const app = await buildApp({ msgFindMany: [{ id: MSG_ID }] });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/messages/bulk/delete-for-me',
+      headers: AUTH,
+      payload: { messageIds: [MSG_ID, 'cccccccccccccccccccccccc'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(notificationOf(app).deleteMany).toHaveBeenCalledWith({
+      where: { userId: USER_ID, messageId: { in: [MSG_ID] } },
+    });
+    await app.close();
+  });
+
+  it('« effacer l\'historique » retire celles des messages antérieurs à la coupure', async () => {
+    const app = await buildApp();
+    const beforeDate = '2026-05-21T12:00:00.000Z';
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/conversations/${CONV_ID}/clear-history`,
+      headers: AUTH,
+      payload: { beforeDate },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(notificationOf(app).deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        message: { is: { conversationId: CONV_ID, createdAt: { lt: new Date(beforeDate) } } },
+      },
+    });
+    await app.close();
+  });
+
+  it('répond succès quand le retrait de la cloche échoue — la suppression, elle, a eu lieu', async () => {
+    const app = await buildApp({ notificationFindMany: new Error('mongo down') });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('n\'écrit rien quand aucune notification ne porte le message', async () => {
+    const app = await buildApp({ notificationFindMany: [] });
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+
+    expect(notificationOf(app).deleteMany).not.toHaveBeenCalled();
+    await app.close();
   });
 });
