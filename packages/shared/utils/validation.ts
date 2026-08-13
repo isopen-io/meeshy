@@ -5,9 +5,19 @@
 
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
+import { personNamePatternSource } from '../types/api-schemas.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
+
+/**
+ * Nom de personne (prénom / nom). Compilé depuis la source unique
+ * `personNamePatternSource` (types/api-schemas.ts) pour que la couche Ajv
+ * (body JSON schema Fastify) et la couche Zod rendent le même verdict —
+ * notamment l'acceptation des apostrophes typographiques `’`/`ʼ` insérées par
+ * le clavier iOS.
+ */
+const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -413,9 +423,9 @@ export const AuthSchemas = {
     password: z.string()
       .min(8, 'Mot de passe trop court (min 8 caractères)'),
     firstName: z.string().min(1).max(50)
-      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le prénom doit contenir au moins une lettre'),
+      .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre'),
     lastName: z.string().min(1).max(50)
-      .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le nom doit contenir au moins une lettre'),
+      .regex(PERSON_NAME_PATTERN, 'Le nom doit contenir au moins une lettre'),
     email: z.email('Email invalide'),
     phoneNumber: z.string().optional(),
     phoneCountryCode: z.string().length(2).optional(),

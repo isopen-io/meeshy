@@ -267,6 +267,11 @@ public final class RegistrationViewModel: ObservableObject {
     }
 
     // MARK: - Local Validation
+    //
+    // Chaque règle DOIT être le miroir exact de `AuthSchemas.register`
+    // (packages/shared/utils/validation.ts) : l'utilisateur qui atteint le
+    // récapitulatif doit déjà être conforme au backend — aucune étape validée
+    // localement ne peut être refusée par le serveur.
 
     private func isUsernameValidLocally(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -276,8 +281,37 @@ public final class RegistrationViewModel: ObservableObject {
     }
 
     private func isEmailValidLocally(_ value: String) -> Bool {
-        value.contains("@") && value.contains(".")
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
     }
+
+    /// Miroir du pattern serveur `personNamePatternSource`
+    /// (`^(?=.*\p{L})[\p{L}\p{M}\s'’ʼ.-]+$`) : lettres (accents et marques
+    /// combinantes inclus — `CharacterSet.letters` couvre L* et M*), espaces,
+    /// apostrophes droite ET typographiques (le clavier iOS insère `’`),
+    /// points et tirets ; au moins une lettre ; 50 caractères max.
+    public func isNameValidLocally(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 50 else { return false }
+        guard trimmed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return false }
+        let allowed = CharacterSet.letters
+            .union(.whitespaces)
+            .union(CharacterSet(charactersIn: "'’ʼ.-"))
+        return trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    /// Erreur affichable sous le champ nom/prénom — `nil` tant que le champ est
+    /// vide (le bouton désactivé suffit) ou que la saisie est conforme.
+    public func nameFieldError(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return isNameValidLocally(trimmed)
+            ? nil
+            : String(localized: "auth.registration.nameInvalid", defaultValue: "Lettres, espaces, apostrophes, points et tirets uniquement", bundle: .module)
+    }
+
+    public var firstNameError: String? { nameFieldError(firstName) }
+    public var lastNameError: String? { nameFieldError(lastName) }
 
     // MARK: - API Validation
 
@@ -418,8 +452,7 @@ public final class RegistrationViewModel: ObservableObject {
         case .email:
             return isEmailValidLocally(email) && emailAvailable == true
         case .identity:
-            return !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return isNameValidLocally(firstName) && isNameValidLocally(lastName)
         case .password:
             return password.count >= 8 && password == confirmPassword
         case .language:
