@@ -697,12 +697,21 @@ private struct StoryUploadOverlay: View {
 
 // MARK: - Pinned Mini Story Trail (revealed inside the collapsed header)
 
-/// Compact story trail pinned *inside* the header, below the title + actions.
-/// It fades/slides in as the full-size `StoryTrayView` scrolls up under the
-/// header so the stories stay reachable without taking a full row. Per product
-/// decision the connected user's avatar is replaced by a single leading "+"
-/// (add a story); everyone else's rings render at half size
-/// (`.storyTrayCompact`, 44pt) with the same design and horizontal scroll.
+/// Compact story trail that TAKES THE TITLE'S PLACE inside the header bar. It
+/// cross-fades in as the full-size `StoryTrayView` scrolls up under the header:
+/// once scrolled, the user no longer reads « Meeshy Feed » / « Meeshy Chats »
+/// but sees the trail, immediately left of the trailing action buttons
+/// (directive user 2026-08-13). It used to render as a second row BELOW a title
+/// that stayed on screen for nothing.
+///
+/// Rings render at half size (`.storyTrayCompact`, 44pt) with the same design
+/// and horizontal scroll as the full trail, without the username caption — the
+/// bar has room for one row of rings, not for a caption under each.
+///
+/// No leading "+" button: it duplicated an affordance the strip already
+/// carries, since touching the connected user's own avatar leads to composing
+/// (same directive). The "+" badge survives where it belongs — on the big
+/// avatar of the full-size trail, visible when the header is expanded.
 struct PinnedStoryTrailBand: View {
     /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
@@ -714,7 +723,6 @@ struct PinnedStoryTrailBand: View {
     /// `StoryTrayView.onViewStory`), unifiant la mini-trail avec la grande trail.
     var onViewStory: ((String) -> Void)? = nil
 
-    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
@@ -733,19 +741,14 @@ struct PinnedStoryTrailBand: View {
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
 
-    // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
-    // expanded header and is fully hidden behind the 44pt collapsed header after
-    // ~148pt of scroll. Reveal the mini-trail over the last ~70pt of that travel.
-    private static let revealStart: CGFloat = 78
-    private static let revealEnd: CGFloat = 148
-    private static let bandHeight: CGFloat = 80
+    // Le rythme de la bascule titre → trail appartient au header : lui fait
+    // disparaître le titre sur exactement la même courbe. Deux jeux de
+    // constantes auraient laissé un instant où ni l'un ni l'autre n'occupe la
+    // fente — ou pire, les deux.
+    private static var bandHeight: CGFloat { CollapsibleHeaderMetrics.inlineAccessoryHeight }
 
     private var reveal: CGFloat {
-        CollapsibleHeaderMetrics.pinnedAccessoryReveal(
-            scrollOffset: scrollOffset,
-            start: Self.revealStart,
-            end: Self.revealEnd
-        )
+        CollapsibleHeaderMetrics.inlineAccessoryReveal(scrollOffset: scrollOffset)
     }
 
     private var currentUserId: String {
@@ -777,15 +780,21 @@ struct PinnedStoryTrailBand: View {
     var body: some View {
         let groups = visibleGroups
         let own = ownGroup
-        // Reveal the pinned band as soon as there is ANYTHING to reach from the
-        // collapsed header: the user's own story ring (quick access to view /
-        // re-view it once the big trail scrolled away) and/or peer stories.
-        // Previously it required a peer story, so a user with only their own
-        // story could never open it from the scrolled header.
-        if reveal > 0.001 && (!groups.isEmpty || own != nil) {
+        // Le band monte dès que la bascule commence, sans condition sur le
+        // contenu : sa PREMIÈRE cellule est toujours l'avatar de l'utilisateur
+        // connecté, et depuis le retrait du « + » de tête c'est par lui que
+        // passe la composition. Le conditionner à l'existence d'une story
+        // laisserait un header scrollé sans aucun accès aux stories — ni les
+        // siennes, ni la création. Le seuil reste une garde de PERFORMANCE :
+        // au repos, aucun anneau n'est matérialisé.
+        if reveal > 0.001 {
             band(groups: groups, ownGroup: own)
+                // La hauteur suit la révélation : la fente du titre n'est pas
+                // encore assez haute au début de la bascule, et un band pleine
+                // hauteur y déborderait par le haut, hors du header.
+                // L'OPACITÉ, elle, appartient au header — c'est lui qui tient
+                // les deux moitiés du fondu croisé titre ↔ trail.
                 .frame(height: Self.bandHeight * reveal, alignment: .top)
-                .opacity(Double(reveal))
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
                 .sheet(item: $selectedProfileUser) { user in
@@ -839,18 +848,22 @@ struct PinnedStoryTrailBand: View {
             // scroll, y compris hors écran. Lazy = seuls les ~8 anneaux
             // visibles vivent (et animent).
             LazyHStack(alignment: .top, spacing: 12) {
-                addStoryButton
-                // Sa propre story d'abord (après le "+"), pour un accès direct
-                // « voir ma story » depuis le header replié — même anneau
-                // compact que les pairs.
+                // Sa propre story EN TÊTE, à la place qu'occupait le bouton
+                // « + » : depuis son retrait (directive user 2026-08-13), c'est
+                // cet avatar-ci qui porte l'accès à la composition — deux
+                // affordances pour le même geste étaient une surcharge, pas une
+                // commodité. Le « + » survit là où il a du sens : en haut à
+                // gauche du grand avatar de la trail dépliée.
                 if let ownGroup {
                     StoryRingCell(
                         group: ownGroup,
                         context: .storyTrayCompact,
+                        showsUsername: false,
                         onViewStory: {
                             // Parité avec la grande trail (supersession
                             // 2026-08-02) : le tap ouvre la LISTE de gestion,
-                            // où vivent les onglets Publiées / Brouillons.
+                            // où vivent les onglets Publiées / Brouillons —
+                            // et d'où l'on crée une story.
                             showMyStories = true
                         },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) },
@@ -862,11 +875,14 @@ struct PinnedStoryTrailBand: View {
                         ]
                     )
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
+                } else {
+                    selfAvatarCell
                 }
                 ForEach(groups, id: \.id) { group in
                     StoryRingCell(
                         group: group,
                         context: .storyTrayCompact,
+                        showsUsername: false,
                         onViewStory: { presentStory(userId: group.id) },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
                     )
@@ -875,8 +891,8 @@ struct PinnedStoryTrailBand: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+            .padding(.top, 2)
+            .padding(.bottom, 4)
         }
         // No own background — this view is injected as the `CollapsibleHeader`
         // accessory slot, so the header surface masks the content underneath.
@@ -895,23 +911,44 @@ struct PinnedStoryTrailBand: View {
         }
     }
 
-    private var addStoryButton: some View {
-        Button {
-            viewModel.showStoryComposer = true
-            HapticFeedback.medium()
-        } label: {
-            // Glyphe dans un cercle de dimension fixe 44×44 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
-            Image(systemName: "plus")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Color.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(MeeshyColors.brandGradient)
-                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.tray.addStory", defaultValue: "Ajouter une story"))
+    /// Anneau « Moi » quand AUCUN groupe de stories n'existe encore. Sans lui,
+    /// un utilisateur sans story verrait un band amputé de sa première cellule
+    /// — donc, depuis le retrait du « + », sans aucun chemin vers la
+    /// composition depuis un header scrollé.
+    ///
+    /// Le routage passe par le MÊME résolveur que la grande trail
+    /// (`StoryTrayActionResolver`) : un historique entièrement expiré mène à la
+    /// liste de gestion, l'absence totale de story mène droit au composer.
+    private var selfAvatarCell: some View {
+        let currentUser = AuthManager.shared.currentUser
+        let uid = currentUserId
+        let hasAnyStory = viewModel.hasStories(forUserId: uid)
+        return MeeshyAvatar(
+            name: currentUser?.displayName ?? currentUser?.username ?? "Moi",
+            context: .storyTrayCompact,
+            accentColor: DynamicColorGenerator.colorForName(currentUser?.username ?? ""),
+            avatarURL: currentUser?.avatar,
+            storyState: .none,
+            moodEmoji: statusViewModel.statusForUser(userId: uid)?.moodEmoji,
+            onTap: {
+                switch StoryTrayActionResolver.avatarTap(hasMyStory: false, hasAnyStory: hasAnyStory) {
+                case .manageStories: showMyStories = true
+                case .createStory:   viewModel.showStoryComposer = true
+                }
+                HapticFeedback.medium()
+            },
+            contextMenuItems: [
+                AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
+                    viewModel.showStoryComposer = true
+                    HapticFeedback.medium()
+                }
+            ]
+        )
+        // Le nom de la personne ne dit rien de la destination : l'annonce vient
+        // de la même règle que le routage, comme sur la grande trail.
+        .accessibilityLabel(
+            StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: false, hasAnyStory: hasAnyStory)
+        )
+        .accessibilityAddTraits(.isButton)
     }
 }

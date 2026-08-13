@@ -1050,9 +1050,9 @@ struct ConversationListView: View {
             .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area.
-        // A compact story trail is integrated *inside* the header (accessory
-        // slot, below the title/actions bar) and reveals as the full-size trail
-        // scrolls up under the header.
+        // La trail compacte prend la PLACE DU TITRE dans la barre et se révèle à
+        // mesure que la grande trail passe sous le header : une fois scrollé, on
+        // ne lit plus « Meeshy Chats » mais la trail (directive user 2026-08-13).
         .overlay(alignment: .top) {
             ConversationListHeaderOverlay(
                 scrollRelay: scrollOffsetRelay,
@@ -1065,7 +1065,7 @@ struct ConversationListView: View {
                 // Paramétré par l'offset (fourni par le header, seul abonné
                 // au relay) — capturer le @State CGFloat d'antan depuis cette
                 // closure liait le body entier de la liste au tick de scroll.
-                accessory: { offset in
+                titleAccessory: { offset in
                     AnyView(
                         PinnedStoryTrailBand(
                             viewModel: storyViewModel,
