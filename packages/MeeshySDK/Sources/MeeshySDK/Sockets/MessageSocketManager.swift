@@ -744,6 +744,19 @@ public struct ParticipantJoinedEvent: Decodable, Sendable {
     public let userId: String
     public let displayName: String
     public let joinedAt: String
+
+    /// Effectif ACTIF APRÈS l'adhésion, absolu — à POSER, jamais à incrémenter.
+    ///
+    /// Un delta ne converge pas : l'événement manqué (hors room, hors ligne,
+    /// trou de reconnexion) laisse une dérive que RIEN ne rattrape, et qu'iOS
+    /// PERSISTE (`schedulePersist` écrit la valeur fausse dans le cache
+    /// disque). Un total, lui, se rattrape au premier événement suivant.
+    ///
+    /// Le compte INCLUT l'arrivant, alors même que l'éventail serveur l'écarte.
+    ///
+    /// Absent (`nil`) sur un gateway antérieur à ce contrat, où l'incrément
+    /// reste le seul repli disponible.
+    public let memberCount: Int?
 }
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
@@ -751,6 +764,12 @@ public struct ParticipantLeftEvent: Decodable, Sendable {
     public let userId: String
     public let displayName: String
     public let leftAt: String
+
+    /// Effectif ACTIF APRÈS le départ, absolu — à POSER, jamais à soustraire.
+    /// Même raison que sur `ParticipantJoinedEvent` : un client qui décrémente
+    /// ne se rattrape jamais d'un événement manqué. `nil` sur un gateway
+    /// antérieur, où le décrément reste le seul repli.
+    public let memberCount: Int?
 }
 
 public struct ParticipantBannedEvent: Decodable, Sendable {
@@ -770,6 +789,14 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
     /// comportement — jamais `event.membershipEnded == true`, qui traiterait un
     /// serveur plus ancien comme un bannissement sans effet.
     public var didEndMembership: Bool { membershipEnded ?? true }
+
+    /// Effectif ACTIF APRÈS le bannissement, absolu — à POSER.
+    ///
+    /// Quand il est là, il tranche `membershipEnded` de lui-même : bannir un
+    /// ex-membre ne retire personne, donc le compte est simplement inchangé, et
+    /// le poser est exact dans les deux cas. Le court-circuit sur
+    /// `didEndMembership` ne subsiste que pour un gateway qui ne l'envoie pas.
+    public let memberCount: Int?
 }
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
@@ -783,6 +810,10 @@ public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let membershipRestored: Bool?
 
     public var didRestoreMembership: Bool { membershipRestored ?? true }
+
+    /// Effectif ACTIF APRÈS la levée, absolu — à POSER. Même lecture que sur
+    /// `ParticipantBannedEvent` : présent, il tranche `membershipRestored`.
+    public let memberCount: Int?
 }
 
 public struct ConversationClosedEvent: Decodable, Sendable {

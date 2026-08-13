@@ -35,13 +35,40 @@ TDD : 5 tests d'unité (fusion), 4 bout-en-bout (moteur), 3 de décodage d'envel
 **Contrainte d'exécution** : aucun toolchain Swift dans l'environnement de la routine — les gates
 Swift sont la CI (`sdk-tests` macOS + `ios-tests`), pas une exécution locale.
 
+## Cycle 114-bis — PR #2968 (même run)
+
+*Renuméroté 114-bis à la fusion : une autre branche (`claude/keen-hamilton-dl8km4`) tournait en
+parallèle et a livré son propre « cycle 115 » (`GET /sync` ouvert aux sessions anonymes, leçon 239),
+mergé avant celui-ci. Les deux existent, ils ne se recouvrent pas.*
+
+`fix(ios/sync): l'effectif d'une conversation dérivait à vie, l'effectif ABSOLU du serveur étant ignoré`
+
+Trouvé en appliquant le réflexe que le cycle 114 venait de dégager (« quel champ le serveur
+envoie-t-il que le client ne lit pas ? ») — deuxième instance de la MÊME classe de défaut, en
+quelques minutes.
+
+- Les 4 structs d'appartenance décodent `memberCount: Int?`.
+- `ConversationListViewModel.memberCountAfterMembershipEvent(current:absolute:delta:)` pose
+  l'absolu ; le delta n'est plus qu'un repli pour un gateway antérieur au contrat.
+- L'absolu tranche `membershipEnded` / `membershipRestored` ; plancher à zéro sur les deux branches.
+- CHANGELOG : entrée pour ce correctif, entrée pour le volet iOS du cycle 114, et retrait du
+  « Reste ouvert : le client iOS » devenu faux.
+
+TDD : 5 témoins de décodage SDK + 5 côté app.
+
 ## Reste ouvert (candidats des prochains cycles)
+
+- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (voir leçon 238, corollaire de
+  méthode). Les commentaires du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne
+  jamais soustraire » prescrivent un comportement CLIENT : chacun nomme un bug possible, et se
+  vérifie par un grep du nom du champ chez chaque client. Deux instances trouvées en un run — la
+  troisième est probablement déjà écrite quelque part.
 
 - **Constat 2 ci-dessus** — masquage personnel au niveau message : décision produit à prendre.
 - **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière
   (le SDK a son propre `ConversationSyncEngine` sur `/conversations?updatedSince=`).
 - **Android** — aucun delta `updatedSince` ; pas d'écart symétrique à combler aujourd'hui.
-- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (candidat cycle 115) :
+- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (candidat prochain cycle) :
   `ConversationSyncEngine.startSocketRelay` n'y fait qu'un
   `cache.participants.invalidate(for:)` — le pendant TEMPS RÉEL du correctif de ce cycle manque
   donc. Un départ déclenché depuis un autre appareil ne retire la conversation de la liste qu'au

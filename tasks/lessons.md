@@ -6234,6 +6234,28 @@ donc y retenir le watermark en plus d'escalader : seul un `since` resté en plac
 sorties coupées si l'escalade échoue. Transposer la règle du jumeau sans regarder la NATURE de son
 curseur aurait rendu ces disparitions irréclamables.
 
+**Confirmation immédiate, cycle 114-bis — la même leçon, deux fois dans le même run.** Cherchant la
+suite de ce correctif, le balayage est reparti du même réflexe (« quel champ le serveur envoie-t-il
+que le client ne lit pas ? ») et a trouvé le second cas en quelques minutes : les quatre événements
+d'appartenance portent un `memberCount` ABSOLU, documenté quatre fois côté serveur comme « à POSER,
+pas à incrémenter », honoré par le web (`applyMemberCount`) — et déclaré sur AUCUN des quatre
+structs Swift, qui faisaient exactement le `± 1` que le contrat interdit. Deux instances en une
+séance disent que ce n'est pas un accident mais une CLASSE, et elles donnent son test :
+
+> **Un champ ajouté à un payload existant n'a de récepteur nulle part tant qu'on ne l'a pas grepé
+> par son NOM dans chaque client.** Ni la doc du serveur, ni les tests du serveur, ni les tests de
+> l'autre client ne le prouvent — et le langage du client (`Decodable` optionnel, `JSONDecoder` qui
+> ignore les clés inconnues) est précisément conçu pour que cette absence ne fasse aucun bruit.
+
+Corollaire de méthode : **le commentaire serveur qui explique POURQUOI un champ existe est un
+détecteur de bug client**. « à POSER, pas à incrémenter », « un client qui décrémente ne se rattrape
+jamais » — cette phrase n'est pas descriptive, elle prescrit un comportement client, donc elle
+nomme le bug qu'elle veut empêcher. Grepper les prescriptions écrites dans les types partagés
+(`packages/shared/types/`) et vérifier chacune chez CHAQUE client est un audit à part entière, bon
+marché, et qui ne demande d'exécuter aucun code.
+
+---
+
 ## Leçon 239 — Une MÊME variable qui porte deux colonnes selon l'appelant : le filtre ne plante pas, il rend vide
 
 Cycle 115 (`gwcontract-09`, ouverture de `GET /sync` aux sessions anonymes).
