@@ -285,9 +285,9 @@ final class Router: ObservableObject {
             case .chatLink(let identifier):
                 DeepLinkRouter.shared.pendingDeepLink = .chatLink(identifier: identifier)
 
-            case .conversation(let id):
+            case .conversation(let id, let draftText):
                 Task { [weak self] in
-                    await self?.handleConversationDeepLink(id)
+                    await self?.handleConversationDeepLink(id, draftText: draftText)
                 }
 
             case .magicLink(let token):
@@ -331,7 +331,27 @@ final class Router: ObservableObject {
 
     // MARK: - Conversation Deep Link
 
-    private func handleConversationDeepLink(_ conversationId: String) async {
+    /// Ouvre une conversation via deep link et dépose un brouillon si fourni.
+    ///
+    /// Voie IN-APP : appelée par le handler `openURL` (RootView/iPadRootView)
+    /// quand un tap `Link` résout en `.conversation(id, draftText)` via
+    /// `DeepLinkParser.parse`. La voie système (cold launch / widget tap) passe
+    /// par `DeepLinkRouter.handle` qui dépose le même brouillon de son côté.
+    ///
+    /// Les surfaces widget / App Shortcut qui pré-remplissent le composer
+    /// portent leur texte en query param (`quickreply?text=…`, `send?message=…`) ;
+    /// il est déposé dans `DraftStore` AVANT la navigation pour que
+    /// `ConversationView` le trouve à l'ouverture. Le dépôt précède aussi le
+    /// fetch réseau : si celui-ci échoue, le texte dicté n'est pas perdu — il
+    /// attend dans le brouillon la prochaine ouverture manuelle.
+    ///
+    /// - Parameter conversationId: ID de conversation (MongoDB ObjectId)
+    /// - Parameter draftText: Texte optionnel à déposer en brouillon (jamais envoyé)
+    private func handleConversationDeepLink(_ conversationId: String, draftText: String? = nil) async {
+        if let draftText, !draftText.isEmpty {
+            DraftStore.shared.stageShortcutDraft(draftText, for: conversationId)
+            Self.logger.info("Deep link staged draft text for conversation \(conversationId)")
+        }
         do {
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             let apiConversation = try await ConversationService.shared.getById(conversationId)

@@ -290,6 +290,25 @@ final class DraftStore: @unchecked Sendable {
     // Legacy shorthand (string overload conflicts with `load(for:) -> MessageDraft?`
     // — callers that want the full draft must use `load(for:)`).
 
+    // MARK: - Shortcut / widget draft staging
+
+    /// Dépose le texte d'un raccourci (widget « Réponse rapide », App Shortcut
+    /// « Send Message ») dans le brouillon de la conversation. Source de vérité
+    /// UNIQUE du dépôt, partagée par les deux voies d'entrée : ouverture
+    /// système (`DeepLinkRouter.handle`) et tap `Link` in-app
+    /// (`Router.handleConversationDeepLink`).
+    ///
+    /// **Ne remplace JAMAIS un brouillon qui porte déjà du texte.** Ce texte
+    /// est de la saisie utilisateur non envoyée ; un tap sur « OK » depuis
+    /// l'écran d'accueil dit ce que l'utilisateur veut écrire, pas qu'il
+    /// consent à détruire ce qu'il avait commencé. Dans ce cas on ne fait
+    /// rien — il voit son brouillon et tranche lui-même.
+    func stageShortcutDraft(_ text: String?, for conversationId: String) {
+        guard let text, !text.isEmpty else { return }
+        if let existing = load(for: conversationId), existing.hasDraftText { return }
+        saveText(text, for: conversationId)
+    }
+
     // MARK: - Maintenance
 
     func clearAll() {

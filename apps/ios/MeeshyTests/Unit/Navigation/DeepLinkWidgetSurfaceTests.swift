@@ -17,16 +17,17 @@ final class DeepLinkWidgetSurfaceParserTests: XCTestCase {
     func test_parse_customScheme_contact_returnsConversation() {
         let destination = DeepLinkParser.parse(URL(string: "meeshy://contact/conv123")!)
 
-        guard case .conversation(let id) = destination else {
+        guard case .conversation(let id, let draftText) = destination else {
             return XCTFail("Expected .conversation, got \(destination)")
         }
         XCTAssertEqual(id, "conv123")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_customScheme_quickReply_returnsConversation() {
         let destination = DeepLinkParser.parse(URL(string: "meeshy://quickreply/conv456?text=OK")!)
 
-        guard case .conversation(let id) = destination else {
+        guard case .conversation(let id, _) = destination else {
             return XCTFail("Expected .conversation, got \(destination)")
         }
         XCTAssertEqual(id, "conv456")
@@ -37,10 +38,60 @@ final class DeepLinkWidgetSurfaceParserTests: XCTestCase {
             URL(string: "meeshy://send?contactId=conv789&message=Bonjour")!
         )
 
-        guard case .conversation(let id) = destination else {
+        guard case .conversation(let id, _) = destination else {
             return XCTFail("Expected .conversation, got \(destination)")
         }
         XCTAssertEqual(id, "conv789")
+    }
+
+    // MARK: - Capture du brouillon (voie in-app)
+
+    /// Le texte du widget Réponse rapide voyage dans la destination : c'est ce
+    /// qui permet à `Router.handleConversationDeepLink` de le déposer en
+    /// brouillon. Avant cette capture, le tap in-app ouvrait la conversation
+    /// VIDE alors que la voie système déposait bien le texte.
+    func test_parse_customScheme_quickReply_capturesText() {
+        let destination = DeepLinkParser.parse(
+            URL(string: "meeshy://quickreply/conv456?text=Hello%20World")!
+        )
+
+        guard case .conversation(let id, let draftText) = destination else {
+            return XCTFail("Expected .conversation, got \(destination)")
+        }
+        XCTAssertEqual(id, "conv456")
+        XCTAssertEqual(draftText, "Hello World")
+    }
+
+    func test_parse_customScheme_send_capturesMessage() {
+        let destination = DeepLinkParser.parse(
+            URL(string: "meeshy://send?contactId=conv789&message=Bonjour%20Monde")!
+        )
+
+        guard case .conversation(let id, let draftText) = destination else {
+            return XCTFail("Expected .conversation, got \(destination)")
+        }
+        XCTAssertEqual(id, "conv789")
+        XCTAssertEqual(draftText, "Bonjour Monde")
+    }
+
+    func test_parse_customScheme_quickReply_withoutText_returnsNilDraft() {
+        let destination = DeepLinkParser.parse(URL(string: "meeshy://quickreply/conv123")!)
+
+        guard case .conversation(let id, let draftText) = destination else {
+            return XCTFail("Expected .conversation, got \(destination)")
+        }
+        XCTAssertEqual(id, "conv123")
+        XCTAssertNil(draftText)
+    }
+
+    func test_parse_customScheme_send_withoutMessage_returnsNilDraft() {
+        let destination = DeepLinkParser.parse(URL(string: "meeshy://send?contactId=conv456")!)
+
+        guard case .conversation(let id, let draftText) = destination else {
+            return XCTFail("Expected .conversation, got \(destination)")
+        }
+        XCTAssertEqual(id, "conv456")
+        XCTAssertNil(draftText)
     }
 
     /// Sans destinataire, l'App Shortcut ne désigne rien : mieux vaut rendre la
@@ -197,7 +248,7 @@ final class DeepLinkWidgetSurfaceRouterTests: XCTestCase {
         for raw in cases {
             let url = URL(string: raw)!
 
-            guard case .conversation(let parsedId) = DeepLinkParser.parse(url) else {
+            guard case .conversation(let parsedId, _) = DeepLinkParser.parse(url) else {
                 XCTFail("Parser n'a pas résolu \(raw) en .conversation")
                 continue
             }

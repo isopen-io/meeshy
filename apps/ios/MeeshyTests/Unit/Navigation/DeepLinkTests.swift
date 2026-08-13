@@ -40,11 +40,12 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_customScheme_conversation_returnsId() {
         let url = URL(string: "meeshy://c/abc123def456")!
         let result = DeepLinkParser.parse(url)
-        guard case .conversation(let id) = result else {
+        guard case .conversation(let id, let draftText) = result else {
             XCTFail("Expected .conversation, got \(result)")
             return
         }
         XCTAssertEqual(id, "abc123def456")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_customScheme_postShort_returnsPostId() {
@@ -141,11 +142,12 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_webUrl_conversation_returnsId() {
         let url = URL(string: "https://meeshy.me/c/conv789")!
         let result = DeepLinkParser.parse(url)
-        guard case .conversation(let id) = result else {
+        guard case .conversation(let id, let draftText) = result else {
             XCTFail("Expected .conversation, got \(result)")
             return
         }
         XCTAssertEqual(id, "conv789")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_webUrl_magicLink_returnsToken() {
@@ -251,11 +253,12 @@ final class DeepLinkParserTests: XCTestCase {
 
     func test_parse_webUrl_conversationLongForm_returnsConversation() {
         let url = URL(string: "https://meeshy.me/conversation/conv789")!
-        guard case .conversation(let id) = DeepLinkParser.parse(url) else {
+        guard case .conversation(let id, let draftText) = DeepLinkParser.parse(url) else {
             XCTFail("Expected .conversation")
             return
         }
         XCTAssertEqual(id, "conv789")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_webUrl_join_emptyId_returnsExternal() {
@@ -286,11 +289,12 @@ final class DeepLinkParserTests: XCTestCase {
 
     func test_parse_customScheme_conversationLongForm_returnsConversation() {
         let url = URL(string: "meeshy://conversation/conv222")!
-        guard case .conversation(let id) = DeepLinkParser.parse(url) else {
+        guard case .conversation(let id, let draftText) = DeepLinkParser.parse(url) else {
             XCTFail("Expected .conversation")
             return
         }
         XCTAssertEqual(id, "conv222")
+        XCTAssertNil(draftText)
     }
 
     // MARK: - External URLs
@@ -409,11 +413,12 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_universalLink_conversation_returnsId() {
         let url = URL(string: "https://meeshy.me/c/60d0fe4f5311236168a109ca")!
         let result = DeepLinkParser.parse(url)
-        guard case .conversation(let id) = result else {
+        guard case .conversation(let id, let draftText) = result else {
             XCTFail("Expected .conversation, got \(result)")
             return
         }
         XCTAssertEqual(id, "60d0fe4f5311236168a109ca")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_universalLink_magic_returnsToken() {
@@ -429,11 +434,12 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_universalLink_appSubdomain_conversation() {
         let url = URL(string: "https://app.meeshy.me/c/conv999")!
         let result = DeepLinkParser.parse(url)
-        guard case .conversation(let id) = result else {
+        guard case .conversation(let id, let draftText) = result else {
             XCTFail("Expected .conversation, got \(result)")
             return
         }
         XCTAssertEqual(id, "conv999")
+        XCTAssertNil(draftText)
     }
 
     func test_parse_universalLink_unknownSubpath_returnsExternal() {
@@ -1428,7 +1434,7 @@ final class DeepLinkRouterConversationAliasLockstepTests: XCTestCase {
         for alias in conversationAliases {
             let url = URL(string: "meeshy://\(alias)/conv_\(alias)")!
 
-            guard case .conversation(let parsedId) = DeepLinkParser.parse(url) else {
+            guard case .conversation(let parsedId, _) = DeepLinkParser.parse(url) else {
                 XCTFail("Expected DeepLinkParser to resolve alias '\(alias)' to .conversation")
                 continue
             }
