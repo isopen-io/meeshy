@@ -1,5 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { LAST_MESSAGE_PREVIEW_MAX_LENGTH } from '../../routes/conversations/utils/last-message-preview';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 
 type Emitted = { room: string; event: string; payload: any };
@@ -299,6 +300,27 @@ describe('emitConversationPreviewUpdate', () => {
 
       expect(emitted.map((e) => e.room).sort()).toEqual(['user:user-es', 'user:user-fr']);
     });
+  });
+
+  // Les deux moitiés d'un même aperçu doivent porter le MÊME plafond. La carte
+  // de traductions le respectait déjà (`buildLastMessagePreviewTranslations`),
+  // l'aperçu de base partait brut : sous le Prisme, un lecteur servi par une
+  // traduction recevait 300 points de code et son voisin servi par l'original
+  // recevait le message entier, pour la même rangée de liste.
+  it('caps the base preview at the same length as the translated previews it ships with', async () => {
+    const emitted: Emitted[] = [];
+    const hugeLatest = {
+      ...latest,
+      content: 'a'.repeat(LAST_MESSAGE_PREVIEW_MAX_LENGTH + 500),
+      originalLanguage: 'en',
+      translations: { fr: { text: 'b'.repeat(LAST_MESSAGE_PREVIEW_MAX_LENGTH + 500), targetLanguage: 'fr' } },
+    };
+    const prisma = makePrisma([FR_READER], hugeLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessagePreview).toHaveLength(LAST_MESSAGE_PREVIEW_MAX_LENGTH);
+    expect(emitted[0].payload.lastMessageTranslations.fr).toHaveLength(LAST_MESSAGE_PREVIEW_MAX_LENGTH);
   });
 
   it('is a no-op when the Socket.IO layer is unavailable', async () => {

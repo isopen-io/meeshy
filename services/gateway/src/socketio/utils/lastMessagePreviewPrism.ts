@@ -1,5 +1,8 @@
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
-import { buildLastMessagePreviewTranslations } from '../../routes/conversations/utils/last-message-preview';
+import {
+  buildLastMessagePreviewTranslations,
+  truncateMessagePreview,
+} from '../../routes/conversations/utils/last-message-preview';
 
 /**
  * Le fragment `select` Prisma que TOUT émetteur d'aperçu de ligne de liste doit
@@ -43,11 +46,19 @@ export interface PreviewPrismParticipant {
 }
 
 export interface PreviewPrismMessage {
+  /**
+   * Le texte du dernier message, c'est-à-dire l'aperçu SERVI au lecteur dont le
+   * prisme ne rend aucune traduction — la règle #1. Il appartient donc à cette
+   * fonction au même titre que la carte : les deux sont deux issues du MÊME
+   * résolveur, et c'est ce qui les oblige au même plafond.
+   */
+  readonly content?: string | null;
   readonly translations?: unknown;
   readonly originalLanguage?: string | null;
 }
 
 export interface LastMessagePreviewPrism {
+  readonly lastMessagePreview: string | null;
   readonly lastMessageTranslations: Record<string, string> | null;
   readonly lastMessageOriginalLanguage: string | null;
 }
@@ -70,6 +81,15 @@ export interface LastMessagePreviewPrism {
  * la même écriture que le nouveau contenu (`routes/messages.ts`), tout en
  * gardant le MÊME `lastMessageId` — aucune heuristique client ne peut trancher
  * ce cas, et un vidage inconditionnel casserait le chemin d'envoi (cycle 65).
+ *
+ * Rend AUSSI `lastMessagePreview`, plafonné. Les trois émetteurs temps réel le
+ * composaient chacun de leur côté (`message.content`, `latest?.content ?? null`)
+ * et aucun ne passait par `truncateMessagePreview` — alors que la carte de
+ * traductions du MÊME payload y passe, et que la liste REST y passe aussi. Le
+ * plafond dépendait donc de la langue du lecteur : servi par une traduction on
+ * recevait 300 points de code, servi par l'original on recevait le message
+ * entier. Le rendre ici est ce qui rend la paire indissociable — un appelant ne
+ * peut plus émettre la moitié plafonnée sans l'autre.
  */
 export function resolveLastMessagePreviewPrism(
   participant: PreviewPrismParticipant,
@@ -81,6 +101,11 @@ export function resolveLastMessagePreviewPrism(
     : [];
 
   return {
+    // `?? null` sur le RÉSULTAT de la troncature, jamais avant : un message
+    // position-seule a un `content` VIDE que le client compose depuis
+    // `location`, et `'' ?? null` vaut `''` — le forcer à `null` ferait
+    // disparaître sa ligne d'aperçu.
+    lastMessagePreview: truncateMessagePreview(message?.content) ?? null,
     lastMessageOriginalLanguage: message?.originalLanguage ?? null,
     lastMessageTranslations: buildLastMessagePreviewTranslations({
       translations: message?.translations,
