@@ -3741,8 +3741,11 @@ final class CallManagerFormatDurationTests: XCTestCase {
 // MARK: - Proximity Monitoring Source Audit
 
 /// Verifies that `updateProximityMonitoring` is correctly wired to both
-/// `callState` and `isVideoEnabled`, and that the condition is right:
-/// monitoring is ON only during audio-only active calls.
+/// `callState` and `isVideoEnabled`, that the condition is right — monitoring
+/// is ON only while the call UI is audio-only (`isVideoUIActive`, not the
+/// local-only `isVideoEnabled`) — and that the two sites which change the
+/// REMOTE video state re-evaluate it, exactly like the sibling
+/// `updateAudioSessionModeForCurrentVideoState()` already does.
 @MainActor
 final class CallManagerProximityMonitoringTests: XCTestCase {
 
@@ -3803,14 +3806,72 @@ final class CallManagerProximityMonitoringTests: XCTestCase {
             XCTFail("updateProximityMonitoring body end not found"); return
         }
         let body = String(after[after.startIndex..<bodyEnd.upperBound])
+        guard let predicateLine = body.components(separatedBy: "\n").first(where: { $0.contains("let shouldMonitor") }) else {
+            XCTFail("shouldMonitor predicate line not found"); return
+        }
         XCTAssertTrue(
-            body.contains("callState.isActive") && body.contains("isVideoEnabled"),
-            "updateProximityMonitoring must gate on `callState.isActive && !isVideoEnabled` — " +
-            "proximity monitoring must only be active during audio-only active calls"
+            predicateLine.contains("callState.isActive") && predicateLine.contains("isVideoUIActive"),
+            "updateProximityMonitoring must gate on `callState.isActive && !isVideoUIActive` — " +
+            "a REMOTE-only video escalation (isVideoEnabled stays false locally) must also " +
+            "disarm the sensor, not just a local camera toggle"
+        )
+        XCTAssertFalse(
+            predicateLine.contains("!isVideoEnabled"),
+            "the predicate must not regress to gating on the local-only `isVideoEnabled` — " +
+            "that leaves proximity monitoring armed for the entire duration of a call where " +
+            "only the REMOTE peer's camera is on, blanking the screen and eating touch input"
         )
         XCTAssertTrue(
             body.contains("isProximityMonitoringEnabled"),
             "updateProximityMonitoring must write to UIDevice.current.isProximityMonitoringEnabled"
+        )
+    }
+
+    func test_updateProximityMonitoring_isCalledWhenRemoteVideoToggleReceived() throws {
+        let source = try callManagerSource()
+        guard let caseRange = source.range(of: "case \"video\":") else {
+            XCTFail("callMediaToggled \"video\" case not found"); return
+        }
+        let after = String(source[caseRange.upperBound...])
+        guard let nextCase = after.range(of: "case \"audio\":") else {
+            XCTFail("callMediaToggled \"audio\" case not found"); return
+        }
+        let block = String(after[after.startIndex..<nextCase.lowerBound])
+        XCTAssertTrue(
+            block.contains("self.isRemoteVideoEnabled = event.enabled"),
+            "sanity: expected to be scoped to the callMediaToggled video branch"
+        )
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "the callMediaToggled \"video\" branch must call updateProximityMonitoring() " +
+            "alongside updateAudioSessionModeForCurrentVideoState() — a remote camera toggle " +
+            "flips isVideoUIActive and the sensor must be re-armed/disarmed to match"
+        )
+    }
+
+    func test_updateProximityMonitoring_isCalledWhenRemoteVideoTrackFirstArrives() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "didReceiveRemoteVideoTrack track: Any) {") else {
+            XCTFail("didReceiveRemoteVideoTrack handler not found"); return
+        }
+        let after = String(source[fnRange.upperBound...])
+        guard let ifRange = after.range(of: "if !wasVideoUIActive && self.isVideoUIActive {") else {
+            XCTFail("wasVideoUIActive re-evaluation guard not found"); return
+        }
+        let afterIf = String(after[ifRange.upperBound...])
+        guard let blockEnd = afterIf.range(of: "\n            }") else {
+            XCTFail("guard block end not found"); return
+        }
+        let block = String(afterIf[afterIf.startIndex..<blockEnd.upperBound])
+        XCTAssertTrue(
+            block.contains("updateAudioSessionModeForCurrentVideoState()"),
+            "sanity: expected to be scoped to the wasVideoUIActive transition guard"
+        )
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "didReceiveRemoteVideoTrack must call updateProximityMonitoring() next to " +
+            "updateAudioSessionModeForCurrentVideoState() — the first remote video frame on an " +
+            "audio-started call flips isVideoUIActive and must disarm the sensor"
         )
     }
 }
