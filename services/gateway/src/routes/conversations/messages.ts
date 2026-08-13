@@ -79,23 +79,11 @@ function isStaleCursorMessageId(params: {
   return candidateMessageId.toLowerCase() < cursorMessageId.toLowerCase();
 }
 
-/**
- * Nested-user fields fetched for a message sender in the GET messages select.
- *
- * T16 — only the fields the response actually derives are fetched: the handler
- * overlays the top-level sender username / displayName / avatar from this
- * nested user (with the flat Participant fields as the primary). `firstName`,
- * `lastName`, `systemLanguage` and `role` are NOT selected: the response schema
- * (`messageSenderSchema`) strips the nested user entirely and never exposes
- * systemLanguage/role, `firstName`/`lastName` are read by no client, so
- * fetching them was pure per-message DB over-fetch.
- */
-export const messageSenderUserSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true
-} as const;
+// Le fragment vit dans `utils/message-sender-select.ts` (partagé avec le delta
+// `/sync`, qui ne peut pas importer ce module de routes) et reste ré-exporté ici
+// pour les appelants historiques.
+import { messageSenderUserSelect } from './utils/message-sender-select';
+export { messageSenderUserSelect };
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
