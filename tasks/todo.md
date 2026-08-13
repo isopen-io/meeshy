@@ -131,13 +131,13 @@ sur le stream `deleted`, court-circuit du masquage) — aucune n'est portée par
 **Gates.** `tsc --noEmit` propre ; suite gateway complète **710/710 suites, 17 344 tests** verts.
 
 ### Reste ouvert après ce cycle
-- **`gwcontract-12` (nouveau, P3/S)** : `messages.ts` garde sa copie inline de la règle de plancher
+- **`gwcontract-14` (nouveau, P3/S — renuméroté au cycle 116, collision avec la fiche `gwcontract-12-message-consumed-literal` préexistante)** : `messages.ts` garde sa copie inline de la règle de plancher
   (il y ajoute les 403 `SHARE_LINK_EXPIRED`/`SHARE_LINK_MAX_USES`). Deux lecteurs d'une même règle —
   la famille de défauts des cycles 105-111. La convergence demande de séparer le FILTRE de la
   DÉCISION DE RÉPONSE, pas de les empiler.
 - **`/sync` n'applique pas les 403 expiry/maxUses** qu'applique `GET messages` : un lien expiré
   garde son canal delta tant que la session reste `isActive`. Non traité ici (la fiche ne le demande
-  pas, et c'est une décision de réponse, pas un filtre) — c'est l'objet de `gwcontract-12`.
+  pas, et c'est une décision de réponse, pas un filtre) — c'est l'objet de `gwcontract-14`.
 - **`net-02` (P1, iOS)** : le volet client du même Lot 7. Non livrable depuis un runner Linux.
 - **`sync-01`** : aucun client n'appelle encore `/sync` — l'impact de tout ce lot reste prospectif
   tant que le backfill iOS n'est pas câblé.
@@ -185,11 +185,15 @@ vertes ; web `tsc` inchangé (1 229 erreurs préexistantes, identiques avant/apr
 - **Volet iOS de `gwcontract-05`** : décoder `notification:read-bulk` (`MessageSocketManager` +
   `NotificationToastManager`) et porter le prédicat en Swift. Non livrable depuis un runner Linux.
   L'événement est additif — un client qui l'ignore se comporte exactement comme avant.
-- **`deleteAllRead` (nouveau, P2/S)** : symétrique exact côté SUPPRESSIONS. « Supprimer toutes les
-  lues » n'émet que `notification:counts` ; les lignes purgées restent listées sur les autres
-  appareils. Demanderait un `notification:deleted-bulk` (scope `{kind:'read'}`).
+- **`gwcontract-13` (nouvelle fiche écrite ce cycle, P2/S)** : symétrique exact côté SUPPRESSIONS.
+  « Supprimer toutes les lues » n'émet que `notification:counts`, **qui ne dit rien ici** — seules des
+  lignes DÉJÀ lues partent, `unread` est inchangé — et les lignes purgées restent listées sur les
+  autres appareils. Le prédicat à diffuser est DÉJÀ écrit côté acteur
+  (`useDeleteAllReadNotificationsMutation`, optimiste) : le correctif ne demande aucune règle
+  nouvelle. Fiche complète dans `06-reseau-et-contrat-gateway.md` (événement additif
+  `notification:deleted-bulk { scope: {kind:'read'} }`, union à un membre par anticipation).
 - **`apps/web/utils/socket-validator.ts` est du code mort** : zéro appelant hors de son propre
   fichier de test. Il n'a délibérément PAS été étendu au nouvel événement (ajouter un schéma à un
   validateur inutilisé, c'est ajouter du code mort). À retirer ou à brancher — décision à instruire.
-- Hérités : `gwcontract-12` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
+- Hérités : `gwcontract-14` (copie inline du plancher d'historique dans `messages.ts`), `net-02`
   (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`).
