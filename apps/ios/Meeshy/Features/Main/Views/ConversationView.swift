@@ -120,6 +120,16 @@ struct PendingAudioEdit: Identifiable, Equatable {
 }
 
 struct ConversationComposerState {
+    /// Plafond de sélection média du composer de conversation.
+    ///
+    /// Relevé de 10 à 199 (2026-08-14). Le planner ne découpe PAS par lot :
+    /// `MultiAttachmentSendPlanner` produit UNE bulle par type (audio /
+    /// visuel), donc 199 photos restent un seul message — la montée de plafond
+    /// ne multiplie pas les bulles, elle lève juste la contrainte de saisie.
+    /// L'envoi lui-même est borné par la concurrence d'upload, pas par ce
+    /// nombre (cf. `TusUploadManager.maxConcurrent`).
+    static let maxMediaSelection = 199
+
     var showOptions = false
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
