@@ -910,6 +910,45 @@ final class ConversationSyncEngineTests: XCTestCase {
                        "opening a conversation must reset its unread count locally")
     }
 
+    // MARK: - L'agrégat exclut la conversation ouverte DÈS le tour de boucle
+    //
+    // `totalConversationsUnread` est un `CurrentValueSubject` : il rejoue sa
+    // dernière valeur à l'abonnement. Publier l'exclusion depuis le `Task` qui
+    // écrit le cache laissait donc `ConversationViewModel.start()` — qui
+    // s'abonne juste après avoir déclaré la conversation ouverte — recevoir le
+    // total d'AVANT l'ouverture, celui qui INCLUT la conversation qu'on vient
+    // d'ouvrir. La pastille du bouton retour affichait ce total puis retombait :
+    // le scintillement rapporté par l'utilisateur.
+
+    func test_setCurrentlyOpenConversation_excludesOpenConv_withoutAwaitingTheCacheWrite() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("sync-open-conv", 99), ("sync-other-conv", 3)])
+        await engine.startSocketRelay()
+        XCTAssertEqual(engine.totalConversationsUnreadValue, 102, "préalable : les deux comptent")
+
+        engine.setCurrentlyOpenConversation("sync-open-conv")
+
+        // AUCUNE attente : la valeur doit être juste immédiatement.
+        XCTAssertEqual(engine.totalConversationsUnreadValue, 3,
+                       "l'exclusion doit être publiée dans le tour de boucle de l'ouverture, pas après un aller-retour cache")
+    }
+
+    func test_setCurrentlyOpenConversation_aSubscriberAttachedAfterwards_neverSeesThePreOpenTotal() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("late-open-conv", 99), ("late-other-conv", 3)])
+        await engine.startSocketRelay()
+
+        engine.setCurrentlyOpenConversation("late-open-conv")
+
+        var firstReplayed: Int?
+        engine.totalConversationsUnread
+            .sink { if firstReplayed == nil { firstReplayed = $0 } }
+            .store(in: &cancellables)
+
+        XCTAssertEqual(firstReplayed, 3,
+                       "c'est CETTE valeur que le premier rendu de l'écran affiche — 102 y serait le « 99 » du glitch")
+    }
+
     func test_setCurrentlyOpenConversation_nil_restoresNormalPassThrough() async {
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         await seedConversations([("conv-1", 0)])

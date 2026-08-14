@@ -171,15 +171,13 @@ final class NotificationActionHandler: NotificationActionHandling {
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
         localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
-            NotificationCoordinator.shared.markConversationRead(conversationId)
-            NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
-            // Frontière de lecture LOCALE : `.conversationMarkedRead` ne touche
-            // que les tableaux @Published — sans cette écriture GRDB, le
-            // prochain `reloadFromCache()` ré-affichait la pastille.
-            Task { await ConversationSyncEngine.shared.markConversationReadLocally(conversationId) }
+            // Les trois surfaces du compteur, en un seul point d'écriture.
+            ConversationReadSignal.markReadLocally(conversationId)
             // Notifications de la cloche (portée conversation) : serveur +
             // cache + publishers, sans déclarer la conversation active
-            // (l'app peut être en arrière-plan, rien n'est ouvert).
+            // (l'app peut être en arrière-plan, rien n'est ouvert). Hors du
+            // signal ci-dessus, qui ne porte QUE le compteur de non-lu : une
+            // ouverture d'écran passe, elle, par `onConversationOpened`.
             NotificationToastManager.shared.onConversationMarkedRead(conversationId)
         },
         removeDeliveredForConversation: @escaping @MainActor (String) -> Void = { conversationId in

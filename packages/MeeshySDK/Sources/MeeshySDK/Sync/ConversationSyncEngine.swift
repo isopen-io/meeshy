@@ -142,6 +142,13 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         get { stateQueue.sync { _currentlyOpenConversationId } }
         set { stateQueue.sync { _currentlyOpenConversationId = newValue } }
     }
+    /// Miroir SYNCHRONE du `unreadCount` de chaque conversation en cache,
+    /// rafraîchi par `recomputeTotalUnread`. Il n'introduit pas une seconde
+    /// vérité : c'est une projection du cache, jamais écrite ailleurs — mais
+    /// il permet de republier l'agrégat SANS attendre un aller-retour cache,
+    /// ce dont dépend l'absence de scintillement à l'ouverture (cf.
+    /// `publishTotalUnread`).
+    private var _unreadByConversation: [String: Int] = [:]
     private var socketSubscriptions = Set<AnyCancellable>()
 
     /// Optional hook the host app installs to persist raw `APIMessage`
@@ -1914,7 +1921,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     ///
     /// La frontière locale est toujours préservée (le serveur ne la porte pas),
     /// ce qui laisse `markAsUnread` — qui l'efface — survivre au prochain sync.
-    nonisolated static func reconcileUnread(
+    ///
+    /// Règle UNIQUE du non-lu local : `ConversationStore.hydrateMetadata`
+    /// applique CETTE fonction, et non une variante à lui. Le store RAM et le
+    /// cache disque ne peuvent donc pas diverger sur ce qu'« ouverte » ou
+    /// « déjà lue » veut dire — c'était la source du va-et-vient 0 ↔ 99 :
+    /// le cache réconcilié disait 0, le store republiait 99, et la ligne
+    /// affichait celui des deux qui avait émis en dernier.
+    public nonisolated static func reconcileUnread(
         incoming: MeeshyConversation,
         local: MeeshyConversation?,
         openConversationId: String?,
@@ -1923,7 +1937,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         var result = incoming
         // La frontière ne voyage que localement : la reprendre du cache est la
         // seule façon qu'elle traverse l'écrasement par l'instantané serveur.
-        result.userState.lastReadAt = local?.userState.lastReadAt ?? incoming.userState.lastReadAt
+        //
+        // MAX et non `local ?? incoming` : sur le chemin serveur, `incoming` ne
+        // porte jamais de frontière et les deux formes coïncident ; sur le
+        // chemin store (`hydrateMetadata`, où `incoming` EST le cache, qui en
+        // porte une) la forme `??` ferait RECULER une frontière que le cache
+        // vient d'avancer. Une frontière de lecture est monotone partout
+        // ailleurs (`applyReadReceipt`) — elle doit l'être ici aussi.
+        result.userState.lastReadAt = [
+            local?.userState.lastReadAt, incoming.userState.lastReadAt
+        ].compactMap { $0 }.max()
 
         if incoming.id == openConversationId {
             result.userState.unreadCount = 0
@@ -1939,7 +1962,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en
     /// la confrontant à son homologue en cache.
-    nonisolated static func reconcileUnread(
+    public nonisolated static func reconcileUnread(
         incoming: [MeeshyConversation],
         existing: [MeeshyConversation],
         openConversationId: String?,
@@ -1957,19 +1980,37 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
     }
 
-    /// Reads the authoritative cache for the conversation list, sums the
-    /// `unreadCount` of every entry (clamped to ≥ 0 to defend against bogus
-    /// negative values), and publishes the result. The currently-open
-    /// conversation is excluded — cross-conversation surfaces (back-button
-    /// pill, side menus) count OTHER conversations only. Cheap: one cache
-    /// read + a linear reduce; runs only when a mutation likely changed
-    /// the total.
+    /// Reads the authoritative cache for the conversation list, refreshes the
+    /// synchronous per-conversation mirror, and republishes the aggregate.
+    /// Cheap: one cache read + a linear reduce; runs only when a mutation
+    /// likely changed the total.
     private func recomputeTotalUnread() async {
         let cached = await cache.conversations.load(for: "list").snapshot() ?? []
-        let openId = currentlyOpenConversationId
-        let total = cached.reduce(0) { acc, conv in
-            guard conv.id != openId else { return acc }
-            return acc + max(0, conv.userState.unreadCount)
+        let mirror = Dictionary(
+            cached.map { ($0.id, $0.userState.unreadCount) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        stateQueue.sync { _unreadByConversation = mirror }
+        publishTotalUnread()
+    }
+
+    /// Sums the mirror, excluding the currently-open conversation — les
+    /// surfaces inter-conversations (pastille du bouton retour, menus
+    /// latéraux) ne comptent QUE les autres. Clamp ≥ 0 contre un compteur
+    /// serveur aberrant.
+    ///
+    /// SYNCHRONE, et c'est tout l'intérêt : `setCurrentlyOpenConversation`
+    /// pose le gate puis republie ICI, dans le même tour de boucle, AVANT le
+    /// `Task` qui va écrire le cache. Sans ce miroir, l'agrégat restait à sa
+    /// valeur d'AVANT l'ouverture (un `CurrentValueSubject` rejoue sa dernière
+    /// valeur à l'abonnement) et `ConversationViewModel.start()`, qui s'abonne
+    /// juste après, recevait le total INCLUANT la conversation qu'on vient
+    /// d'ouvrir : la pastille affichait « 99 » puis retombait — le glitch.
+    private func publishTotalUnread() {
+        let (mirror, openId) = stateQueue.sync { (_unreadByConversation, _currentlyOpenConversationId) }
+        let total = mirror.reduce(0) { acc, entry in
+            guard entry.key != openId else { return acc }
+            return acc + max(0, entry.value)
         }
         _totalConversationsUnread.send(total)
     }
@@ -1978,12 +2019,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     public func setCurrentlyOpenConversation(_ conversationId: String?) {
         currentlyOpenConversationId = conversationId
+        // SYNCHRONE, avant tout `Task` : l'agrégat doit avoir exclu (ou
+        // ré-inclus) cette conversation AVANT que l'écran qui vient de
+        // s'ouvrir s'abonne. Un `CurrentValueSubject` rejoue sa dernière
+        // valeur à l'abonnement — publier depuis le `Task` ci-dessous laissait
+        // donc le premier rendu afficher le total d'AVANT l'ouverture.
+        publishTotalUnread()
         guard let id = conversationId else {
-            // Restoring pass-through: recompute the aggregator so the
-            // previously-excluded conversation is now counted.
+            // Restoring pass-through: recompute from the cache so the
+            // previously-excluded conversation is counted with a fresh value.
             Task { await self.recomputeTotalUnread() }
             return
         }
+        // `unreadCount` local à zéro dans le miroir : la ligne est lue dès
+        // l'ouverture, et l'agrégat ne doit pas la recompter à la fermeture
+        // sur la foi d'une valeur d'avant.
+        stateQueue.sync { _unreadByConversation[id] = 0 }
         // On entry, defensively zero the unread count of the open
         // conversation. The cache may carry an inflated value left over
         // from a stale `conversation:unread-updated` broadcast or from a

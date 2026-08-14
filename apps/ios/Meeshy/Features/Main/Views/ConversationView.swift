@@ -1156,6 +1156,11 @@ struct ConversationView: View {
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
                 flushSeenTrigger: scrollState.flushSeenTrigger,
                 isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
+                // Header déplié = la pill de jour se retire. Les deux vivent
+                // dans la même bande haute ; le déplié étant un geste
+                // explicite vers les détails de la conversation, c'est lui qui
+                // gagne (retour user 2026-08-13).
+                isHeaderExpanded: composerState.showOptions,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
                 },

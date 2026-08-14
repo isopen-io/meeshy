@@ -264,4 +264,63 @@ final class MiniAudioPlayerBarTests: XCTestCase {
             "The precedent this bar mirrors must itself stay at the 44 pt floor."
         )
     }
+
+    // MARK: - Habillage : aplat indigo, angles droits (retour user 2026-08-13)
+
+    func test_bar_isAFlatIndigoBand_notAGlassCapsule() throws {
+        let code = try barSource()
+
+        XCTAssertFalse(
+            code.contains("adaptiveGlass"),
+            "Le mini-lecteur ne flotte pas : il occupe une bande du VStack de " +
+            "compression de RootView. Le verre lui faisait emprunter sa couleur " +
+            "au contenu qui défilait derrière, et promettait un objet flottant."
+        )
+        XCTAssertFalse(
+            code.contains("clipShape(Capsule())"),
+            "Plus d'arrondi : la bande va d'un bord à l'autre."
+        )
+        XCTAssertTrue(
+            code.contains(".background(MiniAudioPlayerBarStyle.background)"),
+            "Le fond doit être l'aplat de marque, posé via le token de style."
+        )
+        XCTAssertTrue(
+            code.contains(".frame(maxWidth: .infinity)"),
+            "La bande doit occuper toute la largeur — un aplat inséré laisserait " +
+            "deviner la capsule qu'il remplace."
+        )
+    }
+
+    func test_barStyle_paintsAnOpaqueIndigo() {
+        XCTAssertEqual(
+            MiniAudioPlayerBarStyle.background,
+            MeeshyColors.indigo600,
+            "« Couleur plate d'indigo » : l'indigo de marque plein, pas un dégradé " +
+            "ni une teinte translucide."
+        )
+    }
+
+    func test_barContents_neverRelyOnSystemPrimaryOrSecondary() throws {
+        let code = try barSource()
+
+        // Sur un aplat indigo soutenu, `.primary` vire au NOIR en thème clair —
+        // illisible. Les deux tokens de style sont la seule source de couleur
+        // de texte et d'icône de la barre.
+        XCTAssertFalse(
+            code.contains("foregroundColor(.primary)"),
+            "Un contenu en .primary devient noir sur l'indigo en thème clair."
+        )
+        XCTAssertFalse(
+            code.contains("foregroundColor(.secondary)"),
+            "Un contenu en .secondary devient gris sombre sur l'indigo en thème clair."
+        )
+        XCTAssertTrue(
+            code.contains("MiniAudioPlayerBarStyle.primaryForeground"),
+            "Les contenus principaux passent par le token de premier plan."
+        )
+        XCTAssertTrue(
+            code.contains("MiniAudioPlayerBarStyle.secondaryForeground"),
+            "Les contenus secondaires passent par le token atténué."
+        )
+    }
 }

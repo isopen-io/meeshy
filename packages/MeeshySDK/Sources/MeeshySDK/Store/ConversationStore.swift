@@ -220,17 +220,35 @@ public actor ConversationStore {
     /// clobber an optimistic toggle that is still draining through the
     /// outbox. Conversations the store doesn't know yet are seeded
     /// wholesale.
+    ///
+    /// Le non-lu échappe au garde-fou de version : il ne participe PAS au
+    /// versionnement (`applyReadReceipt` et le zéro d'ouverture ne bumpent
+    /// jamais `version` — §9 du design), donc `existing.version > incoming.version`
+    /// est faux à l'égalité et l'instantané entrant repassait tel quel. Un
+    /// cache momentanément en retard sur la lecture locale ressuscitait ainsi
+    /// la pastille dans le store, qui la regreffait sur la ligne à sa
+    /// prochaine republication : le va-et-vient 0 ↔ 99 vu à l'ouverture.
+    /// La parade n'est pas une règle de plus, c'est LA règle — celle du
+    /// moteur de sync, appliquée ici au même titre (`reconcileUnread`).
     public func hydrateMetadata(_ convs: [MeeshyConversation]) {
         for incoming in convs {
-            let merged: MeeshyConversation
-            if let existing = conversations[incoming.id],
-               existing.userState.version > incoming.userState.version {
-                var grafted = incoming
-                grafted.userState = existing.userState
-                merged = grafted
+            let existing = conversations[incoming.id]
+            var merged: MeeshyConversation
+            if let existing, existing.userState.version > incoming.userState.version {
+                merged = incoming
+                merged.userState = existing.userState
             } else {
                 merged = incoming
             }
+            // `openConversationId: nil` — le gate « conversation ouverte » n'a
+            // pas à être re-consulté ici : l'ouverture pose déjà une frontière
+            // de lecture sur CE store (`ConversationReadSignal`, app), et la
+            // règle 2 de `reconcileUnread` en tire exactement la même
+            // conclusion. Le lui repasser couplerait le store au singleton du
+            // moteur pour un résultat identique.
+            merged = ConversationSyncEngine.reconcileUnread(
+                incoming: merged, local: existing, openConversationId: nil
+            )
             conversations[merged.id] = merged
             if let subject = subjects.subject(for: merged.id, initial: { merged }) {
                 subject.send(merged)

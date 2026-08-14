@@ -203,6 +203,91 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(after.userState.version, 6)
     }
 
+    // MARK: - hydrateMetadata : le non-lu échappe au garde-fou de version
+    //
+    // `applyReadReceipt` (et le zéro posé à l'ouverture d'une conversation) ne
+    // bumpent JAMAIS `version` — le versionnement est réservé aux préférences.
+    // Le garde-fou `existing.version > incoming.version` est donc faux à
+    // l'égalité, et l'instantané entrant repassait tel quel : un cache en
+    // retard d'une lecture locale ressuscitait la pastille DANS le store, qui
+    // la regreffait ensuite sur la ligne à sa prochaine republication. C'est le
+    // va-et-vient 0 ↔ 99 vu à l'ouverture d'une conversation.
+
+    /// `unreadCount:` et `userState:` sont exclusifs sur l'init de
+    /// `MeeshyConversation` (le second gagne) — ce constructeur ne pose donc
+    /// le compteur QUE par `userState`, sans quoi les cas ci-dessous
+    /// passeraient tous pour la mauvaise raison.
+    private func makeUnreadConv(
+        unread: Int,
+        lastMessageAt: Date,
+        lastReadAt: Date? = nil,
+        version: Int = 5
+    ) -> MeeshyConversation {
+        MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            lastMessageAt: lastMessageAt,
+            createdAt: lastMessageAt, updatedAt: lastMessageAt,
+            userState: ConversationUserState(
+                unreadCount: unread, lastReadAt: lastReadAt, version: version
+            )
+        )
+    }
+
+    func test_hydrateMetadata_doesNotResurrectAnUnreadClearedLocally() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        await store.hydrate(makeUnreadConv(unread: 99, lastMessageAt: t0))
+        // La lecture locale : compteur à zéro, frontière posée APRÈS le dernier
+        // message connu. Aucun bump de version — c'est tout le piège.
+        await store.applyReadReceipt(ReadStatusEvent(
+            conversationId: "conv-1", unreadCount: 0, lastReadAt: t0.addingTimeInterval(1)
+        ))
+
+        // Instantané de cache encore au compte d'avant, à la MÊME version.
+        await store.hydrateMetadata([makeUnreadConv(unread: 99, lastMessageAt: t0)])
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.unreadCount, 0,
+                       "la frontière locale est postérieure au dernier message : le compteur entrant est en retard, pas neuf")
+    }
+
+    func test_hydrateMetadata_takesTheIncomingUnread_whenANewerMessageArrived() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        await store.hydrate(makeUnreadConv(unread: 0, lastMessageAt: t0))
+        await store.applyReadReceipt(ReadStatusEvent(
+            conversationId: "conv-1", unreadCount: 0, lastReadAt: t0.addingTimeInterval(1)
+        ))
+
+        // Un message VRAIMENT plus récent que la frontière : la règle se répare
+        // toute seule et ne peut pas masquer durablement un vrai non-lu.
+        await store.hydrateMetadata([
+            makeUnreadConv(unread: 3, lastMessageAt: t0.addingTimeInterval(60))
+        ])
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.unreadCount, 3)
+    }
+
+    func test_hydrateMetadata_keepsTheNewerReadFrontier_fromEitherSide() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        await store.hydrate(makeUnreadConv(unread: 0, lastMessageAt: t0))
+        await store.applyReadReceipt(ReadStatusEvent(
+            conversationId: "conv-1", unreadCount: 0, lastReadAt: t0.addingTimeInterval(10)
+        ))
+
+        // Le cache porte une frontière PLUS RÉCENTE (une lecture faite depuis
+        // une autre surface, déjà persistée). La reprendre du local sans
+        // comparer la ferait reculer — une frontière de lecture est monotone.
+        await store.hydrateMetadata([
+            makeUnreadConv(unread: 0, lastMessageAt: t0, lastReadAt: t0.addingTimeInterval(30))
+        ])
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.lastReadAt, t0.addingTimeInterval(30))
+    }
+
     func test_hydrateMetadata_publishesPerConvAndList() async {
         let (store, _, _, _) = makeStore()
         let conv = makeConv()

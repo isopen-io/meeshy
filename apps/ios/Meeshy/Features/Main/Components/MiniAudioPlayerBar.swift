@@ -2,6 +2,24 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Habillage du mini-lecteur : **aplat indigo, angles droits, pleine largeur**.
+///
+/// Le bandeau ne flotte pas — il occupe une bande du `VStack` de compression de
+/// `RootView`, au même titre que la bannière d'appel. Un aplat de marque opaque
+/// dit exactement cela ; la capsule Liquid Glass qu'il portait jusqu'au
+/// 2026-08-13 promettait au contraire un objet flottant, et empruntait sa
+/// couleur au contenu qui défilait derrière.
+///
+/// Le fond étant désormais un indigo soutenu dans les DEUX thèmes, les contenus
+/// ne peuvent plus s'en remettre à `.primary`/`.secondary` : ils vireraient au
+/// noir en thème clair. Les deux tokens ci-dessous sont donc la seule source de
+/// couleur de texte et d'icône de la barre.
+enum MiniAudioPlayerBarStyle {
+    static var background: Color { MeeshyColors.indigo600 }
+    static var primaryForeground: Color { .white }
+    static var secondaryForeground: Color { Color.white.opacity(0.72) }
+}
+
 /// Mini-player flottant qui suit le `ConversationAudioCoordinator.shared`.
 ///
 /// Visibilité contrôlée par `coordinator.activeContext`. Pendant 5s après la fin de
@@ -9,6 +27,9 @@ import MeeshyUI
 /// pour animer un fade-out propre au lieu de disparaître instantanément.
 ///
 /// Pure orchestration UX produit — kept app-side per SDK purity rule.
+///
+/// Habillage : aplat indigo bord à bord, angles droits — voir
+/// `MiniAudioPlayerBarStyle`.
 struct MiniAudioPlayerBar: View {
     /// Named magic numbers for the mini-player's grace-fade lifecycle.
     private enum Constants {
@@ -123,11 +144,12 @@ struct MiniAudioPlayerBar: View {
             // button rather than as disconnected monogram / name / percent
             // fragments, and the whole-card tap action stays reachable non-visually.
             HStack(spacing: 10) {
-                // Avatar conv (fallback indigo gradient placeholder)
+                // Avatar conv. Le fond de la barre étant lui-même indigo
+                // plein, le placeholder ne peut plus être un dégradé indigo —
+                // il s'y fondrait. Voile blanc translucide : il se détache du
+                // fond quelle que soit la nuance choisie pour la barre.
                 Circle()
-                    .fill(LinearGradient(
-                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(Color.white.opacity(0.22))
                     .frame(width: 36, height: 36)
                     .overlay(
                         Text(String(context.senderName.prefix(1)).uppercased())
@@ -137,14 +159,15 @@ struct MiniAudioPlayerBar: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(context.senderName)
                         .font(.subheadline.weight(.semibold))
+                        .foregroundColor(MiniAudioPlayerBarStyle.primaryForeground)
                         .lineLimit(1)
                     Text(context.conversationName)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MiniAudioPlayerBarStyle.secondaryForeground)
                         .lineLimit(1)
                     ProgressView(value: max(0, min(1, coordinator.progress)))
                         .progressViewStyle(.linear)
-                        .tint(MeeshyColors.indigo500)
+                        .tint(MiniAudioPlayerBarStyle.primaryForeground)
                         .frame(height: 2)
                 }
             }
@@ -172,7 +195,7 @@ struct MiniAudioPlayerBar: View {
                 Button(action: { coordinator.togglePlayPause() }) {
                     Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
                         .font(.body.weight(.bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(MiniAudioPlayerBarStyle.primaryForeground)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -185,7 +208,7 @@ struct MiniAudioPlayerBar: View {
                 Button(action: { coordinator.playNext() }) {
                     Image(systemName: "forward.fill")
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MiniAudioPlayerBarStyle.secondaryForeground)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
@@ -194,22 +217,24 @@ struct MiniAudioPlayerBar: View {
                 Button(action: { coordinator.close() }) {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MiniAudioPlayerBarStyle.secondaryForeground)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        // iOS 26 Liquid Glass capsule — the SDK Compatibility wrapper owns the
-        // gating + the `.ultraThinMaterial` fallback. Inner controls stay as
-        // vibrancy fills ON the glass (Apple HIG: don't nest glass in glass).
-        // Same atom + pattern as the floating call pill.
-        .adaptiveGlass(in: Capsule())
-        .clipShape(Capsule())
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        // Bandeau INDIGO PLEIN, à angles droits, pleine largeur (retour user
+        // 2026-08-13). La capsule glass d'avant flottait au-dessus du contenu
+        // et empruntait sa couleur au fond : à ce point de montage — le bloc
+        // vit DANS le VStack de compression de `RootView`, il pousse l'écran
+        // vers le bas au lieu de le recouvrir — une pastille flottante ment
+        // sur ce qu'elle est. Un aplat de marque, bord à bord, se lit comme la
+        // bande d'état qu'il est réellement.
+        .frame(maxWidth: .infinity)
+        .background(MiniAudioPlayerBarStyle.background)
         // Petit espace vertical : que ce bloc soit le tout premier élément
         // du VStack de compression (pas d'appel actif — respire depuis la
         // safe area) ou qu'il suive `FloatingCallPillView` (appel actif —

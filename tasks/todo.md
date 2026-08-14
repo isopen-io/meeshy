@@ -44,6 +44,79 @@ un champ qui n'existe que là où le contrôle fonctionnait déjà.
 copie inline. Le recensement des lecteurs de `allowViewHistory` en a trouvé un **troisième**, non
 inventorié — et celui-là ne divergeait pas seulement, il fuyait.
 
+## Cycle 114-bis — PR #2968 (même run)
+
+*Renuméroté 114-bis à la fusion : une autre branche (`claude/keen-hamilton-dl8km4`) tournait en
+parallèle et a livré son propre « cycle 115 » (`GET /sync` ouvert aux sessions anonymes, leçon 239),
+mergé avant celui-ci. Les deux existent, ils ne se recouvrent pas.*
+
+`fix(ios/sync): l'effectif d'une conversation dérivait à vie, l'effectif ABSOLU du serveur étant ignoré`
+
+Trouvé en appliquant le réflexe que le cycle 114 venait de dégager (« quel champ le serveur
+envoie-t-il que le client ne lit pas ? ») — deuxième instance de la MÊME classe de défaut, en
+quelques minutes.
+
+- Les 4 structs d'appartenance décodent `memberCount: Int?`.
+- `ConversationListViewModel.memberCountAfterMembershipEvent(current:absolute:delta:)` pose
+  l'absolu ; le delta n'est plus qu'un repli pour un gateway antérieur au contrat.
+- L'absolu tranche `membershipEnded` / `membershipRestored` ; plancher à zéro sur les deux branches.
+- CHANGELOG : entrée pour ce correctif, entrée pour le volet iOS du cycle 114, et retrait du
+  « Reste ouvert : le client iOS » devenu faux.
+
+TDD : 5 témoins de décodage SDK + 5 côté app.
+
+## Cycle 114-ter — non-lu iOS : une seule vérité locale, et elle tombe à l'ouverture
+
+Signalé par l'utilisateur : « quand j'ouvre une conversation, le compteur doit IMMÉDIATEMENT être à
+0, sans glitch de 99 ». Audit des porteurs du compteur en local — il y en avait trois, et aucun
+chemin d'ouverture ne les touchait tous.
+
+| Porteur | Écrivait sur ouverture ? |
+|---|---|
+| Cache disque (`ConversationSyncEngine`, seul à appliquer `reconcileUnread`) | oui, mais en différé |
+| Store RAM (`ConversationStore`, SoT déclarée de `userState`) | **non** |
+| Lignes `@Published` (`ConversationListViewModel`) | non (seulement via le rechargement débouncé) |
+| Badge d'icône + widget (`NotificationCoordinator`) | **non** |
+
+- `ConversationReadSignal` (app) — point d'écriture UNIQUE de la lecture locale, les 4 surfaces.
+  Appelé par `start()` (ouverture), la quick-action push et le widget. Aucun appel réseau : l'accusé
+  de lecture serveur garde son exigence d'exactitude et part séparément.
+- `reconcileUnread` devient la règle des TROIS porteurs (cache, store, lignes), et sa frontière est
+  monotone (MAX) au lieu de `local ?? incoming` — qui la faisait reculer sur le chemin store.
+- Miroir synchrone de l'agrégat inter-conversations : `setCurrentlyOpenConversation` republie dans
+  le tour de boucle de l'ouverture, sinon l'abonné suivant recevait le total d'avant.
+- Le geste « Marquer comme lu » de la LISTE reste sur `store.apply(.markAsRead)` : c'est le seul
+  chemin dont le zéro doit rester annulable par le rollback 4xx.
+
+TDD : 3 témoins store, 1 règle, 2 agrégat, 3 lignes de liste, 1 ouverture.
+
+**Renversement de politique assumé** : `docs/superpowers/specs/2026-07-24-read-exactness-design.md`
+énonçait « le badge ne se vide plus à l'ouverture ». Il se vide de nouveau — mais LOCALEMENT
+seulement. L'exactitude que la fiche protège porte sur ce qu'on DÉCLARE aux autres, pas sur sa
+propre pastille ; c'est la confusion des deux qui produisait les deux bugs symétriques.
+
+## Reste ouvert (candidats des prochains cycles)
+
+- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (voir leçon 238, corollaire de
+  méthode). Les commentaires du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne
+  jamais soustraire » prescrivent un comportement CLIENT : chacun nomme un bug possible, et se
+  vérifie par un grep du nom du champ chez chaque client. Deux instances trouvées en un run — la
+  troisième est probablement déjà écrite quelque part.
+
+- **Constat 2 ci-dessus** — masquage personnel au niveau message : décision produit à prendre.
+- **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière
+  (le SDK a son propre `ConversationSyncEngine` sur `/conversations?updatedSince=`).
+- **Android** — aucun delta `updatedSince` ; pas d'écart symétrique à combler aujourd'hui.
+- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (candidat prochain cycle) :
+  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un
+  `cache.participants.invalidate(for:)` — le pendant TEMPS RÉEL du correctif de ce cycle manque
+  donc. Un départ déclenché depuis un autre appareil ne retire la conversation de la liste qu'au
+  prochain delta (ce que la PR #2966 rend enfin possible), pas immédiatement. `conversation:closed`
+  et `conversation:deleted`, eux, ont bien leur branche de retrait — l'asymétrie est l'écart.
+  À vérifier avant de coder : le device qui vient de quitter est-il encore dans la room au moment
+  de l'émission (`emitToConversationParticipants`, `routes/conversations/leave.ts:91`) ? Si non,
+  le canal correct est `broadcastToUser`, et le correctif est côté gateway.
+
 ## Livré
 
 - **`services/shareLinkHistoryFloor.ts`** — `historyFloorFor(join, link)`, la règle PURE et

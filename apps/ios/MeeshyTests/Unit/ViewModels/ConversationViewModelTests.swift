@@ -290,12 +290,19 @@ final class ConversationViewModelTests: XCTestCase {
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
-        // Read-exactness (docs/superpowers/specs/2026-07-24-read-exactness-design):
-        // "Badge de non-lus qui ne se vide plus à l'ouverture" — opening a
-        // conversation no longer marks it read. Only messages actually displayed
-        // are reported (visibility accumulator → markAsRead(messageIds:)), and a
-        // partial report never posts the conversation-wide .conversationMarkedRead.
-        // So loadMessages() must NOT post that notification.
+        // Charger des messages n'est PAS lire. `loadMessages()` tourne aussi à
+        // la pagination, au retour en avant-plan et à la revalidation REST —
+        // en faire un déclencheur de lecture viderait la pastille de
+        // conversations que personne n'a ouvertes.
+        //
+        // La lecture LOCALE a un seul déclencheur, `start()` (l'ouverture de
+        // l'écran), qui poste `.conversationMarkedRead` via
+        // `ConversationReadSignal` — voir
+        // `test_start_marksTheConversationReadLocally`. L'accusé de lecture
+        // SERVEUR, lui, garde son exigence d'exactitude
+        // (`docs/superpowers/specs/2026-07-24-read-exactness-design.md`) : il
+        // ne nomme que les messages réellement affichés, et ne part que par
+        // `markAsRead(messageIds:)`.
         let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
             (notification.object as? String) == expectedId
@@ -1505,6 +1512,29 @@ final class ConversationViewModelTests: XCTestCase {
         // systemLanguage "ja" has no match, customDestinationLanguage "de" does
         XCTAssertEqual(result?.targetLanguage, "de")
         XCTAssertEqual(result?.translatedContent, "Hallo")
+    }
+
+    // MARK: - Ouvrir, c'est lire (localement)
+
+    /// Le moteur de sync ramenait déjà le compteur de la conversation ouverte à
+    /// zéro — mais dans son cache SEUL, et de façon différée. Les lignes
+    /// @Published de la liste et le `ConversationStore` ne l'apprenaient que par
+    /// le rechargement de cache débouncé, quand ils l'apprenaient : le seul
+    /// autre chemin qui les touchait est gaté par l'exactitude de lecture, que
+    /// l'ouverture d'une conversation à 99 non-lus sans en atteindre le bas ne
+    /// franchit jamais. Le store gardait donc 99, le cache disait 0, et la ligne
+    /// affichait celui des deux qui avait publié en dernier.
+    func test_start_marksTheConversationReadLocally() {
+        let expectedId = testConversationId
+        let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        // `makeSUT` appelle `start()`, comme le `.task` de la vue.
+        let sut = makeSUT(unreadCount: 99)
+
+        wait(for: [marked], timeout: 1.0)
+        XCTAssertEqual(sut.conversationId, expectedId)
     }
 
     // MARK: - markAsRead Tests

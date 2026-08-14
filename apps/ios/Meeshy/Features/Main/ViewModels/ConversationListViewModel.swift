@@ -140,6 +140,29 @@ class ConversationListViewModel: ObservableObject {
         return _convIdIndex?[id]
     }
 
+    /// Effectif à POSER sur une ligne de liste après un événement
+    /// d'appartenance (adhésion, départ, bannissement, levée).
+    ///
+    /// Les quatre événements du gateway portent un `memberCount` ABSOLU, et ils
+    /// le portent pour une raison précise : **un delta ne rattrape jamais un
+    /// événement manqué**. Hors ligne, hors room, trou de reconnexion — chaque
+    /// événement perdu laissait une dérive définitive, qu'iOS PERSISTE
+    /// (`schedulePersist` écrit la valeur fausse dans le cache disque, et rien
+    /// ne relit spontanément l'effectif ensuite). Un total, lui, se rattrape au
+    /// premier événement suivant.
+    ///
+    /// Le delta n'est donc plus qu'un REPLI pour un gateway antérieur au
+    /// contrat, jamais le chemin nominal. Jumeau web : `applyMemberCount`
+    /// (`apps/web/hooks/queries/use-socket-cache-sync.ts`), qui porte la même
+    /// règle — toute évolution touche les deux.
+    ///
+    /// Le plancher à zéro vaut pour les DEUX branches : un décrément de repli
+    /// sur un cache déjà à zéro rendrait un effectif négatif, et un absolu
+    /// aberrant n'a pas plus le droit d'en produire un.
+    static func memberCountAfterMembershipEvent(current: Int, absolute: Int?, delta: Int) -> Int {
+        max(0, absolute ?? (current + delta))
+    }
+
     // MARK: - List Mutators (centralised write surface)
     //
     // Every code path that wants to replace, extend or re-order
@@ -160,8 +183,21 @@ class ConversationListViewModel: ObservableObject {
     /// after 30 s.
     func setConversations(_ items: [Conversation]) {
         let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
+        // MÊME règle de non-lu que le cache disque (`saveSorted`) et que le
+        // store RAM (`hydrateMetadata`) : `ConversationSyncEngine.reconcileUnread`.
+        // Ce chemin-ci reverse un instantané de cache dans les lignes
+        // AFFICHÉES ; sans la règle, un instantané pris avant que l'écriture
+        // de lecture locale ait atteint GRDB rallumait la pastille le temps
+        // d'une frame — le store la corrigeait ensuite, ce qui EST le
+        // clignotement. Les trois porteurs appliquent la règle, donc aucun
+        // n'a d'avis propre sur ce qu'« ouverte » ou « déjà lue » veut dire.
+        let reconciled = ConversationSyncEngine.reconcileUnread(
+            incoming: merged,
+            existing: conversations,
+            openConversationId: syncEngine.currentlyOpenConversationId
+        )
         let drafts = draftSummaries
-        let sorted = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
+        let sorted = reconciled.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
         conversations = sorted
         // Hydrate the mutation store with the latest metadata snapshot.
         // `hydrateMetadata` version-gates the per-user state so an in-flight
@@ -969,7 +1005,11 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, event.userId != self.currentUserId else { return }
                 guard let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount += 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: +1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -978,7 +1018,11 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount -= 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: -1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -991,9 +1035,19 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.participantBanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard event.didEndMembership else { return }
+                // L'effectif absolu tranche `didEndMembership` de lui-même :
+                // bannir un ex-membre ne retire personne, donc le compte est
+                // simplement inchangé et le POSER est exact dans les deux cas.
+                // Le court-circuit ne subsiste que pour un gateway qui ne
+                // l'envoie pas. Miroir de `handleConversationParticipantBanned`
+                // (`apps/web/hooks/queries/use-socket-cache-sync.ts`).
+                guard event.memberCount != nil || event.didEndMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount -= 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: -1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1003,9 +1057,15 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.participantUnbanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard event.didRestoreMembership else { return }
+                // Même lecture qu'au bannissement : présent, l'effectif absolu
+                // tranche `didRestoreMembership`.
+                guard event.memberCount != nil || event.didRestoreMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount += 1
+                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                    current: self.conversations[index].memberCount,
+                    absolute: event.memberCount,
+                    delta: +1
+                )
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1691,10 +1751,22 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Mark as Read
 
+    /// Le geste « Marquer comme lu » de la liste, seul chemin de lecture qui
+    /// porte AUSSI une mutation serveur annulable. Il n'emprunte donc PAS
+    /// `ConversationReadSignal` : le compteur affiché doit rester la propriété
+    /// de `store.apply(.markAsRead)`, qui le remet à sa valeur d'avant sur un
+    /// 4xx. Passer par le bus poserait un zéro hors du store, que le rollback
+    /// ne saurait plus reprendre. Les autres surfaces (ouverture d'écran,
+    /// quick-action push, widget) ne mutent rien côté serveur par ce chemin et
+    /// utilisent le signal partagé.
     func markAsRead(conversationId: String) async {
         guard convIndex(for: conversationId) != nil else { return }
-        // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
+        // Local-first read sync (cache + frontière de lecture GRDB).
         await syncEngine.markConversationReadLocally(conversationId)
+        // Badge d'icône + widget : le store ne les touche pas, et sans cette
+        // ligne le compte de l'icône restait au chiffre d'avant jusqu'à un
+        // `read-status:updated` serveur.
+        NotificationCoordinator.shared.markConversationRead(conversationId)
         guard Self.shouldDispatchListMarkAsRead(
             conversationId: conversationId,
             activeConversationId: messageSocket.activeConversationId
@@ -2028,8 +2100,14 @@ class ConversationListViewModel: ObservableObject {
             guard let cid = notification.object as? String else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Corrige le `ConversationStore` (RAM, tiers) AVANT d'effacer la
-                // pastille affichée : ce store n'apprend autrement jamais qu'une
+                // La ligne AFFICHÉE d'abord, le store ensuite : `clearUnreadLocally`
+                // est synchrone, `store.applyReadReceipt` traverse un acteur.
+                // Les enchaîner dans l'autre sens faisait attendre à la pastille
+                // un aller-retour d'acteur — visible en split-view iPad, où la
+                // liste reste à l'écran pendant qu'on ouvre la conversation.
+                self.clearUnreadLocally(cid)
+                // Corrige le `ConversationStore` (RAM, tiers) : ce store
+                // n'apprend autrement jamais qu'une
                 // conversation vient d'être lue par CE chemin (ouverture,
                 // quick-action push, widget — tous postent `.conversationMarkedRead`,
                 // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
@@ -2047,7 +2125,6 @@ class ConversationListViewModel: ObservableObject {
                 await self.store.applyReadReceipt(
                     ReadStatusEvent(conversationId: cid, unreadCount: 0, lastReadAt: Date())
                 )
-                self.clearUnreadLocally(cid)
             }
         }
     }

@@ -379,6 +379,15 @@ struct MessageListView: UIViewControllerRepresentable {
     /// True while the ViewModel is searching for a quoted message on the server.
     /// Drives the slow continuous scroll on the underlying UICollectionView.
     var isSearchingQuotedMessage: Bool = false
+    /// Header de conversation déplié. Masque la pill de jour tant qu'il est
+    /// ouvert (voir `MessageDayStickyState.isHeaderExpanded`).
+    ///
+    /// Déclaré ICI, avec les autres valeurs de configuration, et non parmi les
+    /// `on…` : l'init mémberwise d'une `View` impose l'ordre de déclaration aux
+    /// call sites, donc la place d'un stockage n'est pas qu'une question de
+    /// lisibilité — glissé entre deux callbacks, il force le parent à passer
+    /// une config au milieu de ses fermetures.
+    var isHeaderExpanded: Bool = false
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the user approaches the older-messages threshold. Wire to
@@ -483,6 +492,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.isHeaderExpanded = isHeaderExpanded
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -545,6 +555,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.isHeaderExpanded = isHeaderExpanded
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory

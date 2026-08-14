@@ -455,6 +455,56 @@ final class ConversationListViewModelTests: XCTestCase {
         ))
     }
 
+    // MARK: - setConversations : la lecture locale tient face à un instantané en retard
+    //
+    // `setConversations` reverse un instantané de cache dans les lignes
+    // AFFICHÉES. Le cache disque et le store RAM appliquent tous deux
+    // `ConversationSyncEngine.reconcileUnread` avant d'accepter un compteur ;
+    // ce chemin-ci ne l'appliquait pas. Un instantané pris avant que
+    // l'écriture de lecture locale ait atteint GRDB rallumait donc la
+    // pastille, que le store rééteignait au tour suivant — le clignotement.
+
+    func test_setConversations_doesNotResurrectAnUnreadCoveredByTheLocalReadFrontier() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var alreadyRead = makeConversation(id: "conv1", unreadCount: 0, lastMessageAt: lastMessageAt)
+        alreadyRead.userState.lastReadAt = lastMessageAt.addingTimeInterval(1)
+        sut.setConversations([alreadyRead])
+
+        // Instantané de cache en retard sur la lecture : le serveur compte encore 99.
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 99, lastMessageAt: lastMessageAt)])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 0,
+                       "la frontière locale est postérieure au dernier message : ce 99 est en retard, pas neuf")
+    }
+
+    func test_setConversations_takesTheIncomingUnread_whenANewerMessageArrived() async throws {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var alreadyRead = makeConversation(id: "conv1", unreadCount: 0, lastMessageAt: lastMessageAt)
+        alreadyRead.userState.lastReadAt = lastMessageAt.addingTimeInterval(1)
+        sut.setConversations([alreadyRead])
+
+        sut.setConversations([
+            makeConversation(id: "conv1", unreadCount: 2,
+                             lastMessageAt: lastMessageAt.addingTimeInterval(60))
+        ])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 2,
+                       "la règle ne doit jamais masquer durablement un vrai non-lu")
+    }
+
+    func test_setConversations_forcesTheOpenConversationToZero() async throws {
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.setCurrentlyOpenConversation("conv1")
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 99)])
+
+        XCTAssertEqual(sut.conversations.first?.userState.unreadCount, 0,
+                       "l'utilisateur REGARDE cette conversation — aucun instantané ne doit y rallumer une pastille")
+    }
+
     // MARK: - markAsRead: Failure (rollback)
 
     func test_markAsRead_rollsBackOnPermanentFailure() async throws {
@@ -761,20 +811,28 @@ final class ConversationListViewModelTests: XCTestCase {
     /// que le gateway envoie.
     private func makeParticipantJoinedEvent(
         conversationId: String,
-        userId: String
+        userId: String,
+        memberCount: Int? = nil
     ) -> ParticipantJoinedEvent {
         JSONStub.decode("""
-        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"}
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"\(Self.memberCountJSONField(memberCount))}
         """)
     }
 
     private func makeParticipantLeftEvent(
         conversationId: String,
-        userId: String
+        userId: String,
+        memberCount: Int? = nil
     ) -> ParticipantLeftEvent {
         JSONStub.decode("""
-        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","leftAt":"2026-08-11T10:00:00.000Z"}
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","leftAt":"2026-08-11T10:00:00.000Z"\(Self.memberCountJSONField(memberCount))}
         """)
+    }
+
+    /// `nil` produit un JSON SANS la clé — c'est la forme exacte d'un gateway
+    /// antérieur au contrat, et donc le seul moyen d'exercer le repli.
+    private static func memberCountJSONField(_ memberCount: Int?) -> String {
+        memberCount.map { ",\"memberCount\":\($0)" } ?? ""
     }
 
     /// L'effectif ne connaissait que des soustractions — départ, retrait,
@@ -826,6 +884,73 @@ final class ConversationListViewModelTests: XCTestCase {
 
         messageSocket.participantSelfLeft.send(
             makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 3)
+    }
+
+    // MARK: - Socket: l'effectif ABSOLU du serveur se pose, il ne s'additionne pas
+    //
+    // Les quatre événements d'appartenance portent un `memberCount` absolu, et
+    // le gateway le documente comme « à POSER, pas à incrémenter » : un delta ne
+    // rattrape JAMAIS un événement manqué (hors ligne, hors room, trou de
+    // reconnexion), et iOS persiste la valeur fausse (`schedulePersist`). Le
+    // champ n'était même pas décodé — le client dérivait donc à vie.
+
+    func test_memberCountAfterMembershipEvent_posesTheAbsoluteCount_ignoringTheDelta() {
+        // Le cas qui prouve la règle : le cache a dérivé (2 alors que le serveur
+        // en compte 9). Un incrément rendrait 3 et garderait la dérive à vie.
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 2, absolute: 9, delta: +1), 9)
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 2, absolute: 9, delta: -1), 9)
+    }
+
+    func test_memberCountAfterMembershipEvent_fallsBackToTheDelta_whenTheServerSendsNoCount() {
+        // Gateway antérieur au contrat : le delta reste le seul repli.
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 4, absolute: nil, delta: +1), 5)
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 4, absolute: nil, delta: -1), 3)
+    }
+
+    func test_memberCountAfterMembershipEvent_neverGoesNegative() {
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 0, absolute: nil, delta: -1), 0,
+            "un décrément de repli sur un cache déjà à zéro rendrait un effectif négatif")
+        XCTAssertEqual(
+            ConversationListViewModel.memberCountAfterMembershipEvent(current: 3, absolute: -2, delta: -1), 0,
+            "un absolu aberrant n'a pas plus le droit de produire un effectif négatif")
+    }
+
+    func test_socketParticipantJoined_posesTheServerCount_ratherThanIncrementingAStaleOne() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 2 // cache dérivé : le serveur en compte 9
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "someone-else", memberCount: 9)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 9,
+            "un incrément aurait rendu 3 et laissé la dérive intacte — définitivement, le cache disque la persistant")
+    }
+
+    func test_socketParticipantSelfLeft_posesTheServerCount_ratherThanSubtractingFromAStaleOne() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 7
+        sut.conversations = [conversation]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else", memberCount: 3)
         )
 
         try await Task.sleep(nanoseconds: 50_000_000)

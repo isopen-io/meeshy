@@ -6268,6 +6268,28 @@ donc y retenir le watermark en plus d'escalader : seul un `since` resté en plac
 sorties coupées si l'escalade échoue. Transposer la règle du jumeau sans regarder la NATURE de son
 curseur aurait rendu ces disparitions irréclamables.
 
+**Confirmation immédiate, cycle 114-bis — la même leçon, deux fois dans le même run.** Cherchant la
+suite de ce correctif, le balayage est reparti du même réflexe (« quel champ le serveur envoie-t-il
+que le client ne lit pas ? ») et a trouvé le second cas en quelques minutes : les quatre événements
+d'appartenance portent un `memberCount` ABSOLU, documenté quatre fois côté serveur comme « à POSER,
+pas à incrémenter », honoré par le web (`applyMemberCount`) — et déclaré sur AUCUN des quatre
+structs Swift, qui faisaient exactement le `± 1` que le contrat interdit. Deux instances en une
+séance disent que ce n'est pas un accident mais une CLASSE, et elles donnent son test :
+
+> **Un champ ajouté à un payload existant n'a de récepteur nulle part tant qu'on ne l'a pas grepé
+> par son NOM dans chaque client.** Ni la doc du serveur, ni les tests du serveur, ni les tests de
+> l'autre client ne le prouvent — et le langage du client (`Decodable` optionnel, `JSONDecoder` qui
+> ignore les clés inconnues) est précisément conçu pour que cette absence ne fasse aucun bruit.
+
+Corollaire de méthode : **le commentaire serveur qui explique POURQUOI un champ existe est un
+détecteur de bug client**. « à POSER, pas à incrémenter », « un client qui décrémente ne se rattrape
+jamais » — cette phrase n'est pas descriptive, elle prescrit un comportement client, donc elle
+nomme le bug qu'elle veut empêcher. Grepper les prescriptions écrites dans les types partagés
+(`packages/shared/types/`) et vérifier chacune chez CHAQUE client est un audit à part entière, bon
+marché, et qui ne demande d'exécuter aucun code.
+
+---
+
 ## Leçon 239 — Une MÊME variable qui porte deux colonnes selon l'appelant : le filtre ne plante pas, il rend vide
 
 Cycle 115 (`gwcontract-09`, ouverture de `GET /sync` aux sessions anonymes).
@@ -6362,6 +6384,40 @@ absolu émis juste après. **Ne pas fournir la donnée est la seule garde qu'auc
 peut contourner par distraction.**
 
 ---
+
+## Leçon 240 — Trois porteurs d'une même donnée, et aucun geste qui les touche tous
+
+Cycle 114-ter (non-lu iOS, signalement utilisateur « ça affiche 99 puis ça tombe »).
+
+Le compteur de non-lu d'une conversation était tenu en local par TROIS porteurs — cache disque,
+store RAM, lignes `@Published` — plus un quatrième pour le badge d'icône. Chacun était correct pris
+isolément, chacun avait ses tests, et le va-et-vient venait de ce qu'AUCUN geste ne les écrivait
+tous : selon qui republiait en dernier, la ligne montrait 0 ou 99.
+
+> **Un défaut de cohérence ne se voit dans aucun des fichiers concernés.** Il n'existe que dans le
+> tableau « qui écrit quoi, sur quel geste » — un tableau que personne ne dessine tant qu'il n'y a
+> pas de bug. Le dessiner est le diagnostic ; le code ne le contient nulle part.
+
+Deux corollaires de méthode, tous deux vérifiés ici :
+
+1. **Une règle partagée ne l'est que là où on l'appelle.** `reconcileUnread` existait, était pure,
+   testée, et documentée « source de vérité » — appliquée par UN seul des trois porteurs. Nommer
+   une fonction « la règle » ne la propage pas ; seul un appel le fait. Le test qui compte n'est pas
+   « la règle est-elle juste ? » mais « combien de sites la contournent ? », et il se répond par un
+   grep du nom de la fonction, pas par la lecture de sa doc.
+2. **Un garde-fou qui protège un champ ne protège que ce champ.** Le store version-gate `userState`
+   pour défendre les mutations optimistes en vol — mais le non-lu ne participe PAS au versionnement
+   (`applyReadReceipt` ne bumpe jamais `version`, par conception). Le garde-fou était donc
+   structurellement inopérant sur lui, à l'égalité de version, c'est-à-dire toujours. **Quand une
+   structure porte deux champs régis par des horloges différentes, un garde-fou écrit pour l'une est
+   un trou pour l'autre** — et il se lit comme une protection.
+
+Corollaire produit, distinct des deux précédents : **« j'ai lu » et « ma pastille s'éteint » sont
+deux décisions, pas une.** La première engage l'utilisateur vis-à-vis des autres (accusés de
+lecture, exactitude de ce qu'on déclare avoir vu) ; la seconde n'engage que son propre écran. Les
+avoir confondues a produit les deux bugs symétriques à un an d'écart : d'abord un accusé
+sur-déclaré, ensuite une pastille qui ne s'éteignait plus. Les séparer explicitement — un chemin
+local sans réseau, un chemin serveur gaté par l'exactitude — les résout tous les deux à la fois.
 
 ## Leçon 241 — Un code mort qui décrit un CONTRAT a des jumeaux vivants ; c'est eux qu'il faut aller voir
 
