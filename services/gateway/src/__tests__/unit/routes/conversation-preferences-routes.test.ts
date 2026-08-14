@@ -292,7 +292,7 @@ describe('PUT /user-preferences/conversations/:conversationId', () => {
       mentionsOnly: true,
       isArchived: true,
       tags: ['important', 'work'],
-      categoryId: 'cat-1',
+      categoryId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
       orderInCategory: 5,
       customName: 'My Favorite',
       reaction: '❤️',
@@ -575,6 +575,69 @@ describe('version reaches the client on every preferences surface', () => {
       payload: { isPinned: true },
     });
     expect(res.json().data.version).toBe(4);
+    await app.close();
+  });
+});
+
+// ─── categoryId shape ─────────────────────────────────────────────────────────
+
+/**
+ * `categoryId` names a `UserConversationCategory` row, whose id is always a
+ * MongoDB ObjectId. Unvalidated, a malformed one reaches
+ * `userConversationCategory.findFirst` and Prisma raises `Malformed ObjectID`
+ * (P2023) — which the route's catch-all turns into a 500, reporting a caller
+ * mistake as a server fault and filing it under `logError`. The shape belongs in
+ * the schema, where every other id-bearing route in the gateway puts it.
+ */
+describe('PUT /user-preferences/conversations/:conversationId — categoryId shape', () => {
+  const CATEGORY_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+
+  it('rejects a categoryId that is not an ObjectId with 400, before touching the db', async () => {
+    const prisma = makePrisma();
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as unknown);
+    app.decorate('authenticate', async (req: FastifyRequest) => {
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID },
+      };
+    });
+    await app.register(conversationPreferencesRoutes);
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+      payload: { categoryId: 'not-an-objectid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(prisma.userConversationCategory.findFirst).not.toHaveBeenCalled();
+    expect(prisma.userConversationPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('still accepts a well-formed categoryId', async () => {
+    const app = await buildApp({ ownedCategoryIds: [CATEGORY_ID] });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+      payload: { categoryId: CATEGORY_ID },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('still accepts null — uncategorize needs no lookup', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+      payload: { categoryId: null },
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

@@ -6968,8 +6968,95 @@ le termine) — le bug entier tenait dans le nom d'un seul événement émis cô
 (`CALL_END` → `CALL_LEAVE`). **Un event socket au nom générique (« end ») porté par un flux qui
 n'a plus le contexte qui le rendait sûr (1:1 devenu N:N) doit être ré-audité au moment où ce contexte
 change — pas seulement au moment où on l'écrit.**
+## Leçon 251 — « Sans persistance » ne veut pas dire « sans état » : un événement de DÉBUT sans fin est un bail perpétuel
 
-## Leçon 251 — `Task { @MainActor in }` sur une méthode déjà @MainActor ne change pas OÙ elle tourne, seulement QUAND (2026-08-14, routine appels audio/vidéo)
+`LocationHandler` s'ouvrait sur « Real-time only — no Prisma persistence », et en
+tirait deux conclusions dont une seule était juste. Pas de table : correct, il n'y
+en a pas au schéma. Pas d'état **en mémoire** non plus : c'est ce saut-là qui
+coûtait cher. Le handler validait, diffusait, oubliait.
+
+Or un partage de position est un **bail** : il a une date de fin annoncée
+(`expiresAt`, jusqu'à 8 heures) et un titulaire dont la présence conditionne la
+validité. Un serveur qui n'en garde rien ne peut faire aucune des trois choses
+qu'un bail exige — le résilier quand le titulaire disparaît, le laisser expirer à
+son terme, ou dire à un tiers qu'il existe. Il ne restait qu'un chemin : que le
+titulaire vienne lui-même le résilier. Un chemin que l'arrêt forcé, le crash et la
+perte de réseau ne prennent jamais — c'est-à-dire les trois façons ordinaires dont
+une session mobile se termine.
+
+**La règle** : tout événement `X-started` qui porte une durée ou un propriétaire
+crée un état, que le serveur le range quelque part ou non. S'il ne le range pas,
+l'état existe quand même — chez les clients, sans personne pour l'invalider. Le
+choix n'est pas « avec ou sans état » mais « état côté serveur, ou état orphelin
+côté clients ».
+
+**Le signal de recherche** : chercher les paires `X-started` / `X-stopped` où le
+`stopped` n'a qu'UN seul émetteur, et où cet émetteur est le geste explicite d'un
+utilisateur. Puis demander les trois questions du bail : qui le résilie si le
+titulaire meurt ? qui le fait expirer ? qui l'annonce à un arrivant ? Un `stopped`
+à émetteur unique répond « personne » aux trois.
+
+**Corollaire — le voisin qui a déjà raison est le meilleur gabarit.** Le même
+codebase retracte la frappe sur `disconnecting` depuis longtemps
+(`StatusHandler.handleSocketDisconnecting` → `typing:stop`). La position en direct
+était le seul état éphémère par socket à ne pas l'avoir, et le correctif est le
+même geste au même point d'accroche. Avant d'inventer une politique, chercher
+l'état frère qui a déjà survécu à la question : sa forme est déjà validée en
+production, et la copier rend le tout lisible d'un coup.
+
+**Corollaire — l'absence d'état et la fin d'un état se ressemblent dans le
+résultat et s'opposent dans ce qu'elles demandent.** Après un redémarrage de la
+passerelle, le registre est vide alors que des partages tournent. Traiter « pas
+d'entrée » comme « session terminée » — la lecture naïve — ferait mourir tous les
+partages en cours à chaque déploiement. Une session **inconnue** doit passer ; seule
+une session **connue et échue** doit être coupée. La même distinction que
+`truncated` fait dans `/sync` entre « je n'ai pas pu lire » et « il n'y a rien à
+lire », et elle se pose partout où un registre volatil sert d'autorité.
+
+**Corollaire — un `leave` applicatif n'est pas un départ.** La symétrie tentait
+d'étendre la retraction à `conversation:leave`, comme pour la frappe. Elle aurait
+été fausse : côté client, `leave` signifie « j'ai quitté cet écran », pas « j'ai
+quitté le groupe ». Retracter là aurait tué le partage en arrière-plan, qui est
+précisément l'usage principal de la fonction. **Deux états éphémères qui partagent
+un cycle de vie n'en partagent pas forcément tous les points d'accroche** : la
+frappe n'a de sens que sur l'écran, la position en a hors de lui.
+
+## Leçon 252 — Un arbitre de concurrence ne vaut que s'il garde TOUTES les portes d'écriture (2026-08-14, routine temps réel, cycle 19)
+
+Le cycle 17 avait doté les préférences de conversation d'un compteur monotone `version`, l'avait
+fait traverser le sérialiseur REST, et avait posé `applyRemotePreferences()` comme portillon des
+diffusions socket : `incoming.version <= local -> drop`. Correct, testé, documenté. Et pourtant
+l'état pouvait toujours rembobiner — parce que la ligne du store web a **deux** écrivains, et que
+l'arbitre n'en gardait qu'un. Les quatre bascules optimistes (`togglePin`, `toggleMute`,
+`toggleArchive`, `setReaction`) posaient la réponse de leur `PUT` **sans condition**, juste à côté
+du portillon qu'elles ne franchissaient pas.
+
+**Le signal de reconnaissance** : dès qu'on introduit un arbitre (`version`, `updatedAt`, un LWW,
+un numéro de séquence), la question à se poser n'est pas « mon écrivain passe-t-il par l'arbitre ? »
+mais « **combien d'écrivains cette case a-t-elle, et lesquels ne le franchissent pas ?** ». Un
+arbitre partiel est plus dangereux qu'aucun arbitre : il donne l'impression que la course est
+traitée, et concentre l'attention sur le chemin gardé. Ici la porte non gardée était la plus
+fréquente des deux — chaque action de l'utilisateur y passait.
+
+**Le corollaire de la rétractation.** Le même raisonnement vaut pour le `catch` d'une écriture
+optimiste. Rétracter en restaurant l'instantané capturé AVANT la requête suppose que rien n'a écrit
+entre-temps — supposition fausse exactement dans les cas que l'arbitre existe pour traiter. Sur un
+état immuable, l'identité référentielle tranche sans coût : ne rétracter que si l'entrée locale est
+TOUJOURS l'objet que cette écriture a posé. Un échec réseau ne doit jamais annuler une action sans
+rapport avec lui.
+
+**La réserve qui évite la sur-correction** : l'arbitrage ne s'applique QUE si la valeur entrante
+porte effectivement l'arbitre. Une réponse antérieure à l'ajout du champ n'a pas de version, et la
+jeter au motif que `undefined ?? 0 <= 0` perdrait l'écriture — un déploiement mixte cassé par la
+correction elle-même. « Absent = version 0 » est la bonne convention côté LOCAL (une ligne jamais
+diffusée est sous toute version que le serveur peut émettre) et la mauvaise côté ENTRANT.
+
+**Corollaire de refactor** : les quatre bascules étaient quasi identiques sur ~40 lignes chacune.
+Le cycle 17 l'avait noté et repoussé. Tant que la duplication tient, une correction de course doit
+être appliquée quatre fois — et une cinquième bascule naîtra sans elle. Factoriser d'abord
+(`writeOptimistic(conversationId, patch, request)`), corriger ensuite, à un seul endroit.
+
+## Leçon 253 — `Task { @MainActor in }` sur une méthode déjà @MainActor ne change pas OÙ elle tourne, seulement QUAND (2026-08-14, routine appels audio/vidéo)
 
 Audit du calling stack, volet PushKit : `AppDelegate.application(_:didFinishLaunchingWithOptions:)`
 appelait `VoIPPushManager.shared.register()` via `Task { @MainActor in VoIPPushManager.shared.register() }`.

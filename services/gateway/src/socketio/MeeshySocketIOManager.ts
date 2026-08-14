@@ -7,6 +7,7 @@ import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
+import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
@@ -444,6 +445,13 @@ export class MeeshySocketIOManager {
       // plus haut dans ce même constructeur.
       retractTyping: (socket, conversationId) =>
         this.statusHandler.retractTypingIn(socket, conversationId),
+      // Entrer dans une conversation rattrape les partages de position en cours.
+      // `location:live-started` ne touche que les sockets présents à l'instant
+      // du départ : sans ce rejeu, l'épingle d'un pair qui partage déjà reste
+      // invisible pour toute la session de l'arrivant. `locationHandler` est
+      // construit plus haut dans ce même constructeur.
+      replayLiveLocations: (socket, conversationId) =>
+        this.locationHandler.replayLiveLocationsTo(socket, conversationId),
     });
   }
 
@@ -1240,6 +1248,14 @@ export class MeeshySocketIOManager {
       });
 
       socket.on('disconnecting', (_reason: string) => {
+        // Retrait des partages de position portés par CE socket. Ici et pas dans
+        // `disconnect` : la diffusion vise les rooms de la conversation, et
+        // `disconnect` s'exécute après en être sorti. Synchrone et hors du
+        // `if (disconnectingUserId)` — le registre porte lui-même l'identité du
+        // partageur, il n'a pas besoin d'une table qui, elle, peut déjà avoir
+        // été vidée.
+        this.locationHandler.handleSocketDisconnecting(socket.id);
+
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
           // Build the set of OTHER sockets for this user (excluding the one
@@ -1472,8 +1488,17 @@ export class MeeshySocketIOManager {
   private async _handleTextTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
     try {
       const { result, targetLanguage} = data;
-      
-      
+
+      // Une traduction de post/commentaire/story emprunte le même bus que celle
+      // d'un message, sous un identifiant namespacé (`post:<id>`) : elle n'a ni
+      // ligne `Message`, ni room de conversation. La chercher ici envoyait
+      // `post:<24-hex>` à Prisma comme ObjectId (P2023) puis loggait un « No
+      // conversation found » alarmant pour un cas parfaitement normal — le
+      // broadcast social est fait par `SocialEventsHandler`.
+      if (!isMessageTranslationTarget(result?.messageId ?? '')) {
+        return;
+      }
+
       // Récupérer la conversation du message pour broadcast
       let conversationIdForBroadcast: string | null = null;
       // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans
@@ -2663,6 +2688,10 @@ export class MeeshySocketIOManager {
 
       await this.agentAdminRelay?.stop();
       await this.translationService.close();
+      // Les minuteries d'expiration des partages de position sont les seules
+      // que ce manager possède encore ; non désarmées, elles retiendraient la
+      // boucle d'événements jusqu'à 8 heures après l'arrêt.
+      this.locationHandler.dispose();
       this.io.close();
     } catch (error) {
       logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);

@@ -1592,3 +1592,250 @@ d'identité stable, non touché).
   (`MessageSocketManager:3280` discrimine sur `conversationId` puis retombe sur
   le scope `category`, dont le payload communauté n'a pas la forme) ;
   `visibilitychange` → `connect()` côté web.
+---
+
+## Cycle 18 (2026-08-14) — le partage de position en direct n'avait aucune fin
+
+Routine « amélioration continue temps réel ». Le cycle 17 (PR #2998) a fermé la
+chaîne des préférences de conversation ; sa dette nommée est soit iOS-seule —
+non gatable sur ce runner Linux, aucune toolchain Swift — soit logée dans
+`conversation-preferences.ts`, le fichier même que #2998 modifie, où la reprendre
+n'aurait produit qu'un conflit. Ce cycle repart donc d'un recensement neuf.
+
+### Méthode — matrice de couverture des événements
+
+Pour chacun des **125 `SERVER_EVENTS`** : émis par la passerelle ? référencé par
+`apps/web` ? référencé par iOS ? Les trous sont, par construction, des défauts de
+synchronisation temps réel.
+
+| Émis par la passerelle, absent du web | Émis par la passerelle, absent d'iOS |
+|---|---|
+| `location:live-started/-updated/-stopped` | `authenticated`, `auth:session-revoked` |
+| `message:read-status-updated` (jumeau namespacé, l'ancien est traité) | `notification:read-bulk`, `notification:deleted-bulk` |
+| `heartbeat:ack` | `friend-request:*` (les 4 — couverts par le `notification:new` hérité) |
+| | `message:pending-delivered`, `agent:admin-event` |
+
+Le relevé a désigné `location:live-*` : le seul trou où la passerelle émet, iOS
+consomme, et personne ne ferme le cycle de vie.
+
+### Constats
+
+**D1 — un partage n'est jamais retiré quand le socket du partageur meurt.**
+`location:live-stopped` n'était émis que par un `location:live-stop` EXPLICITE.
+Arrêt forcé de l'app, crash, perte de réseau : aucun stop. Les pairs gardent une
+épingle qui se présente comme vivante, figée sur la dernière position connue,
+jusqu'à `expiresAt` — **jusqu'à 8 heures** (`durationMinutes` ≤ 480).
+
+Le codebase avait déjà exactement ce retrait, pour la frappe :
+`StatusHandler.handleSocketDisconnecting` → `typing:stop`. La position en direct
+était le seul état éphémère par socket à en être privé — et c'est celui dont la
+péremption coûte le plus cher, une position vieille de plusieurs heures servie
+comme actuelle étant un défaut de sécurité avant d'être un défaut d'affichage.
+
+**D2 — aucun état serveur, donc aucun rattrapage.**
+`socket.to(room)` ne touche que les sockets présents à cet instant. Un
+participant qui ouvre la conversation APRÈS le début du partage n'apprenait
+jamais son existence. Le cas se retourne contre le partageur : après une
+reconnexion de son socket, ses `live-update` repartaient pour une session
+qu'aucun pair n'avait vue commencer.
+
+**D3 — l'expiration était un indice client que le serveur n'appliquait jamais.**
+`expiresAt` calculé, expédié, oublié. Rien ne retirait le partage à son terme, et
+rien n'empêchait de relayer des positions au-delà.
+
+### Correctif — un registre de sessions
+
+En mémoire, conforme au « real-time only, no Prisma persistence » du handler :
+« sans persistance » n'impose pas « sans état ». Une entrée par
+`(conversationId, userId)`, propriété du DERNIER appareil à avoir démarré le
+partage. Bornée par le nombre de partageurs connectés — la déconnexion ferme
+l'entrée, le registre est son propre ramasse-miettes.
+
+- `disconnecting` retire les partages de ce socket. **Là et pas dans
+  `disconnect`** : la diffusion vise les rooms de la conversation, dont
+  `disconnect` est déjà sorti. Synchrone à dessein — une seule `await` suffirait
+  à laisser la diffusion partir trop tard. Hors du gate `socketToUser` : le
+  registre porte lui-même l'identité du partageur.
+- Minuterie d'expiration, diffusée à TOUTE la room, **partageur inclus** — la
+  seule des quatre diffusions à ne pas passer par `socket.to`. Elle porte une
+  décision du SERVEUR, pas le geste d'un pair, et le partageur doit l'apprendre
+  pour cesser d'émettre. Les clients rangeant les `LOCATION_LIVE_*` par `userId`
+  de pair distant, sa propre entrée n'existe pas : le self-echo est sans effet
+  aujourd'hui, et c'est le seul point d'accroche possible demain.
+- Passé le terme, les `live-update` ne sont plus relayés — sans cette borne, la
+  mise à jour suivante recréerait l'épingle que le retrait venait d'effacer.
+- `conversation:join` rejoue `location:live-started` au socket entrant, avec la
+  **dernière** position connue. Le rejeu part après la jonction à la room, hors
+  du gate `participationId` (un invité de lien partagé a le même besoin), et sous
+  try/catch — un rejeu perdu ne doit jamais faire échouer une jonction.
+- `dispose()` désarme les minuteries : arrêt de la passerelle, isolation des tests.
+
+**Deux décisions de bord.** Une session **inconnue** n'est jamais une session
+**terminée** : après un redémarrage de la passerelle le registre est vide alors
+que des partages tournent, et couper sur « pas d'entrée » les tuerait tous à
+chaque déploiement. Et `conversation:leave` ne retracte **rien**, à l'inverse de
+la frappe : côté client il signifie « j'ai quitté cet écran », pas « j'ai quitté
+le groupe » — un partage légitimement poursuivi en arrière-plan y perdrait la vie.
+
+### Gates
+
+- 18 tests vus ROUGES avant les correctifs (suite `LocationHandler.lifecycle`),
+  verts après. 9 tests d'intégration en plus (4 `ConversationHandler`,
+  5 `MeeshySocketIOManager`) sur le câblage, qui n'a aucun autre témoin.
+- `services/gateway` : **712 suites / 17 442 tests verts** (suite complète).
+- `tsc --noEmit` passerelle : 0 erreur.
+- iOS et web : aucun fichier touché.
+
+### Reste ouvert après ce cycle
+
+- **`location:live-*` n'a aucun consommateur côté web.** Zéro référence dans
+  `apps/web` : un partage lancé depuis iOS est purement invisible sur le web,
+  avant comme après ce cycle. C'est une fonctionnalité absente, pas un défaut de
+  synchronisation — hors périmètre d'un cycle de correction, et le premier
+  candidat d'un cycle de fonctionnalité.
+- **Le registre ne survit pas à un redémarrage de la passerelle.** Délibéré (cf.
+  « session inconnue ≠ session terminée »), mais le corollaire est qu'un partage
+  traversant un déploiement perd sa minuterie serveur : il redevient borné par le
+  seul `expiresAt` des clients, soit l'état d'avant ce cycle. Le rendre durable
+  demanderait une ligne Prisma, que ce handler n'a pas.
+- **`heartbeat:ack` n'est écouté par personne côté web**, qui émet par ailleurs
+  `heartbeat` sans `clientTime` — le `latencyHintMs` que la passerelle calcule
+  n'est donc jamais ni produit ni lu. Sans conséquence connue (le pong moteur
+  couvre la présence), mais c'est du contrat mort des deux côtés.
+- Hérités des cycles 14/16/17, inchangés : validation ObjectId de `categoryId`
+  (500 au lieu de 400) ; scope communauté de `user:preferences-updated` non routé
+  côté iOS ; `visibilitychange` → `connect()` côté web ;
+  `deletedForUserAt` / `clearHistoryBefore` absents de
+  `conversationPreferencesSchema` ; `POST /conversations/:id/clear-history` sans
+  aucun client, et son faux succès local côté iOS.
+
+## Cycle 19 (2026-08-14) — l'arbitre de version ne gardait qu'une porte sur deux
+
+Base : `origin/main` @ `5ff9a3e94` (PR #3000 mergée), rebasé sur `dc3286f7`
+(cycle 18 — partage de position — mergé pendant ce cycle, aucun fichier source
+en commun). Phases 2 / 3 / 8 / 11.
+
+Ce cycle exécute trois des candidats laissés ouverts par le cycle 17, dans
+l'ordre où celui-ci les avait classés. Aucun toolchain Swift ici : périmètre
+gateway + web, comme les cycles 11 à 17.
+
+### D1 — les quatre écritures optimistes du store web posaient leur réponse HTTP sans arbitrage
+
+`apps/web/stores/conversation-preferences-store.ts`
+
+Le cycle 17 a doté la ligne d'un compteur monotone `version`, l'a fait traverser
+le sérialiseur REST, et a posé `applyRemotePreferences()` comme portillon des
+diffusions socket : `incoming.version <= local -> drop`. Mais la ligne a **deux**
+écrivains, et seul l'un des deux passait par ce portillon. `togglePin`,
+`toggleMute`, `toggleArchive` et `setReaction` faisaient toutes, au retour du
+`PUT` :
+
+```ts
+const updatedPrefs = await userPreferencesService.togglePin(...);
+const finalMap = new Map(get().preferencesMap);
+finalMap.set(conversationId, updatedPrefs);   // sans condition
+```
+
+Trois façons de perdre l'état le plus récent, toutes reproduites en test :
+
+1. **Deux bascules rapprochées** (double-clic sur l'épingle, ou épingler puis
+   désépingler). Les deux `PUT` partent, leurs réponses reviennent dans le
+   désordre — rien ne l'interdit sur deux requêtes HTTP concurrentes — et la
+   plus ANCIENNE écrase la plus récente. L'UI se fige alors sur l'inverse de ce
+   que l'utilisateur a demandé en dernier, et le serveur, lui, porte la bonne
+   valeur : l'écart ne se résorbe qu'au prochain rechargement.
+2. **Une diffusion socket qui atterrit pendant le vol.** Le même utilisateur
+   agit depuis un autre appareil ; `applyRemotePreferences` pose la version 5 ;
+   la réponse du `PUT` en vol arrive ensuite avec la version 2 et rembobine.
+3. **La rétractation d'échec.** Le `catch` restaurait l'instantané capturé
+   AVANT l'écriture. Si une diffusion ou une autre bascule a atterri entre-temps,
+   la rétractation en effaçait l'effet — un échec réseau sur une action annulait
+   une action sans rapport.
+
+**Correctif.** Le portillon devient commun aux deux écrivains. `isStaleWriteResponse()`
+applique aux réponses HTTP l'arbitre que `applyRemotePreferences` applique déjà
+aux diffusions, avec une réserve : l'arbitrage n'a lieu que si la réponse PORTE
+une version. Une réponse antérieure à l'ajout du champ au sérialiseur n'a pas
+d'arbitre, et la jeter perdrait l'écriture ; côté local, l'absence vaut la
+version 0, convention déjà posée par le lecteur socket. La rétractation, elle,
+ne se déclenche que si l'entrée locale est TOUJOURS l'objet que cette écriture a
+posé — l'état est immuable, donc l'identité référentielle suffit à dire que
+personne n'a écrit depuis.
+
+**Refactor (Phase 8).** Les quatre méthodes étaient quasi identiques sur ~40
+lignes chacune, ce que le cycle 17 avait noté comme demandant « une
+factorisation, pas un rustinage ponctuel ». Elles passent par un
+`writeOptimistic(conversationId, patch, request)` unique : instantané → patch
+local immédiat → requête → arbitrage. Le correctif vit à un seul endroit, et une
+cinquième bascule l'obtiendra sans y penser. ~160 lignes → ~20.
+
+### D2 — `categoryId` malformé rendait 500 au lieu de 400
+
+`services/gateway/src/routes/conversation-preferences.ts`
+
+Hérité du cycle 14. `categoryId` nomme une ligne `UserConversationCategory`,
+donc toujours un ObjectId. Non validé, un id malformé traversait le schéma,
+atteignait `userConversationCategory.findFirst` et faisait lever à Prisma
+`Malformed ObjectID` (P2023) — que le `catch` du handler transforme en 500, et
+que `logError` classe en incident serveur. Une erreur d'appelant comptée comme
+une panne, dans les logs comme dans le code de statut.
+
+La forme rejoint le schéma, là où toutes les autres routes porteuses d'id de la
+passerelle la mettent (`pattern: '^[0-9a-fA-F]{24}$'`, cf. `calls.ts`,
+`admin/agent.ts`). `null` — désassigner la catégorie — n'est pas touché :
+`pattern` ne contraint que les chaînes. `400` est ajouté au schéma de réponse.
+Un fixture de test utilisait `'cat-1'` ; le contrat de production étant un
+ObjectId, c'est le fixture qui était faux, et il est corrigé.
+
+### D3 — l'onglet qui revenait au premier plan n'avait aucun chemin de reprise
+
+`apps/web/services/socketio/connection.service.ts`
+
+Un onglet en arrière-plan voit ses timers étranglés à ~1/minute et son socket
+coupé par le navigateur. Or les DEUX boucles de reprise reposent sur des timers :
+celle de socket.io, et notre backoff `reconnect()` (que le cycle 15 a justement
+branché sur `reconnect_failed` pour les lecteurs passifs). Au retour de
+l'utilisateur, l'onglet pouvait donc rester muet une minute entière — davantage
+si le backoff en était déjà à plusieurs secondes — pendant laquelle un lecteur
+passif (aucun envoi, aucun join, donc aucun `ensureConnection`) ne recevait
+AUCUN événement temps réel : ni message, ni frappe, ni accusé, ni réaction.
+
+Le retour à l'écran est le signal exact qui manquait, symétrique du handler
+`online` déjà présent : il ne coûte rien quand le lien est vivant et
+court-circuite le backoff quand il ne l'est pas.
+
+Deux points de conception :
+
+- **La vérité est le SOCKET, pas le miroir.** La garde teste
+  `state.socket?.connected`, pas `state.isConnected` : un onglet gelé peut voir
+  sa connexion coupée sans que `disconnect` atteigne jamais le miroir, et c'est
+  précisément le cas que ce chemin doit réparer. Tester le miroir aurait fait
+  sortir la fonction sur l'unique scénario qui la justifie.
+- **Le timer de backoff en attente est annulé**, pas laissé courir : sans cela
+  il fait ensuite avancer `reconnectAttempts` pour une tentative qui n'a plus
+  lieu d'être. `reconnectAttempts` est remis à 0 — le backoff décrit une suite
+  d'échecs, revenir à l'écran est un signal neuf.
+
+### Gates
+
+- 32 tests vus ROUGES avant correctifs, verts après (23 store web, 1 route
+  passerelle, 8 service de connexion web).
+- web **572 suites / 12 275 tests** verts · passerelle **suite complète** verte.
+- `tsc --noEmit` web : 1229 erreurs avant ET après — base pré-existante
+  inchangée, zéro sur les fichiers touchés.
+- iOS hors périmètre : aucun fichier Swift touché.
+
+### Reste ouvert après ce cycle
+
+Inchangés depuis le cycle 17, et toujours dans cet ordre :
+
+- **`clear-history` n'a aucun client**, et le dispatch iOS
+  (`ConversationStore.swift:731`) rend un faux succès local sur
+  `.setClearHistoryBefore`. Dimension vie privée le jour où une UI l'appelle.
+- **`deletedForUserAt` / `clearHistoryBefore` absents du sérialiseur REST**
+  (même cause que D1 du cycle 17, même schéma).
+- **iOS paie un aller-retour HTTP de trop par mutation de préférence** —
+  `DefaultPreferenceWritingAdapter` refait un `GET` après chaque `PUT` alors que
+  le `PUT` porte désormais `version`. Demande un toolchain Swift.
+- **Le scope communauté de `user:preferences-updated` n'est routé nulle part
+  côté iOS** (`MessageSocketManager:3280`).

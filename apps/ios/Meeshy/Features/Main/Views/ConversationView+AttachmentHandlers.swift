@@ -228,6 +228,41 @@ extension ConversationView {
             )
         }
 
+        // --- Optimistic TEXT insert: upfront, like every media group ---
+        // Le groupe texte est ENVOYÉ en dernier (règle A2.2 de la spec
+        // multi-pièces : le texte est toujours son propre message, après les
+        // pièces). Mais son insert optimiste vivait À L'INTÉRIEUR de
+        // `sendMessage`, appelé après la boucle d'upload : la bulle texte
+        // n'apparaissait donc qu'une fois le DERNIER octet du dernier fichier
+        // monté — l'utilisateur voyait « les pièces d'abord, le message
+        // ensuite ». On pose la ligne ici, dans le même tour MainActor que les
+        // bulles média, en conservant l'ordre d'affichage : `createdAt` est
+        // postérieur aux groupes média puisque l'insert suit, et l'envoi réel
+        // reste en dernier via `existingTempId`.
+        //
+        // `insertOptimisticMediaMessage` n'a de « Media » que le nom : avec
+        // `attachments: []` et `messageType: .text` il construit un
+        // `MessageRecord` texte ordinaire (`attachmentsJson` reste nil) et
+        // `optimisticListPreview` gère déjà `.text`.
+        let textGroupPlan = plan.first(where: { $0.kind == .text })
+        let textTempId: String? = {
+            let hasText = !(textGroupPlan?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            guard hasText || (textGroupPlan == nil && place != nil) else { return nil }
+            return ClientMessageId.generate()
+        }()
+        if let textTempId {
+            viewModel.insertOptimisticMediaMessage(
+                tempId: textTempId,
+                content: textGroupPlan?.text ?? "",
+                attachments: [],
+                messageType: .text,
+                replyToId: textGroupPlan?.carriesReply == true ? replyId : nil,
+                storyReplyToId: textGroupPlan?.carriesReply == true ? storyReplyId : nil,
+                replyReference: textGroupPlan?.carriesReply == true ? storyRef : nil,
+                originalLanguage: lang
+            )
+        }
+
         composerState.pendingAttachments.removeAll()
         composerState.pendingThumbnails.removeAll()
         // --- End optimistic media insert ---
@@ -475,13 +510,18 @@ extension ConversationView {
             // message « lieu seul » après les médias. Dans les deux cas
             // `pendingPlace` n'est remis à nil QU'AU SUCCÈS de l'envoi qui le
             // porte — un échec laisse la tuile pour réessayer.
-            if let textGroup = plan.first(where: { $0.kind == .text }) {
+            // `existingTempId` réutilise la ligne optimiste déjà posée en amont
+            // (voir « Optimistic TEXT insert ») : `sendMessage` la fait avancer
+            // au lieu d'en créer une nouvelle, donc la bulle ne bouge pas et
+            // n'apparaît pas une seconde fois.
+            if let textGroup = textGroupPlan {
                 let ok = await viewModel.sendMessage(
                     content: textGroup.text ?? "",
                     replyToId: textGroup.carriesReply ? replyId : nil,
                     storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
                     storyReplyReference: textGroup.carriesReply ? storyRef : nil,
                     originalLanguage: lang,
+                    existingTempId: textTempId,
                     location: place
                 )
                 if ok, place != nil {
@@ -492,6 +532,7 @@ extension ConversationView {
                 let ok = await viewModel.sendMessage(
                     content: "",
                     originalLanguage: lang,
+                    existingTempId: textTempId,
                     location: place
                 )
                 if ok {
