@@ -45,4 +45,29 @@ describe('CallWaitingBanner', () => {
     fireEvent.click(screen.getByText('callWaiting.endAndAnswer'));
     expect(onEndAndAnswer).toHaveBeenCalledTimes(1);
   });
+
+  // Group-calls gap analysis (tasks/2026-08-13-group-calls-gap-analysis.md,
+  // W6) — same fix as CallNotification: a second incoming group call must
+  // read as a group call, not as a 1:1 from the initiator.
+  it('shows the group context line with the conversation title for a titled group call', () => {
+    render(
+      <CallWaitingBanner
+        call={makeCall({ conversationType: 'group', conversationTitle: 'Design Team' })}
+        onReject={jest.fn()}
+        onEndAndAnswer={jest.fn()}
+      />
+    );
+    expect(screen.getByTestId('call-waiting-group-context')).toHaveTextContent('Design Team');
+  });
+
+  it('never shows the group context line for a direct call', () => {
+    render(
+      <CallWaitingBanner
+        call={makeCall({ conversationType: 'direct', conversationTitle: null })}
+        onReject={jest.fn()}
+        onEndAndAnswer={jest.fn()}
+      />
+    );
+    expect(screen.queryByTestId('call-waiting-group-context')).not.toBeInTheDocument();
+  });
 });

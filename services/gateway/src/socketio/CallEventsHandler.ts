@@ -1990,6 +1990,11 @@ export class CallEventsHandler {
               displayName: full.initiator.displayName || undefined,
               avatar: full.initiator.avatar
             },
+            // Same conversation context as the main call:initiate emit below
+            // — a client that (re)connects mid-ring must see the same group
+            // vs. direct presentation as one that was online from the start.
+            conversationType: full.conversation?.type ?? 'direct',
+            conversationTitle: full.conversation?.title ?? null,
             participants: full.participants.map(p => ({
               id: p.id,
               callSessionId: p.callSessionId,
@@ -2116,6 +2121,14 @@ export class CallEventsHandler {
             displayName: callSession.initiator.displayName || undefined,
             avatar: callSession.initiator.avatar
           },
+          // Group-calls gap analysis W6 — lets a ringing callee's UI tell
+          // "Alice is calling you" (direct) apart from "Alice is calling the
+          // Design Team" (group) without a separate conversation lookup.
+          // `conversation` is already selected by `callSessionInclude`
+          // (CallService.ts); the fallback only matters for a test double
+          // that omits it, never for a real Prisma-backed session.
+          conversationType: callSession.conversation?.type ?? 'direct',
+          conversationTitle: callSession.conversation?.title ?? null,
           participants: callSession.participants.map(p => ({
             id: p.id,
             callSessionId: p.callSessionId,
