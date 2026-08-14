@@ -1,6 +1,30 @@
 import SwiftUI
 import MeeshyUI
 
+/// Placement vertical de la pill sticky de jour dans le viewport de la liste.
+///
+/// La pill et la rangée du header flottant (retour + avatar + titre) se
+/// disputaient la même bande, juste sous l'encoche / Dynamic Island — la pill
+/// à `safeArea + 4` recouvrait le header (retour user 2026-08-12), d'où un
+/// repli à +60 pour la faire démarrer SOUS lui. Résolu autrement le lendemain
+/// (2026-08-13) : **exclusion mutuelle** plutôt qu'un grand offset fixe. La
+/// pill n'est visible QUE pendant le défilement actif
+/// (`MessageDayStickyState.isScrollingActive`), moment où `ConversationView`
+/// masque le header flottant en retour (`onScrollingActiveChanged`) — les deux
+/// ne sont donc plus jamais à l'écran en même temps.
+///
+/// L'offset reste à 0, mais sa raison a changé avec la simplification de
+/// l'overlay (2026-08-14) : ce n'est plus `IslandEmergingBanner` qui garantit
+/// l'air sous l'îlot, c'est `MessageDayStickyOverlay` lui-même, via son
+/// `.padding(.top, 8)`. Cumuler une marge ici la doublerait.
+///
+/// Vit dans ce fichier et pas dans `MessageListViewController` parce que c'est
+/// l'overlay qui porte l'autre moitié de la marge : les deux valeurs se lisent
+/// ensemble ou elles dérivent.
+enum MessageDayStickyPlacement {
+    nonisolated static let topOffset: CGFloat = 0
+}
+
 /// État réactif qui pilote l'affichage de la pill flottante « Aujourd'hui /
 /// Hier / Lundi 9 mai » au top de la liste des messages. Sert de pont entre
 /// `MessageListViewController` (UIKit : calcul du `dayStart` du message en
