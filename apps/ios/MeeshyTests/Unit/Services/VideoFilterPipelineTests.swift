@@ -2,6 +2,10 @@ import XCTest
 import CoreVideo
 @testable import Meeshy
 
+#if canImport(WebRTC)
+import WebRTC
+#endif
+
 // MARK: - VideoFilterConfig Tests
 
 @MainActor
@@ -299,3 +303,87 @@ final class VideoFilterPipelineTests: XCTestCase {
         }
     }
 }
+
+#if canImport(WebRTC)
+
+// MARK: - VideoFilterCapturerDelegate Tests
+//
+// Regression guard for the call-site half of Vague 107 (#2859): that PR
+// taught `VideoFilterPipeline.process()` itself to also run when
+// `hasAdvancedFilters` is true, but `VideoFilterCapturerDelegate.capturer(
+// _:didCapture:)` — the WebRTC capture callback that decides whether to call
+// `process()` at all — still duplicated the OLD `cfg.isEnabled`-only gate.
+// Background blur/skin smoothing toggled without ever picking a colorimetry
+// preset therefore still never reached `process()`: the frame handed to the
+// encoder stayed unfiltered on real devices even though CallView's toolbar
+// chip (also fixed by #2859) now claimed the filter was active.
+
+private final class SpyRTCVideoCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
+    private(set) var capturedFrames: [RTCVideoFrame] = []
+
+    func capturer(_ capturer: RTCVideoCapturer, didCapture frame: RTCVideoFrame) {
+        capturedFrames.append(frame)
+    }
+}
+
+@MainActor
+final class VideoFilterCapturerDelegateTests: XCTestCase {
+
+    private func makePixelBuffer(width: Int = 64, height: Int = 64) -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        precondition(status == kCVReturnSuccess, "CVPixelBufferCreate failed")
+        return pixelBuffer!
+    }
+
+    private func makeFrame(pixelBuffer: CVPixelBuffer) -> RTCVideoFrame {
+        RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: 0)
+    }
+
+    private func makeSUT(pipeline: VideoFilterPipeline) -> (sut: VideoFilterCapturerDelegate, target: SpyRTCVideoCapturerDelegate, capturer: RTCVideoCapturer) {
+        let target = SpyRTCVideoCapturerDelegate()
+        let sut = VideoFilterCapturerDelegate(target: target, pipeline: pipeline)
+        let capturer = RTCVideoCapturer(delegate: target)
+        return (sut, target, capturer)
+    }
+
+    func test_didCapture_withOnlyBackgroundBlurEnabled_stillReachesProcess() {
+        let pipeline = VideoFilterPipeline()
+        pipeline.config.isEnabled = false
+        pipeline.config.backgroundBlurEnabled = true
+        let (sut, target, capturer) = makeSUT(pipeline: pipeline)
+
+        sut.capturer(capturer, didCapture: makeFrame(pixelBuffer: makePixelBuffer()))
+
+        XCTAssertNotNil(pipeline.lastFrameProcessingTime, "background blur alone must reach process() from the capturer callback, not be gated by isEnabled")
+        XCTAssertEqual(target.capturedFrames.count, 1, "the (possibly filtered) frame must still be forwarded to the encoder target")
+    }
+
+    func test_didCapture_withOnlySkinSmoothingEnabled_stillReachesProcess() {
+        let pipeline = VideoFilterPipeline()
+        pipeline.config.isEnabled = false
+        pipeline.config.skinSmoothingEnabled = true
+        let (sut, target, capturer) = makeSUT(pipeline: pipeline)
+
+        sut.capturer(capturer, didCapture: makeFrame(pixelBuffer: makePixelBuffer()))
+
+        XCTAssertNotNil(pipeline.lastFrameProcessingTime, "skin smoothing alone must reach process() from the capturer callback, not be gated by isEnabled")
+        XCTAssertEqual(target.capturedFrames.count, 1)
+    }
+
+    func test_didCapture_withNeitherEnabledNorAdvancedFilters_doesNotProcessButStillForwardsFrame() {
+        // Non-regression: the base "no filters at all" case must still
+        // reach `process()`'s own cheap early-return, and the original frame
+        // must still be forwarded unmodified to the encoder target.
+        let pipeline = VideoFilterPipeline()
+        let (sut, target, capturer) = makeSUT(pipeline: pipeline)
+
+        sut.capturer(capturer, didCapture: makeFrame(pixelBuffer: makePixelBuffer()))
+
+        XCTAssertNil(pipeline.lastFrameProcessingTime, "with no filters active at all, process() must still early-return")
+        XCTAssertEqual(target.capturedFrames.count, 1)
+    }
+}
+
+#endif
