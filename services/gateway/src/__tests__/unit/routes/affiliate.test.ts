@@ -173,6 +173,30 @@ describe('GET /affiliate/stats', () => {
     expect(res.json().success).toBe(true);
   });
 
+  it('ships the whole stats payload instead of an empty object', async () => {
+    // Le schéma de réponse déclarait `data` comme un objet SANS `properties` :
+    // fast-json-stringify sérialisait `{}` et vidait compteurs, filleuls et
+    // tokens — sans qu'aucune erreur ne le signale. Le client ne pouvait donc
+    // rien afficher.
+    mockGetStats.mockResolvedValueOnce({
+      success: true,
+      data: {
+        totalReferrals: 2,
+        completedReferrals: 1,
+        referrals: [{ id: 'rel-1', status: 'completed', referredUser: { id: 'u1', username: 'awa' } }],
+        tokens: [{ id: 'tok-1', name: 'Lancement' }],
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/affiliate/stats' });
+
+    const body = res.json();
+    expect(body.data.totalReferrals).toBe(2);
+    expect(body.data.referrals).toHaveLength(1);
+    expect(body.data.referrals[0].referredUser.username).toBe('awa');
+    expect(body.data.tokens[0].name).toBe('Lancement');
+  });
+
   it('returns 400 when service returns error', async () => {
     mockGetStats.mockResolvedValueOnce({ success: false, error: 'Invalid filter' });
     const res = await app.inject({ method: 'GET', url: '/affiliate/stats' });

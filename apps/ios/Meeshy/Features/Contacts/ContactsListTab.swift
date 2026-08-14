@@ -5,6 +5,11 @@ import MeeshyUI
 
 struct ContactsListTab: View {
     @ObservedObject var viewModel: ContactsListViewModel
+    /// Répertoire (carnet d'adresses synchronisé). Vit au niveau du hub pour
+    /// que la liste survive aux allers-retours entre filtres.
+    @ObservedObject var phonebookViewModel: PhonebookViewModel
+    /// Filleuls de l'affiliation.
+    @ObservedObject var affiliatesViewModel: AffiliatesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
@@ -37,8 +42,15 @@ struct ContactsListTab: View {
 
     private func chipButton(_ filter: ContactFilter) -> some View {
         let isActive = viewModel.activeFilter == filter
-        let isPlaceholder = filter == .phonebook || filter == .affiliates
         let countSuffix: String = {
+            if filter == .phonebook {
+                let count = phonebookViewModel.contacts.count
+                return count > 0 ? " (\(count))" : ""
+            }
+            if filter == .affiliates {
+                let count = affiliatesViewModel.referrals.count
+                return count > 0 ? " (\(count))" : ""
+            }
             guard filter == .all || filter == .online else { return "" }
             let count = filter == .all ? viewModel.friends.count :
                 viewModel.friends.filter { $0.isOnline == true }.count
@@ -46,12 +58,7 @@ struct ContactsListTab: View {
         }()
 
         return Button {
-            if isPlaceholder {
-                FeedbackToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
-                HapticFeedback.light()
-            } else {
-                viewModel.setFilter(filter)
-            }
+            viewModel.setFilter(filter)
         } label: {
             Text("\(filter.rawValue)\(countSuffix)")
                 .font(.footnote.weight(.semibold))
@@ -73,7 +80,19 @@ struct ContactsListTab: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.loadState == .loading && viewModel.friends.isEmpty {
+        if viewModel.activeFilter == .phonebook {
+            PhonebookListView(
+                viewModel: phonebookViewModel,
+                isActive: isActive,
+                onScrollOffsetChange: onScrollOffsetChange
+            )
+        } else if viewModel.activeFilter == .affiliates {
+            AffiliatesListView(
+                viewModel: affiliatesViewModel,
+                isActive: isActive,
+                onScrollOffsetChange: onScrollOffsetChange
+            )
+        } else if viewModel.loadState == .loading && viewModel.friends.isEmpty {
             ContactsSkeletonList()
         } else if viewModel.filteredFriends.isEmpty {
             emptyState
@@ -86,7 +105,13 @@ struct ContactsListTab: View {
 
     private var searchableList: some View {
         VStack(spacing: 0) {
-            searchBar
+            ContactsSearchField(
+                placeholder: String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main),
+                query: Binding(get: { viewModel.searchQuery }, set: { viewModel.search($0) })
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
@@ -99,41 +124,6 @@ struct ContactsListTab: View {
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.loadFriends(forceNetwork: true) }
         }
-    }
-
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-
-            TextField(String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main), text: Binding(
-                get: { viewModel.searchQuery },
-                set: { viewModel.search($0) }
-            ))
-            .font(.subheadline)
-            .foregroundColor(theme.textPrimary)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.search("")
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
     }
 
     // MARK: - Contact Row

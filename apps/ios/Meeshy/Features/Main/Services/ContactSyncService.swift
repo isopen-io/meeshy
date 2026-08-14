@@ -9,6 +9,21 @@ struct DeviceContact: Sendable, Equatable {
     let displayName: String?
     let phoneNumbers: [String]
     let emails: [String]
+    /// Pseudos portés par la fiche : surnom (`nickname`) et handles de profils
+    /// sociaux. Troisième voie de rapprochement, après le numéro et l'email.
+    let usernames: [String]
+
+    /// `nonisolated` : la cible compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION =
+    /// MainActor`, or ce type est construit DANS le closure d'énumération du
+    /// carnet, sur une queue utilitaire. Sans ce marqueur, l'init explicite
+    /// hérite de `@MainActor` et chaque construction devient un appel
+    /// cross-acteur (avertissement par contact énuméré).
+    nonisolated init(displayName: String?, phoneNumbers: [String], emails: [String], usernames: [String] = []) {
+        self.displayName = displayName
+        self.phoneNumbers = phoneNumbers
+        self.emails = emails
+        self.usernames = usernames
+    }
 }
 
 // MARK: - Protocol
@@ -18,7 +33,17 @@ protocol ContactSyncProviding: Sendable {
     func requestAccess() async -> Bool
     /// Demande l'accès si nécessaire, lit le carnet en arrière-plan et renvoie
     /// les utilisateurs Meeshy présents dans les contacts de l'utilisateur.
+    /// Rapprochement PUR — rien n'est conservé côté serveur.
     func findFriendsFromContacts() async throws -> [ContactMatch]
+    /// Lit le carnet et le SYNCHRONISE dans le répertoire persisté, pour qu'il
+    /// soit consultable sans re-scanner l'appareil.
+    func syncDirectory(mode: DirectorySyncMode) async throws -> DirectorySyncResult
+}
+
+extension ContactSyncProviding {
+    func syncDirectory() async throws -> DirectorySyncResult {
+        try await syncDirectory(mode: .replace)
+    }
 }
 
 enum ContactSyncError: LocalizedError {
@@ -40,15 +65,18 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
 
     private let store: CNContactStore
     private let matchService: ContactMatchServiceProviding
+    private let directoryService: ContactDirectoryServiceProviding
     private let maxContactsPerSync: Int
 
     init(
         store: CNContactStore = CNContactStore(),
         matchService: ContactMatchServiceProviding = ContactMatchService.shared,
+        directoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
         maxContactsPerSync: Int = 2000
     ) {
         self.store = store
         self.matchService = matchService
+        self.directoryService = directoryService
         self.maxContactsPerSync = maxContactsPerSync
     }
 
@@ -70,22 +98,45 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
     }
 
     func findFriendsFromContacts() async throws -> [ContactMatch] {
-        guard await requestAccess() else { throw ContactSyncError.accessDenied }
-
-        let contacts = try await Self.fetchDeviceContacts(store: store)
-        let entries = contacts
-            .filter { !$0.phoneNumbers.isEmpty || !$0.emails.isEmpty }
-            .prefix(maxContactsPerSync)
-            .map { ContactMatchEntry(displayName: $0.displayName,
-                                     phoneNumbers: $0.phoneNumbers,
-                                     emails: $0.emails) }
-
+        let entries = try await readEntries()
         guard !entries.isEmpty else { return [] }
 
         let response = try await matchService.match(
-            ContactMatchRequest(contacts: Array(entries), defaultCountry: Self.deviceRegionCode())
+            ContactMatchRequest(contacts: entries, defaultCountry: Self.deviceRegionCode())
         )
         return response.matches
+    }
+
+    func syncDirectory(mode: DirectorySyncMode) async throws -> DirectorySyncResult {
+        let entries = try await readEntries()
+        return try await directoryService.sync(
+            DirectorySyncRequest(
+                contacts: entries,
+                defaultCountry: Self.deviceRegionCode(),
+                mode: mode
+            )
+        )
+    }
+
+    /// Demande l'accès, lit le carnet et le réduit aux fiches porteuses d'au
+    /// moins un identifiant exploitable. Une fiche sans numéro, email ni pseudo
+    /// ne peut être rapprochée de rien — l'envoyer ne ferait que gonfler la
+    /// requête.
+    private func readEntries() async throws -> [ContactMatchEntry] {
+        guard await requestAccess() else { throw ContactSyncError.accessDenied }
+
+        let contacts = try await Self.fetchDeviceContacts(store: store)
+        return contacts
+            .filter { !$0.phoneNumbers.isEmpty || !$0.emails.isEmpty || !$0.usernames.isEmpty }
+            .prefix(maxContactsPerSync)
+            .map {
+                ContactMatchEntry(
+                    displayName: $0.displayName,
+                    phoneNumbers: $0.phoneNumbers,
+                    emails: $0.emails,
+                    usernames: $0.usernames
+                )
+            }
     }
 
     // MARK: - Off-main-actor permission & fetch
@@ -121,8 +172,10 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
                 let keys = [
                     CNContactGivenNameKey,
                     CNContactFamilyNameKey,
+                    CNContactNicknameKey,
                     CNContactPhoneNumbersKey,
-                    CNContactEmailAddressesKey
+                    CNContactEmailAddressesKey,
+                    CNContactSocialProfilesKey
                 ] as [CNKeyDescriptor]
                 let request = CNContactFetchRequest(keysToFetch: keys)
                 var results: [DeviceContact] = []
@@ -134,7 +187,8 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
                         results.append(DeviceContact(
                             displayName: name.isEmpty ? nil : name,
                             phoneNumbers: contact.phoneNumbers.map { $0.value.stringValue },
-                            emails: contact.emailAddresses.map { $0.value as String }
+                            emails: contact.emailAddresses.map { $0.value as String },
+                            usernames: Self.pseudonyms(of: contact)
                         ))
                     }
                     continuation.resume(returning: results)
@@ -143,6 +197,20 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// Pseudos exploitables d'une fiche vCard : le surnom (`nickname`) et le
+    /// handle de chaque profil social. La gateway écarte ensuite ceux qui ne
+    /// respectent pas la charte username de la plateforme — ici on se contente
+    /// de collecter sans juger.
+    nonisolated static func pseudonyms(of contact: CNContact) -> [String] {
+        var handles: [String] = []
+        if !contact.nickname.isEmpty { handles.append(contact.nickname) }
+        handles.append(contentsOf: contact.socialProfiles.compactMap { profile in
+            let username = profile.value.username
+            return username.isEmpty ? nil : username
+        })
+        return handles
     }
 
     nonisolated static func deviceRegionCode() -> String? {

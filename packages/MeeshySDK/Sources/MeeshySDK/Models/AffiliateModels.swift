@@ -62,11 +62,79 @@ public struct AffiliateStats: Codable, Sendable {
     public let totalReferrals: Int?
     public let totalVisits: Int?
     public let conversionRate: Double?
+    public let completedReferrals: Int?
+    public let pendingReferrals: Int?
+    /// Les filleuls eux-mêmes — ce que l'onglet « Affilies » liste.
+    public let referrals: [AffiliateReferral]?
 
     public init(totalTokens: Int? = nil, totalReferrals: Int? = nil,
-                totalVisits: Int? = nil, conversionRate: Double? = nil) {
+                totalVisits: Int? = nil, conversionRate: Double? = nil,
+                completedReferrals: Int? = nil, pendingReferrals: Int? = nil,
+                referrals: [AffiliateReferral]? = nil) {
         self.totalTokens = totalTokens; self.totalReferrals = totalReferrals
         self.totalVisits = totalVisits; self.conversionRate = conversionRate
+        self.completedReferrals = completedReferrals; self.pendingReferrals = pendingReferrals
+        self.referrals = referrals
+    }
+}
+
+// MARK: - Affiliate Referral
+
+/// Un filleul : l'utilisateur qui a rejoint Meeshy via un lien d'affiliation.
+public struct AffiliateReferral: Codable, Sendable, Identifiable, Equatable, CacheIdentifiable {
+    public let id: String
+    public let status: String?
+    public let createdAt: Date?
+    public let completedAt: Date?
+    public let referredUser: ReferredUser?
+
+    public init(
+        id: String,
+        status: String? = nil,
+        createdAt: Date? = nil,
+        completedAt: Date? = nil,
+        referredUser: ReferredUser? = nil
+    ) {
+        self.id = id
+        self.status = status
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.referredUser = referredUser
+    }
+
+    /// Nom d'affichage du filleul, pseudo en dernier recours.
+    public var resolvedName: String {
+        guard let user = referredUser else { return "" }
+        let composed = [user.firstName, user.lastName]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return composed.isEmpty ? "@\(user.username)" : composed
+    }
+}
+
+public struct ReferredUser: Codable, Sendable, Identifiable, Equatable {
+    public let id: String
+    public let username: String
+    public let firstName: String?
+    public let lastName: String?
+    public let avatar: String?
+    public let isOnline: Bool?
+
+    public init(
+        id: String,
+        username: String,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        avatar: String? = nil,
+        isOnline: Bool? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.firstName = firstName
+        self.lastName = lastName
+        self.avatar = avatar
+        self.isOnline = isOnline
     }
 }
 

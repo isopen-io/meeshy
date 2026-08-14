@@ -23,6 +23,7 @@ final class DiscoverViewModel: ObservableObject {
     private let friendService: FriendServiceProviding
     private let userService: UserServiceProviding
     private let contactSync: ContactSyncProviding
+    private let directoryService: ContactDirectoryServiceProviding
     private let cache = FriendshipCache.shared
     private let resolver: UserRelationshipResolver
     /// Injected so tests can drive the send-request outbox path (enqueue
@@ -38,12 +39,14 @@ final class DiscoverViewModel: ObservableObject {
         friendService: FriendServiceProviding = FriendService.shared,
         userService: UserServiceProviding = UserService.shared,
         contactSync: ContactSyncProviding = ContactSyncService.shared,
+        directoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
         resolver: UserRelationshipResolver = .shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) {
         self.friendService = friendService
         self.userService = userService
         self.contactSync = contactSync
+        self.directoryService = directoryService
         self.resolver = resolver
         self.offlineQueue = offlineQueue
         // Bridge external state changes into our own objectWillChange so the
@@ -242,13 +245,23 @@ final class DiscoverViewModel: ObservableObject {
     // MARK: - Contact Import (carnet d'adresses → suggestions)
 
     /// Demande l'accès aux contacts (hors main thread, géré par le service),
-    /// puis matche le carnet contre les comptes Meeshy existants.
+    /// SYNCHRONISE le carnet dans le répertoire persisté, puis affiche ceux qui
+    /// ont déjà un compte Meeshy.
+    ///
+    /// Une seule lecture du carnet et un seul envoi : la synchronisation fait
+    /// le rapprochement ET la conservation. Les correspondances affichées sont
+    /// relues du répertoire — l'utilisateur les retrouve ensuite dans l'onglet
+    /// Répertoire, sans avoir à re-scanner son appareil.
     func importContacts() async {
         guard !isImportingContacts else { return }
         isImportingContacts = true
         defer { isImportingContacts = false }
         do {
-            contactMatches = try await contactSync.findFriendsFromContacts()
+            _ = try await contactSync.syncDirectory(mode: .replace)
+            let directory = try await directoryService.list(
+                offset: 0, limit: 200, filter: .meeshy, query: nil
+            )
+            contactMatches = directory.data.compactMap(\.asContactMatch)
             hasImportedContacts = true
             if contactMatches.isEmpty {
                 FeedbackToastManager.shared.show(String(localized: "contacts.discover.import.none", defaultValue: "Aucun de tes contacts n'est encore sur Meeshy — invite-les !", bundle: .main), type: .success)

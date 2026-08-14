@@ -369,8 +369,14 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
+            // `additionalProperties: true` est INDISPENSABLE : un schéma
+            // `type: 'object'` SANS `properties` fait sérialiser `{}` par
+            // fast-json-stringify. La route répondait donc `data: {}` — les
+            // compteurs, la liste des filleuls et les tokens étaient effacés
+            // à la sérialisation, sans qu'aucune erreur ne le signale.
             data: {
               type: 'object',
+              additionalProperties: true,
               description: 'Affiliate statistics and metrics'
             }
           }
