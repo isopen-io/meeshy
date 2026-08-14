@@ -8,6 +8,8 @@ struct ContactsListTab: View {
     /// Répertoire (carnet d'adresses synchronisé). Vit au niveau du hub pour
     /// que la liste survive aux allers-retours entre filtres.
     @ObservedObject var phonebookViewModel: PhonebookViewModel
+    /// Filleuls de l'affiliation.
+    @ObservedObject var affiliatesViewModel: AffiliatesViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
@@ -40,10 +42,13 @@ struct ContactsListTab: View {
 
     private func chipButton(_ filter: ContactFilter) -> some View {
         let isActive = viewModel.activeFilter == filter
-        let isPlaceholder = filter == .affiliates
         let countSuffix: String = {
             if filter == .phonebook {
                 let count = phonebookViewModel.contacts.count
+                return count > 0 ? " (\(count))" : ""
+            }
+            if filter == .affiliates {
+                let count = affiliatesViewModel.referrals.count
                 return count > 0 ? " (\(count))" : ""
             }
             guard filter == .all || filter == .online else { return "" }
@@ -53,12 +58,7 @@ struct ContactsListTab: View {
         }()
 
         return Button {
-            if isPlaceholder {
-                FeedbackToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
-                HapticFeedback.light()
-            } else {
-                viewModel.setFilter(filter)
-            }
+            viewModel.setFilter(filter)
         } label: {
             Text("\(filter.rawValue)\(countSuffix)")
                 .font(.footnote.weight(.semibold))
@@ -83,6 +83,12 @@ struct ContactsListTab: View {
         if viewModel.activeFilter == .phonebook {
             PhonebookListView(
                 viewModel: phonebookViewModel,
+                isActive: isActive,
+                onScrollOffsetChange: onScrollOffsetChange
+            )
+        } else if viewModel.activeFilter == .affiliates {
+            AffiliatesListView(
+                viewModel: affiliatesViewModel,
                 isActive: isActive,
                 onScrollOffsetChange: onScrollOffsetChange
             )

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Contacts
 import MeeshySDK
 import MeeshyUI
 
@@ -15,30 +16,43 @@ final class PhonebookViewModel: ObservableObject {
     @Published private(set) var contacts: [DirectoryContact] = []
     @Published private(set) var loadState: LoadState = .idle
     @Published private(set) var isSyncing = false
+    /// Utilisateurs de la plateforme trouvés par le RELAIS de recherche —
+    /// alimenté seulement quand le répertoire ne répond pas à la requête.
+    @Published private(set) var platformResults: [UserSearchResult] = []
+    @Published private(set) var isSearchingPlatform = false
     @Published var activeFilter: DirectoryFilter = .all
     @Published var searchQuery: String = ""
 
     private let directoryService: ContactDirectoryServiceProviding
     private let contactSync: ContactSyncProviding
+    private let userService: UserServiceProviding
     private let conversationCreator: ConversationCreating
     private let currentUserId: String
     private let cacheKey = "phonebook:all"
+    private let searchDebounce: Duration
     private var revalidationTask: Task<Void, Never>?
+    private var platformSearchTask: Task<Void, Never>?
+    private var hasAttemptedInitialSync = false
 
     init(
         directoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
         contactSync: ContactSyncProviding = ContactSyncService.shared,
+        userService: UserServiceProviding = UserService.shared,
         conversationCreator: ConversationCreating = ConversationCreator(),
-        currentUserId: String = AuthManager.shared.currentUser?.id ?? ""
+        currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
+        searchDebounce: Duration = .milliseconds(300)
     ) {
         self.directoryService = directoryService
         self.contactSync = contactSync
+        self.userService = userService
         self.conversationCreator = conversationCreator
         self.currentUserId = currentUserId
+        self.searchDebounce = searchDebounce
     }
 
     deinit {
         revalidationTask?.cancel()
+        platformSearchTask?.cancel()
     }
 
     // MARK: - Derived state
@@ -70,11 +84,26 @@ final class PhonebookViewModel: ObservableObject {
 
     var isEmpty: Bool { contacts.isEmpty }
 
+    /// Requête normalisée. Sous 2 caractères, une recherche plateforme
+    /// ramènerait la moitié de l'annuaire — on ne relaie pas.
+    private var normalizedQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Le relais plateforme ne s'affiche QUE lorsque le répertoire n'a rien
+    /// répondu : « cherche parmi mes contacts, et si tu ne trouves pas, sur
+    /// Meeshy ». Les résultats plateforme ne s'ajoutent jamais aux contacts,
+    /// ils prennent le relais.
+    var showsPlatformResults: Bool {
+        normalizedQuery.count >= 2 && visibleContacts.isEmpty
+    }
+
     // MARK: - Load
 
     func load(forceNetwork: Bool = false) async {
         if forceNetwork {
             await refreshFromNetwork()
+            await synchronizeIfDirectoryIsEmpty()
             return
         }
 
@@ -93,6 +122,22 @@ final class PhonebookViewModel: ObservableObject {
             loadState = contacts.isEmpty ? .loading : .loaded
             await refreshFromNetwork()
         }
+
+        await synchronizeIfDirectoryIsEmpty()
+    }
+
+    /// Première ouverture : un répertoire vide n'a rien à montrer. Si l'accès
+    /// aux contacts est DÉJÀ accordé, on le remplit sans rien demander — la
+    /// permission a été consentie ailleurs (« Retrouver mes contacts »), et
+    /// laisser l'onglet vide alors qu'on peut le peupler est une impasse.
+    ///
+    /// Aucune demande de permission ici : sans autorisation préalable, l'écran
+    /// garde son état vide et son bouton de synchronisation explicite.
+    private func synchronizeIfDirectoryIsEmpty() async {
+        guard contacts.isEmpty, !isSyncing, !hasAttemptedInitialSync else { return }
+        hasAttemptedInitialSync = true
+        guard contactSync.authorizationStatus() == .authorized else { return }
+        await synchronize(silent: true)
     }
 
     private func refreshFromNetwork() async {
@@ -117,14 +162,19 @@ final class PhonebookViewModel: ObservableObject {
 
     /// Lit le carnet de l'appareil et le synchronise. `replace` : le serveur
     /// devient le miroir exact de l'appareil, contacts supprimés compris.
-    func synchronize() async {
+    /// - Parameter silent: `true` pour le remplissage automatique de première
+    ///   ouverture — l'utilisateur n'a rien demandé, il ne doit pas recevoir de
+    ///   toast ni de retour haptique pour un geste qu'il n'a pas fait.
+    func synchronize(silent: Bool = false) async {
         guard !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
+        hasAttemptedInitialSync = true
 
         do {
             let result = try await contactSync.syncDirectory(mode: .replace)
             await refreshFromNetwork()
+            guard !silent else { return }
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(
                 String(
@@ -134,13 +184,71 @@ final class PhonebookViewModel: ObservableObject {
                 )
             )
         } catch let error as ContactSyncError {
+            guard !silent else { return }
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(error.localizedDescription)
         } catch {
+            guard !silent else { return }
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(
                 String(localized: "contacts.phonebook.sync-error", defaultValue: "Impossible de synchroniser le repertoire", bundle: .main)
             )
+        }
+    }
+
+    // MARK: - Recherche relayée (répertoire → plateforme)
+
+    /// À appeler quand la requête change. Le répertoire répond en local et
+    /// instantanément (`visibleContacts`) ; ce relais ne part sur le réseau que
+    /// s'il n'a rien trouvé, après un temps mort pour ne pas tirer une requête
+    /// par frappe.
+    func searchQueryChanged() async {
+        platformSearchTask?.cancel()
+        guard showsPlatformResults else {
+            platformResults = []
+            isSearchingPlatform = false
+            return
+        }
+
+        let query = normalizedQuery
+        let debounce = searchDebounce
+        let userService = self.userService
+        platformSearchTask = Task { [weak self] in
+            try? await Task.sleep(for: debounce)
+            guard !Task.isCancelled else { return }
+            await self?.runPlatformSearch(query: query, using: userService)
+        }
+        await platformSearchTask?.value
+    }
+
+    private func runPlatformSearch(query: String, using userService: UserServiceProviding) async {
+        isSearchingPlatform = true
+        defer { isSearchingPlatform = false }
+        do {
+            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
+            // La requête a pu changer pendant l'aller-retour : ne pas écraser
+            // l'écran avec les résultats d'une frappe périmée.
+            guard query == normalizedQuery else { return }
+            platformResults = results.filter { $0.id != currentUserId }
+        } catch {
+            guard query == normalizedQuery else { return }
+            platformResults = []
+        }
+    }
+
+    /// « Lui écrire » depuis un résultat plateforme (hors répertoire).
+    func startConversation(withUserId userId: String) async -> Conversation? {
+        do {
+            return try await conversationCreator.createDirectConversation(
+                with: userId,
+                currentUserId: currentUserId
+            )
+        } catch {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(
+                String(localized: "contacts.phonebook.open-error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main)
+            )
+            return nil
         }
     }
 
@@ -151,18 +259,7 @@ final class PhonebookViewModel: ObservableObject {
     /// création échoue, l'appelant restant maître de la navigation.
     func startConversation(with contact: DirectoryContact) async -> Conversation? {
         guard let user = contact.matchedUser else { return nil }
-        do {
-            return try await conversationCreator.createDirectConversation(
-                with: user.id,
-                currentUserId: currentUserId
-            )
-        } catch {
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.open-error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main)
-            )
-            return nil
-        }
+        return await startConversation(withUserId: user.id)
     }
 
     /// Efface le répertoire conservé côté serveur (droit au retrait).

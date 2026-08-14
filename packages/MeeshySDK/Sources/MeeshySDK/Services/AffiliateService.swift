@@ -1,6 +1,13 @@
 import Foundation
 
-public final class AffiliateService: @unchecked Sendable {
+/// Contrat d'accès à l'affiliation, pour que les ViewModels s'injectent un
+/// double en test plutôt que le singleton réseau.
+public protocol AffiliateServiceProviding: Sendable {
+    func listTokens(offset: Int, limit: Int) async throws -> [AffiliateToken]
+    func fetchStats() async throws -> AffiliateStats
+}
+
+public final class AffiliateService: AffiliateServiceProviding, @unchecked Sendable {
     public static let shared = AffiliateService()
     private let api: APIClientProviding
 

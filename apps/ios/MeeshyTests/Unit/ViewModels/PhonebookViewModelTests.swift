@@ -1,4 +1,5 @@
 import XCTest
+import Contacts
 @testable import Meeshy
 import MeeshySDK
 
@@ -33,25 +34,34 @@ final class PhonebookViewModelTests: XCTestCase {
 
     private func makeSUT(
         contacts: [DirectoryContact] = [],
-        listError: Error? = nil
-    ) -> (sut: PhonebookViewModel, directory: MockContactDirectoryService, sync: MockContactSyncService, creator: MockConversationCreator) {
+        listError: Error? = nil,
+        platformResults: [UserSearchResult] = [],
+        contactsAuthorization: CNAuthorizationStatus = .denied
+    ) -> (sut: PhonebookViewModel, directory: MockContactDirectoryService, sync: MockContactSyncService, creator: MockConversationCreator, users: MockUserService) {
         let directory = MockContactDirectoryService()
         directory.listResult = listError.map { .failure($0) } ?? .success(contacts)
         let sync = MockContactSyncService()
+        // Par défaut refusé : les tests qui ne parlent PAS du remplissage
+        // automatique ne doivent pas le déclencher par accident.
+        sync.authorizationStatusResult = contactsAuthorization
         let creator = MockConversationCreator()
+        let users = MockUserService()
+        users.searchUsersResult = .success(platformResults)
         let sut = PhonebookViewModel(
             directoryService: directory,
             contactSync: sync,
+            userService: users,
             conversationCreator: creator,
-            currentUserId: "me"
+            currentUserId: "me",
+            searchDebounce: .zero
         )
-        return (sut, directory, sync, creator)
+        return (sut, directory, sync, creator, users)
     }
 
     // MARK: - Load
 
     func test_load_populatesDirectoryFromNetwork() async {
-        let (sut, directory, _, _) = makeSUT(contacts: [makeContact()])
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
 
         await sut.load(forceNetwork: true)
 
@@ -61,7 +71,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_load_networkFailureOnEmptyDirectory_surfacesError() async {
-        let (sut, _, _, _) = makeSUT(listError: URLError(.notConnectedToInternet))
+        let (sut, _, _, _, _) = makeSUT(listError: URLError(.notConnectedToInternet))
 
         await sut.load(forceNetwork: true)
 
@@ -71,7 +81,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_load_networkFailureWithContactsAlreadyShown_keepsThemVisible() async {
-        let (sut, directory, _, _) = makeSUT(contacts: [makeContact()])
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
         await sut.load(forceNetwork: true)
 
         directory.listResult = .failure(URLError(.timedOut))
@@ -86,7 +96,7 @@ final class PhonebookViewModelTests: XCTestCase {
     // MARK: - Filters & search
 
     func test_visibleContacts_meeshyFilter_keepsOnlyMatchedContacts() async {
-        let (sut, _, _, _) = makeSUT(contacts: [
+        let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Awa", onMeeshy: true),
             makeContact(id: "2", displayName: "Ghost", onMeeshy: false),
         ])
@@ -99,7 +109,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_visibleContacts_invitableFilter_keepsOnlyUnmatchedContacts() async {
-        let (sut, _, _, _) = makeSUT(contacts: [
+        let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Awa", onMeeshy: true),
             makeContact(id: "2", displayName: "Ghost", onMeeshy: false),
         ])
@@ -111,7 +121,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_visibleContacts_searchMatchesAddressBookName() async {
-        let (sut, _, _, _) = makeSUT(contacts: [
+        let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Awa Diallo"),
             makeContact(id: "2", displayName: "Bob Marley", username: "bob"),
         ])
@@ -123,7 +133,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_visibleContacts_searchMatchesMeeshyUsername() async {
-        let (sut, _, _, _) = makeSUT(contacts: [
+        let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Le voisin", username: "awa"),
             makeContact(id: "2", displayName: "Bob", username: "bob"),
         ])
@@ -135,7 +145,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_visibleContacts_searchMatchesPhoneNumber() async {
-        let (sut, _, _, _) = makeSUT(contacts: [
+        let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Awa", phoneNumbers: ["+221771234567"]),
             makeContact(id: "2", displayName: "Bob", phoneNumbers: ["+33612345678"]),
         ])
@@ -146,10 +156,139 @@ final class PhonebookViewModelTests: XCTestCase {
         XCTAssertEqual(sut.visibleContacts.map(\.displayName), ["Awa"])
     }
 
+    // MARK: - Recherche relayée (répertoire → plateforme)
+
+    private func platformUser(id: String = "p1", username: String = "awa_pro") -> UserSearchResult {
+        UserSearchResult(id: id, username: username, displayName: "Awa Pro", avatar: nil, isOnline: true)
+    }
+
+    func test_search_whenTheDirectoryAnswers_doesNotQueryThePlatform() async {
+        let (sut, _, _, _, users) = makeSUT(contacts: [makeContact(displayName: "Awa Diallo")])
+        await sut.load(forceNetwork: true)
+
+        sut.searchQuery = "awa"
+        await sut.searchQueryChanged()
+
+        XCTAssertFalse(sut.showsPlatformResults)
+        XCTAssertEqual(users.searchUsersCallCount, 0)
+        XCTAssertTrue(sut.platformResults.isEmpty)
+    }
+
+    func test_search_whenTheDirectoryFindsNothing_relaysToThePlatform() async {
+        let (sut, _, _, _, users) = makeSUT(
+            contacts: [makeContact(displayName: "Bob", username: "bob")],
+            platformResults: [platformUser()]
+        )
+        await sut.load(forceNetwork: true)
+
+        sut.searchQuery = "awa"
+        await sut.searchQueryChanged()
+
+        XCTAssertTrue(sut.showsPlatformResults)
+        XCTAssertEqual(users.searchUsersCallCount, 1)
+        XCTAssertEqual(users.lastSearchUsersQuery, "awa")
+        XCTAssertEqual(sut.platformResults.map(\.id), ["p1"])
+    }
+
+    func test_search_relayNeverReturnsTheCurrentUser() async {
+        let (sut, _, _, _, _) = makeSUT(
+            platformResults: [platformUser(id: "me"), platformUser(id: "p2", username: "other")]
+        )
+        await sut.load(forceNetwork: true)
+
+        sut.searchQuery = "awa"
+        await sut.searchQueryChanged()
+
+        XCTAssertEqual(sut.platformResults.map(\.id), ["p2"])
+    }
+
+    func test_search_shorterThanTwoCharacters_doesNotRelay() async {
+        let (sut, _, _, _, users) = makeSUT(platformResults: [platformUser()])
+        await sut.load(forceNetwork: true)
+
+        sut.searchQuery = "a"
+        await sut.searchQueryChanged()
+
+        XCTAssertFalse(sut.showsPlatformResults)
+        XCTAssertEqual(users.searchUsersCallCount, 0)
+    }
+
+    func test_search_clearingTheQuery_dropsThePlatformResults() async {
+        let (sut, _, _, _, _) = makeSUT(platformResults: [platformUser()])
+        await sut.load(forceNetwork: true)
+        sut.searchQuery = "awa"
+        await sut.searchQueryChanged()
+        XCTAssertFalse(sut.platformResults.isEmpty)
+
+        sut.searchQuery = ""
+        await sut.searchQueryChanged()
+
+        XCTAssertTrue(sut.platformResults.isEmpty)
+        XCTAssertFalse(sut.isSearchingPlatform)
+    }
+
+    func test_search_platformFailure_leavesNoStaleResults() async {
+        let (sut, _, _, _, users) = makeSUT(platformResults: [platformUser()])
+        await sut.load(forceNetwork: true)
+        users.searchUsersResult = .failure(URLError(.timedOut))
+
+        sut.searchQuery = "awa"
+        await sut.searchQueryChanged()
+
+        XCTAssertTrue(sut.platformResults.isEmpty)
+        XCTAssertFalse(sut.isSearchingPlatform)
+    }
+
+    func test_startConversation_fromAPlatformResult_opensDirectConversation() async {
+        let (sut, _, _, creator, _) = makeSUT()
+
+        let conversation = await sut.startConversation(withUserId: "p1")
+
+        XCTAssertNotNil(conversation)
+        XCTAssertEqual(creator.lastUserId, "p1")
+    }
+
+    // MARK: - Remplissage automatique à l'ouverture
+
+    func test_load_emptyDirectoryWithContactsAlreadyAuthorized_fillsItSilently() async {
+        let (sut, _, sync, _, _) = makeSUT(contactsAuthorization: .authorized)
+
+        await sut.load(forceNetwork: true)
+
+        // L'onglet ne doit pas s'ouvrir vide quand la permission est déjà là.
+        XCTAssertEqual(sync.syncDirectoryCallCount, 1)
+    }
+
+    func test_load_emptyDirectoryWithoutContactPermission_neverPromptsForIt() async {
+        let (sut, _, sync, _, _) = makeSUT(contactsAuthorization: .notDetermined)
+
+        await sut.load(forceNetwork: true)
+
+        XCTAssertEqual(sync.syncDirectoryCallCount, 0)
+        XCTAssertEqual(sync.requestAccessCallCount, 0)
+    }
+
+    func test_load_directoryAlreadyPopulated_doesNotResyncOnItsOwn() async {
+        let (sut, _, sync, _, _) = makeSUT(contacts: [makeContact()], contactsAuthorization: .authorized)
+
+        await sut.load(forceNetwork: true)
+
+        XCTAssertEqual(sync.syncDirectoryCallCount, 0)
+    }
+
+    func test_load_twiceOnAnEmptyDirectory_onlyAttemptsTheAutomaticFillOnce() async {
+        let (sut, _, sync, _, _) = makeSUT(contactsAuthorization: .authorized)
+
+        await sut.load(forceNetwork: true)
+        await sut.load(forceNetwork: true)
+
+        XCTAssertEqual(sync.syncDirectoryCallCount, 1)
+    }
+
     // MARK: - Sync
 
     func test_synchronize_readsDeviceBookInReplaceModeAndReloads() async {
-        let (sut, directory, sync, _) = makeSUT(contacts: [makeContact()])
+        let (sut, directory, sync, _, _) = makeSUT(contacts: [makeContact()])
         sync.syncDirectoryResult = .success(
             DirectorySyncResult(totalContacts: 12, processedContacts: 12, syncedCount: 12, matchedCount: 3, removedCount: 1)
         )
@@ -163,7 +302,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_synchronize_deniedContactAccess_doesNotWipeTheDirectory() async {
-        let (sut, _, sync, _) = makeSUT(contacts: [makeContact()])
+        let (sut, _, sync, _, _) = makeSUT(contacts: [makeContact()])
         await sut.load(forceNetwork: true)
         sync.syncDirectoryResult = .failure(ContactSyncError.accessDenied)
 
@@ -173,20 +312,21 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_synchronize_whileAlreadySyncing_doesNotStartASecondRun() async {
-        let (sut, _, sync, _) = makeSUT()
+        let (sut, _, sync, _, _) = makeSUT()
 
         async let first: Void = sut.synchronize()
         async let second: Void = sut.synchronize()
         _ = await (first, second)
 
-        // Deux appels concurrents ne doivent pas relire le carnet deux fois.
-        XCTAssertLessThanOrEqual(sync.syncDirectoryCallCount, 2)
+        // Le garde `isSyncing` est posé avant toute suspension : le second
+        // appel repart sans relire le carnet.
+        XCTAssertEqual(sync.syncDirectoryCallCount, 1)
     }
 
     // MARK: - « Lui écrire »
 
     func test_startConversation_matchedContact_opensDirectConversation() async {
-        let (sut, _, _, creator) = makeSUT()
+        let (sut, _, _, creator, _) = makeSUT()
         let contact = makeContact()
 
         let conversation = await sut.startConversation(with: contact)
@@ -197,7 +337,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_startConversation_unmatchedContact_doesNothing() async {
-        let (sut, _, _, creator) = makeSUT()
+        let (sut, _, _, creator, _) = makeSUT()
         let contact = makeContact(onMeeshy: false)
 
         let conversation = await sut.startConversation(with: contact)
@@ -207,7 +347,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_startConversation_creationFailure_returnsNil() async {
-        let (sut, _, _, creator) = makeSUT()
+        let (sut, _, _, creator, _) = makeSUT()
         creator.result = .failure(URLError(.badServerResponse))
 
         let conversation = await sut.startConversation(with: makeContact())
@@ -218,7 +358,7 @@ final class PhonebookViewModelTests: XCTestCase {
     // MARK: - Erase
 
     func test_eraseDirectory_clearsServerAndLocalList() async {
-        let (sut, directory, _, _) = makeSUT(contacts: [makeContact()])
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
         await sut.load(forceNetwork: true)
 
         await sut.eraseDirectory()
@@ -228,7 +368,7 @@ final class PhonebookViewModelTests: XCTestCase {
     }
 
     func test_eraseDirectory_failure_keepsTheDirectory() async {
-        let (sut, directory, _, _) = makeSUT(contacts: [makeContact()])
+        let (sut, directory, _, _, _) = makeSUT(contacts: [makeContact()])
         await sut.load(forceNetwork: true)
         directory.clearResult = .failure(URLError(.badServerResponse))
 
@@ -240,7 +380,7 @@ final class PhonebookViewModelTests: XCTestCase {
     // MARK: - Invitation
 
     func test_invitationMessage_namesTheContact() {
-        let (sut, _, _, _) = makeSUT()
+        let (sut, _, _, _, _) = makeSUT()
 
         let message = sut.invitationMessage(for: makeContact(displayName: "Awa"))
 

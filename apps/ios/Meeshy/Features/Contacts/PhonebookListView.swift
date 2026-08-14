@@ -25,6 +25,9 @@ struct PhonebookListView: View {
             content
         }
         .task { await viewModel.load() }
+        .adaptiveOnChange(of: viewModel.searchQuery) { _, _ in
+            Task { await viewModel.searchQueryChanged() }
+        }
         .sheet(item: $invitationTarget) { invitation in
             // `SMSComposerView` est le composeur SMS unique de l'app
             // (DiscoverTab.swift) — pas de second composeur à maintenir.
@@ -142,7 +145,7 @@ struct PhonebookListView: View {
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.isEmpty {
             ContactsSkeletonList()
-        } else if viewModel.visibleContacts.isEmpty {
+        } else if viewModel.visibleContacts.isEmpty && !viewModel.showsPlatformResults {
             emptyState
         } else {
             ScrollView(.vertical, showsIndicators: false) {
@@ -157,11 +160,52 @@ struct PhonebookListView: View {
                         )
                         .equatable()
                     }
+
+                    if viewModel.showsPlatformResults {
+                        platformSection
+                    }
                 }
                 .padding(.top, 4)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }
+        }
+    }
+
+    /// Relais de recherche : le répertoire n'a rien, on montre ce que la
+    /// plateforme sait — sous un en-tête qui dit d'où viennent ces gens, pour
+    /// qu'aucune ligne ne se fasse passer pour un contact du carnet.
+    @ViewBuilder
+    private var platformSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton repertoire", bundle: .main))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+
+                if viewModel.isSearchingPlatform {
+                    ProgressView().progressViewStyle(.circular).scaleEffect(0.6)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+
+            if viewModel.platformResults.isEmpty && !viewModel.isSearchingPlatform {
+                Text(String(localized: "contacts.phonebook.platform-none", defaultValue: "Aucun utilisateur ne correspond", bundle: .main))
+                    .font(.subheadline)
+                    .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(viewModel.platformResults) { user in
+                    PlatformResultRow(
+                        user: user,
+                        isDark: colorScheme == .dark,
+                        onWrite: { openPlatformUser(user) }
+                    )
+                    .equatable()
+                }
+            }
         }
     }
 
@@ -182,6 +226,14 @@ struct PhonebookListView: View {
     private func open(_ contact: DirectoryContact) {
         Task {
             guard let conversation = await viewModel.startConversation(with: contact) else { return }
+            HapticFeedback.success()
+            router.navigateToConversation(conversation)
+        }
+    }
+
+    private func openPlatformUser(_ user: UserSearchResult) {
+        Task {
+            guard let conversation = await viewModel.startConversation(withUserId: user.id) else { return }
             HapticFeedback.success()
             router.navigateToConversation(conversation)
         }
@@ -300,6 +352,69 @@ struct PhonebookRow: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+    }
+}
+
+// MARK: - Platform Result Row
+
+/// Ligne d'un utilisateur trouvé sur la plateforme mais absent du répertoire.
+struct PlatformResultRow: View, Equatable {
+    let user: UserSearchResult
+    let isDark: Bool
+    let onWrite: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static func == (lhs: PlatformResultRow, rhs: PlatformResultRow) -> Bool {
+        lhs.user == rhs.user && lhs.isDark == rhs.isDark
+    }
+
+    private var name: String {
+        let display = user.displayName ?? ""
+        return display.isEmpty ? user.username : display
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            MeeshyAvatar(
+                name: name,
+                context: .userListItem,
+                accentColor: DynamicColorGenerator.colorForName(name),
+                avatarURL: user.avatar
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                Text("@\(user.username)")
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onWrite) {
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.left.fill").font(.caption2.weight(.bold))
+                    Text(String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main))
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(MeeshyColors.indigo500))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(name)
     }
 }
 

@@ -84,22 +84,53 @@ des profils sociaux.
 - `DiscoverViewModel.importContacts` — « Retrouver mes contacts » synchronise
   et CONSERVE désormais, puis relit le répertoire pour l'affichage.
 
+## Deuxième passe (demande utilisateur en cours de cycle)
+
+Synchronisation avec la PR #2996 (échelle du menu flottant → journal d'appels)
+mergée dans cette branche, puis trois points :
+
+**D6 — le sous-menu « Repertoire » n'affichait rien à l'ouverture.** Le
+répertoire ne se remplit qu'à la synchronisation ; un onglet vide avec un
+bouton était une impasse alors que la permission Contacts est souvent DÉJÀ
+accordée (accordée depuis « Retrouver mes contacts »). `load()` déclenche
+désormais un remplissage SILENCIEUX quand le répertoire est vide **et** que
+l'autorisation existe déjà — jamais de demande de permission depuis cet écran,
+et une seule tentative par cycle de vie du ViewModel.
+
+**D7 — la recherche s'arrêtait au répertoire.** Elle cherche maintenant
+d'abord dans le carnet (local, instantané) et RELAIE vers les utilisateurs de
+la plateforme quand le carnet ne répond rien : requête ≥ 2 caractères, temps
+mort de 300 ms, résultats sous un en-tête « Sur Meeshy, hors de ton
+repertoire » pour qu'aucune ligne ne se fasse passer pour un contact du carnet.
+Chaque ligne porte « Lui écrire ».
+
+**D8 — « Affilies » était un autre bouton mort, et sa source de données était
+vide.** `GET /affiliate/stats` déclarait `data` comme un objet SANS
+`properties` : fast-json-stringify sérialisait `{}`. Compteurs, filleuls et
+tokens étaient effacés à la sérialisation, silencieusement — le test existant
+n'assertait que `success: true`. Corrigé (`additionalProperties: true`) et
+verrouillé par un test sur le contenu. L'onglet liste maintenant les filleuls
+avec « Lui écrire ».
+
 ## Vérification
 
 - Suite gateway complète : **714 suites / 17 487 tests verts** (`npx jest`).
 - `tsc --noEmit` gateway : propre.
 - Nouveaux tests : 27 (`contact-identifiers`), 4 (`normalize-logging`),
   21 (`ContactDirectoryService`), 18 (`contacts-directory` routes),
-  15 (`contacts-match` routes, dont 5 neufs sur la tolérance).
-- iOS : tests écrits (`PhonebookViewModelTests`, `DiscoverViewModelTests` mis à
-  jour, mocks). **Non exécutés** — pas de toolchain Swift/Xcode sur l'hôte de
-  ce cycle. `./apps/ios/meeshy.sh test` reste à passer sur une machine macOS.
+  15 (`contacts-match` routes, dont 5 neufs sur la tolérance),
+  1 (`affiliate` — la charge de stats survit à la sérialisation).
+- iOS : tests écrits (`PhonebookViewModelTests` — 26,
+  `AffiliatesViewModelTests` — 8, `DiscoverViewModelTests` mis à jour, mocks).
+  **Non exécutés** — pas de toolchain Swift/Xcode sur l'hôte de ce cycle.
+  `./apps/ios/meeshy.sh test` reste à passer sur une machine macOS.
 
 ## Reste ouvert
 
 - `ContactSyncProviding.findFriendsFromContacts()` n'a plus d'appelant côté app
   (le chemin produit passe par `syncDirectory`). Conservé : c'est la façade du
   endpoint `/match`, toujours servi pour les versions déjà déployées.
-- Le répertoire n'est pas encore paginé côté client (200 premières entrées).
+- Le répertoire n'est pas encore paginé côté client (200 premières entrées) ;
+  les affiliés non plus (tout ce que rend `/affiliate/stats`).
 - Aucune préférence de découvrabilité (« ne pas me retrouver par numéro ») —
   parité avec le comportement d'avant ce cycle, à traiter séparément.

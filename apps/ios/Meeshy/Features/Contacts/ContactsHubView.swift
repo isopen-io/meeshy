@@ -24,6 +24,7 @@ struct ContactsHubView: View {
     @StateObject private var callsVM = CallsViewModel()
     @StateObject private var contactsListVM = ContactsListViewModel()
     @StateObject private var phonebookVM = PhonebookViewModel()
+    @StateObject private var affiliatesVM = AffiliatesViewModel()
 
     /// - Parameter initialTab: tab shown on open. The floating menu ladder
     ///   lands on `.calls` (call journal); everything else keeps the directory.
@@ -136,6 +137,7 @@ struct ContactsHubView: View {
             ContactsListTab(
                 viewModel: contactsListVM,
                 phonebookViewModel: phonebookVM,
+                affiliatesViewModel: affiliatesVM,
                 isActive: selectedTab == .contacts,
                 onScrollOffsetChange: { scrollOffset = $0 }
             )
