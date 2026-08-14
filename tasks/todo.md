@@ -99,8 +99,13 @@ L'inventaire réel se fait sur le diff, pas sur le message d'erreur :
 **Pourquoi la CI ne l'a pas dit — la bonne raison.** PR #2982 ouverte à 04:25:32, **mergée à
 04:25:45**, soit 13 secondes plus tard ; `iOS compile (PR gate)` démarré à 04:25:38 et annulé à
 04:30:09 avec six autres jobs. Le gate n'a pas manqué la rupture, il n'a pas eu le droit de
-finir. Le correctif est une **required check** avant fusion, PAS un élargissement de trigger —
-première conclusion posée puis corrigée, cf. leçon 243.
+finir — PAS un élargissement de trigger, première conclusion posée puis corrigée (leçon 243).
+
+Reste que rendre le check bloquant n'est pas gratuit : `ios-tests.yml` écrit noir sur blanc
+« No branch protection requires this check, so neither trigger can deadlock a merge », la file
+macOS faisant attendre 24-49 min. L'arbitrage a été rendu en connaissance de cause. La piste qui
+ne le paie pas : le gate **compile-only** existe déjà et met 9 minutes — c'est celui-là qui
+aurait rougi sur #2982, et le seul dont on puisse discuter le caractère bloquant.
 
 ## Reste ouvert
 

@@ -37,6 +37,19 @@ opposés :
 Le discriminant se lit en dix secondes dans les `conclusion` des check runs de LA PR fautive :
 `cancelled` ≠ absent ≠ `success`. Je ne l'ai regardé qu'après avoir déjà notifié.
 
+**Et le remède « évident » n'en est pas un.** `ios-tests.yml` porte, écrite par l'équipe :
+« No branch protection requires this check, so neither trigger can deadlock a merge » — les
+checks iOS sont volontairement NON bloquants, parce que la file macOS du compte fait attendre
+24 à 49 minutes et qu'un check requis y bloquerait toutes les fusions. Le trou n'est donc pas un
+oubli, c'est le prix d'un arbitrage déjà rendu. Proposer « exiger le check » sans dire ce qu'il
+coûte, c'est proposer d'annuler une décision sans la nommer.
+
+**La règle complète, alors** : après avoir identifié la cause, chercher si elle est DÉLIBÉRÉE
+avant de proposer le remède. Un fichier de CI qui explique pourquoi il ne bloque pas est un
+arbitrage, pas un bug — et la piste utile devient ce qui protégerait SANS payer ce prix (un gate
+compile-only, plus court que la suite complète, est déjà là et suffisait ici : il aurait rougi en
+9 minutes).
+
 **Corollaire — une description de PR n'est pas un témoignage.** Celle de #2982 énumérait
 fièrement `MessageDayStickyPlacement` parmi les suppressions, et cochait « Manual Testing:
 Visually verified responsive behavior ». Les deux ensemble sont impossibles : l'app ne compile
