@@ -13,6 +13,8 @@ import Combine
 /// - `conversation:updated`        → `ConversationStore.applyConversationUpdated`
 ///   (bump-to-top on new message + metadata changes: title, avatar, …)
 /// - `conversation:deleted`        → `ConversationStore.applyConversationDeleted`
+/// - `conversation:participant-left` / `-banned`, MOI pour sujet
+///                                 → `ConversationStore.applyConversationDeleted`
 /// - `user:preferences-updated` (conversation scope, versioned)
 ///                                 → `ConversationStore.applyRemote`
 /// - `user:preferences-reordered`  → `ConversationStore.applyRemoteReorder`
@@ -63,6 +65,8 @@ public final class ConversationStoreSocketBridge {
         activate(
             conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
+            participantLeft: socket.participantSelfLeft.eraseToAnyPublisher(),
+            participantBanned: socket.participantBanned.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
             userPreferencesReordered: socket.userPreferencesReordered.eraseToAnyPublisher(),
             userUpdated: socket.userUpdated.eraseToAnyPublisher(),
@@ -80,6 +84,8 @@ public final class ConversationStoreSocketBridge {
     func activate(
         conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>,
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
+        participantLeft: AnyPublisher<ParticipantLeftEvent, Never> = Empty().eraseToAnyPublisher(),
+        participantBanned: AnyPublisher<ParticipantBannedEvent, Never> = Empty().eraseToAnyPublisher(),
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
         userPreferencesReordered: AnyPublisher<UserPreferencesReorderedSocketEvent, Never>,
         userUpdated: AnyPublisher<UserUpdatedEvent, Never> = Empty().eraseToAnyPublisher(),
@@ -101,6 +107,39 @@ public final class ConversationStoreSocketBridge {
 
         conversationDeleted.sink { event in
             Task { await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId)) }
+        }.store(in: &cancellables)
+
+        // Quitter, être retiré, être banni : trois manières de perdre une
+        // appartenance, et pour le store elles disent la même chose que
+        // `conversation:deleted` — cette conversation n'est plus à moi.
+        // `GET /conversations` filtre sur `participants.some({ userId,
+        // isActive: true })`, donc la ligne a disparu côté serveur ; la garder
+        // en RAM laissait son non-lu peser sur l'agrégat inter-conversations.
+        //
+        // Le gate d'identité est le même que celui de `readStatusUpdated`
+        // ci-dessous, et pour la même raison : ces deux broadcasts atteignent
+        // AUSSI les pairs (l'effectif, les coches), et le départ d'un pair ne
+        // retire évidemment rien de ma liste. `me.isEmpty` écarte la fenêtre
+        // où l'auth n'est pas encore résolue, sans quoi un payload au `userId`
+        // vide retirerait une ligne au hasard.
+        participantLeft.sink { event in
+            Task {
+                guard let me = await currentUserId(), !me.isEmpty, event.userId == me else { return }
+                await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
+            }
+        }.store(in: &cancellables)
+
+        // Sans gate sur `didEndMembership` : ce drapeau protège un COMPTEUR, et
+        // il n'y a pas de compteur à protéger sur une ligne qui s'en va. Un ban
+        // qui suit un départ non synchronisé porte précisément
+        // `membershipEnded: false`, et c'est le cas où la ligne fantôme est
+        // encore là. `applyConversationDeleted` est déjà un no-op sur une
+        // conversation inconnue.
+        participantBanned.sink { event in
+            Task {
+                guard let me = await currentUserId(), !me.isEmpty, event.userId == me else { return }
+                await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
+            }
         }.store(in: &cancellables)
 
         userPreferencesUpdated.sink { event in

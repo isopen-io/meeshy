@@ -835,6 +835,18 @@ final class ConversationListViewModelTests: XCTestCase {
         memberCount.map { ",\"memberCount\":\($0)" } ?? ""
     }
 
+    private func makeParticipantBannedEvent(
+        conversationId: String,
+        userId: String,
+        membershipEnded: Bool? = nil,
+        memberCount: Int? = nil
+    ) -> ParticipantBannedEvent {
+        let membershipField = membershipEnded.map { ",\"membershipEnded\":\($0)" } ?? ""
+        return JSONStub.decode("""
+        {"conversationId":"\(conversationId)","userId":"\(userId)","bannedBy":{"id":"admin"},"bannedAt":"2026-08-11T10:00:00.000Z"\(membershipField)\(Self.memberCountJSONField(memberCount))}
+        """)
+    }
+
     /// L'effectif ne connaissait que des soustractions — départ, retrait,
     /// bannissement — et dérivait durablement vers le bas, `schedulePersist`
     /// écrivant chaque valeur fausse dans le cache disque.
@@ -888,6 +900,115 @@ final class ConversationListViewModelTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
+        XCTAssertEqual(sut.conversations[0].memberCount, 3)
+    }
+
+    // MARK: - Une fin d'appartenance retire la ligne, elle ne décompte pas
+    //
+    // Quand le sujet du départ / du bannissement est MOI, l'événement ne dit
+    // pas « l'effectif a changé » : il dit « cette conversation n'est plus la
+    // mienne ». `GET /conversations` exige
+    // `participants.some({ userId, isActive: true })` — la ligne a disparu
+    // côté serveur, et `schedulePersist` l'écrivait pourtant dans le cache
+    // disque. Seul le tombstone du prochain delta la retirait : à la
+    // reconnexion suivante au mieux, 24 h plus tard au pire.
+    //
+    // Le cas n'a rien d'exotique : quitter depuis le web ou depuis un autre
+    // appareil, être retiré par un admin, être banni. Le gateway adresse
+    // désormais la room PERSONNELLE du sujet pour que le signal y parvienne
+    // (`leave.ts`, `participants.ts`, `ban.ts`) — la room de conversation ne
+    // portait que l'appareil ayant le FIL ouvert.
+
+    func test_socketParticipantSelfLeft_isMe_removesTheConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        sut.conversations = [makeConversation(id: "conv1"), makeConversation(id: "conv2")]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "me", memberCount: 2)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations.map(\.id), ["conv2"],
+            "une conversation que J'AI quittée doit disparaître, pas voir son compteur baisser")
+    }
+
+    func test_socketParticipantBanned_isMe_removesTheConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        sut.conversations = [makeConversation(id: "conv1")]
+
+        messageSocket.participantBanned.send(
+            makeParticipantBannedEvent(conversationId: "conv1", userId: "me", memberCount: 2)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.conversations.isEmpty)
+    }
+
+    /// `membershipEnded: false` dit que la cible était DÉJÀ partie. Ce
+    /// court-circuit protège un COMPTEUR, jamais une ligne — et c'est
+    /// précisément le ban qui suit un départ non synchronisé, donc le cas où la
+    /// ligne fantôme est encore là.
+    func test_socketParticipantBanned_isMe_removesEvenWhenNoMembershipWasEnded() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        sut.conversations = [makeConversation(id: "conv1")]
+
+        messageSocket.participantBanned.send(
+            makeParticipantBannedEvent(
+                conversationId: "conv1", userId: "me", membershipEnded: false, memberCount: nil
+            )
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.conversations.isEmpty)
+    }
+
+    /// Sans identité résolue, `currentUserId` vaut `""`. Un payload au `userId`
+    /// vide retirerait alors une ligne au hasard — c'est le piège propre à la
+    /// comparaison par `==`, que le `!=` de `participantJoined` n'a pas.
+    func test_socketParticipantSelfLeft_withoutAResolvedIdentity_removesNothing() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = nil
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        sut.conversations = [makeConversation(id: "conv1")]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "", memberCount: 2)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations.count, 1)
+    }
+
+    func test_socketParticipantSelfLeft_peer_keepsTheRowAndPosesTheCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, authManager: authManager)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 7
+        sut.conversations = [conversation]
+
+        messageSocket.participantSelfLeft.send(
+            makeParticipantLeftEvent(conversationId: "conv1", userId: "someone-else", memberCount: 3)
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations.count, 1, "le départ d'un PAIR ne retire aucune ligne")
         XCTAssertEqual(sut.conversations[0].memberCount, 3)
     }
 

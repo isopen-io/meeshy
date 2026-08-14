@@ -105,10 +105,21 @@ export function registerBanRoutes(
           select: { id: true, userId: true },
         })
 
+        // Le banni ferme la chaîne. La room de conversation ne l'atteint que
+        // s'il a le FIL ouvert ; sur l'écran de liste — hors de cette room —
+        // ses appareils gardaient une ligne que `GET /conversations` ne sert
+        // plus, et qu'ils PERSISTENT, jusqu'au prochain delta (tombstone
+        // `bannedAt`). Même écart, même correctif que `leave.ts` et que le
+        // retrait par un admin (`participants.ts`).
+        //
+        // Vrai même quand `membershipEnded` est faux : bannir un ex-membre ne
+        // retire aucune ligne de sa liste, il n'y en avait plus. Le retrait
+        // côté client est idempotent, c'est ce qui permet de ne pas gater ici.
+        const audience = [...remaining, { id: targetParticipant.id, userId: targetUserId }]
         emitToConversationParticipants({
           io,
           conversationId: id,
-          participants: remaining,
+          participants: audience,
           events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED],
           payload: {
             conversationId: id,

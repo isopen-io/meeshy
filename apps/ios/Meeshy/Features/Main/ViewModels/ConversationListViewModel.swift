@@ -140,6 +140,32 @@ class ConversationListViewModel: ObservableObject {
         return _convIdIndex?[id]
     }
 
+    /// Retire la ligne dont MON appartenance vient de s'arrêter — départ
+    /// volontaire depuis un autre appareil, retrait par un admin,
+    /// bannissement.
+    ///
+    /// Le geste est celui de `conversation:deleted`, et pour la même raison :
+    /// `GET /conversations` exige `participants.some({ userId, isActive: true })`,
+    /// donc la ligne n'existe plus côté serveur. Les trois autres fins
+    /// d'appartenance sont d'ailleurs déjà unifiées dans le DELTA — le gateway
+    /// les rend toutes dans `deletedConversationIds`
+    /// (`services/gateway/src/routes/conversations/utils/delta-tombstones.ts`) —
+    /// et seul le chemin TEMPS RÉEL les traitait différemment.
+    ///
+    /// `schedulePersist` sauvegarde l'INSTANTANÉ complet de `conversations` :
+    /// retirer la ligne ici la retire donc aussi du cache disque, qui la
+    /// gardait sinon jusqu'au prochain delta. Les messages partent avec elle,
+    /// comme dans `ConversationSyncEngine.handleConversationDeleted`.
+    ///
+    /// Jumeau web : `dropConversationFromCache`
+    /// (`apps/web/hooks/queries/use-socket-cache-sync.ts`).
+    private func dropConversationLeftByMe(at index: Int) {
+        let conversationId = conversations[index].id
+        conversations.remove(at: index)
+        schedulePersist()
+        Task { await CacheCoordinator.shared.messages.invalidate(for: conversationId) }
+    }
+
     /// Effectif à POSER sur une ligne de liste après un événement
     /// d'appartenance (adhésion, départ, bannissement, levée).
     ///
@@ -1014,10 +1040,26 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Quand le partant est MOI, l'événement ne dit pas « l'effectif a
+        // changé » — il dit « cette conversation n'est plus la mienne ». Le cas
+        // se produit sans rien faire d'anormal : quitter depuis le web, ou être
+        // retiré par un admin pendant que l'app est ouverte sur la liste. Le
+        // gateway adresse désormais la room personnelle du partant pour que le
+        // signal y arrive (`leave.ts`, `participants.ts`) ; la room de
+        // conversation, elle, ne portait que l'appareil ayant le FIL ouvert.
+        //
+        // Poser un compteur sur une ligne que `GET /conversations` ne sert plus
+        // (`participants.some({ userId, isActive: true })`) la laissait
+        // cliquable — et `schedulePersist` l'écrivait dans le cache disque.
+        // Seul le tombstone du prochain delta la retirait.
         messageSocket.participantSelfLeft
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                guard !self.isMe(event.userId) else {
+                    self.dropConversationLeftByMe(at: index)
+                    return
+                }
                 self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
                     current: self.conversations[index].memberCount,
                     absolute: event.memberCount,
@@ -1035,6 +1077,19 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.participantBanned
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                // Être banni est la troisième fin d'appartenance, après le
+                // départ volontaire et le retrait par un admin, et elle se
+                // traite comme les deux autres. Le test d'identité passe AVANT
+                // le court-circuit `didEndMembership` : celui-ci protège un
+                // COMPTEUR, or il n'y a pas de compteur à protéger sur une
+                // ligne qui s'en va. Un ban qui suit un départ non synchronisé
+                // porte précisément `membershipEnded: false`, et c'est le cas
+                // où la ligne fantôme est encore là.
+                if let self, self.isMe(event.userId),
+                   let index = self.convIndex(for: event.conversationId) {
+                    self.dropConversationLeftByMe(at: index)
+                    return
+                }
                 // L'effectif absolu tranche `didEndMembership` de lui-même :
                 // bannir un ex-membre ne retire personne, donc le compte est
                 // simplement inchangé et le POSER est exact dans les deux cas.
@@ -2153,6 +2208,15 @@ class ConversationListViewModel: ObservableObject {
 
     private var currentUserId: String {
         authManager.currentUser?.id ?? ""
+    }
+
+    /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
+    /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`
+    /// vide une fin d'appartenance, donc le retrait d'une ligne au hasard —
+    /// piège que la comparaison par `!=` (`participantJoined`) n'a pas.
+    private func isMe(_ userId: String) -> Bool {
+        let me = currentUserId
+        return !me.isEmpty && userId == me
     }
 }
 

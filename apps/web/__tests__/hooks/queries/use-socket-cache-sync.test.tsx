@@ -36,7 +36,7 @@ let conversationJoinedCallback: ((data: { conversationId: string; userId: string
 let conversationParticipantJoinedCallback: ((data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => void) | null = null;
 let conversationLeftCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => void) | null = null;
-let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean }) => void) | null = null;
+let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => void) | null = null;
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
@@ -1113,6 +1113,68 @@ describe('useSocketCacheSync', () => {
         expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
       );
     });
+
+    // Quand le `userId` du départ est le MIEN, l'événement ne dit pas
+    // « l'effectif a changé » — il dit « cette conversation n'est plus la
+    // mienne ». `GET /conversations` filtre sur
+    // `participants.some({ userId, isActive: true })` : la ligne a disparu
+    // côté serveur, et `staleTime: Infinity` interdit au cache de s'en
+    // apercevoir tout seul. Décrémenter un compteur sur une ligne qui doit
+    // partir la laissait cliquable pour de bon.
+    //
+    // Le cas se produit sans rien faire d'anormal : quitter depuis un autre
+    // appareil, ou depuis le web pendant que l'app est ouverte ailleurs.
+    it('retire la conversation quand le partant est MOI (autre appareil)', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user', displayName: 'Me', leftAt: new Date().toISOString(), memberCount: 2 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(0);
+    });
+
+    it('purge aussi le détail de la conversation quittée', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const removeSpy = jest.spyOn(queryClient, 'removeQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'current-user', displayName: 'Me', leftAt: new Date().toISOString() });
+      });
+
+      expect(removeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'detail', 'conv-1'] })
+      );
+    });
+
+    it("laisse la ligne en place quand c'est quelqu'un d'AUTRE qui part", () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString(), memberCount: 2 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(1);
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
+    });
   });
 
   describe('Conversation Participant Banned Handler', () => {
@@ -1155,6 +1217,49 @@ describe('useSocketCacheSync', () => {
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
+    // Être banni est la troisième manière de perdre une appartenance, après
+    // le départ volontaire et le retrait par un admin. Le geste est le même :
+    // la ligne quitte la liste, elle n'y voit pas son compteur baisser.
+    it('retire la conversation quand le banni est MOI', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'current-user', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString(), memberCount: 2 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(0);
+    });
+
+    // `membershipEnded: false` dit que la cible était DÉJÀ partie. Le retrait
+    // reste le bon geste — il n'y a simplement plus rien à retirer — et le
+    // court-circuit « ne touche pas au compteur » ne doit pas l'en empêcher :
+    // c'est exactement le cas d'un ban qui suit un départ non synchronisé.
+    it('retire la conversation même si le ban ne clôt aucune appartenance', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'current-user', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString(), membershipEnded: false });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(0);
     });
 
     it('invalidates participants query on participant-banned', () => {
