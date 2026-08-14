@@ -1,5 +1,122 @@
 # Lessons
 
+## Leçon 243 — « La CI ne l'a pas vu » a plusieurs causes possibles, et elles n'ont pas le même remède (2026-08-14, routine messaging, cycle 122)
+
+`main` ne compilait plus pour iOS : la PR #2982 avait retiré `enum MessageDayStickyPlacement`
+en laissant trois usages dans `MessageListViewController`. Le gate iOS de MA PR l'a levé.
+
+La première explication trouvée était vraie **et fausse en même temps** : `ios-tests.yml` n'a
+effectivement pas tourné sur `main` depuis le 2026-08-02 (sa portée de déclenchement l'y limite),
+donc j'ai conclu « le gate ne s'exerce qu'en PR, la rupture est passée sans rougir ». Fait exact,
+cause fausse — et je l'ai envoyée en notification, c'est-à-dire vers le mauvais correctif
+(élargir un trigger).
+
+Ce que disent les horodatages, qu'il aurait fallu lire AVANT de conclure :
+
+| Événement | Heure |
+|---|---|
+| PR #2982 ouverte | 04:25:32 |
+| `iOS compile (PR gate)` démarré | 04:25:38 |
+| **PR mergée** | **04:25:45** |
+| gate annulé | 04:30:09 |
+
+**La PR a été mergée 13 secondes après son ouverture.** Le gate n'a pas manqué la rupture : il
+n'a jamais eu le droit de finir. Six autres jobs portent le même `cancelled` à la même minute —
+c'est la signature d'une fusion pendant que la CI tourne, pas d'un trou de couverture. Le remède
+n'est donc pas un trigger, c'est une **required check** / protection de branche.
+
+**La règle** : devant « la CI n'a pas attrapé X », ne pas s'arrêter à la première explication
+cohérente. Distinguer trois causes qui produisent le même silence et appellent trois remèdes
+opposés :
+
+1. **Le job n'a pas tourné** (portée de déclenchement) ⇒ élargir le trigger.
+2. **Le job a tourné et a été annulé** (fusion en cours de route, `cancel-in-progress`) ⇒ exiger
+   le check avant fusion.
+3. **Le job a tourné, il est vert, et il ne testait pas ça** ⇒ écrire le témoin manquant.
+
+Le discriminant se lit en dix secondes dans les `conclusion` des check runs de LA PR fautive :
+`cancelled` ≠ absent ≠ `success`. Je ne l'ai regardé qu'après avoir déjà notifié.
+
+**Et le remède « évident » n'en est pas un.** `ios-tests.yml` porte, écrite par l'équipe :
+« No branch protection requires this check, so neither trigger can deadlock a merge » — les
+checks iOS sont volontairement NON bloquants, parce que la file macOS du compte fait attendre
+24 à 49 minutes et qu'un check requis y bloquerait toutes les fusions. Le trou n'est donc pas un
+oubli, c'est le prix d'un arbitrage déjà rendu. Proposer « exiger le check » sans dire ce qu'il
+coûte, c'est proposer d'annuler une décision sans la nommer.
+
+**La règle complète, alors** : après avoir identifié la cause, chercher si elle est DÉLIBÉRÉE
+avant de proposer le remède. Un fichier de CI qui explique pourquoi il ne bloque pas est un
+arbitrage, pas un bug — et la piste utile devient ce qui protégerait SANS payer ce prix (un gate
+compile-only, plus court que la suite complète, est déjà là et suffisait ici : il aurait rougi en
+9 minutes).
+
+**Corollaire — une description de PR n'est pas un témoignage.** Celle de #2982 énumérait
+fièrement `MessageDayStickyPlacement` parmi les suppressions, et cochait « Manual Testing:
+Visually verified responsive behavior ». Les deux ensemble sont impossibles : l'app ne compile
+pas. Une case cochée décrit une INTENTION, jamais une exécution ; seul un job vert atteste
+quelque chose, et encore faut-il qu'il ait fini.
+
+**Corollaire — supprimer un type et supprimer SES USAGES sont deux gestes.** Le compilateur
+s'arrête au premier lot fautif : il a nommé `MessageDayStickyPlacement` et s'est tu sur
+`MessageDayStickyMetrics` et `MessageDayStickyPalette`, encore référencés par toute une suite de
+témoins. **Un message d'erreur de compilation est un plancher, jamais un inventaire.** Le vrai
+inventaire se fait en listant les déclarations retirées par le diff (`git show <sha> | grep '^-enum\|^-struct'`)
+et en grepant chacune — c'est ce qui a montré que la rupture était trois fois plus large que ce
+que la CI affichait.
+
+## Leçon 242 — L'argument qui justifie un élargissement de diffusion doit être appliqué à CEUX QU'IL EXCLUT (2026-08-14, routine messaging, cycle 122)
+
+Trois routes de la gateway — `leave.ts`, `participants.ts`, `ban.ts` — avaient déjà été
+corrigées : leur événement d'appartenance n'atteignait que `ROOMS.conversation(id)`, et
+l'écran de LISTE, qui rend l'effectif, a précisément quitté cette room. Le correctif a
+ajouté les rooms personnelles des membres **restants**. Il a laissé dehors la seule
+personne dont l'événement parle : le partant, le retiré, le banni.
+
+**Et le code écrivait sa propre justification** : « la room de conversation reste en tête
+de chaîne : elle porte le partant lui-même, encore dedans à cet instant ». C'est vrai — de
+l'appareil qui a le FIL ouvert. C'est faux de tous ses autres appareils, qui sont sur
+l'écran de liste, c'est-à-dire *hors de la room*, ce que la phrase d'à côté venait
+d'établir. Deux commentaires voisins, l'un énonçant la règle, l'autre l'oubliant pour un
+cas particulier.
+
+**La règle** : quand on élargit une diffusion parce qu'« une population lit ailleurs que
+dans la room », lister explicitement QUI reste hors de l'éventail après le correctif, et
+repasser l'argument sur chacun. Le raisonnement ne s'applique pas moins au sujet de
+l'événement qu'à ses témoins — il s'y applique PLUS FORT, parce que ce qu'il rate chez le
+sujet n'est pas un compteur faux mais une ligne qui n'existe plus.
+
+**Corollaire — la gravité ne suit pas la symétrie apparente.** Les restants voyaient un
+compteur d'un cran à côté. Le sujet gardait dans sa liste une conversation que
+`GET /conversations` ne sert plus, cliquable, et PERSISTÉE des deux côtés (cache disque
+iOS, `staleTime: Infinity` web). Le défaut « secondaire » du même correctif était le plus
+grave — écho direct de la leçon 239.
+
+**Corollaire — un rattrapage différé masque un trou temps réel, et le rend plus dur à
+voir.** Le delta `updatedSince=` unifiait DÉJÀ les quatre fins d'appartenance dans un seul
+`deletedConversationIds` (`delta-tombstones.ts` les énumère nommément : fermeture,
+suppression-pour-moi, départ, bannissement). La ligne fantôme finissait donc par partir —
+à la reconnexion suivante au mieux, 24 h plus tard au pire. Rien ne devenait rouge, aucun
+symptôme ne remontait, et le module de rattrapage se lisait comme la PREUVE que le cas
+était traité. **Quand un chemin de réconciliation énumère des cas, chacun de ces cas est
+une question à poser au chemin TEMPS RÉEL** : « qui envoie ça tout de suite, et à qui ? ».
+Ici la réponse était « personne » pour trois cas sur quatre — et le quatrième
+(`conversation:deleted`) visait bien `ROOMS.user`, en le documentant. Un exemplaire correct
+au milieu de trois fautifs est le signal le plus lisible qu'il y avait à lire.
+
+**Corollaire — un garde écrit pour protéger une VALEUR ne doit pas garder une EXISTENCE.**
+`membershipEnded: false` (bannir quelqu'un déjà parti) existe pour empêcher un décrément de
+compteur injustifié. Placé avant le test d'identité, il aurait aussi empêché le RETRAIT de
+la ligne — et précisément dans le cas qui en a le plus besoin : le ban qui suit un départ
+non synchronisé, donc celui où la ligne fantôme est encore là. L'ordre des gardes n'est pas
+cosmétique ; il faut lire ce que chaque garde protège avant de choisir son rang.
+
+**Corollaire — `==` et `!=` sur une identité ne sont pas symétriques quand le repli est une
+valeur vide.** `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue. Le
+voisin existant, `guard event.userId != currentUserId`, est inoffensif dans cet état (un
+vrai `userId` diffère de `""`). Son miroir `==` retirerait une ligne au hasard sur un
+payload au `userId` vide. Copier la forme du voisin sans rejouer le cas dégradé aurait
+introduit le défaut ; d'où `isMe()` (app) et `!me.isEmpty` (SDK).
+
 ## Leçon 239 — Un événement ÉMIS peut ne porter aucune information, et rien dans le code d'émission ne le dit (2026-08-13, routine messaging, cycle 117)
 
 `deleteAllRead` faisait tout ce qu'un chemin correct fait : il purgeait, il vérifiait `count > 0`,

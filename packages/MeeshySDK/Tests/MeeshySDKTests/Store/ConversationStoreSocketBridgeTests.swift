@@ -32,6 +32,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let bridge: ConversationStoreSocketBridge
         let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
         let deleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+        let participantLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
+        let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
         let prefsUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
         let reordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
         let readStatus = PassthroughSubject<ReadStatusUpdateEvent, Never>()
@@ -51,6 +53,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
                 conversationDeleted: deleted.eraseToAnyPublisher(),
+                participantLeft: participantLeft.eraseToAnyPublisher(),
+                participantBanned: participantBanned.eraseToAnyPublisher(),
                 userPreferencesUpdated: prefsUpdated.eraseToAnyPublisher(),
                 userPreferencesReordered: reordered.eraseToAnyPublisher(),
                 userUpdated: userUpdated.eraseToAnyPublisher(),
@@ -262,6 +266,106 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         let removed = await waitUntil { await store.conversation(id: "c1") == nil }
         XCTAssertTrue(removed, "bridge must route conversation:deleted → applyConversationDeleted")
+    }
+
+    // MARK: - Les trois AUTRES fins d'appartenance
+    //
+    // `conversation:deleted` (« supprimer pour moi ») n'est qu'une des quatre
+    // manières dont une conversation cesse d'être la mienne. Les trois autres —
+    // partir, être retiré, être banni — arrivent par `participant-left` /
+    // `participant-banned`, et le store les ignorait : la conversation restait
+    // en RAM, son non-lu pesant sur l'agrégat inter-conversations, alors que
+    // `GET /conversations` ne la sert plus.
+    //
+    // Le DELTA les unifie déjà côté serveur (`deletedConversationIds`,
+    // `delta-tombstones.ts`) ; seul le chemin temps réel les séparait.
+
+    private func makeLeftEvent(conversationId: String, userId: String) throws -> ParticipantLeftEvent {
+        let json = """
+        {"conversationId": "\(conversationId)", "userId": "\(userId)",
+         "displayName": "X", "leftAt": "2026-01-01T00:00:00.000Z", "memberCount": 2}
+        """
+        return try JSONDecoder().decode(ParticipantLeftEvent.self, from: Data(json.utf8))
+    }
+
+    private func makeBannedEvent(
+        conversationId: String, userId: String, membershipEnded: Bool = true
+    ) throws -> ParticipantBannedEvent {
+        let json = """
+        {"conversationId": "\(conversationId)", "userId": "\(userId)",
+         "bannedBy": {"id": "admin"}, "bannedAt": "2026-01-01T00:00:00.000Z",
+         "membershipEnded": \(membershipEnded), "memberCount": 2}
+        """
+        return try JSONDecoder().decode(ParticipantBannedEvent.self, from: Data(json.utf8))
+    }
+
+    func test_participantLeft_self_routesToApplyConversationDeleted() async throws {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.participantLeft.send(try makeLeftEvent(conversationId: "c1", userId: "me"))
+
+        let removed = await waitUntil { await store.conversation(id: "c1") == nil }
+        XCTAssertTrue(removed, "quitter depuis un autre appareil doit retirer la conversation du store")
+    }
+
+    func test_participantLeft_peer_leavesTheConversationInPlace() async throws {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.participantLeft.send(try makeLeftEvent(conversationId: "c1", userId: "someone-else"))
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let stillThere = await store.conversation(id: "c1")
+        XCTAssertNotNil(stillThere, "le départ d'un PAIR ne retire rien de ma liste — il change un effectif")
+    }
+
+    func test_participantBanned_self_routesToApplyConversationDeleted() async throws {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.participantBanned.send(try makeBannedEvent(conversationId: "c1", userId: "me"))
+
+        let removed = await waitUntil { await store.conversation(id: "c1") == nil }
+        XCTAssertTrue(removed, "être banni doit retirer la conversation du store")
+    }
+
+    // `membershipEnded: false` dit que la cible était DÉJÀ partie. Le drapeau
+    // protège un COMPTEUR, jamais une ligne : c'est justement le ban qui suit
+    // un départ non synchronisé, donc le cas où la ligne fantôme est encore là.
+    func test_participantBanned_self_removesEvenWhenNoMembershipWasEnded() async throws {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.participantBanned.send(
+            try makeBannedEvent(conversationId: "c1", userId: "me", membershipEnded: false)
+        )
+
+        let removed = await waitUntil { await store.conversation(id: "c1") == nil }
+        XCTAssertTrue(removed, "le court-circuit `membershipEnded` protège un compteur, pas une ligne")
+    }
+
+    // L'auth peut n'être pas encore résolue quand un événement arrive. Sans le
+    // garde `me.isEmpty`, une identité vide des deux côtés retirerait une ligne
+    // au hasard.
+    func test_participantLeft_withoutAResolvedIdentity_removesNothing() async throws {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(
+            store: store,
+            categoryStore: UserCategoryStore(service: MockCategoryWriter()),
+            currentUserId: nil
+        )
+
+        env.participantLeft.send(try makeLeftEvent(conversationId: "c1", userId: ""))
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let stillThere = await store.conversation(id: "c1")
+        XCTAssertNotNil(stillThere, "sans identité résolue, aucun retrait ne doit avoir lieu")
     }
 
     func test_userPreferencesReordered_routesToApplyRemoteReorder() async {

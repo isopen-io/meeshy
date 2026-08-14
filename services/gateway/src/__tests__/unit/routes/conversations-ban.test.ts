@@ -8,6 +8,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { makeChainableIO } from '../../helpers/chainable-io';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -326,5 +327,69 @@ describe('PATCH /conversations/:id/participants/:userId/unban — success', () =
       'conversation:participant-unbanned',
       expect.objectContaining({ userId: TARGET_USER_ID }),
     );
+  });
+});
+
+/**
+ * Le banni n'était joignable que par la room de conversation — donc seulement
+ * s'il avait le FIL ouvert à cet instant. Sur l'écran de liste, ses appareils
+ * n'apprenaient rien : la ligne restait, cliquable, alors que
+ * `GET /conversations` ne la sert plus (`participants.some({ isActive: true })`),
+ * et les deux clients la persistent. Elle ne disparaissait qu'au prochain delta
+ * `updatedSince=` (tombstone `bannedAt`) — au mieux à la reconnexion suivante,
+ * au pire 24 h plus tard (`fullReconcileInterval`).
+ *
+ * Même écart, même raison, même correctif que `leave.ts` et que le retrait par
+ * un admin : les trois fins d'appartenance adressent désormais la room
+ * personnelle de celui qu'elles sortent.
+ */
+describe('PATCH …/ban — les AUTRES appareils du banni', () => {
+  let app: FastifyInstance;
+  let io: ReturnType<typeof makeChainableIO>;
+
+  beforeAll(async () => {
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    io = makeChainableIO();
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce({ id: 'part-actor', role: 'creator', userId: USER_ID })
+          .mockResolvedValue({
+            id: 'part-target',
+            role: 'member',
+            bannedAt: null,
+            displayName: 'Target',
+            isActive: true,
+            leftAt: null,
+          }),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: 'part-witness', userId: 'user-witness' },
+          { id: 'part-anon', userId: null },
+        ]),
+      },
+    });
+    app.decorate('socketIOHandler', {
+      getManager: () => ({ getIO: () => io, invalidateParticipantCache: jest.fn() }),
+    } as any);
+    registerBanRoutes(app, prisma as any, null, async (req: any) => {
+      req.authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    await app.ready();
+    await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_USER_ID}/ban` });
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  it('chaîne la room PERSONNELLE du banni, après celles des restants', () => {
+    expect(io._roomsFor('conversation:participant-banned')).toEqual([
+      `conversation:${CONV_ID}`,
+      'user:user-witness',
+      'user:part-anon',
+      `user:${TARGET_USER_ID}`,
+    ]);
+  });
+
+  it("n'émet qu'UNE fois — un appareil du banni resté dans la room ne double pas", () => {
+    expect(io._sent.filter((s) => s.event === 'conversation:participant-banned')).toHaveLength(1);
   });
 });

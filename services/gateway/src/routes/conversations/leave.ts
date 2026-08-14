@@ -88,10 +88,26 @@ export function registerLeaveRoutes(
           where: { conversationId: id, isActive: true },
           select: { id: true, userId: true },
         })
+        // Le partant ferme la chaîne, et c'est le MÊME argument qu'au-dessus
+        // appliqué à celui qu'il excluait. La room de conversation « porte le
+        // partant, encore dedans à cet instant » ne vaut que pour l'appareil
+        // qui a le FIL ouvert ; ses autres appareils sont précisément sur
+        // l'écran de liste, donc hors de cette room. Ce qu'ils y affichent
+        // n'est pas un compteur faux mais une ligne que le serveur ne sert
+        // plus — `GET /conversations` exige `participants.some({ userId,
+        // isActive: true })` — et que les deux clients PERSISTENT (cache
+        // disque iOS, `staleTime: Infinity` web). Elle survivait jusqu'au
+        // prochain delta `updatedSince=` (tombstone `leftAt`,
+        // `delta-tombstones.ts`) : à la reconnexion suivante au mieux, 24 h
+        // plus tard au pire (`fullReconcileInterval`).
+        //
+        // Une seule chaîne, pas un second `emit` : un appareil du partant resté
+        // dans la room de conversation recevrait sinon deux copies.
+        const audience = [...remaining, { id: participant.id, userId }]
         emitToConversationParticipants({
           io,
           conversationId: id,
-          participants: remaining,
+          participants: audience,
           events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT],
           payload: {
             conversationId: id,

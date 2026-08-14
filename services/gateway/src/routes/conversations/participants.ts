@@ -622,10 +622,21 @@ export function registerParticipantsRoutes(
             where: { conversationId, isActive: true },
             select: { id: true, userId: true }
           });
+          // Le retiré ferme la chaîne. Le commentaire ci-dessus disait « la
+          // room reste en tête, donc le retiré garde son signal » : vrai du
+          // seul appareil qui a le FIL ouvert. Les autres sont sur l'écran de
+          // liste, hors de cette room — l'argument même qui a fait ajouter les
+          // rooms personnelles des RESTANTS, jamais appliqué à celui dont
+          // l'appartenance s'arrête. Ils gardaient une ligne que
+          // `GET /conversations` ne sert plus, persistée, jusqu'au prochain
+          // delta (tombstone `leftAt`).
+          const audience = removedParticipant
+            ? [...remaining, { id: removedParticipant.id, userId }]
+            : remaining;
           emitToConversationParticipants({
             io,
             conversationId,
-            participants: remaining,
+            participants: audience,
             events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT],
             payload: {
               conversationId,

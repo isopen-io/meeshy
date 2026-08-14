@@ -709,8 +709,37 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
+    // Retire la conversation de la liste ET son détail. Le geste de « cette
+    // conversation n'est plus la mienne », quelle que soit la manière dont
+    // l'appartenance s'est arrêtée : suppression pour moi, départ, retrait par
+    // un admin, bannissement. Les quatre sont déjà unifiées côté serveur — le
+    // delta `updatedSince=` les rend dans un seul champ `deletedConversationIds`
+    // (`delta-tombstones.ts`) — et seul le chemin TEMPS RÉEL les traitait
+    // différemment.
+    const dropConversationFromCache = (conversationId: string) => {
+      if (!conversationId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.filter((c) => c.id !== conversationId)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(conversationId) });
+    };
+
     // Handler for participant-left (room broadcast) — another member was removed/left
+    //
+    // Sauf quand ce membre est MOI : l'événement ne dit alors pas « l'effectif
+    // a changé », il dit « cette conversation n'est plus la mienne ». Le cas
+    // n'a rien d'exotique — quitter depuis un autre appareil, ou se faire
+    // retirer par un admin — et le serveur adresse désormais la room
+    // personnelle du partant justement pour qu'il arrive (`leave.ts`,
+    // `participants.ts`). Décrémenter un compteur sur une ligne que
+    // `GET /conversations` ne sert plus la laissait cliquable pour de bon :
+    // `staleTime: Infinity` ne relit jamais de lui-même, et le seul rattrapage
+    // était le tombstone du prochain delta.
     const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => {
+      if (data.userId === useAuthStore.getState().user?.id) {
+        dropConversationFromCache(data.conversationId);
+        return;
+      }
       applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
     };
 
@@ -720,6 +749,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // but it removes no membership, so the count must not move. Absent on
     // servers older than that contract, where a ban always removed one.
     const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => {
+      // Être banni est la troisième fin d'appartenance, et elle se traite comme
+      // les deux autres. Le test d'identité passe AVANT le court-circuit
+      // `membershipEnded === false` : celui-ci protège un COMPTEUR, or il n'y a
+      // pas de compteur à protéger sur une ligne qui s'en va. Un ban qui suit
+      // un départ non synchronisé porte précisément ce drapeau, et c'est le cas
+      // où la ligne fantôme est encore là.
+      if (data.userId === useAuthStore.getState().user?.id) {
+        dropConversationFromCache(data.conversationId);
+        return;
+      }
       // L'effectif absolu tranche `membershipEnded` de lui-même — bannir un
       // ex-membre ne retire personne, donc le compte est simplement inchangé.
       // Le court-circuit ne subsiste que pour les serveurs qui ne l'envoient pas.

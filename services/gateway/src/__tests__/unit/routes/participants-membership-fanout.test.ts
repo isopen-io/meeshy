@@ -289,17 +289,42 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
 
     const left = emitted.filter((e) => e.event === 'conversation:participant-left');
     expect(left).toHaveLength(1);
-    // La room du fil reste en TÊTE : elle porte le retiré lui-même, encore
-    // dedans jusqu'à l'éviction qui suit l'emit — son signal ne change pas.
+    // La room du fil reste en TÊTE, et la room personnelle du RETIRÉ ferme la
+    // chaîne. Cette dernière a longtemps manqué sur l'argument que « la room du
+    // fil porte le retiré lui-même, encore dedans jusqu'à l'éviction qui suit
+    // l'emit ». C'est vrai de l'appareil qui a le FIL ouvert, et faux de tous
+    // les autres — or c'est l'argument même qui a fait ajouter les rooms
+    // personnelles des membres restants (« l'écran de liste a quitté la room »).
+    // Il n'avait été appliqué qu'à ceux dont le COMPTEUR bouge, jamais à celui
+    // dont l'APPARTENANCE s'arrête.
     expect(left[0].rooms).toEqual([
       `conversation:${CONV_ID}`,
       `user:${ACTOR_ID}`,
       `user:${ANON_PARTICIPANT_ID}`,
+      `user:${TARGET_ID}`,
     ]);
     expect(left[0].payload).toMatchObject({
       conversationId: CONV_ID,
       userId: TARGET_ID,
       displayName: 'Removed User',
     });
+  });
+
+  it("n'émet qu'UNE fois — un appareil du retiré resté dans la room ne double pas", async () => {
+    const route = fastify.routes.find((r) => r.method === 'DELETE')!;
+    await route.handler(
+      {
+        params: { id: CONV_ID, userId: TARGET_ID },
+        authContext: { isAuthenticated: true, isAnonymous: false, userId: ACTOR_ID },
+        server: {},
+      },
+      createMockReply()
+    );
+
+    // Le chaînage est ce qui le garantit : deux `emit` séparés livreraient deux
+    // copies au socket assis dans les deux rooms, et un client qui RETIRE la
+    // ligne sur cet événement la retirerait deux fois — anodin ici, mais la
+    // même forme porte `memberCount` pour les restants.
+    expect(emitted.filter((e) => e.event === 'conversation:participant-left')).toHaveLength(1);
   });
 });

@@ -36,6 +36,9 @@ import { resolveConversationId } from '../../../utils/conversation-id-cache';
 const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439033';
+const WITNESS_ID = '507f1f77bcf86cd799439044';
+/** Participant entré par lien de partage : aucune ligne `User` derrière lui. */
+const ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -264,5 +267,77 @@ describe('POST /conversations/:id/leave — DB error on findFirst', () => {
   it('returns 500 when DB throws on findFirst', async () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+/**
+ * Le partant n'était adressé QUE par la room de conversation — c'est-à-dire par
+ * le seul canal que ses appareils quittent dès qu'ils affichent la LISTE.
+ *
+ * L'argument est déjà écrit dans cette route, mais il n'avait été appliqué qu'à
+ * l'audience : on a élargi l'éventail vers les rooms personnelles des membres
+ * RESTANTS parce que « l'effectif se lit sur l'écran de liste, dont les lecteurs
+ * ont quitté la room ». Le même écran, chez le partant, ne porte pas un compteur
+ * faux — il porte une ligne qui n'existe plus côté serveur : `GET /conversations`
+ * exige `participants.some({ userId, isActive: true })`. Et les deux clients la
+ * PERSISTENT (cache disque iOS, `staleTime: Infinity` web), donc elle survivait
+ * jusqu'au prochain delta.
+ */
+describe('POST /conversations/:id/leave — les AUTRES appareils du partant', () => {
+  let app: FastifyInstance;
+  let socket: ReturnType<typeof makeSocketIO>;
+
+  beforeAll(async () => {
+    (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
+    ({ app, socket } = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'member',
+            isActive: true,
+            displayName: 'Alice',
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { id: 'p-witness', userId: WITNESS_ID },
+            { id: ANON_PARTICIPANT_ID, userId: null },
+          ]),
+          update: jest.fn<any>().mockResolvedValue({}),
+        },
+      },
+    }));
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  it('chaîne la room PERSONNELLE du partant, après celles des restants', () => {
+    expect(socket.mockIo._roomsFor('conversation:participant-left')).toEqual([
+      `conversation:${CONV_ID}`,
+      `user:${WITNESS_ID}`,
+      `user:${ANON_PARTICIPANT_ID}`,
+      `user:${USER_ID}`,
+    ]);
+  });
+
+  it("n'émet qu'UNE fois — un appareil du partant resté dans la room ne double pas", () => {
+    expect(socket.mockIo._sent.filter((s) => s.event === 'conversation:participant-left')).toHaveLength(1);
+  });
+
+  it('adresse le partant AVANT de le sortir de la room', () => {
+    // `fetchSockets().leave(room)` s'exécute après l'emit dans la route. Si
+    // l'ordre s'inversait, l'appareil qui a le fil ouvert perdrait le signal.
+    expect(socket.mockIo._indexOf('conversation:participant-left')).toBe(0);
+    expect(socket.mockLeave).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+  });
+
+  it("porte l'effectif des RESTANTS, partant exclu", () => {
+    expect(socket.mockIo._payloadFor('conversation:participant-left')).toMatchObject({
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      memberCount: 2,
+    });
   });
 });

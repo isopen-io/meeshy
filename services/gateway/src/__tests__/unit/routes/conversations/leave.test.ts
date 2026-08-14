@@ -225,13 +225,21 @@ describe('POST /conversations/:id/leave — audience du départ', () => {
     const left = emitted.filter(e => e.event === 'conversation:participant-left');
     expect(left).toHaveLength(1);
     expect(left[0].rooms).toEqual([
-      // La room de conversation reste en TÊTE de chaîne : elle porte le partant
-      // lui-même, encore dedans à cet instant, dont l'acquittement ne change pas.
+      // La room de conversation reste en TÊTE de chaîne.
       `conversation:${RESOLVED_CONV_ID}`,
       `user:${REMAINING_USER_ID}`,
       // Le participant sans compte est nommé par son `Participant.id` : l'omettre
       // sauterait une room qui EXISTE, pas une qui n'existe pas.
       `user:${REMAINING_ANON_PARTICIPANT_ID}`,
+      // Et le PARTANT ferme la chaîne. Cette room a longtemps manqué, sur
+      // l'argument que « la room de conversation porte le partant lui-même,
+      // encore dedans à cet instant ». Vrai de l'appareil qui a le FIL ouvert,
+      // faux de tous les autres — lesquels sont précisément sur l'écran de
+      // liste, donc HORS de cette room. C'est l'argument même qui a fait
+      // ajouter les rooms personnelles des restants deux lignes plus haut ; il
+      // n'avait été appliqué qu'à ceux dont le COMPTEUR bouge, jamais à celui
+      // dont l'APPARTENANCE s'arrête.
+      `user:${USER_ID}`,
     ]);
     expect(left[0].payload).toMatchObject({ conversationId: RESOLVED_CONV_ID, userId: USER_ID, displayName: 'Alice' });
     await app.close();

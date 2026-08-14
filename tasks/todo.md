@@ -1,3 +1,134 @@
+# Cycle 122 — Une fin d'appartenance n'atteignait pas mes AUTRES appareils
+
+## Le défaut
+
+Quitter une conversation, en être retiré par un admin, y être banni : trois manières de perdre une
+appartenance. Les trois n'adressaient leur événement (`conversation:participant-left` / `-banned`)
+qu'à `ROOMS.conversation(id)` **et aux rooms personnelles des membres RESTANTS** — jamais à celle
+du sujet.
+
+Or ses autres appareils sont posés sur l'écran de LISTE, donc **hors** de la room de conversation.
+Ils n'apprenaient rien.
+
+### L'argument existait déjà, il n'avait pas été appliqué jusqu'au bout
+
+C'est exactement le raisonnement qui avait fait élargir l'éventail vers les rooms personnelles des
+restants — « l'effectif se lit sur l'écran de liste, dont les lecteurs ont quitté la room ». Il
+n'avait été appliqué qu'à ceux dont le **compteur** bouge, jamais à celui dont l'**appartenance**
+s'arrête. Le code s'en justifiait même, à deux lignes de l'autre commentaire :
+
+> « la room de conversation reste en tête de chaîne : elle porte le partant lui-même, encore dedans
+> à cet instant »
+
+Vrai de l'appareil qui a le FIL ouvert. Faux de tous les autres.
+
+### Et le signal qui arrivait était mal lu
+
+Les deux clients posaient un `memberCount` sur une ligne que `GET /conversations` ne sert plus
+(`participants.some({ userId, isActive: true })`). La ligne restait affichée, cliquable, et
+**persistée** — `schedulePersist` (cache disque iOS), `staleTime: Infinity` (web).
+
+| Fin d'appartenance | Temps réel vers MES appareils | Tombstone delta |
+|---|---|---|
+| `conversation:deleted` (supprimer pour moi) | ✅ `ROOMS.user`, documenté | ✅ |
+| départ volontaire (`leave.ts`) | ❌ | ✅ |
+| retrait par un admin (`participants.ts`) | ❌ | ✅ |
+| bannissement (`ban.ts`) | ❌ | ✅ |
+
+Le delta unifiait donc DÉJÀ les quatre cas dans un seul `deletedConversationIds`
+(`delta-tombstones.ts` les énumère nommément). Seul le chemin **temps réel** les séparait — et le
+rattrapage différé (reconnexion suivante au mieux, 24 h au pire via `fullReconcileInterval`)
+faisait que rien ne devenait jamais rouge.
+
+## Le correctif
+
+- **Gateway** — `leave.ts`, `participants.ts`, `ban.ts` : le sujet ferme la chaîne
+  d'`emitToConversationParticipants`. **Une seule chaîne, jamais un second `emit`** — la propriété
+  « au plus une copie par socket » est ce pour quoi le chaînage existe.
+- **Web** — `dropConversationFromCache` sur `participant-left` / `-banned` quand le sujet est moi ;
+  retire la ligne de `conversations.infinite()` et purge `conversations.detail`.
+- **iOS app** — `ConversationListViewModel.dropConversationLeftByMe` : retire la ligne, persiste
+  (donc purge le cache disque, `schedulePersist` sauvegardant l'instantané complet), invalide les
+  messages.
+- **iOS SDK** — `ConversationStoreSocketBridge` route vers `applyConversationDeleted`, sinon le
+  non-lu de la conversation continuait de peser sur l'agrégat inter-conversations.
+
+Sur les deux clients, **le test d'identité passe AVANT le court-circuit `membershipEnded === false`** :
+ce drapeau protège un COMPTEUR, et il n'y a pas de compteur à protéger sur une ligne qui s'en va —
+c'est même le cas d'un ban qui suit un départ non synchronisé, donc précisément celui où la ligne
+fantôme est encore là.
+
+`isMe()` (app) et `!me.isEmpty` (SDK) écartent l'identité vide de l'auth non résolue : piège propre
+à la comparaison par `==`, que le `!=` de `participantJoined` n'avait pas.
+
+## Gates
+
+| Gate | Résultat |
+|---|---|
+| RED prouvé sans la production | 3 rouges gateway, 4 rouges web |
+| gateway `tsc --noEmit` | **0 erreur** |
+| gateway jest **complet** | **710 suites / 17 398 tests verts** |
+| web `tsc --noEmit` (fichiers touchés) | **0 erreur** |
+| web jest **complet** | **569 suites / 12 198 tests verts** (21 skipped) |
+| iOS / SDK | non exécutables depuis un runner Linux — vérifiés par la CI (`ios-tests.yml`, `sdk-tests.yml`) |
+
+## Note de méthode
+
+Le témoin de chaîne du départ existait en **deux exemplaires** — `routes/conversations-leave.test.ts`
+et `routes/conversations/leave.test.ts` — et le second n'est apparu qu'à la suite COMPLÈTE, la
+sélection par fichier ayant manqué le doublon. Les deux portent désormais la room du partant. Un
+`describe` dont l'intitulé est proche (« audience du départ » / « les AUTRES appareils du partant »)
+ne suffit pas à faire remarquer qu'on a écrit à côté du témoin existant : c'est la suite complète
+qui le dit.
+
+## Incident collatéral — `main` ne compilait plus pour iOS
+
+Le gate iOS de cette PR a levé une rupture ANTÉRIEURE, entrée par la PR #2982 (`1dd4b77b`,
+« simplify MessageDayStickyOverlay ») : `enum MessageDayStickyPlacement` supprimé alors que
+`MessageListViewController` s'en sert toujours (sur `origin/main` : 3 usages, 0 définition).
+
+Trois types partaient dans la même passe ; le compilateur n'a nommé que le premier lot.
+L'inventaire réel se fait sur le diff, pas sur le message d'erreur :
+
+| Type | Usages production | Sort |
+|---|---|---|
+| `MessageDayStickyPlacement` | 2 (`MessageListViewController`) | **restauré** |
+| `MessageDayStickyMetrics` | 0 | reste supprimé, ses témoins partent avec |
+| `MessageDayStickyPalette` | 0 | reste supprimé, ses témoins partent avec |
+
+**Pourquoi la CI ne l'a pas dit — la bonne raison.** PR #2982 ouverte à 04:25:32, **mergée à
+04:25:45**, soit 13 secondes plus tard ; `iOS compile (PR gate)` démarré à 04:25:38 et annulé à
+04:30:09 avec six autres jobs. Le gate n'a pas manqué la rupture, il n'a pas eu le droit de
+finir — PAS un élargissement de trigger, première conclusion posée puis corrigée (leçon 243).
+
+Reste que rendre le check bloquant n'est pas gratuit : `ios-tests.yml` écrit noir sur blanc
+« No branch protection requires this check, so neither trigger can deadlock a merge », la file
+macOS faisant attendre 24-49 min. L'arbitrage a été rendu en connaissance de cause. La piste qui
+ne le paie pas : le gate **compile-only** existe déjà et met 9 minutes — c'est celui-là qui
+aurait rougi sur #2982, et le seul dont on puisse discuter le caractère bloquant.
+
+## Reste ouvert
+
+- **L'agrégat non-lu iOS ne se recalcule pas DANS LA FOULÉE du retrait.**
+  `ConversationSyncEngine.recomputeTotalUnread()` lit le cache disque — que `schedulePersist`
+  vient justement de réécrire sans la ligne, donc la DONNÉE est juste — mais rien ne le
+  redéclenche à cet instant précis. Le total se corrige au premier événement suivant (n'importe
+  quel `message:*`, ouverture/fermeture de fil, sync), donc l'écart est transitoire et
+  auto-résolutif, contrairement à la ligne fantôme qui, elle, tenait jusqu'au prochain delta.
+  Le fermer proprement voudrait dire relayer `participant-left` / `-banned` dans
+  `ConversationSyncEngine.startSocketRelay` vers `handleConversationDeleted` — ce qui ferait tout
+  d'un coup (cache, messages, `conversationsDidChange`, recompute). **Écarté ce cycle** :
+  `ConversationSyncEngine.currentUserId()` lit `AuthManager.shared`, non injecté, donc le gate
+  d'identité n'y est pas testable depuis la suite SDK — livrer du Swift non couvert pour un écart
+  transitoire n'en vaut pas le prix. À reprendre AVEC l'injection de l'identité dans l'engine.
+
+## TDD
+
+8 témoins gateway (chaînage exact des rooms, unicité de l'émission, ordre emit → éviction de room,
+effectif des restants), 5 web, 5 ViewModel iOS, 5 bridge SDK.
+
+---
+
 # Cycle 119 — Le retrait de réaction annonçait un ❤️ qu'il n'avait pas retiré
 
 ## Le défaut
