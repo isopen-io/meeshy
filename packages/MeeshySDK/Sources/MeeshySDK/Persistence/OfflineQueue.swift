@@ -1069,6 +1069,64 @@ public actor OfflineQueue {
         mutationEnqueued.send(())
     }
 
+    // MARK: - Pending send row upsert (shared by the media/audio enqueues)
+
+    /// Insère la row outbox `.sendMessage` du message, ou RÉUTILISE celle qui
+    /// existe déjà pour le même `(conversationId, clientMessageId)` encore
+    /// `.pending`, en rafraîchissant son payload.
+    ///
+    /// `enqueue` (chemin texte) déduplique depuis toujours ; `enqueueAudios` et
+    /// `enqueueMedia` faisaient un INSERT sec. Deux rows vivaient donc pour un
+    /// même message dès qu'un ré-enfilage suivait un premier échec d'upload, et
+    /// `OutboxFlusher` les traitait indépendamment : la première à épuiser son
+    /// budget émettait `retryExhausted`, ce qui basculait la bulle en `.failed`
+    /// — bandeau orange — pendant que la jumelle était ENCORE EN VOL, jusqu'à
+    /// ce que son `serverAck` guérisse l'état (`(.failed, .serverAck) → .sent`).
+    /// C'est la cause racine du flash orange observé à l'envoi de médias.
+    /// Contrat de la spec 2026-07-08 règle 3 : `.failed` est TERMINAL, jamais
+    /// un état traversé pendant que des tentatives restent en cours.
+    ///
+    /// Renvoie l'id de la row EFFECTIVE : l'appelant doit s'en servir pour
+    /// toute mise à jour ultérieure (phase B) et pour sa valeur de retour,
+    /// sinon il écrirait sur une row inexistante.
+    nonisolated private static func upsertPendingSendRow(
+        _ db: Database,
+        preferredId: String,
+        conversationId: String,
+        clientMessageId: String,
+        payload: Data,
+        createdAt: Date
+    ) throws -> String {
+        let existing = try OutboxRecord
+            .filter(Column("conversationId") == conversationId)
+            .filter(Column("clientMessageId") == clientMessageId)
+            .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+            .filter(Column("status") == OutboxStatus.pending.rawValue)
+            .order(Column("createdAt").desc)
+            .fetchOne(db)
+
+        if let existing {
+            try db.execute(sql: """
+                UPDATE outbox
+                SET payload = ?, updatedAt = ?, lastError = NULL
+                WHERE id = ?
+                """, arguments: [payload, Date(), existing.id])
+            return existing.id
+        }
+
+        try OutboxRecord(
+            id: preferredId,
+            kind: .sendMessage,
+            conversationId: conversationId,
+            messageLocalId: clientMessageId,
+            clientMessageId: clientMessageId,
+            payload: payload,
+            status: .pending,
+            createdAt: createdAt
+        ).insert(db)
+        return preferredId
+    }
+
     // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
 
     /// Sentinel `conversationId` used for outbox rows that don't belong to a
@@ -1408,20 +1466,21 @@ public actor OfflineQueue {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase A — INSERT outbox row first. If this throws, the files are
-        // still untouched on disk and the caller can retry.
+        // Phase A — UPSERT outbox row first. If this throws, the files are
+        // still untouched on disk and the caller can retry. Un ré-enfilage sur
+        // le même `clientMessageId` réutilise la row `.pending` existante au
+        // lieu d'en créer une jumelle (cf. `upsertPendingSendRow`).
+        let effectiveOutboxId: String
         do {
-            try await pool.write { db in
-                try OutboxRecord(
-                    id: outboxId,
-                    kind: .sendMessage,
+            effectiveOutboxId = try await pool.write { db in
+                try Self.upsertPendingSendRow(
+                    db,
+                    preferredId: outboxId,
                     conversationId: conversationId,
-                    messageLocalId: clientMessageId,
                     clientMessageId: clientMessageId,
                     payload: payload,
-                    status: .pending,
                     createdAt: now
-                ).insert(db)
+                )
             }
         } catch {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
@@ -1456,7 +1515,7 @@ public actor OfflineQueue {
                             OutboxStatus.exhausted.rawValue,
                             "Audio copy failed: \(copyError.localizedDescription)",
                             Date(),
-                            outboxId
+                            effectiveOutboxId
                         ])
                 }
             } catch {
@@ -1494,7 +1553,7 @@ public actor OfflineQueue {
         await refreshPendingCount()
         mutationEnqueued.send(())
 
-        return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
+        return EnqueueAudiosResult(outboxId: effectiveOutboxId, localAudioPaths: relativePaths)
     }
 
     public struct EnqueueMediaResult: Sendable {
@@ -1568,20 +1627,21 @@ public actor OfflineQueue {
             throw EnqueueMediaError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase A — INSERT outbox row first (write-ahead). If this throws, the
-        // source files are still untouched and the caller can retry.
+        // Phase A — UPSERT outbox row first (write-ahead). If this throws, the
+        // source files are still untouched and the caller can retry. Un
+        // ré-enfilage sur le même `clientMessageId` réutilise la row `.pending`
+        // existante au lieu d'en créer une jumelle (cf. `upsertPendingSendRow`).
+        let effectiveOutboxId: String
         do {
-            try await pool.write { db in
-                try OutboxRecord(
-                    id: outboxId,
-                    kind: .sendMessage,
+            effectiveOutboxId = try await pool.write { db in
+                try Self.upsertPendingSendRow(
+                    db,
+                    preferredId: outboxId,
                     conversationId: conversationId,
-                    messageLocalId: clientMessageId,
                     clientMessageId: clientMessageId,
                     payload: payload,
-                    status: .pending,
                     createdAt: now
-                ).insert(db)
+                )
             }
         } catch {
             throw EnqueueMediaError.outboxWriteFailed(underlying: error)
@@ -1602,7 +1662,7 @@ public actor OfflineQueue {
                             OutboxStatus.exhausted.rawValue,
                             "Media copy failed: \(copyError.localizedDescription)",
                             Date(),
-                            outboxId
+                            effectiveOutboxId
                         ])
                 }
             } catch {
@@ -1633,7 +1693,7 @@ public actor OfflineQueue {
         await refreshPendingCount()
         mutationEnqueued.send(())
 
-        return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
+        return EnqueueMediaResult(outboxId: effectiveOutboxId, localMediaPaths: relativePaths)
     }
 
     /// Phase B of a write-ahead media enqueue: copies each source file to its
