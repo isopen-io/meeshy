@@ -284,6 +284,37 @@ adaptative, roster, `onRemove` non branché sur le kick REST, timeout global
 `calls.json`). Le mesh iOS mono-PC (I1-I7) et le SFU (Phase 4, optionnel)
 restent également hors scope de cette branche.
 
+## Mise à jour 2026-08-14 — volet `CallNotification` de W6 traité (routine calling)
+
+**`CallNotification` mono-appelant partiellement levé.** La bannière d'appel
+entrant (`apps/web/components/video-call/CallNotification.tsx`) affichait
+exactement le même texte — nom de l'appelant + « Appel entrant... » — qu'il
+s'agisse d'un 1:1 ou d'un appel de groupe, sans aucun moyen pour l'appelé de
+distinguer les deux avant de décrocher. `CallInitiatedEvent.participants` (déjà
+peuplé côté gateway pour CHAQUE appel — `CallEventsHandler.ts` `call:initiate`
+et le replay `call:check-active`) porte l'initiateur + tous les appelés ; un
+appel direct en a ≤2, un appel de groupe 3+. La bannière calcule maintenant
+`isGroupCall = participants.length > 2` et, si vrai, affiche un badge
+« {count} personnes » (icône `Users`) + un sous-titre « Appel de groupe » au
+lieu du « Appel entrant... » générique. Zéro changement de comportement pour
+le 1:1 (badge absent, sous-titre inchangé) — vérifié par des tests explicites
+sur `participants: []` (payload legacy/replay) et `participants.length === 2`.
+
+Nouvelles clés i18n dans les 4 locales (`incoming.groupSubtitle`,
+`incoming.groupCallLabel` avec token `{count}`, convention `.replace()`
+existante — cf. `VideoStream.tsx` `stream.participantLeft`).
+
+**Reste du W6** (grille adaptative multi-participants, roster avec états
+mute/vidéo, `onRemove` branché sur `DELETE /calls/:id/participants/:pid`,
+timeout 45 s par-pair) et **W7** (i18n groupe pour le reste de l'UI d'appel —
+roster, toasts join/leave) : toujours à traiter, chantier plus large que ce
+correctif ponctuel. Le mesh iOS mono-PC (I1-I7) et le SFU restent hors scope.
+
+Tests : `CallNotification.groupCall.test.tsx` (5 cas, nouveau) +
+`CallNotification.test.tsx` + `CallNotification.ringtoneUnmountRace.test.tsx`
+(régression) — 9/9 verts. `tsc --noEmit` : aucune erreur nouvelle (comparé à
+la baseline pré-existante du dépôt).
+
 ## Récapitulatif
 
 | Capacité demandée | État |

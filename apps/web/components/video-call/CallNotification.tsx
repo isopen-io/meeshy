@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Video, Mic } from 'lucide-react';
+import { Phone, PhoneOff, Video, Mic, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
@@ -22,6 +22,17 @@ interface CallNotificationProps {
 export function CallNotification({ call, onAccept, onReject }: CallNotificationProps) {
   const { t } = useI18n('calls');
   const ringtoneRef = useRef<import('@/utils/ringtone').Ringtone | null>(null);
+
+  // A direct call's `participants` is the initiator + the callee (<=2 once
+  // populated; the `call:check-active` replay path always populates it, the
+  // legacy `call:initiate` ack path may still send it empty for a 1:1 —
+  // either way that's never a group). 3+ means the gateway rang more than
+  // one callee for this call (`CallEventsHandler.ts` `initiateCall`/
+  // `call:check-active`), i.e. a group call — surfaced here so a callee can
+  // tell "Alice is calling you" apart from "Alice is calling your group"
+  // before accepting (audit calls-audit 2026-08-14, W6 follow-up).
+  const isGroupCall = call.participants.length > 2;
+  const groupSize = call.participants.length;
 
   // Play ringtone on mount
   useEffect(() => {
@@ -91,6 +102,14 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           </span>
         </div>
 
+        {/* Group indicator — hidden entirely for direct calls (isGroupCall false) */}
+        {isGroupCall && (
+          <div className="flex items-center justify-center gap-1 -mt-1 mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+            <Users className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{t('incoming.groupCallLabel').replace('{count}', String(groupSize))}</span>
+          </div>
+        )}
+
         {/* Caller info */}
         <div className="text-center">
           <h3
@@ -103,7 +122,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"
           >
-            {t('incoming.subtitle')}
+            {isGroupCall ? t('incoming.groupSubtitle') : t('incoming.subtitle')}
           </p>
         </div>
 

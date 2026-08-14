@@ -136,6 +136,8 @@
       "videoCall": "Videollamada",
       "audioCall": "Llamada de audio",
       "subtitle": "Llamada entrante...",
+      "groupSubtitle": "Llamada grupal",
+      "groupCallLabel": "{count} personas",
       "accept": "Aceptar",
       "decline": "Rechazar",
       "acceptLabel": "Aceptar llamada",
