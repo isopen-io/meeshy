@@ -67,276 +67,213 @@ const DEFAULT_STATE: ConversationPreferencesState = {
   error: null,
 };
 
+const createDefaultPreferences = (conversationId: string): UserConversationPreferences => ({
+  id: '',
+  userId: '',
+  conversationId,
+  isPinned: false,
+  isMuted: false,
+  isArchived: false,
+  tags: [],
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+/**
+ * Même arbitre que `applyRemotePreferences`, appliqué à l'autre écrivain : la
+ * réponse HTTP du `PUT`. Deux bascules rapprochées peuvent voir leurs réponses
+ * revenir dans le désordre, et une diffusion socket peut atterrir pendant le
+ * vol — dans les deux cas, poser la réponse telle quelle rembobine un état plus
+ * récent. `version` tranche.
+ *
+ * L'arbitrage n'a lieu que si la réponse PORTE une version : une réponse
+ * antérieure à l'ajout du champ au sérialiseur n'a pas d'arbitre, et la laisser
+ * tomber perdrait l'écriture. Côté local, l'absence vaut la version 0 (même
+ * convention que le lecteur socket).
+ */
+const isStaleWriteResponse = (
+  incoming: UserConversationPreferences,
+  current: UserConversationPreferences | undefined
+): boolean =>
+  typeof incoming.version === 'number' && incoming.version <= (current?.version ?? 0);
+
 export const useConversationPreferencesStore = create<ConversationPreferencesState & ConversationPreferencesActions>()(
-  (set, get) => ({
-    ...DEFAULT_STATE,
-
-    initialize: async () => {
-      if (get().isInitialized) return;
-
-      set({ isLoading: true, error: null });
-
-      try {
-        const [allPrefs, categories] = await Promise.all([
-          userPreferencesService.getAllPreferences(),
-          userPreferencesService.getCategories(),
-        ]);
-
-        const map = new Map<string, UserConversationPreferences>();
-        allPrefs.forEach(pref => {
-          map.set(pref.conversationId, pref);
-        });
-
-        set({
-          preferencesMap: map,
-          categories: categories.sort((a, b) => a.order - b.order),
-          isInitialized: true,
-        });
-      } catch (error) {
-        console.error('[ConversationPreferencesStore] Initialization error:', error);
-        set({ error: 'Failed to load preferences', isInitialized: true });
-      } finally {
-        set({ isLoading: false });
-      }
-    },
-
-    reset: () => {
-      set(DEFAULT_STATE);
-    },
-
-    getPreferences: (conversationId: string) => {
-      return get().preferencesMap.get(conversationId);
-    },
-
-    togglePin: async (conversationId: string, isPinned: boolean) => {
-      // Optimistic update
-      const currentPrefs = get().preferencesMap.get(conversationId);
-      const newMap = new Map(get().preferencesMap);
-
-      if (currentPrefs) {
-        newMap.set(conversationId, { ...currentPrefs, isPinned });
-      } else {
-        newMap.set(conversationId, {
-          id: '',
-          userId: '',
-          conversationId,
-          isPinned,
-          isMuted: false,
-          isArchived: false,
-          tags: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      set({ preferencesMap: newMap });
-
-      try {
-        const updatedPrefs = await userPreferencesService.togglePin(conversationId, isPinned);
-        const finalMap = new Map(get().preferencesMap);
-        finalMap.set(conversationId, updatedPrefs);
-        set({ preferencesMap: finalMap });
-      } catch (error) {
-        // Revert on error
-        const revertMap = new Map(get().preferencesMap);
-        if (currentPrefs) {
-          revertMap.set(conversationId, currentPrefs);
-        } else {
-          revertMap.delete(conversationId);
-        }
-        set({ preferencesMap: revertMap });
-        throw error;
-      }
-    },
-
-    toggleMute: async (conversationId: string, isMuted: boolean) => {
-      const currentPrefs = get().preferencesMap.get(conversationId);
-      const newMap = new Map(get().preferencesMap);
-
-      if (currentPrefs) {
-        newMap.set(conversationId, { ...currentPrefs, isMuted });
-      } else {
-        newMap.set(conversationId, {
-          id: '',
-          userId: '',
-          conversationId,
-          isPinned: false,
-          isMuted,
-          isArchived: false,
-          tags: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      set({ preferencesMap: newMap });
-
-      try {
-        const updatedPrefs = await userPreferencesService.toggleMute(conversationId, isMuted);
-        const finalMap = new Map(get().preferencesMap);
-        finalMap.set(conversationId, updatedPrefs);
-        set({ preferencesMap: finalMap });
-      } catch (error) {
-        const revertMap = new Map(get().preferencesMap);
-        if (currentPrefs) {
-          revertMap.set(conversationId, currentPrefs);
-        } else {
-          revertMap.delete(conversationId);
-        }
-        set({ preferencesMap: revertMap });
-        throw error;
-      }
-    },
-
-    toggleArchive: async (conversationId: string, isArchived: boolean) => {
-      const currentPrefs = get().preferencesMap.get(conversationId);
-      const newMap = new Map(get().preferencesMap);
-
-      if (currentPrefs) {
-        newMap.set(conversationId, { ...currentPrefs, isArchived });
-      } else {
-        newMap.set(conversationId, {
-          id: '',
-          userId: '',
-          conversationId,
-          isPinned: false,
-          isMuted: false,
-          isArchived,
-          tags: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      set({ preferencesMap: newMap });
-
-      try {
-        const updatedPrefs = await userPreferencesService.toggleArchive(conversationId, isArchived);
-        const finalMap = new Map(get().preferencesMap);
-        finalMap.set(conversationId, updatedPrefs);
-        set({ preferencesMap: finalMap });
-      } catch (error) {
-        const revertMap = new Map(get().preferencesMap);
-        if (currentPrefs) {
-          revertMap.set(conversationId, currentPrefs);
-        } else {
-          revertMap.delete(conversationId);
-        }
-        set({ preferencesMap: revertMap });
-        throw error;
-      }
-    },
-
-    setReaction: async (conversationId: string, reaction: string | null) => {
-      const currentPrefs = get().preferencesMap.get(conversationId);
-      const newMap = new Map(get().preferencesMap);
-
-      if (currentPrefs) {
-        newMap.set(conversationId, { ...currentPrefs, reaction: reaction || undefined });
-      } else {
-        newMap.set(conversationId, {
-          id: '',
-          userId: '',
-          conversationId,
-          isPinned: false,
-          isMuted: false,
-          isArchived: false,
-          tags: [],
-          reaction: reaction || undefined,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      set({ preferencesMap: newMap });
-
-      try {
-        const updatedPrefs = await userPreferencesService.updateReaction(conversationId, reaction);
-        const finalMap = new Map(get().preferencesMap);
-        finalMap.set(conversationId, updatedPrefs);
-        set({ preferencesMap: finalMap });
-      } catch (error) {
-        const revertMap = new Map(get().preferencesMap);
-        if (currentPrefs) {
-          revertMap.set(conversationId, currentPrefs);
-        } else {
-          revertMap.delete(conversationId);
-        }
-        set({ preferencesMap: revertMap });
-        throw error;
-      }
-    },
-
-    updatePreference: (conversationId: string, prefs: Partial<UserConversationPreferences>) => {
-      const currentPrefs = get().preferencesMap.get(conversationId);
-      const newMap = new Map(get().preferencesMap);
-
-      if (currentPrefs) {
-        newMap.set(conversationId, { ...currentPrefs, ...prefs });
-      }
-
-      set({ preferencesMap: newMap });
-    },
-
-    applyRemotePreferences: (event: UserPreferencesConversationUpdatedEventData) => {
-      const { conversationId, version } = event;
-      const current = get().preferencesMap.get(conversationId);
-
-      // La ligne est PAR UTILISATEUR : `writeConversationPreferences` diffuse à
-      // tous ses appareils, y compris celui qui vient d'écrire. `version` est
-      // l'arbitre — une diffusion qui ne dépasse pas l'état local décrit un
-      // passé, et l'appliquer rembobinerait une action plus récente.
-      if (version <= (current?.version ?? 0)) return;
-
-      // `reset: false` sans snapshot n'apprend rien. Avancer le compteur ferait
-      // alors tomber la PROCHAINE diffusion, celle qui portait l'état.
-      if (!event.reset && !event.preferences) return;
-
-      const payload = event.preferences;
-      const next: UserConversationPreferences = {
-        id: current?.id ?? '',
-        userId: current?.userId || event.userId,
-        conversationId,
-        isPinned: payload?.isPinned ?? false,
-        isMuted: payload?.isMuted ?? false,
-        isArchived: payload?.isArchived ?? false,
-        tags: payload ? [...payload.tags] : [],
-        categoryId: payload?.categoryId ?? undefined,
-        orderInCategory: payload?.orderInCategory ?? undefined,
-        customName: payload?.customName ?? undefined,
-        reaction: payload?.reaction ?? undefined,
-        createdAt: current?.createdAt ?? new Date(),
-        updatedAt: new Date(),
-        version,
+  (set, get) => {
+    /**
+     * Écriture optimiste unique des quatre bascules : instantané → patch local
+     * immédiat → requête → arbitrage de la réponse.
+     */
+    const writeOptimistic = async (
+      conversationId: string,
+      patch: Partial<UserConversationPreferences>,
+      request: () => Promise<UserConversationPreferences>
+    ): Promise<void> => {
+      const snapshot = get().preferencesMap.get(conversationId);
+      const optimistic: UserConversationPreferences = {
+        ...(snapshot ?? createDefaultPreferences(conversationId)),
+        ...patch,
       };
 
-      const newMap = new Map(get().preferencesMap);
-      newMap.set(conversationId, next);
-      set({ preferencesMap: newMap });
-    },
+      const optimisticMap = new Map(get().preferencesMap);
+      optimisticMap.set(conversationId, optimistic);
+      set({ preferencesMap: optimisticMap });
 
-    refreshPreferences: async () => {
       try {
-        const allPrefs = await userPreferencesService.getAllPreferences();
-        const map = new Map<string, UserConversationPreferences>();
-        allPrefs.forEach(pref => {
-          map.set(pref.conversationId, pref);
-        });
-        set({ preferencesMap: map });
-      } catch (error) {
-        console.error('[ConversationPreferencesStore] Error refreshing preferences:', error);
-      }
-    },
+        const confirmed = await request();
+        if (isStaleWriteResponse(confirmed, get().preferencesMap.get(conversationId))) return;
 
-    refreshCategories: async () => {
-      try {
-        const categories = await userPreferencesService.getCategories();
-        set({ categories: categories.sort((a, b) => a.order - b.order) });
+        const finalMap = new Map(get().preferencesMap);
+        finalMap.set(conversationId, confirmed);
+        set({ preferencesMap: finalMap });
       } catch (error) {
-        console.error('[ConversationPreferencesStore] Error refreshing categories:', error);
+        // Ne rétracter QUE notre propre écriture : l'état est immuable, donc
+        // l'identité référentielle suffit à dire si personne n'a écrit depuis.
+        // Rembobiner à l'instantané par-dessus une diffusion ou une bascule plus
+        // récente en effacerait l'effet.
+        if (get().preferencesMap.get(conversationId) === optimistic) {
+          const revertMap = new Map(get().preferencesMap);
+          if (snapshot) {
+            revertMap.set(conversationId, snapshot);
+          } else {
+            revertMap.delete(conversationId);
+          }
+          set({ preferencesMap: revertMap });
+        }
+        throw error;
       }
-    },
-  })
+    };
+
+    return {
+      ...DEFAULT_STATE,
+
+      initialize: async () => {
+        if (get().isInitialized) return;
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const [allPrefs, categories] = await Promise.all([
+            userPreferencesService.getAllPreferences(),
+            userPreferencesService.getCategories(),
+          ]);
+
+          const map = new Map<string, UserConversationPreferences>();
+          allPrefs.forEach(pref => {
+            map.set(pref.conversationId, pref);
+          });
+
+          set({
+            preferencesMap: map,
+            categories: categories.sort((a, b) => a.order - b.order),
+            isInitialized: true,
+          });
+        } catch (error) {
+          console.error('[ConversationPreferencesStore] Initialization error:', error);
+          set({ error: 'Failed to load preferences', isInitialized: true });
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      reset: () => {
+        set(DEFAULT_STATE);
+      },
+
+      getPreferences: (conversationId: string) => {
+        return get().preferencesMap.get(conversationId);
+      },
+
+      togglePin: (conversationId: string, isPinned: boolean) =>
+        writeOptimistic(conversationId, { isPinned }, () =>
+          userPreferencesService.togglePin(conversationId, isPinned)
+        ),
+
+      toggleMute: (conversationId: string, isMuted: boolean) =>
+        writeOptimistic(conversationId, { isMuted }, () =>
+          userPreferencesService.toggleMute(conversationId, isMuted)
+        ),
+
+      toggleArchive: (conversationId: string, isArchived: boolean) =>
+        writeOptimistic(conversationId, { isArchived }, () =>
+          userPreferencesService.toggleArchive(conversationId, isArchived)
+        ),
+
+      setReaction: (conversationId: string, reaction: string | null) =>
+        writeOptimistic(conversationId, { reaction: reaction || undefined }, () =>
+          userPreferencesService.updateReaction(conversationId, reaction)
+        ),
+
+      updatePreference: (conversationId: string, prefs: Partial<UserConversationPreferences>) => {
+        const currentPrefs = get().preferencesMap.get(conversationId);
+        const newMap = new Map(get().preferencesMap);
+
+        if (currentPrefs) {
+          newMap.set(conversationId, { ...currentPrefs, ...prefs });
+        }
+
+        set({ preferencesMap: newMap });
+      },
+
+      applyRemotePreferences: (event: UserPreferencesConversationUpdatedEventData) => {
+        const { conversationId, version } = event;
+        const current = get().preferencesMap.get(conversationId);
+
+        // La ligne est PAR UTILISATEUR : `writeConversationPreferences` diffuse à
+        // tous ses appareils, y compris celui qui vient d'écrire. `version` est
+        // l'arbitre — une diffusion qui ne dépasse pas l'état local décrit un
+        // passé, et l'appliquer rembobinerait une action plus récente.
+        if (version <= (current?.version ?? 0)) return;
+
+        // `reset: false` sans snapshot n'apprend rien. Avancer le compteur ferait
+        // alors tomber la PROCHAINE diffusion, celle qui portait l'état.
+        if (!event.reset && !event.preferences) return;
+
+        const payload = event.preferences;
+        const next: UserConversationPreferences = {
+          id: current?.id ?? '',
+          userId: current?.userId || event.userId,
+          conversationId,
+          isPinned: payload?.isPinned ?? false,
+          isMuted: payload?.isMuted ?? false,
+          isArchived: payload?.isArchived ?? false,
+          tags: payload ? [...payload.tags] : [],
+          categoryId: payload?.categoryId ?? undefined,
+          orderInCategory: payload?.orderInCategory ?? undefined,
+          customName: payload?.customName ?? undefined,
+          reaction: payload?.reaction ?? undefined,
+          createdAt: current?.createdAt ?? new Date(),
+          updatedAt: new Date(),
+          version,
+        };
+
+        const newMap = new Map(get().preferencesMap);
+        newMap.set(conversationId, next);
+        set({ preferencesMap: newMap });
+      },
+
+      refreshPreferences: async () => {
+        try {
+          const allPrefs = await userPreferencesService.getAllPreferences();
+          const map = new Map<string, UserConversationPreferences>();
+          allPrefs.forEach(pref => {
+            map.set(pref.conversationId, pref);
+          });
+          set({ preferencesMap: map });
+        } catch (error) {
+          console.error('[ConversationPreferencesStore] Error refreshing preferences:', error);
+        }
+      },
+
+      refreshCategories: async () => {
+        try {
+          const categories = await userPreferencesService.getCategories();
+          set({ categories: categories.sort((a, b) => a.order - b.order) });
+        } catch (error) {
+          console.error('[ConversationPreferencesStore] Error refreshing categories:', error);
+        }
+      },
+    };
+  }
 );
 
 // Selector hooks for specific use cases

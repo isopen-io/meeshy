@@ -111,7 +111,12 @@ const updateConversationPreferencesRequestSchema = {
     mentionsOnly: { type: 'boolean', description: 'Only notify for mentions and @everyone' },
     isArchived: { type: 'boolean', description: 'Archive/unarchive conversation' },
     tags: { type: 'array', items: { type: 'string' }, description: 'User tags for conversation' },
-    categoryId: { type: 'string', nullable: true, description: 'Category ID or null to uncategorize' },
+    // `categoryId` names a `UserConversationCategory` row, so it is always an
+    // ObjectId. Unvalidated, a malformed one reaches Prisma and raises
+    // `Malformed ObjectID` (P2023), which the handler's catch-all reports as a
+    // 500 — a caller mistake filed as a server fault. `null` uncategorizes and
+    // is untouched by `pattern`, which only constrains strings.
+    categoryId: { type: 'string', nullable: true, pattern: '^[0-9a-fA-F]{24}$', description: 'Category ID (ObjectId) or null to uncategorize' },
     orderInCategory: { type: 'number', nullable: true, description: 'Order within category' },
     customName: { type: 'string', nullable: true, description: 'Custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'Emoji reaction' }
@@ -407,6 +412,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
               data: conversationPreferencesSchema
             }
           },
+          400: errorResponseSchema,
           401: errorResponseSchema,
           403: errorResponseSchema,
           404: errorResponseSchema,

@@ -66,7 +66,47 @@ export class ConnectionService {
           this.connect();
         }
       });
+
+      document.addEventListener('visibilitychange', () => this.handleTabVisible());
     }
+  }
+
+  /**
+   * Reprise immédiate au retour de l'onglet.
+   *
+   * Un onglet en arrière-plan voit ses timers étranglés à ~1/minute et son
+   * socket coupé par le navigateur. Or les DEUX boucles de reprise reposent sur
+   * des timers — celle de socket.io et notre backoff (`reconnect()`) — donc
+   * l'onglet redevenu visible peut rester muet une minute entière, voire
+   * davantage si le backoff en était déjà à plusieurs secondes. Un lecteur
+   * passif (aucun envoi, aucun join, donc aucun `ensureConnection`) ne reçoit
+   * pendant ce temps AUCUN événement temps réel : ni message, ni frappe, ni
+   * accusé, ni réaction.
+   *
+   * Le retour à l'écran est le signal exact qu'il manquait : il ne coûte rien
+   * quand le lien est vivant (garde ci-dessous) et court-circuite le backoff
+   * quand il ne l'est pas.
+   *
+   * La vérité est le SOCKET, pas le miroir : un onglet gelé peut voir sa
+   * connexion coupée sans que `disconnect` atteigne jamais `state.isConnected`,
+   * et c'est précisément le cas que ce chemin doit réparer. `connect()` gère
+   * ensuite les deux sens de la réconciliation.
+   */
+  private handleTabVisible(): void {
+    if (document.visibilityState !== 'visible') return;
+    if (this.isAppUpdating) return;
+    if (navigator.onLine === false) return;
+    if (this.state.socket?.connected) return;
+    if (this.state.isConnecting) return;
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    // Le backoff décrit une suite d'échecs ; revenir à l'écran est un signal
+    // neuf, pas la n-ième tentative de cette série.
+    this.state.reconnectAttempts = 0;
+    this.connect();
   }
 
   onStatusChange(callback: (diag: ConnectionDiagnostics) => void): () => void {
