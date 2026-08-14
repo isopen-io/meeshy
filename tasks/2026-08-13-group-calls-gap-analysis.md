@@ -284,6 +284,29 @@ adaptative, roster, `onRemove` non branché sur le kick REST, timeout global
 `calls.json`). Le mesh iOS mono-PC (I1-I7) et le SFU (Phase 4, optionnel)
 restent également hors scope de cette branche.
 
+## Mise à jour 2026-08-14 — deux items de W6 clarifiés/traités (routine calling)
+
+- **« Timeout global 45 s » RECLASSÉ : pas un bug.** Relecture de
+  `CallManager.tsx` (web) : `startCallTimeout`/`clearCallTimeout` sont gatés
+  sur `currentCall.status === 'initiated'`, et le statut passe à `'active'`
+  dès la PREMIÈRE réponse SDP réelle (`useWebRTCP2P.handleAnswer`, Vague
+  113/114 — *pas* le room-join précoce d'iOS). Une fois qu'UN membre décroche
+  vraiment un appel de groupe, l'effet `if (status === 'active')
+  clearCallTimeout()` désarme le timeout pour tout l'appel ; un retardataire
+  qui ne répond jamais ne raccroche que SON PROPRE `incomingCall` local (même
+  logique que n'importe quel appel manqué), sans jamais toucher l'appel actif
+  des autres. Le point W6 d'origine datait d'avant ces deux vagues — corrigé
+  ici pour ne pas ré-auditer un faux positif au prochain cycle.
+- **`CallNotification` mono-appelant → TRAITÉ.** `CallInitiatedEvent` gagne
+  `conversationType?`/`conversationTitle?` (optionnels — compat rolling
+  deploy), peuplés gratuitement depuis `callSessionInclude.conversation`
+  (web + gateway + shared uniquement, cf. `tasks/calls-fonctionnel-todo.md`
+  pour le root cause complet). `CallNotification` ET `CallWaitingBanner`
+  affichent désormais « Appel de groupe · {titre} » sous le nom de
+  l'appelant pour un appel de groupe — un ringing callee ne confond plus un
+  appel de groupe avec un 1:1. Grille/roster/`onRemove`/i18n roster restent
+  ouverts (chantier UI plus large, W6 pour le reste + W7).
+
 ## Récapitulatif
 
 | Capacité demandée | État |

@@ -59,6 +59,15 @@ export function CallWaitingBanner({ call, onReject, onEndAndAnswer }: CallWaitin
           <p className="font-bold text-gray-900 dark:text-white truncate">
             {call.initiator.username}
           </p>
+          {call.conversationType === 'group' && (
+            <p
+              data-testid="call-waiting-group-context"
+              className="text-xs font-medium text-amber-700/80 dark:text-amber-400/80 truncate"
+            >
+              {t('incoming.groupCall')}
+              {call.conversationTitle ? ` · ${call.conversationTitle}` : ''}
+            </p>
+          )}
         </div>
       </div>
 

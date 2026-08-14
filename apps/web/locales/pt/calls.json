@@ -139,7 +139,8 @@
       "accept": "Aceitar",
       "decline": "Recusar",
       "acceptLabel": "Aceitar chamada",
-      "declineLabel": "Recusar chamada"
+      "declineLabel": "Recusar chamada",
+      "groupCall": "Chamada em grupo"
     },
     "waiting": {
       "forParticipant": "Aguardando o participante...",

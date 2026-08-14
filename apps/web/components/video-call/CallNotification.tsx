@@ -99,6 +99,15 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           >
             {call.initiator.username}
           </h3>
+          {call.conversationType === 'group' && (
+            <p
+              data-testid="call-notification-group-context"
+              className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1"
+            >
+              {t('incoming.groupCall')}
+              {call.conversationTitle ? ` · ${call.conversationTitle}` : ''}
+            </p>
+          )}
           <p
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"
