@@ -67,10 +67,19 @@ fantôme est encore là.
 |---|---|
 | RED prouvé sans la production | 3 rouges gateway, 4 rouges web |
 | gateway `tsc --noEmit` | **0 erreur** |
-| gateway jest **complet** | voir section ci-dessous |
+| gateway jest **complet** | **710 suites / 17 398 tests verts** |
 | web `tsc --noEmit` (fichiers touchés) | **0 erreur** |
 | web jest **complet** | **569 suites / 12 198 tests verts** (21 skipped) |
 | iOS / SDK | non exécutables depuis un runner Linux — vérifiés par la CI (`ios-tests.yml`, `sdk-tests.yml`) |
+
+## Note de méthode
+
+Le témoin de chaîne du départ existait en **deux exemplaires** — `routes/conversations-leave.test.ts`
+et `routes/conversations/leave.test.ts` — et le second n'est apparu qu'à la suite COMPLÈTE, la
+sélection par fichier ayant manqué le doublon. Les deux portent désormais la room du partant. Un
+`describe` dont l'intitulé est proche (« audience du départ » / « les AUTRES appareils du partant »)
+ne suffit pas à faire remarquer qu'on a écrit à côté du témoin existant : c'est la suite complète
+qui le dit.
 
 ## TDD
 
