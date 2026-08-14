@@ -119,10 +119,46 @@ export class ConnectionService {
     return socket;
   }
 
+  /**
+   * Ouvre la connexion — ou réaligne le miroir quand le socket est déjà vivant.
+   *
+   * Le handler `offline` marque la connexion perdue SANS toucher au socket,
+   * délibérément : la bannière doit réagir à la seconde où le réseau tombe. Mais
+   * une coupure plus courte que le cycle ping/pong de Socket.IO ne fait jamais
+   * tomber le socket — bascule Wi-Fi/cellulaire, VPN, réveil de veille, tunnel.
+   * Au retour du réseau, `socket.connected` vaut donc encore `true`.
+   *
+   * Sans la branche ci-dessous, le miroir n'avait alors AUCUN chemin de retour :
+   * la garde `!socket.connected` faisait sortir `connect()` en silence, donc
+   * aucun `connect` n'était réémis, et `state.isConnected` restait `false`
+   * jusqu'à la prochaine vraie déconnexion. Tout ce qui lit `isReady`
+   * (`useConnectionStatus`) restait dégradé sur un lien pourtant intact : la
+   * bannière de reconnexion figée, et surtout le rejeu de la file d'échecs
+   * (`useAutoRetryFailedMessages`, dont le déclencheur EST `isReady`) désarmé
+   * pour le reste de la session — les messages en attente n'étaient plus jamais
+   * réessayés.
+   *
+   * Le socket est la vérité ; le miroir se réaligne dessus. La réconciliation
+   * vit ici plutôt que dans le handler `online` parce que `connect()` est le
+   * point de passage de TOUS les appelants (handler `online`, orchestrateur,
+   * `ensureConnection`) : un seul d'entre eux réparant l'état laisserait les
+   * autres sur la même impasse. Aucun rejoin de room n'est nécessaire — le
+   * socket n'a jamais quitté les siennes.
+   */
   connect(): void {
     if (this.isAppUpdating) return;
     const socket = this.state.socket || this.initializeConnection();
-    if (socket && !socket.connected && !this.state.isConnecting) {
+    if (!socket) return;
+
+    if (socket.connected) {
+      if (this.state.isConnected && !this.state.isConnecting) return;
+      this.state.isConnected = true;
+      this.state.isConnecting = false;
+      this.emitStatusChange();
+      return;
+    }
+
+    if (!this.state.isConnecting) {
       this.state.isConnecting = true;
       socket.connect();
       this.emitStatusChange();

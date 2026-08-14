@@ -309,6 +309,101 @@ describe('ConnectionService', () => {
 
         expect(connectSpy).not.toHaveBeenCalled();
       });
+
+      // Une coupure réseau plus courte que le cycle ping/pong de Socket.IO ne
+      // fait pas tomber le socket : au retour, `socket.connected` vaut encore
+      // `true`. Le handler `offline` a pourtant déjà mis le miroir à `false`.
+      it('restores the mirror when the socket survived the offline window', () => {
+        const handlers = captureWindowHandlers();
+        const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+        const svc = new ConnectionService();
+        (svc as any).state.socket = liveSocket;
+        (svc as any).state.isConnected = true;
+
+        const listener = jest.fn();
+        svc.onStatusChange(listener);
+
+        handlers.get('offline')!(new Event('offline'));
+        expect((svc as any).state.isConnected).toBe(false);
+
+        handlers.get('online')!(new Event('online'));
+
+        expect((svc as any).state.isConnected).toBe(true);
+        expect((svc as any).state.isConnecting).toBe(false);
+        expect(svc.getConnectionStatus()).toBe('connected');
+        // Le socket n'a jamais quitté ses rooms : le rouvrir serait une
+        // reconnexion gratuite, et `socket.connect()` est de toute façon un
+        // no-op sur un socket déjà connecté.
+        expect(liveSocket.connect).not.toHaveBeenCalled();
+        // Les consommateurs (`useConnectionStatus`) ne lisent l'état QUE par
+        // cet événement — sans lui, la réparation resterait invisible.
+        expect(listener).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
+
+  // ─── Réconciliation miroir ↔ socket ───────────────────────────────────────
+
+  describe('connect() reconciles the mirror with a live socket', () => {
+    it('marks the connection up instead of silently doing nothing', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = false;
+
+      const listener = jest.fn();
+      svc.onStatusChange(listener);
+
+      svc.connect();
+
+      expect((svc as any).state.isConnected).toBe(true);
+      expect((svc as any).state.isConnecting).toBe(false);
+      expect(liveSocket.connect).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a stale isConnecting flag left by a socket that connected meanwhile', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = true;
+
+      svc.connect();
+
+      expect((svc as any).state.isConnected).toBe(true);
+      expect((svc as any).state.isConnecting).toBe(false);
+    });
+
+    it('does not re-emit when the mirror already agrees with the socket', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = true;
+      (svc as any).state.isConnecting = false;
+
+      const listener = jest.fn();
+      svc.onStatusChange(listener);
+
+      svc.connect();
+
+      expect(listener).not.toHaveBeenCalled();
+      expect(liveSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('still opens a socket that really died', () => {
+      const deadSocket = { ...mockSocket, connected: false, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = deadSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = false;
+
+      svc.connect();
+
+      expect(deadSocket.connect).toHaveBeenCalledTimes(1);
+      expect((svc as any).state.isConnecting).toBe(true);
+      expect((svc as any).state.isConnected).toBe(false);
     });
   });
 
