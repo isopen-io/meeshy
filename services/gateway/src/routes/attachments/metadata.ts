@@ -18,6 +18,8 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { loadShareLinkHistoryFloor } from '../../services/shareLinkHistoryFloor';
+import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -299,46 +301,69 @@ export async function registerMetadataRoutes(
         // aussi. Tester `isAuthenticated` en premier le faisait tomber dans la
         // branche « utilisateur enregistré », où la recherche par `userId`
         // échoue — et rendait la branche anonyme ci-dessous inatteignable.
-        if (authContext.isAnonymous && authContext.participantId) {
-          const participant = await prisma.participant.findUnique({
-            where: { id: authContext.participantId },
-            select: {
-              conversationId: true,
-              type: true,
-              anonymousSession: true,
-            },
-          });
+        //
+        // La galerie est un SECOND LECTEUR des messages de la conversation :
+        // elle en sert les pièces jointes, avec leur URL, leur nom d'origine et
+        // la transcription des audios. Elle doit donc s'arrêter aux mêmes
+        // bornes que le premier lecteur (`GET /conversations/:id/messages`), et
+        // les tenir des mêmes modules — sans quoi la règle a deux énoncés qui
+        // dérivent l'un de l'autre.
+        const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
+        const participantSelect = {
+          conversationId: true,
+          joinedAt: true,
+          shareLinkId: true,
+        } as const;
 
-          if (!participant) {
-            return sendForbidden(reply, 'Participant not found');
-          }
-
-          if (participant.conversationId !== conversationId) {
-            return sendForbidden(reply, 'Access denied to this conversation');
-          }
-
-          if (participant.type === 'anonymous' && participant.anonymousSession?.shareLinkId) {
-            const shareLink = await prisma.conversationShareLink.findUnique({
-              where: { id: participant.anonymousSession.shareLinkId },
-              select: { allowViewHistory: true }
+        const participant = isAnonymous
+          ? await prisma.participant.findUnique({
+              where: { id: authContext.participantId },
+              select: participantSelect,
+            })
+          : await prisma.participant.findFirst({
+              where: {
+                conversationId,
+                userId: authContext.userId,
+                isActive: true,
+              },
+              select: participantSelect,
             });
-            if (!shareLink?.allowViewHistory) {
-              return sendForbidden(reply, 'History viewing not allowed on this link');
-            }
-          }
-        } else {
-          const member = await prisma.participant.findFirst({
-            where: {
-              conversationId,
-              userId: authContext.userId,
-              isActive: true,
-            },
-          });
 
-          if (!member) {
-            return sendForbidden(reply, 'Access denied to this conversation');
-          }
+        if (!participant) {
+          return sendForbidden(reply, isAnonymous ? 'Participant not found' : 'Access denied to this conversation');
         }
+
+        if (isAnonymous && participant.conversationId !== conversationId) {
+          return sendForbidden(reply, 'Access denied to this conversation');
+        }
+
+        // `participant.shareLinkId` et non la copie embarquée dans
+        // `anonymousSession` : la jointure anonyme écrit le fait DEUX fois
+        // (`routes/anonymous.ts`), et la colonne est celle que lisent
+        // `messages.ts`, `/sync` et le module de plancher. Elle est aussi la
+        // seule des deux qu'un utilisateur INSCRIT entré par un lien porte —
+        // c'est par là que la galerie servait tout l'avant-jointure.
+        //
+        // Le plancher RÉTRÉCIT la lecture, il ne la refuse pas : ce participant
+        // voit les messages postés depuis son arrivée, donc leurs médias.
+        //
+        // Les deux lectures sont indépendantes et recouvertes. `Promise.all`
+        // est sûr ici bien que leurs postures d'échec diffèrent : le masquage
+        // personnel ne rejette jamais (il se dégrade en « on sert »), donc le
+        // seul rejet possible est celui du plancher, et il n'abandonne aucune
+        // promesse sans écouteur.
+        const [historyFloor, personalHiding] = await Promise.all([
+          loadShareLinkHistoryFloor(prisma, participant),
+          loadPersonalHistoryHiding(prisma, {
+            userId: isAnonymous ? null : authContext.userId,
+            conversationId,
+          }),
+        ]);
+
+        const messageFilter = applyPersonalHistoryHiding(
+          historyFloor ? { createdAt: { gte: historyFloor } } : {},
+          personalHiding
+        );
 
         const attachments = await attachmentService.getConversationAttachments(
           conversationId,
@@ -346,6 +371,7 @@ export async function registerMetadataRoutes(
             type: query.type,
             limit: query.limit,
             offset: query.offset,
+            messageFilter,
           }
         );
 

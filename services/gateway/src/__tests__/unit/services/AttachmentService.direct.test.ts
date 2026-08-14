@@ -483,7 +483,11 @@ describe('AttachmentService — direct-access methods', () => {
       expect(result).toEqual([]);
     });
 
-    it('queries without type filter when no type option', async () => {
+    it('exclut les messages supprimés POUR TOUS, sans qu’on ait à le demander', async () => {
+      // La galerie sert les pièces jointes des messages ; elle doit s'arrêter
+      // à la même tombstone que `GET /conversations/:id/messages`. Sans ce
+      // `deletedAt: null`, un média restait listé — URL comprise — après la
+      // suppression du message qui le portait.
       const prisma = makePrisma();
       (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
       const svc = new AttachmentService(prisma as PrismaClient);
@@ -492,7 +496,53 @@ describe('AttachmentService — direct-access methods', () => {
 
       expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ message: { conversationId: CONV_ID } }),
+          where: expect.objectContaining({ message: { conversationId: CONV_ID, deletedAt: null } }),
+        })
+      );
+    });
+
+    it('fusionne le `messageFilter` de l’appelant sous `message`', async () => {
+      const prisma = makePrisma();
+      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
+      const svc = new AttachmentService(prisma as PrismaClient);
+      const floor = new Date('2026-06-15T00:00:00Z');
+
+      await svc.getConversationAttachments(CONV_ID, {
+        messageFilter: { createdAt: { gte: floor }, id: { notIn: ['m-1'] } },
+      });
+
+      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            message: {
+              createdAt: { gte: floor },
+              id: { notIn: ['m-1'] },
+              conversationId: CONV_ID,
+              deletedAt: null,
+            },
+          }),
+        })
+      );
+    });
+
+    it('ne laisse PAS l’appelant desserrer les deux invariants du service', async () => {
+      // Le filtre ne peut qu'AJOUTER. Un appelant qui poserait
+      // `conversationId` ou `deletedAt` — par recopie d'une clause de message
+      // toute faite — sortirait sinon de la conversation demandée, ou
+      // ressusciterait les tombstones.
+      const prisma = makePrisma();
+      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.getConversationAttachments(CONV_ID, {
+        messageFilter: { conversationId: 'autre-conversation', deletedAt: { not: null } } as any,
+      });
+
+      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            message: { conversationId: CONV_ID, deletedAt: null },
+          }),
         })
       );
     });
