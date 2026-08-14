@@ -1,0 +1,865 @@
+<title>Au-delà des Bulles</title>
+<style>
+  :root {
+    --paper: #F4F5F8;
+    --surface: #FFFFFF;
+    --ink: #1B2233;
+    --muted: #5C6478;
+    --line: #DBDFE8;
+    --soft: #EBEDF3;
+    --ghost: #C9CEDA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10131B;
+      --surface: #181D29;
+      --ink: #E9EBF2;
+      --muted: #99A1B4;
+      --line: #2B3140;
+      --soft: #202634;
+      --ghost: #3A4254;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131B;
+    --surface: #181D29;
+    --ink: #E9EBF2;
+    --muted: #99A1B4;
+    --line: #2B3140;
+    --soft: #202634;
+    --ghost: #3A4254;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0 20px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+
+  h1, h2, h3 {
+    font-family: "Avenir Next", Futura, "Trebuchet MS", "Segoe UI", sans-serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* ---------- header ---------- */
+  .hero { padding: 64px 0 8px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 58px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 4px; }
+  .hero .lede { max-width: 62ch; font-size: 17px; color: var(--muted); margin: 14px 0 0; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .spectrum { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 26px 0 0; }
+  .spectrum span { flex: 1; }
+
+  .criteria { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 0; padding: 0; list-style: none; }
+  .criteria li {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; font-size: 13.5px; color: var(--ink);
+  }
+  .criteria li b { font-weight: 650; }
+
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 34px 0 0; }
+  nav.toc a {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px 11px; font-size: 13px; color: var(--ink); text-decoration: none;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--dot); outline: none; }
+  nav.toc a i { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+
+  /* ---------- proposals ---------- */
+  section.prop { padding: 72px 0 8px; border-top: 1px solid var(--line); margin-top: 64px; }
+  section.prop:first-of-type { border-top: none; margin-top: 24px; }
+
+  .prop-head { display: flex; gap: 22px; align-items: baseline; }
+  .num {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 15px; font-weight: 700; color: var(--a);
+    border: 1.5px solid var(--a); border-radius: 10px; padding: 4px 9px; flex: none;
+    transform: translateY(-4px);
+  }
+  .prop-head h2 { font-size: clamp(26px, 3.6vw, 34px); letter-spacing: -0.015em; }
+  .thesis { font-size: 16.5px; color: var(--muted); max-width: 58ch; margin: 8px 0 0; }
+  .thesis em { color: var(--a); font-style: normal; font-weight: 600; }
+
+  .prop-body {
+    display: grid; grid-template-columns: 330px 1fr; gap: 46px;
+    margin-top: 34px; align-items: start;
+  }
+  @media (max-width: 780px) { .prop-body { grid-template-columns: 1fr; } }
+
+  figure.mock { margin: 0; }
+  figure.mock svg { width: 100%; max-width: 330px; height: auto; display: block; color: var(--muted); }
+  figure.mock figcaption { font-size: 12.5px; color: var(--muted); margin-top: 10px; max-width: 40ch; }
+
+  .innov { font-size: 15.5px; margin: 0 0 22px; max-width: 62ch; }
+  .innov::before {
+    content: "L’innovation";
+    display: block;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--a); margin-bottom: 6px;
+  }
+  dl.facets { display: grid; gap: 16px; margin: 0; }
+  dl.facets > div {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 13px 16px;
+  }
+  dl.facets dt {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--a); margin-bottom: 3px;
+  }
+  dl.facets dd { margin: 0; font-size: 14.5px; }
+
+  /* ---------- synthesis ---------- */
+  .synth { border-top: 1px solid var(--line); margin-top: 88px; padding: 64px 0 40px; }
+  .synth h2 { font-size: clamp(26px, 3.6vw, 34px); margin: 10px 0 18px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    border-top: none;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  }
+  td.name { white-space: nowrap; font-weight: 600; }
+  td.name i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--dot); }
+
+  .reco {
+    margin-top: 34px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 24px 26px; max-width: 74ch;
+  }
+  .reco h3 { font-size: 19px; margin-bottom: 8px; }
+  .reco p { margin: 10px 0; font-size: 15px; }
+  .reco b { font-weight: 650; }
+
+  footer.colophon {
+    padding: 30px 0 56px; color: var(--muted); font-size: 12.5px;
+    border-top: 1px solid var(--line); margin-top: 40px;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    nav.toc a { transition: border-color 0.15s ease; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Meeshy · Brainstorm produit · Vue conversation</p>
+  <h1>Au-delà des Bulles</h1>
+  <p class="lede">Dix manières de vivre une conversation à plusieurs — sans le flux classique de bulles à droite et à gauche. Chaque proposition partage le même contrat&nbsp;: <strong>ne montrer que le nécessaire à l’instant&nbsp;T</strong>, accueillir un <strong>agent IA comme participant natif</strong>, et rester agréable <strong>de 8 à 50&nbsp;ans</strong>, sans friction ni apprentissage. Toutes s’appuient sur les mêmes données Meeshy (messages, traductions du Prisme, transcriptions) — ce sont des <strong>modes de lecture</strong>, pas des produits différents.</p>
+  <div class="spectrum" aria-hidden="true">
+    <span style="background:#E05252"></span><span style="background:#E07A33"></span><span style="background:#C9962B"></span><span style="background:#3F9E63"></span><span style="background:#2E9E96"></span><span style="background:#3E93CF"></span><span style="background:#5A6FD6"></span><span style="background:#8A63D2"></span><span style="background:#BC55A0"></span><span style="background:#D95F82"></span>
+  </div>
+  <ul class="criteria">
+    <li><b>Instant T</b> — un seul centre d’attention à la fois</li>
+    <li><b>Agent IA</b> — présent, jamais envahissant</li>
+    <li><b>8 → 50 ans</b> — métaphores déjà connues de tous</li>
+    <li><b>Zéro friction</b> — un geste, pas un mode d’emploi</li>
+  </ul>
+  <nav class="toc" aria-label="Les dix propositions">
+    <a href="#p1" style="--dot:#E05252"><i></i>Flux Focal</a>
+    <a href="#p2" style="--dot:#E07A33"><i></i>Table Ronde</a>
+    <a href="#p3" style="--dot:#C9962B"><i></i>Le Script</a>
+    <a href="#p4" style="--dot:#3F9E63"><i></i>Cartes-Moments</a>
+    <a href="#p5" style="--dot:#2E9E96"><i></i>Îlots de Sujets</a>
+    <a href="#p6" style="--dot:#3E93CF"><i></i>Résumé Vivant</a>
+    <a href="#p7" style="--dot:#5A6FD6"><i></i>La Rivière</a>
+    <a href="#p8" style="--dot:#8A63D2"><i></i>La Scène</a>
+    <a href="#p9" style="--dot:#BC55A0"><i></i>Perles de Temps</a>
+    <a href="#p10" style="--dot:#D95F82"><i></i>La Planche BD</a>
+  </nav>
+</header>
+
+<!-- ══════════════════════════ 01 · FLUX FOCAL ══════════════════════════ -->
+<section class="prop" id="p1" style="--a:#E05252">
+  <div class="prop-head">
+    <span class="num">01</span>
+    <div>
+      <p class="eyebrow">Le flux vertical, repensé</p>
+      <h2>Le Flux Focal</h2>
+      <p class="thesis">La conversation respire autour du présent&nbsp;: <em>un seul message à pleine taille</em>, le passé s’éloigne en perspective, comme des pas derrière soi.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : messages anciens rétrécis et estompés en haut, message courant en grande carte centrale, suggestion de l’agent IA sous la carte">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- past, receding -->
+        <g opacity="0.22">
+          <circle cx="112" cy="66" r="5" fill="var(--ghost)"/>
+          <rect x="122" y="61" width="66" height="10" rx="5" fill="var(--ghost)"/>
+        </g>
+        <g opacity="0.34">
+          <circle cx="102" cy="98" r="6" fill="var(--ghost)"/>
+          <rect x="113" y="92" width="88" height="12" rx="6" fill="var(--ghost)"/>
+        </g>
+        <g opacity="0.48">
+          <circle cx="90" cy="136" r="7" fill="var(--ghost)"/>
+          <rect x="103" y="129" width="110" height="14" rx="7" fill="var(--ghost)"/>
+        </g>
+        <g opacity="0.64">
+          <circle cx="76" cy="180" r="8" fill="var(--ghost)"/>
+          <rect x="90" y="172" width="136" height="16" rx="8" fill="var(--ghost)"/>
+          <rect x="90" y="192" width="92" height="16" rx="8" fill="var(--ghost)"/>
+        </g>
+        <g opacity="0.82">
+          <circle cx="62" cy="242" r="9" fill="var(--ghost)"/>
+          <rect x="78" y="233" width="152" height="18" rx="9" fill="var(--ghost)"/>
+        </g>
+        <!-- present card -->
+        <rect x="26" y="300" width="248" height="150" rx="20" fill="var(--soft)" stroke="#E05252" stroke-width="2"/>
+        <circle cx="54" cy="330" r="14" fill="#E05252"/>
+        <text x="76" y="328" font-size="13" font-weight="700" fill="var(--ink)" font-family="system-ui">Lina</text>
+        <text x="76" y="343" font-size="10" fill="var(--muted)" font-family="system-ui">à l’instant · traduit 🇫🇷</text>
+        <rect x="44" y="362" width="212" height="13" rx="6.5" fill="var(--ink)" opacity="0.75"/>
+        <rect x="44" y="382" width="188" height="13" rx="6.5" fill="var(--ink)" opacity="0.75"/>
+        <rect x="44" y="402" width="122" height="13" rx="6.5" fill="var(--ink)" opacity="0.75"/>
+        <!-- agent suggestion -->
+        <rect x="26" y="468" width="192" height="30" rx="15" fill="none" stroke="#E05252" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <path d="M44 477 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#E05252"/>
+        <text x="58" y="487" font-size="11" fill="var(--ink)" font-family="system-ui">Suggestion : « On y sera ! »</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#E05252"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Le passé rétrécit et s’estompe vers le haut ; seul le message courant est à pleine taille, annoté par l’agent.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">On garde le geste que tout le monde connaît — un fil vertical — mais on renverse sa hiérarchie. Au lieu de cent bulles égales qui se disputent l’attention, la typographie fait le travail&nbsp;: le dernier message est grand, lisible, centré, sans côté gauche ni droit (l’auteur est porté par sa pastille de couleur — la palette d’accent Meeshy). Chaque message plus ancien recule d’un cran en taille et en opacité, comme une perspective. Le contexte reste <em>visible</em> mais devient un décor, plus une lecture. Glisser vers le haut « remonte le temps » : le message touché reprend la pleine taille, un à la fois.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Il vit dans la marge du présent&nbsp;: sous le message courant, il propose une traduction, une réponse, un rappel — en pointillé, jamais dans le fil lui-même. Le passé n’est jamais pollué par ses suggestions périmées.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>À l’instant T, exactement un message demande l’attention. Les autres pèsent visuellement ce qu’ils pèsent réellement&nbsp;: de moins en moins.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Aucun nouveau geste à apprendre — on scrolle. La grande taille du message courant est un cadeau pour les yeux fatigués comme pour les lecteurs débutants.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 02 · TABLE RONDE ══════════════════════════ -->
+<section class="prop" id="p2" style="--a:#E07A33">
+  <div class="prop-head">
+    <span class="num">02</span>
+    <div>
+      <p class="eyebrow">L’espace avant le flux</p>
+      <h2>La Table Ronde</h2>
+      <p class="thesis">Les participants sont <em>assis en cercle</em>&nbsp;; la parole vive s’affiche au centre et se remplace, comme dans une vraie discussion.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : six avatars disposés en cercle, le message courant au centre, l’avatar qui parle est entouré d’un anneau, l’agent IA occupe un siège">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <text x="150" y="52" font-size="11" fill="var(--muted)" font-family="system-ui" text-anchor="middle">↑ tirer pour l’historique</text>
+        <!-- table -->
+        <circle cx="150" cy="270" r="112" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 5"/>
+        <!-- seats -->
+        <circle cx="150" cy="158" r="20" fill="var(--ghost)"/>
+        <circle cx="247" cy="214" r="20" fill="#E07A33"/>
+        <circle cx="247" cy="326" r="20" fill="var(--ghost)"/>
+        <circle cx="150" cy="382" r="20" fill="var(--ghost)"/>
+        <circle cx="53" cy="326" r="20" fill="var(--ghost)"/>
+        <!-- AI seat -->
+        <circle cx="53" cy="214" r="20" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <path d="M53 205 l3 6 6 3 -6 3 -3 6 -3 -6 -6 -3 6 -3 z" fill="var(--muted)"/>
+        <!-- active ring + link to center -->
+        <circle cx="247" cy="214" r="27" fill="none" stroke="#E07A33" stroke-width="2.5"/>
+        <line x1="228" y1="228" x2="196" y2="248" stroke="#E07A33" stroke-width="1.5" stroke-dasharray="2 3"/>
+        <!-- center message -->
+        <rect x="83" y="238" width="134" height="72" rx="14" fill="var(--soft)" stroke="#E07A33" stroke-width="1.5"/>
+        <text x="97" y="258" font-size="11" font-weight="700" fill="var(--ink)" font-family="system-ui">Noah</text>
+        <rect x="97" y="266" width="106" height="9" rx="4.5" fill="var(--ink)" opacity="0.7"/>
+        <rect x="97" y="281" width="78" height="9" rx="4.5" fill="var(--ink)" opacity="0.7"/>
+        <text x="150" y="418" font-size="10.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Noah parle · l’agent écoute</text>
+        <!-- names -->
+        <text x="150" y="132" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Mia</text>
+        <text x="53" y="188" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Agent</text>
+        <text x="247" y="188" font-size="10" fill="var(--ink)" font-weight="700" font-family="system-ui" text-anchor="middle">Noah</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#E07A33"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Qui est là, qui parle, à qui l’on s’adresse : tout est spatial. L’agent occupe un siège en pointillé.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Le flux chronologique disparaît au profit d’une métaphore que même un enfant de 8 ans pratique déjà&nbsp;: le cercle de discussion. Les présents sont autour de la table, la parole du moment s’affiche au centre, puis s’efface quand la suivante arrive — exactement le rythme d’une conversation orale. Qui parle est évident (anneau lumineux), qui écoute aussi, et répondre à quelqu’un se fait en le touchant&nbsp;: la réponse part <em>vers</em> lui. L’historique existe toujours — on tire vers le haut pour dérouler le procès-verbal — mais il n’est plus l’écran par défaut.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>L’agent a un siège, comme tout le monde. On lui adresse la parole en le touchant, il lève discrètement la main quand il a quelque chose (une traduction douteuse, un rappel) — et n’intervient que si on la lui donne.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Un seul message visible&nbsp;: celui qui vient d’être dit. La mémoire de la conversation est déléguée à l’historique et au résumé, pas à l’écran.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>C’est la disposition d’un repas de famille ou d’un cercle de classe. Aucune abstraction&nbsp;: les gens sont des visages placés dans l’espace.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 03 · LE SCRIPT ══════════════════════════ -->
+<section class="prop" id="p3" style="--a:#C9962B">
+  <div class="prop-head">
+    <span class="num">03</span>
+    <div>
+      <p class="eyebrow">La forme la plus ancienne du dialogue</p>
+      <h2>Le Script</h2>
+      <p class="thesis">La conversation devient une <em>pièce de théâtre</em>&nbsp;: prénoms en couleur, répliques en colonne unique — la densité d’un livre, le calme d’un livre.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : répliques en colonne unique précédées du prénom coloré de chaque personne, note italique de l’agent entre deux répliques, séparateur horaire discret">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- time separator -->
+        <line x1="30" y1="60" x2="118" y2="60" stroke="var(--line)" stroke-width="1"/>
+        <text x="150" y="64" font-size="10" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace" text-anchor="middle">14:02</text>
+        <line x1="182" y1="60" x2="270" y2="60" stroke="var(--line)" stroke-width="1"/>
+        <!-- replica 1 -->
+        <text x="30" y="94" font-size="12" font-weight="700" fill="#C9962B" font-family="system-ui">LINA</text>
+        <rect x="30" y="102" width="240" height="11" rx="5.5" fill="var(--ghost)"/>
+        <rect x="30" y="119" width="196" height="11" rx="5.5" fill="var(--ghost)"/>
+        <!-- replica 2 -->
+        <text x="30" y="158" font-size="12" font-weight="700" fill="#3F9E63" font-family="system-ui">NOAH</text>
+        <rect x="30" y="166" width="214" height="11" rx="5.5" fill="var(--ghost)"/>
+        <!-- didascalie IA -->
+        <rect x="30" y="196" width="240" height="46" rx="10" fill="var(--soft)"/>
+        <path d="M44 212 l2.4 4.6 4.6 2.4 -4.6 2.4 -2.4 4.6 -2.4 -4.6 -4.6 -2.4 4.6 -2.4 z" fill="#C9962B"/>
+        <text x="58" y="216" font-size="10.5" font-style="italic" fill="var(--muted)" font-family="system-ui">L’agent — Ils cherchent une date</text>
+        <text x="58" y="230" font-size="10.5" font-style="italic" fill="var(--muted)" font-family="system-ui">pour samedi. Deux options restent.</text>
+        <!-- replica 3 -->
+        <text x="30" y="274" font-size="12" font-weight="700" fill="#5A6FD6" font-family="system-ui">MIA</text>
+        <text x="66" y="274" font-size="9.5" fill="var(--muted)" font-family="system-ui">· traduit de l’espagnol</text>
+        <rect x="30" y="282" width="228" height="11" rx="5.5" fill="var(--ghost)"/>
+        <rect x="30" y="299" width="160" height="11" rx="5.5" fill="var(--ghost)"/>
+        <!-- replica 4 (current, ink) -->
+        <text x="30" y="340" font-size="12" font-weight="700" fill="#C9962B" font-family="system-ui">LINA</text>
+        <rect x="30" y="348" width="240" height="12" rx="6" fill="var(--ink)" opacity="0.8"/>
+        <rect x="30" y="366" width="204" height="12" rx="6" fill="var(--ink)" opacity="0.8"/>
+        <rect x="30" y="384" width="118" height="12" rx="6" fill="var(--ink)" opacity="0.8"/>
+        <!-- typing -->
+        <text x="30" y="428" font-size="12" font-weight="700" fill="#3F9E63" font-family="system-ui" opacity="0.6">NOAH</text>
+        <circle cx="34" cy="444" r="3" fill="var(--muted)"/>
+        <circle cx="46" cy="444" r="3" fill="var(--muted)" opacity="0.6"/>
+        <circle cx="58" cy="444" r="3" fill="var(--muted)" opacity="0.3"/>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#C9962B"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Pas de bulles, pas d’avatars répétés : le prénom coloré suffit. L’agent écrit des didascalies en italique.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">On supprime tout le chrome de la messagerie — bulles, avatars répétés, horodatage sur chaque ligne — et il reste ce que l’humanité utilise depuis les dialogues de Platon&nbsp;: un prénom, deux points, une réplique. La colonne unique pleine largeur donne une lecture de livre&nbsp;: dense mais reposante, et la couleur du prénom (palette d’accent de la conversation) identifie la voix plus vite qu’un avatar. Le Prisme Linguistique s’y intègre naturellement&nbsp;: la réplique est affichée dans votre langue, la mention « traduit de… » est une simple note de marge, l’original à un appui long.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>L’agent est la <b>didascalie</b>&nbsp;: entre deux répliques, une note en italique, typographiquement distincte, résume, contextualise ou traduit. On ne confond jamais sa voix avec celle des humains.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>L’heure n’apparaît qu’aux changements de scène, les réactions se replient en fin de réplique. L’écran ne montre que du texte utile — le taux de signal est celui d’une page de roman.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>C’est la mise en page des livres de lecture de l’école primaire et des scénarios. Personne n’a besoin qu’on la lui explique — et c’est la plus accessible qui soit (lecteurs d’écran, gros caractères).</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 04 · CARTES-MOMENTS ══════════════════════════ -->
+<section class="prop" id="p4" style="--a:#3F9E63">
+  <div class="prop-head">
+    <span class="num">04</span>
+    <div>
+      <p class="eyebrow">Un message, un écran</p>
+      <h2>Les Cartes-Moments</h2>
+      <p class="thesis">Chaque message est une <em>carte plein écran</em> qu’on feuillette d’un tap, comme des stories. Le retard devient un paquet — et l’IA en fait la couverture.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : une carte de message plein écran avec avatar et grand texte, points de progression en haut, carte suivante qui dépasse sur le bord droit, réponses rapides en bas de carte">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- progress -->
+        <rect x="24" y="40" width="40" height="4" rx="2" fill="#3F9E63"/>
+        <rect x="70" y="40" width="40" height="4" rx="2" fill="#3F9E63"/>
+        <rect x="116" y="40" width="40" height="4" rx="2" fill="var(--line)"/>
+        <rect x="162" y="40" width="40" height="4" rx="2" fill="var(--line)"/>
+        <rect x="208" y="40" width="40" height="4" rx="2" fill="var(--line)"/>
+        <!-- next card peeking -->
+        <rect x="262" y="76" width="26" height="380" rx="16" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5"/>
+        <!-- main card -->
+        <rect x="22" y="64" width="230" height="404" rx="22" fill="var(--soft)" stroke="#3F9E63" stroke-width="2"/>
+        <circle cx="137" cy="128" r="26" fill="#3F9E63"/>
+        <text x="137" y="176" font-size="14" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Mia</text>
+        <text x="137" y="192" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">il y a 12 min · 🇪🇸 → 🇫🇷</text>
+        <rect x="48" y="222" width="178" height="15" rx="7.5" fill="var(--ink)" opacity="0.78"/>
+        <rect x="48" y="246" width="154" height="15" rx="7.5" fill="var(--ink)" opacity="0.78"/>
+        <rect x="48" y="270" width="178" height="15" rx="7.5" fill="var(--ink)" opacity="0.78"/>
+        <rect x="48" y="294" width="102" height="15" rx="7.5" fill="var(--ink)" opacity="0.78"/>
+        <!-- quick replies -->
+        <rect x="48" y="380" width="84" height="30" rx="15" fill="none" stroke="#3F9E63" stroke-width="1.5"/>
+        <text x="90" y="399" font-size="11" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Partant !</text>
+        <rect x="142" y="380" width="84" height="30" rx="15" fill="none" stroke="#3F9E63" stroke-width="1.5"/>
+        <text x="184" y="399" font-size="11" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Plus tard…</text>
+        <!-- deck summary chip -->
+        <rect x="46" y="488" width="208" height="32" rx="16" fill="none" stroke="#3F9E63" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <path d="M64 498 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#3F9E63"/>
+        <text x="80" y="508" font-size="11" fill="var(--ink)" font-family="system-ui">12 cartes en retard · lire le résumé</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#3F9E63"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Un tap = la carte suivante. Le paquet en retard s’ouvre par une carte de résumé écrite par l’agent.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Le geste des stories — connu de toutes les générations désormais — appliqué à la conversation. Un message occupe tout l’écran&nbsp;: grands caractères, l’audio se joue avec sa transcription traduite, la photo respire. On avance à son rythme, d’un tap. La vraie innovation est le traitement du retard&nbsp;: les messages manqués forment un <em>paquet</em> visible (« 12 cartes »), et l’agent en rédige la carte de couverture — trois phrases — qu’on peut accepter comme lecture suffisante. Rattraper une conversation cesse d’être un devoir de scroll.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Il résume les paquets, propose deux réponses rapides contextuelles en bas de chaque carte, et peut transformer un vocal en carte lisible. Il est un format de carte parmi les autres, pas une fenêtre à part.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Littéralement un message à l’écran. Le nombre de cartes restantes est la seule méta-information affichée.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Taper pour avancer est le geste le plus simple qui existe. Les grands caractères et le rythme un-par-un conviennent aux petits lecteurs comme à la presbytie.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 05 · ÎLOTS DE SUJETS ══════════════════════════ -->
+<section class="prop" id="p5" style="--a:#2E9E96">
+  <div class="prop-head">
+    <span class="num">05</span>
+    <div>
+      <p class="eyebrow">Le sujet avant la chronologie</p>
+      <h2>Les Îlots de Sujets</h2>
+      <p class="thesis">L’IA regroupe la conversation en <em>îlots vivants</em> — un par sujet, leur taille suit l’activité. On ne plonge que dans celui qui nous concerne.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : trois îlots circulaires nommés par sujet, de tailles différentes selon leur activité, l’un attend une réponse et porte un anneau, l’îlot ouvert déplie ses derniers messages">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <text x="30" y="56" font-size="11" fill="var(--muted)" font-family="system-ui">3 sujets en cours · rangés par l’agent</text>
+        <!-- island 1 (big, awaiting you) -->
+        <circle cx="100" cy="160" r="66" fill="var(--soft)" stroke="#2E9E96" stroke-width="2.5"/>
+        <text x="100" y="148" font-size="13" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Resto samedi</text>
+        <circle cx="80" cy="170" r="7" fill="var(--ghost)"/>
+        <circle cx="100" cy="170" r="7" fill="var(--ghost)"/>
+        <circle cx="120" cy="170" r="7" fill="#2E9E96"/>
+        <text x="100" y="196" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">14 messages</text>
+        <rect x="56" y="212" width="88" height="18" rx="9" fill="#2E9E96"/>
+        <text x="100" y="224" font-size="9.5" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">on t’attend ✋</text>
+        <!-- island 2 -->
+        <circle cx="226" cy="130" r="44" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="226" y="124" font-size="11.5" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Devoirs</text>
+        <circle cx="214" cy="140" r="5.5" fill="var(--ghost)"/>
+        <circle cx="230" cy="140" r="5.5" fill="var(--ghost)"/>
+        <text x="226" y="160" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">5 messages</text>
+        <!-- island 3 (quiet) -->
+        <circle cx="232" cy="248" r="30" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5" opacity="0.75"/>
+        <text x="232" y="246" font-size="10.5" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle" opacity="0.8">Photos</text>
+        <text x="232" y="260" font-size="9" fill="var(--muted)" font-family="system-ui" text-anchor="middle">calme</text>
+        <!-- opened island detail -->
+        <line x1="100" y1="230" x2="100" y2="292" stroke="#2E9E96" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <rect x="26" y="292" width="248" height="176" rx="18" fill="var(--soft)" stroke="#2E9E96" stroke-width="1.5"/>
+        <text x="44" y="318" font-size="11" font-weight="700" fill="var(--ink)" font-family="system-ui">Resto samedi</text>
+        <text x="150" y="318" font-size="9.5" fill="var(--muted)" font-family="system-ui">résumé : 2 options restent</text>
+        <circle cx="52" cy="344" r="8" fill="var(--ghost)"/>
+        <rect x="66" y="337" width="150" height="11" rx="5.5" fill="var(--ghost)"/>
+        <circle cx="52" cy="372" r="8" fill="var(--ghost)"/>
+        <rect x="66" y="365" width="184" height="11" rx="5.5" fill="var(--ghost)"/>
+        <circle cx="52" cy="400" r="8" fill="#2E9E96"/>
+        <rect x="66" y="393" width="166" height="12" rx="6" fill="var(--ink)" opacity="0.78"/>
+        <rect x="66" y="411" width="112" height="12" rx="6" fill="var(--ink)" opacity="0.78"/>
+        <rect x="44" y="434" width="120" height="24" rx="12" fill="none" stroke="#2E9E96" stroke-width="1.5"/>
+        <text x="104" y="450" font-size="10.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Répondre ici</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#2E9E96"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Quarante messages deviennent trois îlots nommés. Celui qui attend votre réponse porte l’anneau et le badge.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Une conversation de groupe réelle mélange trois discussions en une — le restaurant, les devoirs, les photos de vacances — et le fil chronologique les entrelace jusqu’à l’illisible. Ici, l’IA fait le tri en continu&nbsp;: chaque sujet devient un îlot nommé, dont la taille respire avec l’activité. On ouvre l’îlot qui nous regarde, on lit son mini-fil et son résumé, on répond <em>dedans</em> — la réponse retombe au bon endroit pour tout le monde. Le reste de la conversation existe, mais n’occupe ni l’écran ni l’esprit.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Le clustering est son cœur de métier&nbsp;: il nomme les îlots, les fusionne quand ils convergent, et marque d’un « on t’attend » ceux où une question vous est adressée. C’est un bibliothécaire, pas un participant bavard.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>La carte des îlots est un sommaire, pas un flux&nbsp;: trois formes nommées remplacent quarante messages. Les îlots calmes rétrécissent d’eux-mêmes.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Choisir « de quoi on parle » est plus naturel que dérouler du temps. Les îlots sont gros, nommés en langage humain, et rien ne clignote.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 06 · RÉSUMÉ VIVANT ══════════════════════════ -->
+<section class="prop" id="p6" style="--a:#3E93CF">
+  <div class="prop-head">
+    <span class="num">06</span>
+    <div>
+      <p class="eyebrow">L’état plutôt que le flux</p>
+      <h2>Le Résumé Vivant</h2>
+      <p class="thesis">La vue par défaut n’est plus les messages, mais <em>l’état de la conversation</em>, tenu à jour par l’agent&nbsp;: décisions, questions en attente, prochaine étape.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : carte « Ce qu’il faut savoir » avec une décision cochée, une question en attente et une prochaine étape, puis les messages repliés en épisodes dépliables">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- digest card -->
+        <rect x="22" y="44" width="256" height="252" rx="20" fill="var(--soft)" stroke="#3E93CF" stroke-width="2"/>
+        <path d="M42 66 l2.8 5.4 5.4 2.8 -5.4 2.8 -2.8 5.4 -2.8 -5.4 -5.4 -2.8 5.4 -2.8 z" fill="#3E93CF"/>
+        <text x="60" y="78" font-size="13" font-weight="700" fill="var(--ink)" font-family="system-ui">Ce qu’il faut savoir</text>
+        <text x="42" y="98" font-size="9.5" fill="var(--muted)" font-family="system-ui">à jour il y a 1 min · 26 messages lus pour vous</text>
+        <!-- decision -->
+        <rect x="42" y="114" width="14" height="14" rx="4" fill="#3E93CF"/>
+        <path d="M45 121 l3 3.5 5 -6" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="64" y="125" font-size="11.5" fill="var(--ink)" font-family="system-ui">Décidé : pique-nique samedi midi</text>
+        <!-- question pending -->
+        <circle cx="49" cy="152" r="8" fill="none" stroke="#3E93CF" stroke-width="1.8"/>
+        <text x="49" y="156" font-size="11" font-weight="700" fill="#3E93CF" font-family="system-ui" text-anchor="middle">?</text>
+        <text x="64" y="149" font-size="11.5" fill="var(--ink)" font-family="system-ui">Noah te demande : tu amènes</text>
+        <text x="64" y="163" font-size="11.5" fill="var(--ink)" font-family="system-ui">le ballon ou les raquettes ?</text>
+        <!-- next step -->
+        <path d="M43 186 h10 m-4 -4 l4 4 -4 4" stroke="#3E93CF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="64" y="191" font-size="11.5" fill="var(--ink)" font-family="system-ui">Prochaine étape : Mia envoie le lieu</text>
+        <!-- reply affordance -->
+        <rect x="42" y="212" width="118" height="30" rx="15" fill="#3E93CF"/>
+        <text x="101" y="231" font-size="11" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">Répondre à Noah</text>
+        <rect x="168" y="212" width="90" height="30" rx="15" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="213" y="231" font-size="11" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Tout va bien</text>
+        <text x="42" y="276" font-size="9.5" fill="var(--muted)" font-family="system-ui" font-style="italic">chaque ligne est vérifiable : toucher = voir les messages source</text>
+        <!-- collapsed episodes -->
+        <text x="26" y="326" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">LES MESSAGES, REPLIÉS</text>
+        <rect x="22" y="338" width="256" height="36" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <path d="M38 351 l6 5 -6 5" stroke="var(--muted)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="54" y="360" font-size="11" fill="var(--ink)" font-family="system-ui">Matin · 18 messages · le lieu</text>
+        <rect x="22" y="382" width="256" height="36" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <path d="M38 395 l6 5 -6 5" stroke="var(--muted)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="54" y="404" font-size="11" fill="var(--ink)" font-family="system-ui">Midi · 8 messages · qui vient</text>
+        <rect x="22" y="426" width="256" height="36" rx="12" fill="var(--surface)" stroke="#3E93CF" stroke-width="1.5"/>
+        <path d="M38 439 l6 5 -6 5" stroke="#3E93CF" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="54" y="448" font-size="11" font-weight="600" fill="var(--ink)" font-family="system-ui">Maintenant · en direct</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#3E93CF"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Quatre lignes remplacent soixante messages. Chaque ligne du résumé s’ouvre sur ses messages source.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Le renversement le plus radical&nbsp;: on n’ouvre plus un flux, on ouvre un <em>état</em>. L’agent maintient en continu trois choses — ce qui a été décidé, ce qui vous est demandé, ce qui vient ensuite — dans votre langue, en langage simple. Les messages ne disparaissent pas&nbsp;: ils sont la preuve, repliés en épisodes titrés, et chaque ligne du résumé se déplie sur ses messages source (la confiance se vérifie d’un geste). C’est le seul modèle où « lire la conversation » prend dix secondes quel que soit le volume échangé.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Ici l’agent n’est pas <b>dans</b> la vue, il <b>est</b> la vue. Sa mission est bornée et vérifiable : résumer fidèlement, dans la langue du lecteur, et toujours pointer vers les originaux.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Maximale. L’écran affiche l’exact nécessaire — et le bouton « Tout va bien » permet de repartir sans rien lire de plus, l’esprit tranquille.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Pour un parent pressé, c’est un compte-rendu. Pour un enfant, « ce qui s’est passé » raconté simplement. Les deux échappent à la culpabilité du compteur de non-lus.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 07 · LA RIVIÈRE ══════════════════════════ -->
+<section class="prop" id="p7" style="--a:#5A6FD6">
+  <div class="prop-head">
+    <span class="num">07</span>
+    <div>
+      <p class="eyebrow">La structure sociale, rendue visible</p>
+      <h2>La Rivière</h2>
+      <p class="thesis">Chaque personne est un <em>fil coloré</em> qui coule vers le bas&nbsp;; les fils se tressent quand on se répond. On voit qui parle à qui — avant même de lire.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : trois fils verticaux colorés, un par personne, portant leurs messages comme des nœuds ; deux fils convergent à l’endroit d’une réponse puis se séparent">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- headers -->
+        <circle cx="75" cy="52" r="12" fill="#E05252"/>
+        <text x="75" y="78" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Lina</text>
+        <circle cx="150" cy="52" r="12" fill="#3F9E63"/>
+        <text x="150" y="78" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Noah</text>
+        <circle cx="225" cy="52" r="12" fill="#5A6FD6"/>
+        <text x="225" y="78" font-size="10" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Toi</text>
+        <!-- streams -->
+        <path d="M75 90 C 75 150, 75 170, 75 210 C 75 260, 138 268, 144 300 C 148 322, 75 330, 75 380 L 75 470" fill="none" stroke="#E05252" stroke-width="2.5" opacity="0.85"/>
+        <path d="M150 90 L 150 240 C 150 270, 152 280, 152 300 C 152 320, 150 330, 150 470" fill="none" stroke="#3F9E63" stroke-width="2.5" opacity="0.85"/>
+        <path d="M225 90 L 225 470" fill="none" stroke="#5A6FD6" stroke-width="4"/>
+        <!-- nodes -->
+        <circle cx="75" cy="130" r="7" fill="#E05252"/>
+        <circle cx="150" cy="166" r="7" fill="#3F9E63"/>
+        <circle cx="225" cy="204" r="8" fill="#5A6FD6"/>
+        <!-- convergence node -->
+        <circle cx="148" cy="300" r="9" fill="#E05252" stroke="var(--surface)" stroke-width="2"/>
+        <rect x="168" y="286" width="104" height="30" rx="10" fill="var(--soft)" stroke="var(--line)" stroke-width="1.2"/>
+        <text x="178" y="299" font-size="9" fill="var(--muted)" font-family="system-ui">Lina répond à Noah</text>
+        <rect x="178" y="304" width="76" height="7" rx="3.5" fill="var(--ghost)"/>
+        <!-- node addressed to you -->
+        <circle cx="150" cy="404" r="9" fill="#3F9E63"/>
+        <path d="M162 404 L 213 404" stroke="#3F9E63" stroke-width="1.8" stroke-dasharray="3 3"/>
+        <path d="M208 399 l6 5 -6 5" fill="none" stroke="#3F9E63" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="225" cy="404" r="10" fill="none" stroke="#5A6FD6" stroke-width="2.5"/>
+        <!-- current message readout -->
+        <rect x="26" y="486" width="248" height="40" rx="12" fill="var(--soft)" stroke="#5A6FD6" stroke-width="1.5"/>
+        <text x="40" y="502" font-size="10" font-weight="700" fill="var(--ink)" font-family="system-ui">Noah → toi</text>
+        <rect x="40" y="508" width="196" height="10" rx="5" fill="var(--ink)" opacity="0.75"/>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#5A6FD6"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Le fil qui se courbe vers un autre est une réponse. Votre fil est plus épais ; ce qui vous vise est cerclé.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Les bulles cachent la chose la plus importante d’une conversation à plusieurs&nbsp;: <em>sa structure</em>. Qui répond à qui, quels apartés se forment, où la discussion se noue. La Rivière la dessine&nbsp;: chaque personne est un fil de sa couleur, chaque message un nœud sur ce fil, chaque réponse une courbe d’un fil vers l’autre. Un regard suffit pour voir un aparté entre deux personnes, une question laissée sans réponse (un nœud isolé), ou le moment où tout le monde converge. On lit le message d’un nœud en le touchant — un seul à la fois, dans le bandeau bas.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Son fil n’apparaît que lorsqu’il intervient, puis s’efface. Il cercle les nœuds qui vous adressent une question et peut « lisser » la rivière : replier les zones lues en un simple tressage décoratif.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Le texte n’est affiché qu’à la demande, un message à la fois. Le reste est un motif — de l’information de structure, pas de la lecture.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>La couleur se lit avant la lettre : un enfant suit « son » fil sans savoir bien lire ; un adulte y retrouve le diagramme qu’il aurait dessiné sur un tableau blanc.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 08 · LA SCÈNE ══════════════════════════ -->
+<section class="prop" id="p8" style="--a:#8A63D2">
+  <div class="prop-head">
+    <span class="num">08</span>
+    <div>
+      <p class="eyebrow">Le tour de parole, théâtralisé</p>
+      <h2>La Scène</h2>
+      <p class="thesis">Une seule voix à la fois, <em>comme dans la vraie vie</em>&nbsp;: l’orateur monte sur scène, sa parole défile en sous-titre traduit&nbsp;; les autres écoutent au premier rang.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : grand avatar de l’orateur sur une scène avec onde vocale et sous-titre traduit, rangée d’avatars du public en bas, l’un demande la parole">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- stage -->
+        <rect x="20" y="44" width="260" height="300" rx="22" fill="var(--soft)"/>
+        <circle cx="150" cy="130" r="42" fill="#8A63D2"/>
+        <circle cx="150" cy="130" r="50" fill="none" stroke="#8A63D2" stroke-width="2" opacity="0.4"/>
+        <text x="150" y="200" font-size="13" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Mia parle…</text>
+        <!-- waveform -->
+        <rect x="122" y="212" width="5" height="12" rx="2.5" fill="#8A63D2"/>
+        <rect x="132" y="206" width="5" height="24" rx="2.5" fill="#8A63D2"/>
+        <rect x="142" y="200" width="5" height="36" rx="2.5" fill="#8A63D2"/>
+        <rect x="152" y="208" width="5" height="20" rx="2.5" fill="#8A63D2"/>
+        <rect x="162" y="203" width="5" height="30" rx="2.5" fill="#8A63D2"/>
+        <rect x="172" y="211" width="5" height="14" rx="2.5" fill="#8A63D2"/>
+        <!-- subtitle -->
+        <rect x="40" y="256" width="220" height="64" rx="14" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="54" y="276" font-size="9.5" fill="var(--muted)" font-family="system-ui">sous-titre · 🇪🇸 → ta langue</text>
+        <rect x="54" y="286" width="192" height="11" rx="5.5" fill="var(--ink)" opacity="0.78"/>
+        <rect x="54" y="303" width="136" height="11" rx="5.5" fill="var(--ink)" opacity="0.78"/>
+        <!-- audience -->
+        <text x="30" y="384" font-size="10.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">PREMIER RANG</text>
+        <circle cx="55" cy="420" r="17" fill="var(--ghost)"/>
+        <circle cx="105" cy="420" r="17" fill="var(--ghost)"/>
+        <circle cx="155" cy="420" r="17" fill="var(--ghost)"/>
+        <!-- hand raised -->
+        <circle cx="205" cy="420" r="17" fill="var(--ghost)"/>
+        <circle cx="219" cy="404" r="8" fill="#8A63D2"/>
+        <text x="219" y="408" font-size="10" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">✋</text>
+        <!-- AI seat -->
+        <circle cx="252" cy="420" r="17" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <path d="M252 412 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="var(--muted)"/>
+        <text x="150" y="462" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Noah demande la parole · ensuite : toi</text>
+        <!-- push to talk -->
+        <rect x="80" y="486" width="140" height="36" rx="18" fill="#8A63D2"/>
+        <text x="150" y="509" font-size="12" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">Prendre la parole</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#8A63D2"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>La parole est un lieu, pas un flux : une scène, un premier rang, une file d’attente tenue par l’agent-régisseur.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Dans la vraie vie, on ne reçoit pas six phrases simultanées&nbsp;: on écoute quelqu’un, puis quelqu’un d’autre. La Scène rétablit ce rythme dans le numérique. L’orateur du moment occupe la scène — voix, visage, et sa parole en sous-titre défilant, <em>déjà traduite dans la langue de chaque spectateur</em> (le pipeline Whisper → NLLB de Meeshy trouve ici sa forme idéale). Les autres écoutent au premier rang et « lèvent la main » pour la suite. C’est le format naturel du vocal en groupe&nbsp;: appels famille, débats entre ados, réunions — sans que personne ne se coupe la parole.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Il est le régisseur : il tient la file de parole, sous-titre et traduit en direct, et publie l’« affiche » de la session (résumé) pour ceux qui arrivent en retard ou l’ont manquée.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Une voix, un visage, deux lignes de sous-titre. Rien d’autre n’est à l’écran pendant qu’on écoute.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Lever la main pour parler : tout le monde l’a appris à l’école. Le rituel gère l’équité de parole mieux qu’aucune interface de chat.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 09 · PERLES DE TEMPS ══════════════════════════ -->
+<section class="prop" id="p9" style="--a:#BC55A0">
+  <div class="prop-head">
+    <span class="num">09</span>
+    <div>
+      <p class="eyebrow">Le passé compacté, le présent ouvert</p>
+      <h2>Les Perles de Temps</h2>
+      <p class="thesis">La conversation devient un <em>collier de moments</em>&nbsp;: chaque perle est un épisode titré par l’IA — seule la perle du présent est ouverte.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : frise horizontale de perles représentant les épisodes de la journée, la perle courante est ouverte et déplie ses messages dans une carte en dessous">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <!-- necklace -->
+        <line x1="34" y1="110" x2="266" y2="110" stroke="var(--line)" stroke-width="2"/>
+        <circle cx="52" cy="110" r="7" fill="var(--ghost)"/>
+        <text x="52" y="88" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">hier</text>
+        <circle cx="98" cy="110" r="9" fill="var(--ghost)"/>
+        <text x="98" y="88" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">matin</text>
+        <text x="98" y="134" font-size="9" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace" text-anchor="middle">8</text>
+        <circle cx="146" cy="110" r="11" fill="var(--ghost)"/>
+        <text x="146" y="88" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">midi</text>
+        <text x="146" y="136" font-size="9" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace" text-anchor="middle">23</text>
+        <!-- current bead -->
+        <circle cx="212" cy="110" r="15" fill="#BC55A0"/>
+        <circle cx="212" cy="110" r="21" fill="none" stroke="#BC55A0" stroke-width="2" opacity="0.45"/>
+        <text x="212" y="82" font-size="10" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">maintenant</text>
+        <!-- connector -->
+        <line x1="212" y1="131" x2="212" y2="162" stroke="#BC55A0" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <!-- open bead card -->
+        <rect x="24" y="162" width="252" height="298" rx="20" fill="var(--soft)" stroke="#BC55A0" stroke-width="2"/>
+        <text x="42" y="190" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">« L’apéro s’organise »</text>
+        <text x="42" y="206" font-size="9.5" fill="var(--muted)" font-family="system-ui">titre de l’agent · 6 messages · 3 personnes</text>
+        <circle cx="52" cy="238" r="9" fill="#E05252"/>
+        <rect x="70" y="228" width="168" height="11" rx="5.5" fill="var(--ghost)"/>
+        <rect x="70" y="245" width="120" height="11" rx="5.5" fill="var(--ghost)"/>
+        <circle cx="52" cy="286" r="9" fill="#3F9E63"/>
+        <rect x="70" y="276" width="190" height="11" rx="5.5" fill="var(--ghost)"/>
+        <circle cx="52" cy="334" r="9" fill="#BC55A0"/>
+        <rect x="70" y="324" width="178" height="12" rx="6" fill="var(--ink)" opacity="0.78"/>
+        <rect x="70" y="342" width="132" height="12" rx="6" fill="var(--ink)" opacity="0.78"/>
+        <!-- past bead preview on hold -->
+        <rect x="42" y="386" width="216" height="52 " rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.2"/>
+        <text x="56" y="406" font-size="10" fill="var(--muted)" font-family="system-ui">survol de « midi » — sans l’ouvrir :</text>
+        <text x="56" y="424" font-size="10.5" font-style="italic" fill="var(--ink)" font-family="system-ui">« Le lieu est choisi : parc de la Tête d’Or »</text>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#BC55A0"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>La taille d’une perle dit son intensité ; l’appuyer révèle sa phrase-résumé sans l’ouvrir.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">Une conversation n’est pas un ruban continu, c’est une suite d’<em>épisodes</em> — le matin où le lieu s’est décidé, le midi où tout le monde a réagi, le soir qui s’organise. Les Perles matérialisent ce découpage&nbsp;: l’agent segmente le flux en moments, les titre d’une phrase, et les enfile sur une frise. Seule la perle du présent est ouverte et se lit comme un mini-fil. Rattraper trois jours d’absence, c’est parcourir huit perles du doigt — chacune révèle sa phrase au survol — au lieu de scroller trois cents messages.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Il est l’horloger : il découpe les épisodes, les titre dans votre langue, fusionne les perles mineures et sait répondre à « qu’est-ce que j’ai manqué depuis mardi ? » en trois perles.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>Le passé n’occupe jamais plus qu’une rangée de perles fermées. L’écran appartient au présent.</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>La frise chronologique est un schéma mental appris à l’école et jamais oublié. Toucher une perle pour l’ouvrir est compris instantanément à tout âge.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 10 · LA PLANCHE BD ══════════════════════════ -->
+<section class="prop" id="p10" style="--a:#D95F82">
+  <div class="prop-head">
+    <span class="num">10</span>
+    <div>
+      <p class="eyebrow">La conversation comme récit</p>
+      <h2>La Planche BD</h2>
+      <p class="thesis">Les échanges se composent en <em>cases de bande dessinée</em>&nbsp;: vraies bulles avec leur queue, avatars expressifs — une planche est un écran fini, pas un puits sans fond.</p>
+    </div>
+  </div>
+  <div class="prop-body">
+    <figure class="mock">
+      <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : quatre cases de bande dessinée avec avatars et bulles de dialogue à queue, la dernière case est active, indicateur de planche en bas">
+        <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+        <text x="30" y="54" font-size="11" fill="var(--muted)" font-family="system-ui">Samedi après-midi — planche 4</text>
+        <!-- panel 1 -->
+        <rect x="22" y="66" width="124" height="150" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5"/>
+        <circle cx="52" cy="182" r="14" fill="#E05252"/>
+        <ellipse cx="88" cy="112" rx="46" ry="28" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+        <path d="M70 134 l-8 16 18 -10 z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+        <rect x="58" y="102" width="60" height="7" rx="3.5" fill="var(--ghost)"/>
+        <rect x="64" y="114" width="48" height="7" rx="3.5" fill="var(--ghost)"/>
+        <!-- panel 2 -->
+        <rect x="154" y="66" width="124" height="150" rx="8" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5"/>
+        <circle cx="248" cy="182" r="14" fill="#3F9E63"/>
+        <ellipse cx="212" cy="112" rx="46" ry="28" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+        <path d="M232 134 l8 16 -18 -10 z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+        <rect x="182" y="102" width="60" height="7" rx="3.5" fill="var(--ghost)"/>
+        <rect x="188" y="114" width="42" height="7" rx="3.5" fill="var(--ghost)"/>
+        <text x="258" y="90" font-size="12" font-weight="800" fill="#D95F82" font-family="system-ui" transform="rotate(-8 258 90)">HA !</text>
+        <!-- panel 3 (wide, AI narration) -->
+        <rect x="22" y="228" width="256" height="64" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <path d="M40 250 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#D95F82"/>
+        <text x="56" y="254" font-size="10" font-style="italic" fill="var(--muted)" font-family="system-ui">Pendant ce temps… l’agent raconte :</text>
+        <text x="56" y="270" font-size="10" font-style="italic" fill="var(--muted)" font-family="system-ui">« Mia a envoyé 3 photos du parc »</text>
+        <!-- panel 4 (active) -->
+        <rect x="22" y="304" width="256" height="186" rx="8" fill="var(--soft)" stroke="#D95F82" stroke-width="2.5"/>
+        <circle cx="60" cy="450" r="17" fill="#D95F82"/>
+        <ellipse cx="150" cy="368" rx="92" ry="40" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.8"/>
+        <path d="M112 400 l-16 26 32 -16 z" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.8"/>
+        <rect x="86" y="352" width="128" height="9" rx="4.5" fill="var(--ink)" opacity="0.78"/>
+        <rect x="96" y="368" width="108" height="9" rx="4.5" fill="var(--ink)" opacity="0.78"/>
+        <text x="236" y="462" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="end">case en cours…</text>
+        <!-- page dots -->
+        <circle cx="126" cy="514" r="4" fill="var(--line)"/>
+        <circle cx="140" cy="514" r="4" fill="var(--line)"/>
+        <circle cx="154" cy="514" r="4" fill="var(--line)"/>
+        <circle cx="168" cy="514" r="4" fill="#D95F82"/>
+        <!-- input -->
+        <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+        <circle cx="262" cy="559" r="19" fill="#D95F82"/>
+        <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <figcaption>Les messages composent des cases ; les moments calmes deviennent un cartouche de narration signé par l’agent.</figcaption>
+    </figure>
+    <div class="notes">
+      <p class="innov">La bande dessinée est le seul langage visuel que les 8 ans et les 50 ans partagent <em>avec plaisir</em> — surtout en francophonie. Ici, les messages se composent automatiquement en cases&nbsp;: bulles authentiques avec leur queue pointant vers l’auteur, réactions en onomatopées, photos en pleine case. Une planche est un écran <em>fini</em>&nbsp;: quand elle est pleine, on tourne la page — la conversation a un rythme de lecture, pas un vertige de scroll. L’historique devient un album qu’on feuillette, et qu’on a — détail qui change tout — envie de relire.</p>
+      <dl class="facets">
+        <div><dt>Agent IA</dt><dd>Il est le narrateur : les passages calmes ou manqués deviennent un cartouche « Pendant ce temps… », et il peut recomposer une semaine en une planche-résumé, une case par chapitre.</dd></div>
+        <div><dt>Anti-surcharge</dt><dd>La planche borne l’attention : 4 à 6 cases, jamais plus. La mise en page hiérarchise d’elle-même (une grande case = un moment important).</dd></div>
+        <div><dt>De 8 à 50 ans</dt><dd>Personne n’a jamais eu besoin d’un tutoriel pour lire une BD. Le sens de lecture, les bulles, les onomatopées : tout est déjà su.</dd></div>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ SYNTHÈSE ══════════════════════════ -->
+<section class="synth" id="synthese">
+  <p class="eyebrow">Synthèse</p>
+  <h2>Quelle vue pour quel moment ?</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Vue</th><th>Idéale pour</th><th>Ce que fait l’agent</th><th>À l’écran à l’instant T</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="name" style="--dot:#E05252"><i></i>Flux Focal</td><td>Le quotidien, remplaçant direct du fil classique</td><td>Annoter le présent (traduction, suggestion)</td><td>1 message + contexte estompé</td></tr>
+        <tr><td class="name" style="--dot:#E07A33"><i></i>Table Ronde</td><td>Petits groupes en temps réel (famille, amis)</td><td>Participant assis, parle si on l’invite</td><td>1 message au centre du cercle</td></tr>
+        <tr><td class="name" style="--dot:#C9962B"><i></i>Le Script</td><td>Lecture longue, accessibilité, relecture</td><td>Didascalies : résumés en italique</td><td>Du texte pur, zéro chrome</td></tr>
+        <tr><td class="name" style="--dot:#3F9E63"><i></i>Cartes-Moments</td><td>Rattrapage rythmé, contenus riches (audio, photo)</td><td>Résumer les paquets, réponses rapides</td><td>1 carte plein écran</td></tr>
+        <tr><td class="name" style="--dot:#2E9E96"><i></i>Îlots de Sujets</td><td>Groupes actifs multi-sujets</td><td>Nommer et ranger les sujets</td><td>3 îlots nommés</td></tr>
+        <tr><td class="name" style="--dot:#3E93CF"><i></i>Résumé Vivant</td><td>Gens pressés, conversations volumineuses</td><td>Il est la vue : état fidèle et vérifiable</td><td>4 lignes d’état</td></tr>
+        <tr><td class="name" style="--dot:#5A6FD6"><i></i>La Rivière</td><td>Comprendre qui parle à qui, grands groupes</td><td>Cercler ce qui vous vise, lisser le lu</td><td>Des fils, 1 message déplié</td></tr>
+        <tr><td class="name" style="--dot:#8A63D2"><i></i>La Scène</td><td>Vocal en groupe, appels multilingues</td><td>Régisseur : file de parole, sous-titres traduits</td><td>1 voix + 2 lignes de sous-titre</td></tr>
+        <tr><td class="name" style="--dot:#BC55A0"><i></i>Perles de Temps</td><td>Revenir après une absence</td><td>Découper et titrer les épisodes</td><td>1 perle ouverte, le reste fermé</td></tr>
+        <tr><td class="name" style="--dot:#D95F82"><i></i>Planche BD</td><td>Familles, enfants, souvenirs à relire</td><td>Narrateur des ellipses, planches-résumé</td><td>1 planche finie (4–6 cases)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="reco">
+    <h3>Recommandation</h3>
+    <p>Ces dix propositions ne sont pas dix produits&nbsp;: ce sont des <b>modes de lecture interchangeables</b> posés sur les mêmes données Meeshy — messages, <code>MessageTranslation[]</code> du Prisme, transcriptions, et une couche de résumé/segmentation produite par l’agent (épisodes, sujets, état). Construire cette couche une fois débloque six des dix vues.</p>
+    <p>Pour prototyper, trois paris complémentaires&nbsp;: le <b>Flux Focal</b> (01) comme successeur naturel du fil — même geste, hiérarchie inversée, risque minimal&nbsp;; le <b>Résumé Vivant</b> (06) comme mode « rattrapage » — c’est lui qui fait dire « je ne peux plus revenir en arrière »&nbsp;; et la <b>Scène</b> (08) pour le vocal multilingue, où le pipeline de traduction de Meeshy devient un avantage que personne d’autre ne peut copier.</p>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="wrap">Meeshy · brainstorm « vue conversation » · 14 août 2026 — dix pistes au-delà du flux de bulles, à trier, combiner, prototyper.</div>
+</footer>
+
+</div>
