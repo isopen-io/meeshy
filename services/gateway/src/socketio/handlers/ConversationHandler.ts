@@ -35,6 +35,21 @@ export interface ConversationHandlerDependencies {
    * normalement, il ne retracte simplement rien.
    */
   retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
+  /**
+   * Rejoue au socket entrant les partages de position en cours dans la
+   * conversation — `LocationHandler.replayLiveLocationsTo` en pratique.
+   *
+   * `location:live-started` ne touche que les sockets présents à l'instant du
+   * départ. Sans ce rejeu, un participant qui ouvre la conversation ensuite
+   * n'apprend jamais l'existence du partage, et l'épingle lui reste invisible
+   * pour toute la session. Même famille que la resynchronisation des accusés de
+   * lecture ci-dessous : ce qu'un client rate en n'étant pas là, la jonction le
+   * lui rend.
+   *
+   * Optionnelle : un `ConversationHandler` construit sans elle joint
+   * normalement, il ne rattrape simplement rien.
+   */
+  replayLiveLocations?: (socket: Socket, conversationId: string) => void;
 }
 
 export class ConversationHandler {
@@ -43,6 +58,7 @@ export class ConversationHandler {
   private socketToUser: Map<string, string>;
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
   private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
+  private replayLiveLocations?: (socket: Socket, conversationId: string) => void;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -51,6 +67,7 @@ export class ConversationHandler {
     this.socketToUser = deps.socketToUser;
     this.readStatusService = deps.readStatusService;
     this.retractTyping = deps.retractTyping;
+    this.replayLiveLocations = deps.replayLiveLocations;
   }
 
   /**
@@ -164,6 +181,19 @@ export class ConversationHandler {
 
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
+
+      // Rattrapage AVANT les accusés ci-dessous, et hors du gate
+      // `participationId` : l'appartenance vient d'être contrôlée, et un invité
+      // de lien partagé a autant besoin de voir l'épingle d'un pair que le
+      // membre inscrit. Ne peut pas jeter — l'implémentation est synchrone et
+      // sans I/O — mais un rejeu perdu ne doit de toute façon jamais faire
+      // échouer une jonction.
+      try {
+        this.replayLiveLocations?.(socket, normalizedId);
+      } catch (err) {
+        logger.warn('live location replay failed on join (non-blocking)', { conversationId: normalizedId, error: err });
+      }
+
       const registeredUserId = connectedUser.userId;
       // L'identité du socket dans cette conversation. Un invité de lien partagé
       // n'a pas de `userId` : c'est son `Participant.id` qui l'identifie, et

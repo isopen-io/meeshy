@@ -192,6 +192,9 @@ jest.mock('../handlers/LocationHandler', () => ({
     handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
+    handleSocketDisconnecting: jest.fn(),
+    replayLiveLocationsTo: jest.fn(),
+    dispose: jest.fn(),
   })),
 }));
 
@@ -846,6 +849,14 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.close).toHaveBeenCalled();
     });
 
+    // Les minuteries d'expiration des partages de position sont les seules que
+    // ce manager possède encore : non désarmées, elles retiendraient la boucle
+    // d'événements jusqu'à 8 heures après l'arrêt.
+    it('disposes the location handler timers', async () => {
+      await manager.close();
+      expect((manager as any).locationHandler.dispose).toHaveBeenCalled();
+    });
+
     it('does not throw if agentAdminRelay.stop() rejects', async () => {
       mockAgentAdminRelayInstance.stop.mockRejectedValue(new Error('relay down'));
       await expect(manager.close()).resolves.not.toThrow();
@@ -1074,6 +1085,28 @@ describe('MeeshySocketIOManager', () => {
       );
       const otherSockets = mockStatusHandlerInstance.handleSocketDisconnecting.mock.calls[0][2];
       expect([...otherSockets]).toEqual(['sock-dc2']);
+    });
+
+    // Les partages de position portés par ce socket doivent être retirés ici, et
+    // pas dans `disconnect` : la diffusion vise les rooms de la conversation, et
+    // `disconnect` s'exécute après en être sorti.
+    it('retracts the live locations carried by the disconnecting socket', () => {
+      const socket = makeSocket('sock-dc-loc');
+      (manager as any).socketToUser.set('sock-dc-loc', 'user-dc-loc');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect((manager as any).locationHandler.handleSocketDisconnecting)
+        .toHaveBeenCalledWith('sock-dc-loc');
+    });
+
+    // Hors du gate `socketToUser` : le registre du LocationHandler porte
+    // lui-même l'identité du partageur, et cette table peut déjà avoir été vidée.
+    it('retracts live locations even for a socket no user table claims', () => {
+      const socket = makeSocket('sock-dc-orphan');
+      triggerConnection(socket);
+      socket._handlers['disconnecting']('transport close');
+      expect((manager as any).locationHandler.handleSocketDisconnecting)
+        .toHaveBeenCalledWith('sock-dc-orphan');
     });
 
     it('omits sibling-socket set when the disconnecting socket is the only one', () => {
@@ -4733,6 +4766,20 @@ describe('MeeshySocketIOManager', () => {
       prisma.conversation.findUnique.mockResolvedValue({ id: '507f1f77bcf86cd799439099', identifier: 'my-conv-cb' });
       const result = await lastCallArgs.normalizeConversationId('my-conv-cb');
       expect(result).toBe('507f1f77bcf86cd799439099');
+    });
+
+    // Le seul fil entre la jonction à une conversation et le registre des
+    // partages : `ConversationHandler` ne connaît qu'un callback optionnel, et
+    // rien d'autre ne signale qu'il n'a pas été branché.
+    it('wires ConversationHandler.replayLiveLocations to the LocationHandler', () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const lastCallArgs = ConversationHandler.mock.calls[ConversationHandler.mock.calls.length - 1][0];
+      expect(lastCallArgs.replayLiveLocations).toBeDefined();
+
+      const mockSock = makeSocket('sock-replay-cb');
+      lastCallArgs.replayLiveLocations(mockSock, 'conv-replay-cb');
+      expect((manager as any).locationHandler.replayLiveLocationsTo)
+        .toHaveBeenCalledWith(mockSock, 'conv-replay-cb');
     });
 
     it('emitPresenceSnapshot callback does not throw', () => {
