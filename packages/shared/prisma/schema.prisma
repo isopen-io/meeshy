@@ -304,11 +304,60 @@ model User {
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
 
+  // Répertoire (carnet d'adresses synchronisé depuis l'appareil)
+  addressBookEntries UserContact[] @relation("AddressBookOwner")
+  addressBookMatches UserContact[] @relation("AddressBookMatchedUser")
+
   @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
   @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
   @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
   @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
+}
+
+/// Entrée du répertoire d'un utilisateur — un contact de son carnet d'adresses
+/// appareil, synchronisé et conservé côté serveur pour que le répertoire soit
+/// consultable depuis n'importe quel client (Instant App : le répertoire est
+/// servi depuis le cache, revalidé en arrière-plan).
+///
+/// `matchedUserId` non-null = ce contact possède un compte Meeshy : le client
+/// affiche « Lui écrire ». Null = contact hors plateforme : le client affiche
+/// « Inviter ».
+model UserContact {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String @db.ObjectId
+  owner   User   @relation("AddressBookOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Identité stable du contact appareil (hash SHA-256 des identifiants
+  /// normalisés) — clé d'upsert idempotente entre deux synchronisations.
+  contactKey String
+
+  displayName String?
+  /// Numéros normalisés E.164 (les entrées non parsables sont écartées)
+  phoneNumbers String[] @default([])
+  /// Emails normalisés (trim + lowercase)
+  emails String[] @default([])
+  /// Pseudos issus de la vCard (nickname, handle social) normalisés lowercase
+  usernames String[] @default([])
+
+  /// Utilisateur Meeshy correspondant (null = contact hors plateforme)
+  matchedUserId String? @db.ObjectId
+  matchedUser   User?   @relation("AddressBookMatchedUser", fields: [matchedUserId], references: [id], onDelete: SetNull)
+  /// Identifiant ayant permis le rapprochement
+  matchedBy String?
+  matchedAt DateTime?
+
+  /// Dernière synchronisation ayant vu ce contact sur l'appareil — permet de
+  /// purger les entrées supprimées du carnet lors d'une sync complète.
+  lastSyncedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, contactKey])
+  @@index([ownerId, matchedUserId])
+  @@index([ownerId, displayName])
+  @@index([matchedUserId])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)

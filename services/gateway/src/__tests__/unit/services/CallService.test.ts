@@ -1466,6 +1466,53 @@ describe('CallService', () => {
       );
     });
 
+    it('decline-before-join fix (2026-08-14): allows ending with no CallParticipant row when options.preJoinDecline is set', async () => {
+      // The declining callee has no row at all — only the initiator does.
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.rejected,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      const result = await callService.endCall(
+        'call-123', 'callee-user-999', 'conv-participant-of-callee', false, 'rejected',
+        { preJoinDecline: true }
+      );
+
+      expect(result.status).toBe(CallStatus.rejected);
+    });
+
+    it('decline-before-join fix: still throws NOT_A_PARTICIPANT with no row when preJoinDecline is NOT set (default authorization unchanged)', async () => {
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [createMockParticipant({ participantId: 'other-participant', userId: 'other-user' })]
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
+
+      await expect(
+        callService.endCall('call-123', 'callee-user-999', 'conv-participant-of-callee', false, 'rejected')
+      ).rejects.toThrow('NOT_A_PARTICIPANT: You are not in this call');
+    });
+
     it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
       const initiatorParticipant = createMockParticipant({
         role: ParticipantRole.initiator

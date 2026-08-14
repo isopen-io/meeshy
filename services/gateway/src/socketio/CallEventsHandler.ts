@@ -1222,6 +1222,44 @@ export class CallEventsHandler {
   }
 
   /**
+   * Authorizes a callee declining a call they were invited to but never
+   * joined. `call:join` is the only path that creates a CallParticipant row
+   * for a callee — `call:initiate` creates one only for the initiator — so a
+   * callee who taps "Decline" while still ringing legitimately has NO row
+   * for `resolveActiveCallParticipantId` to find, and that check correctly
+   * (by design) returns null for them. That is a DIFFERENT case from the one
+   * 2026-07-10b actually closed: a caller who HAD a row and left it, then
+   * replayed `call:end` from a stale socket. Disambiguate explicitly — a
+   * caller who already has ANY row for this call (active or left) must keep
+   * going through `resolveActiveCallParticipantId` and stay blocked here.
+   * Decline-before-join regression fix, 2026-08-14.
+   */
+  private async resolvePreJoinDeclineParticipantId(userId: string, callId: string): Promise<string | null> {
+    try {
+      const callSession = await this.callService.getCallSession(callId);
+      // Pre-join decline only makes sense while nobody has ever answered —
+      // once the call is truly under way, a "never joined" decline has no
+      // meaning and hangup must go through the active-participant path.
+      if (callSession.answeredAt) return null;
+      const hasAnyRow = callSession.participants.some(
+        (p) => (p.participant?.userId ?? p.participantId) === userId
+      );
+      if (hasAnyRow) return null;
+      // No CallParticipant row at all: this user never joined this call.
+      // Only a genuine conversation member may decline it — keeps a
+      // stranger who merely guessed/observed the callId from ending it.
+      return this.resolveParticipantIdFromCall(userId, callId);
+    } catch (error) {
+      logger.warn('resolvePreJoinDeclineParticipantId: getCallSession failed, treating caller as unauthorized', {
+        userId,
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
+  }
+
+  /**
    * Resolve the caller as an active participant of THIS call, returning both
    * the authorization proof (`participantId`) and the server-trusted
    * `displayName` (user.displayName ?? username) stamped onto relayed
@@ -3387,7 +3425,20 @@ export class CallEventsHandler {
         // left behind in the call room by a reconnect race) is still a
         // conversation member, so the weaker check kept authorizing exactly
         // the fast-path broadcast this comment describes guarding against.
-        const endParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        let endParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        // Decline-before-join fix (2026-08-14): a callee who declines while
+        // still ringing has no CallParticipant row yet (`call:join` is the
+        // only path that creates one for a callee) — the check above
+        // correctly returns null for them. Fall back to the dedicated
+        // pre-join decline check before rejecting outright — scoped to an
+        // explicit reason='rejected' so every other `call:end` reason keeps
+        // exactly its pre-existing (stricter) authorization surface.
+        const preJoinDecline = (!endParticipantId && data.reason === 'rejected')
+          ? await this.resolvePreJoinDeclineParticipantId(userId, data.callId)
+          : null;
+        if (preJoinDecline) {
+          endParticipantId = preJoinDecline;
+        }
         if (!endParticipantId) {
           // Failing here means `userId` has no active CallParticipant row
           // for THIS call — either no conversation membership at all, or a
@@ -3433,7 +3484,8 @@ export class CallEventsHandler {
         }
 
         const callSession = await this.callService.endCall(
-          data.callId, userId, endParticipantId, isAnonymous, data.reason
+          data.callId, userId, endParticipantId, isAnonymous, data.reason,
+          { preJoinDecline: Boolean(preJoinDecline) }
         );
         this.invalidateSignalSession(data.callId);
 

@@ -466,14 +466,22 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       }
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Register beforeunload handler to end call on tab close (M3)
+    // Register beforeunload handler to leave the call on tab close (M3)
     if (beforeUnloadHandler) {
       window.removeEventListener('beforeunload', beforeUnloadHandler);
     }
     beforeUnloadHandler = () => {
       const socket = meeshySocketIOService.getSocket();
       if (socket?.connected) {
-        socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' }, () => {});
+        // CALL_LEAVE, not CALL_END (2026-08-14 fix): CALL_END always
+        // terminates the whole CallSession for every participant.
+        // CALL_LEAVE routes through CallService.leaveCall(), which already
+        // distinguishes a direct (1:1) call — where any leave correctly
+        // ends the call for the other party — from a group call, where it
+        // only removes this participant and leaves the call running for
+        // the rest. A closed tab must never end a group call for everyone
+        // else just because one participant left.
+        socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
       }
       // No sendBeacon fallback: sendBeacon can only POST and cannot carry the
       // Authorization header the DELETE /calls/:callId route requires, and

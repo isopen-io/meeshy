@@ -75,6 +75,14 @@ const mockContactsMatchFns = {
 
 jest.mock('../../../../routes/users/contacts-match', () => mockContactsMatchFns);
 
+const mockContactsDirectoryFns = {
+  syncContactsDirectory: jest.fn<any>().mockResolvedValue(undefined),
+  getContactsDirectory: jest.fn<any>().mockResolvedValue(undefined),
+  clearContactsDirectory: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/contacts-directory', () => mockContactsDirectoryFns);
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { userRoutes } from '../../../../routes/users/index';
@@ -131,5 +139,10 @@ describe('userRoutes — registers all route handler groups', () => {
 
     // Contacts matching route
     expect(mockContactsMatchFns.matchContacts).toHaveBeenCalledWith(mockFastify);
+
+    // Répertoire persisté
+    expect(mockContactsDirectoryFns.syncContactsDirectory).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactsDirectoryFns.getContactsDirectory).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactsDirectoryFns.clearContactsDirectory).toHaveBeenCalledWith(mockFastify);
   });
 });

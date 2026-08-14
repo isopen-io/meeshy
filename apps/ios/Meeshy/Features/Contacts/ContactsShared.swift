@@ -195,3 +195,150 @@ enum FriendListAggregator {
         }
     }
 }
+
+
+// MARK: - Briques partagées de l'annuaire
+
+/// Champ de recherche de l'annuaire. Trois écrans le posaient à l'identique
+/// (contacts, répertoire, affiliés) : une seule définition, un seul style.
+struct ContactsSearchField: View {
+    let placeholder: String
+    @Binding var query: String
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+
+            TextField(placeholder, text: $query)
+                .font(.subheadline)
+                .foregroundColor(theme.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textMuted)
+                }
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(theme.inputBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+/// Ligne « une personne + une action » de l'annuaire : répertoire, relais de
+/// recherche plateforme, affiliés. Les trois affichaient le même bloc
+/// avatar / nom / identifiant / bouton — une seule vue le rend désormais.
+///
+/// `Equatable` sur ses seules entrées de VALEUR (les closures en sont
+/// exclues) : une cellule ne se réévalue que si la personne qu'elle montre
+/// change. `isDark` en fait partie, sinon un basculement de thème laisserait
+/// la ligne figée dans les couleurs de l'ancien mode.
+struct DirectoryPersonRow: View, Equatable {
+    /// Ce que la ligne propose de faire. `write` pour un compte Meeshy,
+    /// `invite` pour un contact du carnet qui n'en a pas.
+    enum Action: Equatable {
+        case write
+        case invite
+
+        var icon: String {
+            switch self {
+            case .write: return "bubble.left.fill"
+            case .invite: return "paperplane.fill"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .write:
+                return String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main)
+            case .invite:
+                return String(localized: "contacts.phonebook.invite", defaultValue: "Inviter", bundle: .main)
+            }
+        }
+
+        /// L'action principale est pleine, l'invitation reste discrète.
+        var isFilled: Bool { self == .write }
+    }
+
+    let name: String
+    let subtitle: String?
+    let avatarURL: String?
+    let action: Action
+    /// Complément lu par VoiceOver après le nom (« sur Meeshy », etc.).
+    var accessibilityDetail: String?
+    let isDark: Bool
+    let onAction: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static func == (lhs: DirectoryPersonRow, rhs: DirectoryPersonRow) -> Bool {
+        lhs.name == rhs.name
+            && lhs.subtitle == rhs.subtitle
+            && lhs.avatarURL == rhs.avatarURL
+            && lhs.action == rhs.action
+            && lhs.accessibilityDetail == rhs.accessibilityDetail
+            && lhs.isDark == rhs.isDark
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            MeeshyAvatar(
+                name: name,
+                context: .userListItem,
+                accentColor: DynamicColorGenerator.colorForName(name),
+                avatarURL: avatarURL
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onAction) {
+                HStack(spacing: 5) {
+                    Image(systemName: action.icon).font(.caption2.weight(.bold))
+                    Text(action.title).font(.caption.weight(.semibold))
+                }
+                .foregroundColor(action.isFilled ? .white : MeeshyColors.indigo500)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(action.isFilled ? MeeshyColors.indigo500 : Color.clear)
+                )
+                .overlay(
+                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(action.title)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityDetail.map { "\(name), \($0)" } ?? name)
+    }
+}

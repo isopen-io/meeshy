@@ -52,6 +52,13 @@ import {
 // Contacts matching route (address book → platform users)
 import { matchContacts } from './contacts-match';
 
+// Contacts directory routes (persisted address book)
+import {
+  syncContactsDirectory,
+  getContactsDirectory,
+  clearContactsDirectory
+} from './contacts-directory';
+
 // Presence routes (runtime online status)
 import { getUsersPresence } from './presence';
 
@@ -101,6 +108,11 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Contacts matching (address book → platform users)
   await matchContacts(fastify);
+
+  // Répertoire persisté (sync / list / erase)
+  await syncContactsDirectory(fastify);
+  await getContactsDirectory(fastify);
+  await clearContactsDirectory(fastify);
 
   // Presence routes
   await getUsersPresence(fastify);
