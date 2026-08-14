@@ -12,6 +12,7 @@ jest.mock('@/services/auth-manager.service', () => ({
     getAuthToken: jest.fn(() => null),
     getAnonymousSession: jest.fn(() => null),
     logout: jest.fn(),
+    registerOnTokensUpdated: jest.fn(() => jest.fn()),
   },
 }));
 

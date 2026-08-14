@@ -56,6 +56,63 @@ describe('AuthManager.registerOnClear', () => {
   });
 });
 
+describe('AuthManager.registerOnTokensUpdated', () => {
+  it('notifies subscribers when a refreshed token lands', () => {
+    const cb = jest.fn();
+    const unsubscribe = authManager.registerOnTokensUpdated(cb);
+
+    authManager.updateTokens('refreshed-token');
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it('exposes the freshly stored token to subscribers, not the previous one', () => {
+    localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'stale-token');
+    const seen: Array<string | null> = [];
+    const unsubscribe = authManager.registerOnTokensUpdated(() => {
+      seen.push(authManager.getAuthToken());
+    });
+
+    authManager.updateTokens('refreshed-token');
+
+    expect(seen).toEqual(['refreshed-token']);
+    unsubscribe();
+  });
+
+  it('stops notifying after the returned unsubscribe is called', () => {
+    const cb = jest.fn();
+    const unsubscribe = authManager.registerOnTokensUpdated(cb);
+    unsubscribe();
+
+    authManager.updateTokens('refreshed-token');
+
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('swallows errors thrown inside a subscriber so others still run', () => {
+    const bad = jest.fn().mockImplementation(() => { throw new Error('boom'); });
+    const good = jest.fn();
+    const unsubBad = authManager.registerOnTokensUpdated(bad);
+    const unsubGood = authManager.registerOnTokensUpdated(good);
+
+    expect(() => authManager.updateTokens('refreshed-token')).not.toThrow();
+    expect(good).toHaveBeenCalled();
+    unsubBad();
+    unsubGood();
+  });
+
+  it('does not notify when sessions are cleared — only a landing token counts', () => {
+    const cb = jest.fn();
+    const unsubscribe = authManager.registerOnTokensUpdated(cb);
+
+    authManager.clearAllSessions();
+
+    expect(cb).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+});
+
 describe('AuthManager.setCredentials', () => {
   it('stores auth token in localStorage', () => {
     authManager.setCredentials(mockUser, 'access-tok');
