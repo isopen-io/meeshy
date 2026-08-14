@@ -48,6 +48,7 @@ function makePrisma(users: any[] = []) {
   return {
     user: {
       findMany: jest.fn<any>().mockResolvedValue(users),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
     },
   } as any;
 }
@@ -87,14 +88,19 @@ describe('POST /users/me/contacts/match — unauthenticated', () => {
 });
 
 describe('POST /users/me/contacts/match — empty contacts', () => {
-  it('returns 400 when contacts array is empty', async () => {
-    const { app } = await buildApp();
+  it('returns an empty match set without querying the database', async () => {
+    // Un carnet vide (permission accordée, aucun contact) est un état normal,
+    // pas une erreur client : renvoyer 400 faisait remonter « erreur gateway »
+    // dans l'app pour un cas parfaitement légitime.
+    const { app, prisma } = await buildApp();
     const res = await app.inject({
       method: 'POST',
       url: '/users/me/contacts/match',
       payload: { contacts: [] },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toEqual([]);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -199,7 +205,7 @@ describe('POST /users/me/contacts/match — excludes self', () => {
       payload: { contacts: [{ phoneNumbers: ['+33612345678'] }] },
     });
     const where = prisma.user.findMany.mock.calls[0][0].where;
-    expect(where.id).toEqual({ not: CURRENT_USER_ID });
+    expect(where.id.notIn).toContain(CURRENT_USER_ID);
     await app.close();
   });
 });
@@ -221,8 +227,11 @@ describe('POST /users/me/contacts/match — no valid identifier', () => {
   });
 });
 
-describe('POST /users/me/contacts/match — payload too large', () => {
-  it('returns 400 when more than 2000 contacts are sent', async () => {
+describe('POST /users/me/contacts/match — oversized payload', () => {
+  it('truncates instead of rejecting, and reports what it processed', async () => {
+    // Un carnet plus gros que la borne ne doit pas faire ÉCHOUER la recherche
+    // de contacts : on traite les 2000 premiers et on dit au client combien
+    // ont été traités, pour qu'il pagine le reste.
     const { app } = await buildApp();
     const contacts = Array.from({ length: 2001 }, (_, i) => ({
       phoneNumbers: [`+3361234${String(i).padStart(4, '0')}`],
@@ -232,7 +241,97 @@ describe('POST /users/me/contacts/match — payload too large', () => {
       url: '/users/me/contacts/match',
       payload: { contacts },
     });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.totalContacts).toBe(2001);
+    expect(body.data.processedContacts).toBe(2000);
+    await app.close();
+  });
+
+  it('returns 400 when contacts is not an array', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: 'nope' },
+    });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('POST /users/me/contacts/match — messy address book never fails the batch', () => {
+  it('accepts an address book full of short codes, labels and empty strings', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: {
+        defaultCountry: 'SN',
+        contacts: [
+          { displayName: 'Repondeur', phoneNumbers: ['*123#'] },
+          { displayName: 'Urgences', phoneNumbers: ['112', 'SOS', '', '   '] },
+          { displayName: 'x'.repeat(600), phoneNumbers: ['+999 000 111 222'], emails: ['pas-un-email'] },
+          { displayName: 'Awa', phoneNumbers: ['77 123 45 67'] },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toHaveLength(1);
+    await app.close();
+  });
+
+  it('ignores a non ISO-3166 alpha-2 default country instead of rejecting', async () => {
+    // `Locale.current.region?.identifier` peut valoir "419" (Amérique latine).
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: {
+        defaultCountry: '419',
+        contacts: [{ displayName: 'Awa', phoneNumbers: ['+221771234567'] }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toHaveLength(1);
+    await app.close();
+  });
+
+  it('tolerates malformed entries mixed into the batch', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: {
+        contacts: [
+          { phoneNumbers: 'not-an-array' },
+          { emails: [null, 42] },
+          { displayName: 'Awa', emails: ['awa@test.com'] },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toHaveLength(1);
+    await app.close();
+  });
+});
+
+describe('POST /users/me/contacts/match — vCard pseudo', () => {
+  it('matches a contact by its vCard nickname when no phone or email matches', async () => {
+    const prisma = makePrisma([{ ...MATCHED_USER, phoneNumber: null, email: 'other@test.com' }]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: [{ displayName: 'Awa', usernames: ['@Awa'] }] },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.matches).toHaveLength(1);
+    expect(body.data.matches[0].matchedBy).toBe('username');
     await app.close();
   });
 });

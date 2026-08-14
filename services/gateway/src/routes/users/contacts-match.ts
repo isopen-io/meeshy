@@ -1,69 +1,25 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { normalizePhoneWithCountry, normalizeEmail } from '../../utils/normalize';
+import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
+import { ContactDirectoryService } from '../../services/ContactDirectoryService';
+import { matchedUserSchema } from './contacts-schemas';
 import type { AuthenticatedRequest } from './types';
 
 /**
- * Matching carnet d'adresses → utilisateurs Meeshy.
+ * Matching carnet d'adresses → utilisateurs Meeshy, SANS persistance.
  *
- * Le client envoie les identifiants bruts de ses contacts (numéros, emails) ;
- * le serveur normalise en E.164, matche contre les comptes actifs et renvoie
- * les profils publics. Les contacts ne sont JAMAIS persistés côté serveur —
- * pur matching en mémoire, dans l'esprit du Prisme (suggestion discrète).
+ * Le client envoie les identifiants bruts de ses contacts (numéros, emails,
+ * pseudos vCard) ; le serveur normalise, matche contre les comptes actifs et
+ * renvoie les profils publics. Rien n'est écrit — pour CONSERVER le répertoire,
+ * c'est `POST /users/me/contacts/sync` (contacts-directory.ts).
+ *
+ * Tolérance : le carnet d'adresses est une donnée appareil non maîtrisée. Une
+ * entrée illisible est ÉCARTÉE, jamais fatale pour le lot ; un lot au-delà de
+ * la borne est TRONQUÉ et le client en est informé (`processedContacts`), au
+ * lieu de renvoyer un 400 qui ferait échouer toute la recherche de contacts.
  */
-
-const MAX_CONTACTS_PER_SYNC = 2000;
-const MAX_MATCH_RESULTS = 500;
-
-// Le carnet d'adresses est une donnée appareil non maîtrisée : un contact
-// peut porter beaucoup de numéros/emails et des chaînes longues. On borne
-// GÉNÉREUSEMENT (garde-fou anti-abus) plutôt que serré, sinon un seul contact
-// « atypique » ferait échouer TOUT le batch (400) — cf. tolérance des entrées.
-const contactEntrySchema = z.object({
-  displayName: z.string().max(300).optional(),
-  phoneNumbers: z.array(z.string().max(64)).max(50).optional(),
-  emails: z.array(z.string().max(320)).max(50).optional(),
-}).strip();
-
-const matchContactsSchema = z.object({
-  contacts: z.array(contactEntrySchema).min(1).max(MAX_CONTACTS_PER_SYNC),
-  defaultCountry: z.string().length(2).optional(),
-}).strip();
-
-type ContactEntry = z.infer<typeof contactEntrySchema>;
-
-type IdentifierIndex = {
-  phones: Map<string, string | undefined>;
-  emails: Map<string, string | undefined>;
-};
-
-function indexContactIdentifiers(
-  contacts: ContactEntry[],
-  defaultCountry: string
-): IdentifierIndex {
-  const phones = new Map<string, string | undefined>();
-  const emails = new Map<string, string | undefined>();
-
-  contacts.forEach((contact) => {
-    (contact.phoneNumbers ?? []).forEach((raw) => {
-      const normalized = normalizePhoneWithCountry(raw, defaultCountry);
-      if (normalized?.isValid && !phones.has(normalized.phoneNumber)) {
-        phones.set(normalized.phoneNumber, contact.displayName);
-      }
-    });
-    (contact.emails ?? []).forEach((raw) => {
-      const email = normalizeEmail(raw);
-      if (email.includes('@') && !emails.has(email)) {
-        emails.set(email, contact.displayName);
-      }
-    });
-  });
-
-  return { phones, emails };
-}
 
 export async function matchContacts(fastify: FastifyInstance) {
   fastify.post('/users/me/contacts/match', {
@@ -83,7 +39,8 @@ export async function matchContacts(fastify: FastifyInstance) {
               properties: {
                 displayName: { type: 'string' },
                 phoneNumbers: { type: 'array', items: { type: 'string' } },
-                emails: { type: 'array', items: { type: 'string' } }
+                emails: { type: 'array', items: { type: 'string' } },
+                usernames: { type: 'array', items: { type: 'string' }, description: 'Pseudos issus de la vCard (nickname, profils sociaux)' }
               }
             }
           },
@@ -103,25 +60,14 @@ export async function matchContacts(fastify: FastifyInstance) {
                   items: {
                     type: 'object',
                     properties: {
-                      user: {
-                        type: 'object',
-                        properties: {
-                          id: { type: 'string' },
-                          username: { type: 'string' },
-                          firstName: { type: 'string' },
-                          lastName: { type: 'string' },
-                          displayName: { type: 'string', nullable: true },
-                          avatar: { type: 'string', nullable: true },
-                          isOnline: { type: 'boolean' },
-                          lastActiveAt: { type: 'string', format: 'date-time', nullable: true }
-                        }
-                      },
-                      matchedBy: { type: 'string', enum: ['phone', 'email'] },
+                      user: matchedUserSchema,
+                      matchedBy: { type: 'string', enum: ['phone', 'email', 'username'] },
                       contactDisplayName: { type: 'string', nullable: true }
                     }
                   }
                 },
                 totalContacts: { type: 'number' },
+                processedContacts: { type: 'number' },
                 matchedCount: { type: 'number' }
               }
             }
@@ -139,78 +85,37 @@ export async function matchContacts(fastify: FastifyInstance) {
         return sendUnauthorized(reply, 'Authentication required');
       }
 
-      const parsed = matchContactsSchema.safeParse(request.body);
-      if (!parsed.success) {
+      const body = (request.body ?? {}) as { contacts?: unknown; defaultCountry?: unknown };
+      if (!Array.isArray(body.contacts)) {
         return sendBadRequest(reply, 'Invalid contacts payload');
       }
 
-      const { contacts, defaultCountry } = parsed.data;
-      const { phones, emails } = indexContactIdentifiers(contacts, defaultCountry ?? 'FR');
+      const totalContacts = body.contacts.length;
+      const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
 
-      if (phones.size === 0 && emails.size === 0) {
-        return sendSuccess(reply, {
-          matches: [],
-          totalContacts: contacts.length,
-          matchedCount: 0
-        });
-      }
-
-      const identifierFilters = [
-        ...(phones.size > 0 ? [{ phoneNumber: { in: Array.from(phones.keys()) } }] : []),
-        ...(emails.size > 0 ? [{ email: { in: Array.from(emails.keys()) } }] : []),
-      ];
-
-      const matchedUsers = await fastify.prisma.user.findMany({
-        where: {
-          id: { not: authContext.userId },
-          isActive: true,
-          deletedAt: null,
-          OR: identifierFilters
-        },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          isOnline: true,
-          lastActiveAt: true,
-          phoneNumber: true,
-          email: true
-        },
-        take: MAX_MATCH_RESULTS
-      });
-
-      if (matchedUsers.length === MAX_MATCH_RESULTS) {
+      if (totalContacts > MAX_CONTACTS_PER_SYNC) {
         fastify.log.warn(
-          `[CONTACTS-MATCH] Résultats plafonnés à ${MAX_MATCH_RESULTS} — matchedCount sous-estime le total réel`
+          `[CONTACTS-MATCH] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
         );
       }
 
-      const matches = matchedUsers.map((user) => {
-        const matchedByPhone = user.phoneNumber !== null && phones.has(user.phoneNumber);
-        return {
-          user: {
-            id: user.id,
-            username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            displayName: user.displayName,
-            avatar: user.avatar,
-            isOnline: user.isOnline,
-            lastActiveAt: user.lastActiveAt
-          },
-          matchedBy: matchedByPhone ? 'phone' : 'email',
-          contactDisplayName: (matchedByPhone
-            ? phones.get(user.phoneNumber as string)
-            : emails.get(normalizeEmail(user.email))) ?? null
-        };
+      const service = new ContactDirectoryService(fastify.prisma);
+      const matchesByKey = await service.match({ contacts, excludeUserId: authContext.userId });
+
+      const matches = contacts.flatMap((contact) => {
+        const match = matchesByKey.get(contact.contactKey);
+        if (!match) return [];
+        return [{
+          user: match.user,
+          matchedBy: match.matchedBy,
+          contactDisplayName: contact.displayName
+        }];
       });
 
       return sendSuccess(reply, {
         matches,
-        totalContacts: contacts.length,
+        totalContacts,
+        processedContacts: contacts.length,
         matchedCount: matches.length
       });
     } catch (error) {

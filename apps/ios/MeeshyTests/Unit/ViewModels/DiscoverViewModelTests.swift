@@ -29,9 +29,15 @@ final class DiscoverViewModelTests: XCTestCase {
     private func makeSUT(
         friendService: MockFriendService = MockFriendService(),
         userService: MockUserService = MockUserService(),
-        contactSync: MockContactSyncService = MockContactSyncService()
+        contactSync: MockContactSyncService = MockContactSyncService(),
+        directoryService: MockContactDirectoryService = MockContactDirectoryService()
     ) -> (sut: DiscoverViewModel, friendService: MockFriendService, userService: MockUserService) {
-        let sut = DiscoverViewModel(friendService: friendService, userService: userService, contactSync: contactSync)
+        let sut = DiscoverViewModel(
+            friendService: friendService,
+            userService: userService,
+            contactSync: contactSync,
+            directoryService: directoryService
+        )
         return (sut, friendService, userService)
     }
 
@@ -180,31 +186,64 @@ final class DiscoverViewModelTests: XCTestCase {
 
     // MARK: - importContacts
 
-    private static let stubContactMatches: [ContactMatch] = {
-        let json = """
-        [
-            {"user":{"id":"u9","username":"awa","firstName":"Awa","lastName":"Diallo","displayName":"Awa D.","avatar":null,"isOnline":true,"lastActiveAt":null},"matchedBy":"phone","contactDisplayName":"Awa du bureau"}
-        ]
-        """
-        return JSONStub.decode(json)
-    }()
+    private static func stubDirectoryContact(
+        id: String = "c9",
+        userId: String = "u9",
+        displayName: String? = "Awa du bureau"
+    ) -> DirectoryContact {
+        DirectoryContact(
+            id: id,
+            contactKey: "key-\(id)",
+            displayName: displayName,
+            phoneNumbers: ["+221771234567"],
+            emails: [],
+            usernames: [],
+            isOnMeeshy: true,
+            matchedBy: "phone",
+            matchedUser: MatchedContactUser(
+                id: userId, username: "awa", firstName: "Awa", lastName: "Diallo", displayName: "Awa D."
+            )
+        )
+    }
 
-    func test_importContacts_success_populatesMatches() async {
+    func test_importContacts_success_populatesMatchesFromTheSavedDirectory() async {
         let contactSync = MockContactSyncService()
-        contactSync.findFriendsResult = .success(Self.stubContactMatches)
-        let (sut, _, _) = makeSUT(contactSync: contactSync)
+        let directory = MockContactDirectoryService()
+        directory.listResult = .success([Self.stubDirectoryContact()])
+        let (sut, _, _) = makeSUT(contactSync: contactSync, directoryService: directory)
 
         await sut.importContacts()
 
         XCTAssertEqual(sut.contactMatches.map(\.id), ["u9"])
+        XCTAssertEqual(sut.contactMatches.first?.contactDisplayName, "Awa du bureau")
         XCTAssertTrue(sut.hasImportedContacts)
         XCTAssertFalse(sut.isImportingContacts)
-        XCTAssertEqual(contactSync.findFriendsCallCount, 1)
+    }
+
+    func test_importContacts_persistsTheAddressBookAsAFullSync() async {
+        let contactSync = MockContactSyncService()
+        let (sut, _, _) = makeSUT(contactSync: contactSync)
+
+        await sut.importContacts()
+
+        // « Retrouver mes contacts » CONSERVE désormais le répertoire : c'est
+        // ce qui alimente l'onglet Répertoire sans re-scanner l'appareil.
+        XCTAssertEqual(contactSync.syncDirectoryCallCount, 1)
+        XCTAssertEqual(contactSync.lastSyncDirectoryMode, .replace)
+    }
+
+    func test_importContacts_asksTheDirectoryForMeeshyContactsOnly() async {
+        let directory = MockContactDirectoryService()
+        let (sut, _, _) = makeSUT(directoryService: directory)
+
+        await sut.importContacts()
+
+        XCTAssertEqual(directory.lastListFilter, .meeshy)
     }
 
     func test_importContacts_accessDenied_leavesMatchesEmpty() async {
         let contactSync = MockContactSyncService()
-        contactSync.findFriendsResult = .failure(ContactSyncError.accessDenied)
+        contactSync.syncDirectoryResult = .failure(ContactSyncError.accessDenied)
         let (sut, _, _) = makeSUT(contactSync: contactSync)
 
         await sut.importContacts()
@@ -216,7 +255,7 @@ final class DiscoverViewModelTests: XCTestCase {
 
     func test_importContacts_networkError_leavesMatchesEmpty() async {
         let contactSync = MockContactSyncService()
-        contactSync.findFriendsResult = .failure(NSError(domain: "test", code: 500))
+        contactSync.syncDirectoryResult = .failure(NSError(domain: "test", code: 500))
         let (sut, _, _) = makeSUT(contactSync: contactSync)
 
         await sut.importContacts()

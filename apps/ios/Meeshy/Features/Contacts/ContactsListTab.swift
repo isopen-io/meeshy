@@ -5,6 +5,9 @@ import MeeshyUI
 
 struct ContactsListTab: View {
     @ObservedObject var viewModel: ContactsListViewModel
+    /// Répertoire (carnet d'adresses synchronisé). Vit au niveau du hub pour
+    /// que la liste survive aux allers-retours entre filtres.
+    @ObservedObject var phonebookViewModel: PhonebookViewModel
     var isActive: Bool = true
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
@@ -37,8 +40,12 @@ struct ContactsListTab: View {
 
     private func chipButton(_ filter: ContactFilter) -> some View {
         let isActive = viewModel.activeFilter == filter
-        let isPlaceholder = filter == .phonebook || filter == .affiliates
+        let isPlaceholder = filter == .affiliates
         let countSuffix: String = {
+            if filter == .phonebook {
+                let count = phonebookViewModel.contacts.count
+                return count > 0 ? " (\(count))" : ""
+            }
             guard filter == .all || filter == .online else { return "" }
             let count = filter == .all ? viewModel.friends.count :
                 viewModel.friends.filter { $0.isOnline == true }.count
@@ -73,7 +80,13 @@ struct ContactsListTab: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.loadState == .loading && viewModel.friends.isEmpty {
+        if viewModel.activeFilter == .phonebook {
+            PhonebookListView(
+                viewModel: phonebookViewModel,
+                isActive: isActive,
+                onScrollOffsetChange: onScrollOffsetChange
+            )
+        } else if viewModel.loadState == .loading && viewModel.friends.isEmpty {
             ContactsSkeletonList()
         } else if viewModel.filteredFriends.isEmpty {
             emptyState

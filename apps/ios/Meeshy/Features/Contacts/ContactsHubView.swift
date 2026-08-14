@@ -23,6 +23,7 @@ struct ContactsHubView: View {
     @StateObject private var keypadVM = KeypadViewModel()
     @StateObject private var callsVM = CallsViewModel()
     @StateObject private var contactsListVM = ContactsListViewModel()
+    @StateObject private var phonebookVM = PhonebookViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -142,6 +143,7 @@ struct ContactsHubView: View {
 
             ContactsListTab(
                 viewModel: contactsListVM,
+                phonebookViewModel: phonebookVM,
                 isActive: selectedTab == .contacts,
                 onScrollOffsetChange: { scrollOffset = $0 }
             )

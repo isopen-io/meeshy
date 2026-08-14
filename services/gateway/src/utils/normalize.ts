@@ -71,7 +71,7 @@ export function normalizePhoneWithCountry(
   phoneNumber: string,
   defaultCountry?: string
 ): PhoneNormalizationResult | null {
-  if (!phoneNumber || phoneNumber.trim() === '') {
+  if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
     return null;
   }
 
@@ -92,7 +92,19 @@ export function normalizePhoneWithCountry(
       isValid: parsed.isValid()
     };
   } catch (error) {
-    logger.warn('normalizePhoneWithCountry parse error', error as Error);
+    // Une `ParseError` est une DONNÉE illisible (`*123#`, `SOS`, indicatif
+    // inconnu), pas un incident : la fonction la traduit déjà en `null`. La
+    // remonter en WARN noyait les logs — une ligne par entrée atypique, des
+    // centaines par synchronisation d'un carnet d'adresses réel. Seule une
+    // défaillance INATTENDUE reste un WARN.
+    if (error instanceof Error && error.name === 'ParseError') {
+      logger.debug('normalizePhoneWithCountry parse error', { reason: error.message });
+      return null;
+    }
+    logger.warn('normalizePhoneWithCountry unexpected error', {
+      name: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : String(error)
+    });
     return null;
   }
 }
