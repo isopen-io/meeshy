@@ -67,7 +67,7 @@ struct MessageDayStickyOverlay: View {
                     .padding(.vertical, 7)
                     .background(colorScheme == .dark ? MeeshyColors.indigo900 : MeeshyColors.indigo50)
                     .cornerRadius(20)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
                     .padding(.horizontal, 16)
                     .accessibilityLabel(label)
                     .accessibilityAddTraits(.isHeader)
