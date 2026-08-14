@@ -1701,8 +1701,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var socket: SocketIOClient?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
-    private var reconnectAttempts: Int = 0
-    private var reconnectDelay: TimeInterval = 1
+    private var backoff = SocketReconnectBackoff()
     private var reconnectTask: Task<Void, Never>?
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
@@ -1750,19 +1749,28 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func handleNetworkBackOnline() {
         guard !isConnected else { return }
         guard APIClient.shared.authToken != nil else { return }
+        // The network coming back is fresh positive evidence about the LINK, not
+        // about the server: a ladder built up by earlier outages must not defer
+        // this attempt. (`SocialSocketManager` reconnects immediately on the same
+        // signal — resetting here keeps the two policies aligned.)
+        backoff.reset()
         scheduleReconnectWithBackoff()
     }
 
     private func scheduleReconnectWithBackoff() {
+        // Only worth retrying while a session still exists. A nil token means the
+        // server invalidated us (`requireReauthentication` clears it) and no amount
+        // of retrying helps — only a fresh login does. An EXPIRED token is a
+        // different story and must keep retrying: that is the post-outage case this
+        // ladder exists for.
+        guard APIClient.shared.authToken != nil else {
+            Logger.socket.info("MessageSocket: no session — not arming a reconnect retry")
+            return
+        }
         reconnectTask?.cancel()
-        // Cap BEFORE applying jitter so the jittered value never exceeds the 60s maximum.
-        let capped = min(reconnectDelay, 60)
-        let jittered = capped * (0.8 + Double.random(in: 0...0.4))
-        let delay = jittered
-        let attempt = reconnectAttempts
+        let delay = backoff.nextDelay(jitter: SocketReconnectBackoff.randomJitter())
+        let attempt = backoff.attempt
         Logger.socket.info("MessageSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
-        reconnectDelay = min(reconnectDelay * 2, 60)
-        reconnectAttempts += 1
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
@@ -1793,17 +1801,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Connection
 
     public func connect() {
+        establishTransport()
+    }
+
+    /// The real `connect()`, reporting whether a live transport now exists.
+    ///
+    /// Every early return below leaves `socket`/`manager` nil. That is harmless
+    /// on a cold start, but NOT when reached from `forceReconnect()`: that path
+    /// runs `suspendTransport()` first, which destroys Socket.IO's own infinite
+    /// retry loop. A `.notArmed` outcome there means the app is left with no
+    /// transport and nothing retrying — so the caller has to arm the backoff
+    /// ladder. See `forceReconnect()`.
+    @discardableResult
+    func establishTransport() -> SocketConnectOutcome {
         // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
         // en cours. Réassigner `manager`/`socket` relâche l'instance courante
         // en plein handshake : la connexion n'aboutit alors jamais et tous les
         // emits échouent avec « Tried emitting when not connected ».
         if let socket, socket.status == .connected || socket.status == .connecting {
-            return
+            return .armed
         }
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping connect")
-            return
+            return .notArmed
         }
 
         let tokenExpired = Self.isJWTExpired(token)
@@ -1812,10 +1833,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Task { @MainActor in
                 AuthManager.shared.handleUnauthorized()
             }
-            return
+            // The refresh is fire-and-forget and gives up silently on a transient
+            // network error — very likely right after an outage, which is exactly
+            // when we land here. Without a scheduled retry the app would stay dark
+            // with a valid session in the keychain.
+            return .notArmed
         }
 
-        guard let url = SocketConfig.baseURL else { return }
+        guard let url = SocketConfig.baseURL else { return .notArmed }
 
         DispatchQueue.main.async { self.connectionState = .connecting }
 
@@ -1839,6 +1864,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket = manager?.defaultSocket
         setupEventHandlers()
         socket?.connect()
+        return .armed
     }
 
     public func connectAnonymous(sessionToken: String) {
@@ -1936,6 +1962,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// signaling, which would strand the call on "connecting".
     public var isCallActiveGuard: (@Sendable () -> Bool)?
 
+    /// Whether a backoff retry is currently armed. Test seam: the recovery this
+    /// class owes after a rebuild that produced no transport is invisible from
+    /// the outside otherwise (no socket, no published state change).
+    var hasPendingReconnect: Bool { reconnectTask != nil }
+
     /// Tear down and rebuild the socket unconditionally. Use this on
     /// foreground resume or after a token refresh so we never depend on
     /// the potentially stale `isConnected` flag. `disconnect()` clears
@@ -1943,13 +1974,26 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public func forceReconnect() {
         if isCallActiveGuard?() == true {
             Logger.socket.info("MessageSocket: forceReconnect suppressed — call active (keep signaling socket)")
+            // Suppressed, not abandoned. Keeping a HEALTHY signaling socket is the
+            // whole point, so nothing to do while it is up — but if it is already
+            // down, suppression would otherwise be terminal for the one socket the
+            // call depends on. Arm the ladder so the rebuild happens anyway.
+            if !isConnected { scheduleReconnectWithBackoff() }
             return
         }
         // Suspend (not full disconnect) so `hadPreviousConnection` survives: this
         // rebuild is a reconnect (resume / network-back / re-auth), and the next
         // `.connect` must fire `didReconnect`.
         suspendTransport()
-        connect()
+        if establishTransport() == .notArmed {
+            // The teardown above is unconditional but the rebuild is not: no
+            // transport was built (missing/expired token, no base URL) and
+            // Socket.IO's own retry loop went down with the old socket. The
+            // backoff ladder is now the ONLY thing that can bring us back —
+            // notably when the post-outage token refresh fails transiently and
+            // `handleUnauthorized()` gives up without telling anyone.
+            scheduleReconnectWithBackoff()
+        }
     }
 
     /// Connection-handshake bookkeeping, extracted from the `.connect` handler
@@ -1966,8 +2010,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         let wasReconnect = hadPreviousConnection
         hadPreviousConnection = true
         reconnectAttempt = 0
-        reconnectAttempts = 0
-        reconnectDelay = 1
+        backoff.reset()
         if wasReconnect {
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }
