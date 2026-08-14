@@ -350,7 +350,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     }
 
     // L'auth peut n'être pas encore résolue quand un événement arrive. Sans le
-    // garde `me.isEmpty`, un identité vide des deux côtés retirerait une ligne
+    // garde `me.isEmpty`, une identité vide des deux côtés retirerait une ligne
     // au hasard.
     func test_participantLeft_withoutAResolvedIdentity_removesNothing() async throws {
         let store = makeStore()
