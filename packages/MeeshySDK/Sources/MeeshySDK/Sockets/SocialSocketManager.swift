@@ -360,6 +360,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private var socket: SocketIOClient?
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
+    private var backoff = SocketReconnectBackoff()
+    private var reconnectTask: Task<Void, Never>?
     private var hadPreviousConnection = false
     /// Post rooms actuellement rejointes (détail, reel, story, commentaires).
     /// Miroir de `MessageSocketManager.joinedConversations` : après une reconnexion
@@ -438,7 +440,35 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         guard !isConnected else { return }
         guard APIClient.shared.authToken != nil else { return }
         Logger.socket.info("SocialSocket: network back online → forcing reconnect")
+        // Fresh positive evidence about the link: any ladder built up by earlier
+        // failed attempts must not defer this one.
+        backoff.reset()
         forceReconnect()
+    }
+
+    /// Retry after an attempt that failed to leave a transport behind. Mirror of
+    /// `MessageSocketManager.scheduleReconnectWithBackoff` — see
+    /// `SocketReconnectBackoff` for why the ladder climbs per failed attempt
+    /// rather than per outage.
+    private func scheduleReconnectWithBackoff() {
+        // See MessageSocketManager: a nil token means the session was invalidated
+        // and retrying cannot help; an expired one must keep retrying.
+        guard APIClient.shared.authToken != nil else {
+            Logger.socket.info("SocialSocket: no session — not arming a reconnect retry")
+            return
+        }
+        reconnectTask?.cancel()
+        let delay = backoff.nextDelay(jitter: SocketReconnectBackoff.randomJitter())
+        let attempt = backoff.attempt
+        Logger.socket.info("SocialSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, !self.isConnected else { return }
+                self.forceReconnect()
+            }
+        }
     }
 
     // MARK: - JWT Helpers
@@ -461,16 +491,25 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     // MARK: - Connection
 
     public func connect() {
+        establishTransport()
+    }
+
+    /// The real `connect()`, reporting whether a live transport now exists.
+    /// Mirror of `MessageSocketManager.establishTransport` — every early return
+    /// leaves `socket`/`manager` nil, which is only safe if the caller arms a
+    /// retry when reached from `forceReconnect()`.
+    @discardableResult
+    func establishTransport() -> SocketConnectOutcome {
         // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
         // en cours : réassigner `manager`/`socket` relâche l'instance courante
         // en plein handshake et la connexion n'aboutit jamais.
         if let socket, socket.status == .connected || socket.status == .connecting {
-            return
+            return .armed
         }
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping SocialSocket connect")
-            return
+            return .notArmed
         }
 
         let tokenExpired = Self.isJWTExpired(token)
@@ -479,10 +518,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             Task { @MainActor in
                 AuthManager.shared.handleUnauthorized()
             }
-            return
+            return .notArmed
         }
 
-        guard let url = SocketConfig.baseURL else { return }
+        guard let url = SocketConfig.baseURL else { return .notArmed }
 
         DispatchQueue.main.async { self.connectionState = .connecting }
 
@@ -500,6 +539,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         socket = manager?.defaultSocket
         setupEventHandlers()
         socket?.connect()
+        return .armed
     }
 
     /// Transport-only teardown (R1 — sibling of MessageSocketManager.suspendTransport).
@@ -508,6 +548,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// `.connect` is recognised as a reconnect (fires `didReconnect` → feed/social
     /// re-sync). Contrast `disconnect()` (logout/cold reset) which also clears it.
     private func suspendTransport() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         stopHeartbeat()
         socket?.disconnect()
         socket = nil
@@ -554,6 +596,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// so a token rotation / re-auth never tears down the socket mid-call.
     public var isCallActiveGuard: (@Sendable () -> Bool)?
 
+    /// Whether a backoff retry is currently armed (test seam — mirror of
+    /// `MessageSocketManager.hasPendingReconnect`).
+    var hasPendingReconnect: Bool { reconnectTask != nil }
+
     /// Unconditionally rebuild the socket. Safe to call from any lifecycle
     /// hook — used to bypass the stale `isConnected` flag. R1 — suspends the
     /// transport (not a full disconnect) so `hadPreviousConnection` survives
@@ -561,10 +607,16 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func forceReconnect() {
         if isCallActiveGuard?() == true {
             Logger.socket.info("SocialSocket: forceReconnect suppressed — call active (keep signaling socket)")
+            if !isConnected { scheduleReconnectWithBackoff() }
             return
         }
         suspendTransport()
-        connect()
+        if establishTransport() == .notArmed {
+            // Teardown is unconditional, the rebuild is not: nothing was built and
+            // Socket.IO's retry loop went down with the old socket. Without this
+            // the social feed stays dark until an unrelated external nudge.
+            scheduleReconnectWithBackoff()
+        }
     }
 
     /// Connection-handshake bookkeeping, extracted from the `.connect` handler
@@ -575,9 +627,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// re-synced. Returns whether it was a reconnect.
     @discardableResult
     func handleConnectionEstablished() -> Bool {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         let wasReconnect = hadPreviousConnection
         hadPreviousConnection = true
         reconnectAttempt = 0
+        backoff.reset()
         if wasReconnect {
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }

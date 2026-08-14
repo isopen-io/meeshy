@@ -31,7 +31,13 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
   // `call:check-active`), i.e. a group call — surfaced here so a callee can
   // tell "Alice is calling you" apart from "Alice is calling your group"
   // before accepting (audit calls-audit 2026-08-14, W6 follow-up).
-  const isGroupCall = call.participants.length > 2;
+  //
+  // `conversationType` (PR #2987) est le signal AUTORITAIRE quand la gateway
+  // l'envoie : une conversation de groupe reste un groupe même si un seul
+  // appelé sonne. Le compte de participants reste le repli pour les payloads
+  // qui ne le portent pas (gateway antérieure, replay legacy) — deux signaux
+  // pour la même question, une seule réponse.
+  const isGroupCall = call.conversationType === 'group' || call.participants.length > 2;
   const groupSize = call.participants.length;
 
   // Play ringtone on mount
@@ -118,6 +124,19 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           >
             {call.initiator.username}
           </h3>
+          {/* QUEL groupe. Le badge au-dessus dit COMBIEN et le sous-titre dit
+              qu'il s'agit d'un appel de groupe : répéter « Appel de groupe »
+              ici l'écrirait deux fois à trois lignes d'écart. Le libellé ne
+              sert donc que de repli pour un groupe SANS titre, où la ligne
+              n'aurait rien d'autre à porter. */}
+          {call.conversationType === 'group' && (
+            <p
+              data-testid="call-notification-group-context"
+              className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1"
+            >
+              {call.conversationTitle ? call.conversationTitle : t('incoming.groupCall')}
+            </p>
+          )}
           <p
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"

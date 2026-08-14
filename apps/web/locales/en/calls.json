@@ -141,7 +141,8 @@
       "accept": "Accept",
       "decline": "Decline",
       "acceptLabel": "Accept call",
-      "declineLabel": "Decline call"
+      "declineLabel": "Decline call",
+      "groupCall": "Group call"
     },
     "waiting": {
       "forParticipant": "Waiting for participant...",
