@@ -81,6 +81,21 @@ sélection par fichier ayant manqué le doublon. Les deux portent désormais la 
 ne suffit pas à faire remarquer qu'on a écrit à côté du témoin existant : c'est la suite complète
 qui le dit.
 
+## Reste ouvert
+
+- **L'agrégat non-lu iOS ne se recalcule pas DANS LA FOULÉE du retrait.**
+  `ConversationSyncEngine.recomputeTotalUnread()` lit le cache disque — que `schedulePersist`
+  vient justement de réécrire sans la ligne, donc la DONNÉE est juste — mais rien ne le
+  redéclenche à cet instant précis. Le total se corrige au premier événement suivant (n'importe
+  quel `message:*`, ouverture/fermeture de fil, sync), donc l'écart est transitoire et
+  auto-résolutif, contrairement à la ligne fantôme qui, elle, tenait jusqu'au prochain delta.
+  Le fermer proprement voudrait dire relayer `participant-left` / `-banned` dans
+  `ConversationSyncEngine.startSocketRelay` vers `handleConversationDeleted` — ce qui ferait tout
+  d'un coup (cache, messages, `conversationsDidChange`, recompute). **Écarté ce cycle** :
+  `ConversationSyncEngine.currentUserId()` lit `AuthManager.shared`, non injecté, donc le gate
+  d'identité n'y est pas testable depuis la suite SDK — livrer du Swift non couvert pour un écart
+  transitoire n'en vaut pas le prix. À reprendre AVEC l'injection de l'identité dans l'engine.
+
 ## TDD
 
 8 témoins gateway (chaînage exact des rooms, unicité de l'émission, ordre emit → éviction de room,

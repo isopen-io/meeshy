@@ -1056,7 +1056,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                guard !self.isMe(event.userId) else {
+                if self.isMe(event.userId) {
                     self.dropConversationLeftByMe(at: index)
                     return
                 }
