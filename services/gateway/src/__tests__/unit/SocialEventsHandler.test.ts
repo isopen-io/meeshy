@@ -416,6 +416,8 @@ describe('SocialEventsHandler', () => {
         storyId: 'story-1',
         userId: VIEWER_ID,
         emoji: 'fire',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
@@ -487,6 +489,8 @@ describe('SocialEventsHandler', () => {
         statusId: 'status-1',
         userId: VIEWER_ID,
         emoji: 'heart',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
@@ -504,6 +508,8 @@ describe('SocialEventsHandler', () => {
         statusId: 'status-1',
         userId: VIEWER_ID,
         emoji: 'heart',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
@@ -916,8 +922,8 @@ describe('SocialEventsHandler', () => {
       const unlikeData: PostUnlikedEventData = { postId: 'p1', userId: 'u1', emoji: 'heart', likeCount: 0, reactionSummary: {} };
       const repostData: PostRepostedEventData = { originalPostId: 'p1', repost: post };
       const storyViewData: StoryViewedEventData = { storyId: 's1', viewerId: 'v1', viewerUsername: 'viewer', viewCount: 1 };
-      const storyReactData: StoryReactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire' };
-      const statusReactData: StatusReactedEventData = { statusId: 'st1', userId: 'u1', emoji: 'heart' };
+      const storyReactData: StoryReactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire', likeCount: 1, reactionSummary: { fire: 1 } };
+      const statusReactData: StatusReactedEventData = { statusId: 'st1', userId: 'u1', emoji: 'heart', likeCount: 1, reactionSummary: { heart: 1 } };
       const commentAddData: CommentAddedEventData = { postId: 'p1', comment: { id: 'c1', content: 'hi', likeCount: 0, replyCount: 0, createdAt: '' }, commentCount: 1 };
       const commentDelData: CommentDeletedEventData = { postId: 'p1', commentId: 'c1', commentCount: 0 };
       const commentLikeData: CommentLikedEventData = { postId: 'p1', commentId: 'c1', userId: 'u1', emoji: 'heart', likeCount: 1 };
@@ -961,6 +967,8 @@ describe('SocialEventsHandler', () => {
         storyId: 'story-42',
         userId: VIEWER_ID,
         emoji: 'fire',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
@@ -978,6 +986,8 @@ describe('SocialEventsHandler', () => {
         storyId: 'story-42',
         userId: VIEWER_ID,
         emoji: 'fire',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
@@ -998,6 +1008,8 @@ describe('SocialEventsHandler', () => {
         storyId: 'story-42',
         userId: VIEWER_ID,
         emoji: 'fire',
+        likeCount: 0,
+        reactionSummary: {},
       };
 
       handler.broadcastStoryUnreacted(data, AUTHOR_ID);
@@ -1012,7 +1024,7 @@ describe('SocialEventsHandler', () => {
     it('should use the STORY_UNREACTED event constant ("story:unreacted")', () => {
       expect(SERVER_EVENTS.STORY_UNREACTED).toBe('story:unreacted');
 
-      const data: StoryUnreactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire' };
+      const data: StoryUnreactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire', likeCount: 0, reactionSummary: {} };
       handler.broadcastStoryUnreacted(data, AUTHOR_ID);
 
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
@@ -1030,6 +1042,8 @@ describe('SocialEventsHandler', () => {
         statusId: 'status-99',
         userId: VIEWER_ID,
         emoji: 'heart',
+        likeCount: 1,
+        reactionSummary: { fire: 1 },
       };
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
@@ -1050,6 +1064,8 @@ describe('SocialEventsHandler', () => {
         statusId: 'status-99',
         userId: VIEWER_ID,
         emoji: 'heart',
+        likeCount: 0,
+        reactionSummary: {},
       };
 
       handler.broadcastStatusUnreacted(data, AUTHOR_ID);

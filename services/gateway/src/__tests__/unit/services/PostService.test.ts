@@ -425,6 +425,25 @@ describe('unlikePost', () => {
 
     expect(reactionService.removeReaction).not.toHaveBeenCalled();
     expect(result).toEqual(expect.objectContaining({ id: 'post-1' }));
+    // Rien n'a été retiré : il n'y a pas d'emoji à annoncer, et la route ne
+    // doit donc rien diffuser. C'est le seul signal qui le lui dise.
+    expect(result?.removedEmoji).toBeNull();
+  });
+
+  // L'emoji retiré ne se lit qu'ICI, avant la suppression de la ligne
+  // `PostReaction` : nul autre endroit ne peut le reconstruire, et la route
+  // en fabriquait un ('❤️') faute de le recevoir.
+  it('rend la réaction RÉELLEMENT retirée, quel que soit son emoji', async () => {
+    const prisma = makePrisma({ reactionFindMany: [{ userId: 'user-1', emoji: '😂', createdAt: new Date() }] });
+    const { sut, reactionService } = makeSut(prisma);
+
+    const result = await sut.unlikePost('post-1', 'user-1');
+
+    expect(reactionService.removeReaction).toHaveBeenCalledWith(
+      expect.objectContaining({ emoji: '😂' }),
+    );
+    expect(result?.removedEmoji).toBe('😂');
+    expect(result?.post).toEqual(expect.objectContaining({ id: 'post-1' }));
   });
 
   it('calls removeReaction and updates post when reactions exist', async () => {

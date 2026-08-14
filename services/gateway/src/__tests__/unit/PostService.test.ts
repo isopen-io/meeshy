@@ -551,6 +551,7 @@ describe('PostService', () => {
         userId: 'user-liker',
         emoji: '❤️',
       });
+      expect(result?.removedEmoji).toBe('❤️');
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'post-1' },
@@ -560,7 +561,7 @@ describe('PostService', () => {
           }),
         }),
       );
-      expect(result).toEqual(post);
+      expect(result?.post).toEqual(post);
     });
 
     it('is idempotent — no reaction exists, returns post unchanged without calling removeReaction', async () => {
@@ -572,7 +573,8 @@ describe('PostService', () => {
 
       expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
       expect(prisma.post.update).not.toHaveBeenCalled();
-      expect(result).toEqual(post);
+      expect(result?.post).toEqual(post);
+      expect(result?.removedEmoji).toBeNull();
     });
   });
 

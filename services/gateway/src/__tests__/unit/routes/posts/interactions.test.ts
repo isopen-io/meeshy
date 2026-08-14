@@ -13,7 +13,8 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockLikePost = jest.fn<any>().mockResolvedValue({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 } });
-const mockUnlikePost = jest.fn<any>().mockResolvedValue({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {} });
+// `unlikePost` rend une enveloppe : le post ET la réaction réellement retirée.
+const mockUnlikePost = jest.fn<any>().mockResolvedValue({ id: 'post-001', removedEmoji: '❤️', post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {} } });
 const mockBookmarkPost = jest.fn<any>().mockResolvedValue({ bookmarkCount: 1 });
 const mockUnbookmarkPost = jest.fn<any>().mockResolvedValue({ bookmarkCount: 0 });
 const mockRecordView = jest.fn<any>().mockResolvedValue(true);
@@ -290,7 +291,7 @@ describe('DELETE /posts/:id/like — service error', () => {
 
 describe('DELETE /posts/:id/like — STORY type broadcast', () => {
   it('returns 200 and fires story unreacted broadcast', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'story-001', type: 'STORY', authorId: 'author-1', likeCount: 0, reactionSummary: {} });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'story-001', removedEmoji: '❤️', post: { id: 'story-001', type: 'STORY', authorId: 'author-1', likeCount: 0, reactionSummary: {} } });
     const app = await buildApp({ withSocialEvents: true });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -300,7 +301,7 @@ describe('DELETE /posts/:id/like — STORY type broadcast', () => {
 
 describe('DELETE /posts/:id/like — STATUS type broadcast', () => {
   it('returns 200 and fires status unreacted broadcast', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'status-001', type: 'STATUS', authorId: 'author-1', likeCount: 0, reactionSummary: {} });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'status-001', removedEmoji: '❤️', post: { id: 'status-001', type: 'STATUS', authorId: 'author-1', likeCount: 0, reactionSummary: {} } });
     const app = await buildApp({ withSocialEvents: true });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -1208,7 +1209,7 @@ describe('DELETE /posts/:id/like — onDuplicate replay path', () => {
 
 describe('DELETE /posts/:id/like — POST type with social events broadcasts post unliked', () => {
   it('returns 200 and fires broadcastPostUnliked for POST type', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', removedEmoji: '❤️', post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] } });
     const app = await buildApp({ withSocialEvents: true });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -1305,7 +1306,7 @@ describe('POST /posts/:id/like — createPostLikeNotification rejects (line 113)
 
 describe('DELETE /posts/:id/like — broadcastPostUnliked rejects (line 185)', () => {
   it('returns 200 even when broadcast rejects', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', removedEmoji: '❤️', post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] } });
 
     const app = Fastify({ logger: false });
     const prisma = {
@@ -1442,7 +1443,7 @@ describe('POST /posts/:id/like — null reactionSummary uses ?? {} fallback (lin
 
 describe('DELETE /posts/:id/like — null reactionSummary uses ?? {} fallback (line 181)', () => {
   it('returns 200 using empty object when reactionSummary is null in unlike', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: null });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', removedEmoji: '❤️', post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: null } });
     const app = await buildApp({ withSocialEvents: true });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -1452,7 +1453,7 @@ describe('DELETE /posts/:id/like — null reactionSummary uses ?? {} fallback (l
 
 describe('DELETE /posts/:id/like — undefined visibility uses ?? PUBLIC fallback (lines 183-184)', () => {
   it('returns 200 using PUBLIC when visibility and visibilityUserIds are undefined', async () => {
-    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {} });
+    mockUnlikePost.mockResolvedValueOnce({ id: 'post-001', removedEmoji: '❤️', post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {} } });
     const app = await buildApp({ withSocialEvents: true });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);

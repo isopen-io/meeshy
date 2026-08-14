@@ -371,6 +371,82 @@ draine désormais ses pages (cf. `tasks/todo.md`, cycle 80).
 **Risque de régression.** Quasi nul — événement additif, un client qui l'ignore se comporte exactement comme aujourd'hui.
 **Dépendances.** aucune (gwcontract-05 livré fournit le patron) · **Backend requis :** oui
 
+### gwcontract-16-unreact-emoji-fabricated — le retrait de réaction annonçait un ❤️ qu'il n'avait pas retiré · **P1** · effort M · ✅ **LIVRÉ 2026-08-14 (cycle 119), gateway + shared + web**
+
+**Constat.** `DELETE /posts/:postId/like` diffusait `emoji: '❤️'` **codé en dur** sur ses trois
+branches (`story:unreacted`, `status:unreacted`, `post:unliked`). La route n'était pas en position
+de le savoir : la ligne `PostReaction` n'est lisible qu'AVANT sa suppression, et `unlikePost` — qui
+la lit sous le nom `foundEmoji` — ne rendait que le post. Le défaut était **connu et écrit dans le
+code** depuis le chantier des rétractations de notifications (`PostService.ts`, commentaire :
+« La route, elle, diffuse un '❤️' codé en dur ») : il avait été contourné là où il gênait, jamais
+corrigé à sa source.
+
+**Ce n'était pas latent.** `StoryViewModel.applyStoryReactionDelta`
+(`apps/ios/.../StoryViewModel.swift:3057`) fait, sur l'appareil de l'acteur,
+`mine.removeAll { $0 == emoji }`. Un 😂 retiré ne retirait donc **rien** : la puce 😂 survivait à sa
+propre suppression, pendant que `reactionCount` était bien décrémenté — une contradiction visible à
+l'écran (« vous avez réagi 😂 » sur un compteur à 0), jusqu'au prochain fetch complet. La fiche
+rts-03 (fichier 03) avait identifié le mensonge et prescrit de le **contourner** côté client
+(« unreacted = NO-OP ») ; il est ici retiré à la source, ce qui rend le delta iOS existant correct
+sans une ligne de Swift.
+
+**Second défaut, même route.** `unlikePost` est idempotent : sur un post que le lecteur n'a jamais
+aimé, il ne touche à rien. La route diffusait quand même un `unreacted` — un événement qui décrit
+une transition qui n'a pas eu lieu, et que les clients à delta appliquent en `-1`. Le rejeu
+`onDuplicate` du journal de mutation tombait dans la même case, alors même que le commentaire de la
+route affirmait l'inverse (« recording the mutation prevents the broadcast path from firing twice
+on replay ») : l'affirmation était fausse, elle est maintenant vraie.
+
+**Troisième volet (rts-03, étapes 2-3).** Les quatre événements story/status ne portaient
+qu'`emoji` + `userId`, là où `post:liked`/`post:unliked` portent `likeCount` + `reactionSummary`
+depuis toujours. Un consommateur ne pouvait donc que compter en `±1` — non idempotent sous double
+livraison, non rattrapable après un manqué. Le web l'avait acté **en renonçant** au temps réel sur
+ces compteurs (`handleStoryReacted` : « no authoritative aggregation count — mutating the feed
+would drift »).
+
+**Livré.**
+- **`PostService.unlikePost`** rend une enveloppe `{ id, post, removedEmoji }`. `removedEmoji` est
+  la réaction réellement retirée, `null` quand il n'y en avait aucune. L'enveloppe existe pour ce
+  seul champ, et `id` y est repris du post parce que c'est l'identité que `withMutationLog`
+  journalise (`T & { id: string }`).
+- **`routes/posts/interactions.ts`** — l'emoji diffusé est `removedEmoji` sur les trois branches ;
+  **rien retiré ⇒ rien annoncé** (`removedEmoji` falsy ⇒ aucune diffusion), le rejeu `onDuplicate`
+  rendant `removedEmoji: null` par construction. L'acteur, lui, continue de recevoir l'état absolu
+  dans la réponse HTTP.
+- **`packages/shared/types/post.ts`** — `likeCount` + `reactionSummary` sur les quatre types
+  story/status, **requis** (cf. écart (a)).
+- **web** — `handleStoryReacted`/`handleStoryUnreacted` écrivent l'absolu dans `stories.feed()` via
+  `patchStoryReactionCounts` ; le no-op documenté disparaît avec sa cause. Les handlers `status:*`
+  gardent leur invalidation : elle est correcte, et la remplacer par un patch est une optimisation
+  distincte, hors périmètre.
+
+**Écarts assumés vs la fiche rts-03.**
+- **(a) champs REQUIS, pas optionnels.** La fiche prescrivait `reactionSummary?`. L'optionnalité en
+  TypeScript n'achète rien ici : il y a **un seul** émetteur et il tient toujours la paire. Requis,
+  le compilateur prouve l'invariant. La rétro-compatibilité est une propriété du **fil**, pas du
+  type TS — elle est portée par les décodeurs (`Decodable` Swift, handlers web), qui ignorent un
+  champ qu'ils ne déclarent pas.
+- **(b) `likeCount` en plus de `reactionSummary`.** La somme du résumé vaut le total, mais un
+  consommateur ne devrait pas avoir à la redériver ; c'est aussi la paire exacte que
+  `PostLikedEventData` porte déjà — même contrat, mêmes champs.
+- **(c) STORY inclus, pas seulement STATUS.** rts-03 ne visait que les statuts. C'est sur les
+  **stories** que le mensonge avait un consommateur en production.
+
+**Non fait (hors runner Linux).** Volet iOS de rts-03 : persistance des 4 sinks `StatusViewModel`,
+sink `statusUnreacted`, champs `reactionSummary` sur les `Socket*Data` du SDK. **Le défaut de cette
+fiche, lui, ne l'attend pas** : il est fermé côté serveur, et le client iOS existant devient correct
+sans changement.
+
+**Tests (TDD — RED vérifié).** Le RED est discriminant et a été mesuré : 11 tests rouges dans
+`interactions2.test.ts` contre l'ancienne source (emoji fabriqué, diffusion sans retrait, absence de
+la paire absolue), 3 dans `use-post-socket-cache-sync.test.tsx` (le tray n'écrivait rien).
+
+**Risque de régression.** L'arrêt de diffusion sur un retrait sans effet est le seul changement
+observable au-delà du contenu du payload ; il retire des événements qui décrivaient une transition
+inexistante. L'acteur reste servi par la réponse HTTP.
+
+**Dépendances.** aucune · **Backend requis :** oui
+
 ## Doublons rattachés
 
 | Doublon (dimension d'origine) | Canonique | Apport intégré au canonique |

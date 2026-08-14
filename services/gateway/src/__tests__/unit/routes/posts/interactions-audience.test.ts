@@ -23,8 +23,11 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 const mockLikePost = jest.fn<any>().mockResolvedValue({
   id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 },
 });
+// `unlikePost` rend une enveloppe : le post ET la réaction réellement retirée.
 const mockUnlikePost = jest.fn<any>().mockResolvedValue({
-  id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {},
+  id: 'post-001',
+  removedEmoji: '❤️',
+  post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {} },
 });
 
 jest.mock('../../../../services/PostService', () => ({

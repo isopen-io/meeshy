@@ -132,7 +132,20 @@ Deux singletons SDK transportent le temps réel : `MessageSocketManager` (~70 li
 
 ---
 
-### rts-03 — Statuses : événements socket jamais persistés au cache + `status:unreacted` ignoré (payload gateway à enrichir : emoji hardcodé ❤️) · **P2** · effort M (ajusté de S : le correctif vérifié ajoute un enrichissement de payload gateway + types shared + SDK — S iOS + S gateway)
+### rts-03 — Statuses : événements socket jamais persistés au cache + `status:unreacted` ignoré (payload gateway à enrichir : emoji hardcodé ❤️) · **P2** · effort M
+
+> **Volet GATEWAY + shared livré 2026-08-14 (cycle 119)** — étapes 2 et 3, élargies : les quatre
+> types story/status portent `likeCount` **et** `reactionSummary`, **requis** (un seul émetteur, qui
+> tient toujours la paire — la rétro-compatibilité est portée par les décodeurs, pas par le type TS),
+> et l'élargissement couvre STORY, pas seulement STATUS.
+>
+> **L'étape 5 est caduque dans sa partie défensive.** Elle prescrivait « unreacted = NO-OP (le
+> payload legacy ment sur l'emoji — ne JAMAIS décrémenter dessus) » : le mensonge est retiré À LA
+> SOURCE par `gwcontract-16` (fichier 06), la route diffusant désormais la réaction réellement
+> retirée. Le delta iOS existant (`StoryViewModel.applyStoryReactionDelta`) devient correct sans une
+> ligne de Swift. Reste dû côté iOS : la persistance des 4 sinks (étape 1), le sink `statusUnreacted`
+> (étape 5, partie constructive), les champs `Socket*Data` du SDK (étape 4) — non livrables depuis un
+> runner Linux. (ajusté de S : le correctif vérifié ajoute un enrichissement de payload gateway + types shared + SDK — S iOS + S gateway)
 
 **Constat.** Les 4 sinks de `StatusViewModel` (`statusCreated`, `statusDeleted`, `statusUpdated`, `statusReacted`) mutent `statuses` sans jamais appeler `saveCacheSnapshot()` (invoqué seulement par `setStatus` l.218 et `clearStatus` l.254). Aucun sink `statusUnreacted` alors que le SDK publie l'événement (`SocialSocketManager.swift:1018-1023`) et que le gateway l'émet réellement. `CacheCoordinator` possède un store `statuses` (`CacheCoordinator.swift:41`) mais aucune souscription socket ne le patche. Découverte adversariale décisive : le correctif naïf « décrément symétrique de `payload.emoji` » serait CORRUPTEUR — le `DELETE /posts/:postId/like` hardcode `emoji: '❤️'` dans `broadcastStatusUnreacted` (`interactions.ts:199-203`) alors que la réaction retirée peut être n'importe quel emoji (`reactToStatus` accepte tout, stockage max 1 réaction/utilisateur). Le résumé absolu `post.reactionSummary` est disponible au site d'émission (`interactions.ts:216`).
 

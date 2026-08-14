@@ -23,7 +23,10 @@ const mockGetPostInteractions = jest.fn();
 const mockRepostPost = jest.fn();
 const mockGetPostById = jest.fn().mockResolvedValue({ id: 'post-1', type: 'POST', authorId: 'author-1' });
 const mockLikePost = jest.fn().mockResolvedValue({ id: 'p1', likeCount: 1, reactionSummary: {} });
-const mockUnlikePost = jest.fn().mockResolvedValue({ id: 'p1', likeCount: 0, reactionSummary: {} });
+// `unlikePost` rend une enveloppe : le post ET la réaction réellement retirée.
+const mockUnlikePost = jest.fn().mockResolvedValue({
+  id: 'p1', removedEmoji: '❤️', post: { id: 'p1', likeCount: 0, reactionSummary: {} },
+});
 const mockBookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 1 });
 const mockUnbookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 0 });
 const mockRecordView = jest.fn().mockResolvedValue(true);

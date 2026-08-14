@@ -1,107 +1,125 @@
-# Cycle 118 — La galerie de médias ne bornait rien
+# Cycle 119 — Le retrait de réaction annonçait un ❤️ qu'il n'avait pas retiré
 
 ## Le défaut
 
-`GET /conversations/:id/attachments` — la galerie de médias d'une conversation — est un **second
-lecteur des messages** : il en sert les pièces jointes, avec `fileUrl`, `originalName`, les
-dimensions et la transcription des audios. Le premier lecteur (`GET /conversations/:id/messages`)
-applique trois exclusions. La galerie n'en appliquait **aucune**.
+`DELETE /posts/:postId/like` diffusait `emoji: '❤️'` **codé en dur** sur ses trois branches —
+`story:unreacted`, `status:unreacted`, `post:unliked`. La route n'était pas en position de savoir
+quel emoji partait : la ligne `PostReaction` n'est lisible qu'AVANT sa suppression, et le seul
+endroit qui la lise est `PostService.unlikePost`, sous le nom `foundEmoji`, qui ne rendait que le
+post.
 
-**Un membre INSCRIT entré par un lien `allowViewHistory:false` obtenait la galerie entière de la
-conversation** — tout l'avant-jointure compris. La branche « membre enregistré » ne vérifiait que
-l'adhésion, et rien d'autre. Un inscrit qui rejoint par un lien porte pourtant un
-`participant.shareLinkId` au même titre qu'un anonyme (`routes/conversations/sharing.ts:620`, écrit
-avec `type: 'user'`) : le lien lui ferme l'historique dans la liste des messages, et la galerie le
-lui rouvrait en entier.
+Le défaut était **déjà écrit dans le code**. Le chantier des rétractations de notifications l'avait
+rencontré et documenté sur place :
 
-C'est le trou que `gwcontract-09` (c) avait fermé pour `/sync` au cycle 115 — « la règle est portée
-par la LIGNE PARTICIPANT, pas par le type d'identité » — dans une route que personne n'avait
-rouverte depuis.
+> « La route, elle, diffuse un '❤️' codé en dur, et un retrait câblé là-haut manquerait donc toute
+> réaction d'un autre emoji. »
 
-**Symétriquement, la branche anonyme se trompait en sens INVERSE** : elle rendait `403` sur toute la
-galerie dès que le lien fermait l'historique. Ce même participant voit pourtant dans `GET messages`
-les messages postés depuis son arrivée, pièces jointes comprises — la galerie les lui cachait
-toutes. Un plancher rétrécit une lecture ; il ne la refuse pas.
+Il avait été contourné là où il gênait — jamais corrigé à sa source.
 
-### Pourquoi (a) restait invisible
+### Ce n'était pas latent
 
-La branche anonyme lisait `participant.anonymousSession.shareLinkId` — la copie **embarquée** —
-quand `messages.ts`, `/sync` et le module de plancher lisent la colonne `participant.shareLinkId`.
-La jointure anonyme écrit le fait aux deux endroits (`routes/anonymous.ts:398` et `:410`), donc
-cette branche marchait ; mais seule la colonne existe pour un inscrit. Lire la copie, c'était lire
-un champ qui n'existe que là où le contrôle fonctionnait déjà.
+`StoryViewModel.applyStoryReactionDelta` (`apps/ios/.../StoryViewModel.swift:3057`) fait, sur
+l'appareil de l'ACTEUR :
 
-### Deux exclusions de plus, hors lien de partage
+```swift
+mine.removeAll { $0 == emoji }
+```
 
-- **Tombstone `deletedAt`** — jamais appliquée : un média restait listé, URL comprise, après la
-  suppression POUR TOUS du message qui le portait.
-- **Masquage personnel** (`clear-history`, `delete-for-me`) — jamais appliqué non plus, alors que
-  `personalHistoryFilter` existe et sert déjà quatre autres surfaces.
+Un 😂 retiré n'y retirait donc **rien**. La puce 😂 survivait à sa propre suppression, pendant que
+`reactionCount` était bien décrémenté — « vous avez réagi 😂 » affiché sur un compteur à 0, jusqu'au
+prochain fetch complet.
 
-## Ce qui l'a fait apparaître
+La fiche `rts-03` avait vu le mensonge et prescrit de le **contourner** côté client (« unreacted =
+NO-OP — ne JAMAIS décrémenter sur ce payload »). Il est ici retiré à la source : le delta iOS
+existant redevient correct **sans une ligne de Swift**.
 
-`gwcontract-14`, une convergence P3 : faire lire à `messages.ts` la règle du module au lieu de sa
-copie inline. Le recensement des lecteurs de `allowViewHistory` en a trouvé un **troisième**, non
-inventorié — et celui-là ne divergeait pas seulement, il fuyait.
+### Deuxième défaut, même route
+
+`unlikePost` est idempotent : sur un post que le lecteur n'a jamais aimé, il ne touche à rien. La
+route diffusait quand même un `unreacted` — un événement qui décrit une transition qui n'a pas eu
+lieu, et que les clients à delta appliquent en `-1`. Le rejeu `onDuplicate` du journal de mutation
+tombait dans la même case, alors que le commentaire de la route affirmait l'inverse :
+
+> « recording the mutation prevents the broadcast path from firing twice on replay »
+
+L'affirmation était fausse. Elle est maintenant vraie.
+
+### Troisième volet — le compteur absolu (rts-03, étapes 2-3)
+
+Les quatre événements story/status ne portaient qu'`emoji` + `userId`, là où
+`post:liked`/`post:unliked` portent `likeCount` + `reactionSummary` depuis toujours. Un consommateur
+ne pouvait donc que compter en `±1` : ni idempotent sous double livraison, ni rattrapable après un
+événement manqué. Le web l'avait acté **en renonçant** au temps réel sur ces compteurs —
+`handleStoryReacted` : « no authoritative aggregation count — mutating the feed would drift ».
 
 ## Livré
 
-- **`services/shareLinkHistoryFloor.ts`** — `historyFloorFor(join, link)`, la règle PURE et
-  désormais unique. `loadShareLinkHistoryFloors` (forme ensembliste, `/sync`) l'appelle ;
-  `messages.ts` l'appelle ; la galerie l'appelle via `loadShareLinkHistoryFloor` (forme unitaire).
-  Les deux cas d'absence — pas de lien, lien INTROUVABLE — sont énoncés une fois et testés.
-- **`routes/conversations/messages.ts`** (gwcontract-14) — la copie inline disparaît. La séparation
-  que la fiche prescrivait est tenue en laissant la règle **sans chargeur imposé** : `/sync` lit
-  tous les liens d'un coup, `messages.ts` lit LE lien avec les colonnes de la porte (`expiresAt`,
-  `maxUses`) dont il a besoin par ailleurs. Un chargeur commun aurait ajouté un aller-retour à l'un
-  des deux ; la règle partagée n'en ajoute aucun. **La porte (403) reste entièrement dans la route.**
-- **`routes/attachments/metadata.ts`** — une seule résolution de participant pour les deux branches,
-  la colonne canonique, le plancher et le masquage personnel recouverts en `Promise.all`.
-- **`AttachmentService.getConversationAttachments`** — prend un `messageFilter` **opaque** et pose
-  ses deux invariants (`conversationId`, `deletedAt: null`) **après** le spread : un appelant ne peut
-  qu'ajouter, jamais sortir de la conversation ni ressusciter une tombstone. Gelé par test.
+- **`PostService.unlikePost`** rend une enveloppe `{ id, post, removedEmoji }`. `removedEmoji` est
+  la réaction réellement retirée, `null` quand il n'y en avait aucune. L'enveloppe existe pour ce
+  seul champ ; `id` y est repris du post parce que c'est l'identité que `withMutationLog`
+  journalise (`T & { id: string }`).
+- **`routes/posts/interactions.ts`** — l'emoji diffusé est `removedEmoji` sur les trois branches ;
+  **rien retiré ⇒ rien annoncé**, le rejeu `onDuplicate` rendant `removedEmoji: null` par
+  construction. L'acteur reste servi par l'état absolu de la réponse HTTP.
+- **`packages/shared/types/post.ts`** — `likeCount` + `reactionSummary` sur les quatre types
+  story/status, **requis**.
+- **web** — `handleStoryReacted`/`handleStoryUnreacted` écrivent l'absolu dans `stories.feed()` via
+  `patchStoryReactionCounts`. Le no-op documenté disparaît avec sa cause. Les handlers `status:*`
+  gardent leur invalidation : elle est correcte, et la remplacer par un patch serait une
+  optimisation distincte, hors périmètre.
+
+### Écarts assumés vs la fiche rts-03
+
+- **(a) champs REQUIS, pas optionnels.** La fiche prescrivait `reactionSummary?`. L'optionnalité en
+  TypeScript n'achète rien ici : il y a **un seul** émetteur et il tient toujours la paire. Requis,
+  le compilateur prouve l'invariant. La rétro-compatibilité est une propriété du **fil**, pas du
+  type TS — elle est portée par les décodeurs, qui ignorent un champ qu'ils ne déclarent pas.
+- **(b) `likeCount` en plus de `reactionSummary`.** La somme du résumé vaut le total, mais un
+  consommateur ne devrait pas avoir à la redériver — et c'est la paire exacte que
+  `PostLikedEventData` porte déjà.
+- **(c) STORY inclus, pas seulement STATUS.** rts-03 ne visait que les statuts. C'est sur les
+  **stories** que le mensonge avait un consommateur en production.
 
 ### Ce qui a été REFUSÉ
 
-Faire porter au module la décision de réponse (403 expiry/quota) en plus du filtre. La fiche le
-disait, et c'est juste : la porte et le plancher répondent à deux questions différentes sur la même
-ligne. Les empiler aurait donné au module de filtre le pouvoir de terminer une requête HTTP.
+Remplacer l'invalidation `status:*` du web par un patch. Elle est correcte ; la changer est une
+optimisation, pas un correctif, et elle n'a pas de défaut à fermer.
 
-Appliquer la porte à la galerie « par symétrie ». Un lien expiré ferme une ENTRÉE ; il ne révoque
-pas ce qu'un participant déjà entré a le droit de lire. `GET messages` en décide ainsi, la galerie
-suit — et c'est le comportement inchangé.
+Rendre `emoji` optionnel sur le fil pour couvrir le cas « emoji inconnu ». Les décodeurs iOS le
+déclarent non-optionnel (`SocketStoryUnreactedData.emoji: String`) : un payload sans emoji ferait
+échouer le décodage et **droperait l'événement entier**. Quand l'emoji est inconnu, il n'y a rien à
+annoncer — c'est la règle « rien retiré ⇒ rien annoncé », pas un champ à affaiblir.
 
 ## TDD
 
-RED d'abord, vérifié : 8 tests rouges (5 sur le plancher de la galerie, 2 sur le masquage, 1 sur la
-suite service qui ne compilait plus), plus la suite du module rouge sur `historyFloorFor`
-introuvable. Un test existant disait `403 quand le lien ne permet pas l'historique` — il encodait le
-défaut (b) ; il est réécrit pour dire la règle, avec la raison en commentaire.
+RED **vérifié en revenant la source seule**, les tests en place :
 
-Ajouté aussi à `messages-routes.test.ts` : deux tests qui pinnent le plancher DANS la clause. La
-suite ne vérifiait que `reply.send` — « plancher appliqué » et « plancher perdu » s'y terminaient de
-la même façon, donc la convergence n'y aurait rien cassé de visible.
+| Suite | Rouges contre l'ancienne source |
+|---|---|
+| `interactions2.test.ts` (gateway) | **11** |
+| `use-post-socket-cache-sync.test.tsx` (web) | **3** |
+
+Les rouges couvrent les trois volets : emoji fabriqué (STORY/STATUS/POST), diffusion sur un retrait
+sans effet (dont le rejeu `onDuplicate`), et absence de la paire absolue.
 
 ## Gates
 
 | Gate | Résultat |
 |---|---|
-| prisma generate + shared `bun run build` | OK (prérequis) |
-| gateway jest **complet** | **710 suites / 17 376 tests verts** |
+| `prisma generate` + shared `bun run build` | OK (prérequis) |
 | gateway `tsc --noEmit` | **0 erreur** |
-| couverture `metadata.ts` | **100 %** lignes (91,6 % branches) |
-| couverture `shareLinkHistoryFloor.ts` | **100 %** lignes |
-| couverture `AttachmentService.ts` | **100 %** lignes/branches |
-| couverture globale gateway | 95,08 % stmts / 95,75 % lignes |
+| gateway jest **complet** | **710 suites / 17 387 tests verts** |
+| web `tsc --noEmit` sur les fichiers touchés | **0 erreur** |
+| web jest **complet** | **569 suites / 12 181 tests verts** (21 skipped) |
 
 ## Reste ouvert après ce cycle
 
-- **`bun run lint` (gateway) ne s'exécute pas** — aucun `eslint.config.js` dans `services/gateway/`,
-  et le script pointe sur `eslint src/`. ESLint 10 refuse l'ancien format. **Antérieur à ce cycle**,
-  et la CI ne lance pas ce script : le gate lint n'existe donc pas pour la gateway. À instruire.
-- **iOS — fossile INERTE** : `SocketNotificationEvent.isRead` (`MessageSocketManager.swift:1115`),
-  toujours `nil`, zéro consommateur. Non livrable depuis un runner Linux (Xcode).
-- **Volets iOS de `gwcontract-05` et `gwcontract-13`** — miroir Swift des deux prédicats bulk, à
-  livrer ENSEMBLE. Hérité des cycles 116/117.
-- Hérités : `net-02` (P1, iOS), `sync-01` (aucun client n'appelle encore `/sync`), arbitrage produit
-  `delete-for-me` au niveau message (cycle 114).
+- **Volet iOS de rts-03** — persistance des 4 sinks `StatusViewModel`, sink `statusUnreacted`,
+  champs `reactionSummary` sur les `Socket*Data` du SDK. Non livrable depuis un runner Linux.
+  **Le défaut de ce cycle ne l'attend pas** : il est fermé côté serveur, et le client iOS existant
+  devient correct sans changement.
+- **`bun run lint` (gateway) ne s'exécute pas** — aucun `eslint.config.js` dans `services/gateway/`.
+  Antérieur, et la CI ne lance pas ce script : le gate lint n'existe pas pour la gateway.
+- Hérités : volets iOS de `gwcontract-05` et `gwcontract-13` (à livrer ENSEMBLE), `net-02` (P1,
+  iOS), `sync-01` (aucun client n'appelle encore `/sync`), fossile inerte
+  `SocketNotificationEvent.isRead`.
