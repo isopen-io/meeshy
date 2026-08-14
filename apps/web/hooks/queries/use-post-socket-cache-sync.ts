@@ -454,10 +454,13 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       }));
     }
 
-    function handleStoryReacted(_data: StoryReactedEventData) {
-      // Story reactions are informational for the author and carry no
-      // authoritative aggregation count — mutating the feed would drift. The
-      // feed reconciles via its next refetch.
+    // Les deux événements de réaction story portent désormais l'état ABSOLU
+    // (`likeCount` + `reactionSummary`), comme `post:liked`/`post:unliked`. Le
+    // no-op qui vivait ici tenait à leur absence : sans total autoritatif il ne
+    // restait qu'un `±1` qui dérive. On écrit la valeur reçue — idempotent sous
+    // double livraison, et convergent après un événement manqué.
+    function handleStoryReacted(data: StoryReactedEventData) {
+      patchStoryReactionCounts(queryClient, data.storyId, data);
     }
 
     function handleStoryUpdated(data: StoryUpdatedEventData) {
@@ -470,8 +473,8 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       );
     }
 
-    function handleStoryUnreacted(_data: StoryUnreactedEventData) {
-      // Mirror of handleStoryReacted — no authoritative count on the wire.
+    function handleStoryUnreacted(data: StoryUnreactedEventData) {
+      patchStoryReactionCounts(queryClient, data.storyId, data);
     }
 
     // ── Status events ───────────────────────────────────────────────────
@@ -782,6 +785,24 @@ function patchCommentInPostCaches(
 // no-op when the story is absent (returns `old` untouched) so a missing entry
 // never resurrects a story the feed query has already dropped.
 // ---------------------------------------------------------------------------
+
+/**
+ * Écrit le total et la ventilation ABSOLUS d'une story dans le tray.
+ *
+ * Réutilise `patchStoryInFeed` — la clé `stories.feed()` est la seule où une
+ * story vit côté web ; les surfaces post/reels n'en portent pas.
+ */
+function patchStoryReactionCounts(
+  queryClient: ReturnType<typeof useQueryClient>,
+  storyId: string,
+  counts: { readonly likeCount: number; readonly reactionSummary: Record<string, number> },
+) {
+  patchStoryInFeed(queryClient, storyId, (s) => ({
+    ...s,
+    likeCount: counts.likeCount,
+    reactionSummary: counts.reactionSummary,
+  }));
+}
 
 function patchStoryInFeed(
   queryClient: ReturnType<typeof useQueryClient>,

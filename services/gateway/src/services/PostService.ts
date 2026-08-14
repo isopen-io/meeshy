@@ -1317,6 +1317,19 @@ export class PostService {
     });
   }
 
+  /**
+   * Retire la réaction du lecteur sur un post.
+   *
+   * Rend `null` si le post n'existe pas ; sinon une enveloppe
+   * `{ id, post, removedEmoji }` où `removedEmoji` est la réaction RÉELLEMENT
+   * retirée, ou `null` quand il n'y en avait aucune (le geste est idempotent).
+   *
+   * L'enveloppe existe pour ce seul champ : `foundEmoji` ne se lit qu'ICI,
+   * avant la suppression de la ligne `PostReaction`, et il n'est reconstructible
+   * nulle part en aval. La route en a besoin pour DIRE quel emoji est parti —
+   * elle en fabriquait un ('❤️') faute de l'avoir. `id` est repris du post :
+   * c'est l'identité que `withMutationLog` journalise (`T & { id: string }`).
+   */
   async unlikePost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
@@ -1329,17 +1342,15 @@ export class PostService {
       select: { userId: true, emoji: true, createdAt: true },
     });
 
-    if (userReactions.length === 0) return post;
+    if (userReactions.length === 0) return { id: post.id, post, removedEmoji: null };
 
     const foundEmoji = userReactions[0].emoji;
     await this.postReactionService.removeReaction({ postId, userId, emoji: foundEmoji });
 
     // La notification que le like avait produite (`post_like` /
     // `story_reaction` / `status_reaction`) n'a plus de sujet. Le retrait vit
-    // ICI et non dans la route, pour la même raison que le reste de la
-    // famille : `foundEmoji` — la réaction RÉELLEMENT retirée — n'existe qu'à
-    // cet endroit. La route, elle, diffuse un '❤️' codé en dur, et un retrait
-    // câblé là-haut manquerait donc toute réaction d'un autre emoji.
+    // ICI et non dans la route, pour la même raison que l'enveloppe ci-dessus :
+    // `foundEmoji` — la réaction RÉELLEMENT retirée — n'existe qu'à cet endroit.
     // L'annonceur par défaut est le service PARTAGÉ du processus (le seul
     // câblé avec `io`), exactement comme `applyPostRemovalEffects`.
     try {
@@ -1374,10 +1385,14 @@ export class PostService {
       },
     });
 
-    return this.prisma.post.findFirst({
+    const refreshed = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
+
+    // Le post a été relu après le retrait ; s'il a disparu entre-temps, la
+    // ligne d'origine reste la meilleure description de ce qui a été retiré.
+    return { id: post.id, post: refreshed ?? post, removedEmoji: foundEmoji };
   }
 
   async bookmarkPost(postId: string, userId: string) {

@@ -265,16 +265,39 @@ export interface StoryViewedEventData {
   readonly viewCount: number;
 }
 
+/**
+ * Réaction posée sur une story.
+ *
+ * `likeCount` / `reactionSummary` sont l'état ABSOLU du post APRÈS le geste —
+ * mêmes champs, même rôle et même garantie que sur {@link PostLikedEventData}.
+ * Ils ne sont pas décoratifs : un payload qui ne porte qu'`emoji` + `userId`
+ * n'autorise qu'un comptage en `±1`, qui n'est ni idempotent sous double
+ * livraison ni rattrapable après un événement manqué. Avec l'absolu, un
+ * consommateur écrit la valeur reçue et converge quoi qu'il ait raté.
+ */
 export interface StoryReactedEventData {
   readonly storyId: string;
   readonly userId: string;
   readonly emoji: string;
+  readonly likeCount: number;
+  readonly reactionSummary: Record<string, number>;
 }
 
+/**
+ * Réaction RETIRÉE d'une story.
+ *
+ * `emoji` est la réaction réellement retirée — jamais une valeur par défaut.
+ * L'émetteur ne la connaît qu'en la lisant AVANT la suppression de la ligne
+ * `PostReaction` ; s'il ne la connaît pas, il n'a rien à annoncer et n'émet
+ * pas. Les clients s'en servent pour retirer la puce correspondante de la
+ * réaction du lecteur, geste qu'un emoji faux rend silencieusement inopérant.
+ */
 export interface StoryUnreactedEventData {
   readonly storyId: string;
   readonly userId: string;
   readonly emoji: string;
+  readonly likeCount: number;
+  readonly reactionSummary: Record<string, number>;
 }
 
 export interface StatusCreatedEventData {
@@ -290,16 +313,22 @@ export interface StatusDeletedEventData {
   readonly authorId: string;
 }
 
+/** Jumeau STATUS de {@link StoryReactedEventData} — mêmes invariants. */
 export interface StatusReactedEventData {
   readonly statusId: string;
   readonly userId: string;
   readonly emoji: string;
+  readonly likeCount: number;
+  readonly reactionSummary: Record<string, number>;
 }
 
+/** Jumeau STATUS de {@link StoryUnreactedEventData} — mêmes invariants. */
 export interface StatusUnreactedEventData {
   readonly statusId: string;
   readonly userId: string;
   readonly emoji: string;
+  readonly likeCount: number;
+  readonly reactionSummary: Record<string, number>;
 }
 
 export interface CommentAddedEventData {

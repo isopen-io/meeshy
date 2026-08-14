@@ -170,8 +170,12 @@ beforeEach(() => {
   mockLikePost.mockResolvedValue({
     id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 1, reactionSummary: {},
   });
+  // `unlikePost` rend une ENVELOPPE : le post relu ET la réaction réellement
+  // retirée, seul endroit d'où la route puisse l'apprendre (cf. PostService).
   mockUnlikePost.mockResolvedValue({
-    id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {},
+    id: POST_ID,
+    removedEmoji: '❤️',
+    post: { id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
   });
   mockGetPostById.mockResolvedValue({
     id: POST_ID, type: 'POST', authorId: AUTHOR_ID, viewCount: 1,
@@ -298,7 +302,9 @@ describe('DELETE /posts/:postId/like — STORY type triggers broadcastStoryUnrea
 
   it('calls broadcastStoryUnreacted when post type is STORY', async () => {
     mockUnlikePost.mockResolvedValueOnce({
-      id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {},
+      id: POST_ID,
+      removedEmoji: '❤️',
+      post: { id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
     });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -322,7 +328,9 @@ describe('DELETE /posts/:postId/like — STATUS type triggers broadcastStatusUnr
 
   it('calls broadcastStatusUnreacted when post type is STATUS', async () => {
     mockUnlikePost.mockResolvedValueOnce({
-      id: POST_ID, type: 'STATUS', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {},
+      id: POST_ID,
+      removedEmoji: '❤️',
+      post: { id: POST_ID, type: 'STATUS', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
     });
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
@@ -348,6 +356,202 @@ describe('DELETE /posts/:postId/like — POST type triggers broadcastPostUnliked
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastPostUnliked).toHaveBeenCalled();
+  });
+});
+
+// ─── DELETE /posts/:postId/like — l'emoji annoncé est celui RÉELLEMENT retiré ─
+//
+// Le retrait ne dit pas de lui-même QUEL emoji part : la ligne `PostReaction`
+// n'est lisible qu'avant sa suppression, et `PostService.unlikePost` est le
+// SEUL endroit qui la lise. La route diffusait donc un `'❤️'` codé en dur — une
+// affirmation qu'elle n'était pas en position de faire.
+//
+// Ce n'est pas resté latent : `StoryViewModel.applyStoryReactionDelta` (iOS)
+// retire `event.emoji` de `currentUserReactions`. Un 😂 retiré n'y retirait
+// RIEN, et la puce 😂 survivait à sa propre suppression chez son auteur — avec
+// un compteur déjà décrémenté, donc une contradiction visible à l'écran.
+describe("DELETE /posts/:postId/like — l'emoji diffusé est celui qui a été retiré", () => {
+  let app: FastifyInstance;
+  let socialEvents: ReturnType<typeof makeSocialEvents>;
+  beforeAll(async () => {
+    socialEvents = makeSocialEvents();
+    app = await buildApp({ socialEvents });
+  });
+  afterAll(async () => { await app.close(); });
+  beforeEach(() => {
+    socialEvents.broadcastStoryUnreacted.mockClear();
+    socialEvents.broadcastStatusUnreacted.mockClear();
+    socialEvents.broadcastPostUnliked.mockClear();
+  });
+
+  it('STORY : diffuse le 😂 retiré, pas un ❤️ reconstruit', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: '😂',
+      post: { id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
+      expect.objectContaining({ storyId: POST_ID, emoji: '😂' }),
+      AUTHOR_ID,
+    );
+  });
+
+  it('STATUS : diffuse le 🔥 retiré', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: '🔥',
+      post: { id: POST_ID, type: 'STATUS', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
+      expect.objectContaining({ statusId: POST_ID, emoji: '🔥' }),
+      AUTHOR_ID,
+    );
+  });
+
+  it('POST : diffuse le 👍 retiré', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: '👍',
+      post: { id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 2, reactionSummary: { '❤️': 2 } },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({ postId: POST_ID, emoji: '👍' }),
+      AUTHOR_ID, 'PUBLIC', [],
+    );
+  });
+});
+
+// ─── DELETE /posts/:postId/like — rien retiré ⇒ rien annoncé ─────────────────
+//
+// `unlikePost` est idempotent : sur un post que le lecteur n'a jamais aimé, il
+// ne touche à rien et rend `removedEmoji: null`. La route annonçait quand même
+// un retrait — un événement qui décrit une transition qui n'a pas eu lieu, et
+// que les clients à delta appliquent (`-1`) comme les autres.
+//
+// Le rejeu `onDuplicate` tombe dans la même case, et pour la même raison : la
+// ligne `PostReaction` est déjà partie, l'emoji retiré n'est plus lisible, et
+// l'exécution d'origine a déjà diffusé. Le commentaire de la route l'affirmait
+// déjà (« prevents the broadcast path from firing twice on replay ») sans que
+// le code le fasse.
+describe('DELETE /posts/:postId/like — aucun retrait ⇒ aucune diffusion', () => {
+  let app: FastifyInstance;
+  let socialEvents: ReturnType<typeof makeSocialEvents>;
+  beforeAll(async () => {
+    socialEvents = makeSocialEvents();
+    app = await buildApp({ socialEvents });
+  });
+  afterAll(async () => { await app.close(); });
+  beforeEach(() => {
+    socialEvents.broadcastStoryUnreacted.mockClear();
+    socialEvents.broadcastStatusUnreacted.mockClear();
+    socialEvents.broadcastPostUnliked.mockClear();
+  });
+
+  it('ne diffuse rien quand aucune réaction du lecteur n\'existait', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: null,
+      post: { id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 7, reactionSummary: { '❤️': 7 } },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastPostUnliked).not.toHaveBeenCalled();
+  });
+
+  it('ne diffuse rien sur une STORY quand aucune réaction du lecteur n\'existait', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: null,
+      post: { id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 3, reactionSummary: { '😂': 3 } },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastStoryUnreacted).not.toHaveBeenCalled();
+  });
+
+  it('ne re-diffuse pas sur le rejeu onDuplicate (emoji retiré non relisible)', async () => {
+    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(POST_ID));
+    mockGetPostById.mockResolvedValueOnce({
+      id: POST_ID, type: 'POST', authorId: AUTHOR_ID, likeCount: 4, reactionSummary: { '❤️': 4 },
+    });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(res.statusCode).toBe(200);
+    expect(socialEvents.broadcastPostUnliked).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Réactions story/status : le compteur ABSOLU sur le fil ──────────────────
+//
+// `post:liked`/`post:unliked` portent `likeCount` + `reactionSummary` depuis
+// toujours ; leurs jumeaux story/status ne portaient qu'un emoji et un acteur.
+// Un client ne pouvait donc que compter en `±1` — non idempotent sous double
+// livraison, et irrécupérable après un événement manqué. Le web l'avait acté en
+// commentaire (`handleStoryReacted` : « no authoritative aggregation count »),
+// c'est-à-dire en renonçant au temps réel sur ces compteurs.
+//
+// Les deux champs sont disponibles au site d'émission : la route tient déjà le
+// post rendu par `likePost`/`unlikePost`.
+describe('Réactions story/status — payload absolu (likeCount + reactionSummary)', () => {
+  let app: FastifyInstance;
+  let socialEvents: ReturnType<typeof makeSocialEvents>;
+  beforeAll(async () => {
+    socialEvents = makeSocialEvents();
+    app = await buildApp({ socialEvents });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('story:reacted porte le total et la ventilation', async () => {
+    mockLikePost.mockResolvedValueOnce({
+      id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 3, reactionSummary: { '❤️': 2, '😂': 1 },
+    });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+    expect(socialEvents.broadcastStoryReacted).toHaveBeenCalledWith(
+      expect.objectContaining({ likeCount: 3, reactionSummary: { '❤️': 2, '😂': 1 } }),
+      AUTHOR_ID,
+    );
+  });
+
+  it('status:reacted porte le total et la ventilation', async () => {
+    mockLikePost.mockResolvedValueOnce({
+      id: POST_ID, type: 'STATUS', authorId: AUTHOR_ID, likeCount: 1, reactionSummary: { '🔥': 1 },
+    });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+    expect(socialEvents.broadcastStatusReacted).toHaveBeenCalledWith(
+      expect.objectContaining({ likeCount: 1, reactionSummary: { '🔥': 1 } }),
+      AUTHOR_ID,
+    );
+  });
+
+  it('story:unreacted porte le total APRÈS retrait', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: '😂',
+      post: { id: POST_ID, type: 'STORY', authorId: AUTHOR_ID, likeCount: 2, reactionSummary: { '❤️': 2 } },
+    });
+    await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
+      expect.objectContaining({ likeCount: 2, reactionSummary: { '❤️': 2 } }),
+      AUTHOR_ID,
+    );
+  });
+
+  it('status:unreacted porte le total APRÈS retrait', async () => {
+    mockUnlikePost.mockResolvedValueOnce({
+      id: POST_ID,
+      removedEmoji: '🔥',
+      post: { id: POST_ID, type: 'STATUS', authorId: AUTHOR_ID, likeCount: 0, reactionSummary: {} },
+    });
+    await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+    expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
+      expect.objectContaining({ likeCount: 0, reactionSummary: {} }),
+      AUTHOR_ID,
+    );
   });
 });
 

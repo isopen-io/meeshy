@@ -132,8 +132,16 @@ function seedStories(qc: QueryClient, stories: unknown[] = [mockStory]) {
   qc.setQueryData(['stories', 'feed'], stories);
 }
 
-function getStories(qc: QueryClient): Array<{ id: string; viewCount?: number; content?: string }> {
-  return qc.getQueryData<Array<{ id: string; viewCount?: number; content?: string }>>(['stories', 'feed']) ?? [];
+type CachedStory = {
+  id: string;
+  viewCount?: number;
+  content?: string;
+  likeCount?: number;
+  reactionSummary?: Record<string, number>;
+};
+
+function getStories(qc: QueryClient): CachedStory[] {
+  return qc.getQueryData<CachedStory[]>(['stories', 'feed']) ?? [];
 }
 
 // Reels affinity thread caches (`/feed/reels`, `/reel/:id`) key off
@@ -876,15 +884,36 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('story:reacted', () => {
-    it('does not mutate stories.feed() (no authoritative count on the wire)', () => {
+    // L'événement porte désormais l'état ABSOLU (`likeCount` + `reactionSummary`),
+    // comme `post:liked`. Le tray écrit la valeur reçue : même résultat que
+    // l'événement arrive une fois ou deux, et convergence après un manqué.
+    it('écrit le total et la ventilation absolus dans stories.feed()', () => {
       const qc = createQueryClient();
       seedStories(qc, [mockStory]);
-      const before = getStories(qc);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:reacted', { storyId: 'story-1', userId: 'user-2', emoji: '❤️' }));
+      act(() => emit('story:reacted', {
+        storyId: 'story-1', userId: 'user-2', emoji: '😂',
+        likeCount: 4, reactionSummary: { '❤️': 3, '😂': 1 },
+      }));
 
-      expect(getStories(qc)).toEqual(before);
+      expect(getStories(qc)[0].likeCount).toBe(4);
+      expect(getStories(qc)[0].reactionSummary).toEqual({ '❤️': 3, '😂': 1 });
+    });
+
+    it('est idempotent — une seconde livraison du même événement ne double rien', () => {
+      const qc = createQueryClient();
+      seedStories(qc, [mockStory]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const event = {
+        storyId: 'story-1', userId: 'user-2', emoji: '😂',
+        likeCount: 4, reactionSummary: { '😂': 4 },
+      };
+      act(() => emit('story:reacted', event));
+      act(() => emit('story:reacted', event));
+
+      expect(getStories(qc)[0].likeCount).toBe(4);
     });
   });
 
@@ -1121,15 +1150,18 @@ describe('usePostSocketCacheSync', () => {
       expect(getStories(qc).map((s) => s.id)).toEqual(['s-2']);
     });
 
-    it('story:unreacted does not mutate stories.feed()', () => {
+    it('story:unreacted écrit le total absolu APRÈS retrait', () => {
       const qc = createQueryClient();
-      seedStories(qc, [{ ...mockStory, id: 's-1' }]);
-      const before = getStories(qc);
+      seedStories(qc, [{ ...mockStory, id: 's-1', likeCount: 5 }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:unreacted', { storyId: 's-1', userId: 'user-2', emoji: '❤️' }));
+      act(() => emit('story:unreacted', {
+        storyId: 's-1', userId: 'user-2', emoji: '😂',
+        likeCount: 4, reactionSummary: { '❤️': 4 },
+      }));
 
-      expect(getStories(qc)).toEqual(before);
+      expect(getStories(qc)[0].likeCount).toBe(4);
+      expect(getStories(qc)[0].reactionSummary).toEqual({ '❤️': 4 });
     });
 
     it('status:unreacted invalidates the statuses query', () => {

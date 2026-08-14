@@ -114,17 +114,28 @@ export function registerInteractionRoutes(
       // - POST/MOOD → post:liked fan-out to all friends
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
+        // `likeCount` + `reactionSummary` : l'état ABSOLU après le geste, la
+        // même paire que `post:liked` porte depuis toujours. Les jumeaux
+        // story/status ne portaient qu'un emoji et un acteur, ce qui n'autorise
+        // qu'un comptage en `±1` — non idempotent, non rattrapable. La paire
+        // est déjà en main : c'est le post rendu par `likePost`.
+        const counters = {
+          likeCount: post.likeCount,
+          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+        };
         if (post.type === 'STORY') {
           socialEvents.broadcastStoryReacted({
             storyId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
+            ...counters,
           }, post.authorId);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusReacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
+            ...counters,
           }, post.authorId);
         } else {
           // L'audience du broadcast vient de `target`, la tranche ACL de la
@@ -135,8 +146,7 @@ export function registerInteractionRoutes(
             postId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
-            likeCount: post.likeCount,
-            reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+            ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
         }
@@ -195,7 +205,14 @@ export function registerInteractionRoutes(
       // idempotent — re-running over an already-unliked post is a
       // no-op — but recording the mutation prevents the broadcast
       // path from firing twice on replay.
-      const post = await withMutationLog({
+      //
+      // `removedEmoji` traverse le journal de mutation avec le post : c'est le
+      // seul endroit d'où la route puisse apprendre QUELLE réaction est partie
+      // (cf. `PostService.unlikePost`). Le rejeu, lui, ne peut plus le savoir —
+      // la ligne `PostReaction` n'existe plus — et il rend donc `null`, ce qui
+      // vaut « rien à annoncer ». C'est exactement ce que le commentaire
+      // ci-dessus promettait déjà et que le code ne faisait pas.
+      const outcome = await withMutationLog({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -203,35 +220,47 @@ export function registerInteractionRoutes(
         op: async () => {
           const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
           if (!res) throw new Error('POST_NOT_FOUND');
-          return res as typeof res & { id: string };
+          return res;
         },
         onDuplicate: async (_resultId) => {
           const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
-          return res as (typeof res & { id: string }) | null;
+          return res ? { id: res.id, post: res, removedEmoji: null } : null;
         },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
         throw err;
       });
-      if (!post) {
+      if (!outcome) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      const { post, removedEmoji } = outcome;
 
       // Broadcast unlike via Socket.IO — porte l'id de la CIBLE réelle, comme
       // le like. Mirror the like broadcast routing per post type.
+      //
+      // Rien retiré ⇒ rien annoncé. Un `unreacted` décrit une TRANSITION ; sans
+      // réaction retirée il n'y en a pas eu, et l'émettre quand même faisait
+      // décrémenter les clients à delta sur un geste sans effet. L'acteur, lui,
+      // reçoit l'état absolu dans la réponse HTTP ci-dessous.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents && post.authorId) {
+      if (socialEvents && post.authorId && removedEmoji) {
+        const counters = {
+          likeCount: post.likeCount,
+          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+        };
         if (post.type === 'STORY') {
           socialEvents.broadcastStoryUnreacted({
             storyId: targetPostId,
             userId: authContext.registeredUser.id,
-            emoji: '❤️',
+            emoji: removedEmoji,
+            ...counters,
           }, post.authorId);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusUnreacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
-            emoji: '❤️',
+            emoji: removedEmoji,
+            ...counters,
           }, post.authorId);
         } else {
           // Même source que le jumeau `POST` : la tranche ACL de la CIBLE
@@ -240,9 +269,8 @@ export function registerInteractionRoutes(
           socialEvents.broadcastPostUnliked({
             postId: targetPostId,
             userId: authContext.registeredUser.id,
-            emoji: '❤️',
-            likeCount: post.likeCount,
-            reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+            emoji: removedEmoji,
+            ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
           ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
         }
