@@ -40,7 +40,10 @@ struct PhonebookListView: View {
     private var header: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                searchField
+                ContactsSearchField(
+                    placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le repertoire", bundle: .main),
+                    query: $viewModel.searchQuery
+                )
                 syncButton
             }
             .padding(.horizontal, 16)
@@ -55,59 +58,6 @@ struct PhonebookListView: View {
             }
         }
         .padding(.vertical, 8)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-
-            TextField(
-                String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le repertoire", bundle: .main),
-                text: $viewModel.searchQuery
-            )
-            .font(.subheadline)
-            .foregroundColor(theme.textPrimary)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var syncButton: some View {
-        Button {
-            Task { await viewModel.synchronize() }
-        } label: {
-            Group {
-                if viewModel.isSyncing {
-                    ProgressView().progressViewStyle(.circular).tint(.white)
-                } else {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                }
-            }
-            .frame(width: 38, height: 38)
-            .background(Circle().fill(MeeshyColors.indigo500))
-        }
-        .disabled(viewModel.isSyncing)
-        .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le repertoire", bundle: .main))
     }
 
     private func filterChip(_ filter: DirectoryFilter) -> some View {
@@ -152,11 +102,16 @@ struct PhonebookListView: View {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleContacts) { contact in
-                        PhonebookRow(
-                            contact: contact,
+                        DirectoryPersonRow(
+                            name: contact.resolvedName,
+                            subtitle: contact.subtitle,
+                            avatarURL: contact.matchedUser?.avatar,
+                            action: contact.isOnMeeshy ? .write : .invite,
+                            accessibilityDetail: contact.isOnMeeshy
+                                ? String(localized: "contacts.phonebook.on-meeshy", defaultValue: "sur Meeshy", bundle: .main)
+                                : String(localized: "contacts.phonebook.not-on-meeshy", defaultValue: "pas encore sur Meeshy", bundle: .main),
                             isDark: colorScheme == .dark,
-                            onWrite: { open(contact) },
-                            onInvite: { invite(contact) }
+                            onAction: { contact.isOnMeeshy ? open(contact) : invite(contact) }
                         )
                         .equatable()
                     }
@@ -198,10 +153,13 @@ struct PhonebookListView: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(viewModel.platformResults) { user in
-                    PlatformResultRow(
-                        user: user,
+                    DirectoryPersonRow(
+                        name: user.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? user.username,
+                        subtitle: "@\(user.username)",
+                        avatarURL: user.avatar,
+                        action: .write,
                         isDark: colorScheme == .dark,
-                        onWrite: { openPlatformUser(user) }
+                        onAction: { openPlatformUser(user) }
                     )
                     .equatable()
                 }
@@ -256,165 +214,6 @@ struct PhonebookListView: View {
             phoneNumber: phoneNumber,
             message: viewModel.invitationMessage(for: contact)
         )
-    }
-}
-
-// MARK: - Row
-
-/// Ligne du répertoire. `Equatable` sur le contact seul : la liste peut être
-/// longue (un carnet réel dépasse souvent 500 fiches) et une cellule ne doit se
-/// réévaluer que si SON contact change.
-struct PhonebookRow: View, Equatable {
-    let contact: DirectoryContact
-    /// Passé en valeur primitive plutôt que lu depuis un singleton observé :
-    /// une cellule de liste ne doit se réévaluer que si SES entrées changent.
-    /// Il entre dans l'égalité, sinon un basculement de thème laisserait la
-    /// ligne figée dans les couleurs de l'ancien mode.
-    let isDark: Bool
-    let onWrite: () -> Void
-    let onInvite: () -> Void
-
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    static func == (lhs: PhonebookRow, rhs: PhonebookRow) -> Bool {
-        lhs.contact == rhs.contact && lhs.isDark == rhs.isDark
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            MeeshyAvatar(
-                name: contact.resolvedName,
-                context: .userListItem,
-                accentColor: DynamicColorGenerator.colorForName(contact.resolvedName),
-                avatarURL: contact.matchedUser?.avatar
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(contact.resolvedName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-
-                if let subtitle = contact.subtitle {
-                    Text(subtitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            if contact.isOnMeeshy {
-                actionButton(
-                    title: String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main),
-                    icon: "bubble.left.fill",
-                    filled: true,
-                    action: onWrite
-                )
-            } else {
-                actionButton(
-                    title: String(localized: "contacts.phonebook.invite", defaultValue: "Inviter", bundle: .main),
-                    icon: "paperplane.fill",
-                    filled: false,
-                    action: onInvite
-                )
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var accessibilityLabel: String {
-        let state = contact.isOnMeeshy
-            ? String(localized: "contacts.phonebook.on-meeshy", defaultValue: "sur Meeshy", bundle: .main)
-            : String(localized: "contacts.phonebook.not-on-meeshy", defaultValue: "pas encore sur Meeshy", bundle: .main)
-        return "\(contact.resolvedName), \(state)"
-    }
-
-    private func actionButton(title: String, icon: String, filled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.caption2.weight(.bold))
-                Text(title).font(.caption.weight(.semibold))
-            }
-            .foregroundColor(filled ? .white : MeeshyColors.indigo500)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(filled ? MeeshyColors.indigo500 : Color.clear)
-            )
-            .overlay(
-                Capsule().stroke(filled ? Color.clear : MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-    }
-}
-
-// MARK: - Platform Result Row
-
-/// Ligne d'un utilisateur trouvé sur la plateforme mais absent du répertoire.
-struct PlatformResultRow: View, Equatable {
-    let user: UserSearchResult
-    let isDark: Bool
-    let onWrite: () -> Void
-
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    static func == (lhs: PlatformResultRow, rhs: PlatformResultRow) -> Bool {
-        lhs.user == rhs.user && lhs.isDark == rhs.isDark
-    }
-
-    private var name: String {
-        let display = user.displayName ?? ""
-        return display.isEmpty ? user.username : display
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            MeeshyAvatar(
-                name: name,
-                context: .userListItem,
-                accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: user.avatar
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-
-                Text("@\(user.username)")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            Button(action: onWrite) {
-                HStack(spacing: 5) {
-                    Image(systemName: "bubble.left.fill").font(.caption2.weight(.bold))
-                    Text(String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main))
-                        .font(.caption.weight(.semibold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(MeeshyColors.indigo500))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "contacts.phonebook.write", defaultValue: "Lui ecrire", bundle: .main))
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(name)
     }
 }
 

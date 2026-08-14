@@ -238,18 +238,7 @@ final class PhonebookViewModel: ObservableObject {
 
     /// « Lui écrire » depuis un résultat plateforme (hors répertoire).
     func startConversation(withUserId userId: String) async -> Conversation? {
-        do {
-            return try await conversationCreator.createDirectConversation(
-                with: userId,
-                currentUserId: currentUserId
-            )
-        } catch {
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.open-error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main)
-            )
-            return nil
-        }
+        await conversationCreator.openDirectConversation(with: userId, currentUserId: currentUserId)
     }
 
     // MARK: - Actions

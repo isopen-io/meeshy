@@ -105,7 +105,13 @@ struct ContactsListTab: View {
 
     private var searchableList: some View {
         VStack(spacing: 0) {
-            searchBar
+            ContactsSearchField(
+                placeholder: String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main),
+                query: Binding(get: { viewModel.searchQuery }, set: { viewModel.search($0) })
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
@@ -118,41 +124,6 @@ struct ContactsListTab: View {
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.loadFriends(forceNetwork: true) }
         }
-    }
-
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-
-            TextField(String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main), text: Binding(
-                get: { viewModel.searchQuery },
-                set: { viewModel.search($0) }
-            ))
-            .font(.subheadline)
-            .foregroundColor(theme.textPrimary)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.search("")
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
     }
 
     // MARK: - Contact Row

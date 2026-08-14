@@ -88,17 +88,6 @@ final class AffiliatesViewModel: ObservableObject {
     /// « Lui écrire » — ouvre la conversation directe avec un filleul.
     func startConversation(with referral: AffiliateReferral) async -> Conversation? {
         guard let user = referral.referredUser else { return nil }
-        do {
-            return try await conversationCreator.createDirectConversation(
-                with: user.id,
-                currentUserId: currentUserId
-            )
-        } catch {
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.open-error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main)
-            )
-            return nil
-        }
+        return await conversationCreator.openDirectConversation(with: user.id, currentUserId: currentUserId)
     }
 }
