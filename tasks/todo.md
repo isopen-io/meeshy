@@ -1,3 +1,84 @@
+# Cycle 122 — Une fin d'appartenance n'atteignait pas mes AUTRES appareils
+
+## Le défaut
+
+Quitter une conversation, en être retiré par un admin, y être banni : trois manières de perdre une
+appartenance. Les trois n'adressaient leur événement (`conversation:participant-left` / `-banned`)
+qu'à `ROOMS.conversation(id)` **et aux rooms personnelles des membres RESTANTS** — jamais à celle
+du sujet.
+
+Or ses autres appareils sont posés sur l'écran de LISTE, donc **hors** de la room de conversation.
+Ils n'apprenaient rien.
+
+### L'argument existait déjà, il n'avait pas été appliqué jusqu'au bout
+
+C'est exactement le raisonnement qui avait fait élargir l'éventail vers les rooms personnelles des
+restants — « l'effectif se lit sur l'écran de liste, dont les lecteurs ont quitté la room ». Il
+n'avait été appliqué qu'à ceux dont le **compteur** bouge, jamais à celui dont l'**appartenance**
+s'arrête. Le code s'en justifiait même, à deux lignes de l'autre commentaire :
+
+> « la room de conversation reste en tête de chaîne : elle porte le partant lui-même, encore dedans
+> à cet instant »
+
+Vrai de l'appareil qui a le FIL ouvert. Faux de tous les autres.
+
+### Et le signal qui arrivait était mal lu
+
+Les deux clients posaient un `memberCount` sur une ligne que `GET /conversations` ne sert plus
+(`participants.some({ userId, isActive: true })`). La ligne restait affichée, cliquable, et
+**persistée** — `schedulePersist` (cache disque iOS), `staleTime: Infinity` (web).
+
+| Fin d'appartenance | Temps réel vers MES appareils | Tombstone delta |
+|---|---|---|
+| `conversation:deleted` (supprimer pour moi) | ✅ `ROOMS.user`, documenté | ✅ |
+| départ volontaire (`leave.ts`) | ❌ | ✅ |
+| retrait par un admin (`participants.ts`) | ❌ | ✅ |
+| bannissement (`ban.ts`) | ❌ | ✅ |
+
+Le delta unifiait donc DÉJÀ les quatre cas dans un seul `deletedConversationIds`
+(`delta-tombstones.ts` les énumère nommément). Seul le chemin **temps réel** les séparait — et le
+rattrapage différé (reconnexion suivante au mieux, 24 h au pire via `fullReconcileInterval`)
+faisait que rien ne devenait jamais rouge.
+
+## Le correctif
+
+- **Gateway** — `leave.ts`, `participants.ts`, `ban.ts` : le sujet ferme la chaîne
+  d'`emitToConversationParticipants`. **Une seule chaîne, jamais un second `emit`** — la propriété
+  « au plus une copie par socket » est ce pour quoi le chaînage existe.
+- **Web** — `dropConversationFromCache` sur `participant-left` / `-banned` quand le sujet est moi ;
+  retire la ligne de `conversations.infinite()` et purge `conversations.detail`.
+- **iOS app** — `ConversationListViewModel.dropConversationLeftByMe` : retire la ligne, persiste
+  (donc purge le cache disque, `schedulePersist` sauvegardant l'instantané complet), invalide les
+  messages.
+- **iOS SDK** — `ConversationStoreSocketBridge` route vers `applyConversationDeleted`, sinon le
+  non-lu de la conversation continuait de peser sur l'agrégat inter-conversations.
+
+Sur les deux clients, **le test d'identité passe AVANT le court-circuit `membershipEnded === false`** :
+ce drapeau protège un COMPTEUR, et il n'y a pas de compteur à protéger sur une ligne qui s'en va —
+c'est même le cas d'un ban qui suit un départ non synchronisé, donc précisément celui où la ligne
+fantôme est encore là.
+
+`isMe()` (app) et `!me.isEmpty` (SDK) écartent l'identité vide de l'auth non résolue : piège propre
+à la comparaison par `==`, que le `!=` de `participantJoined` n'avait pas.
+
+## Gates
+
+| Gate | Résultat |
+|---|---|
+| RED prouvé sans la production | 3 rouges gateway, 4 rouges web |
+| gateway `tsc --noEmit` | **0 erreur** |
+| gateway jest **complet** | voir section ci-dessous |
+| web `tsc --noEmit` (fichiers touchés) | **0 erreur** |
+| web jest **complet** | **569 suites / 12 198 tests verts** (21 skipped) |
+| iOS / SDK | non exécutables depuis un runner Linux — vérifiés par la CI (`ios-tests.yml`, `sdk-tests.yml`) |
+
+## TDD
+
+8 témoins gateway (chaînage exact des rooms, unicité de l'émission, ordre emit → éviction de room,
+effectif des restants), 5 web, 5 ViewModel iOS, 5 bridge SDK.
+
+---
+
 # Cycle 119 — Le retrait de réaction annonçait un ❤️ qu'il n'avait pas retiré
 
 ## Le défaut
