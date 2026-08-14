@@ -201,6 +201,44 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByTestId('call-duration')).toHaveTextContent('0:05');
   });
 
+  // --- Vague 120 (2026-08-13): `currentCall.participants` never contains the
+  // local user — the gateway explicitly skips echoing `call:participant-joined`
+  // back to the socket that triggered it (CallEventsHandler.ts, `if
+  // (remoteSocket.id === socket.id) continue`), and the caller's own optimistic
+  // `setCurrentCall` on the `call:initiate` ack seeds `participants: []` by
+  // design (use-video-call.ts). `VideoCallInterface` only ever mounts while
+  // `isInCall` is true, so the local user is unconditionally part of the call
+  // for its entire lifetime — the overlay's count must include them. Without
+  // the +1, a caller watching their own screen mid-ring saw "0 participants",
+  // and a connected 1:1 call always under-reported by one (e.g. "1 participant"
+  // for two people on the line).
+
+  it('counts the local user even before anyone else has joined (ringing, participants empty)', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date().toISOString(),
+      initiatorId: 'u1',
+      participants: [],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    expect(screen.getByTestId('call-participant-count')).toHaveAttribute('data-count', '1');
+  });
+
+  it('counts the local user alongside every other active participant', () => {
+    storeState.currentCall = {
+      id: 'call1',
+      startedAt: new Date().toISOString(),
+      initiatorId: 'other',
+      participants: [
+        { userId: 'other', username: 'Other', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        { userId: 'third', username: 'Third', leftAt: new Date().toISOString(), isAudioEnabled: true, isVideoEnabled: true },
+      ],
+    };
+    render(<VideoCallInterface callId="call1" />);
+    // 1 active other participant (the second has left) + the local user = 2.
+    expect(screen.getByTestId('call-participant-count')).toHaveAttribute('data-count', '2');
+  });
+
   // --- watchdog de connexion : un appel jamais connecté est borné à 45 s ---
   // (parité iOS connectingFailSeconds / Android CallConnectingWatchdog — un
   // échec ICE ne produisait qu'un toast, l'UI d'appel restait à vie)

@@ -32,7 +32,13 @@ export const CallInfoOverlay = memo(function CallInfoOverlay({
         </p>
       </div>
       <div className="bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
-        <p className="text-white text-sm">{participantLabel}</p>
+        <p
+          className="text-white text-sm"
+          data-testid="call-participant-count"
+          data-count={participantCount}
+        >
+          {participantLabel}
+        </p>
       </div>
     </div>
   );
