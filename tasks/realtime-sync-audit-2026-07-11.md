@@ -1568,6 +1568,15 @@ d'identité stable, non touché).
   même schéma). Non corrigés ici : aucun client ne les lit depuis cette surface
   aujourd'hui, et le cycle a délibérément gardé son périmètre sur le champ dont
   la perte cassait un contrat documenté.
+- **iOS paie un aller-retour HTTP de trop par mutation de préférence.**
+  `DefaultPreferenceWritingAdapter` refait un `GET` après chaque `PUT` parce que
+  `PreferenceService.updateConversationPreferences` rend `Void` — son commentaire
+  annonce « until the service interface gets the unified update-and-return shape
+  in a follow-up ». Le `PUT` porte désormais `version` dans sa réponse (D1), donc
+  le second appel est devenu du gaspillage pur : un aller-retour réseau par
+  épinglage, coupure de son, archivage ou renommage. Non fait ici — aucun
+  toolchain Swift sur ce runner, et le changement touche la signature d'un
+  service partagé.
 - **Les quatre écritures optimistes du store web appliquent leur réponse HTTP
   sans arbitrage.** `togglePin` / `toggleMute` / `toggleArchive` / `setReaction`
   posent `updatedPrefs` tel quel au retour du `PUT`. Deux bascules rapprochées
