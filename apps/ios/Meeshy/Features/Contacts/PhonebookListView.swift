@@ -60,6 +60,27 @@ struct PhonebookListView: View {
         .padding(.vertical, 8)
     }
 
+    /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
+    private var syncButton: some View {
+        Button {
+            Task { await viewModel.synchronize() }
+        } label: {
+            Group {
+                if viewModel.isSyncing {
+                    ProgressView().progressViewStyle(.circular).tint(.white)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: 38, height: 38)
+            .background(Circle().fill(MeeshyColors.indigo500))
+        }
+        .disabled(viewModel.isSyncing)
+        .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le repertoire", bundle: .main))
+    }
+
     private func filterChip(_ filter: DirectoryFilter) -> some View {
         let isSelected = viewModel.activeFilter == filter
         return Button {

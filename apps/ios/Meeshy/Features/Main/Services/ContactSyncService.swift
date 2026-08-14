@@ -13,7 +13,12 @@ struct DeviceContact: Sendable, Equatable {
     /// sociaux. Troisième voie de rapprochement, après le numéro et l'email.
     let usernames: [String]
 
-    init(displayName: String?, phoneNumbers: [String], emails: [String], usernames: [String] = []) {
+    /// `nonisolated` : la cible compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION =
+    /// MainActor`, or ce type est construit DANS le closure d'énumération du
+    /// carnet, sur une queue utilitaire. Sans ce marqueur, l'init explicite
+    /// hérite de `@MainActor` et chaque construction devient un appel
+    /// cross-acteur (avertissement par contact énuméré).
+    nonisolated init(displayName: String?, phoneNumbers: [String], emails: [String], usernames: [String] = []) {
         self.displayName = displayName
         self.phoneNumbers = phoneNumbers
         self.emails = emails
