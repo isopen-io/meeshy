@@ -120,6 +120,7 @@ type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
         id: true;
         identifier: true;
         type: true;
+        title: true;
       };
     };
   };
@@ -154,7 +155,8 @@ const callSessionInclude = {
     select: {
       id: true,
       identifier: true,
-      type: true
+      type: true,
+      title: true
     }
   }
 } as const;
