@@ -1436,3 +1436,141 @@ neuf — le chemin de retour que le web n'avait pas. Vérifié à ce cycle.
   de `user:preferences-updated` non routé côté iOS ;
   `ConversationStore.dispatchPreferencesUpdate` traite `.setClearHistoryBefore`
   en succès purement local.
+
+## Cycle 17 (2026-08-14) — les préférences de conversation ne traversaient ni le sérialiseur ni le socket web
+
+Base : `origin/main` @ `14c226e08` (cycle 16 mergé). Phases 2 / 3 / 11.
+
+### Constats (Phase 1 — audit de la chaîne « préférences de conversation »)
+
+La chaîne complète a été tracée : `PUT /user-preferences/conversations/:id` →
+`writeConversationPreferences` (incrément `version` + `broadcastToUser`) →
+`USER_PREFERENCES_UPDATED` → clients. La partie serveur est correcte et
+soigneusement documentée. Les deux extrémités ne l'étaient pas.
+
+**D1 — `version` n'a jamais quitté le serveur.**
+
+`conversationPreferencesSchema` (`routes/conversation-preferences.ts:50`) est le
+schéma de RÉPONSE des trois surfaces REST : `GET` unitaire (`:241`), `GET` liste
+(`:317`), `PUT` (`:387`). Il énumère onze champs et **omet `version`**. Fastify
+retire du fil toute propriété absente du schéma : le compteur monotone est
+effacé de chaque réponse.
+
+Conséquence mesurée côté iOS : `DefaultPreferenceWritingAdapter`
+(`ConversationStore.swift:927`) refait un `GET` **immédiatement après le PUT**
+dans le seul but de lire `version` — commentaire à l'appui — et reçoit `nil` à
+tous les coups. `dispatchPreferencesUpdate` rend donc
+`.completed(authoritativeVersion: nil)`, et la branche
+`if let v = authoritativeVersion` de `mutate()` ne s'exécute jamais :
+`userState.version` reste sur l'estimation optimiste locale (`local + 1`) au
+lieu de la valeur serveur. Le schéma d'arbitrage tourne sur un compteur que
+personne ne reçoit — il converge quand même la plupart du temps (les diffusions
+portent une version qui dépasse le local), mais plusieurs écritures locales
+d'affilée peuvent hisser le compteur optimiste AU-DESSUS du serveur, et les
+diffusions suivantes sont alors jetées.
+
+**D2 — le web jette le scope conversation de `user:preferences-updated`.**
+
+`use-socket-cache-sync.ts:1096` discrimine l'union à trois scopes et ne traite
+que `category` et `communityId` ; la branche `conversationId` sortait sans rien
+faire, sous un commentaire annonçant que « le câblage web arrive dans une phase
+ultérieure ». Le store Zustand `conversation-preferences-store.ts` (324 lignes)
+n'a aucune référence à un socket : il vit du REST au démarrage et de ses propres
+écritures optimistes.
+
+La ligne `UserConversationPreferences` est par UTILISATEUR, pas par appareil.
+Épingler / couper le son / archiver / réagir / renommer / recatégoriser depuis
+un autre appareil ne parvenait donc jamais à un onglet web ouvert : la liste
+gardait son état — et son **tri**, `useConversationSorting` lisant `isPinned`
+depuis ce store — jusqu'à un rechargement de page.
+
+**D3 — le type partagé n'a pas de `version`.**
+
+`UserConversationPreferences` (`packages/shared/types/user-preferences.ts`) ne
+modélisait pas le compteur, donc même D1 corrigé le web n'aurait pas pu arbitrer
+de manière typée.
+
+### Correctifs
+
+**D1.** `version` ajouté à `conversationPreferencesSchema`. La branche « aucune
+ligne stockée » du `GET` unitaire pose `version: 0` explicitement :
+`CONVERSATION_PREFERENCES_DEFAULTS` l'exclut à dessein (état de protocole, pas
+préférence — un reset ne doit jamais le rembobiner), donc c'est à l'appelant de
+le fournir. Une ligne absente n'a jamais été diffusée : elle est sous TOUTE
+version que le serveur peut émettre, et répondre `undefined` laisserait le
+client deviner un plancher.
+
+**D3.** `readonly version?: number` sur `UserConversationPreferences`, porté par
+`transformPreferencesData` côté web depuis le REST. Optionnel : une réponse d'un
+serveur antérieur n'en porte pas, et l'absence reste une absence — jamais un 0
+inventé qui ferait tomber la première diffusion reçue.
+
+**D2.** `applyRemotePreferences()` sur le store web. Quatre décisions :
+- **arbitrage sur `version`** — `version <= (current?.version ?? 0)` → drop.
+  Une entrée sans version (posée optimistiquement, ou hydratée par un serveur
+  antérieur) vaut 0, donc toute diffusion la dépasse.
+- **création d'entrée** — une conversation jamais personnalisée n'a pas de
+  ligne ; c'est justement le premier épinglage fait ailleurs qui en crée une.
+  La refuser (comme fait iOS pour une conversation non hydratée) laisserait le
+  cas le plus courant invisible, le store des préférences étant indépendant de
+  la liste des conversations.
+- **`reset: true`** — le DELETE porte `conversationId` et `preferences: null` :
+  même scope, defaults restaurés, `version` avancée.
+- **`reset: false` sans snapshot** — ignoré ENTIÈREMENT, compteur inclus. Rien
+  n'a été appris ; avancer `version` ferait tomber la diffusion suivante, celle
+  qui portait l'état.
+
+Le câblage se fait dans `use-socket-cache-sync`, au même endroit que ses deux
+scopes frères, via `useConversationPreferencesStore.getState()` (le socket n'est
+pas un composant React ; `useConversationPreferencesActions` garde son contrat
+d'identité stable, non touché).
+
+### Gates
+
+- 13 tests vus ROUGES avant correctifs (4 passerelle, 9 web), verts après.
+- `services/gateway` : **711 suites / 17 420 tests verts**.
+- `apps/web` : **572 suites / 12 251 tests verts**, 21 skipped (suite complète).
+- `packages/shared` : 54 fichiers / 1 542 tests verts.
+- `tsc --noEmit` : passerelle **0 erreur** ; web **1229 avant ET après** — base
+  pré-existante identique aux cycles 15/16, zéro erreur sur les fichiers touchés.
+- iOS : **aucun fichier Swift touché**. Le correctif D1 lui profite sans
+  changement — `APIConversationPreferences.version` existe déjà et
+  `ConversationStore` l'applique déjà ; il lui manquait d'arriver sur le fil.
+
+### Vérifié correct — ne pas re-défricher
+
+- `ConversationStateOutbox` (SQLite/GRDB) : hydratation synchrone anti-race,
+  coalescing par `(convId, key)`, garde de concurrence post-dispatch comparant
+  la mutation dispatchée à l'état courant, `purgeAll` de logout, backoff
+  `min(60s, 2^n × 5s)`. Aucun défaut trouvé.
+- `ConversationStoreSocketBridge` : gate d'identité présent sur
+  `readStatusUpdated` / `participantLeft` / `participantBanned` ; absent sur
+  `userPreferencesUpdated` mais **correct** — `broadcastToUser` cible la room de
+  l'utilisateur, le payload n'atteint que ses propres appareils.
+- `ConversationStore.merging(_:with:)` (bump-to-top) et `applyRemote`
+  (arbitrage de version, groupe Prisme monotone) : tracés, conformes.
+
+### Reste ouvert après ce cycle
+
+- **`clear-history` n'a aucun client.** `POST /api/conversations/:id/clear-history`
+  est complet côté passerelle (écriture versionnée, diffusion, rétractation des
+  notifications), mais ni le web ni iOS ne l'appellent. Pire, iOS a le type de
+  mutation, la persistance outbox et l'application distante — et son dispatch
+  (`ConversationStore.swift:731`) rend un **faux succès local** pour
+  `.setClearHistoryBefore`, avec un `default:` qui masquera tout futur cas
+  ajouté. Latent aujourd'hui (aucun appelant n'enfile cette mutation), mais
+  c'est une amorce à dimension **vie privée** : le jour où une UI l'appelle,
+  l'utilisateur croira son historique effacé alors que rien n'aura quitté
+  l'appareil. `.setClearHistoryBefore(nil)` n'a par ailleurs aucune route
+  serveur (pas de `restore-history`), ce qu'il faudra trancher.
+- **`deletedForUserAt` / `clearHistoryBefore` / `mentionsOnly` ne franchissent
+  pas non plus le sérialiseur REST** pour les deux premiers (même cause que D1,
+  même schéma). Non corrigés ici : aucun client ne les lit depuis cette surface
+  aujourd'hui, et le cycle a délibérément gardé son périmètre sur le champ dont
+  la perte cassait un contrat documenté.
+- Hérités des cycles 14/16, inchangés : `PUT /user-preferences/conversations/:id`
+  ne valide pas `categoryId` comme ObjectId (500 au lieu de 400) ; le scope
+  **communauté** de `user:preferences-updated` n'est routé nulle part côté iOS
+  (`MessageSocketManager:3280` discrimine sur `conversationId` puis retombe sur
+  le scope `category`, dont le payload communauté n'a pas la forme) ;
+  `visibilitychange` → `connect()` côté web.

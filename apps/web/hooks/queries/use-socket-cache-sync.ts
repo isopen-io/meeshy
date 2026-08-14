@@ -7,6 +7,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import {
   rebuildInfiniteConversationPages,
@@ -1095,10 +1096,19 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
       // The event is a union: user-level (has `category`) vs conversation-scoped
-      // (has `conversationId`) vs community-scoped (has `communityId`). Web cache
-      // invalidation here handles the user-level and community-scoped variants;
-      // the conversation-scoped variant is consumed by the new ConversationStore
-      // (iOS first; web wiring lands in a later phase).
+      // (has `conversationId`) vs community-scoped (has `communityId`).
+      //
+      // Le scope conversation ne passe PAS par React Query : l'état pin/mute/
+      // archive/réaction que la liste et l'en-tête lisent vit dans le store
+      // Zustand `conversation-preferences-store`, alimenté jusqu'ici par le
+      // seul REST et par ses propres écritures optimistes. La ligne étant par
+      // UTILISATEUR et non par appareil, la diffusion est le seul chemin par
+      // lequel un épinglage fait sur un autre appareil peut atteindre un
+      // onglet ouvert. Le store arbitre lui-même sur `version`.
+      if ('conversationId' in data) {
+        useConversationPreferencesStore.getState().applyRemotePreferences(data);
+        return;
+      }
       if ('category' in data) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.preferences.category(data.category),

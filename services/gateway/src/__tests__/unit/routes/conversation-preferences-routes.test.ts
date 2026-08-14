@@ -515,3 +515,66 @@ describe('POST /user-preferences/reorder', () => {
     await appErr.close();
   });
 });
+
+// ─── `version` survives the response serializer ──────────────────────────────
+//
+// `version` is the monotonic counter every client arbitrates socket broadcasts
+// against (`incoming.version <= local -> drop`). Fastify strips any property
+// absent from the response schema, so a schema that forgets it silently voids
+// the contract on all three read/write surfaces: the clients keep receiving
+// preferences and never receive the sequence that says which of two snapshots
+// is newer. iOS goes as far as re-fetching the row right after its PUT for the
+// sole purpose of reading this field.
+
+describe('version reaches the client on every preferences surface', () => {
+  it('GET single returns the stored version', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+    });
+    expect(res.json().data.version).toBe(STORED_PREF.version);
+    await app.close();
+  });
+
+  it('GET single returns version 0 when no row is stored', async () => {
+    // An absent row has never been broadcast, so it sits below every version
+    // the server can emit. Answering `undefined` would leave the client to
+    // guess, and a client that defaults to something other than 0 would drop
+    // the first broadcast it ever receives.
+    const app = await buildApp({ findUniqueResult: null });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+    });
+    const body = res.json();
+    expect(body.data.isDefault).toBe(true);
+    expect(body.data.version).toBe(0);
+    await app.close();
+  });
+
+  it('GET list returns the version of each row', async () => {
+    const app = await buildApp({ findManyResult: [STORED_PREF], countResult: 1 });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/user-preferences/conversations',
+      headers: AUTH,
+    });
+    expect(res.json().data[0].version).toBe(STORED_PREF.version);
+    await app.close();
+  });
+
+  it('PUT echoes the version the write produced', async () => {
+    const app = await buildApp({ upsertResult: { ...STORED_PREF, version: 4 } });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/user-preferences/conversations/${CONV_ID}`,
+      headers: AUTH,
+      payload: { isPinned: true },
+    });
+    expect(res.json().data.version).toBe(4);
+    await app.close();
+  });
+});
