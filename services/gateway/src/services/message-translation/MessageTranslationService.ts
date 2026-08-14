@@ -12,6 +12,7 @@ import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
+import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
@@ -980,7 +981,22 @@ export class MessageTranslationService extends EventEmitter {
   }) {
     try {
       const startTime = Date.now();
-      
+
+      // Le bus `translationCompleted` est MULTIPLEXÉ : posts, commentaires et
+      // stories y transitent sous un identifiant namespacé (`post:<id>`,
+      // `comment:<id>`, `story:<id>`) et sont persistés par LEURS propres
+      // services. Sans cette garde, chacune de leurs traductions descendait ici
+      // et envoyait `post:<24-hex>` à Prisma en guise d'ObjectId de Message :
+      // P2023 « Malformed ObjectID » sur le garde de suppression, l'exigence de
+      // chiffrement, la sauvegarde et les stats — puis un `translationReady`
+      // fantôme cherchant une conversation qui n'a jamais existé.
+      if (!isMessageTranslationTarget(data.result?.messageId ?? '')) {
+        logger.debug(
+          `⏭️ [TranslationService] Cible non-message ignorée: ${data.result?.messageId} (persistée par son propre service)`
+        );
+        return;
+      }
+
       // Utiliser taskId pour la déduplication (permet la retraduction avec un nouveau taskId)
       const taskKey = `${data.taskId}_${data.targetLanguage}`;
       
@@ -1078,6 +1094,15 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   private async _handleTranslationError(data: { taskId: string; messageId: string; error: string; conversationId: string }) {
+    // Même multiplexage que sur le chemin nominal : l'échec d'une traduction de
+    // post/commentaire/story n'a pas de room de conversation à notifier — son
+    // `conversationId` est un contexte social (`post_context:<id>`), pas une
+    // conversation. Le diffuser adressait une room fantôme.
+    if (!isMessageTranslationTarget(data.messageId ?? '')) {
+      logger.debug(`⏭️ [TranslationService] Échec de traduction non-message ignoré: ${data.messageId}`);
+      return;
+    }
+
     logger.error(`❌ Erreur de traduction: ${data.error} pour ${data.messageId}`);
 
     if (data.error === 'translation pool full') {

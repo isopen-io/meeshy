@@ -7,6 +7,7 @@ import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
+import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
@@ -1487,8 +1488,17 @@ export class MeeshySocketIOManager {
   private async _handleTextTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
     try {
       const { result, targetLanguage} = data;
-      
-      
+
+      // Une traduction de post/commentaire/story emprunte le même bus que celle
+      // d'un message, sous un identifiant namespacé (`post:<id>`) : elle n'a ni
+      // ligne `Message`, ni room de conversation. La chercher ici envoyait
+      // `post:<24-hex>` à Prisma comme ObjectId (P2023) puis loggait un « No
+      // conversation found » alarmant pour un cas parfaitement normal — le
+      // broadcast social est fait par `SocialEventsHandler`.
+      if (!isMessageTranslationTarget(result?.messageId ?? '')) {
+        return;
+      }
+
       // Récupérer la conversation du message pour broadcast
       let conversationIdForBroadcast: string | null = null;
       // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans

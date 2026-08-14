@@ -56,7 +56,15 @@ jest.mock('../types', () => ({
 }));
 
 // Import AFTER all mocks are set up
-import { loadAudioAsBinary, audioFormatToMimeType, mimeTypeToAudioFormat } from '../utils/zmq-helpers';
+import {
+  loadAudioAsBinary,
+  audioFormatToMimeType,
+  mimeTypeToAudioFormat,
+  isMessageTranslationTarget,
+  translationTargetId,
+  translationTargetNamespace,
+  TRANSLATION_TARGET_NAMESPACES,
+} from '../utils/zmq-helpers';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -268,6 +276,44 @@ describe('zmq-helpers', () => {
     it('returns the full string when there is no audio/ prefix', () => {
       // replace('audio/', '') on a string without the prefix just returns the original
       expect(mimeTypeToAudioFormat('video/mp4')).toBe('video/mp4');
+    });
+  });
+  // ─── Identité des cibles de traduction ────────────────────────────────────
+  // Le champ `messageId` du bus ZMQ est multiplexé : messages de conversation
+  // (ObjectId nu) ET objets sociaux namespacés. Le pipeline des messages ne doit
+  // se saisir QUE des identifiants nus — sinon Prisma reçoit `post:<24-hex>` en
+  // guise d'ObjectId et rend un P2023 « Malformed ObjectID » par langue.
+  describe('translation target identity', () => {
+    const OBJECT_ID = '6a7f982febddb6944a7e3bb6';
+
+    it('builds a namespaced id for every social target family', () => {
+      expect(translationTargetId('post', OBJECT_ID)).toBe(`post:${OBJECT_ID}`);
+      expect(translationTargetId('comment', 'c1')).toBe('comment:c1');
+      expect(translationTargetId('story', 's1')).toBe('story:s1');
+    });
+
+    it('exposes the namespaces the social pipelines claim', () => {
+      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story']);
+    });
+
+    it('extracts the namespace of a social target, null for a bare message id', () => {
+      expect(translationTargetNamespace(`post:${OBJECT_ID}`)).toBe('post');
+      expect(translationTargetNamespace('comment:abc')).toBe('comment');
+      expect(translationTargetNamespace('story:abc')).toBe('story');
+      expect(translationTargetNamespace(OBJECT_ID)).toBeNull();
+    });
+
+    it('claims bare ids — ObjectIds and legacy/ad-hoc ids alike', () => {
+      expect(isMessageTranslationTarget(OBJECT_ID)).toBe(true);
+      expect(isMessageTranslationTarget('msg-1')).toBe(true);
+      expect(isMessageTranslationTarget('rest_1700000000_abc')).toBe(true);
+    });
+
+    it('rejects every namespaced target, known or future', () => {
+      expect(isMessageTranslationTarget(translationTargetId('post', OBJECT_ID))).toBe(false);
+      expect(isMessageTranslationTarget(`comment:${OBJECT_ID}`)).toBe(false);
+      expect(isMessageTranslationTarget(`story:${OBJECT_ID}`)).toBe(false);
+      expect(isMessageTranslationTarget(`text-object:${OBJECT_ID}`)).toBe(false);
     });
   });
 });

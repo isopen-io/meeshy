@@ -1531,6 +1531,22 @@ describe('MeeshySocketIOManager', () => {
       await expect((manager as any)._handleTextTranslationReady(baseData)).resolves.not.toThrow();
     });
 
+    // Le bus de traduction est partagé avec les posts/commentaires/stories, qui
+    // portent un identifiant namespacé. Les chercher dans `Message` envoyait
+    // `post:<24-hex>` à Prisma comme ObjectId (P2023) — leur broadcast est fait
+    // par SocialEventsHandler, pas ici.
+    it('ignores a namespaced social target without querying Message', async () => {
+      prisma.message.findUnique.mockClear();
+
+      await (manager as any)._handleTextTranslationReady({
+        ...baseData,
+        result: { ...baseData.result, messageId: 'post:6a7f982febddb6944a7e3bb6' },
+      });
+
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+    });
+
     // Cycle 73 — LE défaut. `message:translation` ne porte que la room de
     // CONVERSATION. Un lecteur resté sur l'écran de liste n'y est pas ; sa ligne
     // garde l'aperçu servi à l'ENVOI, quand aucune traduction n'existait encore.
