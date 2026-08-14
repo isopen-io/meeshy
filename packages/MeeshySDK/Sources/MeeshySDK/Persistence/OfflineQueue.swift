@@ -613,6 +613,34 @@ public actor OfflineQueue {
 
     private static let maxQueueSize = 500
 
+    /// Statuts sous lesquels une row outbox est encore VIVANTE : elle sera
+    /// livrée, ou l'est déjà. Un ré-enfilage du même `clientMessageId` doit
+    /// alors RÉUTILISER la row, jamais en insérer une jumelle.
+    ///
+    /// `.pending` seul ne suffit pas : `OutboxFlusher` réclame une row en la
+    /// basculant `pending → inflight` le temps de son envoi. Filtrer sur le
+    /// seul `.pending` rendait donc la row invisible à la déduplication
+    /// PENDANT TOUT SON VOL — et un ré-enfilage concurrent (retour en
+    /// avant-plan qui rejoue `share_pending_sends`, retry manuel, catch du
+    /// repli REST) insérait une seconde row pour le même message. Les deux
+    /// vivaient alors indépendamment sous `OutboxFlusher` : la première à
+    /// épuiser son budget émettait `retryExhausted`, ce qui faisait passer la
+    /// bulle `.queued → .failed` — bandeau orange — pendant que la jumelle
+    /// était ENCORE EN VOL, jusqu'à ce que son `serverAck` guérisse l'état
+    /// (`(.failed, .serverAck) → .sent`). C'est la cause racine du flash
+    /// orange, sur le chemin texte comme sur le chemin média.
+    ///
+    /// `.exhausted` en est volontairement exclu : il est TERMINAL, et un
+    /// nouvel enfilage sur un message épuisé est un retry manuel légitime qui
+    /// doit repartir sur une row neuve.
+    ///
+    /// Contrat de la spec 2026-07-08 règle 3 : `.failed` est un état terminal,
+    /// jamais un état traversé pendant que des tentatives restent en cours.
+    nonisolated static let liveStatuses: [String] = [
+        OutboxStatus.pending.rawValue,
+        OutboxStatus.inflight.rawValue
+    ]
+
     /// Items-at-risk threshold: when the queue reaches this count the
     /// `nearCapacityPublisher` fires `true` so the UI can warn the user.
     /// Set at 80% of the max to give a meaningful heads-up before messages
@@ -980,13 +1008,13 @@ public actor OfflineQueue {
                 let existing = try OutboxRecord
                     .filter(Column("conversationId") == conversationId)
                     .filter(Column("clientMessageId") == clientMessageId)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .filter(Self.liveStatuses.contains(Column("status")))
                     .order(Column("createdAt").desc)
                     .fetchOne(db)
 
                 switch (existing?.kind, OutboxKind.sendMessage) {
                 case (.none, _):
-                    // No existing pending record — straight insert.
+                    // No existing live record — straight insert.
                     try OutboxRecord(
                         id: outboxId,
                         kind: .sendMessage,
@@ -1007,15 +1035,18 @@ public actor OfflineQueue {
                         .warning("sendMessage after deleteMessage on \(clientMessageId, privacy: .public), dropping")
 
                 case (.sendMessage?, _):
-                    // Same sendMessage already pending (idempotent re-enqueue,
-                    // e.g. retry path). Refresh the payload + timestamps so
-                    // attachmentIds and audio path stay current without
-                    // creating a duplicate record.
-                    try db.execute(sql: """
-                        UPDATE outbox
-                        SET payload = ?, updatedAt = ?, lastError = NULL
-                        WHERE id = ?
-                        """, arguments: [payload, Date(), existing!.id])
+                    // Same sendMessage already live (idempotent re-enqueue,
+                    // e.g. retry path). Reuse the row rather than inserting a
+                    // twin. The payload is refreshed only while the row is
+                    // still `.pending` — rewriting a row the flusher has
+                    // already claimed would race its in-flight attempt.
+                    if existing!.status == .pending {
+                        try db.execute(sql: """
+                            UPDATE outbox
+                            SET payload = ?, updatedAt = ?, lastError = NULL
+                            WHERE id = ?
+                            """, arguments: [payload, Date(), existing!.id])
+                    }
 
                 case (.editMessage?, _), (.sendReaction?, _):
                     // A pending edit/reaction precedes a fresh send for the
@@ -1101,16 +1132,18 @@ public actor OfflineQueue {
             .filter(Column("conversationId") == conversationId)
             .filter(Column("clientMessageId") == clientMessageId)
             .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
-            .filter(Column("status") == OutboxStatus.pending.rawValue)
+            .filter(liveStatuses.contains(Column("status")))
             .order(Column("createdAt").desc)
             .fetchOne(db)
 
         if let existing {
-            try db.execute(sql: """
-                UPDATE outbox
-                SET payload = ?, updatedAt = ?, lastError = NULL
-                WHERE id = ?
-                """, arguments: [payload, Date(), existing.id])
+            if existing.status == .pending {
+                try db.execute(sql: """
+                    UPDATE outbox
+                    SET payload = ?, updatedAt = ?, lastError = NULL
+                    WHERE id = ?
+                    """, arguments: [payload, Date(), existing.id])
+            }
             return existing.id
         }
 
