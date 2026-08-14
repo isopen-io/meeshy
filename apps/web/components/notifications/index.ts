@@ -1,6 +1,6 @@
 export { NotificationBell } from './NotificationBell';
 export { NotificationItem } from './NotificationItem';
-export { NotificationFilters, matchesFilter } from './NotificationFilters';
+export { NotificationFilters, FILTER_TYPES } from './NotificationFilters';
 export type { FilterType } from './NotificationFilters';
 export { NotificationEmptyState } from './NotificationEmptyState';
 export { NotificationList } from './NotificationList';

@@ -1,18 +1,19 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { NotificationService } from '@/services/notification.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
-import type { Notification, NotificationFilters, NotificationPaginationOptions } from '@/types/notification';
-
-type NotificationsFiltersAndPagination = Partial<NotificationFilters & NotificationPaginationOptions>;
+import type { Notification, NotificationQueryOptions } from '@/types/notification';
 
 /** Une page se demande par ANCRE (curseur) ou par RANG (offset) — jamais les deux. */
 type NotificationPageParam = { cursor: string } | { offset: number };
 
-export function useNotificationsQuery(options: NotificationsFiltersAndPagination = {}) {
+export function useNotificationsQuery(options: NotificationQueryOptions = {}) {
   const { limit = 50, ...filters } = options;
 
   return useQuery({
-    queryKey: queryKeys.notifications.list({ unreadOnly: filters.isRead === false }),
+    // La clé porte TOUS les filtres, pas le seul `unreadOnly` : deux onglets
+    // partageraient sinon une entrée de cache, et le second lirait les lignes
+    // du premier. La variante infinie le fait déjà — c'est la même règle.
+    queryKey: queryKeys.notifications.list(filters),
     queryFn: async () => {
       const response = await NotificationService.fetchNotifications({ ...filters, limit });
       return response.data;
@@ -21,7 +22,7 @@ export function useNotificationsQuery(options: NotificationsFiltersAndPagination
 }
 
 export function useInfiniteNotificationsQuery(
-  options: NotificationsFiltersAndPagination & { enabled?: boolean } = {}
+  options: NotificationQueryOptions & { enabled?: boolean } = {}
 ) {
   const { limit = 50, enabled = true, ...filters } = options;
 
@@ -80,13 +81,22 @@ export function useUnreadNotificationCountQuery() {
   });
 }
 
-export function useNotificationCountsQuery() {
+/**
+ * Les totaux d'onglets, lus sur l'inbox ENTIÈRE.
+ *
+ * `refetchOnMount: 'always'` pour la même raison que la liste : le socket ne
+ * pousse rien quand l'app est fermée, et `staleTime: Infinity` figerait sinon
+ * des pastilles au chiffre de la dernière session.
+ */
+export function useNotificationCountsQuery(enabled = true) {
   return useQuery({
-    queryKey: [...queryKeys.notifications.all, 'counts'],
+    enabled,
+    queryKey: queryKeys.notifications.counts(),
     queryFn: async () => {
       const response = await NotificationService.getCounts();
       return response.data;
     },
+    refetchOnMount: 'always',
   });
 }
 

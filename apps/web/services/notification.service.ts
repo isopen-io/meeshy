@@ -10,9 +10,8 @@ import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type {
   Notification,
-  NotificationFilters,
   NotificationPaginatedResponse,
-  NotificationPaginationOptions,
+  NotificationQueryOptions,
   NotificationCounts,
 } from '@/types/notification';
 
@@ -112,21 +111,9 @@ export const NotificationService = {
    * Récupère les notifications avec pagination et filtres
    */
   async fetchNotifications(
-    options: Partial<NotificationFilters> & NotificationPaginationOptions = {}
+    options: NotificationQueryOptions = {}
   ): Promise<ApiResponse<NotificationPaginatedResponse>> {
-    const {
-      offset = 0,
-      cursor,
-      limit = 50,
-      type,
-      isRead,
-      priority,
-      conversationId,
-      startDate,
-      endDate,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-    } = options;
+    const { offset = 0, cursor, limit = 50, types, isRead } = options;
 
     return withRetry(async () => {
       const params = new URLSearchParams();
@@ -138,31 +125,17 @@ export const NotificationService = {
         params.set('offset', offset.toString());
       }
       params.set('limit', limit.toString());
-      params.set('sortBy', sortBy);
-      params.set('sortOrder', sortOrder);
 
-      if (type && type !== 'all') {
-        params.set('type', type);
+      // L'onglet est envoyé au SERVEUR, pas appliqué aux pages déjà chargées :
+      // filtré côté client, « aucune mention » ne veut dire que « aucune mention
+      // parmi les vingt dernières notifications », et rien ne va chercher les
+      // autres. Une liste vide n'envoie rien — l'onglet « tout ».
+      if (types && types.length > 0) {
+        params.set('types', types.join(','));
       }
 
       if (typeof isRead === 'boolean') {
         params.set('unreadOnly', (!isRead).toString());
-      }
-
-      if (priority) {
-        params.set('priority', priority);
-      }
-
-      if (conversationId) {
-        params.set('conversationId', conversationId);
-      }
-
-      if (startDate) {
-        params.set('startDate', startDate.toISOString());
-      }
-
-      if (endDate) {
-        params.set('endDate', endDate.toISOString());
       }
 
       const response = await apiService.get<{
@@ -293,28 +266,30 @@ export const NotificationService = {
   /**
    * Récupère les compteurs de notifications
    */
+  /**
+   * Les totaux de l'inbox ENTIÈRE, par type.
+   *
+   * Cette méthode rendait `total = unread = /notifications/unread-count` : deux
+   * questions différentes servies par le même chiffre, et un `byType` déclaré
+   * dans le type sans que rien ne le produise. Les onglets de la cloche
+   * comptaient donc, faute de mieux, les pages déjà chargées — le même mensonge
+   * que le filtre qu'ils commandent.
+   */
   async getCounts(): Promise<ApiResponse<NotificationCounts>> {
     return withRetry(async () => {
       const response = await apiService.get<{
         success: boolean;
-        count: number;
-      }>('/notifications/unread-count');
+        data?: NotificationCounts;
+      }>('/notifications/counts');
 
-      if (response.data) {
-        return {
-          ...response,
-          data: {
-            total: response.data.count || 0,
-            unread: response.data.count || 0,
-          },
-        };
-      }
+      const counts = response.data?.data;
 
       return {
         ...response,
         data: {
-          total: 0,
-          unread: 0,
+          total: counts?.total ?? 0,
+          unread: counts?.unread ?? 0,
+          byType: counts?.byType ?? {},
         },
       };
     });

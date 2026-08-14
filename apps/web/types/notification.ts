@@ -42,6 +42,7 @@ export {
   // Filtres et pagination
   type NotificationFilters,
   type NotificationResponse,
+  type NotificationCounts,
 
   // Préférences
   type NotificationPreference,
@@ -71,25 +72,39 @@ export type NotificationPaginationOptions = {
    */
   cursor?: string;
   limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
+};
+
+/**
+ * Ce que `GET /notifications` accepte RÉELLEMENT — pas ce qu'on aimerait lui
+ * demander.
+ *
+ * Fastify retire de `request.query` toute clé absente du schéma de la route :
+ * un paramètre que la signature accepte mais que la gateway ne déclare pas part
+ * sur le fil et ne filtre rien, en silence. Une signature qui les admet fait
+ * donc croire à un filtrage qui n'a pas lieu — c'est ainsi que `priority`,
+ * `conversationId`, `startDate`, `endDate` et le tri ont voyagé sans lecteur.
+ *
+ * Le tri, en particulier, ne peut PAS être ouvert : la pagination keyset de
+ * l'inbox est ancrée sur l'ordre total `(createdAt desc, id desc)`, et servir un
+ * autre ordre ferait sauter des lignes au curseur sans rien signaler.
+ */
+export type NotificationQueryOptions = NotificationPaginationOptions & {
+  /** Types BRUTS conservés ; vide ou absent = l'inbox entière. */
+  types?: readonly string[];
+  /** `false` ⇒ `unreadOnly=true`. Absent = lues et non lues. */
+  isRead?: boolean;
 };
 
 // Re-import for local use
 import type {
   Notification,
-  NotificationFilters,
+  NotificationCounts,
   NotificationType,
 } from '@meeshy/shared/types/notification';
 
-/**
- * Compteurs de notifications (frontend-specific)
- */
-export interface NotificationCounts {
-  total: number;
-  unread: number;
-  byType?: Partial<Record<NotificationType, number>>;
-}
+// `NotificationCounts` n'est plus « frontend-specific » : c'est le corps rendu
+// par `GET /notifications/counts`, donc un contrat de fil. Il est déclaré une
+// seule fois, dans `@meeshy/shared`, et réexporté ici pour les imports existants.
 
 /**
  * Événement Socket.IO pour les notifications
