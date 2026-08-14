@@ -1385,6 +1385,75 @@ describe('usePostSocketCacheSync', () => {
       expect(repliesOf(qc, 'c-1').map((c) => c.id)).toEqual([]);
     });
 
+    // Le `replyCount + 1` de `comment:added` (testé juste au-dessus) n'avait
+    // pas de pendant : supprimer une réponse laissait « 3 réponses » affiché
+    // au-dessus de deux lignes. Le serveur décrémente pourtant bien le parent
+    // DIRECT (`PostCommentService.deleteComment`).
+    it('décrémente le replyCount du parent annoncé quand une réponse est supprimée', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 3 }]);
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 2 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(2);
+    });
+
+    // L'affordance « N réponses » ne s'affiche que fil REPLIÉ — donc quand la
+    // réponse supprimée n'est PAS en cache. Déduire le parent depuis le cache
+    // échouerait exactement là où le compteur se voit ; le payload l'annonce.
+    it('décrémente même quand le fil du parent n\'a jamais été déplié', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 2 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 4 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(1);
+    });
+
+    // `parentId: null` = la cible était une racine : le serveur n'a décrémenté
+    // aucun `replyCount`, le client non plus.
+    it('ne décrémente rien quand la cible supprimée était un commentaire racine', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, id: 'c-2', replyCount: 4 }, { ...parent, replyCount: 3 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'c-1', parentId: null, commentCount: 1 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-2')?.replyCount).toBe(4);
+    });
+
+    // Clé ABSENTE = rejeu idempotent du DELETE (le décrément serveur a déjà eu
+    // lieu) ou gateway antérieure. Ne rien décrémenter est ce qui rend le
+    // miroir client idempotent sans état.
+    it('ne décrémente rien quand le payload ne porte aucun parentId', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 3 }]);
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', commentCount: 2 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(3);
+    });
+
+    it('ne descend jamais sous zéro', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 0 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 1 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(0);
+    });
+
     it('patches a reaction on a reply living in the replies sub-cache', () => {
       const qc = createQueryClient();
       seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, reactionSummary: {} as Record<string, number>, currentUserReactions: [] as string[], createdAt: '2026-01-02T00:00:00Z' }]);

@@ -8121,3 +8121,49 @@ du web, à trancher en produit avant tout code : les réactions sur pièce joint
 direct (`location:live-started/updated/stopped`, `LocationHandler` gateway). Ce ne sont pas des bugs
 de synchronisation — le web n'a aucune surface pour les émettre ni les afficher — mais des écarts de
 parité de plateforme qu'un chantier dédié devra couvrir.
+
+## Vague 122 — supprimer une réponse laissait « 3 réponses » affiché au-dessus de deux lignes (web + gateway + shared) (2026-08-14)
+
+Suite directe de la Vague 121, même fichier et même famille : en écrivant `handleCommentUpdated`
+dans `use-post-socket-cache-sync.ts`, la relecture des handlers voisins a montré que
+`handleCommentAdded` incrémente le `replyCount` du parent (« bumps the parent replyCount so the
+"N replies" affordance updates live ») **sans aucun pendant** côté suppression.
+
+- **Root cause** : `PostCommentService.deleteComment` décrémente bien le `replyCount` du parent
+  DIRECT en base (« Only the direct parent's `replyCount` moves »), mais l'annonce
+  `comment:deleted` ne portait que `postId`, `commentId`, `deletedCommentIds` et `commentCount`.
+  Aucun client ne pouvait donc refléter ce décrément. Côté web, `handleCommentDeleted` filtrait les
+  ids retirés de tous les caches de commentaires du post sans jamais toucher le compteur du parent :
+  l'affordance « N réponses » restait figée sur sa valeur d'avant jusqu'à un refetch complet.
+- **Pourquoi le déduire du cache ne marche pas** — et c'est le cœur de cette vague : la cible
+  supprimée n'est en cache QUE si le fil du parent était déplié, alors que l'affordance
+  « N réponses » ne s'affiche QUE fil REPLIÉ (`CommentThread` : `if (!isExpanded && replyCount > 0)`).
+  Un client qui lirait `parentId` sur la ligne qu'il s'apprête à retirer échouerait donc exactement
+  dans le cas où le compteur périmé est à l'écran. C'est aussi la limite du miroir iOS existant
+  (`PostDetailViewModel`, qui balaie `repliesMap` — donc les seuls fils dépliés). Le parent doit
+  venir du PAYLOAD.
+- **Fix** : `CommentDeletedEventData.parentId?: string | null` (shared) ; `deleteComment` rend
+  `parentId: comment.parentId ?? null` — même motif que `deletedCommentIds`, remonté pour la même
+  raison (« la seule chose que le client ne peut pas redériver ») ; la route DELETE le fait suivre.
+  Côté web, `handleCommentDeleted` décrémente le parent annoncé via `patchCommentInPostCaches`
+  (borné à 0), qui balaie déjà liste de premier niveau ET sous-caches de réponses — donc un parent
+  qui est lui-même une réponse est couvert.
+- **L'omission est la garde d'idempotence** : la clé est OMISE — jamais mise à `null` — quand le
+  service ne la rend pas, c'est-à-dire sur le rejeu idempotent du DELETE (`onDuplicate` ne rend
+  qu'un `{ id }`), où le décrément a déjà eu lieu en base. `null` garde son sens propre (« la cible
+  était une racine, rien à décrémenter »). Un client qui ne décrémente rien sur clé absente est donc
+  idempotent SANS état local, et une gateway antérieure se comporte exactement comme avant.
+  Alternative écartée : garder l'idempotence en ne décrémentant que si la cible était présente dans
+  le cache — ce guard tue précisément le cas fil-replié, le seul qui se voit.
+- **Tests** (TDD, RED vérifié en retirant la seule production, tests en place) : web 5 cas neufs —
+  décrément sur parent annoncé, décrément même fil jamais déplié, rien sur `parentId: null`, rien
+  sur clé absente, plancher à 0 → **2 rouges** avant fix, **109/109** après. Gateway 4 cas neufs
+  (service rend le parent direct / rend `null` pour une racine ; route annonce `parentId` / l'OMET
+  au rejeu) → **3 rouges** avant fix, **123/123** après sur
+  `PostCommentService.test.ts` + `routes/posts/comments.test.ts`. `packages/shared` : 54 fichiers /
+  1542 tests verts. `tsc --noEmit` gateway : propre. `tsc --noEmit` web : 1764 lignes avant comme
+  après (bruit préexistant), 0 occurrence du fichier modifié.
+- **Non fait** : le miroir iOS (`PostDetailViewModel` pourrait maintenant décrémenter sur
+  `data.parentId` au lieu de balayer `repliesMap`, ce qui le rendrait juste fil replié aussi) —
+  changement Swift non vérifiable dans ce sandbox sans Xcode. Le champ est additif : iOS le
+  consommera sans rien casser.

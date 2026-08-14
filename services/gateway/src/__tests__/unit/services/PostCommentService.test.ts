@@ -481,6 +481,31 @@ describe('PostCommentService.deleteComment', () => {
     );
   });
 
+  // Le décrément ci-dessus ne touche que le parent DIRECT, et l'affordance
+  // « N réponses » qui l'affiche ne se voit que fil REPLIÉ — donc quand la
+  // cible n'est PAS dans le cache du client et ne peut pas livrer son propre
+  // parent. Le rendre est la seule façon pour un client de refléter le
+  // décrément.
+  it("rend le parent direct de la cible pour que l'annonce puisse le porter", async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'r1', authorId: 'u1', postId: 'p1', parentId: 'c1' },
+    );
+    const service = new PostCommentService(prisma);
+    const result = await service.deleteComment('r1', 'u1');
+
+    expect(result?.parentId).toBe('c1');
+  });
+
+  it("rend parentId: null pour une cible racine — rien à décrémenter", async () => {
+    const { prisma } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect(result?.parentId).toBeNull();
+  });
+
   it("does not touch replyCount when deleting a top-level comment", async () => {
     const { prisma, update } = buildPrismaForDelete(
       { id: 'c1', authorId: 'u1', postId: 'p1', parentId: null },

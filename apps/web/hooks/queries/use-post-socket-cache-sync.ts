@@ -251,6 +251,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       // behaviour, never an empty list.
       const removedIds = new Set(data.deletedCommentIds ?? [data.commentId]);
 
+      // Miroir exact du `replyCount + 1` de `handleCommentAdded`, qui n'avait
+      // pas de pendant : supprimer une réponse laissait « 3 réponses » affiché
+      // au-dessus de deux lignes, jusqu'à un refetch complet. Le serveur, lui,
+      // décrémente bien (`PostCommentService.deleteComment`).
+      //
+      // Le parent vient du PAYLOAD et n'est jamais redérivé du cache : la
+      // cible n'y est présente que fil déplié, alors que l'affordance
+      // « N réponses » ne s'affiche que fil REPLIÉ — le déduire échouerait
+      // précisément dans le cas qui se voit. Son absence (rejeu idempotent du
+      // DELETE, gateway antérieure) vaut « ne rien décrémenter », ce qui rend
+      // le miroir idempotent sans état côté client.
+      if (data.parentId) {
+        patchCommentInPostCaches(queryClient, data.postId, data.parentId, (c) => ({
+          ...c,
+          replyCount: Math.max(0, c.replyCount - 1),
+        }));
+      }
+
       // The payload doesn't say whether an id was a reply, so sweep every
       // post-scoped comment cache (top-level list AND replies subs).
       queryClient.setQueriesData<InfiniteCommentsData>(

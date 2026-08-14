@@ -704,10 +704,18 @@ export function registerCommentRoutes(
           // repli reproduit exactement le comportement d'avant ce correctif ;
           // une liste vide, elle, ferait survivre la cible elle-même.
           const deletedCommentIds = result.deletedCommentIds ?? [commentId];
+          // `parentId` est OMIS — jamais mis à `null` — quand le service ne le
+          // rend pas, c'est-à-dire sur le rejeu idempotent : le décrément de
+          // `replyCount` a déjà eu lieu en base, et un client qui le
+          // reflèterait une seconde fois ferait dériver son compteur. La clé
+          // absente est donc la garde, et `null` reste réservé à son sens
+          // propre : « la cible était un commentaire racine, rien à
+          // décrémenter ».
           socialEvents.broadcastCommentDeleted({
             postId,
             commentId,
             deletedCommentIds,
+            ...(result.parentId !== undefined ? { parentId: result.parentId } : {}),
             commentCount: post.commentCount,
           }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed'));
         }

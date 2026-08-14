@@ -363,6 +363,21 @@ export interface CommentDeletedEventData {
    * idempotent d'une suppression ne peut plus reconstruire le sous-arbre.
    */
   readonly deletedCommentIds?: readonly string[];
+  /**
+   * Le parent DIRECT de la cible, ou `null` si la cible était un commentaire
+   * racine — c'est-à-dire l'unique ligne dont le `replyCount` bouge côté
+   * serveur (`PostCommentService.deleteComment` : « Only the direct parent's
+   * replyCount moves »). Sans lui, un client ne peut pas refléter ce
+   * décrément : la cible qu'il faudrait interroger pour en déduire le parent
+   * n'est en cache QUE si le fil était déplié — or l'affordance « N réponses »
+   * ne s'affiche justement que replié.
+   *
+   * Optionnel, et ABSENT (jamais `null`) sur le rejeu idempotent du DELETE :
+   * la suppression a déjà eu lieu, son décrément aussi. C'est cette absence
+   * qui rend le miroir client idempotent — un client DOIT ne rien décrémenter
+   * quand la clé manque, jamais deviner le parent depuis son cache.
+   */
+  readonly parentId?: string | null;
   readonly commentCount: number;
 }
 

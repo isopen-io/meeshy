@@ -1135,6 +1135,53 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
     );
     await app.close();
   });
+
+  /**
+   * `replyCount` du parent DIRECT est la seule ligne que la suppression fait
+   * bouger en plus du sous-arbre, et l'affordance « N réponses » qui l'affiche
+   * ne se voit que fil REPLIÉ — précisément quand le client n'a pas la cible en
+   * cache pour en déduire le parent. L'annonce doit donc le porter.
+   */
+  it("annonce le parent direct de la cible pour que les clients reflètent le décrément", async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true,
+      deletedCommentIds: [COMMENT_ID],
+      parentId: 'parent-1',
+    });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: COMMENT_ID, parentId: 'parent-1' }),
+      expect.anything(), expect.anything(), expect.anything(),
+    );
+    await app.close();
+  });
+
+  /**
+   * Le rejeu idempotent ne rend aucun `parentId` : le décrément a déjà eu lieu
+   * en base. La clé doit être ABSENTE — pas `null`, qui signifie « la cible
+   * était une racine » — car c'est son absence qui interdit à un client de
+   * décrémenter une seconde fois.
+   */
+  it('omet parentId (jamais null) quand le service ne le rend pas — rejeu', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({ id: COMMENT_ID });
+    const app = buildDeleteApp(broadcast);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast.mock.calls[0][0]).not.toHaveProperty('parentId');
+    await app.close();
+  });
 });
 
 // ─── Branch coverage: FeedQuerySchema false branches (lines 44, 76-79) ────────
