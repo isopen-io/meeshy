@@ -4,7 +4,7 @@
 
 # Cycle 123bis — Suites du filtre d'onglet, après collision avec #2986
 
-Ce cycle a implémenté le même correctif que #2986 en parallèle, sans le savoir (voir leçon 245).
+Ce cycle a implémenté le même correctif que #2986 en parallèle, sans le savoir (voir leçon 246).
 #2986 ayant fusionné le premier, sa version fait foi ; ce qui suit est le seul DELTA qui lui
 manquait, repris depuis `main`.
 
