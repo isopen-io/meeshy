@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
+import { useNotificationCountsQuery } from '@/hooks/queries/use-notifications-query';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import type { Notification } from '@/types/notification';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { NotificationFilters, matchesFilter, NotificationList, NotificationSkeleton, PushPermissionBanner } from '@/components/notifications';
+import { NotificationFilters, FILTER_TYPES, NotificationList, NotificationSkeleton, PushPermissionBanner } from '@/components/notifications';
 import type { FilterType } from '@/components/notifications';
 import { formatNotificationTimeAgo } from '@/utils/notification-helpers';
 import { Bell, Search, X, Check } from 'lucide-react';
@@ -24,6 +25,12 @@ function NotificationsPageContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const markAllReadHandled = useRef(false);
 
+  // L'onglet part au SERVEUR : filtré sur les pages déjà chargées, « aucune
+  // mention » ne voulait dire que « aucune mention parmi les vingt dernières »,
+  // et rien n'allait chercher les autres. Le tableau vide de l'onglet « tout »
+  // laisse l'inbox entière.
+  const types = FILTER_TYPES[activeFilter];
+
   const {
     notifications,
     unreadCount,
@@ -34,7 +41,11 @@ function NotificationsPageContent() {
     markAllAsRead,
     deleteNotification,
     fetchMore,
-  } = useNotificationsManagerRQ();
+  } = useNotificationsManagerRQ({ filters: { types } });
+
+  // Les pastilles comptent l'inbox ENTIÈRE — les compter sur `notifications`
+  // aurait rendu « 0 » sur tous les autres onglets dès que l'un d'eux filtre.
+  const { data: counts } = useNotificationCountsQuery();
 
   useEffect(() => {
     if (markAllReadHandled.current) return;
@@ -46,23 +57,22 @@ function NotificationsPageContent() {
     }
   }, [searchParams, markAllAsRead, router, t]);
 
+  // La recherche TEXTE reste locale, et l'assume : elle ne porte que sur les
+  // pages chargées. Contrairement à l'onglet, elle ne prétend pas compter — le
+  // champ est vide par défaut, et l'utilisateur voit défiler ce qu'il a sous les
+  // yeux.
   const filteredNotifications = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
+    if (!query) return notifications;
 
     return notifications.filter((n) => {
-      if (!matchesFilter(n, activeFilter)) return false;
+      const content = (n.content || '').toLowerCase();
+      const actorName = (n.actor?.displayName || n.actor?.username || '').toLowerCase();
+      const conversationTitle = (n.context?.conversationTitle || '').toLowerCase();
 
-      if (query) {
-        const content = (n.content || '').toLowerCase();
-        const actorName = (n.actor?.displayName || n.actor?.username || '').toLowerCase();
-        const conversationTitle = (n.context?.conversationTitle || '').toLowerCase();
-
-        return content.includes(query) || actorName.includes(query) || conversationTitle.includes(query);
-      }
-
-      return true;
+      return content.includes(query) || actorName.includes(query) || conversationTitle.includes(query);
     });
-  }, [notifications, activeFilter, searchQuery]);
+  }, [notifications, searchQuery]);
 
   const handleNotificationClick = useCallback((notification: Notification) => {
     // Marquage lu ; la navigation est portée par le lien interne de la rangée.
@@ -99,14 +109,22 @@ function NotificationsPageContent() {
                 <h1 className="text-2xl font-bold text-foreground">
                   {t('pageTitle')}
                 </h1>
-                <p className="text-sm text-muted-foreground">
-                  {notifications.length === 0
-                    ? t('unreadCount.empty')
-                    : unreadCount > 0
-                      ? t('unreadCount.active', { count: String(unreadCount), total: String(notifications.length) })
-                      : t('unreadCount.allRead', { total: String(notifications.length), plural: notifications.length > 1 ? 's' : '' })
-                  }
-                </p>
+                {/* Le total vient du SERVEUR, pas de `notifications.length` :
+                    compté sur les pages chargées, il annonçait « 20 notifications »
+                    à qui en a trois cents, et changeait à chaque défilement. Rien
+                    ne s'affiche tant qu'il n'est pas connu — un chiffre provisoire
+                    qui saute ensuite se lit comme une correction, pas comme un
+                    chargement. */}
+                {counts !== undefined && (
+                  <p className="text-sm text-muted-foreground">
+                    {counts.total === 0
+                      ? t('unreadCount.empty')
+                      : unreadCount > 0
+                        ? t('unreadCount.active', { count: String(unreadCount), total: String(counts.total) })
+                        : t('unreadCount.allRead', { total: String(counts.total), plural: counts.total > 1 ? 's' : '' })
+                    }
+                  </p>
+                )}
               </div>
             </div>
 
@@ -143,7 +161,7 @@ function NotificationsPageContent() {
             <NotificationFilters
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
-              notifications={notifications}
+              counts={counts}
               t={t}
             />
           </div>

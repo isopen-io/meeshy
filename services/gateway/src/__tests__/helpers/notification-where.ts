@@ -14,6 +14,7 @@
 export interface NotificationRow {
   readonly id: string;
   readonly userId: string;
+  readonly type: string;
   readonly isRead: boolean;
   readonly expiresAt: Date | null;
   readonly createdAt: Date;
@@ -28,6 +29,14 @@ export function matchesNotificationWhere(
   return Object.entries(where).every(([key, condition]) => {
     if (key === 'userId') return row.userId === condition;
     if (key === 'isRead') return row.isRead === condition;
+    if (key === 'type') {
+      // Le filtre de la cloche est TOUJOURS un ensemble : un onglet nomme
+      // plusieurs types bruts (« mentions » = `user_mentioned` ET `mention`).
+      // Une égalité simple jetterait la moitié de l'onglet sans le dire.
+      const set = (condition as { in?: readonly string[] }).in;
+      if (Array.isArray(set)) return set.includes(row.type as string);
+      throw new Error(`double Prisma: condition type non supportée ${JSON.stringify(condition)}`);
+    }
     if (key === 'OR') {
       return (condition as Array<Record<string, unknown>>).some((branch) =>
         matchesNotificationWhere(row, branch)
@@ -104,4 +113,27 @@ export function findManyNotifications<T extends Partial<NotificationRow>>(
 
   const from = args.skip ?? 0;
   return args.take === undefined ? matched.slice(from) : matched.slice(from, from + args.take);
+}
+
+/**
+ * `groupBy({ by: ['type'] })` d'une inbox, joué sur un tableau.
+ *
+ * Le regroupement est ce qui rend un compteur d'onglet HONNÊTE : compté sur les
+ * pages déjà chargées, « 0 mention » ne veut dire que « 0 mention parmi les 20
+ * dernières ». Le double applique donc le MÊME `where` que la liste — un
+ * compteur qui verrait les expirées ou l'inbox d'autrui recréerait exactement
+ * la contradiction que `visibleNotificationsWhere` existe pour supprimer.
+ */
+export function groupByNotificationType<T extends Partial<NotificationRow>>(
+  rows: readonly T[],
+  args: { where?: Record<string, unknown> } = {}
+): Array<{ type: string; _count: { _all: number } }> {
+  const tally = rows
+    .filter((row) => matchesNotificationWhere(row, args.where))
+    .reduce<Map<string, number>>(
+      (acc, row) => acc.set(row.type as string, (acc.get(row.type as string) ?? 0) + 1),
+      new Map()
+    );
+
+  return [...tally.entries()].map(([type, count]) => ({ type, _count: { _all: count } }));
 }

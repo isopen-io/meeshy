@@ -11,7 +11,7 @@ import {
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { NotificationService } from '@/services/notification.service';
-import type { Notification, NotificationFilters } from '@/types/notification';
+import type { Notification, NotificationCounts, NotificationQueryOptions } from '@/types/notification';
 import type {
   NotificationDeletedBulkEventData,
   NotificationReadBulkEventData,
@@ -29,11 +29,28 @@ import { useNotificationStore } from '@/stores/notification-store';
 
 const recentToasts = new Set<string>();
 
+/**
+ * Cette liste-là accepterait-elle ce type ?
+ *
+ * L'onglet demandé au serveur voyage dans la CLÉ de la query
+ * (`[...lists(), 'infinite', { types }]`) — c'est la seule trace disponible au
+ * moment d'insérer une notification poussée par le socket. Une clé sans `types`,
+ * ou avec une liste vide, est l'onglet « tout » et accepte donc tout.
+ */
+function listAcceptsType(key: unknown, type: string): boolean {
+  if (!Array.isArray(key)) return true;
+
+  const filters = key[key.length - 1] as { types?: readonly string[] } | undefined;
+  const types = filters?.types;
+
+  return !Array.isArray(types) || types.length === 0 || types.includes(type);
+}
+
 /** Miroir du débounce de `NotificationGapResyncCoordinator` (iOS, 0.3 s). */
 const SYNC_RESYNC_DEBOUNCE_MS = 300;
 
 interface UseNotificationsManagerRQOptions {
-  filters?: NotificationFilters;
+  filters?: NotificationQueryOptions;
   limit?: number;
 }
 
@@ -156,9 +173,15 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       });
 
       if (!notificationExists) {
-        queryClient.setQueriesData(
-          { queryKey: queryKeys.notifications.lists(), exact: false },
-          (old: unknown) => {
+        // Écriture clé par clé, et non `setQueriesData` : depuis que l'onglet
+        // filtre côté SERVEUR, chaque liste porte dans sa clé les types qu'elle
+        // a demandés. Une écriture aveugle ferait apparaître une demande d'ami
+        // au milieu de l'onglet « mentions » — le socket contredirait le filtre
+        // que la liste vient d'appliquer.
+        queries.forEach(([key]: [unknown, unknown]) => {
+          if (!listAcceptsType(key, notification.type)) return;
+
+          queryClient.setQueryData(key as readonly unknown[], (old: unknown) => {
             if (!old || typeof old !== 'object' || !('pages' in old)) return old;
             const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
 
@@ -176,7 +199,26 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
             });
 
             return { ...data, pages: updatedPages };
-          }
+          });
+        });
+
+        // Les totaux d'onglets sont SERVEUR ; sans ce report, la pastille de
+        // l'onglet resterait au chiffre de la dernière lecture pendant que la
+        // ligne, elle, s'affiche.
+        queryClient.setQueryData(
+          queryKeys.notifications.counts(),
+          (old: NotificationCounts | undefined) =>
+            old === undefined
+              ? old
+              : {
+                  ...old,
+                  total: old.total + 1,
+                  unread: isInActiveConversation ? old.unread : old.unread + 1,
+                  byType: {
+                    ...old.byType,
+                    [notification.type]: (old.byType?.[notification.type] ?? 0) + 1,
+                  },
+                }
         );
 
         if (!isInActiveConversation) {

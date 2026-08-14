@@ -148,6 +148,7 @@ export {
   // Filters and pagination
   type NotificationFilters,
   type NotificationResponse,
+  type NotificationCounts,
 
   // Preferences
   type NotificationPreference,

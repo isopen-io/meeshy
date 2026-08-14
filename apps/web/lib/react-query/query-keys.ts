@@ -50,6 +50,7 @@ export const queryKeys = {
     list: (filters?: { unreadOnly?: boolean }) =>
       [...queryKeys.notifications.lists(), filters] as const,
     unreadCount: () => [...queryKeys.notifications.all, 'unreadCount'] as const,
+    counts: () => [...queryKeys.notifications.all, 'counts'] as const,
   },
 
   attachments: {
