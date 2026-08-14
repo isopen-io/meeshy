@@ -1896,8 +1896,23 @@ export class CallService {
    * @param endedBy - User ID attempting to end the call
    * @param participantId - Participant ID of the user ending the call
    * @param isAnonymous - Whether the user is anonymous (anonymous users CANNOT end calls)
+   * @param options.preJoinDecline - Set ONLY by the gateway's
+   *   `resolvePreJoinDeclineParticipantId`, after it has independently
+   *   verified `endedBy` is a genuine conversation member with NO
+   *   CallParticipant row at all for this call (never joined, so `call:join`
+   *   never created one) and the call was never answered. Bypasses the
+   *   active-participant lookup below, which can never find a row for a
+   *   callee declining before they joined — see decline-before-join fix,
+   *   2026-08-14.
    */
-  async endCall(callId: string, endedBy: string, participantId: string, isAnonymous?: boolean, reason?: string): Promise<CallSessionWithParticipants> {
+  async endCall(
+    callId: string,
+    endedBy: string,
+    participantId: string,
+    isAnonymous?: boolean,
+    reason?: string,
+    options?: { preJoinDecline?: boolean }
+  ): Promise<CallSessionWithParticipants> {
     logger.info('Ending call', { callId, endedBy, isAnonymous, reason });
 
     // CVE-004: Anonymous users cannot end calls for everyone
@@ -1934,7 +1949,7 @@ export class CallService {
     // CVE-004: Verify user has permission to end the call (initiator or moderator role)
     const userParticipant = call.participants.find(p => p.participantId === participantId && !p.leftAt);
 
-    if (!userParticipant) {
+    if (!userParticipant && !options?.preJoinDecline) {
       logger.error('❌ User not in call', { callId, endedBy });
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not in this call`);
     }
