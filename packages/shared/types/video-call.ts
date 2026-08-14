@@ -426,6 +426,23 @@ export interface CallInitiatedEvent {
     readonly avatar?: string;
   };
   readonly participants: CallParticipant[];
+  /**
+   * `'direct' | 'group'` (mirrors `Conversation.type`, restricted to the two
+   * values `CallService.initiateCall` accepts). Optional — a rolling deploy
+   * can put an older gateway build in front of a newer client, so clients
+   * MUST fall back to today's single-caller presentation when absent, never
+   * throw. Lets a callee's UI tell "Alice is calling you" (direct) apart
+   * from "Alice is calling the Design Team" (group) without a separate
+   * conversation lookup — see `CallHistoryItem.conversationType`
+   * (`services/gateway/src/services/callHistory.ts`) for the same field on
+   * the REST call-history contract.
+   */
+  readonly conversationType?: string;
+  /**
+   * Group display name — `null` for a direct call (no title exists) or an
+   * untitled group. Mirrors `CallHistoryItem.conversationTitle`.
+   */
+  readonly conversationTitle?: string | null;
 }
 
 /**

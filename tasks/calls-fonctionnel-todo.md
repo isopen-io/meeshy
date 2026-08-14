@@ -8168,7 +8168,113 @@ dans `use-post-socket-cache-sync.ts`, la relecture des handlers voisins a montr�
   changement Swift non vérifiable dans ce sandbox sans Xcode. Le champ est additif : iOS le
   consommera sans rien casser.
 
-## Vague 123 — `stopPreauthorizedStream` effaçait le handoff global même quand un AUTRE flux d'appel venait de l'écraser (web) (2026-08-14)
+## Vague 123 — `CallNotification`/`CallWaitingBanner` étaient mono-appelant en appel de groupe (web + gateway + shared) (2026-08-14)
+
+Point d'entrée : routine automatique d'amélioration continue AUDIO/VIDÉO CALLING
+(prompt élargi FaceTime-quality 12-phases). Base explicite sur le développement
+précédent : `git fetch origin main`, branche désignée `claude/upbeat-dirac-v186b5`
+déjà alignée sur `origin/main` (`75201df4`, contient la Vague 122 — comments,
+mergée). Aucune PR ouverte sur le dépôt au démarrage (vérifié `list_pull_requests`).
+Repris `tasks/2026-08-13-group-calls-gap-analysis.md` (chantier « appels de groupe »,
+actif sur cette même journée) plutôt que de relancer un audit générique — le point
+W6 « `CallNotification` mono-appelant » y était explicitement listé comme reste ouvert.
+Sandbox inchangée (ni Xcode ni SDK Android) : périmètre web+gateway+shared.
+
+- **Root cause** : `CallInitiatedEvent` (`packages/shared/types/video-call.ts`) ne
+  portait ni le type ni le titre de la conversation appelante — seulement
+  `conversationId`. Un callee recevant un appel de GROUPE voyait exactement la même
+  bannière qu'un appel 1:1 (avatar + nom du seul initiateur), sans aucun moyen de
+  savoir qu'il s'agissait d'un appel de groupe ni lequel. Investigation avant
+  d'écrire du code (suivant la leçon « énumérer sur le code les valeurs qu'il devra
+  porter ») : `CallService.initiateCall`/`getCallSession` sélectionnaient DÉJÀ
+  `conversation.{id,identifier,type}` via `callSessionInclude` (nécessaire à la
+  validation `direct`/`group` de `initiateCall`) — il ne manquait que `title`. Même
+  precedent déjà en place côté REST : `CallHistoryItem.conversationType`/
+  `conversationTitle` (`services/gateway/src/services/callHistory.ts`) porte
+  exactement la même paire de champs pour le journal d'appels ; ce vague applique
+  le même contrat au wire event temps réel.
+- **Fix** :
+  1. `CallSessionWithParticipants` + `callSessionInclude` (`CallService.ts`) :
+     `title: true` ajouté au `select` de `conversation` (déjà inclus) — zéro
+     requête Prisma supplémentaire, la ligne était déjà chargée pour chaque
+     `initiateCall`/`getCallSession`.
+  2. `CallInitiatedEvent` (shared) gagne `conversationType?: string` et
+     `conversationTitle?: string | null` — **optionnels**, pas requis : un
+     rolling deploy peut mettre une gateway plus ancienne devant un client plus
+     récent (ou l'inverse), et les clients DOIVENT retomber sur la présentation
+     mono-appelant actuelle sans jamais planter quand le champ est absent.
+  3. `CallEventsHandler.ts` : les DEUX sites qui construisent un
+     `CallInitiatedEvent` (le `call:initiate` principal ET le replay
+     `call:check-active` au reconnect mi-sonnerie) peuplent les deux champs
+     depuis `callSession.conversation?.type ?? 'direct'` /
+     `callSession.conversation?.title ?? null` — un callee qui se reconnecte
+     pendant que ça sonne encore voit la même présentation groupe/direct qu'un
+     callee resté en ligne depuis le début.
+  4. Web : `CallNotification.tsx` (bannière plein écran, premier appel entrant)
+     ET `CallWaitingBanner.tsx` (bannière compacte busy-path, second appel
+     pendant un appel actif) affichent désormais une ligne
+     `data-testid="call-notification-group-context"` /
+     `"call-waiting-group-context"` — « Appel de groupe · {titre} » (ou sans
+     titre si le groupe n'en a pas) — SEULEMENT quand `conversationType ===
+     'group'`, jamais pour un direct ni quand le champ est absent (ancienne
+     gateway). i18n `incoming.groupCall` ajoutée aux 4 locales (en/fr/es/pt).
+  5. **Non fait volontairement** : la grille/roster/`onRemove`→kick REST/timeout
+     (reste de W6) et l'i18n roster (W7) — chantier UI de groupe distinct et
+     plus large, hors scope de ce fix ciblé. Voir aussi la reclassification
+     du point « timeout global 45s » (pas un bug — déjà correctement désarmé
+     sur la première vraie réponse SDP depuis les Vagues 113/114) dans
+     `tasks/2026-08-13-group-calls-gap-analysis.md`, mise à jour au passage
+     pour ne pas faire ré-auditer un faux positif au prochain cycle.
+- **Tests** (TDD, RED confirmé avant chaque fix) :
+  - Gateway : nouveau fichier `CallEventsHandler-initiate-conversation-context.test.ts`
+    — 4 cas (groupe titré, groupe sans titre, direct, `conversation` absent du
+    call session résolu → repli `direct`/`null` sans throw) sur le fan-out membre
+    de `call:initiate`. RED confirmé (4/4 échouaient contre le payload d'avant
+    fix, `conversationType`/`conversationTitle` absents). Sweep
+    `--testPathPatterns="[Cc]all"` (gateway) : **50 suites / 1169 tests verts**
+    (+4 nets), 0 régression. Suite complète `src/__tests__/unit/services` +
+    `src/__tests__/unit/socketio` : 181+44 suites, 5681+531 tests verts.
+    `tsc --noEmit` gateway : 0 erreur.
+  - Web : 4 cas neufs dans `CallNotification.test.tsx` (titre affiché, sans
+    titre affiché quand même la ligne, jamais pour direct, jamais quand le
+    champ est absent) + 2 cas neufs dans `CallWaitingBanner.test.tsx` (titre
+    affiché, jamais pour direct). RED confirmé avant chaque fix (2 puis 1
+    échec ciblé). Sweep `--testPathPatterns="[Cc]all"` (web) : **52 suites /
+    472 tests verts** (+6 nets), 0 régression — `calls-i18n-regression.test.tsx`
+    inclus et vert (les 4 locales restent synchronisées). `npx tsc --noEmit`
+    (apps/web) : 1764 lignes de sortie AVANT et APRÈS (bruit préexistant
+    documenté depuis les Vagues 115-122), 0 occurrence de `CallNotification`/
+    `CallWaitingBanner`/`video-call.ts` dans la sortie.
+  - `packages/shared` : `bunx vitest run` — 54 fichiers / 1542 tests verts.
+  - Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) :
+    `bun install --ignore-scripts` (bun 1.3.11 disponible localement, pas
+    1.3.14), puis `packages/shared && npx prisma generate --generator client`
+    + `bun run build`.
+- **Portée volontairement non étendue** : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les
+  6 trouvailles Android de la Vague 70 ; `CXSetHeldCallAction` (Vague 84,
+  on-device requis) ; `setSinkId` (Vague 111) ; grille/roster/`onRemove`/
+  timeout/i18n roster du chantier groupe (W6 reste, W7) ; mesh iOS mono-PC
+  (I1-I7) et SFU (Phase 4) du même chantier — toolchains iOS/Android toujours
+  hors d'atteinte dans ce sandbox pour vérifier un changement Swift/Kotlin
+  avant merge.
+
+### Reste ouvert (mis à jour)
+
+Reconduit (moins « `CallNotification` mono-appelant » traité ce cycle, et
+« timeout global 45s » reclassé non-bug) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles
+Android de la Vague 70 ; `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce
+sandbox ; sélection réelle de périphérique de sortie audio (`setSinkId`,
+Vague 111). Voir `tasks/2026-08-13-group-calls-gap-analysis.md` pour le reste
+du chantier « appels de groupe » : grille adaptative web, roster, `onRemove`
+branché sur le kick REST, i18n roster (W6/W7), mesh iOS mono-PC (I1-I7), SFU
+(Phase 4, optionnel — déclencheur : besoin réel >4-5 participants).
+
+## Vague 124 — `stopPreauthorizedStream` effaçait le handoff global même quand un AUTRE flux d'appel venait de l'écraser (web) (2026-08-14)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
 session. Base explicite sur le développement précédent — branche dédiée réalignée sur
