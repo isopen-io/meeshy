@@ -269,32 +269,69 @@ describe('NotificationService - Structure Groupée V2', () => {
       await NotificationService.fetchNotifications({
         offset: 10,
         limit: 20,
-        type: NotificationTypeEnum.NEW_MESSAGE,
         isRead: false,
-        priority: 'high',
-        conversationId: 'conv_123',
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
       });
 
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('offset=10')
-      );
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('limit=20')
-      );
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('type=new_message')
-      );
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('unreadOnly=true')
-      );
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('priority=high')
-      );
-      expect(apiService.get).toHaveBeenCalledWith(
-        expect.stringContaining('conversationId=conv_123')
-      );
+      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
+      expect(callArg).toContain('offset=10');
+      expect(callArg).toContain('limit=20');
+      expect(callArg).toContain('unreadOnly=true');
+    });
+
+    it('demande les types au SERVEUR — un onglet ne filtre pas le déjà-chargé', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [],
+          pagination: { limit: 20, hasMore: false, nextCursor: null },
+          unreadCount: 0,
+        },
+      });
+
+      await NotificationService.fetchNotifications({
+        types: [NotificationTypeEnum.USER_MENTIONED, 'mention'],
+      });
+
+      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
+      expect(decodeURIComponent(callArg)).toContain('types=user_mentioned,mention');
+    });
+
+    it('n’envoie pas de types quand l’onglet est « tout » — vide ne veut pas dire aucun', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [],
+          pagination: { limit: 20, hasMore: false, nextCursor: null },
+          unreadCount: 0,
+        },
+      });
+
+      await NotificationService.fetchNotifications({ types: [] });
+
+      expect((apiService.get as jest.Mock).mock.calls[0][0]).not.toContain('types=');
+    });
+
+    // Le fil ne porte que ce que la gateway DÉCLARE : Fastify retire de
+    // `request.query` toute clé absente du schéma, donc un paramètre non déclaré
+    // part, coûte des octets, et ne filtre rien. `sortBy`/`sortOrder` en
+    // particulier ne PEUVENT pas être honorés — le curseur keyset de l'inbox est
+    // ancré sur l'ordre total `(createdAt desc, id desc)`, et servir un autre
+    // ordre lui ferait sauter des lignes en silence.
+    it('n’envoie aucun paramètre que la gateway ne déclare pas', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [],
+          pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
+          unreadCount: 0,
+        },
+      });
+
+      await NotificationService.fetchNotifications({ limit: 20 });
+
+      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
+      expect(callArg).not.toContain('sortBy=');
+      expect(callArg).not.toContain('sortOrder=');
     });
 
     it('demande la page par CURSEUR quand il en tient un — et jamais par offset', async () => {
@@ -315,29 +352,6 @@ describe('NotificationService - Structure Groupée V2', () => {
       // périmé que le curseur existe pour remplacer, et une gateway qui
       // choisirait l'offset re-servirait la ligne déjà lue.
       expect(callArg).not.toContain('offset=');
-    });
-
-    it('devrait gérer les dates dans les filtres', async () => {
-      (apiService.get as jest.Mock).mockResolvedValue({
-        success: true,
-        data: {
-          data: [],
-          pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
-          unreadCount: 0,
-        },
-      });
-
-      const startDate = new Date('2024-01-01');
-      const endDate = new Date('2024-01-31');
-
-      await NotificationService.fetchNotifications({
-        startDate,
-        endDate,
-      });
-
-      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
-      expect(callArg).toContain('startDate=2024-01-01T00');
-      expect(callArg).toContain('endDate=2024-01-31T00');
     });
 
     it('devrait retourner une structure vide en cas de données manquantes', async () => {
@@ -436,18 +450,35 @@ describe('NotificationService - Structure Groupée V2', () => {
   });
 
   describe('getCounts', () => {
-    it('devrait récupérer et formater les compteurs', async () => {
+    it('lit les totaux de TOUTE l’inbox, par type', async () => {
       (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
         data: {
-          count: 15,
+          success: true,
+          data: {
+            total: 15,
+            unread: 4,
+            byType: { new_message: 12, user_mentioned: 3 },
+          },
         },
       });
 
       const response = await NotificationService.getCounts();
 
+      expect(apiService.get).toHaveBeenCalledWith('/notifications/counts');
       expect(response.data?.total).toBe(15);
-      expect(response.data?.unread).toBe(15);
+      // `unread` et `total` sont DEUX questions : les avoir confondus faisait
+      // afficher « 15 non lues » sur une inbox entièrement lue.
+      expect(response.data?.unread).toBe(4);
+      expect(response.data?.byType).toEqual({ new_message: 12, user_mentioned: 3 });
+    });
+
+    it('rend des compteurs vides plutôt que rien quand la réponse est vide', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({ success: true, data: undefined });
+
+      const response = await NotificationService.getCounts();
+
+      expect(response.data).toEqual({ total: 0, unread: 0, byType: {} });
     });
   });
 
@@ -520,7 +551,7 @@ describe('NotificationService - Structure Groupée V2', () => {
       });
 
       const response = await NotificationService.fetchNotifications({
-        type: NotificationTypeEnum.USER_MENTIONED,
+        types: [NotificationTypeEnum.USER_MENTIONED],
       });
 
       const notification = response.data!.notifications[0];
@@ -568,7 +599,7 @@ describe('NotificationService - Structure Groupée V2', () => {
       });
 
       const response = await NotificationService.fetchNotifications({
-        type: NotificationTypeEnum.MISSED_CALL,
+        types: [NotificationTypeEnum.MISSED_CALL],
       });
 
       const notification = response.data!.notifications[0];

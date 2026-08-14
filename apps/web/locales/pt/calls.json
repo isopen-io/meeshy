@@ -136,6 +136,8 @@
       "videoCall": "Chamada de vídeo",
       "audioCall": "Chamada de áudio",
       "subtitle": "Chamada recebida...",
+      "groupSubtitle": "Chamada em grupo",
+      "groupCallLabel": "{count} pessoas",
       "accept": "Aceitar",
       "decline": "Recusar",
       "acceptLabel": "Aceitar chamada",

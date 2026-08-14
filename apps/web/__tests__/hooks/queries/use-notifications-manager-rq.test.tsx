@@ -696,3 +696,84 @@ describe('useNotificationsManagerRQ — sync desync resync', () => {
     expect(mockFetchNotifications).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * L'onglet de la cloche filtre côté SERVEUR depuis que « aucune mention » ne
+ * doit plus vouloir dire « aucune mention parmi les vingt dernières ». Le socket,
+ * lui, insère en tête du cache — et il écrivait dans TOUTES les listes à la fois.
+ * Sur une liste qui n'a demandé que les mentions, cela fait apparaître une
+ * demande d'ami que le serveur n'aurait jamais servie : le temps réel
+ * contredirait le filtre que la liste vient d'appliquer.
+ */
+describe('useNotificationsManagerRQ — insertion socket sous un onglet filtré', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedNotificationHandler = null;
+    mockFetchNotifications.mockResolvedValue({
+      data: {
+        notifications: [],
+        pagination: { limit: 20, offset: 0, total: 0, hasMore: false },
+        unreadCount: 0,
+      },
+    });
+  });
+
+  it('n’insère pas un type que l’onglet n’a pas demandé', async () => {
+    const { result } = renderHook(
+      () => useNotificationsManagerRQ({ filters: { types: ['user_mentioned', 'mention'] } }),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => expect(capturedNotificationHandler).not.toBeNull());
+
+    act(() => {
+      capturedNotificationHandler!({
+        ...makeNotification('live-friend', false),
+        type: 'friend_request',
+      });
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.notifications.find((n) => n.id === 'live-friend')).toBeUndefined();
+  });
+
+  it('insère bien un type que l’onglet a demandé', async () => {
+    const { result } = renderHook(
+      () => useNotificationsManagerRQ({ filters: { types: ['user_mentioned', 'mention'] } }),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => expect(capturedNotificationHandler).not.toBeNull());
+
+    act(() => {
+      capturedNotificationHandler!({
+        ...makeNotification('live-mention', false),
+        type: 'user_mentioned',
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.notifications.find((n) => n.id === 'live-mention')).toBeDefined()
+    );
+  });
+
+  it('l’onglet « tout » accepte tout — une liste vide n’est pas un refus', async () => {
+    const { result } = renderHook(
+      () => useNotificationsManagerRQ({ filters: { types: [] } }),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => expect(capturedNotificationHandler).not.toBeNull());
+
+    act(() => {
+      capturedNotificationHandler!({
+        ...makeNotification('live-any', false),
+        type: 'friend_request',
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.notifications.find((n) => n.id === 'live-any')).toBeDefined()
+    );
+  });
+});

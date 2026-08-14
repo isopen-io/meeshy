@@ -1,5 +1,49 @@
 # Lessons
 
+## Leçon 246 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 242 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
+
+La leçon 242 disait : avant de RÉPARER un fichier cassé, chercher qui d'autre le répare déjà. Ce
+cycle a montré que la règle vaut à l'identique pour une FONCTIONNALITÉ, et qu'elle se paie plus
+cher — parce qu'un chantier dure des heures, pas trois minutes.
+
+J'ai implémenté « le filtre de la cloche ne filtre que le déjà-chargé » de bout en bout : gateway,
+web, témoins, doc, PR #2991, CI verte sur quatorze jobs. Pendant que ma CI tournait, une autre
+session de LA MÊME routine a livré et fusionné le même correctif (#2986). Deux implémentations
+indépendantes du même défaut, dont une jetée — la mienne.
+
+**Ce qui l'aurait dit en dix secondes, avant d'écrire la première ligne :**
+
+```bash
+git ls-remote origin 'refs/heads/*' | grep -i <mot-clé-du-chantier>
+# et : gh/MCP search_pull_requests state:open — le TITRE d'une PR ouverte dit le chantier
+```
+
+Le candidat que j'ai pris venait de la section « Prochains candidats » de `tasks/todo.md` — c'est-
+à-dire d'une liste PUBLIQUE, lue par toutes les sessions de la routine. **Une file de tâches
+partagée sans réservation produit mécaniquement des doublons** : le premier candidat de la liste
+est celui que tout le monde prend. Prendre le premier NON déjà porté par une branche distante est
+le geste correct.
+
+**Ce que le doublon coûte, et ce qu'il ne coûte pas.** Il ne coûte pas la compréhension du défaut :
+les deux implémentations sont arrivées aux mêmes conclusions (`?types=` en CSV, liste vide = pas de
+filtre, compte serveur pour les pastilles), ce qui est un signe que l'analyse était juste. Il coûte
+le temps machine et, surtout, il fait courir le risque d'un ÉCRASEMENT : deux branches qui touchent
+les mêmes fichiers, et la dernière fusionnée gagne. C'est exactement le scénario de la leçon 242,
+en plus gros.
+
+**Le geste de sortie, quand le doublon est constaté : ne pas fusionner par-dessus.** Repartir de
+`main`, comparer les deux implémentations point par point, et ne garder que le DELTA réellement
+absent. Ici, trois choses manquaient à la version fusionnée — le squelette qui emporte toute la
+page à chaque premier passage sur un onglet, le `{ types: [] }` qui dédouble le cache de la cloche,
+et la doc qui annonçait toujours les paramètres fantômes à l'origine du bug. Le cycle a donc rendu
+une PR de suite, petite et honnête, au lieu d'une PR concurrente. Le travail superseded est gardé
+sous un tag (`cycle123-superseded-by-2986`) plutôt que poussé.
+
+**Corollaire — une CI longue est une fenêtre de collision.** Quatorze jobs, dont un de huit
+minutes, laissent une demi-heure pendant laquelle `main` peut recevoir le même correctif. Re-faire
+`git fetch origin main` AVANT de fusionner n'est donc pas une formalité : c'est le seul moment où
+la collision est encore réparable proprement.
+
 ## Leçon 243 — « La CI ne l'a pas vu » a plusieurs causes possibles, et elles n'ont pas le même remède (2026-08-14, routine messaging, cycle 122)
 
 `main` ne compilait plus pour iOS : la PR #2982 avait retiré `enum MessageDayStickyPlacement`
@@ -6627,10 +6671,96 @@ d'hier », c'est **remettre le plus petit symbole qui manque à ses lecteurs**, 
 jamais été vue par personne avant d'être sur `main`, et `ios-tests.yml` ne tournant pas sur les
 pushes vers `main`, rien ne l'a rattrapée ensuite. Un `cancelled` se lit comme un rouge, jamais
 comme un vert absent.
+## Leçon 244 — Un filtre qui ne filtre que le déjà-chargé ne gaspille pas : il MENT
+
+Cycle 123 (`GET /notifications`, onglets de la cloche web).
+
+Sept paramètres de filtrage partaient du web vers une route qui ne les déclarait pas. Fastify les
+retirait de `request.query` sans bruit. La lecture facile — celle qui a laissé l'écart ouvert un
+cycle de plus — est « des octets envoyés pour rien, à nettoyer un jour ». Elle est fausse, et c'est
+la SUITE qui compte : il fallait bien que quelque chose filtre, et ce quelque chose était
+`matchesFilter`, appliqué **aux pages déjà chargées**.
+
+**Sur une liste paginée, filtrer le déjà-chargé n'est pas une approximation du filtrage — c'est une
+autre opération, qui rend une réponse d'une autre nature.** « Aucune mention » ne voulait pas dire
+« vous n'avez pas de mention » mais « aucune mention parmi les vingt dernières notifications », et
+rien n'allait chercher les autres. L'utilisateur, lui, lit la première phrase. Un onglet vide n'était
+pas une réponse, c'était une fenêtre.
+
+**Règle de reconnaissance : devant un filtre client, demander sur QUOI il s'applique. S'il s'applique
+à une collection paginée, il ment — et il ment d'autant plus fort que l'utilisateur a d'historique**,
+c'est-à-dire exactement chez les utilisateurs qui comptent. Le corollaire vaut pour tout chiffre
+dérivé de la même collection : ici les pastilles de comptage des onglets et le sous-titre
+« N notifications » mentaient de la même façon, et personne ne les avait rangés avec le filtre parce
+qu'ils ne s'appellent pas « filtre ». **Un filtre et un compteur posés sur la même collection
+partagent leur défaut ; corriger l'un sans l'autre laisse l'écran incohérent avec lui-même.**
+
+**Corollaire — une signature qui accepte un paramètre non honoré est la CAUSE, pas la conséquence.**
+`fetchNotifications(options: Partial<NotificationFilters> & …)` admettait `priority`,
+`conversationId`, `startDate`, `endDate`, `sortBy`, `sortOrder`. Le type disait « tu peux filtrer
+là-dessus » ; le serveur n'en savait rien. Tant que la signature les accepte, personne n'a de raison
+de vérifier qu'ils arrivent quelque part — et un appelant futur les passera de bonne foi. Le
+correctif durable n'est pas de les faire honorer (construire un filtre sans lecteur est le défaut
+symétrique) : c'est de faire dire au type **ce que la route accepte réellement**, et rien d'autre.
+
+**Corollaire — filtrer côté serveur crée un danger neuf du côté temps réel.** Le socket insérait
+chaque notification dans TOUTES les listes en cache (`setQueriesData` sur un préfixe). Tant que
+toutes les listes voyaient la même chose, c'était juste ; dès qu'une liste porte un filtre, l'écriture
+aveugle y injecte ce que le serveur n'aurait jamais servi — le temps réel contredisant le filtre que
+la liste vient d'appliquer. **Quand on rend une liste sélective, il faut relire tous ses ÉCRIVAINS,
+pas seulement son lecteur.** La sélection était déjà disponible au bon endroit : dans la clé de la
+query, qui la transporte par construction.
+
+**Corollaire — deux `switch` identiques dans un même fichier ne sont pas une duplication de style.**
+`countByFilter` et `matchesFilter` recopiaient ligne pour ligne le groupement d'alias
+(`user_mentioned` et `mention` sous « mentions »). Rien n'avait encore divergé — mais le jour où le
+filtre part au serveur, il faut envoyer CETTE table, et une table qui existe en deux exemplaires n'a
+pas de nom à envoyer. La duplication ne coûtait rien tant que la règle restait locale ; elle a coûté
+le droit de la déplacer.
+
+## Leçon 245 — Un miroir d'état a besoin d'un chemin de retour, pas seulement d'un chemin d'aller
+
+Cycle 15 temps réel (`ConnectionService.state.isConnected`, web).
+
+Un handler `offline` mettait le miroir de connexion à `false` sans toucher au socket — geste
+délibéré et correct : la bannière doit réagir à la seconde où le réseau tombe, sans attendre que
+Socket.IO s'en aperçoive. Le défaut n'est pas là. Il est dans ce qui manquait **en face** : rien ne
+pouvait remettre le miroir à `true` quand le socket, lui, n'était jamais tombé.
+
+**Un miroir pessimiste est un pari sur l'existence d'un événement de retour.** Ici le pari était
+faux par construction : le seul événement capable de relever le drapeau (`connect`) n'est JAMAIS
+émis sur un socket déjà connecté, et la fonction censée le provoquer (`connect()`) sortait en
+silence sur exactement cette condition. Le chemin d'aller était instantané, le chemin de retour
+n'existait pas.
+
+Deux règles à en tirer :
+
+1. **Quand on écrit une mise à jour optimiste ou pessimiste d'un état MIROIR, écrire le chemin de
+   retour dans le même geste.** Pas « ça se réparera au prochain événement » — il faut nommer
+   l'événement et vérifier qu'il peut se produire dans l'état où le miroir vient d'être mis. Ici la
+   mise à `false` rendait précisément impossible l'événement censé la défaire.
+
+2. **La réconciliation va au POINT DE PASSAGE, pas au point de déclenchement.** La réparation était
+   tentante dans le handler `online` — c'est là que le symptôme se voit. Mais `connect()` est
+   traversé par tous les appelants (handler `online`, orchestrateur, `ensureConnection`) : réparer
+   au point de déclenchement aurait laissé les deux autres sur la même impasse, c'est-à-dire aurait
+   reproduit la configuration « un contrôle correct répété en N endroits dont l'un finit par
+   manquer » (leçons des cycles 13 et 14).
+
+**Le signal de recherche** : un booléen d'état écrit à `false` dans un handler qui ne touche pas la
+ressource qu'il décrit. Chercher ensuite, explicitement, la ligne qui le remet à `true` — et vérifier
+qu'elle est atteignable depuis l'état écrit. Si la remise à `true` vit derrière une garde que la mise
+à `false` vient de rendre infranchissable, le miroir est piégé.
+
+**Ce qui rendait la panne invisible** : le socket continuait à livrer les messages ENTRANTS. La seule
+chose cassée était ce qui LISAIT le miroir — ici `useAutoRetryFailedMessages`, dont `isReady` est
+l'unique déclencheur, donc la file des messages en échec silencieusement gelée. Un état miroir faux
+ne se manifeste pas là où il est faux, mais chez ses lecteurs : recenser les lecteurs fait partie du
+diagnostic, pas de la rédaction.
 
 ---
 
-## Leçon 244 — Quand deux éléments se disputent une bande, la géométrie sépare ; l'exclusion mutuelle ampute
+## Leçon 246 — Quand deux éléments se disputent une bande, la géométrie sépare ; l'exclusion mutuelle ampute
 
 **Symptôme.** La pastille de jour d'une conversation et la rangée du header flottant vivaient toutes
 deux juste sous l'encoche. Le 12/08 le chevauchement est signalé, le 13/08 au soir il est « résolu »

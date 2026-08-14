@@ -47,17 +47,9 @@ jest.mock('@/services/notification.service', () => ({
   },
 }));
 
-// Mock query keys
-jest.mock('@/lib/react-query/query-keys', () => ({
-  queryKeys: {
-    notifications: {
-      all: ['notifications'],
-      lists: () => ['notifications', 'list'],
-      list: (filters?: { unreadOnly?: boolean }) => ['notifications', 'list', filters],
-      unreadCount: () => ['notifications', 'unreadCount'],
-    },
-  },
-}));
+// `queryKeys` n'est PAS doublé : c'est un module pur, et la copie manuelle qui
+// tenait ici a figé un contrat que le vrai module avait dépassé — la clé des
+// compteurs y manquait, et le hook jetait sur une fonction absente.
 
 // Test data
 const mockNotification = {
@@ -247,6 +239,50 @@ describe('useInfiniteNotificationsQuery', () => {
     });
 
     expect(result.current.data?.pages).toHaveLength(1);
+  });
+
+  /**
+   * La cloche (montée au layout RACINE, donc sur toutes les pages) et
+   * /notifications sur l'onglet « tout » posent la MÊME question : l'inbox
+   * entière. `FILTER_TYPES.all` valant `[]`, la page passe `{ types: [] }` là où
+   * la cloche ne passe rien — deux clés distinctes pour une requête identique,
+   * donc un second cache et un écran vide à l'ouverture, le temps de refaire un
+   * appel dont la réponse était déjà en mémoire.
+   */
+  it('partage le cache de la cloche quand aucun type n’est demandé', async () => {
+    mockFetchNotifications.mockResolvedValue(mockPaginatedResponse);
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    const bell = renderHook(() => useInfiniteNotificationsQuery(), { wrapper });
+    await waitFor(() => expect(bell.result.current.isSuccess).toBe(true));
+
+    const tabAll = renderHook(() => useInfiniteNotificationsQuery({ types: [] }), { wrapper });
+    await waitFor(() => expect(tabAll.result.current.isSuccess).toBe(true));
+
+    expect(
+      queryClient.getQueryCache().findAll({ queryKey: ['notifications', 'list'] })
+    ).toHaveLength(1);
+  });
+
+  it('tient un cache SÉPARÉ par jeu de types demandé', async () => {
+    mockFetchNotifications.mockResolvedValue(mockPaginatedResponse);
+    const { wrapper, queryClient } = createWrapperWithClient();
+
+    const all = renderHook(() => useInfiniteNotificationsQuery(), { wrapper });
+    await waitFor(() => expect(all.result.current.isSuccess).toBe(true));
+
+    const mentions = renderHook(
+      () => useInfiniteNotificationsQuery({ types: ['user_mentioned', 'mention'] }),
+      { wrapper }
+    );
+    await waitFor(() => expect(mentions.result.current.isSuccess).toBe(true));
+
+    expect(
+      queryClient.getQueryCache().findAll({ queryKey: ['notifications', 'list'] })
+    ).toHaveLength(2);
+    expect(mockFetchNotifications).toHaveBeenLastCalledWith(
+      expect.objectContaining({ types: ['user_mentioned', 'mention'] })
+    );
   });
 
   it('should determine hasNextPage from pagination', async () => {

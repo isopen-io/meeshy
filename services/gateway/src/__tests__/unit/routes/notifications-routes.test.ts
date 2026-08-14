@@ -55,7 +55,11 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { notificationRoutes } from '../../../routes/notifications';
-import { findManyNotifications, matchesNotificationWhere } from '../../helpers/notification-where';
+import {
+  findManyNotifications,
+  groupByNotificationType,
+  matchesNotificationWhere,
+} from '../../helpers/notification-where';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -88,6 +92,7 @@ function createMockPrisma() {
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       count: jest.fn<any>().mockResolvedValue(0),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
       findUnique: jest.fn<any>().mockResolvedValue(null),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 5 }),
     },
@@ -395,6 +400,181 @@ describe('GET /notifications — pagination par curseur', () => {
 
     expect(pagination.properties.nextCursor).toBeDefined();
     expect(route.options.schema.querystring.properties.cursor).toBeDefined();
+  });
+});
+
+// ─── GET /notifications — filtre par type ────────────────────────────────────
+
+describe('GET /notifications — filtre par type', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const at = (minute: number) => new Date(Date.UTC(2024, 0, 1, 12, minute, 0));
+
+  /** Une inbox où le type recherché est HORS de la première page. */
+  function mixedInbox() {
+    return [
+      ...Array.from({ length: 3 }, (_, i) =>
+        makeNotification({
+          id: `msg${i}`,
+          type: 'new_message',
+          isRead: false,
+          expiresAt: null,
+          createdAt: at(50 - i),
+        })
+      ),
+      makeNotification({
+        id: 'men1',
+        type: 'user_mentioned',
+        isRead: false,
+        expiresAt: null,
+        createdAt: at(20),
+      }),
+      makeNotification({
+        id: 'men0',
+        type: 'mention',
+        isRead: false,
+        expiresAt: null,
+        createdAt: at(10),
+      }),
+    ];
+  }
+
+  function serve(pr: any, rows: any[]) {
+    pr.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(findManyNotifications(rows, args))
+    );
+    pr.notification.count.mockImplementation((args: any) =>
+      Promise.resolve(findManyNotifications(rows, { where: args?.where }).length)
+    );
+  }
+
+  it('rend les mentions ENFOUIES sous la première page, pas seulement celles déjà chargées', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, mixedInbox());
+
+    const result: any = await route.handler(
+      makeRequest({ query: { limit: 2, types: 'user_mentioned,mention' } }),
+      reply
+    );
+
+    expect(result.data.map((n: any) => n.id)).toEqual(['men1', 'men0']);
+    expect(result.pagination.total).toBe(2);
+  });
+
+  it('déclare types dans le querystring — sinon Fastify le retire de la requête', () => {
+    const { fastify } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+
+    expect(route.options.schema.querystring.properties.types).toBeDefined();
+  });
+
+  it('garde le filtre sous le curseur — une page suivante ne réélargit pas l’onglet', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, mixedInbox());
+
+    const first: any = await route.handler(
+      makeRequest({ query: { limit: 1, types: 'user_mentioned,mention' } }),
+      reply
+    );
+    const second: any = await route.handler(
+      makeRequest({
+        query: { limit: 5, types: 'user_mentioned,mention', cursor: first.pagination.nextCursor },
+      }),
+      reply
+    );
+
+    expect(first.data.map((n: any) => n.id)).toEqual(['men1']);
+    expect(second.data.map((n: any) => n.id)).toEqual(['men0']);
+  });
+
+  it('sans types, l’inbox reste entière', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, mixedInbox());
+
+    const result: any = await route.handler(makeRequest({ query: { limit: 10 } }), reply);
+
+    expect(result.data).toHaveLength(5);
+  });
+
+  it('un types vide vaut « aucun filtre », pas « aucune notification »', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, mixedInbox());
+
+    const result: any = await route.handler(
+      makeRequest({ query: { limit: 10, types: ' , ' } }),
+      reply
+    );
+
+    expect(result.data).toHaveLength(5);
+  });
+});
+
+// ─── GET /notifications/counts ───────────────────────────────────────────────
+
+describe('GET /notifications/counts', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const rows = [
+    makeNotification({ id: 'a', type: 'new_message', isRead: false, expiresAt: null }),
+    makeNotification({ id: 'b', type: 'new_message', isRead: true, expiresAt: null }),
+    makeNotification({ id: 'c', type: 'user_mentioned', isRead: false, expiresAt: null }),
+    makeNotification({
+      id: 'd',
+      type: 'user_mentioned',
+      isRead: false,
+      expiresAt: new Date(Date.now() - 60_000),
+    }),
+    makeNotification({ id: 'e', userId: 'other', type: 'missed_call', expiresAt: null }),
+  ];
+
+  function serve(pr: any) {
+    pr.notification.groupBy.mockImplementation((args: any) =>
+      Promise.resolve(groupByNotificationType(rows, args))
+    );
+  }
+
+  it('compte TOUTE l’inbox par type, pas les pages chargées', async () => {
+    const { fastify, pr, ns, reply } = setup();
+    serve(pr);
+    ns.getUnreadCount.mockResolvedValue(2);
+    const route = getRoute(fastify, 'GET', '/notifications/counts');
+
+    await route.handler(makeRequest(), reply);
+
+    expect(mockSendSuccess).toHaveBeenCalledWith(
+      reply,
+      expect.objectContaining({
+        total: 3,
+        unread: 2,
+        byType: { new_message: 2, user_mentioned: 1 },
+      })
+    );
+  });
+
+  it('exclut les expirées et l’inbox d’autrui — même prédicat que la liste', async () => {
+    const { fastify, pr, reply } = setup();
+    serve(pr);
+    const route = getRoute(fastify, 'GET', '/notifications/counts');
+
+    await route.handler(makeRequest(), reply);
+
+    const [, payload] = mockSendSuccess.mock.calls[0] as [unknown, any];
+    expect(payload.byType.missed_call).toBeUndefined();
+    expect(payload.byType.user_mentioned).toBe(1);
+  });
+
+  it('returns 500 on service error', async () => {
+    const { fastify, pr, reply } = setup();
+    pr.notification.groupBy.mockRejectedValue(new Error('boom'));
+    const route = getRoute(fastify, 'GET', '/notifications/counts');
+
+    await route.handler(makeRequest(), reply);
+
+    expect(mockSendInternalError).toHaveBeenCalled();
   });
 });
 
