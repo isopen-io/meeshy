@@ -72,9 +72,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // reliable place for launch-time OS contracts. `register()` is
         // idempotent (no-ops if already registered), so this is safe
         // alongside the existing call in MeeshyApp.swift's push bootstrap.
-        Task { @MainActor in
-            VoIPPushManager.shared.register()
-        }
+        //
+        // Called DIRECTLY, not `Task { @MainActor in }` — this method is
+        // itself @MainActor-isolated (SWIFT_DEFAULT_ACTOR_ISOLATION, same
+        // as the `BackgroundTaskManager.shared.registerTasks()` call two
+        // lines above), so wrapping in a Task only defers `register()` to
+        // a later run-loop turn instead of running inline. That deferral
+        // reopens exactly the race this call was moved into AppDelegate to
+        // close: a VoIP push delivered immediately at launch could still
+        // reach the OS before `PKPushRegistry` exists. Regression:
+        // `AppInitWireupTests.test_app_init_registersVoIPPushSynchronously`.
+        VoIPPushManager.shared.register()
 
         // Masquer le spinner natif d'iOS pour les pull-to-refresh
         // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation

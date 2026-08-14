@@ -62,6 +62,45 @@ final class AppInitWireupTests: XCTestCase {
         )
     }
 
+    // MARK: - VoIP push registration timing
+
+    /// `VoIPPushManager.shared.register()` must run INLINE in
+    /// `didFinishLaunchingWithOptions`, not deferred via `Task { @MainActor in }`.
+    /// The method is itself `@MainActor`-isolated (same as the
+    /// `BackgroundTaskManager.shared.registerTasks()` call immediately above it,
+    /// which is already called directly) — wrapping it in a `Task` doesn't change
+    /// *where* it runs, only *when*: it defers `register()` to a later run-loop
+    /// turn instead of the current synchronous launch path. That reopens the
+    /// exact race the surrounding comment says this call was moved into
+    /// `AppDelegate` to close — a VoIP push delivered at the moment of launch
+    /// could reach the OS before `PKPushRegistry` exists, since PushKit has no
+    /// obligation to wait for a later run-loop turn.
+    func test_app_init_registersVoIPPushSynchronously() throws {
+        let body = try appDelegateLaunchBody()
+        XCTAssertTrue(
+            body.contains("\n        VoIPPushManager.shared.register()"),
+            "AppDelegate.application(_:didFinishLaunchingWithOptions:) must call "
+                + "VoIPPushManager.shared.register() as a direct top-level statement "
+                + "(8-space launch-body indent), not nested inside a Task block — see "
+                + "test_app_init_doesNotDeferVoIPPushRegistrationInATask for why."
+        )
+    }
+
+    /// Twin of the above: proves the call is NOT nested one indent level deeper
+    /// inside a `Task { @MainActor in ... }`, which is what silently reintroduces
+    /// the deferred-registration race without breaking the simpler `.contains`
+    /// check above (a `Task` wrapper still contains the same call text).
+    func test_app_init_doesNotDeferVoIPPushRegistrationInATask() throws {
+        let body = try appDelegateLaunchBody()
+        XCTAssertFalse(
+            body.contains("            VoIPPushManager.shared.register()"),
+            "VoIPPushManager.shared.register() must not be indented as the sole "
+                + "statement of a Task block in didFinishLaunchingWithOptions — that "
+                + "defers PushKit registration past the current launch turn, reopening "
+                + "the 'registry doesn't exist yet when the push arrives' race."
+        )
+    }
+
     // MARK: - Runtime smoke (symbol availability)
 
     /// Cheap proof that the symbol exists with the expected signature from the
