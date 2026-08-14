@@ -501,24 +501,37 @@ nonisolated final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerD
             darkFrameDetector.analyzeFrame(pixelBuffer)
         }
 
-        if pipeline.config.isEnabled {
-            // PERF-014: process() may return a NEW buffer from its private
-            // pool (different from the capturer's input pool). When that
-            // happens we need to forward a frame wrapping the new buffer so
-            // the encoder receives the filtered pixels. If the pool fell
-            // back to in-place rendering, the returned buffer === input and
-            // the original frame still reflects the filter result.
-            let processed = pipeline.process(pixelBuffer, averageBrightness: darkFrameDetector.lastAverageBrightness)
-            if processed !== pixelBuffer {
-                let wrapped = RTCCVPixelBuffer(pixelBuffer: processed)
-                let filteredFrame = RTCVideoFrame(
-                    buffer: wrapped,
-                    rotation: frame.rotation,
-                    timeStampNs: frame.timeStampNs
-                )
-                target.capturer(capturer, didCapture: filteredFrame)
-                return
-            }
+        // Vague 107 (#2859) taught `process()` itself to also run when
+        // `hasAdvancedFilters` is true (background blur / skin smoothing
+        // toggled without ever picking a colorimetry preset, so `isEnabled`
+        // stays false) — but left THIS call site gating the call on
+        // `isEnabled` alone, so `process()` was never even reached in that
+        // case: the frame handed to the encoder stayed unfiltered while
+        // CallView's toolbar chip (fixed in the same PR) now claimed the
+        // filter was active. `process()`'s own guard (`cfg.isEnabled ||
+        // cfg.hasAdvancedFilters`) is the single source of truth for
+        // "should this frame run through the pipeline" — duplicating that
+        // condition here is exactly what let the two drift apart once
+        // already; always calling it keeps there being only one place that
+        // can get the condition wrong.
+        //
+        // PERF-014: process() may return a NEW buffer from its private
+        // pool (different from the capturer's input pool). When that
+        // happens we need to forward a frame wrapping the new buffer so
+        // the encoder receives the filtered pixels. If the pool fell
+        // back to in-place rendering, or the pipeline early-returned the
+        // input unchanged, the returned buffer === input and the original
+        // frame already reflects the (non-)filter result.
+        let processed = pipeline.process(pixelBuffer, averageBrightness: darkFrameDetector.lastAverageBrightness)
+        if processed !== pixelBuffer {
+            let wrapped = RTCCVPixelBuffer(pixelBuffer: processed)
+            let filteredFrame = RTCVideoFrame(
+                buffer: wrapped,
+                rotation: frame.rotation,
+                timeStampNs: frame.timeStampNs
+            )
+            target.capturer(capturer, didCapture: filteredFrame)
+            return
         }
 
         target.capturer(capturer, didCapture: frame)

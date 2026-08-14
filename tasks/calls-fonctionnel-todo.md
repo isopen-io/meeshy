@@ -7932,3 +7932,50 @@ vrai sélecteur multi-périphériques, pas un quick fix) ; `CallInfoOverlay`'s `
 affichant brièvement 0 côté caller (Vague 112, cosmétique, non traité). Voir aussi
 `tasks/2026-08-13-group-calls-gap-analysis.md` pour le chantier séparé « appels de groupe » (W6/W7
 web, I1-I7 iOS, SFU) en cours sur une autre branche le même jour.
+
+## Vague 120 — `VideoFilterCapturerDelegate` dupliquait le gate `isEnabled` déjà corrigé dans `process()` (iOS) (2026-08-14)
+
+- **Root cause** : la Vague 107 (#2859) avait corrigé le no-op silencieux des filtres avancés
+  (background blur / skin smoothing) activés sans preset de colorimétrie, en élargissant le guard
+  de `VideoFilterPipeline.process()` à `cfg.isEnabled || cfg.hasAdvancedFilters`, et avait aligné
+  les deux indicateurs UI (`CallView.hasActiveEffects`, `CallEffectsOverlay`) sur la même
+  condition. Un QUATRIÈME site restait sur l'ancien gate : `VideoFilterCapturerDelegate.capturer(
+  _:didCapture:)` — le callback WebRTC qui décide s'il appelle `pipeline.process()` DU TOUT —
+  continuait à ne l'invoquer que `if pipeline.config.isEnabled`. Résultat : le correctif de
+  `process()` n'était jamais atteint depuis la capture réelle. Un utilisateur activant le flou
+  d'arrière-plan ou le lissage de peau sans jamais choisir de preset voyait le chip "Filtres"
+  s'allumer (indicateur corrigé) alors que la frame envoyée au pair restait NON filtrée — la même
+  panne que #2859 croyait avoir fermée, plus une régression UI (l'indicateur ment désormais dans
+  ce cas précis).
+- **Fix** : suppression du gate dupliqué `if pipeline.config.isEnabled` au call site. `process()`
+  est désormais la SEULE source de vérité pour « cette frame doit-elle traverser le pipeline » —
+  toujours appelé, son propre guard interne fait l'early-return bon marché quand aucun filtre
+  n'est actif. Élimine la classe de bug (deux conditions identiques à faire évoluer ensemble) au
+  lieu de patcher le symptôme.
+- **Tests** : `VideoFilterCapturerDelegateTests` (nouveau, `VideoFilterPipelineTests.swift`,
+  `#if canImport(WebRTC)`) — construit un vrai `RTCVideoCapturer`/`RTCVideoFrame`/
+  `RTCCVPixelBuffer` et un spy `RTCVideoCapturerDelegate`, invoque `capturer(_:didCapture:)`
+  directement. 3 cas : blur seul → `process()` atteint (`lastFrameProcessingTime` non-nil) ;
+  smoothing seul → idem ; aucun filtre → `process()` toujours atteint mais early-return
+  (`lastFrameProcessingTime` nil), frame originale toujours forwardée au target dans les 3 cas.
+  Miroir exact du triptyque déjà existant dans `VideoFilterPipelineTests` pour `process()`
+  lui-même (Vague 107), au niveau du call site manqué.
+  Build/tests non exécutables dans ce sandbox Linux (pas d'Xcode/WebRTC) — vérifié par lecture de
+  source directe (signatures `RTCVideoCapturer(delegate:)` / `RTCVideoFrame(buffer:rotation:
+  timeStampNs:)` / `RTCCVPixelBuffer(pixelBuffer:)` déjà utilisées ailleurs dans le fichier de
+  production) ; vérification réelle déférée au job CI macOS « iOS Tests », PR suivie jusqu'au vert
+  avant merge — même pratique que Vague 107/#2965.
+- **Portée volontairement non étendue** : les items déjà listés en « Reste ouvert » ci-dessus
+  (god-object `CallManager.swift`, `setSinkId`, etc.) — trouvaille isolée d'un audit ciblé sur le
+  call site WebRTC de `VideoFilterPipeline`, pas un balayage complet du fichier.
+
+### Reste ouvert (mis à jour)
+
+Reconduit à l'identique (aucun item de cette liste résolu ce cycle) : dead code / god-object
+`CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; busy-path
+`reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ; piste
+`CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ; toolchains
+iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique de sortie audio
+(`setSinkId`, Vague 111) ; `CallInfoOverlay`'s `participantCount` affichant brièvement 0 côté
+caller (Vague 112, cosmétique). Voir aussi `tasks/2026-08-13-group-calls-gap-analysis.md` pour le
+chantier « appels de groupe ».
