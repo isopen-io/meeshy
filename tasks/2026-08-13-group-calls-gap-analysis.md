@@ -284,36 +284,53 @@ adaptative, roster, `onRemove` non branché sur le kick REST, timeout global
 `calls.json`). Le mesh iOS mono-PC (I1-I7) et le SFU (Phase 4, optionnel)
 restent également hors scope de cette branche.
 
-## Mise à jour 2026-08-14 — volet `CallNotification` de W6 traité (routine calling)
+## Mise à jour 2026-08-14 — deux items de W6 clarifiés/traités (routine calling)
 
-**`CallNotification` mono-appelant partiellement levé.** La bannière d'appel
-entrant (`apps/web/components/video-call/CallNotification.tsx`) affichait
-exactement le même texte — nom de l'appelant + « Appel entrant... » — qu'il
-s'agisse d'un 1:1 ou d'un appel de groupe, sans aucun moyen pour l'appelé de
-distinguer les deux avant de décrocher. `CallInitiatedEvent.participants` (déjà
-peuplé côté gateway pour CHAQUE appel — `CallEventsHandler.ts` `call:initiate`
-et le replay `call:check-active`) porte l'initiateur + tous les appelés ; un
-appel direct en a ≤2, un appel de groupe 3+. La bannière calcule maintenant
-`isGroupCall = participants.length > 2` et, si vrai, affiche un badge
-« {count} personnes » (icône `Users`) + un sous-titre « Appel de groupe » au
-lieu du « Appel entrant... » générique. Zéro changement de comportement pour
-le 1:1 (badge absent, sous-titre inchangé) — vérifié par des tests explicites
-sur `participants: []` (payload legacy/replay) et `participants.length === 2`.
+- **« Timeout global 45 s » RECLASSÉ : pas un bug.** Relecture de
+  `CallManager.tsx` (web) : `startCallTimeout`/`clearCallTimeout` sont gatés
+  sur `currentCall.status === 'initiated'`, et le statut passe à `'active'`
+  dès la PREMIÈRE réponse SDP réelle (`useWebRTCP2P.handleAnswer`, Vague
+  113/114 — *pas* le room-join précoce d'iOS). Une fois qu'UN membre décroche
+  vraiment un appel de groupe, l'effet `if (status === 'active')
+  clearCallTimeout()` désarme le timeout pour tout l'appel ; un retardataire
+  qui ne répond jamais ne raccroche que SON PROPRE `incomingCall` local (même
+  logique que n'importe quel appel manqué), sans jamais toucher l'appel actif
+  des autres. Le point W6 d'origine datait d'avant ces deux vagues — corrigé
+  ici pour ne pas ré-auditer un faux positif au prochain cycle.
 
-Nouvelles clés i18n dans les 4 locales (`incoming.groupSubtitle`,
-`incoming.groupCallLabel` avec token `{count}`, convention `.replace()`
-existante — cf. `VideoStream.tsx` `stream.participantLeft`).
+- **`CallNotification` mono-appelant → TRAITÉ, par deux chemins qui se sont
+  croisés.** Le même item a été traité deux fois le même jour, de deux façons
+  complémentaires, et la fusion les réunit plutôt que d'en jeter une :
+  - *Combien* — `isGroupCall` déduit de `CallInitiatedEvent.participants`
+    (≥3 appelés = groupe), déjà peuplé pour CHAQUE appel côté gateway
+    (`CallEventsHandler.ts`, `call:initiate` et le replay `call:check-active`).
+    Il porte le badge « {count} personnes » et bascule le sous-titre sur
+    « Appel de groupe ».
+  - *Quel* — `CallInitiatedEvent` gagne `conversationType?`/`conversationTitle?`
+    (optionnels, compat rolling deploy), peuplés gratuitement depuis
+    `callSessionInclude.conversation`. Ils portent le TITRE de la conversation
+    sous le nom de l'appelant, et rendent le signal de groupe AUTORITAIRE :
+    une conversation de groupe reste un groupe même quand un seul appelé
+    sonne, cas que le compte de participants ne peut pas voir.
+  - `isGroupCall = conversationType === 'group' || participants.length > 2` :
+    le champ quand la gateway l'envoie, le compte en repli pour les payloads
+    antérieurs. La ligne de contexte ne répète PAS « Appel de groupe » (le
+    sous-titre le dit déjà) — elle porte le titre, et ne retombe sur le
+    libellé que pour un groupe sans titre.
+  - `CallWaitingBanner` (2ᵉ appel entrant pendant qu'on est occupé) porte la
+    même ligne de contexte.
 
 **Reste du W6** (grille adaptative multi-participants, roster avec états
-mute/vidéo, `onRemove` branché sur `DELETE /calls/:id/participants/:pid`,
-timeout 45 s par-pair) et **W7** (i18n groupe pour le reste de l'UI d'appel —
-roster, toasts join/leave) : toujours à traiter, chantier plus large que ce
-correctif ponctuel. Le mesh iOS mono-PC (I1-I7) et le SFU restent hors scope.
+mute/vidéo, `onRemove` branché sur `DELETE /calls/:id/participants/:pid`) et
+**W7** (i18n groupe pour le reste de l'UI d'appel — roster, toasts
+join/leave) : toujours à traiter, chantier plus large que ces correctifs
+ponctuels. Le mesh iOS mono-PC (I1-I7) et le SFU restent hors scope.
 
-Tests : `CallNotification.groupCall.test.tsx` (5 cas, nouveau) +
-`CallNotification.test.tsx` + `CallNotification.ringtoneUnmountRace.test.tsx`
-(régression) — 9/9 verts. `tsc --noEmit` : aucune erreur nouvelle (comparé à
-la baseline pré-existante du dépôt).
+Tests : `CallNotification.groupCall.test.tsx` (5 cas) +
+`CallNotification.test.tsx` (4 cas de contexte de groupe) +
+`CallNotification.ringtoneUnmountRace.test.tsx` (régression) +
+`CallWaitingBanner.test.tsx` (2 cas) +
+`CallEventsHandler-initiate-conversation-context.test.ts` (4 cas, gateway).
 
 ## Récapitulatif
 

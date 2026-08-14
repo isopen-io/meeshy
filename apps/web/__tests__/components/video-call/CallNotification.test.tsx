@@ -50,3 +50,49 @@ describe('CallNotification — media type label', () => {
     expect(screen.queryByText('incoming.videoCall')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Group-calls gap analysis (tasks/2026-08-13-group-calls-gap-analysis.md, W6)
+ * — the ringing banner showed only the initiator's name, indistinguishable
+ * from a direct call, even when the initiator actually rang a whole group.
+ */
+describe('CallNotification — group call context', () => {
+  it('shows the group context line with the conversation title for a titled group call', () => {
+    render(
+      <CallNotification
+        call={{ ...baseCall, conversationType: 'group', conversationTitle: 'Design Team' }}
+        onAccept={jest.fn()}
+        onReject={jest.fn()}
+      />
+    );
+    const groupContext = screen.getByTestId('call-notification-group-context');
+    expect(groupContext).toHaveTextContent('Design Team');
+  });
+
+  it('shows the group context line without a title for an untitled group call', () => {
+    render(
+      <CallNotification
+        call={{ ...baseCall, conversationType: 'group', conversationTitle: null }}
+        onAccept={jest.fn()}
+        onReject={jest.fn()}
+      />
+    );
+    expect(screen.getByTestId('call-notification-group-context')).toBeInTheDocument();
+  });
+
+  it('never shows the group context line for a direct call', () => {
+    render(
+      <CallNotification
+        call={{ ...baseCall, conversationType: 'direct', conversationTitle: null }}
+        onAccept={jest.fn()}
+        onReject={jest.fn()}
+      />
+    );
+    expect(screen.queryByTestId('call-notification-group-context')).not.toBeInTheDocument();
+  });
+
+  it('never shows the group context line when conversationType is absent (older gateway)', () => {
+    render(<CallNotification call={baseCall} onAccept={jest.fn()} onReject={jest.fn()} />);
+    expect(screen.queryByTestId('call-notification-group-context')).not.toBeInTheDocument();
+  });
+});

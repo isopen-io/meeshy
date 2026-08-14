@@ -66683,53 +66683,6 @@
         }
       }
     },
-    "route.title.contacts": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جهات الاتصال"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kontakte"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contacts"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contactos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contacts"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contatti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contatos"
-          }
-        }
-      }
-    },
     "route.title.conversations": {
       "extractionState": "manual",
       "localizations": {
@@ -104311,49 +104264,49 @@
         }
       }
     },
-    "root.menu.contacts": {
+    "root.menu.calls": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهات الاتصال"
+            "value": "المكالمات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kontakte"
+            "value": "Anrufe"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Calls"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contactos"
+            "value": "Llamadas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contacts"
+            "value": "Appels"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatti"
+            "value": "Chiamate"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contatos"
+            "value": "Chamadas"
           }
         }
       }

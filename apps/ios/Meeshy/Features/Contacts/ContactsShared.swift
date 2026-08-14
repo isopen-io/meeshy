@@ -19,6 +19,20 @@ enum PeopleTab: String, CaseIterable, Hashable {
         case .contacts: return "person.2.fill"
         }
     }
+
+    /// Localized display name. The raw enum value stays the stable French key
+    /// used for `.tag`/persistence; the hub's header, its tab bar and
+    /// `Route.contacts(_:).displayTitle` all read this instead.
+    var title: String {
+        switch self {
+        case .calls:
+            return String(localized: "contacts.tab.calls", defaultValue: "Appels", bundle: .main)
+        case .keypad:
+            return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
+        case .contacts:
+            return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        }
+    }
 }
 
 /// Sub-tabs of the **Découverte d'utilisateurs Meeshy** view (`PeopleDiscoveryView`).
