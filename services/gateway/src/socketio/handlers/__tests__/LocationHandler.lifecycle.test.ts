@@ -208,6 +208,21 @@ describe('LocationHandler — cycle de vie du partage', () => {
       expect(roomStopEmissions(ctx.io)).toHaveLength(0);
     });
 
+    it('ne rediffuse pas le retrait déjà annoncé par l\'expiration', async () => {
+      const ctx = makeHandler();
+      handler = ctx.handler;
+      await startShare(handler, makeSocket(SHARER_SOCKET), 15);
+
+      jest.advanceTimersByTime(15 * 60_000);
+      expect(roomStopEmissions(ctx.io)).toHaveLength(1);
+
+      // L'entrée survit à son terme, et c'est cette déconnexion qui la ramasse —
+      // mais sa fin a déjà été annoncée.
+      handler.handleSocketDisconnecting(SHARER_SOCKET);
+
+      expect(roomStopEmissions(ctx.io)).toHaveLength(1);
+    });
+
     it('ne diffuse rien deux fois si le partageur avait déjà arrêté explicitement', async () => {
       const ctx = makeHandler();
       handler = ctx.handler;

@@ -279,10 +279,16 @@ export class LocationHandler {
    * propriétaire, et la mort du premier ne le retire donc pas.
    */
   handleSocketDisconnecting(socketId: string): void {
+    const now = new Date();
     for (const [key, session] of [...this.sessions]) {
       if (session.socketId !== socketId) continue;
+      // Une entrée SURVIT à son terme — c'est elle qui fait taire les
+      // `live-update` d'après, et c'est cette déconnexion qui la ramasse. Mais
+      // son retrait a déjà été diffusé par la minuterie : le rediffuser ici
+      // annoncerait deux fois la même fin.
+      const wasLive = now < session.expiresAt;
       this._closeSession(key);
-      this._broadcastStopped(session);
+      if (wasLive) this._broadcastStopped(session);
     }
   }
 
