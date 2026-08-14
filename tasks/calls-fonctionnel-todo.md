@@ -7979,3 +7979,70 @@ iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphériq
 (`setSinkId`, Vague 111) ; `CallInfoOverlay`'s `participantCount` affichant brièvement 0 côté
 caller (Vague 112, cosmétique). Voir aussi `tasks/2026-08-13-group-calls-gap-analysis.md` pour le
 chantier « appels de groupe ».
+
+## Vague 120 — `CallInfoOverlay.participantCount` sous-comptait de 1 (auto-exclusion permanente) (2026-08-13)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session déclenchée par le prompt élargi (FaceTime-quality 12-phases). Base explicite sur le
+développement précédent : `git fetch origin main`, branche désignée réalignée sur `origin/main`
+(`a1b284d0`, contient la Vague 119 — PR mergée). Aucune PR ouverte sur la branche désignée de
+cette session. Repris directement le dernier item concret du backlog « Reste ouvert » —
+`CallInfoOverlay`'s `participantCount` (Vague 112) — plutôt que de relancer un audit générique.
+
+- **Root cause creusée au-delà de la note d'origine — pas « brièvement 0 », mais tout l'écran
+  d'appel systématiquement sous-compté d'une unité.** `currentCall.participants` NE contient
+  JAMAIS l'utilisateur local, pour les DEUX rôles, par construction serveur : le broadcast
+  `call:participant-joined` (`CallEventsHandler.ts`) saute explicitement le socket qui vient de
+  rejoindre (`if (remoteSocket.id === socket.id) continue`), et l'ack `call:initiate` côté appelant
+  amorce `participants: []` par conception (`use-video-call.ts`, commentaire « populated as callees
+  join »). Comme `VideoCallInterface` ne monte QUE pendant que `isInCall` est vrai
+  (`CallManager.tsx:1226`), l'utilisateur local fait TOUJOURS partie de l'appel pendant toute la
+  durée de vie du composant — jamais un cas où il faudrait l'exclure. Conséquence concrète, pas
+  seulement cosmétique : un appelant regardant son propre écran pendant que le combiné du callee
+  sonne encore voyait « 0 participants » (pas juste un flash — `setCurrentCall` amorce `isInCall:
+  true` dès l'ack, donc l'overlay est monté et affiché tout le temps de la sonnerie) ; un appel 1:1
+  connecté affichait en permanence « 1 participant » pour DEUX personnes réellement en ligne.
+- **Fix** : `VideoCallInterface.tsx` ajoute `+ 1` au compte dérivé de
+  `participants.filter(p => !p.leftAt).length` — l'utilisateur local complète toujours le total,
+  jamais de double-comptage possible puisque le serveur garantit son absence de `participants` par
+  construction (prouvé ci-dessus, pas supposé). `CallInfoOverlay.tsx` gagne
+  `data-testid="call-participant-count"` / `data-count={participantCount}` sur la ligne du
+  compteur — même précédent que `data-testid="call-duration"` — pour que les tests container
+  puissent asserter la valeur numérique indépendamment de l'interpolation i18n (le mock `t()` de
+  `VideoCallInterface.test.tsx` renvoie la clé brute, sans substituer `{count}`).
+- **Tests** (TDD, RED confirmé avant fix) : 2 nouveaux cas dans `VideoCallInterface.test.tsx` —
+  compte l'utilisateur local dès la sonnerie (`participants: []` → `data-count="1"`, pas `"0"`) et
+  aux côtés de chaque participant réellement actif (`participants` avec un pair présent + un pair
+  parti filtré par `!p.leftAt` → `data-count="2"`, pas `"1"`). RED confirmé par exécution ciblée
+  avant le fix : `Received: data-count="0"` puis `data-count="1"` sur les deux nouvelles
+  assertions respectivement. Sweep complet `--testPathPatterns="[Cc]all"` (web) : **52 suites /
+  466 tests verts** (+2 nets vs. Vague 119), 0 régression. `npx tsc --noEmit` : **1229 erreurs,
+  baseline identique confirmée par `git stash`** (compté avec ET sans le fix — même chiffre) ;
+  aucune des 11 erreurs préexistantes de `VideoCallInterface.tsx` (lignes 201-596,
+  `unknown`/socket-typing, inchangées depuis les Vagues 115-119) ne touche les lignes éditées.
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install
+  --ignore-scripts` (bun 1.3.11 disponible localement, pas 1.3.14), puis `packages/shared && npx
+  prisma generate --generator client` + `bun run build`.
+- **PR** : https://github.com/isopen-io/meeshy/pull/2975 — `claude/upbeat-dirac-qzfej3`
+  (branche désignée de cette session, réalignée sur `origin/main` avant tout `Write`/`Edit`). CI
+  complète verte, mergée (`5d789c89`). `main` re-synchronisé après merge (`git fetch` + reset sur
+  `origin/main`, le `main` local ayant dérivé de manière non-résolvable — 340 commits locaux
+  jamais poussés vs. 194 côté origin, artefact d'environnement sans rapport avec le travail de
+  cette session ; aucune perte, tout le travail réel de cette session vivait déjà sur la branche
+  désignée poussée sur `origin`).
+- **Portée volontairement non étendue** : dead code / god-object `CallManager.swift`, `setSinkId`,
+  `CXSetHeldCallAction`, les 6 trouvailles Android de la Vague 70 — non traités ce cycle, toolchains
+  iOS/Android toujours hors d'atteinte dans ce sandbox pour vérifier un changement Swift/Kotlin
+  avant merge. Une PR concurrente d'une autre session de la même routine (#2978,
+  `claude/upbeat-dirac-x24ovb`, fix iOS `VideoFilterPipeline`) a mergé pendant ce cycle — aucun
+  chevauchement de fichiers, non affecté par le resync `main`.
+
+### Reste ouvert
+
+Reconduit (moins l'item `CallInfoOverlay.participantCount` résolu ce cycle) : dead code /
+god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android de la Vague 70 ;
+piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ; toolchains
+iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique de sortie audio
+(`setSinkId`, Vague 111). Voir aussi `tasks/2026-08-13-group-calls-gap-analysis.md` pour le
+chantier « appels de groupe ».
