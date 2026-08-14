@@ -538,15 +538,24 @@ model Notification {
 ### GET /notifications
 Récupère les notifications paginées avec filtres
 
-**Query params:**
-- `offset`: Offset de pagination (défaut: 0)
-- `limit`: Nombre de résultats (défaut: 50, max: 100)
-- `type`: Filtrer par type
+**Query params — la liste EXHAUSTIVE de ce que la route DÉCLARE.** Fastify retire d'une
+querystring toute clé absente du schéma : ni erreur, ni log, ni 400. Un paramètre écrit ici mais
+absent du `querystring` de `routes/notifications.ts` ne filtre donc RIEN, et le client qui l'envoie
+croit filtrer. Cette section a longtemps annoncé `type`, `priority`, `conversationId`, `sortBy`,
+`sortOrder` — aucun n'a jamais existé côté serveur, et c'est de là que venait la croyance du web
+(corrigé le 2026-08-14 ; voir `tasks/lessons.md`).
+
+- `offset`: Offset de pagination (défaut: 0). Ignoré dès qu'un `cursor` est fourni.
+- `cursor`: Ancre keyset `(createdAt, id)` rendue par `pagination.nextCursor`. **Prioritaire sur
+  `offset`** — une inbox qui reçoit pendant qu'on la lit décale ses rangs, pas ses lignes.
+- `limit`: Nombre de résultats (défaut: 20, max: 100)
 - `unreadOnly`: Seulement les non lues (boolean)
-- `priority`: Filtrer par priorité
-- `conversationId`: Filtrer par conversation
-- `sortBy`: Champ de tri (défaut: createdAt)
-- `sortOrder`: Ordre (asc/desc, défaut: desc)
+- `types`: Liste CSV de types BRUTS à garder, ex. `user_mentioned,mention`. Vide, absente ou
+  illisible = inbox entière, jamais liste vide. Un onglet d'interface couvre plusieurs types : le
+  groupement appartient au client qui dessine les onglets, le serveur ne connaît que la liste reçue.
+
+**L'ordre est FIXÉ** à `(createdAt desc, id desc)` et n'est pas paramétrable : c'est la clé exacte
+que le curseur transporte, et une page servie dans un autre ordre sauterait des lignes en silence.
 
 **Response:**
 ```json
@@ -555,13 +564,42 @@ Récupère les notifications paginées avec filtres
   "data": [/* Notification[] */],
   "pagination": {
     "offset": 0,
-    "limit": 50,
+    "limit": 20,
     "total": 123,
-    "hasMore": true
+    "hasMore": true,
+    "nextCursor": "..."
   },
   "unreadCount": 45
 }
 ```
+
+- `pagination.offset` / `pagination.total` : mode offset uniquement — une page servie par curseur
+  n'a pas de rang, et rien n'y est compté.
+- `pagination.nextCursor` : `null` = fin de liste ; **absent** = gateway antérieure au curseur.
+
+### GET /notifications/counts
+Totaux de l'inbox ENTIÈRE, groupés par type brut — ce qui alimente les pastilles d'onglet.
+
+Elles ne peuvent pas se compter sur la page affichée : un compte tiré des seules lignes chargées
+annonce « 2 mentions » là où l'inbox en a trente, et il se trompe d'autant plus que le lecteur
+défile peu. Le compte est donc SERVEUR, et volontairement séparé de la liste : il ne dépend
+d'aucun `?types=`, et son cache ne se rejoue pas à chaque page.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "total": 123,
+    "unread": 45,
+    "byType": { "new_message": 87, "user_mentioned": 12 }
+  }
+}
+```
+
+- `byType` porte les types BRUTS tels que stockés. Un type absent vaut zéro — n'énumérer que les
+  types présents évite de faire grossir la réponse à chaque type ajouté.
+- `total` et `unread` répondent à deux questions distinctes et se lisent séparément.
 
 ### GET /notifications/unread-count
 Compte les notifications non lues
