@@ -539,7 +539,12 @@ export class PostCommentService {
     // dépliés, et aucun refetch ne les enlevait : `getComments` filtre
     // `parentId: null`, leur parent supprimé n'est plus rendu, donc `getReplies`
     // n'est plus jamais appelé pour eux.
-    return { success: true as const, deletedCommentIds };
+    // `parentId` remonte pour la MÊME raison que `deletedCommentIds` : il est
+    // la seule chose que le client ne peut pas redériver. Le décrément
+    // ci-dessus ne touche que le parent DIRECT, et l'affordance « N réponses »
+    // qui l'affiche ne se voit que fil REPLIÉ — donc précisément quand la
+    // cible n'est PAS en cache et ne peut pas livrer son propre parent.
+    return { success: true as const, deletedCommentIds, parentId: comment.parentId ?? null };
   }
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {

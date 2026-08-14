@@ -27,6 +27,7 @@ import type {
   StatusReactedEventData,
   StatusUnreactedEventData,
   CommentAddedEventData,
+  CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
   CommentMediaUpdatedEventData,
@@ -205,6 +206,33 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       );
     }
 
+    // Édition d'un commentaire. Le payload porte le commentaire COMPLET et se
+    // substitue à la ligne (idempotent par id, contrairement à l'insertion de
+    // `comment:added`), donc aucun compteur du post ne bouge : éditer ne crée ni
+    // ne retire rien.
+    //
+    // Recopier le commentaire ENTIER, jamais le seul `content` : le serveur
+    // purge `translations` et `originalLanguage` dans la MÊME écriture que le
+    // texte (`PostCommentService.updateComment`) parce qu'ils décrivaient
+    // l'ANCIEN contenu. Un patch qui ne prendrait que le texte laisserait la
+    // traduction d'avant collée au texte d'après — un affichage traduit qui
+    // ment, ce que la règle #1 du Prisme interdit.
+    //
+    // Le spread préserve en revanche ce que le payload NE PORTE PAS : la
+    // diffusion est une charge unique pour toute la room, elle ne peut pas
+    // transporter `currentUserReactions`, qui dépend du lecteur. Ces clés sont
+    // absentes (et non `undefined`), donc la valeur en cache survit.
+    //
+    // `patchCommentInPostCaches` balaie TOUS les caches de commentaires du post
+    // — liste de premier niveau ET sous-caches de réponses — car le payload ne
+    // dit pas où vit la ligne, et une réponse s'édite comme une racine.
+    function handleCommentUpdated(data: CommentUpdatedEventData) {
+      patchCommentInPostCaches(queryClient, data.postId, data.comment.id, (c) => ({
+        ...c,
+        ...data.comment,
+      }));
+    }
+
     function handleCommentDeleted(data: CommentDeletedEventData) {
       patchPostInAllCaches(queryClient, data.postId, (p) => ({
         ...p,
@@ -222,6 +250,24 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       // replay can no longer reconstruct the subtree) — exactly the previous
       // behaviour, never an empty list.
       const removedIds = new Set(data.deletedCommentIds ?? [data.commentId]);
+
+      // Miroir exact du `replyCount + 1` de `handleCommentAdded`, qui n'avait
+      // pas de pendant : supprimer une réponse laissait « 3 réponses » affiché
+      // au-dessus de deux lignes, jusqu'à un refetch complet. Le serveur, lui,
+      // décrémente bien (`PostCommentService.deleteComment`).
+      //
+      // Le parent vient du PAYLOAD et n'est jamais redérivé du cache : la
+      // cible n'y est présente que fil déplié, alors que l'affordance
+      // « N réponses » ne s'affiche que fil REPLIÉ — le déduire échouerait
+      // précisément dans le cas qui se voit. Son absence (rejeu idempotent du
+      // DELETE, gateway antérieure) vaut « ne rien décrémenter », ce qui rend
+      // le miroir idempotent sans état côté client.
+      if (data.parentId) {
+        patchCommentInPostCaches(queryClient, data.postId, data.parentId, (c) => ({
+          ...c,
+          replyCount: Math.max(0, c.replyCount - 1),
+        }));
+      }
 
       // The payload doesn't say whether an id was a reply, so sweep every
       // post-scoped comment cache (top-level list AND replies subs).
@@ -509,6 +555,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.POST_REPOSTED, handlePostReposted);
     socket.on(SERVER_EVENTS.POST_BOOKMARKED, handlePostBookmarked);
     socket.on(SERVER_EVENTS.COMMENT_ADDED, handleCommentAdded);
+    socket.on(SERVER_EVENTS.COMMENT_UPDATED, handleCommentUpdated);
     socket.on(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
     socket.on(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
@@ -541,6 +588,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.POST_REPOSTED, handlePostReposted);
       socket.off(SERVER_EVENTS.POST_BOOKMARKED, handlePostBookmarked);
       socket.off(SERVER_EVENTS.COMMENT_ADDED, handleCommentAdded);
+      socket.off(SERVER_EVENTS.COMMENT_UPDATED, handleCommentUpdated);
       socket.off(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);

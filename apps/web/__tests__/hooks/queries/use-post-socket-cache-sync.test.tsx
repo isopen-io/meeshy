@@ -34,6 +34,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     POST_REPOSTED: 'post:reposted',
     POST_BOOKMARKED: 'post:bookmarked',
     COMMENT_ADDED: 'comment:added',
+    COMMENT_UPDATED: 'comment:updated',
     COMMENT_DELETED: 'comment:deleted',
     COMMENT_LIKED: 'comment:liked',
     POST_TRANSLATION_UPDATED: 'post:translation-updated',
@@ -166,17 +167,17 @@ describe('usePostSocketCacheSync', () => {
     Object.keys(listeners).forEach((k) => delete listeners[k]);
   });
 
-  it('registers 28 socket listeners on mount (13 post/comment + 11 story/status + 4 reaction)', () => {
+  it('registers 29 socket listeners on mount (14 post/comment + 11 story/status + 4 reaction)', () => {
     const qc = createQueryClient();
     renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-    expect(mockSocket.on).toHaveBeenCalledTimes(28);
+    expect(mockSocket.on).toHaveBeenCalledTimes(29);
   });
 
-  it('unregisters all 28 listeners on unmount', () => {
+  it('unregisters all 29 listeners on unmount', () => {
     const qc = createQueryClient();
     const { unmount } = renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(28);
+    expect(mockSocket.off).toHaveBeenCalledTimes(29);
   });
 
   it('does not register when enabled=false', () => {
@@ -1191,6 +1192,124 @@ describe('usePostSocketCacheSync', () => {
     });
   });
 
+  // `comment:updated` — l'édition d'un commentaire. Le gateway la diffuse
+  // (`SocialEventsHandler.broadcastCommentUpdated`, filtrée par visibilité) et
+  // iOS l'applique ; le web n'avait aucun auditeur, alors qu'il en a un pour
+  // TOUTES les mutations voisines (added / deleted / liked / media-updated /
+  // translation-updated). Une édition faite depuis un iPhone n'atteignait donc
+  // jamais un onglet web ouvert sur le même post.
+  describe('comment:updated', () => {
+    const baseComment = {
+      id: 'c-1',
+      content: 'Avant',
+      isEdited: false,
+      likeCount: 3,
+      replyCount: 0,
+      parentId: null as string | null,
+      createdAt: '2026-08-14T00:00:00Z',
+      translations: { en: { content: 'Before' } },
+      originalLanguage: 'fr',
+      reactionSummary: { '❤️': 3 },
+      currentUserReactions: ['❤️'],
+    };
+
+    function seedTopLevel(qc: QueryClient, comments: unknown[]) {
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: comments, meta: {} }],
+        pageParams: [undefined],
+      });
+    }
+    function topLevel(qc: QueryClient) {
+      const d = qc.getQueryData<{ pages: { data: Record<string, unknown>[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      return d?.pages.flatMap((p) => p.data) ?? [];
+    }
+
+    it('remplace le texte du commentaire édité dans la liste de premier niveau', () => {
+      const qc = createQueryClient();
+      seedTopLevel(qc, [{ ...baseComment }, { ...baseComment, id: 'c-2', content: 'Intacte' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:updated', {
+        postId: 'post-1',
+        comment: { ...baseComment, content: 'Après', isEdited: true, translations: {}, originalLanguage: null },
+      }));
+
+      expect(topLevel(qc)[0].content).toBe('Après');
+      expect(topLevel(qc)[0].isEdited).toBe(true);
+      expect(topLevel(qc)[1].content).toBe('Intacte');
+    });
+
+    it("périme les traductions de l'ANCIEN texte, jamais servies sur le nouveau", () => {
+      // Le serveur purge `translations` ET `originalLanguage` dans la MÊME
+      // écriture que le contenu (`PostCommentService.updateComment`) : le
+      // payload les porte vidés. Un patch qui ne recopierait que `content`
+      // laisserait « Before » collé au texte « Après » jusqu'au prochain
+      // `comment:translation-updated` — c'est-à-dire un affichage traduit qui
+      // ment, exactement ce que la règle #1 du Prisme interdit.
+      const qc = createQueryClient();
+      seedTopLevel(qc, [{ ...baseComment }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:updated', {
+        postId: 'post-1',
+        comment: { ...baseComment, content: 'Après', isEdited: true, translations: {}, originalLanguage: null },
+      }));
+
+      expect(topLevel(qc)[0].translations).toEqual({});
+      expect(topLevel(qc)[0].originalLanguage).toBeNull();
+    });
+
+    it('patche aussi une RÉPONSE, qui vit dans le sous-cache de son parent', () => {
+      const qc = createQueryClient();
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-parent'], {
+        pages: [{ data: [{ ...baseComment, id: 'r-1', parentId: 'c-parent' }], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:updated', {
+        postId: 'post-1',
+        comment: { ...baseComment, id: 'r-1', parentId: 'c-parent', content: 'Réponse éditée', isEdited: true },
+      }));
+
+      const d = qc.getQueryData<{ pages: { data: { content: string }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-parent']);
+      expect(d?.pages[0].data[0].content).toBe('Réponse éditée');
+    });
+
+    it("préserve l'état de réaction PROPRE au lecteur, absent du payload diffusé", () => {
+      // La diffusion est UNE charge pour toute la room : elle ne peut pas
+      // porter `currentUserReactions`, qui dépend du lecteur. Les clés absentes
+      // doivent rester celles du cache — sans quoi l'édition d'autrui
+      // effacerait la réaction du lecteur.
+      const qc = createQueryClient();
+      seedTopLevel(qc, [{ ...baseComment }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:updated', {
+        postId: 'post-1',
+        comment: {
+          id: 'c-1', content: 'Après', isEdited: true, likeCount: 3, replyCount: 0,
+          parentId: null, createdAt: '2026-08-14T00:00:00Z', translations: {}, originalLanguage: null,
+        },
+      }));
+
+      expect(topLevel(qc)[0].currentUserReactions).toEqual(['❤️']);
+      expect(topLevel(qc)[0].reactionSummary).toEqual({ '❤️': 3 });
+    });
+
+    it("ne ressuscite pas un commentaire absent du cache", () => {
+      const qc = createQueryClient();
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:updated', {
+        postId: 'post-1',
+        comment: { ...baseComment, content: 'Après' },
+      }));
+
+      expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
   describe('threaded replies (comment:added / comment:deleted / comment:reaction-added on replies)', () => {
     function seedComments(qc: QueryClient, comments: unknown[]) {
       qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
@@ -1264,6 +1383,75 @@ describe('usePostSocketCacheSync', () => {
       act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', commentCount: 2 }));
 
       expect(repliesOf(qc, 'c-1').map((c) => c.id)).toEqual([]);
+    });
+
+    // Le `replyCount + 1` de `comment:added` (testé juste au-dessus) n'avait
+    // pas de pendant : supprimer une réponse laissait « 3 réponses » affiché
+    // au-dessus de deux lignes. Le serveur décrémente pourtant bien le parent
+    // DIRECT (`PostCommentService.deleteComment`).
+    it('décrémente le replyCount du parent annoncé quand une réponse est supprimée', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 3 }]);
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 2 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(2);
+    });
+
+    // L'affordance « N réponses » ne s'affiche que fil REPLIÉ — donc quand la
+    // réponse supprimée n'est PAS en cache. Déduire le parent depuis le cache
+    // échouerait exactement là où le compteur se voit ; le payload l'annonce.
+    it('décrémente même quand le fil du parent n\'a jamais été déplié', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 2 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 4 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(1);
+    });
+
+    // `parentId: null` = la cible était une racine : le serveur n'a décrémenté
+    // aucun `replyCount`, le client non plus.
+    it('ne décrémente rien quand la cible supprimée était un commentaire racine', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, id: 'c-2', replyCount: 4 }, { ...parent, replyCount: 3 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'c-1', parentId: null, commentCount: 1 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-2')?.replyCount).toBe(4);
+    });
+
+    // Clé ABSENTE = rejeu idempotent du DELETE (le décrément serveur a déjà eu
+    // lieu) ou gateway antérieure. Ne rien décrémenter est ce qui rend le
+    // miroir client idempotent sans état.
+    it('ne décrémente rien quand le payload ne porte aucun parentId', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 3 }]);
+      seedReplies(qc, 'c-1', [{ id: 'r-1', parentId: 'c-1', content: 'a reply', likeCount: 0, replyCount: 0, createdAt: '2026-01-02T00:00:00Z' }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', commentCount: 2 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(3);
+    });
+
+    it('ne descend jamais sous zéro', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      seedComments(qc, [{ ...parent, replyCount: 0 }]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:deleted', { postId: 'post-1', commentId: 'r-1', parentId: 'c-1', commentCount: 1 }));
+
+      expect(topLevel(qc).find((c) => c.id === 'c-1')?.replyCount).toBe(0);
     });
 
     it('patches a reaction on a reply living in the replies sub-cache', () => {
