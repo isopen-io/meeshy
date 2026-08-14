@@ -16,6 +16,10 @@ jest.mock('@/services/user-preferences.service', () => ({
   userPreferencesService: {
     getAllPreferences: jest.fn().mockResolvedValue([]),
     getCategories: jest.fn().mockResolvedValue([]),
+    togglePin: jest.fn(),
+    toggleMute: jest.fn(),
+    toggleArchive: jest.fn(),
+    updateReaction: jest.fn(),
   },
 }));
 
@@ -318,5 +322,259 @@ describe('applyRemotePreferences', () => {
 
     expect(useConversationPreferencesStore.getState().preferencesMap.get('conv-b')?.isPinned).toBe(true);
     expect(useConversationPreferencesStore.getState().preferencesMap.get('conv-b')?.version).toBe(1);
+  });
+});
+
+describe('optimistic writes — version arbitration', () => {
+  const service = jest.requireMock('@/services/user-preferences.service')
+    .userPreferencesService as {
+    togglePin: jest.Mock;
+    toggleMute: jest.Mock;
+    toggleArchive: jest.Mock;
+    updateReaction: jest.Mock;
+  };
+
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+
+  const seed = (prefs: UserConversationPreferences) => {
+    act(() => {
+      useConversationPreferencesStore.setState({
+        preferencesMap: new Map([[prefs.conversationId, prefs]]),
+      });
+    });
+  };
+
+  const read = (conversationId: string) =>
+    useConversationPreferencesStore.getState().preferencesMap.get(conversationId);
+
+  const broadcast = (conversationId: string, version: number, patch: Record<string, unknown>) => {
+    act(() => {
+      useConversationPreferencesStore.getState().applyRemotePreferences({
+        userId: 'user-1',
+        conversationId,
+        version,
+        reset: false,
+        preferences: {
+          isPinned: false,
+          isMuted: false,
+          mentionsOnly: false,
+          isArchived: false,
+          tags: [],
+          categoryId: null,
+          orderInCategory: null,
+          customName: null,
+          reaction: null,
+          deletedForUserAt: null,
+          clearHistoryBefore: null,
+          ...patch,
+        },
+      } as Parameters<
+        ReturnType<typeof useConversationPreferencesStore.getState>['applyRemotePreferences']
+      >[0]);
+    });
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    act(() => {
+      useConversationPreferencesStore.getState().reset();
+    });
+  });
+
+  const WRITERS = [
+    {
+      name: 'togglePin',
+      mock: () => service.togglePin,
+      run: (conversationId: string, value: boolean) =>
+        useConversationPreferencesStore.getState().togglePin(conversationId, value),
+      field: 'isPinned' as const,
+    },
+    {
+      name: 'toggleMute',
+      mock: () => service.toggleMute,
+      run: (conversationId: string, value: boolean) =>
+        useConversationPreferencesStore.getState().toggleMute(conversationId, value),
+      field: 'isMuted' as const,
+    },
+    {
+      name: 'toggleArchive',
+      mock: () => service.toggleArchive,
+      run: (conversationId: string, value: boolean) =>
+        useConversationPreferencesStore.getState().toggleArchive(conversationId, value),
+      field: 'isArchived' as const,
+    },
+  ];
+
+  describe.each(WRITERS)('$name', ({ mock, run, field }) => {
+    it('applies the response when it carries a newer version', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+      mock().mockResolvedValue(createPrefs('conv-a', { [field]: true, version: 2 }));
+
+      await act(async () => {
+        await run('conv-a', true);
+      });
+
+      expect(read('conv-a')?.[field]).toBe(true);
+      expect(read('conv-a')?.version).toBe(2);
+    });
+
+    it('keeps the newest write when two responses come back out of order', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+
+      const first = deferred<UserConversationPreferences>();
+      const second = deferred<UserConversationPreferences>();
+      mock().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = Promise.all([run('conv-a', true), run('conv-a', false)]);
+      });
+
+      await act(async () => {
+        second.resolve(createPrefs('conv-a', { [field]: false, version: 3 }));
+        first.resolve(createPrefs('conv-a', { [field]: true, version: 2 }));
+        await pending;
+      });
+
+      expect(read('conv-a')?.[field]).toBe(false);
+      expect(read('conv-a')?.version).toBe(3);
+    });
+
+    it('does not rewind a broadcast that landed while the write was in flight', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+
+      const inFlight = deferred<UserConversationPreferences>();
+      mock().mockReturnValueOnce(inFlight.promise);
+
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = run('conv-a', true);
+      });
+
+      broadcast('conv-a', 5, { customName: 'renamed' });
+
+      await act(async () => {
+        inFlight.resolve(createPrefs('conv-a', { [field]: true, version: 2 }));
+        await pending;
+      });
+
+      expect(read('conv-a')?.version).toBe(5);
+      expect(read('conv-a')?.customName).toBe('renamed');
+    });
+
+    it('applies a versionless response — nothing to arbitrate with', async () => {
+      seed(createPrefs('conv-a'));
+      mock().mockResolvedValue(createPrefs('conv-a', { [field]: true, customName: 'from-server' }));
+
+      await act(async () => {
+        await run('conv-a', true);
+      });
+
+      expect(read('conv-a')?.[field]).toBe(true);
+      expect(read('conv-a')?.customName).toBe('from-server');
+    });
+
+    it('reverts to the pre-write snapshot when the request fails', async () => {
+      const snapshot = createPrefs('conv-a', { customName: 'kept', version: 4 });
+      seed(snapshot);
+      mock().mockRejectedValue(new Error('network down'));
+
+      await act(async () => {
+        await expect(run('conv-a', true)).rejects.toThrow('network down');
+      });
+
+      expect(read('conv-a')?.[field]).toBe(false);
+      expect(read('conv-a')?.customName).toBe('kept');
+      expect(read('conv-a')?.version).toBe(4);
+    });
+
+    it('drops the entry when a failed write had created it', async () => {
+      mock().mockRejectedValue(new Error('network down'));
+
+      await act(async () => {
+        await expect(run('conv-b', true)).rejects.toThrow('network down');
+      });
+
+      expect(read('conv-b')).toBeUndefined();
+    });
+
+    it('does not revert over a newer state that landed during the failed write', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+
+      const inFlight = deferred<UserConversationPreferences>();
+      mock().mockReturnValueOnce(inFlight.promise);
+
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = run('conv-a', true).catch(() => undefined);
+      });
+
+      broadcast('conv-a', 6, { customName: 'renamed' });
+
+      await act(async () => {
+        inFlight.reject(new Error('network down'));
+        await pending;
+      });
+
+      expect(read('conv-a')?.version).toBe(6);
+      expect(read('conv-a')?.customName).toBe('renamed');
+    });
+  });
+
+  describe('setReaction', () => {
+    it('keeps the newest reaction when two responses come back out of order', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+
+      const first = deferred<UserConversationPreferences>();
+      const second = deferred<UserConversationPreferences>();
+      service.updateReaction.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = Promise.all([
+          useConversationPreferencesStore.getState().setReaction('conv-a', '👍'),
+          useConversationPreferencesStore.getState().setReaction('conv-a', null),
+        ]);
+      });
+
+      await act(async () => {
+        second.resolve(createPrefs('conv-a', { reaction: undefined, version: 3 }));
+        first.resolve(createPrefs('conv-a', { reaction: '👍', version: 2 }));
+        await pending;
+      });
+
+      expect(read('conv-a')?.reaction).toBeUndefined();
+      expect(read('conv-a')?.version).toBe(3);
+    });
+
+    it('shows the reaction optimistically before the server answers', async () => {
+      seed(createPrefs('conv-a', { version: 1 }));
+
+      const inFlight = deferred<UserConversationPreferences>();
+      service.updateReaction.mockReturnValueOnce(inFlight.promise);
+
+      let pending: Promise<unknown> = Promise.resolve();
+      act(() => {
+        pending = useConversationPreferencesStore.getState().setReaction('conv-a', '🎉');
+      });
+
+      expect(read('conv-a')?.reaction).toBe('🎉');
+
+      await act(async () => {
+        inFlight.resolve(createPrefs('conv-a', { reaction: '🎉', version: 2 }));
+        await pending;
+      });
+
+      expect(read('conv-a')?.reaction).toBe('🎉');
+      expect(read('conv-a')?.version).toBe(2);
+    });
   });
 });

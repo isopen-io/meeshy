@@ -168,6 +168,14 @@ function captureWindowHandlers(): Map<string, EventListener> {
   return handlers;
 }
 
+function captureDocumentHandlers(): Map<string, EventListener> {
+  const handlers = new Map<string, EventListener>();
+  jest.spyOn(document, 'addEventListener').mockImplementation((event: string, handler: EventListenerOrEventListenerObject) => {
+    handlers.set(event, handler as EventListener);
+  });
+  return handlers;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ConnectionService', () => {
@@ -353,6 +361,140 @@ describe('ConnectionService', () => {
         // Les consommateurs (`useConnectionStatus`) ne lisent l'état QUE par
         // cet événement — sans lui, la réparation resterait invisible.
         expect(listener).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    /**
+     * Un onglet en arrière-plan voit ses timers étranglés à ~1/minute et son
+     * socket coupé par le navigateur. Les DEUX boucles de reprise reposent sur
+     * des timers — celle de socket.io et notre backoff — donc au retour de
+     * l'utilisateur la reprise peut se faire attendre une minute entière,
+     * pendant laquelle un lecteur passif (aucun envoi, aucun join, donc aucun
+     * `ensureConnection`) ne reçoit AUCUN événement temps réel.
+     */
+    describe('visibilitychange handler', () => {
+      const setVisibility = (value: 'visible' | 'hidden') => {
+        Object.defineProperty(document, 'visibilityState', {
+          value,
+          configurable: true,
+        });
+      };
+
+      afterEach(() => setVisibility('visible'));
+
+      it('reconnects immediately when the tab comes back and the socket is dead', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).state.socket = { ...mockSocket, connected: false };
+        (svc as any).state.reconnectAttempts = 7;
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+        // Le backoff décrit une suite d'échecs ; revenir à l'écran est un
+        // signal neuf, pas la 8e tentative d'une série.
+        expect((svc as any).state.reconnectAttempts).toBe(0);
+      });
+
+      it('cancels the pending backoff timer it just short-circuited', () => {
+        jest.useFakeTimers();
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).state.socket = { ...mockSocket, connected: false };
+        svc.reconnect();
+        expect((svc as any).reconnectTimeout).not.toBeNull();
+
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+        expect((svc as any).reconnectTimeout).toBeNull();
+
+        jest.advanceTimersByTime(60000);
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+        jest.useRealTimers();
+      });
+
+      it('does nothing when the tab is being hidden', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+
+        setVisibility('hidden');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).not.toHaveBeenCalled();
+      });
+
+      it('does nothing when the socket is still alive', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).state.socket = { ...mockSocket, connected: true };
+        (svc as any).state.isConnected = true;
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).not.toHaveBeenCalled();
+      });
+
+      it('does nothing while an attempt is already in flight', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).state.socket = { ...mockSocket, connected: false };
+        (svc as any).state.isConnecting = true;
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).not.toHaveBeenCalled();
+      });
+
+      it('does nothing while the app is updating', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).isAppUpdating = true;
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).not.toHaveBeenCalled();
+      });
+
+      it('does not burn an attempt while the browser reports no network', () => {
+        const handlers = captureDocumentHandlers();
+        const svc = new ConnectionService();
+        (svc as any).state.socket = { ...mockSocket, connected: false };
+        const connectSpy = jest.spyOn(svc, 'connect').mockImplementation(() => {});
+        const onLine = jest.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(connectSpy).not.toHaveBeenCalled();
+        onLine.mockRestore();
+      });
+
+      it('repairs a mirror that claims connected while the socket is dead', () => {
+        const handlers = captureDocumentHandlers();
+        const deadSocket = { ...mockSocket, connected: false, connect: jest.fn() };
+        const svc = new ConnectionService();
+        (svc as any).state.socket = deadSocket;
+        // Le navigateur peut couper un socket d'onglet gelé sans que
+        // l'événement `disconnect` atteigne jamais le miroir.
+        (svc as any).state.isConnected = true;
+
+        setVisibility('visible');
+        handlers.get('visibilitychange')!(new Event('visibilitychange'));
+
+        expect(deadSocket.connect).toHaveBeenCalledTimes(1);
+        expect((svc as any).state.isConnecting).toBe(true);
       });
     });
   });

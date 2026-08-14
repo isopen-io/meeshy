@@ -1708,3 +1708,134 @@ le groupe » — un partage légitimement poursuivi en arrière-plan y perdrait 
   `deletedForUserAt` / `clearHistoryBefore` absents de
   `conversationPreferencesSchema` ; `POST /conversations/:id/clear-history` sans
   aucun client, et son faux succès local côté iOS.
+
+## Cycle 19 (2026-08-14) — l'arbitre de version ne gardait qu'une porte sur deux
+
+Base : `origin/main` @ `5ff9a3e94` (PR #3000 mergée), rebasé sur `dc3286f7`
+(cycle 18 — partage de position — mergé pendant ce cycle, aucun fichier source
+en commun). Phases 2 / 3 / 8 / 11.
+
+Ce cycle exécute trois des candidats laissés ouverts par le cycle 17, dans
+l'ordre où celui-ci les avait classés. Aucun toolchain Swift ici : périmètre
+gateway + web, comme les cycles 11 à 17.
+
+### D1 — les quatre écritures optimistes du store web posaient leur réponse HTTP sans arbitrage
+
+`apps/web/stores/conversation-preferences-store.ts`
+
+Le cycle 17 a doté la ligne d'un compteur monotone `version`, l'a fait traverser
+le sérialiseur REST, et a posé `applyRemotePreferences()` comme portillon des
+diffusions socket : `incoming.version <= local -> drop`. Mais la ligne a **deux**
+écrivains, et seul l'un des deux passait par ce portillon. `togglePin`,
+`toggleMute`, `toggleArchive` et `setReaction` faisaient toutes, au retour du
+`PUT` :
+
+```ts
+const updatedPrefs = await userPreferencesService.togglePin(...);
+const finalMap = new Map(get().preferencesMap);
+finalMap.set(conversationId, updatedPrefs);   // sans condition
+```
+
+Trois façons de perdre l'état le plus récent, toutes reproduites en test :
+
+1. **Deux bascules rapprochées** (double-clic sur l'épingle, ou épingler puis
+   désépingler). Les deux `PUT` partent, leurs réponses reviennent dans le
+   désordre — rien ne l'interdit sur deux requêtes HTTP concurrentes — et la
+   plus ANCIENNE écrase la plus récente. L'UI se fige alors sur l'inverse de ce
+   que l'utilisateur a demandé en dernier, et le serveur, lui, porte la bonne
+   valeur : l'écart ne se résorbe qu'au prochain rechargement.
+2. **Une diffusion socket qui atterrit pendant le vol.** Le même utilisateur
+   agit depuis un autre appareil ; `applyRemotePreferences` pose la version 5 ;
+   la réponse du `PUT` en vol arrive ensuite avec la version 2 et rembobine.
+3. **La rétractation d'échec.** Le `catch` restaurait l'instantané capturé
+   AVANT l'écriture. Si une diffusion ou une autre bascule a atterri entre-temps,
+   la rétractation en effaçait l'effet — un échec réseau sur une action annulait
+   une action sans rapport.
+
+**Correctif.** Le portillon devient commun aux deux écrivains. `isStaleWriteResponse()`
+applique aux réponses HTTP l'arbitre que `applyRemotePreferences` applique déjà
+aux diffusions, avec une réserve : l'arbitrage n'a lieu que si la réponse PORTE
+une version. Une réponse antérieure à l'ajout du champ au sérialiseur n'a pas
+d'arbitre, et la jeter perdrait l'écriture ; côté local, l'absence vaut la
+version 0, convention déjà posée par le lecteur socket. La rétractation, elle,
+ne se déclenche que si l'entrée locale est TOUJOURS l'objet que cette écriture a
+posé — l'état est immuable, donc l'identité référentielle suffit à dire que
+personne n'a écrit depuis.
+
+**Refactor (Phase 8).** Les quatre méthodes étaient quasi identiques sur ~40
+lignes chacune, ce que le cycle 17 avait noté comme demandant « une
+factorisation, pas un rustinage ponctuel ». Elles passent par un
+`writeOptimistic(conversationId, patch, request)` unique : instantané → patch
+local immédiat → requête → arbitrage. Le correctif vit à un seul endroit, et une
+cinquième bascule l'obtiendra sans y penser. ~160 lignes → ~20.
+
+### D2 — `categoryId` malformé rendait 500 au lieu de 400
+
+`services/gateway/src/routes/conversation-preferences.ts`
+
+Hérité du cycle 14. `categoryId` nomme une ligne `UserConversationCategory`,
+donc toujours un ObjectId. Non validé, un id malformé traversait le schéma,
+atteignait `userConversationCategory.findFirst` et faisait lever à Prisma
+`Malformed ObjectID` (P2023) — que le `catch` du handler transforme en 500, et
+que `logError` classe en incident serveur. Une erreur d'appelant comptée comme
+une panne, dans les logs comme dans le code de statut.
+
+La forme rejoint le schéma, là où toutes les autres routes porteuses d'id de la
+passerelle la mettent (`pattern: '^[0-9a-fA-F]{24}$'`, cf. `calls.ts`,
+`admin/agent.ts`). `null` — désassigner la catégorie — n'est pas touché :
+`pattern` ne contraint que les chaînes. `400` est ajouté au schéma de réponse.
+Un fixture de test utilisait `'cat-1'` ; le contrat de production étant un
+ObjectId, c'est le fixture qui était faux, et il est corrigé.
+
+### D3 — l'onglet qui revenait au premier plan n'avait aucun chemin de reprise
+
+`apps/web/services/socketio/connection.service.ts`
+
+Un onglet en arrière-plan voit ses timers étranglés à ~1/minute et son socket
+coupé par le navigateur. Or les DEUX boucles de reprise reposent sur des timers :
+celle de socket.io, et notre backoff `reconnect()` (que le cycle 15 a justement
+branché sur `reconnect_failed` pour les lecteurs passifs). Au retour de
+l'utilisateur, l'onglet pouvait donc rester muet une minute entière — davantage
+si le backoff en était déjà à plusieurs secondes — pendant laquelle un lecteur
+passif (aucun envoi, aucun join, donc aucun `ensureConnection`) ne recevait
+AUCUN événement temps réel : ni message, ni frappe, ni accusé, ni réaction.
+
+Le retour à l'écran est le signal exact qui manquait, symétrique du handler
+`online` déjà présent : il ne coûte rien quand le lien est vivant et
+court-circuite le backoff quand il ne l'est pas.
+
+Deux points de conception :
+
+- **La vérité est le SOCKET, pas le miroir.** La garde teste
+  `state.socket?.connected`, pas `state.isConnected` : un onglet gelé peut voir
+  sa connexion coupée sans que `disconnect` atteigne jamais le miroir, et c'est
+  précisément le cas que ce chemin doit réparer. Tester le miroir aurait fait
+  sortir la fonction sur l'unique scénario qui la justifie.
+- **Le timer de backoff en attente est annulé**, pas laissé courir : sans cela
+  il fait ensuite avancer `reconnectAttempts` pour une tentative qui n'a plus
+  lieu d'être. `reconnectAttempts` est remis à 0 — le backoff décrit une suite
+  d'échecs, revenir à l'écran est un signal neuf.
+
+### Gates
+
+- 32 tests vus ROUGES avant correctifs, verts après (23 store web, 1 route
+  passerelle, 8 service de connexion web).
+- web **572 suites / 12 275 tests** verts · passerelle **suite complète** verte.
+- `tsc --noEmit` web : 1229 erreurs avant ET après — base pré-existante
+  inchangée, zéro sur les fichiers touchés.
+- iOS hors périmètre : aucun fichier Swift touché.
+
+### Reste ouvert après ce cycle
+
+Inchangés depuis le cycle 17, et toujours dans cet ordre :
+
+- **`clear-history` n'a aucun client**, et le dispatch iOS
+  (`ConversationStore.swift:731`) rend un faux succès local sur
+  `.setClearHistoryBefore`. Dimension vie privée le jour où une UI l'appelle.
+- **`deletedForUserAt` / `clearHistoryBefore` absents du sérialiseur REST**
+  (même cause que D1 du cycle 17, même schéma).
+- **iOS paie un aller-retour HTTP de trop par mutation de préférence** —
+  `DefaultPreferenceWritingAdapter` refait un `GET` après chaque `PUT` alors que
+  le `PUT` porte désormais `version`. Demande un toolchain Swift.
+- **Le scope communauté de `user:preferences-updated` n'est routé nulle part
+  côté iOS** (`MessageSocketManager:3280`).
