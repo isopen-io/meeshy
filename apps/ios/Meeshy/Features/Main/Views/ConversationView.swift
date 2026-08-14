@@ -1666,6 +1666,7 @@ struct ConversationView: View {
                 expandedHeaderMidContent
                 headerAvatarView
             }
+            .padding(.trailing, MeeshySpacing.sm)
         }
         .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm + 2 : 0)
         .padding(.vertical, composerState.showOptions ? MeeshySpacing.sm - 2 : 0)

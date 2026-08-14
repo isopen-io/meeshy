@@ -162,12 +162,12 @@ export function DashboardLayout({
       {!(isMobile && hideHeaderOnMobile) && (
         <header className="sticky flex-shrink-0 top-0 left-0 right-0 z-[50] bg-white dark:bg-gray-900 shadow-sm dark:shadow-gray-900/50 border-b dark:border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16 gap-2 sm:gap-4">
             {/* Logo et titre */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 min-w-0">
               <Link
                 href="/"
-                className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+                className="flex items-center space-x-2 hover:opacity-80 transition-opacity flex-shrink-0"
               >
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
                   <MessageSquare className="h-5 w-5 text-white" />
@@ -178,7 +178,7 @@ export function DashboardLayout({
                 backHref ? (
                   <Link
                     href={backHref}
-                    className="flex items-center gap-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    className="flex items-center gap-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors flex-shrink-0"
                     aria-label={`${t('common.back', 'Back')} — ${title}`}
                   >
                     <ChevronLeft className="h-5 w-5" />
@@ -186,7 +186,7 @@ export function DashboardLayout({
                     <span className="text-lg font-medium">{title}</span>
                   </Link>
                 ) : (
-                  <div className="hidden md:block">
+                  <div className="hidden md:block flex-shrink-0">
                     <span className="text-gray-400 dark:text-gray-600 mx-2">/</span>
                     <span className="text-lg font-medium text-gray-700 dark:text-gray-300">{title}</span>
                   </div>
@@ -196,7 +196,7 @@ export function DashboardLayout({
 
             {/* Barre de recherche */}
             {!hideSearch && (
-              <div className="flex-1 max-w-lg mx-8">
+              <div className="flex-1 max-w-lg mx-4 hidden sm:block">
                 <form onSubmit={handleSearch} className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
                   <Input
@@ -211,7 +211,7 @@ export function DashboardLayout({
             )}
 
             {/* Menu utilisateur */}
-            <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0 pr-2 sm:pr-0">
               {/* Bouton de partage - visible sur tous les écrans */}
               <ShareAffiliateButton
                 variant="ghost"
