@@ -29,6 +29,8 @@ let capturedAttachmentStatusListener: ((data: any) => void) | null = null;
 let capturedMessagePinnedListener: ((data: any) => void) | null = null;
 let capturedMessageUnpinnedListener: ((data: any) => void) | null = null;
 let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
+// Capture the preferences listener — `user:preferences-updated` is a three-scope union
+let capturedPreferencesListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -60,7 +62,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       return () => { capturedAttachmentStatusListener = null; };
     }),
     onParticipantRoleUpdated: jest.fn(() => () => {}),
-    onPreferencesUpdated: jest.fn(() => () => {}),
+    onPreferencesUpdated: jest.fn((listener: (data: any) => void) => {
+      capturedPreferencesListener = listener;
+      return () => { capturedPreferencesListener = null; };
+    }),
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
     onConversationNew: jest.fn(() => () => {}),
@@ -102,6 +107,13 @@ jest.mock('@/services/api.service', () => ({
 jest.mock('@/stores/auth-store', () => ({
   useAuthStore: {
     getState: () => ({ user: { id: 'current-user' } }),
+  },
+}));
+
+const applyRemotePreferencesMock = jest.fn();
+jest.mock('@/stores/conversation-preferences-store', () => ({
+  useConversationPreferencesStore: {
+    getState: () => ({ applyRemotePreferences: applyRemotePreferencesMock }),
   },
 }));
 
@@ -967,5 +979,88 @@ describe('useSocketCacheSync — every message write reaches the alias-keyed cac
     const { canonical, alias } = readBoth(queryClient);
     expect(canonical).toHaveLength(1);
     expect(alias).toHaveLength(1);
+  });
+});
+
+// ─── user:preferences-updated (scope conversation) ───────────────────────────
+//
+// `writeConversationPreferences` diffuse à TOUS les appareils du même
+// utilisateur. Le web ne traitait que deux des trois scopes de l'union : la
+// branche `conversationId` sortait sans rien faire, donc un épinglage / une
+// coupure de son / un archivage fait ailleurs n'atteignait jamais un onglet
+// ouvert — la liste gardait son état, et son tri, jusqu'à un rechargement.
+
+describe('useSocketCacheSync — user:preferences-updated', () => {
+  beforeEach(() => {
+    capturedPreferencesListener = null;
+    applyRemotePreferencesMock.mockClear();
+    jest.clearAllMocks();
+  });
+
+  const conversationScopeEvent = {
+    userId: 'current-user',
+    conversationId: 'conv-1',
+    version: 4,
+    reset: false,
+    preferences: {
+      isPinned: true,
+      isMuted: false,
+      mentionsOnly: false,
+      isArchived: false,
+      tags: [],
+      categoryId: null,
+      orderInCategory: null,
+      customName: null,
+      reaction: null,
+      deletedForUserAt: null,
+      clearHistoryBefore: null,
+    },
+  };
+
+  it('routes the conversation scope to the preferences store', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    expect(capturedPreferencesListener).not.toBeNull();
+    act(() => { capturedPreferencesListener!(conversationScopeEvent); });
+
+    expect(applyRemotePreferencesMock).toHaveBeenCalledWith(conversationScopeEvent);
+  });
+
+  it('routes a reset (DELETE) of the conversation scope too', () => {
+    // Le reset porte `conversationId` et `preferences: null` : c'est le MÊME
+    // scope, et l'oublier laisserait la remise à zéro invisible.
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    const resetEvent = { userId: 'current-user', conversationId: 'conv-1', version: 5, reset: true, preferences: null };
+    act(() => { capturedPreferencesListener!(resetEvent); });
+
+    expect(applyRemotePreferencesMock).toHaveBeenCalledWith(resetEvent);
+  });
+
+  it('does not send the category scope to the conversation store', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!({ userId: 'current-user', category: 'notifications' }); });
+
+    expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send the community scope to the conversation store', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedPreferencesListener!({
+        userId: 'current-user',
+        communityId: 'comm-1',
+        reset: false,
+        preferences: { isPinned: true, isMuted: false, isArchived: false, isHidden: false, notificationLevel: 'all', customName: null, categoryId: null, orderInCategory: null },
+      });
+    });
+
+    expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
   });
 });

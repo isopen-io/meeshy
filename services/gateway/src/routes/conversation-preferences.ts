@@ -64,6 +64,13 @@ const conversationPreferencesSchema = {
     customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
     isDefault: { type: 'boolean', description: 'Whether this is using default values' },
+    // Le compteur monotone sur lequel TOUS les clients arbitrent le temps réel
+    // (`incoming.version <= local -> drop`). Fastify retire toute propriété
+    // absente de ce schéma : l'omettre n'affaiblissait pas le contrat, il le
+    // supprimait — les clients recevaient les préférences sans jamais recevoir
+    // la séquence qui dit laquelle de deux versions est la plus récente. iOS
+    // refait un GET juste après son PUT dans le seul but de lire ce champ.
+    version: { type: 'number', description: 'Monotonic version for optimistic-concurrency resolution' },
     createdAt: { type: 'string', format: 'date-time', nullable: true, description: 'Creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last update timestamp' },
     category: {
@@ -281,6 +288,13 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             userId,
             conversationId,
             ...CONVERSATION_PREFERENCES_DEFAULTS,
+            // `CONVERSATION_PREFERENCES_DEFAULTS` exclut `version` à dessein
+            // (c'est de l'état de protocole, pas une préférence, et un reset
+            // ne doit jamais le rembobiner). La branche « aucune ligne » doit
+            // donc le poser elle-même : une ligne absente n'a jamais été
+            // diffusée, elle est sous TOUTE version que le serveur peut
+            // émettre. Répondre `undefined` laisserait le client deviner.
+            version: 0,
             isDefault: true,
             createdAt: null,
             updatedAt: null,

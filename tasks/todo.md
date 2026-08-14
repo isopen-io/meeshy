@@ -1,72 +1,77 @@
-# Cycle 16 — le socket restait scellé sur le jeton de sa naissance
+# Cycle 17 (2026-08-14) — les préférences de conversation ne traversaient ni le sérialiseur ni le socket web
 
-Branche : `claude/keen-hamilton-55j95x`, partie de `origin/main` (le cycle
-précédent — miroir de connexion, PR #2991 — était intégralement mergé).
+Routine « amélioration continue temps réel », phases 2 / 3 / 11.
+Base : `origin/main` @ `14c226e08` (le cycle 16 est mergé).
 
-## Point de départ (Phase 1)
+## Défauts retenus
 
-Pas de recensement neuf : reprise directe du reste ouvert nommé en fin de
-cycle 15, « `initializeConnection()` rend `null` sur JWT expiré et rien ne
-réessaie ». L'instruction de la routine est de partir du développement
-précédent, c'est donc sa dette qui ouvre ce cycle.
+**D1 — le compteur `version` n'a jamais quitté le serveur.**
+`conversationPreferencesSchema` (le sérialiseur de réponse Fastify des trois
+surfaces REST : `GET` unitaire, `GET` liste, `PUT`) n'énumère pas `version`.
+Fastify retire toute propriété absente du schéma : le compteur monotone sur
+lequel TOUS les clients sont censés arbitrer (`incoming.version <= local →
+drop`) est effacé de chaque réponse. Côté iOS, `DefaultPreferenceWritingAdapter`
+refait un GET APRÈS le PUT dans le seul but de récupérer ce `version` — et
+reçoit `nil` à tous les coups, donc `authoritativeVersion` n'est jamais
+appliqué et `userState.version` reste sur l'estimation optimiste locale.
 
-## Défauts retenus (Phases 2 / 3 / 10)
+**D2 — le web jette le scope conversation de `user:preferences-updated`.**
+`use-socket-cache-sync.ts` discrimine l'union à trois branches et n'en traite
+que deux (`category`, `communityId`) ; la branche `conversationId` sort de la
+fonction sans rien faire. Le store Zustand `conversation-preferences-store`
+n'a AUCUN câblage socket. Épingler / couper le son / archiver depuis un autre
+appareil ne parvient donc jamais à un onglet web ouvert : la liste garde son
+état périmé (et son tri) jusqu'à un rechargement.
 
-**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
-`io(url, { auth: { token } })` fige les identifiants à la construction et
-Socket.IO rejoue cette charge à CHAQUE reconnexion. Trois chemins font tourner
-le jeton sous ses pieds (401 REST, pré-contrôle d'expiration, rotation de
-session anonyme) : après l'un d'eux, chaque handshake présente un jeton refusé,
-la boucle interne brûle ses 5 tentatives, `reconnect_failed` passe la main à
-notre backoff, qui represente le même jeton mort — indéfiniment. Déclencheur
-le plus banal : un redéploiement de la passerelle.
-
-**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne
-revient.** Le rafraîchissement REST réussit sans que personne ne le dise à la
-couche temps réel. Seules les actions SORTANTES (`sendMessage`,
-`joinConversation`) réveillent la connexion : un lecteur resté sur la liste des
-conversations n'en déclenche aucune et n'a plus RIEN en temps réel pour toute
-la session.
-
-**D3 — `expiresIn` écrit dans l'emplacement du jeton de session** (décalage de
-position d'argument dans `authService.refreshToken()`). Sans conséquence
-observable, le test existant verrouillait le décalage.
-
-Analyse complète : `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 16.
+**D3 — le type partagé n'a pas de `version`.**
+`UserConversationPreferences` ne modélise pas le compteur, donc le web ne peut
+pas arbitrer de manière typée même une fois D1 corrigé.
 
 ## Correctifs
 
-- `auth` devient un **résolveur** réévalué à chaque handshake, et le rustinage
-  impératif `socket.auth = { token }` disparaît (il remplacerait le résolveur).
-- `authManager.registerOnTokensUpdated()` — l'orchestrateur (et non
-  `ConnectionService`, qui ne sait pas brancher les écouteurs) rouvre le socket
-  quand il n'en existe aucun.
-- `refreshToken()` passe `expiresIn` dans son propre emplacement.
-
-## Fichiers touchés
-
-- `apps/web/services/socketio/connection.service.ts`
-- `apps/web/services/socketio/orchestrator.service.ts`
-- `apps/web/services/auth-manager.service.ts`
-- `apps/web/services/auth.service.ts`
-- 6 fichiers de tests (+14 tests neufs, 2 doublures mises à jour)
-- `CHANGELOG.md`, `tasks/lessons.md` (leçon 247), journal du cycle
+- `version` ajouté à `conversationPreferencesSchema` ; la branche « aucune
+  ligne stockée » du GET unitaire répond `version: 0` explicitement.
+- `readonly version?: number` sur `UserConversationPreferences`, porté par
+  `transformPreferencesData` côté web.
+- `applyRemotePreferences()` sur le store web : arbitrage par `version`,
+  gestion de `reset`, création d'entrée absente.
+- Branche `conversationId` câblée dans `use-socket-cache-sync.ts`.
 
 ## Gates
 
-- 14 tests vus ROUGES avant les correctifs, verts après.
-- `apps/web` : **571 suites / 12 231 tests verts**, 21 skipped (suite complète).
-- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique
-  au cycle 15, rien de neuf sur les fichiers touchés.
-- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
-  ce runner Linux). Le SDK a été LU et vérifié exempt de D1/D2 —
-  `AuthManager.applySession` reconnecte les sockets sur rotation de jeton.
+- Tests vus ROUGES avant correctifs, verts après.
+- Suite gateway + suite web complètes.
 
-## Prochains candidats
+## Revue
 
-- `visibilitychange` → `connect()` (hérité du cycle 15, toujours sans risque).
-- Un socket existant mais bloqué en reconnexion n'est pas relancé par
-  `onTokensUpdated` — volontaire (D1 le couvre), à regarder si un onglet reste
-  muet malgré un socket présent.
-- Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
-  `user:preferences-updated` côté iOS.
+Les trois correctifs sont livrés. Détail complet et surfaces vérifiées correctes :
+`tasks/realtime-sync-audit-2026-07-11.md` § Cycle 17.
+
+### Fichiers touchés
+
+- `services/gateway/src/routes/conversation-preferences.ts` (schéma + branche defaults)
+- `packages/shared/types/user-preferences.ts` (`version?: number`)
+- `apps/web/services/user-preferences.service.ts` (`transformPreferencesData`)
+- `apps/web/stores/conversation-preferences-store.ts` (`applyRemotePreferences`)
+- `apps/web/hooks/queries/use-socket-cache-sync.ts` (branche `conversationId`)
+- 4 fichiers de tests (+13 tests neufs, 1 suite neuve)
+- `CHANGELOG.md`, `tasks/lessons.md` (leçon 249), journal du cycle
+
+### Gates
+
+- 13 tests vus ROUGES avant correctifs, verts après.
+- passerelle **711 suites / 17 420 tests** · web **572 suites / 12 251 tests**
+  · shared **54 fichiers / 1 542 tests** — tous verts.
+- `tsc --noEmit` : passerelle 0 erreur ; web 1229 avant ET après (base
+  pré-existante inchangée, rien sur les fichiers touchés).
+- iOS hors périmètre : aucun fichier Swift touché, et le correctif D1 lui
+  profite sans changement.
+
+### Prochains candidats
+
+- `clear-history` sans client, et le faux succès local d'iOS sur
+  `.setClearHistoryBefore` (dimension vie privée le jour où une UI l'appelle).
+- `deletedForUserAt` / `clearHistoryBefore` absents du même sérialiseur REST.
+- Restes des cycles 14/16 : validation ObjectId de `categoryId`, scope
+  communauté de `user:preferences-updated` non routé côté iOS,
+  `visibilitychange` → `connect()` côté web.
