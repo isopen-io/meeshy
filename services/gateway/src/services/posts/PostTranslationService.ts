@@ -13,6 +13,7 @@ import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHa
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isUrlOnly } from '../../utils/url-content';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './storyContentComposition';
+import { translationTargetId, translationTargetNamespace } from '../zmq-translation/utils/zmq-helpers';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -83,7 +84,7 @@ export class PostTranslationService {
       return;
     }
 
-    const messageId = `post:${postId}`;
+    const messageId = translationTargetId('post', postId);
 
     log.info('PostTranslation: sending ZMQ request', { postId, sourceLang, targetLanguages });
 
@@ -170,7 +171,7 @@ export class PostTranslationService {
       return;
     }
 
-    const messageId = `post:${postId}`;
+    const messageId = translationTargetId('post', postId);
 
     log.info('PostTranslation: on-demand request', { postId, sourceLang, targetLanguage });
 
@@ -260,7 +261,7 @@ export class PostTranslationService {
       return;
     }
 
-    const messageId = `comment:${commentId}`;
+    const messageId = translationTargetId('comment', commentId);
 
     log.info('CommentTranslation: sending ZMQ request', { commentId, postId, sourceLang, targetLanguages });
 
@@ -324,7 +325,7 @@ export class PostTranslationService {
         comment.content,
         sourceLang,
         [targetLanguage],
-        `comment:${commentId}`,
+        translationTargetId('comment', commentId),
         `comment_context:${comment.postId}`,
       );
     } catch (err) {
@@ -341,13 +342,15 @@ export class PostTranslationService {
       const messageId = event.result?.messageId;
       if (!messageId) return;
 
-      if (messageId.startsWith('post:')) {
+      const namespace = translationTargetNamespace(messageId);
+
+      if (namespace === 'post') {
         const postId = messageId.slice('post:'.length);
         /* istanbul ignore next -- handlePostTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handlePostTranslationCompleted(postId, event).catch((err) => {
           log.error('handlePostTranslationCompleted failed', err, { postId });
         });
-      } else if (messageId.startsWith('comment:')) {
+      } else if (namespace === 'comment') {
         const commentId = messageId.slice('comment:'.length);
         /* istanbul ignore next -- handleCommentTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handleCommentTranslationCompleted(commentId, event).catch((err) => {

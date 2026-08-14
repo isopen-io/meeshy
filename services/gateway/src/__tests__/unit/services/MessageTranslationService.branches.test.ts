@@ -1538,4 +1538,94 @@ describe('MessageTranslationService — branch supplement', () => {
       );
     });
   });
+  // =========================================================================
+  // 11. Bus ZMQ multiplexé — cibles sociales (post:/comment:/story:)
+  //
+  // Posts, commentaires et stories empruntent le MÊME canal
+  // `translationCompleted` que les messages, sous un identifiant namespacé, et
+  // sont persistés par leurs propres services. Le pipeline des messages les
+  // traitait comme des `Message` : `post:<24-hex>` partait chez Prisma en guise
+  // d'ObjectId — P2023 « Malformed ObjectID » sur le garde de suppression,
+  // l'exigence de chiffrement, la sauvegarde et les stats — suivi d'un
+  // `translationReady` fantôme cherchant une conversation inexistante.
+  // =========================================================================
+  describe('_handleTranslationCompleted — cibles sociales sur le bus partagé', () => {
+    const OBJECT_ID = '6a7f982febddb6944a7e3bb6';
+
+    const emitCompleted = (messageId: string, taskId: string) =>
+      mockZmqClient.emit('translationCompleted', {
+        taskId,
+        targetLanguage: 'es',
+        result: {
+          messageId,
+          sourceLanguage: 'fr',
+          targetLanguage: 'es',
+          translatedText: 'Hola',
+          confidenceScore: 0.9,
+          processingTime: 5,
+          modelType: 'basic'
+        }
+      });
+
+    it.each([
+      ['post', `post:${OBJECT_ID}`],
+      ['comment', `comment:${OBJECT_ID}`],
+      ['story', `story:${OBJECT_ID}`],
+    ])('ne touche jamais la collection Message pour une traduction de %s', async (namespace, targetId) => {
+      prisma.message.findUnique.mockClear();
+      const ready: unknown[] = [];
+      svc.on('translationReady', (e) => ready.push(e));
+
+      emitCompleted(targetId, `task-${namespace}`);
+      await flushAsync(8);
+
+      expect(prisma.message.findUnique).not.toHaveBeenCalled();
+      expect(prisma.message.findFirst).not.toHaveBeenCalled();
+      expect(prisma.message.update).not.toHaveBeenCalled();
+      expect(ready).toHaveLength(0);
+    });
+
+    it('traite normalement une traduction de message (identifiant nu)', async () => {
+      prisma.message.findUnique.mockResolvedValue({ id: OBJECT_ID, originalLanguage: 'fr', translations: {} });
+      const ready: unknown[] = [];
+      svc.on('translationReady', (e) => ready.push(e));
+
+      emitCompleted(OBJECT_ID, 'task-message');
+      await flushAsync(8);
+
+      expect(prisma.message.findUnique).toHaveBeenCalled();
+      expect(prisma.message.update).toHaveBeenCalled();
+      expect(ready).toHaveLength(1);
+    });
+
+    it("ne diffuse pas d'échec de traduction pour une cible sociale", async () => {
+      const failures: unknown[] = [];
+      svc.on('translationFailed', (e) => failures.push(e));
+
+      mockZmqClient.emit('translationError', {
+        taskId: 'task-err-post',
+        messageId: `post:${OBJECT_ID}`,
+        error: 'translation pool full',
+        conversationId: `post_context:${OBJECT_ID}`
+      });
+      await flushAsync(4);
+
+      expect(failures).toHaveLength(0);
+    });
+
+    it("diffuse toujours l'échec de traduction d'un message", async () => {
+      const failures: unknown[] = [];
+      svc.on('translationFailed', (e) => failures.push(e));
+
+      mockZmqClient.emit('translationError', {
+        taskId: 'task-err-msg',
+        messageId: OBJECT_ID,
+        error: 'boom',
+        conversationId: 'conv-1'
+      });
+      await flushAsync(4);
+
+      expect(failures).toHaveLength(1);
+    });
+  });
 });

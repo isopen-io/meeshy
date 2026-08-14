@@ -32,6 +32,7 @@ import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, type DiscoverabilityPrecision } from './location/geoDiscoverability';
+import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -411,7 +412,7 @@ export class PostService {
         return;
       }
 
-      const storyMessageId = `story:${postId}`;
+      const storyMessageId = translationTargetId('story', postId);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 

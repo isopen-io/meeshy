@@ -98,3 +98,50 @@ export function audioFormatToMimeType(format: string): string {
 export function mimeTypeToAudioFormat(mimeType: string): string {
   return mimeType.replace('audio/', '');
 }
+
+/**
+ * Identité de la CIBLE d'une traduction sur le bus ZMQ.
+ *
+ * Le champ `messageId` des requêtes/réponses de traduction est MULTIPLEXÉ : il
+ * transporte aussi bien un message de conversation (`Message._id`, un ObjectId
+ * nu) que des objets sociaux qui empruntent le même pipeline sous un préfixe de
+ * namespace — `post:<id>`, `comment:<id>`, `story:<id>`.
+ *
+ * Chaque famille a son propre propriétaire côté gateway (PostTranslationService,
+ * PostService, MessageTranslationService) et chacun persiste dans SA collection.
+ * Sans discrimination explicite, le pipeline des messages traitait les cibles
+ * sociales comme des `Message` et envoyait `post:<24-hex>` à Prisma en guise
+ * d'ObjectId : P2023 « Malformed ObjectID » à chaque lookup (deletedAt, exigence
+ * de chiffrement, stats), traduction sociale correctement persistée par son
+ * propre service mais accompagnée d'une pluie d'erreurs, plus un broadcast
+ * fantôme cherchant une conversation qui n'existe pas.
+ *
+ * Un seul endroit décrit donc la convention : producteurs ET consommateurs.
+ */
+
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story'] as const;
+
+export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
+
+/**
+ * Volontairement générique : TOUT identifiant namespacé est étranger au pipeline
+ * des messages, y compris un namespace ajouté demain sans que ce fichier bouge.
+ * Un `Message._id` est un ObjectId — il ne contient jamais de deux-points.
+ */
+const NAMESPACED_TARGET_PATTERN = /^([a-z][a-z0-9-]*):/;
+
+export function translationTargetId(namespace: TranslationTargetNamespace, id: string): string {
+  return `${namespace}:${id}`;
+}
+
+export function translationTargetNamespace(messageId: string): string | null {
+  return NAMESPACED_TARGET_PATTERN.exec(messageId)?.[1] ?? null;
+}
+
+/**
+ * `true` quand la cible est un message de conversation — donc quand le pipeline
+ * des messages (persistance, chiffrement, stats, broadcast) doit s'en saisir.
+ */
+export function isMessageTranslationTarget(messageId: string): boolean {
+  return translationTargetNamespace(messageId) === null;
+}
