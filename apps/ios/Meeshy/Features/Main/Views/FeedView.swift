@@ -604,6 +604,7 @@ struct FeedView: View {
             reelsButton
             postsMapButton
         }
+        .padding(.trailing, 12)
     }
 
     private var reelsButton: some View {
