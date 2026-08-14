@@ -10,7 +10,10 @@ export function useNotificationsQuery(options: NotificationQueryOptions = {}) {
   const { limit = 50, ...filters } = options;
 
   return useQuery({
-    queryKey: queryKeys.notifications.list({ unreadOnly: filters.isRead === false }),
+    // La clé porte TOUS les filtres, pas le seul `unreadOnly` : deux onglets
+    // partageraient sinon une entrée de cache, et le second lirait les lignes
+    // du premier. La variante infinie le fait déjà — c'est la même règle.
+    queryKey: queryKeys.notifications.list(filters),
     queryFn: async () => {
       const response = await NotificationService.fetchNotifications({ ...filters, limit });
       return response.data;

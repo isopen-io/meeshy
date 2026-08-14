@@ -358,6 +358,14 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
           (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
         );
       }
+
+      // Les totaux d'onglets sont SERVEUR, et une suppression venue d'un AUTRE
+      // appareil ne dit pas combien il en reste par type. À l'arrivée d'une
+      // notification, le report optimiste suffit (on connaît le type, et c'est
+      // le chemin fréquent) ; ici on relit — une purge est rare, et deviner le
+      // décompte d'une portée qu'on n'a qu'en partie en cache donnerait un
+      // chiffre faux qui a l'air juste.
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.counts() });
     };
 
     // `notification:deleted-bulk` — symétrique du précédent côté PURGE, et son
@@ -392,6 +400,14 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
           };
         }
       );
+
+      // Les totaux d'onglets sont SERVEUR, et une suppression venue d'un AUTRE
+      // appareil ne dit pas combien il en reste par type. À l'arrivée d'une
+      // notification, le report optimiste suffit (on connaît le type, et c'est
+      // le chemin fréquent) ; ici on relit — une purge est rare, et deviner le
+      // décompte d'une portée qu'on n'a qu'en partie en cache donnerait un
+      // chiffre faux qui a l'air juste.
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.counts() });
     };
 
     // `notification:counts` est la resync AUTORITAIRE du serveur : émise après
