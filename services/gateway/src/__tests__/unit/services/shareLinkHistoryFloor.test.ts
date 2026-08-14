@@ -7,6 +7,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import {
   historyFloorClause,
+  historyFloorFor,
   loadShareLinkHistoryFloors,
   loadShareLinkHistoryFloorsOrFail,
   type ShareLinkParticipation,
@@ -125,5 +126,44 @@ describe('loadShareLinkHistoryFloorsOrFail', () => {
     );
     expect(result.unreadableConversationIds).toEqual([]);
     expect(result.floors.get('c1')).toEqual(JOINED);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `historyFloorFor` — la règle elle-même, sur UNE participation.
+//
+// Les deux formes de la règle (ensembliste pour `/sync`, unitaire pour les
+// routes qui servent une seule conversation) doivent rendre le MÊME verdict.
+// Les cas d'absence sont ce sur quoi deux lecteurs indépendants divergent en
+// premier — ils sont donc énoncés ici et non laissés à l'intuition de chaque
+// site d'appel.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('historyFloorFor', () => {
+  it('rend `joinedAt` quand le lien ferme l’historique', () => {
+    expect(historyFloorFor(participation(), { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  it('ne rend RIEN quand le lien ouvre l’historique', () => {
+    expect(historyFloorFor(participation(), { allowViewHistory: true })).toBeNull();
+  });
+
+  it('ne rend RIEN pour une participation sans lien (ajout direct)', () => {
+    expect(historyFloorFor(participation({ shareLinkId: null }), null)).toBeNull();
+  });
+
+  it('ne borne RIEN quand le lien est INTROUVABLE — posture unique du dépôt', () => {
+    // `messages.ts` sert l'historique dans ce cas (`if (shareLink) { … }`) et
+    // `loadShareLinkHistoryFloors` aussi (aucune entrée dans la map). Un
+    // troisième lecteur qui refuserait ici ferait diverger la même règle.
+    expect(historyFloorFor(participation(), null)).toBeNull();
+  });
+
+  it('rend le MÊME verdict que la forme ensembliste', async () => {
+    const floors = await loadShareLinkHistoryFloors(
+      prismaWith([{ id: 'sl-1', allowViewHistory: false }]),
+      [participation()],
+    );
+    expect(historyFloorFor(participation(), { allowViewHistory: false })).toEqual(floors.get('c1'));
   });
 });

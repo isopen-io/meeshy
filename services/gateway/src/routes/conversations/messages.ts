@@ -15,6 +15,7 @@ import {
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
+import { historyFloorFor } from '../../services/shareLinkHistoryFloor';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
@@ -619,7 +620,13 @@ export function registerMessagesRoutes(
         ? authRequest.authContext.participantId
         : currentParticipant?.id;
 
-      // Determine history start date based on share link configuration
+      // Le lien de partage répond ici à DEUX questions distinctes sur la même
+      // ligne : la PORTE (lien expiré, quota atteint → 403) et le PLANCHER de
+      // lecture. Elles restent séparées — la décision de réponse appartient à
+      // la route, le plancher est rendu par `historyFloorFor`, qui l'énonce
+      // aussi pour `/sync` (forme ensembliste) et pour la galerie de médias.
+      // Un seul aller-retour : le module ne charge rien, cette route lit déjà
+      // la ligne pour les colonnes de la porte.
       const participant = isAnonymousUser ? anonymousParticipant : currentParticipant;
       let historyStartDate: Date | null = null;
 
@@ -635,10 +642,8 @@ export function registerMessagesRoutes(
           if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
             return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
           }
-          if (!shareLink.allowViewHistory) {
-            historyStartDate = participant.joinedAt;
-          }
         }
+        historyStartDate = historyFloorFor(participant, shareLink);
       }
 
       t0 = performance.now();

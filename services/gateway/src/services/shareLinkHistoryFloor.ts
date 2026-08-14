@@ -43,11 +43,63 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 
-export type ShareLinkParticipation = {
-  readonly conversationId: string;
+/** Ce qu'il faut d'une ligne `Participant` pour répondre à la question. */
+export type ShareLinkJoin = {
   readonly joinedAt: Date;
   readonly shareLinkId: string | null;
 };
+
+export type ShareLinkParticipation = ShareLinkJoin & {
+  readonly conversationId: string;
+};
+
+/** Ce qu'il faut d'une ligne `ConversationShareLink`. `null` = introuvable. */
+export type ShareLinkHistoryGrant = { readonly allowViewHistory: boolean } | null;
+
+/**
+ * La règle, énoncée UNE fois : un lien qui ferme l'historique borne la lecture
+ * à l'instant de la jointure.
+ *
+ * Pure, et volontairement séparée de la lecture de la ligne : les appelants
+ * n'ont pas la même stratégie de chargement — `/sync` lit tous les liens d'un
+ * coup, `GET messages` lit LE lien avec les colonnes du contrôle d'entrée
+ * (`expiresAt`, `maxUses`) dont il a besoin par ailleurs. Leur imposer un
+ * chargeur commun ajouterait une requête à l'un des deux ; leur laisser la
+ * règle produirait un troisième lecteur qui divergerait sur les cas d'absence.
+ *
+ * Les deux absences rendent `null` — aucun lien (ajout direct) et lien
+ * INTROUVABLE (supprimé depuis la jointure). La seconde est la posture
+ * historique de `messages.ts` (`if (shareLink) { … }`) ; ce n'est pas
+ * évidemment la bonne, mais deux lecteurs qui en divergeraient seraient pires
+ * que le cas lui-même.
+ */
+export function historyFloorFor(join: ShareLinkJoin, link: ShareLinkHistoryGrant): Date | null {
+  if (!join.shareLinkId || !link || link.allowViewHistory) return null;
+  return join.joinedAt;
+}
+
+/**
+ * Forme UNITAIRE : le plancher d'UNE participation, pour les routes qui servent
+ * une seule conversation et n'ont pas d'autre raison de lire la ligne du lien.
+ *
+ * Ne rattrape pas ses erreurs — un plancher illisible est un contrôle d'accès
+ * illisible, et la seule dégradation sûre est de ne rien servir. Le `try/catch`
+ * de la route en fait un 500. C'est la posture de `messages.ts`, et l'exact
+ * pendant unitaire de `loadShareLinkHistoryFloorsOrFail`, qui retire du service
+ * les conversations dont il n'a pas pu lire le plancher.
+ */
+export async function loadShareLinkHistoryFloor(
+  prisma: PrismaClient,
+  join: ShareLinkJoin,
+): Promise<Date | null> {
+  if (!join.shareLinkId) return null;
+
+  const link = await prisma.conversationShareLink.findUnique({
+    where: { id: join.shareLinkId },
+    select: { allowViewHistory: true },
+  });
+  return historyFloorFor(join, link);
+}
 
 /**
  * `conversationId` → instant avant lequel rien n'est lisible. Une conversation
@@ -65,12 +117,11 @@ export async function loadShareLinkHistoryFloors(
     where: { id: { in: [...new Set(linked.map((p) => p.shareLinkId as string))] } },
     select: { id: true, allowViewHistory: true },
   });
-  const allowsHistory = new Map(links.map((l) => [l.id, l.allowViewHistory]));
+  const byId = new Map(links.map((l) => [l.id, l]));
 
   for (const p of linked) {
-    if (allowsHistory.get(p.shareLinkId as string) === false) {
-      floors.set(p.conversationId, p.joinedAt);
-    }
+    const floor = historyFloorFor(p, byId.get(p.shareLinkId as string) ?? null);
+    if (floor) floors.set(p.conversationId, floor);
   }
   return floors;
 }

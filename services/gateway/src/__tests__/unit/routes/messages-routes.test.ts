@@ -3269,6 +3269,38 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
     expect(reply.send).toHaveBeenCalled();
+    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toBeUndefined();
+  });
+
+  it('shareLink avec allowViewHistory=false: la clause PORTE le plancher', async () => {
+    // Le plancher est rendu par `historyFloorFor` depuis la convergence
+    // (gwcontract-14). Sans cette assertion, la suite de la route ne
+    // distinguait pas « plancher appliqué » de « plancher perdu » — les deux
+    // se terminent par un `reply.send`.
+    const joinedAt = new Date('2024-03-01');
+    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt, shareLinkId: 'link-1' });
+    prisma.conversationShareLink.findFirst.mockResolvedValue({
+      allowViewHistory: false,
+      expiresAt: null,
+      maxUses: null,
+      currentUses: 0,
+    });
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.count.mockResolvedValue(0);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: joinedAt });
+  });
+
+  it('shareLink INTROUVABLE: aucun plancher, et pas de 403', async () => {
+    prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt: new Date('2024-03-01'), shareLinkId: 'link-gone' });
+    prisma.conversationShareLink.findFirst.mockResolvedValue(null);
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.count.mockResolvedValue(0);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toBeUndefined();
+    expect(reply.status).not.toHaveBeenCalledWith(403);
   });
 
   it('around mode with historyStartDate: applies gte to beforeFilter (line 575 true)', async () => {

@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -89,6 +89,16 @@ function makePrisma(overrides: any = {}) {
       findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: true }),
       ...overrides.conversationShareLink,
     },
+    // Les deux tables que lit `loadPersonalHistoryHiding`. Par défaut vides :
+    // un lecteur qui ne masque rien ne doit rien changer à l'appel du service.
+    userConversationPreferences: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.userConversationPreferences,
+    },
+    userMessageDeletion: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...overrides.userMessageDeletion,
+    },
     ...overrides,
   };
 }
@@ -145,6 +155,7 @@ async function buildApp({
   const prisma = makePrisma(prismaOverrides);
   await registerMetadataRoutes(app, authRequired, authOptional, prisma as any);
   await app.ready();
+  (app as any).__prisma = prisma;
   return app;
 }
 
@@ -462,17 +473,37 @@ describe('GET /conversations/:id/attachments — anonymous wrong conversation', 
   });
 });
 
-describe('GET /conversations/:id/attachments — anonymous no viewHistory permission', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authMode: 'anonymous',
+// ─────────────────────────────────────────────────────────────────────────────
+// La galerie est un SECOND LECTEUR des messages de la conversation — elle en
+// sert les pièces jointes. Elle doit donc honorer les mêmes exclusions que le
+// premier lecteur (`GET /conversations/:id/messages`) : plancher de lien de
+// partage, masquage personnel, tombstone `deletedAt`. Ce que la galerie retire
+// n'est pas une préférence d'affichage : c'est le contenu lui-même — `fileUrl`,
+// `originalName`, la transcription d'un audio.
+//
+// Le plancher est un `createdAt >= joinedAt`, JAMAIS un refus global : un
+// participant entré par un lien sans historique voit les messages postés depuis
+// son arrivée, donc leurs médias.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const JOINED_AT = new Date('2026-06-15T00:00:00Z');
+
+const messageFilterOf = (call: any) => call?.[1]?.messageFilter;
+
+describe('GET /conversations/:id/attachments — plancher de lien de partage', () => {
+  beforeEach(() => { mockGetConversationAttachments.mockClear(); });
+
+  it('borne la galerie d’un membre INSCRIT entré par un lien sans historique', async () => {
+    // Le trou : la branche « membre enregistré » ne vérifiait que l'adhésion.
+    // Un inscrit entré par un lien `allowViewHistory:false` porte pourtant un
+    // `shareLinkId` (routes/conversations/sharing.ts) et n'a pas plus de droit
+    // sur l'avant-jointure qu'un anonyme entré à côté de lui.
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
       prismaOverrides: {
         participant: {
-          findUnique: jest.fn<any>().mockResolvedValue({
-            conversationId: CONV_ID,
-            type: 'anonymous',
-            anonymousSession: { shareLinkId: 'link-1' },
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, joinedAt: JOINED_AT, shareLinkId: 'link-1',
           }),
         },
         conversationShareLink: {
@@ -480,41 +511,203 @@ describe('GET /conversations/:id/attachments — anonymous no viewHistory permis
         },
       },
     });
-  });
-  afterAll(async () => { await app.close(); });
 
-  it('returns 403 when share link does not allow view history', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0]))
+      .toEqual({ createdAt: { gte: JOINED_AT } });
+    await app.close();
   });
-});
 
-describe('GET /conversations/:id/attachments — anonymous with history permission', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
+  it('ne borne RIEN pour un membre ajouté directement, et n’interroge aucun lien', async () => {
     mockGetConversationAttachments.mockResolvedValue([]);
-    app = await buildApp({
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, joinedAt: JOINED_AT, shareLinkId: null,
+          }),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({});
+    expect((app as any).__prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('SERT la galerie bornée à un anonyme sans historique, au lieu de la refuser', async () => {
+    // Ce test disait 403. Le refus contredisait `GET messages`, qui sert à ce
+    // même participant les messages postés depuis son arrivée — pièces jointes
+    // comprises. La galerie les cachait pourtant toutes.
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
       authMode: 'anonymous',
       prismaOverrides: {
         participant: {
           findUnique: jest.fn<any>().mockResolvedValue({
-            conversationId: CONV_ID,
-            type: 'anonymous',
-            anonymousSession: { shareLinkId: 'link-1' },
+            id: PARTICIPANT_ID, conversationId: CONV_ID, type: 'anonymous',
+            joinedAt: JOINED_AT, shareLinkId: 'link-1',
           }),
         },
         conversationShareLink: {
-          findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: true }),
+          findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: false }),
         },
       },
     });
-  });
-  afterAll(async () => { await app.close(); });
 
-  it('returns 200 when share link allows view history', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
     expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0]))
+      .toEqual({ createdAt: { gte: JOINED_AT } });
+    await app.close();
+  });
+
+  it('lit `participant.shareLinkId`, pas la copie dans `anonymousSession`', async () => {
+    // Deux colonnes portent le même fait à la jointure anonyme
+    // (routes/anonymous.ts). `messages.ts`, `/sync` et le module de plancher
+    // lisent tous la colonne canonique ; cette route lisait l'autre.
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
+      authMode: 'anonymous',
+      prismaOverrides: {
+        participant: {
+          findUnique: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, type: 'anonymous',
+            joinedAt: JOINED_AT, shareLinkId: 'link-1', anonymousSession: null,
+          }),
+        },
+        conversationShareLink: {
+          findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: false }),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0]))
+      .toEqual({ createdAt: { gte: JOINED_AT } });
+    await app.close();
+  });
+
+  it('ne borne rien quand le lien est INTROUVABLE — posture du dépôt', async () => {
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
+      authMode: 'anonymous',
+      prismaOverrides: {
+        participant: {
+          findUnique: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, type: 'anonymous',
+            joinedAt: JOINED_AT, shareLinkId: 'link-gone',
+          }),
+        },
+        conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0])).toEqual({});
+    await app.close();
+  });
+
+  it('ne sert RIEN quand le plancher est ILLISIBLE (contrôle d’accès, pas courtoisie)', async () => {
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, joinedAt: JOINED_AT, shareLinkId: 'link-1',
+          }),
+        },
+        conversationShareLink: {
+          findUnique: jest.fn<any>().mockRejectedValue(new Error('mongo down')),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(500);
+    expect(mockGetConversationAttachments).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('GET /conversations/:id/attachments — masquage personnel', () => {
+  beforeEach(() => { mockGetConversationAttachments.mockClear(); });
+
+  it('retire les médias des messages que ce lecteur a supprimés de SA vue', async () => {
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, joinedAt: JOINED_AT, shareLinkId: null,
+          }),
+        },
+        userMessageDeletion: {
+          findMany: jest.fn<any>().mockResolvedValue([{ messageId: 'm-hidden' }]),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0]))
+      .toEqual({ id: { notIn: ['m-hidden'] } });
+    await app.close();
+  });
+
+  it('garde la borne la PLUS STRICTE quand le plancher et le vidage se croisent', async () => {
+    // Un `clear-history` plus ANCIEN que la jointure ne doit pas desserrer le
+    // plancher : le masquage personnel est une courtoisie, le plancher est un
+    // contrôle d'accès.
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, joinedAt: JOINED_AT, shareLinkId: 'link-1',
+          }),
+        },
+        conversationShareLink: {
+          findUnique: jest.fn<any>().mockResolvedValue({ allowViewHistory: false }),
+        },
+        userConversationPreferences: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            clearHistoryBefore: new Date('2026-01-01T00:00:00Z'),
+          }),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect(messageFilterOf(mockGetConversationAttachments.mock.calls[0]))
+      .toEqual({ createdAt: { gte: JOINED_AT } });
+    await app.close();
+  });
+
+  it('n’interroge PAS les tables de masquage pour un anonyme — il n’en possède aucune', async () => {
+    mockGetConversationAttachments.mockResolvedValue([]);
+    const app = await buildApp({
+      authMode: 'anonymous',
+      prismaOverrides: {
+        participant: {
+          findUnique: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID, conversationId: CONV_ID, type: 'anonymous',
+            joinedAt: JOINED_AT, shareLinkId: null,
+          }),
+        },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).__prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+    expect((app as any).__prisma.userConversationPreferences.findFirst).not.toHaveBeenCalled();
+    await app.close();
   });
 });
 
