@@ -897,10 +897,14 @@ public struct NotificationListResponse: Decodable {
 }
 
 public struct NotificationPagination: Decodable {
-    public let total: Int
-    public let offset: Int
+    /// Mode offset uniquement — une page servie par curseur n'est pas comptée.
+    public let total: Int?
+    /// Mode offset uniquement — une page servie par curseur n'a pas de rang.
+    public let offset: Int?
     public let limit: Int
     public let hasMore: Bool
+    /// Ancre de reprise `(createdAt, id)` ; `nil` en fin de liste.
+    public let nextCursor: String?
 }
 
 public struct UnreadCountResponse: Decodable {

@@ -1,333 +1,117 @@
-# Cycle 122 — Une fin d'appartenance n'atteignait pas mes AUTRES appareils
+# Cycle 122 — La cloche dupliquait ses lignes dès qu'une notification arrivait pendant le défilement
 
 ## Le défaut
 
-Quitter une conversation, en être retiré par un admin, y être banni : trois manières de perdre une
-appartenance. Les trois n'adressaient leur événement (`conversation:participant-left` / `-banned`)
-qu'à `ROOMS.conversation(id)` **et aux rooms personnelles des membres RESTANTS** — jamais à celle
-du sujet.
+Deux gestes corrects, incompatibles ensemble, dans le même cache React Query.
 
-Or ses autres appareils sont posés sur l'écran de LISTE, donc **hors** de la room de conversation.
-Ils n'apprenaient rien.
+`useInfiniteNotificationsQuery` demandait sa page suivante par RANG :
 
-### L'argument existait déjà, il n'avait pas été appliqué jusqu'au bout
-
-C'est exactement le raisonnement qui avait fait élargir l'éventail vers les rooms personnelles des
-restants — « l'effectif se lit sur l'écran de liste, dont les lecteurs ont quitté la room ». Il
-n'avait été appliqué qu'à ceux dont le **compteur** bouge, jamais à celui dont l'**appartenance**
-s'arrête. Le code s'en justifiait même, à deux lignes de l'autre commentaire :
-
-> « la room de conversation reste en tête de chaîne : elle porte le partant lui-même, encore dedans
-> à cet instant »
-
-Vrai de l'appareil qui a le FIL ouvert. Faux de tous les autres.
-
-### Et le signal qui arrivait était mal lu
-
-Les deux clients posaient un `memberCount` sur une ligne que `GET /conversations` ne sert plus
-(`participants.some({ userId, isActive: true })`). La ligne restait affichée, cliquable, et
-**persistée** — `schedulePersist` (cache disque iOS), `staleTime: Infinity` (web).
-
-| Fin d'appartenance | Temps réel vers MES appareils | Tombstone delta |
-|---|---|---|
-| `conversation:deleted` (supprimer pour moi) | ✅ `ROOMS.user`, documenté | ✅ |
-| départ volontaire (`leave.ts`) | ❌ | ✅ |
-| retrait par un admin (`participants.ts`) | ❌ | ✅ |
-| bannissement (`ban.ts`) | ❌ | ✅ |
-
-Le delta unifiait donc DÉJÀ les quatre cas dans un seul `deletedConversationIds`
-(`delta-tombstones.ts` les énumère nommément). Seul le chemin **temps réel** les séparait — et le
-rattrapage différé (reconnexion suivante au mieux, 24 h au pire via `fullReconcileInterval`)
-faisait que rien ne devenait jamais rouge.
-
-## Le correctif
-
-- **Gateway** — `leave.ts`, `participants.ts`, `ban.ts` : le sujet ferme la chaîne
-  d'`emitToConversationParticipants`. **Une seule chaîne, jamais un second `emit`** — la propriété
-  « au plus une copie par socket » est ce pour quoi le chaînage existe.
-- **Web** — `dropConversationFromCache` sur `participant-left` / `-banned` quand le sujet est moi ;
-  retire la ligne de `conversations.infinite()` et purge `conversations.detail`.
-- **iOS app** — `ConversationListViewModel.dropConversationLeftByMe` : retire la ligne, persiste
-  (donc purge le cache disque, `schedulePersist` sauvegardant l'instantané complet), invalide les
-  messages.
-- **iOS SDK** — `ConversationStoreSocketBridge` route vers `applyConversationDeleted`, sinon le
-  non-lu de la conversation continuait de peser sur l'agrégat inter-conversations.
-
-Sur les deux clients, **le test d'identité passe AVANT le court-circuit `membershipEnded === false`** :
-ce drapeau protège un COMPTEUR, et il n'y a pas de compteur à protéger sur une ligne qui s'en va —
-c'est même le cas d'un ban qui suit un départ non synchronisé, donc précisément celui où la ligne
-fantôme est encore là.
-
-`isMe()` (app) et `!me.isEmpty` (SDK) écartent l'identité vide de l'auth non résolue : piège propre
-à la comparaison par `==`, que le `!=` de `participantJoined` n'avait pas.
-
-## Gates
-
-| Gate | Résultat |
-|---|---|
-| RED prouvé sans la production | 3 rouges gateway, 4 rouges web |
-| gateway `tsc --noEmit` | **0 erreur** |
-| gateway jest **complet** | **710 suites / 17 398 tests verts** |
-| web `tsc --noEmit` (fichiers touchés) | **0 erreur** |
-| web jest **complet** | **569 suites / 12 198 tests verts** (21 skipped) |
-| iOS / SDK | non exécutables depuis un runner Linux — vérifiés par la CI (`ios-tests.yml`, `sdk-tests.yml`) |
-
-## Note de méthode
-
-Le témoin de chaîne du départ existait en **deux exemplaires** — `routes/conversations-leave.test.ts`
-et `routes/conversations/leave.test.ts` — et le second n'est apparu qu'à la suite COMPLÈTE, la
-sélection par fichier ayant manqué le doublon. Les deux portent désormais la room du partant. Un
-`describe` dont l'intitulé est proche (« audience du départ » / « les AUTRES appareils du partant »)
-ne suffit pas à faire remarquer qu'on a écrit à côté du témoin existant : c'est la suite complète
-qui le dit.
-
-## Incident collatéral — `main` ne compilait plus pour iOS
-
-Le gate iOS de cette PR a levé une rupture ANTÉRIEURE, entrée par la PR #2982 (`1dd4b77b`,
-« simplify MessageDayStickyOverlay ») : `enum MessageDayStickyPlacement` supprimé alors que
-`MessageListViewController` s'en sert toujours (sur `origin/main` : 3 usages, 0 définition).
-
-Trois types partaient dans la même passe ; le compilateur n'a nommé que le premier lot.
-L'inventaire réel se fait sur le diff, pas sur le message d'erreur :
-
-| Type | Usages production | Sort |
-|---|---|---|
-| `MessageDayStickyPlacement` | 2 (`MessageListViewController`) | **restauré** |
-| `MessageDayStickyMetrics` | 0 | reste supprimé, ses témoins partent avec |
-| `MessageDayStickyPalette` | 0 | reste supprimé, ses témoins partent avec |
-
-**Pourquoi la CI ne l'a pas dit — la bonne raison.** PR #2982 ouverte à 04:25:32, **mergée à
-04:25:45**, soit 13 secondes plus tard ; `iOS compile (PR gate)` démarré à 04:25:38 et annulé à
-04:30:09 avec six autres jobs. Le gate n'a pas manqué la rupture, il n'a pas eu le droit de
-finir — PAS un élargissement de trigger, première conclusion posée puis corrigée (leçon 243).
-
-Reste que rendre le check bloquant n'est pas gratuit : `ios-tests.yml` écrit noir sur blanc
-« No branch protection requires this check, so neither trigger can deadlock a merge », la file
-macOS faisant attendre 24-49 min. L'arbitrage a été rendu en connaissance de cause. La piste qui
-ne le paie pas : le gate **compile-only** existe déjà et met 9 minutes — c'est celui-là qui
-aurait rougi sur #2982, et le seul dont on puisse discuter le caractère bloquant.
-
-## Reste ouvert
-
-- **L'agrégat non-lu iOS ne se recalcule pas DANS LA FOULÉE du retrait.**
-  `ConversationSyncEngine.recomputeTotalUnread()` lit le cache disque — que `schedulePersist`
-  vient justement de réécrire sans la ligne, donc la DONNÉE est juste — mais rien ne le
-  redéclenche à cet instant précis. Le total se corrige au premier événement suivant (n'importe
-  quel `message:*`, ouverture/fermeture de fil, sync), donc l'écart est transitoire et
-  auto-résolutif, contrairement à la ligne fantôme qui, elle, tenait jusqu'au prochain delta.
-  Le fermer proprement voudrait dire relayer `participant-left` / `-banned` dans
-  `ConversationSyncEngine.startSocketRelay` vers `handleConversationDeleted` — ce qui ferait tout
-  d'un coup (cache, messages, `conversationsDidChange`, recompute). **Écarté ce cycle** :
-  `ConversationSyncEngine.currentUserId()` lit `AuthManager.shared`, non injecté, donc le gate
-  d'identité n'y est pas testable depuis la suite SDK — livrer du Swift non couvert pour un écart
-  transitoire n'en vaut pas le prix. À reprendre AVEC l'injection de l'identité dans l'engine.
-
-## TDD
-
-8 témoins gateway (chaînage exact des rooms, unicité de l'émission, ordre emit → éviction de room,
-effectif des restants), 5 web, 5 ViewModel iOS, 5 bridge SDK.
-
----
-
-# Cycle 119 — Le retrait de réaction annonçait un ❤️ qu'il n'avait pas retiré
-
-## Le défaut
-
-`DELETE /posts/:postId/like` diffusait `emoji: '❤️'` **codé en dur** sur ses trois branches —
-`story:unreacted`, `status:unreacted`, `post:unliked`. La route n'était pas en position de savoir
-quel emoji partait : la ligne `PostReaction` n'est lisible qu'AVANT sa suppression, et le seul
-endroit qui la lise est `PostService.unlikePost`, sous le nom `foundEmoji`, qui ne rendait que le
-post.
-
-Le défaut était **déjà écrit dans le code**. Le chantier des rétractations de notifications l'avait
-rencontré et documenté sur place :
-
-> « La route, elle, diffuse un '❤️' codé en dur, et un retrait câblé là-haut manquerait donc toute
-> réaction d'un autre emoji. »
-
-Il avait été contourné là où il gênait — jamais corrigé à sa source.
-
-### Ce n'était pas latent
-
-`StoryViewModel.applyStoryReactionDelta` (`apps/ios/.../StoryViewModel.swift:3057`) fait, sur
-l'appareil de l'ACTEUR :
-
-```swift
-mine.removeAll { $0 == emoji }
+```ts
+getNextPageParam: (lastPage) => {
+  if (!lastPage?.pagination?.hasMore) return undefined;
+  return lastPage.pagination.offset + lastPage.pagination.limit;
+}
 ```
 
-Un 😂 retiré n'y retirait donc **rien**. La puce 😂 survivait à sa propre suppression, pendant que
-`reactionCount` était bien décrémenté — « vous avez réagi 😂 » affiché sur un compteur à 0, jusqu'au
-prochain fetch complet.
+`useNotificationsManagerRQ`, lui, insère chaque `notification:new` **en tête de la page 0** du
+même cache (`pages.map((page, index) => index === 0 ? { ...page, notifications: [notification,
+...page.notifications] } : page)`).
 
-La fiche `rts-03` avait vu le mensonge et prescrit de le **contourner** côté client (« unreacted =
-NO-OP — ne JAMAIS décrémenter sur ce payload »). Il est ici retiré à la source : le delta iOS
-existant redevient correct **sans une ligne de Swift**.
+Une notification reçue entre la page 1 et la page 2 décale toute l'inbox d'un cran **côté serveur**.
+La page 2 demandée à `offset=20` re-sert donc la ligne déjà affichée en fin de page 1 — doublon
+visible, clés React en conflit — et **saute la première ligne jamais vue**. Celle-là ne revient
+pas : rien ne redemande un rang déjà consommé. Une suppression produit le décalage inverse.
 
-### Deuxième défaut, même route
+### Pourquoi le garde existant ne pouvait pas l'attraper
 
-`unlikePost` est idempotent : sur un post que le lecteur n'a jamais aimé, il ne touche à rien. La
-route diffusait quand même un `unreacted` — un événement qui décrit une transition qui n'a pas eu
-lieu, et que les clients à delta appliquent en `-1`. Le rejeu `onDuplicate` du journal de mutation
-tombait dans la même case, alors que le commentaire de la route affirmait l'inverse :
+Le manager porte bien un `notificationExists`. Il compare l'événement SOCKET aux pages en cache —
+jamais une PAGE RÉCUPÉRÉE aux pages déjà tenues. C'est l'autre sens du problème, et il n'y avait
+rien pour lui.
 
-> « recording the mutation prevents the broadcast path from firing twice on replay »
+### Un second décalage, sous le premier
 
-L'affirmation était fausse. Elle est maintenant vraie.
-
-### Troisième volet — le compteur absolu (rts-03, étapes 2-3)
-
-Les quatre événements story/status ne portaient qu'`emoji` + `userId`, là où
-`post:liked`/`post:unliked` portent `likeCount` + `reactionSummary` depuis toujours. Un consommateur
-ne pouvait donc que compter en `±1` : ni idempotent sous double livraison, ni rattrapable après un
-événement manqué. Le web l'avait acté **en renonçant** au temps réel sur ces compteurs —
-`handleStoryReacted` : « no authoritative aggregation count — mutating the feed would drift ».
+L'`orderBy` de la route était `{ createdAt: 'desc' }` seul. Deux notifications nées dans la même
+milliseconde — un fan-out en écrit couramment plusieurs — n'ont alors aucun ordre stable : elles
+s'échangent leur place d'une lecture à l'autre, et une pagination par rang en saute une. Ce défaut-là
+ne dépend d'aucun trafic concurrent, et un curseur posé sur un ordre partiel l'aurait hérité.
 
 ## Livré
 
-- **`PostService.unlikePost`** rend une enveloppe `{ id, post, removedEmoji }`. `removedEmoji` est
-  la réaction réellement retirée, `null` quand il n'y en avait aucune. L'enveloppe existe pour ce
-  seul champ ; `id` y est repris du post parce que c'est l'identité que `withMutationLog`
-  journalise (`T & { id: string }`).
-- **`routes/posts/interactions.ts`** — l'emoji diffusé est `removedEmoji` sur les trois branches ;
-  **rien retiré ⇒ rien annoncé**, le rejeu `onDuplicate` rendant `removedEmoji: null` par
-  construction. L'acteur reste servi par l'état absolu de la réponse HTTP.
-- **`packages/shared/types/post.ts`** — `likeCount` + `reactionSummary` sur les quatre types
-  story/status, **requis**.
-- **web** — `handleStoryReacted`/`handleStoryUnreacted` écrivent l'absolu dans `stories.feed()` via
-  `patchStoryReactionCounts`. Le no-op documenté disparaît avec sa cause. Les handlers `status:*`
-  gardent leur invalidation : elle est correcte, et la remplacer par un patch serait une
-  optimisation distincte, hors périmètre.
+- **Gateway** — `GET /notifications?cursor=` : keyset `(createdAt, id)`, prioritaire sur `offset`,
+  qui reste intact pour les appelants historiques (iOS). `orderBy` devient l'ordre TOTAL
+  `[{createdAt:desc},{id:desc}]` dans les DEUX modes. Ligne sonde `take: limit+1` ⇒ `hasMore` sans
+  `count()` : la requête de comptage **disparaît du chemin** sous curseur.
+- **`nextCursor` rendu AUSSI en mode offset** — c'est ce qui permet la bascule sans redemander une
+  page : la page 1 se prend comme avant (pour son `total`), la suite au curseur. Le champ est
+  DÉCLARÉ dans le schéma de réponse Fastify ; un champ non déclaré est retiré du fil en silence
+  (piège documenté `api-schemas.ts:1520`), et un témoin l'ancre.
+- **`@@index([userId, createdAt(sort: Desc), id(sort: Desc)])`** sur `Notification` — il REMPLACE
+  `[userId, createdAt(sort: Desc)]` (même préfixe, donc mêmes requêtes servies, sans second index à
+  écrire). `id` entre dans la clé de TRI : sans `_id` dans l'index, MongoDB ne peut pas satisfaire
+  `sort {createdAt:-1,_id:-1}` par parcours et ajoute un SORT bloquant sur tout l'historique borné
+  par le curseur — une page coûterait l'inbox entière. **Prod : l'entrypoint ne joue aucune
+  migration, index à créer à la main.**
+- **`services/gateway/src/utils/keyset-cursor.ts`** — `encodeCursor`/`decodeCursor` déplacés hors de
+  `routes/posts/types.ts` : trois services les importaient déjà depuis un module de ROUTES, et
+  l'inbox est le quatrième lecteur, hors domaine posts. Nouveau `keysetBeforeClause(cursor)` qui
+  énonce UNE fois la clause de reprise. `routes/posts/types.ts` ré-exporte — aucun import existant
+  ne bouge, une seule implémentation.
+- **Web** — `pageParam: { cursor } | { offset }`. Repli EXPLICITE : `nextCursor` **absent** =
+  gateway antérieure (le web se déploie en premier) ⇒ on continue par offset ; `null` = fin de
+  liste. Couper le défilement à la page 1 pendant la fenêtre de déploiement aurait été une
+  régression livrée par le client.
+- **SDK iOS** — `NotificationPagination.total`/`.offset` optionnels, `nextCursor` ajouté. iOS
+  n'envoie pas de curseur aujourd'hui ; déclarés non-optionnels, le premier appel `?cursor=` aurait
+  fait échouer le décodage de la RÉPONSE ENTIÈRE (`decodeIfPresent` jette sur une valeur présente et
+  malformée) — cloche vide, sans erreur lisible.
 
-### Écarts assumés vs la fiche rts-03
+### Le double Prisma a été changé avant le code
 
-- **(a) champs REQUIS, pas optionnels.** La fiche prescrivait `reactionSummary?`. L'optionnalité en
-  TypeScript n'achète rien ici : il y a **un seul** émetteur et il tient toujours la paire. Requis,
-  le compilateur prouve l'invariant. La rétro-compatibilité est une propriété du **fil**, pas du
-  type TS — elle est portée par les décodeurs, qui ignorent un champ qu'ils ne déclarent pas.
-- **(b) `likeCount` en plus de `reactionSummary`.** La somme du résumé vaut le total, mais un
-  consommateur ne devrait pas avoir à la redériver — et c'est la paire exacte que
-  `PostLikedEventData` porte déjà.
-- **(c) STORY inclus, pas seulement STATUS.** rts-03 ne visait que les statuts. C'est sur les
-  **stories** que le mensonge avait un consommateur en production.
+`matchesNotificationWhere` savait filtrer, pas TRIER. Or offset et curseur rendent exactement la
+même chose tant que la source ne bouge pas : leur différence n'apparaît qu'en INSÉRANT une ligne
+entre deux pages, sur une source qui reclasse à chaque lecture. `findManyNotifications` (filtre →
+tri → fenêtre) est ce qui rend le RED discriminant possible ; il **jette** sur un `orderBy` autre
+que `(createdAt desc, id desc)`, parce qu'une page servie dans un ordre que le curseur ne sait pas
+reprendre saute des lignes en silence.
 
-### Ce qui a été REFUSÉ
+## Écarts assumés vs la fiche gwcontract-06
 
-Remplacer l'invalidation `status:*` du web par un patch. Elle est correcte ; la changer est une
-optimisation, pas un correctif, et elle n'a pas de défaut à fermer.
-
-Rendre `emoji` optionnel sur le fil pour couvrir le cas « emoji inconnu ». Les décodeurs iOS le
-déclarent non-optionnel (`SocketStoryUnreactedData.emoji: String`) : un payload sans emoji ferait
-échouer le décodage et **droperait l'événement entier**. Quand l'emoji est inconnu, il n'y a rien à
-annoncer — c'est la règle « rien retiré ⇒ rien annoncé », pas un champ à affaiblir.
-
-## TDD
-
-RED **vérifié en revenant la source seule**, les tests en place :
-
-| Suite | Rouges contre l'ancienne source |
-|---|---|
-| `interactions2.test.ts` (gateway) | **11** |
-| `use-post-socket-cache-sync.test.tsx` (web) | **3** |
-
-Les rouges couvrent les trois volets : emoji fabriqué (STORY/STATUS/POST), diffusion sur un retrait
-sans effet (dont le rejeu `onDuplicate`), et absence de la paire absolue.
+- **(a) `updatedSince` (étape 1) non livré, ni l'index `[userId, readAt]` (étape 5).** Son
+  consommateur est le client delta iOS (`NotificationGapResyncCoordinator`, étape 6), non livrable
+  depuis un runner Linux. Livré seul, ce serait un paramètre sans lecteur — et l'index qui va avec
+  se poserait sur une hypothèse de charge que rien n'exercerait.
+- **(b) Tombstones (étape 4) : toujours impossibles.** Hard delete, aucun `deletedAt` sur
+  `Notification`. Le constat de la fiche tient tel quel.
+- **(c) `nextCursor` en mode offset** — non demandé par la fiche. Sans lui, un client devrait
+  redemander sa page 1 pour obtenir sa première ancre.
 
 ## Gates
 
-| Gate | Résultat |
-|---|---|
-| `prisma generate` + shared `bun run build` | OK (prérequis) |
-| gateway `tsc --noEmit` | **0 erreur** |
-| gateway jest **complet** | **710 suites / 17 387 tests verts** |
-| web `tsc --noEmit` sur les fichiers touchés | **0 erreur** |
-| web jest **complet** | **569 suites / 12 181 tests verts** (21 skipped) |
+- Gateway : `npx tsc --noEmit` propre ; suite complète jest verte.
+- Web : suites `__tests__/hooks/queries` + `__tests__/services/notification.service.test.ts` vertes ;
+  `tsc --noEmit` sans erreur nouvelle (baseline identique, comparée par `git stash`).
+- iOS : **non exécuté** — runner Linux, aucun gate `meeshy.sh build`/XCTest disponible. Les deux
+  témoins Swift sont écrits mais n'ont pas tourné.
 
-## Reste ouvert après ce cycle
+## Prochains candidats
 
-- **Volet iOS de rts-03** — persistance des 4 sinks `StatusViewModel`, sink `statusUnreacted`,
-  champs `reactionSummary` sur les `Socket*Data` du SDK. Non livrable depuis un runner Linux.
-  **Le défaut de ce cycle ne l'attend pas** : il est fermé côté serveur, et le client iOS existant
-  devient correct sans changement.
-- **`bun run lint` (gateway) ne s'exécute pas** — aucun `eslint.config.js` dans `services/gateway/`.
-  Antérieur, et la CI ne lance pas ce script : le gate lint n'existe pas pour la gateway.
-- Hérités : volets iOS de `gwcontract-05` et `gwcontract-13` (à livrer ENSEMBLE), `net-02` (P1,
-  iOS), `sync-01` (aucun client n'appelle encore `/sync`), fossile inerte
-  `SocketNotificationEvent.isRead`.
-
----
-
-# Cycles antérieurs
-
-## Cycle 114-bis — PR #2968 (même run)
-
-*Renuméroté 114-bis à la fusion : une autre branche (`claude/keen-hamilton-dl8km4`) tournait en
-parallèle et a livré son propre « cycle 115 » (`GET /sync` ouvert aux sessions anonymes, leçon 239),
-mergé avant celui-ci. Les deux existent, ils ne se recouvrent pas.*
-
-`fix(ios/sync): l'effectif d'une conversation dérivait à vie, l'effectif ABSOLU du serveur étant ignoré`
-
-Trouvé en appliquant le réflexe que le cycle 114 venait de dégager (« quel champ le serveur
-envoie-t-il que le client ne lit pas ? ») — deuxième instance de la MÊME classe de défaut, en
-quelques minutes.
-
-- Les 4 structs d'appartenance décodent `memberCount: Int?`.
-- `ConversationListViewModel.memberCountAfterMembershipEvent(current:absolute:delta:)` pose
-  l'absolu ; le delta n'est plus qu'un repli pour un gateway antérieur au contrat.
-- L'absolu tranche `membershipEnded` / `membershipRestored` ; plancher à zéro sur les deux branches.
-- CHANGELOG : entrée pour ce correctif, entrée pour le volet iOS du cycle 114, et retrait du
-  « Reste ouvert : le client iOS » devenu faux.
-
-TDD : 5 témoins de décodage SDK + 5 côté app.
-
-## Cycle 114-ter — non-lu iOS : une seule vérité locale, et elle tombe à l'ouverture
-
-Signalé par l'utilisateur : « quand j'ouvre une conversation, le compteur doit IMMÉDIATEMENT être à
-0, sans glitch de 99 ». Audit des porteurs du compteur en local — il y en avait trois, et aucun
-chemin d'ouverture ne les touchait tous.
-
-| Porteur | Écrivait sur ouverture ? |
-|---|---|
-| Cache disque (`ConversationSyncEngine`, seul à appliquer `reconcileUnread`) | oui, mais en différé |
-| Store RAM (`ConversationStore`, SoT déclarée de `userState`) | **non** |
-| Lignes `@Published` (`ConversationListViewModel`) | non (seulement via le rechargement débouncé) |
-| Badge d'icône + widget (`NotificationCoordinator`) | **non** |
-
-- `ConversationReadSignal` (app) — point d'écriture UNIQUE de la lecture locale, les 4 surfaces.
-  Appelé par `start()` (ouverture), la quick-action push et le widget. Aucun appel réseau : l'accusé
-  de lecture serveur garde son exigence d'exactitude et part séparément.
-- `reconcileUnread` devient la règle des TROIS porteurs (cache, store, lignes), et sa frontière est
-  monotone (MAX) au lieu de `local ?? incoming` — qui la faisait reculer sur le chemin store.
-- Miroir synchrone de l'agrégat inter-conversations : `setCurrentlyOpenConversation` republie dans
-  le tour de boucle de l'ouverture, sinon l'abonné suivant recevait le total d'avant.
-- Le geste « Marquer comme lu » de la LISTE reste sur `store.apply(.markAsRead)` : c'est le seul
-  chemin dont le zéro doit rester annulable par le rollback 4xx.
-
-TDD : 3 témoins store, 1 règle, 2 agrégat, 3 lignes de liste, 1 ouverture.
-
-**Renversement de politique assumé** : `docs/superpowers/specs/2026-07-24-read-exactness-design.md`
-énonçait « le badge ne se vide plus à l'ouverture ». Il se vide de nouveau — mais LOCALEMENT
-seulement. L'exactitude que la fiche protège porte sur ce qu'on DÉCLARE aux autres, pas sur sa
-propre pastille ; c'est la confusion des deux qui produisait les deux bugs symétriques.
-
-## Reste ouvert (candidats des prochains cycles)
-
-- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (voir leçon 238, corollaire de
-  méthode). Les commentaires du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne
-  jamais soustraire » prescrivent un comportement CLIENT : chacun nomme un bug possible, et se
-  vérifie par un grep du nom du champ chez chaque client. Deux instances trouvées en un run — la
-  troisième est probablement déjà écrite quelque part.
-
-- **Constat 2 ci-dessus** — masquage personnel au niveau message : décision produit à prendre.
-- **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière
-  (le SDK a son propre `ConversationSyncEngine` sur `/conversations?updatedSince=`).
-- **Android** — aucun delta `updatedSince` ; pas d'écart symétrique à combler aujourd'hui.
-- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (candidat prochain cycle) :
-  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un
-  `cache.participants.invalidate(for:)` — le pendant TEMPS RÉEL du correctif de ce cycle manque
-  donc. Un départ déclenché depuis un autre appareil ne retire la conversation de la liste qu'au
-  prochain delta (ce que la PR #2966 rend enfin possible), pas immédiatement. `conversation:closed`
-  et `conversation:deleted`, eux, ont bien leur branche de retrait — l'asymétrie est l'écart.
-  À vérifier avant de coder : le device qui vient de quitter est-il encore dans la room au moment
-  de l'émission (`emitToConversationParticipants`, `routes/conversations/leave.ts:91`) ? Si non,
-  le canal correct est `broadcastToUser`, et le correctif est côté gateway.
+- **`GET /notifications` ignore en silence la moitié de ce que le web lui envoie** — `type`,
+  `priority`, `conversationId`, `startDate`, `endDate`, `sortBy`, `sortOrder` ne sont pas déclarés
+  dans le querystring, Fastify les laisse donc tomber ; le filtrage réel se fait côté client
+  (`matchesFilter`) sur les seules pages chargées. Un filtre qui ne filtre que le déjà-chargé ment
+  sur une liste paginée : « aucune mention » peut vouloir dire « aucune mention dans les 20
+  dernières notifications ». Fiche à instruire (gateway + web).
+- **`gwcontract-08`** (delta feed principal + statuses) n'est plus bloqué : `gwcontract-11` est
+  livré depuis le cycle 80, sa case du plan était restée ouverte — corrigée ici après vérification
+  dans le code.
+- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (leçon 238). Les commentaires
+  du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne jamais soustraire » prescrivent
+  un comportement CLIENT : chacun nomme un bug possible, et se vérifie par un grep du nom du champ
+  chez chaque client.
+- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** :
+  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un `cache.participants.invalidate(for:)`.
+  `conversation:closed` et `conversation:deleted` ont bien leur branche de retrait — l'asymétrie est
+  l'écart. À vérifier avant de coder : le device qui vient de quitter est-il encore dans la room au
+  moment de l'émission (`routes/conversations/leave.ts:91`) ? Si non, le canal correct est
+  `broadcastToUser`, et le correctif est côté gateway.
+- **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière.

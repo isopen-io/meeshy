@@ -1398,7 +1398,15 @@ model Notification {
   /// plages d'index et le compte reste couvert.
   @@index([userId, isRead, expiresAt])
   @@index([userId, type])
-  @@index([userId, createdAt(sort: Desc)])
+  // `id` fait partie de la clé de TRI de l'inbox, pas seulement du filtre : la
+  // pagination keyset `(createdAt, id)` de `GET /notifications?cursor=` trie par
+  // `{createdAt:-1, _id:-1}`, et sans `_id` dans l'index MongoDB ne peut pas
+  // satisfaire ce tri par parcours d'index — il ajoute un SORT bloquant sur tout
+  // l'historique borné par le curseur, soit l'inbox entière à chaque page.
+  // ÉTEND l'ancien `[userId, createdAt(sort: Desc)]` plutôt que de s'y ajouter :
+  // même préfixe, donc mêmes requêtes servies, sans second index à écrire.
+  // Prod : l'entrypoint ne joue aucune migration — index à créer à la main.
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([createdAt])
   @@index([type])
   @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user

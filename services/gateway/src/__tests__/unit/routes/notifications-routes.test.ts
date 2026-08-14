@@ -55,7 +55,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { notificationRoutes } from '../../../routes/notifications';
-import { matchesNotificationWhere } from '../../helpers/notification-where';
+import { findManyNotifications, matchesNotificationWhere } from '../../helpers/notification-where';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -255,6 +255,146 @@ describe('GET /notifications', () => {
     await route.handler(req, reply);
 
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+  });
+});
+
+// ─── GET /notifications — pagination keyset ──────────────────────────────────
+
+describe('GET /notifications — pagination par curseur', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const at = (minute: number) => new Date(Date.UTC(2024, 0, 1, 12, minute, 0));
+
+  function inbox(...ids: Array<{ id: string; minute: number; isRead?: boolean }>) {
+    return ids.map(({ id, minute, isRead = false }) =>
+      makeNotification({ id, isRead, expiresAt: null, createdAt: at(minute) })
+    );
+  }
+
+  /** Une source VIVANTE : chaque lecture rejoue le filtre et le tri sur `rows`. */
+  function serve(pr: any, rows: any[]) {
+    pr.notification.findMany.mockImplementation((args: any) =>
+      Promise.resolve(findManyNotifications(rows, args))
+    );
+    pr.notification.count.mockImplementation((args: any) =>
+      Promise.resolve(findManyNotifications(rows, { where: args?.where }).length)
+    );
+  }
+
+  it('sert la page suivante sans doublon quand une notification arrive entre les deux', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    const rows = inbox(
+      { id: 'n4', minute: 40 },
+      { id: 'n3', minute: 30 },
+      { id: 'n2', minute: 20 },
+      { id: 'n1', minute: 10 }
+    );
+    serve(pr, rows);
+
+    const first: any = await route.handler(makeRequest({ query: { limit: 2 } }), reply);
+    expect(first.data.map((n: any) => n.id)).toEqual(['n4', 'n3']);
+    expect(first.pagination.hasMore).toBe(true);
+    expect(typeof first.pagination.nextCursor).toBe('string');
+
+    // La cloche est vivante : une notification arrive AVANT que le lecteur ne
+    // demande la suite. En offset, elle décale toute la liste d'un rang et la
+    // page 2 re-sert `n3` en sautant `n1`.
+    rows.push(...inbox({ id: 'n5', minute: 50 }));
+
+    const second: any = await route.handler(
+      makeRequest({ query: { limit: 2, cursor: first.pagination.nextCursor } }),
+      reply
+    );
+
+    expect(second.data.map((n: any) => n.id)).toEqual(['n2', 'n1']);
+    expect(second.pagination.hasMore).toBe(false);
+    expect(second.pagination.nextCursor).toBeNull();
+  });
+
+  it('ne compte pas la table en mode curseur', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    const rows = inbox({ id: 'n2', minute: 20 }, { id: 'n1', minute: 10 });
+    serve(pr, rows);
+
+    const first: any = await route.handler(makeRequest({ query: { limit: 1 } }), reply);
+    pr.notification.count.mockClear();
+
+    const second: any = await route.handler(
+      makeRequest({ query: { limit: 1, cursor: first.pagination.nextCursor } }),
+      reply
+    );
+
+    expect(pr.notification.count).not.toHaveBeenCalled();
+    expect(second.pagination.total).toBeUndefined();
+  });
+
+  it('laisse le mode offset intact — total compté, offset rendu', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, inbox({ id: 'n2', minute: 20 }, { id: 'n1', minute: 10 }));
+
+    const result: any = await route.handler(
+      makeRequest({ query: { offset: 1, limit: 1 } }),
+      reply
+    );
+
+    expect(pr.notification.count).toHaveBeenCalled();
+    expect(result.data.map((n: any) => n.id)).toEqual(['n1']);
+    expect(result.pagination).toMatchObject({ total: 2, offset: 1, limit: 1, hasMore: false });
+  });
+
+  it('garde le prédicat de visibilité sous le curseur (expirées et lues exclues)', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    const rows = [
+      ...inbox({ id: 'n4', minute: 40 }, { id: 'n3', minute: 30, isRead: true }),
+      makeNotification({
+        id: 'n2',
+        isRead: false,
+        createdAt: at(20),
+        expiresAt: new Date(Date.now() - 60_000),
+      }),
+      ...inbox({ id: 'n1', minute: 10 }),
+    ];
+    serve(pr, rows);
+
+    const first: any = await route.handler(
+      makeRequest({ query: { limit: 1, unreadOnly: true } }),
+      reply
+    );
+    const second: any = await route.handler(
+      makeRequest({
+        query: { limit: 5, unreadOnly: true, cursor: first.pagination.nextCursor },
+      }),
+      reply
+    );
+
+    expect(first.data.map((n: any) => n.id)).toEqual(['n4']);
+    expect(second.data.map((n: any) => n.id)).toEqual(['n1']);
+  });
+
+  it('sert la première page sur un curseur illisible', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, inbox({ id: 'n2', minute: 20 }, { id: 'n1', minute: 10 }));
+
+    const result: any = await route.handler(
+      makeRequest({ query: { limit: 1, cursor: 'pas-un-curseur' } }),
+      reply
+    );
+
+    expect(result.data.map((n: any) => n.id)).toEqual(['n2']);
+  });
+
+  it('déclare nextCursor dans le schéma de réponse — sinon Fastify le retire du fil', () => {
+    const { fastify } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    const pagination = route.options.schema.response[200].properties.pagination;
+
+    expect(pagination.properties.nextCursor).toBeDefined();
+    expect(route.options.schema.querystring.properties.cursor).toBeDefined();
   });
 });
 

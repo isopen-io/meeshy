@@ -125,7 +125,61 @@ Côté client, `APIClient.shared` (`APIClient.swift:260-765`) est le funnel de t
 
 **Reste ouvert : le volet iOS** (étape 4 — décodage de `notification:read-bulk` dans `MessageSocketManager` + `NotificationToastManager`, miroir Swift du prédicat). Non livrable depuis un runner Linux : aucun gate `meeshy.sh build`/XCTest exécutable. Les listeners `notification:read`/`:deleted` unitaires, eux, sont déjà câblés — seul le bulk manque. **Écart voisin identifié, non traité :** `deleteAllRead` (purge « supprimer toutes les lues ») souffre du MÊME défaut côté suppressions — elle n'émet que `notification:counts`, et les lignes purgées restent listées sur les autres appareils jusqu'au refetch. Symétrique exact du bulk de lecture, il demanderait un `notification:deleted-bulk` ; hors périmètre de cette fiche, à instruire.
 
-### gwcontract-06-notifications-no-delta — GET /notifications sans delta ni cursor — et tombstones impossibles en l'état (hard delete) · **P2** · effort M
+### gwcontract-06-notifications-no-delta — GET /notifications sans delta ni cursor — et tombstones impossibles en l'état (hard delete) · **P2** · effort M · 🟡 **VOLET CURSEUR LIVRÉ 2026-08-14 (cycle 122), gateway + web + SDK**
+
+**Ce qui est livré (étapes 2 et 3).** La pagination keyset `(createdAt, id)` et l'élision du
+`count()` sous curseur. Ce n'était PAS une amélioration de contrat en prévision d'un client : le
+défaut était **actif sur le web**. `useInfiniteNotificationsQuery` paginait par rang
+(`getNextPageParam: offset + limit`) pendant que `useNotificationsManagerRQ` insérait chaque
+`notification:new` **en tête de la page 0** du même cache. Une seule notification reçue entre deux
+pages décale toute l'inbox d'un cran : la page suivante re-sert la dernière ligne déjà affichée
+(doublon visible, clés React en conflit) et saute la première jamais vue — une notification perdue
+pour l'œil, définitivement, puisque rien ne la ramène. Le garde `notificationExists` du manager ne
+couvrait pas ce cas : il dédoublonne l'événement socket contre le cache, jamais une PAGE récupérée
+contre les pages déjà tenues.
+
+- **Gateway** — `?cursor=` (opaque, prioritaire sur `offset`) ; `orderBy` devient l'ordre TOTAL
+  `[{createdAt:desc},{id:desc}]` dans les DEUX modes (sans `id` en second rang, deux notifications
+  nées dans la même milliseconde s'échangent leur place d'une lecture à l'autre et la pagination —
+  offset comme curseur — en saute une) ; `take: limit+1` comme ligne sonde ; `count()` **retiré du
+  chemin** en mode curseur (`Promise.resolve(0)`, jamais la requête).
+- **`utils/keyset-cursor.ts`** — `encodeCursor`/`decodeCursor` **déplacés** hors de
+  `routes/posts/types.ts` (trois services les importaient déjà depuis un module de ROUTES ; l'inbox
+  est le quatrième lecteur, hors domaine posts). `routes/posts/types.ts` les ré-exporte : aucun
+  import existant ne bouge, et il n'existe toujours qu'une implémentation. Nouveau :
+  `keysetBeforeClause(cursor)` énonce UNE fois la clause de reprise que `PostFeedService` recopie à
+  dix endroits (migration de ces dix sites : hors périmètre, pure churn ici).
+- **Index `[userId, createdAt desc, id desc]`** — il ÉTEND `[userId, createdAt desc]` au lieu de
+  s'y ajouter (même préfixe, mêmes requêtes servies, pas de second index à écrire sur une
+  collection très écrite). Il n'est pas décoratif : `id` entre dans la clé de TRI, et sans `_id`
+  dans l'index MongoDB ne peut pas satisfaire `sort {createdAt:-1,_id:-1}` par parcours — il
+  ajouterait un SORT bloquant sur tout l'historique borné par le curseur, soit l'inbox entière à
+  chaque page. Prod : l'entrypoint ne joue aucune migration, l'index est à créer à la main
+  (rappel de l'étape 5 de la fiche, appliqué ici à l'autre colonne).
+- **`nextCursor` rendu AUSSI en mode offset.** C'est ce qui permet à un client de demander sa
+  page 1 comme avant (il veut le `total`) puis de passer au curseur, sans jamais redemander une
+  page. Le champ est DÉCLARÉ dans le schéma de réponse Fastify — un champ non déclaré est retiré du
+  fil en silence (le piège documenté à `api-schemas.ts:1520`), et un témoin l'ancre.
+- **Web** — `pageParam` devient `{cursor} | {offset}`. Repli explicite : `nextCursor` **absent** =
+  gateway antérieure (le web se déploie en premier) ⇒ on continue par offset ; `null` = fin de
+  liste. Couper le défilement à la page 1 pendant la fenêtre de déploiement aurait été une
+  régression livrée par le client.
+- **SDK iOS** — `NotificationPagination.total`/`.offset` passent OPTIONNELS et `nextCursor`
+  apparaît. iOS n'envoie pas encore de curseur, donc rien ne change aujourd'hui ; mais déclarés
+  non-optionnels, le premier appel `?cursor=` aurait fait échouer le décodage de la RÉPONSE ENTIÈRE
+  (`decodeIfPresent` jette sur une valeur présente et malformée) — cloche vide, sans erreur lisible.
+  Deux témoins Swift ; **non exécutés** (runner Linux, aucun gate `meeshy.sh`/XCTest disponible).
+
+**Reste ouvert.** (a) **`updatedSince` (étape 1)** — délibérément non livré : son consommateur est
+le client delta (iOS `NotificationGapResyncCoordinator`, étape 6), non livrable ici ; livré seul, ce
+serait un paramètre sans lecteur, et l'index `[userId, readAt]` de l'étape 5 avec lui. (b) **les
+tombstones (étape 4)** — le constat ci-dessous tient : hard delete, aucun `deletedAt`. (c) **écart
+voisin repéré, non traité** : le web envoie `type`, `priority`, `conversationId`, `startDate`,
+`endDate`, `sortBy`, `sortOrder` — que le querystring de la route ne déclare pas et que Fastify
+laisse donc tomber sans bruit ; le filtrage réel se fait côté client (`matchesFilter`) sur les
+seules pages chargées. Un filtre qui ne filtre que le déjà-chargé est un filtre qui ment sur une
+liste paginée — fiche à instruire.
+
 **Constat.** `GET /notifications` n'accepte que `offset/limit/unreadOnly`, et chaque page paie un `count()` total. Aucun moyen de demander « ce qui a changé depuis ». La vérification a invalidé une partie du correctif initial : promettre `deletedNotificationIds` est IMPOSSIBLE en l'état — la suppression est un HARD delete et le modèle `Notification` n'a aucun `deletedAt` ; il n'existe rien à requêter pour produire des tombstones sans changer le schéma.
 **Preuve.** `services/gateway/src/routes/notifications.ts:30-51` (querystring = offset/limit/unreadOnly), :91-100 (`notification.count()` par page). Hard delete : `prisma.notification.delete` (`NotificationService.ts:3985`), `deleteMany` admin (`routes/notifications.ts:542`) ; `schema.prisma` : aucun `deletedAt` sur `Notification`, et pas d'index `[userId, readAt]` (seuls `[userId, isRead]` et `[userId, createdAt]` existent).
 **Impact.** Au reconnect, le client repagine depuis zéro (l'offset produit doublons/trous quand des lignes s'insèrent pendant le scroll) ; le 304 global saute au moindre changement.

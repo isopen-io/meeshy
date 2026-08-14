@@ -12,6 +12,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
+import { decodeCursor, keysetBeforeClause } from '../utils/keyset-cursor';
 
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
@@ -49,6 +50,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
               description: 'Filter only unread notifications',
               default: false,
             },
+            cursor: {
+              type: 'string',
+              description:
+                'Opaque keyset cursor (createdAt, id) returned as pagination.nextCursor. Takes precedence over offset.',
+            },
           },
         },
         response: {
@@ -64,10 +70,14 @@ export async function notificationRoutes(fastify: FastifyInstance) {
               pagination: {
                 type: 'object',
                 properties: {
-                  total: { type: 'number' },
-                  offset: { type: 'number' },
+                  total: { type: 'number', description: 'Offset mode only — not counted under a cursor' },
+                  offset: { type: 'number', description: 'Offset mode only' },
                   limit: { type: 'number' },
                   hasMore: { type: 'boolean' },
+                  nextCursor: {
+                    type: ['string', 'null'],
+                    description: 'Cursor mode only — pass back as ?cursor= for the next page',
+                  },
                 },
               },
               unreadCount: { type: 'number' },
@@ -81,26 +91,53 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
-        const { offset = 0, limit = 20, unreadOnly = false } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean };
+        const { offset = 0, limit = 20, unreadOnly = false, cursor } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string };
 
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
         // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
         // une liste et un badge qui ne s'accordent pas sur ce qui est visible
         // se contredisent à l'écran.
-        const where = visibleNotificationsWhere({ userId, unreadOnly });
+        const visibleWhere = visibleNotificationsWhere({ userId, unreadOnly });
+
+        // Un curseur illisible vaut « pas de curseur » — le repli du reste du
+        // dépôt (`PostFeedService`). Refuser la requête couperait le défilement
+        // sur une erreur que le lecteur ne peut pas réparer ; re-servir la
+        // première page lui laisse une liste cohérente.
+        const cursorData = cursor ? decodeCursor(cursor) : null;
+        const isCursorMode = cursorData !== null;
+
+        const where = cursorData
+          ? { AND: [visibleWhere, keysetBeforeClause(cursorData)] }
+          : visibleWhere;
 
         const [rawNotifications, total, unreadCount] = await Promise.all([
           fastify.prisma.notification.findMany({
             where,
-            orderBy: { createdAt: 'desc' },
-            take: limit,
-            skip: offset,
+            // L'ordre TOTAL de l'inbox, et la clé exacte que le curseur
+            // transporte. Sans `id` en second rang, deux notifications nées
+            // dans la même milliseconde s'échangent leur place d'une lecture à
+            // l'autre : la pagination en saute une et re-sert l'autre.
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            // Une ligne SONDE en mode curseur : elle dit `hasMore` sans
+            // compter la table.
+            take: isCursorMode ? limit + 1 : limit,
+            ...(isCursorMode ? {} : { skip: offset }),
           }),
-          fastify.prisma.notification.count({ where }),
+          isCursorMode ? Promise.resolve(0) : fastify.prisma.notification.count({ where }),
           notificationService.getUnreadCount(userId),
         ]);
 
         // Formatter UNE SEULE FOIS avec NotificationFormatter
+        if (isCursorMode) {
+          const hasMore = rawNotifications.length > limit;
+          return NotificationFormatter.formatCursorPaginatedResponse({
+            notifications: hasMore ? rawNotifications.slice(0, limit) : rawNotifications,
+            limit,
+            hasMore,
+            unreadCount,
+          });
+        }
+
         return NotificationFormatter.formatPaginatedResponse({
           notifications: rawNotifications,
           total,

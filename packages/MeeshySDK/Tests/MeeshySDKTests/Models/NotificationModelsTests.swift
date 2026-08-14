@@ -384,6 +384,24 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(pagination.offset, 10)
         XCTAssertEqual(pagination.limit, 20)
         XCTAssertTrue(pagination.hasMore)
+        XCTAssertNil(pagination.nextCursor)
+    }
+
+    /// Une page servie par curseur ne porte NI `total` NI `offset` : la gateway
+    /// ne compte pas la table à chaque page, et un rang n'a plus de sens sur une
+    /// fenêtre ancrée à une ligne. Ces deux champs déclarés non-optionnels
+    /// faisaient échouer le décodage de la RÉPONSE ENTIÈRE — cloche vide, sans
+    /// message d'erreur lisible — au premier appel passant `?cursor=`.
+    func testNotificationPaginationDecodesCursorPage() throws {
+        let json = """
+        {"limit":20,"hasMore":true,"nextCursor":"Y3Vyc2V1cg"}
+        """.data(using: .utf8)!
+
+        let pagination = try JSONDecoder().decode(NotificationPagination.self, from: json)
+        XCTAssertNil(pagination.total)
+        XCTAssertNil(pagination.offset)
+        XCTAssertEqual(pagination.limit, 20)
+        XCTAssertEqual(pagination.nextCursor, "Y3Vyc2V1cg")
     }
 
     // MARK: - New story/comment reaction notification types
