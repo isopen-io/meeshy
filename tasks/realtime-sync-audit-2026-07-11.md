@@ -1568,6 +1568,15 @@ d'identité stable, non touché).
   même schéma). Non corrigés ici : aucun client ne les lit depuis cette surface
   aujourd'hui, et le cycle a délibérément gardé son périmètre sur le champ dont
   la perte cassait un contrat documenté.
+- **Les quatre écritures optimistes du store web appliquent leur réponse HTTP
+  sans arbitrage.** `togglePin` / `toggleMute` / `toggleArchive` / `setReaction`
+  posent `updatedPrefs` tel quel au retour du `PUT`. Deux bascules rapprochées
+  dont les réponses reviennent dans le désordre écrasent donc la plus récente
+  par la plus ancienne. Le défaut est ANTÉRIEUR à ce cycle, mais il devient
+  réparable grâce à lui : maintenant que `version` arrive sur le fil (D1) et que
+  le store la porte (D3), ces quatre `set` peuvent passer par le même portillon
+  que `applyRemotePreferences`. Non fait ici — quatre méthodes quasi identiques
+  qui demandent une factorisation, pas un rustinage ponctuel.
 - Hérités des cycles 14/16, inchangés : `PUT /user-preferences/conversations/:id`
   ne valide pas `categoryId` comme ObjectId (500 au lieu de 400) ; le scope
   **communauté** de `user:preferences-updated` n'est routé nulle part côté iOS
