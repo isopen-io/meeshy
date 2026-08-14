@@ -297,15 +297,40 @@ restent également hors scope de cette branche.
   logique que n'importe quel appel manqué), sans jamais toucher l'appel actif
   des autres. Le point W6 d'origine datait d'avant ces deux vagues — corrigé
   ici pour ne pas ré-auditer un faux positif au prochain cycle.
-- **`CallNotification` mono-appelant → TRAITÉ.** `CallInitiatedEvent` gagne
-  `conversationType?`/`conversationTitle?` (optionnels — compat rolling
-  deploy), peuplés gratuitement depuis `callSessionInclude.conversation`
-  (web + gateway + shared uniquement, cf. `tasks/calls-fonctionnel-todo.md`
-  pour le root cause complet). `CallNotification` ET `CallWaitingBanner`
-  affichent désormais « Appel de groupe · {titre} » sous le nom de
-  l'appelant pour un appel de groupe — un ringing callee ne confond plus un
-  appel de groupe avec un 1:1. Grille/roster/`onRemove`/i18n roster restent
-  ouverts (chantier UI plus large, W6 pour le reste + W7).
+
+- **`CallNotification` mono-appelant → TRAITÉ, par deux chemins qui se sont
+  croisés.** Le même item a été traité deux fois le même jour, de deux façons
+  complémentaires, et la fusion les réunit plutôt que d'en jeter une :
+  - *Combien* — `isGroupCall` déduit de `CallInitiatedEvent.participants`
+    (≥3 appelés = groupe), déjà peuplé pour CHAQUE appel côté gateway
+    (`CallEventsHandler.ts`, `call:initiate` et le replay `call:check-active`).
+    Il porte le badge « {count} personnes » et bascule le sous-titre sur
+    « Appel de groupe ».
+  - *Quel* — `CallInitiatedEvent` gagne `conversationType?`/`conversationTitle?`
+    (optionnels, compat rolling deploy), peuplés gratuitement depuis
+    `callSessionInclude.conversation`. Ils portent le TITRE de la conversation
+    sous le nom de l'appelant, et rendent le signal de groupe AUTORITAIRE :
+    une conversation de groupe reste un groupe même quand un seul appelé
+    sonne, cas que le compte de participants ne peut pas voir.
+  - `isGroupCall = conversationType === 'group' || participants.length > 2` :
+    le champ quand la gateway l'envoie, le compte en repli pour les payloads
+    antérieurs. La ligne de contexte ne répète PAS « Appel de groupe » (le
+    sous-titre le dit déjà) — elle porte le titre, et ne retombe sur le
+    libellé que pour un groupe sans titre.
+  - `CallWaitingBanner` (2ᵉ appel entrant pendant qu'on est occupé) porte la
+    même ligne de contexte.
+
+**Reste du W6** (grille adaptative multi-participants, roster avec états
+mute/vidéo, `onRemove` branché sur `DELETE /calls/:id/participants/:pid`) et
+**W7** (i18n groupe pour le reste de l'UI d'appel — roster, toasts
+join/leave) : toujours à traiter, chantier plus large que ces correctifs
+ponctuels. Le mesh iOS mono-PC (I1-I7) et le SFU restent hors scope.
+
+Tests : `CallNotification.groupCall.test.tsx` (5 cas) +
+`CallNotification.test.tsx` (4 cas de contexte de groupe) +
+`CallNotification.ringtoneUnmountRace.test.tsx` (régression) +
+`CallWaitingBanner.test.tsx` (2 cas) +
+`CallEventsHandler-initiate-conversation-context.test.ts` (4 cas, gateway).
 
 ## Récapitulatif
 

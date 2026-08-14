@@ -190,6 +190,7 @@ class AuthService {
         authManager.updateTokens(
           data.data.token,
           data.data.refreshToken,
+          undefined,
           data.data.expiresIn
         );
       }

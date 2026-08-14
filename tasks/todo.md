@@ -1,117 +1,72 @@
-# Cycle 122 — La cloche dupliquait ses lignes dès qu'une notification arrivait pendant le défilement
+# Cycle 16 — le socket restait scellé sur le jeton de sa naissance
 
-## Le défaut
+Branche : `claude/keen-hamilton-55j95x`, partie de `origin/main` (le cycle
+précédent — miroir de connexion, PR #2991 — était intégralement mergé).
 
-Deux gestes corrects, incompatibles ensemble, dans le même cache React Query.
+## Point de départ (Phase 1)
 
-`useInfiniteNotificationsQuery` demandait sa page suivante par RANG :
+Pas de recensement neuf : reprise directe du reste ouvert nommé en fin de
+cycle 15, « `initializeConnection()` rend `null` sur JWT expiré et rien ne
+réessaie ». L'instruction de la routine est de partir du développement
+précédent, c'est donc sa dette qui ouvre ce cycle.
 
-```ts
-getNextPageParam: (lastPage) => {
-  if (!lastPage?.pagination?.hasMore) return undefined;
-  return lastPage.pagination.offset + lastPage.pagination.limit;
-}
-```
+## Défauts retenus (Phases 2 / 3 / 10)
 
-`useNotificationsManagerRQ`, lui, insère chaque `notification:new` **en tête de la page 0** du
-même cache (`pages.map((page, index) => index === 0 ? { ...page, notifications: [notification,
-...page.notifications] } : page)`).
+**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
+`io(url, { auth: { token } })` fige les identifiants à la construction et
+Socket.IO rejoue cette charge à CHAQUE reconnexion. Trois chemins font tourner
+le jeton sous ses pieds (401 REST, pré-contrôle d'expiration, rotation de
+session anonyme) : après l'un d'eux, chaque handshake présente un jeton refusé,
+la boucle interne brûle ses 5 tentatives, `reconnect_failed` passe la main à
+notre backoff, qui represente le même jeton mort — indéfiniment. Déclencheur
+le plus banal : un redéploiement de la passerelle.
 
-Une notification reçue entre la page 1 et la page 2 décale toute l'inbox d'un cran **côté serveur**.
-La page 2 demandée à `offset=20` re-sert donc la ligne déjà affichée en fin de page 1 — doublon
-visible, clés React en conflit — et **saute la première ligne jamais vue**. Celle-là ne revient
-pas : rien ne redemande un rang déjà consommé. Une suppression produit le décalage inverse.
+**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne
+revient.** Le rafraîchissement REST réussit sans que personne ne le dise à la
+couche temps réel. Seules les actions SORTANTES (`sendMessage`,
+`joinConversation`) réveillent la connexion : un lecteur resté sur la liste des
+conversations n'en déclenche aucune et n'a plus RIEN en temps réel pour toute
+la session.
 
-### Pourquoi le garde existant ne pouvait pas l'attraper
+**D3 — `expiresIn` écrit dans l'emplacement du jeton de session** (décalage de
+position d'argument dans `authService.refreshToken()`). Sans conséquence
+observable, le test existant verrouillait le décalage.
 
-Le manager porte bien un `notificationExists`. Il compare l'événement SOCKET aux pages en cache —
-jamais une PAGE RÉCUPÉRÉE aux pages déjà tenues. C'est l'autre sens du problème, et il n'y avait
-rien pour lui.
+Analyse complète : `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 16.
 
-### Un second décalage, sous le premier
+## Correctifs
 
-L'`orderBy` de la route était `{ createdAt: 'desc' }` seul. Deux notifications nées dans la même
-milliseconde — un fan-out en écrit couramment plusieurs — n'ont alors aucun ordre stable : elles
-s'échangent leur place d'une lecture à l'autre, et une pagination par rang en saute une. Ce défaut-là
-ne dépend d'aucun trafic concurrent, et un curseur posé sur un ordre partiel l'aurait hérité.
+- `auth` devient un **résolveur** réévalué à chaque handshake, et le rustinage
+  impératif `socket.auth = { token }` disparaît (il remplacerait le résolveur).
+- `authManager.registerOnTokensUpdated()` — l'orchestrateur (et non
+  `ConnectionService`, qui ne sait pas brancher les écouteurs) rouvre le socket
+  quand il n'en existe aucun.
+- `refreshToken()` passe `expiresIn` dans son propre emplacement.
 
-## Livré
+## Fichiers touchés
 
-- **Gateway** — `GET /notifications?cursor=` : keyset `(createdAt, id)`, prioritaire sur `offset`,
-  qui reste intact pour les appelants historiques (iOS). `orderBy` devient l'ordre TOTAL
-  `[{createdAt:desc},{id:desc}]` dans les DEUX modes. Ligne sonde `take: limit+1` ⇒ `hasMore` sans
-  `count()` : la requête de comptage **disparaît du chemin** sous curseur.
-- **`nextCursor` rendu AUSSI en mode offset** — c'est ce qui permet la bascule sans redemander une
-  page : la page 1 se prend comme avant (pour son `total`), la suite au curseur. Le champ est
-  DÉCLARÉ dans le schéma de réponse Fastify ; un champ non déclaré est retiré du fil en silence
-  (piège documenté `api-schemas.ts:1520`), et un témoin l'ancre.
-- **`@@index([userId, createdAt(sort: Desc), id(sort: Desc)])`** sur `Notification` — il REMPLACE
-  `[userId, createdAt(sort: Desc)]` (même préfixe, donc mêmes requêtes servies, sans second index à
-  écrire). `id` entre dans la clé de TRI : sans `_id` dans l'index, MongoDB ne peut pas satisfaire
-  `sort {createdAt:-1,_id:-1}` par parcours et ajoute un SORT bloquant sur tout l'historique borné
-  par le curseur — une page coûterait l'inbox entière. **Prod : l'entrypoint ne joue aucune
-  migration, index à créer à la main.**
-- **`services/gateway/src/utils/keyset-cursor.ts`** — `encodeCursor`/`decodeCursor` déplacés hors de
-  `routes/posts/types.ts` : trois services les importaient déjà depuis un module de ROUTES, et
-  l'inbox est le quatrième lecteur, hors domaine posts. Nouveau `keysetBeforeClause(cursor)` qui
-  énonce UNE fois la clause de reprise. `routes/posts/types.ts` ré-exporte — aucun import existant
-  ne bouge, une seule implémentation.
-- **Web** — `pageParam: { cursor } | { offset }`. Repli EXPLICITE : `nextCursor` **absent** =
-  gateway antérieure (le web se déploie en premier) ⇒ on continue par offset ; `null` = fin de
-  liste. Couper le défilement à la page 1 pendant la fenêtre de déploiement aurait été une
-  régression livrée par le client.
-- **SDK iOS** — `NotificationPagination.total`/`.offset` optionnels, `nextCursor` ajouté. iOS
-  n'envoie pas de curseur aujourd'hui ; déclarés non-optionnels, le premier appel `?cursor=` aurait
-  fait échouer le décodage de la RÉPONSE ENTIÈRE (`decodeIfPresent` jette sur une valeur présente et
-  malformée) — cloche vide, sans erreur lisible.
-
-### Le double Prisma a été changé avant le code
-
-`matchesNotificationWhere` savait filtrer, pas TRIER. Or offset et curseur rendent exactement la
-même chose tant que la source ne bouge pas : leur différence n'apparaît qu'en INSÉRANT une ligne
-entre deux pages, sur une source qui reclasse à chaque lecture. `findManyNotifications` (filtre →
-tri → fenêtre) est ce qui rend le RED discriminant possible ; il **jette** sur un `orderBy` autre
-que `(createdAt desc, id desc)`, parce qu'une page servie dans un ordre que le curseur ne sait pas
-reprendre saute des lignes en silence.
-
-## Écarts assumés vs la fiche gwcontract-06
-
-- **(a) `updatedSince` (étape 1) non livré, ni l'index `[userId, readAt]` (étape 5).** Son
-  consommateur est le client delta iOS (`NotificationGapResyncCoordinator`, étape 6), non livrable
-  depuis un runner Linux. Livré seul, ce serait un paramètre sans lecteur — et l'index qui va avec
-  se poserait sur une hypothèse de charge que rien n'exercerait.
-- **(b) Tombstones (étape 4) : toujours impossibles.** Hard delete, aucun `deletedAt` sur
-  `Notification`. Le constat de la fiche tient tel quel.
-- **(c) `nextCursor` en mode offset** — non demandé par la fiche. Sans lui, un client devrait
-  redemander sa page 1 pour obtenir sa première ancre.
+- `apps/web/services/socketio/connection.service.ts`
+- `apps/web/services/socketio/orchestrator.service.ts`
+- `apps/web/services/auth-manager.service.ts`
+- `apps/web/services/auth.service.ts`
+- 6 fichiers de tests (+14 tests neufs, 2 doublures mises à jour)
+- `CHANGELOG.md`, `tasks/lessons.md` (leçon 247), journal du cycle
 
 ## Gates
 
-- Gateway : `npx tsc --noEmit` propre ; suite complète jest verte.
-- Web : suites `__tests__/hooks/queries` + `__tests__/services/notification.service.test.ts` vertes ;
-  `tsc --noEmit` sans erreur nouvelle (baseline identique, comparée par `git stash`).
-- iOS : **non exécuté** — runner Linux, aucun gate `meeshy.sh build`/XCTest disponible. Les deux
-  témoins Swift sont écrits mais n'ont pas tourné.
+- 14 tests vus ROUGES avant les correctifs, verts après.
+- `apps/web` : **571 suites / 12 231 tests verts**, 21 skipped (suite complète).
+- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique
+  au cycle 15, rien de neuf sur les fichiers touchés.
+- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
+  ce runner Linux). Le SDK a été LU et vérifié exempt de D1/D2 —
+  `AuthManager.applySession` reconnecte les sockets sur rotation de jeton.
 
 ## Prochains candidats
 
-- **`GET /notifications` ignore en silence la moitié de ce que le web lui envoie** — `type`,
-  `priority`, `conversationId`, `startDate`, `endDate`, `sortBy`, `sortOrder` ne sont pas déclarés
-  dans le querystring, Fastify les laisse donc tomber ; le filtrage réel se fait côté client
-  (`matchesFilter`) sur les seules pages chargées. Un filtre qui ne filtre que le déjà-chargé ment
-  sur une liste paginée : « aucune mention » peut vouloir dire « aucune mention dans les 20
-  dernières notifications ». Fiche à instruire (gateway + web).
-- **`gwcontract-08`** (delta feed principal + statuses) n'est plus bloqué : `gwcontract-11` est
-  livré depuis le cycle 80, sa case du plan était restée ouverte — corrigée ici après vérification
-  dans le code.
-- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (leçon 238). Les commentaires
-  du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne jamais soustraire » prescrivent
-  un comportement CLIENT : chacun nomme un bug possible, et se vérifie par un grep du nom du champ
-  chez chaque client.
-- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** :
-  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un `cache.participants.invalidate(for:)`.
-  `conversation:closed` et `conversation:deleted` ont bien leur branche de retrait — l'asymétrie est
-  l'écart. À vérifier avant de coder : le device qui vient de quitter est-il encore dans la room au
-  moment de l'émission (`routes/conversations/leave.ts:91`) ? Si non, le canal correct est
-  `broadcastToUser`, et le correctif est côté gateway.
-- **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière.
+- `visibilitychange` → `connect()` (hérité du cycle 15, toujours sans risque).
+- Un socket existant mais bloqué en reconnexion n'est pas relancé par
+  `onTokensUpdated` — volontaire (D1 le couvre), à regarder si un onglet reste
+  muet malgré un socket présent.
+- Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
+  `user:preferences-updated` côté iOS.

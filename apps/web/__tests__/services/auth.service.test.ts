@@ -281,9 +281,13 @@ describe('AuthService', () => {
         })
       );
       expect(result.success).toBe(true);
+      // `updateTokens(authToken, refreshToken, sessionToken, expiresIn)` —
+      // `expiresIn` must land in its own slot. Passed third it was written to
+      // storage as an anonymous session token.
       expect(mockUpdateTokens).toHaveBeenCalledWith(
         'new-jwt-token',
         'new-refresh-token',
+        undefined,
         3600
       );
     });

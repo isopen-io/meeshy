@@ -136,6 +136,8 @@
       "videoCall": "Video Call",
       "audioCall": "Audio Call",
       "subtitle": "Incoming call...",
+      "groupSubtitle": "Group call",
+      "groupCallLabel": "{count} people",
       "accept": "Accept",
       "decline": "Decline",
       "acceptLabel": "Accept call",

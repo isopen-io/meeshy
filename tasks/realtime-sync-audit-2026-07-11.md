@@ -1177,3 +1177,262 @@ doit émettre, et ce que `user-deletions.ts` émet déjà) : adapter le code de 
   `.setClearHistoryBefore` en succès purement local (aucun appelant applicatif).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation
   humaine (il change le comportement d'API publiques).
+
+## Cycle 15 (2026-08-14) — le miroir de connexion qui n'avait pas de chemin de retour
+
+`apps/web/services/socketio/connection.service.ts`
+
+### Demande
+
+Routine « amélioration continue temps réel » (Phases 2 / 3 / 4 : cycle de vie
+WebSocket, stratégie de reconnexion, file de réessai, dégradation hors ligne).
+Reprise après le cycle 14, dont les restes ouverts étaient tous cosmétiques ou
+hors périmètre Linux — recensement neuf plutôt que ramassage de miettes.
+
+### Méthode de recensement (ce qui a été écarté, pour ne pas re-défricher)
+
+Croisement mécanique des 125 `SERVER_EVENTS` (`packages/shared/types/socketio-events.ts`)
+contre les `socket.on` du web, en résolvant les constantes et non les littéraux
+(le web n'utilise que `SERVER_EVENTS.X` — une comparaison littérale rend 127 faux
+positifs). 16 événements sans écouteur web, tous écartés :
+
+| Événement(s) | Verdict |
+|---|---|
+| `message:read-status-updated` | **alias volontaire** de `read-status:updated`, émis en parallèle pendant la fenêtre de migration (~3 mois) ; les clients écoutent l'ancien. Pas un trou. |
+| `attachment:reaction-added/-removed`, `location:live-*` | **écarts de parité** : la fonctionnalité est absente du web (zéro occurrence de `attachment:reaction` dans `apps/web`), pas un bug de synchronisation. Déjà relevés au cycle du 2026-08-13. |
+| `call:*` (5) | hors périmètre messagerie. |
+| `comment:reaction-sync`, `post:reaction-sync`, `heartbeat:ack` | pas de consommateur applicatif. |
+| `message:send*` | événements CLIENT listés côté serveur. |
+
+Surfaces re-parcourues et **trouvées correctes** (ne pas re-vérifier) :
+`delta-sync.ts` (watermark déduit du cache, preuve de conservatisme en tête de
+fichier), `unread-cache.ts`, `typing.service.ts` (throttle 2 s, fenêtre de
+persistance 3 s, filet 15 s, purge sur déconnexion), `messaging.service.ts`
+(dédup `recentMessageIds` bornée 200/5 min, repli REST anonyme, abandon du repli
+sur E2EE), `use-auto-retry-failed-messages.ts` (jeton de propriété, ré-armement,
+preuve de non-bouclage), `emitToConversationParticipants.ts` (`userId ?? id`
+tenu partout — aucun site restant n'adresse un participant par `userId` seul),
+`broadcastMessageMutation.ts` (trois audiences + `void`/`.catch` disjoints).
+
+### Constats
+
+**D1 — le miroir peut descendre, il ne peut pas remonter.**
+
+`ConnectionService` tient `state.isConnected`, miroir de l'état du socket. Le
+handler `offline` le met à `false` **sans toucher au socket** — et c'est
+délibéré : la bannière doit réagir à la seconde où le réseau tombe, sans
+attendre que Socket.IO s'en aperçoive.
+
+Le socket, lui, ne remarque une coupure qu'au terme de son cycle ping/pong. Une
+coupure plus COURTE ne le fait donc jamais tomber : bascule Wi-Fi→cellulaire,
+VPN, réveil de veille, tunnel. Au retour du réseau, `socket.connected` vaut
+encore `true`.
+
+`connect()` sortait alors en silence sur sa garde `!socket.connected`. Aucun
+`connect` n'est réémis sur un socket déjà connecté — donc plus RIEN ne pouvait
+remettre `state.isConnected` à `true`, jusqu'à la prochaine vraie déconnexion,
+potentiellement jamais.
+
+**D2 — les deux miroirs se verrouillent mutuellement.**
+
+`useConnectionStatus` mire le même état via `onStatusChange`, et son propre
+handler `offline` abaisse `isSocketConnected` de son côté. Son `handleOnline` ne
+relève que `isOnline` : `isSocketConnected` ne peut remonter que par un
+événement du service — celui que D1 empêche d'exister. Aucune des deux couches
+ne pouvait réparer l'autre.
+
+**D3 — pourquoi le coût n'est pas cosmétique.**
+
+Le symptôme visible est une bannière de reconnexion figée. Le coût réel est
+`useAutoRetryFailedMessages`, dont `isReady` (`isOnline && isSocketConnected`)
+est l'**unique** déclencheur : la file des messages en échec n'était plus jamais
+rejouée pour le reste de la session. Un message que l'utilisateur croit en
+attente de renvoi ne l'était plus, en silence — pendant que le lien portait
+normalement les messages entrants, ce qui rendait la panne invisible.
+
+C'est exactement la classe de défaut que le commentaire de `reconnect_failed`
+nomme déjà (« un onglet ouvert mais passif cesse de recevoir en silence ») ;
+elle n'avait été traitée que pour la boucle interne de Socket.IO, jamais pour
+un socket resté VIVANT.
+
+### Plan
+- [x] T1 — RED : `online` après `offline` sur un socket survivant → miroir rétabli, statut diffusé, `socket.connect()` non appelé
+- [x] T2 — RED : `connect()` sur socket vivant + miroir périmé → `isConnected` remonte, un seul événement
+- [x] T3 — RED : `connect()` efface un `isConnecting` périmé (socket connecté entre-temps)
+- [x] T4 — verrous (verts AVANT et APRÈS) : pas de ré-émission quand miroir et socket concordent ; un socket réellement mort est toujours ouvert
+- [x] T5 — GREEN : réconciliation dans `connect()`
+- [x] T6 — gates : 159 suites / 4001 tests web verts ; `tsc --noEmit` à 1229 erreurs avant ET après (base inchangée)
+- [x] T7 — CHANGELOG + ce relevé
+
+### Revue
+
+La réconciliation vit dans `connect()` et non dans le handler `online`, parce
+que `connect()` est le point de passage de TOUS les appelants — handler `online`,
+`SocketIOOrchestrator.initialize`, `ensureConnection`. La placer dans le seul
+handler `online` aurait réparé un chemin et laissé les autres sur la même
+impasse : c'est la configuration « un contrôle correct répété en N endroits dont
+l'un finit par manquer » que les cycles 13 et 14 ont chacun documentée.
+
+Le handler `offline` n'est PAS modifié. Sa pessimisation immédiate est correcte
+comme retour d'information à l'utilisateur ; il ne lui manquait qu'un retour de
+manivelle. Le corriger en supprimant la mise à `false` aurait échangé un état
+figé contre une bannière qui met 45 s à réagir — une régression d'UX pour
+fermer un bug de synchronisation.
+
+Le socket est la vérité, le miroir se réaligne dessus. Aucun rejoin de room
+n'est émis : le socket n'a jamais quitté les siennes, et forcer un rejoin
+serait du trafic gratuit sur un lien intact.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 3 tests ont été vus
+ROUGES avant le correctif, dont le scénario `offline`→`online` de bout en bout
+par les vrais handlers `window`. Les 2 verrous verts avant et après interdisent
+au correctif d'ouvrir un socket déjà mort (le chemin nominal) et de réémettre un
+statut inchangé (un orage d'événements sur chaque `connect()` d'orchestrateur).
+
+### Reste ouvert après ce cycle
+- **Le retour du réseau n'est détecté que par l'événement `online`.** Un onglet
+  restauré depuis le bfcache, ou dont la coupure n'a pas produit d'événement
+  navigateur (portail captif), garde un miroir périmé jusqu'au prochain
+  `connect()`. Un `visibilitychange` appelant `connect()` fermerait le cas —
+  non fait ici : aucun défaut observé pour le motiver, et `connect()` est
+  désormais idempotent, donc l'ajout est sans risque quand il se justifiera.
+- **`initializeConnection()` rend `null` sur JWT expiré et rien ne réessaie.**
+  Le commentaire délègue au rafraîchissement silencieux du chemin REST 401,
+  mais aucun crochet ne rappelle `connect()` après un refresh réussi lorsque
+  AUCUN socket n'a jamais été créé (le handler `auth:token-expired` exige un
+  socket existant). Même classe que D1 — à instruire au prochain cycle.
+- Hérités du cycle 14, inchangés : `PUT /user-preferences/conversations/:id`
+  ne valide pas `categoryId` comme ObjectId (500 au lieu de 400) ; scope
+  communauté de `user:preferences-updated` non routé côté iOS ;
+  `ConversationStore.dispatchPreferencesUpdate` traite `.setClearHistoryBefore`
+  en succès purement local.
+- Écarts de parité web relevés au recensement (fonctionnalités absentes, pas
+  des bugs) : réactions de pièce jointe, localisation live.
+
+## Cycle 16 (2026-08-14) — le socket restait scellé sur le jeton de sa naissance
+
+`apps/web/services/socketio/connection.service.ts`,
+`apps/web/services/socketio/orchestrator.service.ts`,
+`apps/web/services/auth-manager.service.ts`, `apps/web/services/auth.service.ts`
+
+### Demande
+
+Routine « amélioration continue temps réel ». Reprise directe du reste ouvert
+nommé en fin de cycle 15 : « `initializeConnection()` rend `null` sur JWT expiré
+et rien ne réessaie ». L'instruction est de partir du développement précédent —
+c'est donc sa dette, pas un recensement neuf, qui ouvre ce cycle.
+
+### Constats
+
+**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
+
+`io(url, { auth: { token } })` fige le jeton au moment de la construction.
+Socket.IO **rejoue cette même charge à chaque tentative de reconnexion** : le
+socket reste donc scellé à vie sur ce jeton-là. Or trois chemins font tourner
+les identifiants sous ses pieds :
+
+| Chemin | Qui écrit le nouveau jeton |
+|---|---|
+| Rafraîchissement silencieux sur 401 REST | `api.service.ts` → `authService.refreshToken()` |
+| Pré-contrôle d'expiration avant requête | idem, sans même un 401 |
+| Rotation de session anonyme | `authManager.setAnonymousSession` |
+
+Après l'un d'eux, chaque handshake présente un jeton que la passerelle refuse
+(`socket.handshake.auth?.token`, `services/gateway/src/socketio/utils/socket-helpers.ts:55`).
+La boucle intégrée brûle ses 5 tentatives, `reconnect_failed` passe la main à
+notre backoff manuel (ajouté au cycle 12), et **celui-ci represente le même
+jeton mort** — indéfiniment. Un onglet verrouillé sur l'authentification, sur
+une session dont les identifiants valides dormaient dans `localStorage` depuis
+le début. Le déclencheur le plus banal est un redéploiement de la passerelle :
+tous les sockets tombent en même temps, et ceux qui avaient rafraîchi entre-temps
+ne remontent jamais.
+
+Le handler `auth:token-expired` connaissait déjà le problème — il repoussait
+manuellement `socket.auth = { token: newToken }`. Ce rustinage ne couvre qu'un
+seul chemin : celui où la passerelle a pu émettre l'événement, donc où le socket
+était encore **connecté**. Les rotations côté REST, elles, ne passent jamais par
+là.
+
+**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne revient.**
+
+Suite exacte du reste ouvert du cycle 15. `initializeConnection()` rend `null`
+quand le JWT stocké est expiré, en déléguant au rafraîchissement REST. Ce
+rafraîchissement réussit — et personne ne le dit à la couche temps réel :
+`setCurrentUser()` a déjà tourné et ne retournera pas ; le handler
+`auth:token-expired` exige un socket qui n'existe pas. Il ne reste que
+`ensureConnection()`, appelé par les seules actions SORTANTES (`sendMessage`,
+`joinConversation`).
+
+Un lecteur qui reste sur la liste des conversations n'en déclenche aucune :
+zéro message entrant, zéro compteur de non-lus, zéro présence, zéro indicateur
+de frappe — pour toute la session, jusqu'à un rechargement de page. Sur une
+application de messagerie, c'est l'écran d'accueil qui devient muet.
+
+**D3 — `expiresIn` écrit dans l'emplacement du jeton de session.**
+
+`authService.refreshToken()` appelait
+`updateTokens(token, refreshToken, expiresIn)` sur une signature
+`(authToken, refreshToken?, sessionToken?, expiresIn?)`. Le nombre atterrissait
+en 3e position, donc dans `AUTH_STORAGE_KEYS.SESSION_TOKEN`, et `expiresIn`
+était perdu. Sans conséquence observable aujourd'hui — cette clé est en écriture
+seule, `getSessionToken()` lit la session anonyme — mais c'est une amorce posée
+sous le premier lecteur qui viendra. Le test existant verrouillait le décalage.
+
+### Correctifs
+
+**D1 — `auth` devient un résolveur, pas une valeur.** socket.io-client accepte
+`auth` sous forme de callback, réévalué à CHAQUE handshake.
+`resolveHandshakeToken()` relit `authManager` au moment où la poignée de main a
+lieu. Plus personne n'a à penser à pousser un jeton neuf ; corollaire imposé par
+un test : plus personne ne doit **repincer** `socket.auth` sur une valeur, ce qui
+remplacerait le résolveur et restaurerait la panne. Le rustinage du handler
+`auth:token-expired` disparaît donc — il ne lui reste que rafraîchir puis
+reconnecter.
+
+**D2 — `authManager.registerOnTokensUpdated()`.** `updateTokens()` est le point
+de passage unique de tout jeton rafraîchi ; il notifie désormais ses abonnés,
+après écriture en stockage (un abonné qui relit `getAuthToken()` voit donc le
+jeton qui vient d'atterrir). `clearAllSessions()` ne le déclenche **pas** :
+perdre ses identifiants est le signal inverse, et il a déjà `registerOnClear()`.
+
+L'abonné est l'**orchestrateur**, pas `ConnectionService` : le socket doit
+revenir avec ses écouteurs branchés, et les brancher est le travail de
+l'orchestrateur. Un `connect()` émis depuis la couche inférieure aurait produit
+un socket vivant que personne n'écoute. Le handler n'agit que s'il n'existe
+AUCUN socket — un socket déjà là relit ses identifiants tout seul au prochain
+handshake (D1), et le démolir lui ferait perdre ses rooms pour rien.
+
+### Gates
+
+- 14 tests vus ROUGES avant les correctifs (6 `authManager`, 5 `ConnectionService`,
+  3 orchestrateur), verts après.
+- `apps/web` : **571 suites / 12 231 tests verts** (suite complète), 21 skipped.
+- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique au
+  cycle 15, rien de neuf sur les fichiers touchés.
+- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
+  ce runner Linux).
+
+### Vérifié correct côté iOS — ne pas re-défricher
+
+Le SDK Swift **n'a pas** D1/D2. `MessageSocketManager.connect()` fige lui aussi
+son jeton (`.extraHeaders(["Authorization": "Bearer \(token)"])` sur le
+`SocketManager`), mais `AuthManager.applySession` détecte la rotation de jeton
+(`isTokenRotation`) et démolit puis reconnecte les deux sockets avec le jeton
+neuf — le chemin de retour que le web n'avait pas. Vérifié à ce cycle.
+
+### Reste ouvert après ce cycle
+
+- **Le rustinage n'est retiré que du web.** Si un futur chemin repince
+  `socket.auth`, seul le test « leaves the handshake resolver in place » le
+  signalera ; aucune barrière de type ne l'interdit.
+- **`visibilitychange` → `connect()`** (hérité du cycle 15) : toujours pas fait,
+  toujours sans risque, toujours sans défaut observé pour le motiver.
+- **Un socket existant mais bloqué en reconnexion n'est pas relancé** par
+  `onTokensUpdated`. C'est volontaire — la boucle interne de Socket.IO reprendra
+  le jeton neuf d'elle-même grâce à D1. Si un cycle observe un onglet qui reste
+  muet malgré un socket présent, c'est ici qu'il faudra regarder.
+- Hérités du cycle 14, inchangés : `PUT /user-preferences/conversations/:id` ne
+  valide pas `categoryId` comme ObjectId (500 au lieu de 400) ; scope communauté
+  de `user:preferences-updated` non routé côté iOS ;
+  `ConversationStore.dispatchPreferencesUpdate` traite `.setClearHistoryBefore`
+  en succès purement local.

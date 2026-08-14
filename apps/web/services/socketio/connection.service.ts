@@ -87,6 +87,26 @@ export class ConnectionService {
     }
   }
 
+  /**
+   * Credentials for the NEXT handshake, read at the moment it happens.
+   *
+   * Socket.IO replays the `auth` option on every reconnection attempt. Passed
+   * as a literal, the socket stayed pinned for life to the token it was built
+   * with: a silent REST refresh, an anonymous session rotation, or a gateway
+   * restart after the token had already turned over left every retry
+   * presenting credentials the gateway rejects — the built-in loop burned its
+   * attempts, `reconnect_failed` handed off to our backoff, and that one
+   * re-presented the same dead token. An auth-locked tab, on a session whose
+   * valid credentials were sitting in storage the whole time.
+   *
+   * As a callback, each handshake asks again. Nothing has to remember to push
+   * a new token in — and nothing may pin one back onto `socket.auth`, which
+   * would replace this resolver and restore the old failure.
+   */
+  private resolveHandshakeToken(): string | undefined {
+    return authManager.getAuthToken() || authManager.getAnonymousSession()?.token;
+  }
+
   initializeConnection(): TypedSocket | null {
     if (this.state.socket) return this.state.socket;
     const token = authManager.getAuthToken();
@@ -104,7 +124,7 @@ export class ConnectionService {
 
     const socketUrl = getWebSocketUrl();
     const socket = io(socketUrl, {
-      auth: { token: token || sessionToken },
+      auth: (cb: (data: Record<string, unknown>) => void) => cb({ token: this.resolveHandshakeToken() }),
       transports: ['websocket', 'polling'],
       autoConnect: false,
       reconnection: true,
@@ -119,10 +139,46 @@ export class ConnectionService {
     return socket;
   }
 
+  /**
+   * Ouvre la connexion — ou réaligne le miroir quand le socket est déjà vivant.
+   *
+   * Le handler `offline` marque la connexion perdue SANS toucher au socket,
+   * délibérément : la bannière doit réagir à la seconde où le réseau tombe. Mais
+   * une coupure plus courte que le cycle ping/pong de Socket.IO ne fait jamais
+   * tomber le socket — bascule Wi-Fi/cellulaire, VPN, réveil de veille, tunnel.
+   * Au retour du réseau, `socket.connected` vaut donc encore `true`.
+   *
+   * Sans la branche ci-dessous, le miroir n'avait alors AUCUN chemin de retour :
+   * la garde `!socket.connected` faisait sortir `connect()` en silence, donc
+   * aucun `connect` n'était réémis, et `state.isConnected` restait `false`
+   * jusqu'à la prochaine vraie déconnexion. Tout ce qui lit `isReady`
+   * (`useConnectionStatus`) restait dégradé sur un lien pourtant intact : la
+   * bannière de reconnexion figée, et surtout le rejeu de la file d'échecs
+   * (`useAutoRetryFailedMessages`, dont le déclencheur EST `isReady`) désarmé
+   * pour le reste de la session — les messages en attente n'étaient plus jamais
+   * réessayés.
+   *
+   * Le socket est la vérité ; le miroir se réaligne dessus. La réconciliation
+   * vit ici plutôt que dans le handler `online` parce que `connect()` est le
+   * point de passage de TOUS les appelants (handler `online`, orchestrateur,
+   * `ensureConnection`) : un seul d'entre eux réparant l'état laisserait les
+   * autres sur la même impasse. Aucun rejoin de room n'est nécessaire — le
+   * socket n'a jamais quitté les siennes.
+   */
   connect(): void {
     if (this.isAppUpdating) return;
     const socket = this.state.socket || this.initializeConnection();
-    if (socket && !socket.connected && !this.state.isConnecting) {
+    if (!socket) return;
+
+    if (socket.connected) {
+      if (this.state.isConnected && !this.state.isConnecting) return;
+      this.state.isConnected = true;
+      this.state.isConnecting = false;
+      this.emitStatusChange();
+      return;
+    }
+
+    if (!this.state.isConnecting) {
       this.state.isConnecting = true;
       socket.connect();
       this.emitStatusChange();
@@ -211,11 +267,11 @@ export class ConnectionService {
 
     socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
       logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
+      // No token is pushed onto the socket here: `resolveHandshakeToken()`
+      // reads storage at the handshake, so the reconnect below already carries
+      // whatever the refresh just stored. Assigning `socket.auth` would swap
+      // the resolver out for a literal and re-pin the socket.
       authService.refreshToken().then(() => {
-        const newToken = authManager.getAuthToken();
-        if (newToken && this.state.socket) {
-          (this.state.socket as any).auth = { token: newToken };
-        }
         this.reconnect();
       }).catch((err) => {
         logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });

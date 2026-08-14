@@ -19,6 +19,7 @@ interface AnonymousSession {
 class AuthManager {
   private static instance: AuthManager;
   private onClearCallbacks: Array<() => void> = [];
+  private onTokensUpdatedCallbacks = new Set<() => void>();
 
   private constructor() {}
 
@@ -35,6 +36,39 @@ class AuthManager {
    */
   public registerOnClear(callback: () => void) {
     this.onClearCallbacks.push(callback);
+  }
+
+  /**
+   * Subscribe to "a freshly minted auth token just landed in storage".
+   *
+   * A silent refresh (the REST 401 path) replaces the credentials without any
+   * user-visible event. Layers that captured the OLD credentials — first and
+   * foremost the realtime socket, whose handshake carries the token — have no
+   * other way to learn about it: `updateTokens()` is the single point every
+   * refreshed token passes through.
+   *
+   * Deliberately NOT fired by `clearAllSessions()`: losing the credentials is
+   * the opposite signal, and it already has `registerOnClear()`. Subscribers
+   * run after the new values are committed to storage, so a subscriber that
+   * calls `getAuthToken()` reads the token that just landed.
+   *
+   * Returns an unsubscribe function.
+   */
+  public registerOnTokensUpdated(callback: () => void): () => void {
+    this.onTokensUpdatedCallbacks.add(callback);
+    return () => {
+      this.onTokensUpdatedCallbacks.delete(callback);
+    };
+  }
+
+  private notifyTokensUpdated(): void {
+    for (const callback of this.onTokensUpdatedCallbacks) {
+      try {
+        callback();
+      } catch (error) {
+        logger.warn('[AuthManager]', 'tokens-updated subscriber failed', { error });
+      }
+    }
   }
 
   // ==================== CREDENTIALS (RW) ====================
@@ -73,6 +107,8 @@ class AuthManager {
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
     if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     if (sessionToken) localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, sessionToken);
+
+    this.notifyTokensUpdated();
   }
 
   // ==================== GETTERS ====================

@@ -144,6 +144,21 @@ function resetMockSocket() {
   mockSocket.id = 'socket-1';
 }
 
+/**
+ * Resolve the handshake credentials the way socket.io-client does: `auth` is a
+ * callback re-evaluated at EVERY connection attempt, so the payload it yields
+ * is what the gateway actually receives on the next handshake — not what was
+ * true when the socket was built.
+ */
+function resolveHandshakeAuth(callIndex = 0): Record<string, unknown> {
+  const options = mockIo.mock.calls[callIndex][1] as {
+    auth: (cb: (data: Record<string, unknown>) => void) => void;
+  };
+  let payload: Record<string, unknown> = {};
+  options.auth((data) => { payload = data; });
+  return payload;
+}
+
 /** Collect window event handlers registered during construction */
 function captureWindowHandlers(): Map<string, EventListener> {
   const handlers = new Map<string, EventListener>();
@@ -309,6 +324,101 @@ describe('ConnectionService', () => {
 
         expect(connectSpy).not.toHaveBeenCalled();
       });
+
+      // Une coupure réseau plus courte que le cycle ping/pong de Socket.IO ne
+      // fait pas tomber le socket : au retour, `socket.connected` vaut encore
+      // `true`. Le handler `offline` a pourtant déjà mis le miroir à `false`.
+      it('restores the mirror when the socket survived the offline window', () => {
+        const handlers = captureWindowHandlers();
+        const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+        const svc = new ConnectionService();
+        (svc as any).state.socket = liveSocket;
+        (svc as any).state.isConnected = true;
+
+        const listener = jest.fn();
+        svc.onStatusChange(listener);
+
+        handlers.get('offline')!(new Event('offline'));
+        expect((svc as any).state.isConnected).toBe(false);
+
+        handlers.get('online')!(new Event('online'));
+
+        expect((svc as any).state.isConnected).toBe(true);
+        expect((svc as any).state.isConnecting).toBe(false);
+        expect(svc.getConnectionStatus()).toBe('connected');
+        // Le socket n'a jamais quitté ses rooms : le rouvrir serait une
+        // reconnexion gratuite, et `socket.connect()` est de toute façon un
+        // no-op sur un socket déjà connecté.
+        expect(liveSocket.connect).not.toHaveBeenCalled();
+        // Les consommateurs (`useConnectionStatus`) ne lisent l'état QUE par
+        // cet événement — sans lui, la réparation resterait invisible.
+        expect(listener).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
+
+  // ─── Réconciliation miroir ↔ socket ───────────────────────────────────────
+
+  describe('connect() reconciles the mirror with a live socket', () => {
+    it('marks the connection up instead of silently doing nothing', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = false;
+
+      const listener = jest.fn();
+      svc.onStatusChange(listener);
+
+      svc.connect();
+
+      expect((svc as any).state.isConnected).toBe(true);
+      expect((svc as any).state.isConnecting).toBe(false);
+      expect(liveSocket.connect).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a stale isConnecting flag left by a socket that connected meanwhile', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = true;
+
+      svc.connect();
+
+      expect((svc as any).state.isConnected).toBe(true);
+      expect((svc as any).state.isConnecting).toBe(false);
+    });
+
+    it('does not re-emit when the mirror already agrees with the socket', () => {
+      const liveSocket = { ...mockSocket, connected: true, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = liveSocket;
+      (svc as any).state.isConnected = true;
+      (svc as any).state.isConnecting = false;
+
+      const listener = jest.fn();
+      svc.onStatusChange(listener);
+
+      svc.connect();
+
+      expect(listener).not.toHaveBeenCalled();
+      expect(liveSocket.connect).not.toHaveBeenCalled();
+    });
+
+    it('still opens a socket that really died', () => {
+      const deadSocket = { ...mockSocket, connected: false, connect: jest.fn() };
+      const svc = new ConnectionService();
+      (svc as any).state.socket = deadSocket;
+      (svc as any).state.isConnected = false;
+      (svc as any).state.isConnecting = false;
+
+      svc.connect();
+
+      expect(deadSocket.connect).toHaveBeenCalledTimes(1);
+      expect((svc as any).state.isConnecting).toBe(true);
+      expect((svc as any).state.isConnected).toBe(false);
     });
   });
 
@@ -417,11 +527,9 @@ describe('ConnectionService', () => {
       expect(mockIo).toHaveBeenCalledTimes(1);
       expect(mockIo).toHaveBeenCalledWith(
         'ws://localhost:3000',
-        expect.objectContaining({
-          auth: { token: 'valid-token' },
-          autoConnect: false,
-        })
+        expect.objectContaining({ autoConnect: false })
       );
+      expect(resolveHandshakeAuth()).toEqual({ token: 'valid-token' });
       expect(result).toBe(mockSocket);
     });
 
@@ -432,13 +540,33 @@ describe('ConnectionService', () => {
       const svc = new ConnectionService();
       const result = svc.initializeConnection();
 
-      expect(mockIo).toHaveBeenCalledWith(
-        'ws://localhost:3000',
-        expect.objectContaining({
-          auth: { token: 'anon-token' },
-        })
-      );
+      expect(resolveHandshakeAuth()).toEqual({ token: 'anon-token' });
       expect(result).toBe(mockSocket);
+    });
+
+    it('re-reads the credentials at every handshake, never the ones captured at creation', () => {
+      mockAuthManager.getAuthToken.mockReturnValue('token-at-creation');
+
+      const svc = new ConnectionService();
+      svc.initializeConnection();
+      expect(resolveHandshakeAuth()).toEqual({ token: 'token-at-creation' });
+
+      // A silent REST refresh lands a new token while the socket object lives on.
+      mockAuthManager.getAuthToken.mockReturnValue('token-after-refresh');
+
+      expect(resolveHandshakeAuth()).toEqual({ token: 'token-after-refresh' });
+    });
+
+    it('falls back to the anonymous session at handshake time when the JWT is gone', () => {
+      mockAuthManager.getAuthToken.mockReturnValue('jwt-token');
+
+      const svc = new ConnectionService();
+      svc.initializeConnection();
+
+      mockAuthManager.getAuthToken.mockReturnValue(null);
+      mockAuthManager.getAnonymousSession.mockReturnValue({ token: 'rotated-anon-token' });
+
+      expect(resolveHandshakeAuth()).toEqual({ token: 'rotated-anon-token' });
     });
 
     it('stores socket in state after creation', () => {
@@ -910,11 +1038,10 @@ describe('ConnectionService', () => {
     });
 
     describe('on AUTH_TOKEN_EXPIRED', () => {
-      it('refreshes token, updates socket.auth, and calls reconnect() on success', async () => {
+      it('refreshes the token and calls reconnect() on success', async () => {
         const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
         const localSocket = {
           ...mockSocket,
-          auth: { token: 'old-token' },
           on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
             eventHandlers[event] = handler;
           }),
@@ -933,22 +1060,26 @@ describe('ConnectionService', () => {
         await Promise.resolve();
 
         expect(mockAuthRefreshToken).toHaveBeenCalledTimes(1);
-        expect(localSocket.auth).toEqual({ token: 'new-token' });
         expect(reconnectSpy).toHaveBeenCalledTimes(1);
       });
 
-      it('does not update socket.auth when no new token returned after refresh', async () => {
+      it('leaves the handshake resolver in place instead of pinning a token onto the socket', async () => {
+        // Overwriting `socket.auth` with a literal would replace the resolver
+        // installed at creation, and the socket would be frozen on that token
+        // for every later reconnection — the very failure this handler exists
+        // to escape.
         const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const authResolver = jest.fn();
         const localSocket = {
           ...mockSocket,
-          auth: { token: 'old-token' },
+          auth: authResolver,
           on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
             eventHandlers[event] = handler;
           }),
         };
 
         mockAuthRefreshToken.mockResolvedValue({});
-        mockAuthManager.getAuthToken.mockReturnValue(null);
+        mockAuthManager.getAuthToken.mockReturnValue('new-token');
 
         const svc = new ConnectionService();
         (svc as any).state.socket = localSocket;
@@ -959,7 +1090,7 @@ describe('ConnectionService', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(localSocket.auth).toEqual({ token: 'old-token' });
+        expect(localSocket.auth).toBe(authResolver);
       });
 
       it('logs warn and does not reconnect when refreshToken fails', async () => {

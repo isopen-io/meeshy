@@ -174,11 +174,41 @@ contre les pages déjà tenues.
 le client delta (iOS `NotificationGapResyncCoordinator`, étape 6), non livrable ici ; livré seul, ce
 serait un paramètre sans lecteur, et l'index `[userId, readAt]` de l'étape 5 avec lui. (b) **les
 tombstones (étape 4)** — le constat ci-dessous tient : hard delete, aucun `deletedAt`. (c) **écart
-voisin repéré, non traité** : le web envoie `type`, `priority`, `conversationId`, `startDate`,
-`endDate`, `sortBy`, `sortOrder` — que le querystring de la route ne déclare pas et que Fastify
-laisse donc tomber sans bruit ; le filtrage réel se fait côté client (`matchesFilter`) sur les
-seules pages chargées. Un filtre qui ne filtre que le déjà-chargé est un filtre qui ment sur une
-liste paginée — fiche à instruire.
+voisin repéré — FERMÉ au cycle 123**, voir ci-dessous.
+
+**Volet « le filtre qui ne filtrait que le déjà-chargé » — LIVRÉ 2026-08-14 (cycle 123), gateway +
+web + shared.** Le web envoyait `type`, `priority`, `conversationId`, `startDate`, `endDate`,
+`sortBy`, `sortOrder` que le querystring ne déclarait pas ; Fastify les retirait sans bruit et le
+filtrage réel se faisait côté client (`matchesFilter`) sur les seules pages chargées. Le défaut
+n'était pas que du gaspillage de fil : sur une liste PAGINÉE, « aucune mention » ne voulait dire que
+« aucune mention parmi les vingt dernières », et rien n'allait chercher les autres — les pastilles
+de comptage des onglets mentaient de la même façon, et changeaient à chaque défilement.
+
+- **Gateway** — `?types=` (CSV de types BRUTS) déclaré et appliqué en `type: { in: [...] }`, dans
+  les DEUX modes de pagination. Une liste vide vaut « aucun filtre », jamais « aucune ligne » : le
+  repli d'un paramètre illisible est l'absence de filtre, comme pour le curseur.
+- **Gateway** — `GET /notifications/counts` → `{ total, unread, byType }`, un `groupBy(['type'])`
+  sous le MÊME `visibleNotificationsWhere` que la liste. `total` se déduit du regroupement plutôt
+  que d'un `count()` séparé : deux lectures répondraient à la même question à deux instants, et
+  pourraient se contredire à l'écran.
+- **Index `[userId, type, createdAt desc, id desc]`** — égalité puis tri (ESR). Il ÉTEND
+  `[userId, type]` (même préfixe, `markNotificationsByTypesAsRead` reste servi) ; sans les deux clés
+  de tri, une page d'onglet ferait trier tout l'historique de l'onglet. Prod : index à créer à la
+  main.
+- **Web** — l'onglet part au serveur (`FILTER_TYPES`, source unique du groupement d'alias, qui
+  remplace deux `switch` recopiés) ; les pastilles et le sous-titre « N notifications » lisent
+  `GET /notifications/counts` au lieu de compter les pages chargées. Les paramètres que la gateway
+  ne déclare pas ne sont plus envoyés, et la signature de `fetchNotifications` cesse de les
+  admettre : une signature qui accepte un filtre non honoré fait croire à un filtrage qui n'a pas
+  lieu. Le tri, lui, ne PEUT pas être ouvert — le curseur keyset est ancré sur l'ordre total.
+- **Temps réel** — l'insertion socket devient consciente de l'onglet : elle lit les `types` dans la
+  CLÉ de chaque query au lieu d'écrire dans toutes les listes (`setQueriesData`), sans quoi une
+  demande d'ami apparaîtrait au milieu de l'onglet « mentions » — le temps réel contredisant le
+  filtre que la liste vient d'appliquer.
+- **`NotificationCounts` monte dans `@meeshy/shared`** : ce n'est plus un type « frontend-specific »
+  mais le corps d'une réponse, donc un contrat de fil. Son `byType` y était DÉCLARÉ depuis toujours
+  sans qu'aucun producteur ne l'écrive, et `useNotificationCountsQuery` existait sans consommateur —
+  les deux moitiés d'une même fonctionnalité, mortes chacune de son côté (motif de la Leçon 241).
 
 **Constat.** `GET /notifications` n'accepte que `offset/limit/unreadOnly`, et chaque page paie un `count()` total. Aucun moyen de demander « ce qui a changé depuis ». La vérification a invalidé une partie du correctif initial : promettre `deletedNotificationIds` est IMPOSSIBLE en l'état — la suppression est un HARD delete et le modèle `Notification` n'a aucun `deletedAt` ; il n'existe rien à requêter pour produire des tombstones sans changer le schéma.
 **Preuve.** `services/gateway/src/routes/notifications.ts:30-51` (querystring = offset/limit/unreadOnly), :91-100 (`notification.count()` par page). Hard delete : `prisma.notification.delete` (`NotificationService.ts:3985`), `deleteMany` admin (`routes/notifications.ts:542`) ; `schema.prisma` : aucun `deletedAt` sur `Notification`, et pas d'index `[userId, readAt]` (seuls `[userId, isRead]` et `[userId, createdAt]` existent).

@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Video, Mic } from 'lucide-react';
+import { Phone, PhoneOff, Video, Mic, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
@@ -22,6 +22,23 @@ interface CallNotificationProps {
 export function CallNotification({ call, onAccept, onReject }: CallNotificationProps) {
   const { t } = useI18n('calls');
   const ringtoneRef = useRef<import('@/utils/ringtone').Ringtone | null>(null);
+
+  // A direct call's `participants` is the initiator + the callee (<=2 once
+  // populated; the `call:check-active` replay path always populates it, the
+  // legacy `call:initiate` ack path may still send it empty for a 1:1 —
+  // either way that's never a group). 3+ means the gateway rang more than
+  // one callee for this call (`CallEventsHandler.ts` `initiateCall`/
+  // `call:check-active`), i.e. a group call — surfaced here so a callee can
+  // tell "Alice is calling you" apart from "Alice is calling your group"
+  // before accepting (audit calls-audit 2026-08-14, W6 follow-up).
+  //
+  // `conversationType` (PR #2987) est le signal AUTORITAIRE quand la gateway
+  // l'envoie : une conversation de groupe reste un groupe même si un seul
+  // appelé sonne. Le compte de participants reste le repli pour les payloads
+  // qui ne le portent pas (gateway antérieure, replay legacy) — deux signaux
+  // pour la même question, une seule réponse.
+  const isGroupCall = call.conversationType === 'group' || call.participants.length > 2;
+  const groupSize = call.participants.length;
 
   // Play ringtone on mount
   useEffect(() => {
@@ -91,6 +108,14 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           </span>
         </div>
 
+        {/* Group indicator — hidden entirely for direct calls (isGroupCall false) */}
+        {isGroupCall && (
+          <div className="flex items-center justify-center gap-1 -mt-1 mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+            <Users className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{t('incoming.groupCallLabel').replace('{count}', String(groupSize))}</span>
+          </div>
+        )}
+
         {/* Caller info */}
         <div className="text-center">
           <h3
@@ -99,20 +124,24 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           >
             {call.initiator.username}
           </h3>
+          {/* QUEL groupe. Le badge au-dessus dit COMBIEN et le sous-titre dit
+              qu'il s'agit d'un appel de groupe : répéter « Appel de groupe »
+              ici l'écrirait deux fois à trois lignes d'écart. Le libellé ne
+              sert donc que de repli pour un groupe SANS titre, où la ligne
+              n'aurait rien d'autre à porter. */}
           {call.conversationType === 'group' && (
             <p
               data-testid="call-notification-group-context"
               className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1"
             >
-              {t('incoming.groupCall')}
-              {call.conversationTitle ? ` · ${call.conversationTitle}` : ''}
+              {call.conversationTitle ? call.conversationTitle : t('incoming.groupCall')}
             </p>
           )}
           <p
             id="call-notification-description"
             className="text-sm text-gray-600 dark:text-gray-400 animate-pulse"
           >
-            {t('incoming.subtitle')}
+            {isGroupCall ? t('incoming.groupSubtitle') : t('incoming.subtitle')}
           </p>
         </div>
 
