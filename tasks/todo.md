@@ -81,6 +81,27 @@ sélection par fichier ayant manqué le doublon. Les deux portent désormais la 
 ne suffit pas à faire remarquer qu'on a écrit à côté du témoin existant : c'est la suite complète
 qui le dit.
 
+## Incident collatéral — `main` ne compilait plus pour iOS
+
+Le gate iOS de cette PR a levé une rupture ANTÉRIEURE, entrée par la PR #2982 (`1dd4b77b`,
+« simplify MessageDayStickyOverlay ») : `enum MessageDayStickyPlacement` supprimé alors que
+`MessageListViewController` s'en sert toujours (sur `origin/main` : 3 usages, 0 définition).
+
+Trois types partaient dans la même passe ; le compilateur n'a nommé que le premier lot.
+L'inventaire réel se fait sur le diff, pas sur le message d'erreur :
+
+| Type | Usages production | Sort |
+|---|---|---|
+| `MessageDayStickyPlacement` | 2 (`MessageListViewController`) | **restauré** |
+| `MessageDayStickyMetrics` | 0 | reste supprimé, ses témoins partent avec |
+| `MessageDayStickyPalette` | 0 | reste supprimé, ses témoins partent avec |
+
+**Pourquoi la CI ne l'a pas dit — la bonne raison.** PR #2982 ouverte à 04:25:32, **mergée à
+04:25:45**, soit 13 secondes plus tard ; `iOS compile (PR gate)` démarré à 04:25:38 et annulé à
+04:30:09 avec six autres jobs. Le gate n'a pas manqué la rupture, il n'a pas eu le droit de
+finir. Le correctif est une **required check** avant fusion, PAS un élargissement de trigger —
+première conclusion posée puis corrigée, cf. leçon 243.
+
 ## Reste ouvert
 
 - **L'agrégat non-lu iOS ne se recalcule pas DANS LA FOULÉE du retrait.**
