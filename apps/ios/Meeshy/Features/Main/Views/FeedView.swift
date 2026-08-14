@@ -568,6 +568,10 @@ struct FeedView: View {
                         )
                     }
                 )
+                // L'offset du feed change à chaque frame défilée puis se tait :
+                // c'est le seul signal de mouvement dont dispose un
+                // `ScrollView` SwiftUI avant iOS 17.
+                .scrollMotionActive(offset: headerScrollOffset)
                 Spacer()
             }
 
@@ -604,7 +608,13 @@ struct FeedView: View {
             reelsButton
             postsMapButton
         }
-        .padding(.trailing, 12)
+        // La marge droite vient du header (`CollapsibleHeaderMetrics.trailingActionsInset`),
+        // pas d'un padding local : posée ici, elle divergeait de celle de la
+        // liste de conversations, qui n'en avait aucune.
+        // Loi commune `ScrollMotion` : une vue en mouvement ne montre pas ses
+        // boutons d'action. Le titre et la trail épinglée restent lisibles,
+        // les deux entrées de lecture s'effacent le temps du défilement.
+        .hiddenWhileScrolling()
     }
 
     private var reelsButton: some View {

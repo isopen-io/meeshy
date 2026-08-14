@@ -71,9 +71,10 @@ struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
     /// True while the message list is actively being dragged/decelerated.
-    /// Drives the floating header row's visibility — it hides during active
-    /// scrolling so the sticky day pill (which docks in the same band, just
-    /// under the notch) never overlaps it. See `MessageDayStickyPlacement`.
+    /// Efface les BOUTONS D'ACTION du header (appel, recherche) le temps du
+    /// mouvement — loi commune `ScrollMotion`. Le header lui-même reste
+    /// lisible, et la pill de jour garde sa bande à part
+    /// (`MessageDayStickyPlacement.topOffset`).
     var isScrollingActiveList: Bool = false
     var scrollToBottomTrigger: Int = 0
     /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
@@ -1550,6 +1551,26 @@ struct ConversationView: View {
 
     private var isAnonymous: Bool { anonymousSession != nil }
 
+    /// Loi commune (`ScrollMotion`) : une vue en mouvement ne montre pas ses
+    /// boutons d'action. Pendant le défilement de la liste, les boutons
+    /// d'appel et de recherche s'effacent ; le header lui-même — retour,
+    /// avatar, titre — reste lisible, et la pill de jour vit dans sa propre
+    /// bande sous lui (`MessageDayStickyPlacement.topOffset`).
+    ///
+    /// Une recherche ouverte échappe à la règle : sa barre est un champ de
+    /// SAISIE, pas un bouton, et doit rester joignable pendant qu'on fait
+    /// défiler les résultats.
+    static func hidesHeaderActions(isScrollingList: Bool, isSearchOpen: Bool) -> Bool {
+        isScrollingList && !isSearchOpen
+    }
+
+    private var hidesHeaderActionsForScroll: Bool {
+        Self.hidesHeaderActions(
+            isScrollingList: scrollState.isScrollingActiveList,
+            isSearchOpen: headerState.showSearch
+        )
+    }
+
     // Enfants en AnyView : le type structurel du tuple (branches anonymous /
     // typing / bande + searchBar) gonflait le mangled name de
     // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
@@ -1557,15 +1578,6 @@ struct ConversationView: View {
     // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
     // closure du VStack). Même famille que expandedHeaderMidContent — couper
     // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
-    /// Exclusion mutuelle avec la pill sticky de jour (`MessageDayStickyOverlay`) :
-    /// les deux se disputent la même bande juste sous l'encoche. Le header
-    /// s'efface pendant le défilement actif de la liste — sauf si la barre
-    /// de recherche est ouverte, qui doit rester joignable en toute
-    /// circonstance (2026-08-13, en résolution du chevauchement 2026-08-12).
-    private var hidesFloatingHeaderForScroll: Bool {
-        scrollState.isScrollingActiveList && !headerState.showSearch
-    }
-
     @ViewBuilder
     private var floatingHeaderSection: some View {
         VStack {
@@ -1584,19 +1596,14 @@ struct ConversationView: View {
             Spacer()
         }
         .zIndex(100)
-        // Exclusion mutuelle avec la pill sticky de jour (fade sur la VStack
-        // entière plutôt qu'un Group autour des 3 branches — ne pas toucher
-        // à leur type-erasure individuelle, voir la note "leçon 5cdde93c4"
-        // au-dessus sur le crash de mangled name). Sans effet sur la barre de
-        // recherche : `hidesFloatingHeaderForScroll` retombe à false dès que
-        // `headerState.showSearch` est vrai, donc jamais les deux en même
-        // temps.
-        .opacity(hidesFloatingHeaderForScroll ? 0 : 1)
-        .allowsHitTesting(!hidesFloatingHeaderForScroll)
+        // Le mouvement est PUBLIÉ ici, consommé plus bas par les seuls
+        // `.hiddenWhileScrolling()` des grappes de boutons : le header garde
+        // son opacité, ses branches gardent leur type-erasure individuelle
+        // (note "leçon 5cdde93c4" au-dessus sur le crash de mangled name).
+        .scrollMotionActive(hidesHeaderActionsForScroll)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
-        .animation(.easeInOut(duration: 0.22), value: hidesFloatingHeaderForScroll)
     }
 
     private var typingHeaderBar: some View {
@@ -1704,11 +1711,18 @@ struct ConversationView: View {
     /// TOP of that built-in padding is what pushed them apart. `spacing: 0`
     /// still leaves that built-in padding as the visible gap (no tap-target
     /// overlap between the two 44×44 hit areas).
+    ///
+    /// Grappe d'ACTIONS : elle s'efface tant que la liste défile et revient à
+    /// l'arrêt (loi commune `ScrollMotion`, publiée par
+    /// `floatingHeaderSection`). Le retour, l'avatar et le titre ne la
+    /// suivent pas — on doit pouvoir quitter la conversation et savoir où on
+    /// est, même en plein défilement.
     private var headerButtonsCluster: some View {
         HStack(spacing: 0) {
             headerCallButtons.layoutPriority(1)
             expandedHeaderSearchButton
         }
+        .hiddenWhileScrolling()
     }
 
     /// Title + tags column shown when the composer-options drawer is open.

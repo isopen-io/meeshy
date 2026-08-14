@@ -103,9 +103,10 @@ final class MessageListViewController: UIViewController {
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
     /// Invoked when active scrolling (drag or deceleration) starts/stops.
-    /// Drives the floating header row in `ConversationView`, which hides
-    /// while this is true — the sticky day pill takes over that band instead
-    /// (exclusion mutuelle, voir `MessageDayStickyPlacement`).
+    /// Drives the header ACTION BUTTONS in `ConversationView` (call, search),
+    /// which fade while this is true — loi commune `ScrollMotion` : une vue
+    /// en mouvement ne montre pas ses boutons d'action. Le header lui-même
+    /// (retour, avatar, titre) et la pill de jour restent en place.
     var onScrollingActiveChanged: ((Bool) -> Void)?
     /// Header de conversation déplié (tap sur l'avatar / l'icône de
     /// conversation). Retire entièrement la pill de jour tant qu'il est
@@ -254,6 +255,7 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
+            stickyDayState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -313,10 +315,14 @@ final class MessageListViewController: UIViewController {
     /// `store.isUserScrolling` utilisé comme garde de dédoublonnage pour ne
     /// propager `onScrollingActiveChanged` qu'aux transitions, jamais à
     /// chaque frame de `scrollViewDidScroll`.
+    ///
+    /// La pill de jour n'en dépend PAS : elle suit le défilement et reste
+    /// posée à l'arrêt, sous le header (`MessageDayStickyPlacement`). Ce
+    /// signal ne pilote que l'effacement des boutons d'action du header
+    /// pendant le mouvement (loi `ScrollMotion`).
     private func setScrollingActive(_ active: Bool) {
         guard store.isUserScrolling != active else { return }
         store.isUserScrolling = active
-        stickyDayState.isScrollingActive = active
         onScrollingActiveChanged?(active)
     }
 
@@ -352,6 +358,7 @@ final class MessageListViewController: UIViewController {
     }
 
     private func configureStickyDayOverlay() {
+        stickyDayState.isDark = isDark
         let host = UIHostingController(
             rootView: MessageDayStickyOverlay(state: stickyDayState)
         )
