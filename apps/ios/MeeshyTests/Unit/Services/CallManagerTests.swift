@@ -4865,6 +4865,40 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
             "rejoinActiveCall must call applyNegotiationRole() to reset the negotiation epoch."
         )
     }
+
+    /// Audio-recovery regression (2026-08-14): `rejoinActiveCall` never sets
+    /// any CallKit transaction (see `test_rejoinActiveCall_neverTouchesCallKit`
+    /// above) but used to leave `callUsesCallKit` at its default `true` —
+    /// `configureAudioSession()`/`transitionToConnected()` both gate
+    /// self-activation on `!callUsesCallKit`, so with the stale `true` they
+    /// deferred activation to CallKit's `provider:didActivate:`, which is
+    /// never invoked for a rejoin. Every rejoined call started with dead
+    /// audio (no mic, no speaker) until an unrelated ~2s stuck-muted fallback
+    /// timer force-activated it. Must be set BEFORE configureAudioSession()
+    /// runs in the same method.
+    func test_rejoinActiveCall_setsCallUsesCallKitFalseBeforeConfiguringAudioSession() throws {
+        let source = try callManagerSource()
+        guard let body = rejoinBody(source) else {
+            XCTFail("rejoinActiveCall body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callUsesCallKit = false"),
+            "rejoinActiveCall must explicitly set callUsesCallKit = false — it never starts a " +
+            "CallKit transaction, so audio self-activation must not be deferred to a " +
+            "provider:didActivate: that will never fire."
+        )
+        guard
+            let setterRange = body.range(of: "callUsesCallKit = false"),
+            let configureRange = body.range(of: "configureAudioSession()")
+        else {
+            XCTFail("Expected both callUsesCallKit = false and configureAudioSession() in body"); return
+        }
+        XCTAssertTrue(
+            setterRange.lowerBound < configureRange.lowerBound,
+            "callUsesCallKit must be set to false BEFORE configureAudioSession() runs, or the " +
+            "self-activation branch it gates would still read the stale value."
+        )
+    }
 }
 
 // MARK: - Socket Reconnect Media Re-Sync (§P1-30 / audit P1-30)
