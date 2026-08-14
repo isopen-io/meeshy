@@ -1062,6 +1062,11 @@ struct ConversationListHeaderOverlay: View {
                         .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
                     }
                 }
+                // Loi commune `ScrollMotion` : une vue en mouvement ne montre
+                // pas ses boutons d'action. Le titre, la trail compacte et le
+                // verre du header restent — seuls les glyphes d'action
+                // s'effacent le temps du défilement.
+                .hiddenWhileScrolling()
             },
             // Adapte la closure paramétrée à la slot sans-argument du
             // CollapsibleHeader : l'offset capturé ici est celui du render
@@ -1071,6 +1076,11 @@ struct ConversationListHeaderOverlay: View {
                 return { build(offset) }
             }
         )
+        // Ce header est le SEUL abonné au relay : il se re-rend à chaque tick
+        // de scroll, donc l'offset qu'il publie ici est vivant. Le
+        // `ScrollView` SwiftUI n'expose pas de phase de défilement avant
+        // iOS 17 — l'apaisement se déduit du silence de l'offset.
+        .scrollMotionActive(offset: scrollRelay.offset)
     }
 }
 

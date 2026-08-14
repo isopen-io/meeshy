@@ -391,6 +391,9 @@ struct ThemedFeedOverlay: View {
                 )
             }
         )
+        // L'offset du feed change à chaque frame défilée puis se tait : seul
+        // signal de mouvement d'un `ScrollView` SwiftUI avant iOS 17.
+        .scrollMotionActive(offset: headerScrollOffset)
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
@@ -402,6 +405,9 @@ struct ThemedFeedOverlay: View {
             reelsButton
             postsMapButton
         }
+        // Loi commune `ScrollMotion` : une vue en mouvement ne montre pas ses
+        // boutons d'action. Même traitement que le chemin iPad (`FeedView`).
+        .hiddenWhileScrolling()
     }
 
     private var reelsButton: some View {
