@@ -149,6 +149,13 @@ contre les pages déjà tenues.
   import existant ne bouge, et il n'existe toujours qu'une implémentation. Nouveau :
   `keysetBeforeClause(cursor)` énonce UNE fois la clause de reprise que `PostFeedService` recopie à
   dix endroits (migration de ces dix sites : hors périmètre, pure churn ici).
+- **Index `[userId, createdAt desc, id desc]`** — il ÉTEND `[userId, createdAt desc]` au lieu de
+  s'y ajouter (même préfixe, mêmes requêtes servies, pas de second index à écrire sur une
+  collection très écrite). Il n'est pas décoratif : `id` entre dans la clé de TRI, et sans `_id`
+  dans l'index MongoDB ne peut pas satisfaire `sort {createdAt:-1,_id:-1}` par parcours — il
+  ajouterait un SORT bloquant sur tout l'historique borné par le curseur, soit l'inbox entière à
+  chaque page. Prod : l'entrypoint ne joue aucune migration, l'index est à créer à la main
+  (rappel de l'étape 5 de la fiche, appliqué ici à l'autre colonne).
 - **`nextCursor` rendu AUSSI en mode offset.** C'est ce qui permet à un client de demander sa
   page 1 comme avant (il veut le `total`) puis de passer au curseur, sans jamais redemander une
   page. Le champ est DÉCLARÉ dans le schéma de réponse Fastify — un champ non déclaré est retiré du

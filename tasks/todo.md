@@ -45,6 +45,12 @@ ne dépend d'aucun trafic concurrent, et un curseur posé sur un ordre partiel l
   page : la page 1 se prend comme avant (pour son `total`), la suite au curseur. Le champ est
   DÉCLARÉ dans le schéma de réponse Fastify ; un champ non déclaré est retiré du fil en silence
   (piège documenté `api-schemas.ts:1520`), et un témoin l'ancre.
+- **`@@index([userId, createdAt(sort: Desc), id(sort: Desc)])`** sur `Notification` — il REMPLACE
+  `[userId, createdAt(sort: Desc)]` (même préfixe, donc mêmes requêtes servies, sans second index à
+  écrire). `id` entre dans la clé de TRI : sans `_id` dans l'index, MongoDB ne peut pas satisfaire
+  `sort {createdAt:-1,_id:-1}` par parcours et ajoute un SORT bloquant sur tout l'historique borné
+  par le curseur — une page coûterait l'inbox entière. **Prod : l'entrypoint ne joue aucune
+  migration, index à créer à la main.**
 - **`services/gateway/src/utils/keyset-cursor.ts`** — `encodeCursor`/`decodeCursor` déplacés hors de
   `routes/posts/types.ts` : trois services les importaient déjà depuis un module de ROUTES, et
   l'inbox est le quatrième lecteur, hors domaine posts. Nouveau `keysetBeforeClause(cursor)` qui
