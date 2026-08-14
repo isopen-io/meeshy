@@ -289,17 +289,31 @@ export class AttachmentService {
     });
   }
 
+  /**
+   * Les pièces jointes d'une conversation, telles que CE lecteur a le droit de
+   * les voir.
+   *
+   * `messageFilter` porte les exclusions qui dépendent du lecteur — plancher de
+   * lien de partage, masquage personnel. Le service ne les calcule pas : il ne
+   * sait pas qui appelle. Il tient en revanche les deux invariants qui ne
+   * dépendent de personne, et il les pose APRÈS le filtre de l'appelant pour
+   * que celui-ci ne puisse qu'ajouter — sortir de la conversation demandée ou
+   * ressusciter une tombstone reste inexprimable.
+   */
   async getConversationAttachments(
     conversationId: string,
     options: {
       type?: AttachmentType;
       limit?: number;
       offset?: number;
+      messageFilter?: Prisma.MessageWhereInput;
     } = {}
   ): Promise<AttachmentWithMetadata[]> {
     const where: Prisma.MessageAttachmentWhereInput = {
       message: {
+        ...options.messageFilter,
         conversationId: conversationId,
+        deletedAt: null,
       },
     };
 

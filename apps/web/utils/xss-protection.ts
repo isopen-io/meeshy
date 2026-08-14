@@ -302,37 +302,6 @@ export function isValidEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * Sanitize notification object
- * Apply appropriate sanitization to each field
- *
- * @param notification - Notification object
- * @returns Sanitized notification
- */
-export function sanitizeNotification(notification: any): any {
-  if (!notification) return null;
-
-  return {
-    ...notification,
-    title: sanitizeText(notification.title),
-    content: sanitizeText(notification.content),
-    messagePreview: sanitizeText(notification.messagePreview),
-    senderUsername: sanitizeUsername(notification.senderUsername),
-    senderAvatar: sanitizeUrl(notification.senderAvatar, ['https:', 'http:']),
-
-    // Sanitize nested context object
-    context: notification.context ? {
-      conversationId: sanitizeText(notification.context.conversationId),
-      conversationTitle: sanitizeText(notification.context.conversationTitle),
-      messageId: sanitizeText(notification.context.messageId),
-      userId: sanitizeText(notification.context.userId)
-    } : undefined,
-
-    // Sanitize data JSON
-    data: notification.data ? sanitizeJson(notification.data) : undefined
-  };
-}
-
-/**
  * Test if string contains potential XSS
  * This is a heuristic check, not a complete validation
  *
