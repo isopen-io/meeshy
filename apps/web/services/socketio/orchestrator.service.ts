@@ -103,6 +103,38 @@ export class SocketIOOrchestrator {
     this.presenceService = new PresenceService();
     this.translationService = new TranslationService();
     this.preferencesSyncService = new PreferencesSyncService();
+
+    // A boot whose stored JWT had already expired gets NO socket at all:
+    // ConnectionService.initializeConnection() bails out and leaves the REST
+    // 401 path to refresh silently. That refresh works — and nothing told the
+    // realtime layer. `setCurrentUser()` has already run and will not run
+    // again, so the only remaining wake-ups were the outbound actions that
+    // call `ensureConnection()` (send, join). A reader who stays on the
+    // conversation list takes none of them: no incoming messages, no unread
+    // counts, no presence, no typing, for the whole session, until a reload.
+    //
+    // Subscribing here rather than in ConnectionService is deliberate — the
+    // socket has to come back with its event listeners attached, and wiring
+    // them is this class's job. A bare connect() from the layer below would
+    // produce a live socket nobody is listening to.
+    /* istanbul ignore else */
+    if (typeof window !== 'undefined') {
+      require('../auth-manager.service').authManager.registerOnTokensUpdated(() => this.onTokensUpdated());
+    }
+  }
+
+  /**
+   * A refreshed token just landed. Open the socket only if there is none —
+   * a socket that already exists re-reads the credentials by itself at its
+   * next handshake (ConnectionService.resolveHandshakeToken), so tearing a
+   * live one down would drop its rooms for nothing.
+   */
+  private onTokensUpdated(): void {
+    if (!this.currentUserId) return;
+    if (this.connectionService.getSocket()) return;
+
+    logger.info('[SocketIOOrchestrator]', 'credentials refreshed — opening the socket the expired token had blocked');
+    this.initializeConnection();
   }
 
   /**
