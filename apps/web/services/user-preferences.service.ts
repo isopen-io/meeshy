@@ -60,6 +60,10 @@ export class UserPreferencesService {
       reaction: prefs.reaction ? String(prefs.reaction) : undefined,
       createdAt: new Date(String(prefs.createdAt)),
       updatedAt: new Date(String(prefs.updatedAt)),
+      // L'arbitre du temps réel (`incoming.version <= local -> drop`). Une
+      // absence reste une absence : la coercer en 0 inventerait un plancher
+      // que le serveur n'a pas donné.
+      version: typeof prefs.version === 'number' ? prefs.version : undefined,
     };
   }
 

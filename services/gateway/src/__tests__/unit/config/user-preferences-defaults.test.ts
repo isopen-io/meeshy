@@ -102,6 +102,17 @@ describe('CONVERSATION_PREFERENCES_DEFAULTS', () => {
     expect(CONVERSATION_PREFERENCES_DEFAULTS.categoryId).toBeNull();
     expect(CONVERSATION_PREFERENCES_DEFAULTS.deletedForUserAt).toBeNull();
   });
+
+  it('does not carry `version`', () => {
+    // La constante est étalée par le RESET du `DELETE`, qui incrémente le
+    // compteur dans le même `update`. Y poser `version` le rembobinerait à
+    // chaque remise à zéro — et les autres appareils, qui arbitrent sur
+    // `incoming.version <= local -> drop`, jetteraient alors toute écriture
+    // faite après le reset jusqu'à ce que la séquence repasse au-dessus.
+    // La branche « aucune ligne stockée » du GET pose son `version: 0`
+    // elle-même, ce qui est un besoin distinct.
+    expect(CONVERSATION_PREFERENCES_DEFAULTS).not.toHaveProperty('version');
+  });
 });
 
 // ─── COMMUNITY_PREFERENCES_DEFAULTS ──────────────────────────────────────────
