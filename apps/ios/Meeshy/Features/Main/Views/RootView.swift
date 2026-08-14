@@ -321,8 +321,8 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .contacts:
-                        ContactsHubView()
+                    case .contacts(let initialTab):
+                        ContactsHubView(initialTab: initialTab)
                             .navigationBarHidden(true)
                     case .peopleDiscovery(let initialTab):
                         PeopleDiscoveryView(initialTab: initialTab)
@@ -1996,47 +1996,22 @@ struct RootView: View {
             let menuX = pos.isLeft ? buttonX : buttonX
             let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
 
-            // Menu items — boutons d'action. Le profil n'a PAS d'item dédié : il
-            // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
-            // DERNIER bouton est la roue dentée (→ préférences générales).
-            let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
-                ("link.badge.plus", "F8B500", String(localized: "root.menu.links", defaultValue: "Mes liens"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", String(localized: "root.menu.notifications", defaultValue: "Notifications"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts) }),
-                ("sparkle.magnifyingglass", "8B5CF6", String(localized: "root.menu.discover", defaultValue: "Découvrir"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.peopleDiscovery()) }),
-                ("person.3.fill", "2ECC71", String(localized: "root.menu.communities", defaultValue: "Communautés"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
-                ("gearshape.fill", "64748B", String(localized: "root.menu.settings", defaultValue: "Réglages"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
-            ]
-
-            ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
+            // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
+            ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
                 let yOffset = expandDown
                     ? CGFloat(index) * (menuItemSize + menuSpacing)
                     : -CGFloat(index) * (menuItemSize + menuSpacing)
 
                 let itemY = menuStartY + yOffset
 
-                // Special handling for notifications & pending-request badges
-                Group {
-                    if item.icon == "bell.fill" {
-                        ThemedActionButton(
-                            icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
-                            badge: notificationManager.unreadCount, action: item.action
-                        )
-                    } else if item.icon == "sparkle.magnifyingglass" {
-                        ThemedActionButton(
-                            icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
-                            badge: FriendshipCache.shared.pendingReceivedCount, action: item.action
-                        )
-                    } else {
-                        ThemedActionButton(
-                            icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
-                            action: item.action
-                        )
-                    }
-                }
+                ThemedActionButton(
+                    icon: entry.icon,
+                    color: entry.colorHex,
+                    label: entry.label,
+                    hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
+                    badge: menuBadgeCount(entry.badge),
+                    action: { openMenuEntry(entry) }
+                )
                 .position(x: menuX, y: itemY)
                 .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
             }
@@ -2044,6 +2019,19 @@ struct RootView: View {
         .ignoresSafeArea()
         .zIndex(showMenu ? 151 : -1)
         .allowsHitTesting(showMenu)
+    }
+
+    private func menuBadgeCount(_ badge: RootMenuBadge?) -> Int {
+        switch badge {
+        case .unreadNotifications: return notificationManager.unreadCount
+        case .pendingFriendRequests: return FriendshipCache.shared.pendingReceivedCount
+        case nil: return 0
+        }
+    }
+
+    private func openMenuEntry(_ entry: RootMenuLadderEntry) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
+        router.push(entry.route)
     }
 }
 
