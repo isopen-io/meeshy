@@ -82,7 +82,7 @@ final class TabNavigationTests: XCTestCase {
     // MARK: - All hub routes are recognized
 
     func test_allHubRoutes_returnTrueForIsHub() {
-        let hubRoutes: [Route] = [.profile, .settings, .communityList, .contacts, .peopleDiscovery(), .links, .notifications]
+        let hubRoutes: [Route] = [.profile, .settings, .communityList, .contacts(), .peopleDiscovery(), .links, .notifications]
         for route in hubRoutes {
             XCTAssertTrue(route.isHub, "\(route) should be a hub route")
         }

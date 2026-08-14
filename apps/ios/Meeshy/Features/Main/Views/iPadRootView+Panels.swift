@@ -16,8 +16,8 @@ extension iPadRootView {
         case .profile:
             ProfileView()
                                 .navigationBarHidden(true)
-        case .contacts:
-            ContactsHubView()
+        case .contacts(let initialTab):
+            ContactsHubView(initialTab: initialTab)
                 .navigationBarHidden(true)
         case .peopleDiscovery(let initialTab):
             PeopleDiscoveryView(initialTab: initialTab)
