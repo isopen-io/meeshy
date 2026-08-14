@@ -1,72 +1,58 @@
-# Cycle 16 — le socket restait scellé sur le jeton de sa naissance
+# Cycle 18 — Le partage de position en direct n'a aucune fin
 
-Branche : `claude/keen-hamilton-55j95x`, partie de `origin/main` (le cycle
-précédent — miroir de connexion, PR #2991 — était intégralement mergé).
+Routine « amélioration continue temps réel ». Le cycle 17 (PR #2998) a fermé la
+chaîne des préférences de conversation. Sa dette nommée est iOS-seule
+(scope communauté non routé, faux succès local de `.setClearHistoryBefore`) ou
+touche `conversation-preferences.ts`, le fichier même que #2998 modifie — la
+reprendre ici produirait un conflit sans gain. Ce cycle repart donc d'un
+recensement neuf : **matrice de couverture des 125 `SERVER_EVENTS`** (émis par
+la passerelle × traités par le web × traités par iOS).
 
-## Point de départ (Phase 1)
+## Constats
 
-Pas de recensement neuf : reprise directe du reste ouvert nommé en fin de
-cycle 15, « `initializeConnection()` rend `null` sur JWT expiré et rien ne
-réessaie ». L'instruction de la routine est de partir du développement
-précédent, c'est donc sa dette qui ouvre ce cycle.
+**D1 — un partage en direct n'est jamais retiré quand le socket du partageur meurt.**
+`location:live-stopped` n'est émis QUE par `location:live-stop` explicite.
+Arrêt forcé de l'app, crash, perte de réseau : aucun stop. Les pairs gardent une
+épingle qui se présente comme vivante, figée sur la dernière position connue,
+jusqu'à `expiresAt` — soit **jusqu'à 8 heures** (`durationMinutes` ≤ 480). Sur
+une fonction dont le contrat entier est « voici où je suis MAINTENANT », servir
+une position vieille de plusieurs heures comme actuelle est un défaut de
+sécurité, pas d'affichage. Le codebase a déjà exactement ce retrait pour la
+frappe (`StatusHandler.handleSocketDisconnecting` → `typing:stop`) ; la position
+en direct est le seul état éphémère par socket à ne pas l'avoir.
 
-## Défauts retenus (Phases 2 / 3 / 10)
+**D2 — aucun état serveur, donc aucun rattrapage.**
+`socket.to(room)` ne touche que les sockets présents à cet instant. Un
+participant qui ouvre la conversation APRÈS le début du partage n'apprend jamais
+son existence : l'épingle lui est invisible pour toute la session. Le cas se
+retourne contre le partageur lui-même — après une reconnexion de son socket, ses
+`live-update` partent pour une session qu'aucun pair n'a vu commencer.
 
-**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
-`io(url, { auth: { token } })` fige les identifiants à la construction et
-Socket.IO rejoue cette charge à CHAQUE reconnexion. Trois chemins font tourner
-le jeton sous ses pieds (401 REST, pré-contrôle d'expiration, rotation de
-session anonyme) : après l'un d'eux, chaque handshake présente un jeton refusé,
-la boucle interne brûle ses 5 tentatives, `reconnect_failed` passe la main à
-notre backoff, qui represente le même jeton mort — indéfiniment. Déclencheur
-le plus banal : un redéploiement de la passerelle.
+**D3 — l'expiration est un indice client que le serveur n'applique jamais.**
+`expiresAt` est calculé, expédié, puis oublié. Rien côté serveur ne retire le
+partage à son terme, et rien n'empêche de relayer des positions au-delà.
 
-**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne
-revient.** Le rafraîchissement REST réussit sans que personne ne le dise à la
-couche temps réel. Seules les actions SORTANTES (`sendMessage`,
-`joinConversation`) réveillent la connexion : un lecteur resté sur la liste des
-conversations n'en déclenche aucune et n'a plus RIEN en temps réel pour toute
-la session.
+## Correctif — un registre de sessions dans `LocationHandler`
 
-**D3 — `expiresIn` écrit dans l'emplacement du jeton de session** (décalage de
-position d'argument dans `authService.refreshToken()`). Sans conséquence
-observable, le test existant verrouillait le décalage.
+En mémoire, conforme au « real-time only, no Prisma persistence » du handler.
+Une entrée par `(conversationId, userId)`.
 
-Analyse complète : `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 16.
-
-## Correctifs
-
-- `auth` devient un **résolveur** réévalué à chaque handshake, et le rustinage
-  impératif `socket.auth = { token }` disparaît (il remplacerait le résolveur).
-- `authManager.registerOnTokensUpdated()` — l'orchestrateur (et non
-  `ConnectionService`, qui ne sait pas brancher les écouteurs) rouvre le socket
-  quand il n'en existe aucun.
-- `refreshToken()` passe `expiresIn` dans son propre emplacement.
-
-## Fichiers touchés
-
-- `apps/web/services/socketio/connection.service.ts`
-- `apps/web/services/socketio/orchestrator.service.ts`
-- `apps/web/services/auth-manager.service.ts`
-- `apps/web/services/auth.service.ts`
-- 6 fichiers de tests (+14 tests neufs, 2 doublures mises à jour)
-- `CHANGELOG.md`, `tasks/lessons.md` (leçon 247), journal du cycle
+- [x] `live-start` ouvre la session (position, `expiresAt`, socket propriétaire)
+- [x] `live-update` rafraîchit la dernière position connue
+- [x] `live-stop` ferme la session
+- [x] `disconnecting` retire les sessions de CE socket (retraction diffusée)
+- [x] minuterie d'expiration : diffuse `location:live-stopped` au terme
+- [x] au-delà du terme, les `live-update` ne sont plus relayés
+- [x] `conversation:join` rejoue `location:live-started` au socket entrant
+- [x] `dispose()` pour l'arrêt de la passerelle et les tests
 
 ## Gates
 
-- 14 tests vus ROUGES avant les correctifs, verts après.
-- `apps/web` : **571 suites / 12 231 tests verts**, 21 skipped (suite complète).
-- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique
-  au cycle 15, rien de neuf sur les fichiers touchés.
-- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
-  ce runner Linux). Le SDK a été LU et vérifié exempt de D1/D2 —
-  `AuthManager.applySession` reconnecte les sockets sur rotation de jeton.
+- [x] tests RED d'abord, verts après
+- [x] suite passerelle complète
+- [x] `tsc --noEmit` passerelle
+- [x] CHANGELOG + journal d'audit + leçons
 
-## Prochains candidats
+## Revue
 
-- `visibilitychange` → `connect()` (hérité du cycle 15, toujours sans risque).
-- Un socket existant mais bloqué en reconnexion n'est pas relancé par
-  `onTokensUpdated` — volontaire (D1 le couvre), à regarder si un onglet reste
-  muet malgré un socket présent.
-- Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
-  `user:preferences-updated` côté iOS.
+Voir `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 18.

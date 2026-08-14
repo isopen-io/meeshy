@@ -1436,3 +1436,120 @@ neuf — le chemin de retour que le web n'avait pas. Vérifié à ce cycle.
   de `user:preferences-updated` non routé côté iOS ;
   `ConversationStore.dispatchPreferencesUpdate` traite `.setClearHistoryBefore`
   en succès purement local.
+
+---
+
+## Cycle 18 — Le partage de position en direct n'avait aucune fin
+
+Routine « amélioration continue temps réel ». Le cycle 17 (PR #2998) a fermé la
+chaîne des préférences de conversation ; sa dette nommée est soit iOS-seule —
+non gatable sur ce runner Linux, aucune toolchain Swift — soit logée dans
+`conversation-preferences.ts`, le fichier même que #2998 modifie, où la reprendre
+n'aurait produit qu'un conflit. Ce cycle repart donc d'un recensement neuf.
+
+### Méthode — matrice de couverture des événements
+
+Pour chacun des **125 `SERVER_EVENTS`** : émis par la passerelle ? référencé par
+`apps/web` ? référencé par iOS ? Les trous sont, par construction, des défauts de
+synchronisation temps réel.
+
+| Émis par la passerelle, absent du web | Émis par la passerelle, absent d'iOS |
+|---|---|
+| `location:live-started/-updated/-stopped` | `authenticated`, `auth:session-revoked` |
+| `message:read-status-updated` (jumeau namespacé, l'ancien est traité) | `notification:read-bulk`, `notification:deleted-bulk` |
+| `heartbeat:ack` | `friend-request:*` (les 4 — couverts par le `notification:new` hérité) |
+| | `message:pending-delivered`, `agent:admin-event` |
+
+Le relevé a désigné `location:live-*` : le seul trou où la passerelle émet, iOS
+consomme, et personne ne ferme le cycle de vie.
+
+### Constats
+
+**D1 — un partage n'est jamais retiré quand le socket du partageur meurt.**
+`location:live-stopped` n'était émis que par un `location:live-stop` EXPLICITE.
+Arrêt forcé de l'app, crash, perte de réseau : aucun stop. Les pairs gardent une
+épingle qui se présente comme vivante, figée sur la dernière position connue,
+jusqu'à `expiresAt` — **jusqu'à 8 heures** (`durationMinutes` ≤ 480).
+
+Le codebase avait déjà exactement ce retrait, pour la frappe :
+`StatusHandler.handleSocketDisconnecting` → `typing:stop`. La position en direct
+était le seul état éphémère par socket à en être privé — et c'est celui dont la
+péremption coûte le plus cher, une position vieille de plusieurs heures servie
+comme actuelle étant un défaut de sécurité avant d'être un défaut d'affichage.
+
+**D2 — aucun état serveur, donc aucun rattrapage.**
+`socket.to(room)` ne touche que les sockets présents à cet instant. Un
+participant qui ouvre la conversation APRÈS le début du partage n'apprenait
+jamais son existence. Le cas se retourne contre le partageur : après une
+reconnexion de son socket, ses `live-update` repartaient pour une session
+qu'aucun pair n'avait vue commencer.
+
+**D3 — l'expiration était un indice client que le serveur n'appliquait jamais.**
+`expiresAt` calculé, expédié, oublié. Rien ne retirait le partage à son terme, et
+rien n'empêchait de relayer des positions au-delà.
+
+### Correctif — un registre de sessions
+
+En mémoire, conforme au « real-time only, no Prisma persistence » du handler :
+« sans persistance » n'impose pas « sans état ». Une entrée par
+`(conversationId, userId)`, propriété du DERNIER appareil à avoir démarré le
+partage. Bornée par le nombre de partageurs connectés — la déconnexion ferme
+l'entrée, le registre est son propre ramasse-miettes.
+
+- `disconnecting` retire les partages de ce socket. **Là et pas dans
+  `disconnect`** : la diffusion vise les rooms de la conversation, dont
+  `disconnect` est déjà sorti. Synchrone à dessein — une seule `await` suffirait
+  à laisser la diffusion partir trop tard. Hors du gate `socketToUser` : le
+  registre porte lui-même l'identité du partageur.
+- Minuterie d'expiration, diffusée à TOUTE la room, **partageur inclus** — la
+  seule des quatre diffusions à ne pas passer par `socket.to`. Elle porte une
+  décision du SERVEUR, pas le geste d'un pair, et le partageur doit l'apprendre
+  pour cesser d'émettre. Les clients rangeant les `LOCATION_LIVE_*` par `userId`
+  de pair distant, sa propre entrée n'existe pas : le self-echo est sans effet
+  aujourd'hui, et c'est le seul point d'accroche possible demain.
+- Passé le terme, les `live-update` ne sont plus relayés — sans cette borne, la
+  mise à jour suivante recréerait l'épingle que le retrait venait d'effacer.
+- `conversation:join` rejoue `location:live-started` au socket entrant, avec la
+  **dernière** position connue. Le rejeu part après la jonction à la room, hors
+  du gate `participationId` (un invité de lien partagé a le même besoin), et sous
+  try/catch — un rejeu perdu ne doit jamais faire échouer une jonction.
+- `dispose()` désarme les minuteries : arrêt de la passerelle, isolation des tests.
+
+**Deux décisions de bord.** Une session **inconnue** n'est jamais une session
+**terminée** : après un redémarrage de la passerelle le registre est vide alors
+que des partages tournent, et couper sur « pas d'entrée » les tuerait tous à
+chaque déploiement. Et `conversation:leave` ne retracte **rien**, à l'inverse de
+la frappe : côté client il signifie « j'ai quitté cet écran », pas « j'ai quitté
+le groupe » — un partage légitimement poursuivi en arrière-plan y perdrait la vie.
+
+### Gates
+
+- 18 tests vus ROUGES avant les correctifs (suite `LocationHandler.lifecycle`),
+  verts après. 9 tests d'intégration en plus (4 `ConversationHandler`,
+  5 `MeeshySocketIOManager`) sur le câblage, qui n'a aucun autre témoin.
+- `services/gateway` : **712 suites / 17 442 tests verts** (suite complète).
+- `tsc --noEmit` passerelle : 0 erreur.
+- iOS et web : aucun fichier touché.
+
+### Reste ouvert après ce cycle
+
+- **`location:live-*` n'a aucun consommateur côté web.** Zéro référence dans
+  `apps/web` : un partage lancé depuis iOS est purement invisible sur le web,
+  avant comme après ce cycle. C'est une fonctionnalité absente, pas un défaut de
+  synchronisation — hors périmètre d'un cycle de correction, et le premier
+  candidat d'un cycle de fonctionnalité.
+- **Le registre ne survit pas à un redémarrage de la passerelle.** Délibéré (cf.
+  « session inconnue ≠ session terminée »), mais le corollaire est qu'un partage
+  traversant un déploiement perd sa minuterie serveur : il redevient borné par le
+  seul `expiresAt` des clients, soit l'état d'avant ce cycle. Le rendre durable
+  demanderait une ligne Prisma, que ce handler n'a pas.
+- **`heartbeat:ack` n'est écouté par personne côté web**, qui émet par ailleurs
+  `heartbeat` sans `clientTime` — le `latencyHintMs` que la passerelle calcule
+  n'est donc jamais ni produit ni lu. Sans conséquence connue (le pong moteur
+  couvre la présence), mais c'est du contrat mort des deux côtés.
+- Hérités des cycles 14/16/17, inchangés : validation ObjectId de `categoryId`
+  (500 au lieu de 400) ; scope communauté de `user:preferences-updated` non routé
+  côté iOS ; `visibilitychange` → `connect()` côté web ;
+  `deletedForUserAt` / `clearHistoryBefore` absents de
+  `conversationPreferencesSchema` ; `POST /conversations/:id/clear-history` sans
+  aucun client, et son faux succès local côté iOS.
