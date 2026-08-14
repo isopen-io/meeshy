@@ -30,7 +30,20 @@ final class RouterTests: XCTestCase {
     }
 
     func test_isHub_contacts_returnsTrue() {
-        XCTAssertTrue(Route.contacts.isHub)
+        XCTAssertTrue(Route.contacts().isHub)
+    }
+
+    func test_contacts_defaultsToDirectoryTab() {
+        XCTAssertEqual(Route.contacts(), .contacts(.contacts))
+    }
+
+    func test_contacts_callsTab_isDistinctFromDirectory() {
+        XCTAssertNotEqual(Route.contacts(.calls), Route.contacts())
+    }
+
+    func test_contacts_displayTitle_followsInitialTab() {
+        XCTAssertEqual(Route.contacts(.calls).displayTitle, PeopleTab.calls.title)
+        XCTAssertEqual(Route.contacts().displayTitle, PeopleTab.contacts.title)
     }
 
     func test_isHub_peopleDiscovery_returnsTrue() {
@@ -241,9 +254,16 @@ final class RouterTests: XCTestCase {
 
     func test_push_contacts_addsToPath() {
         let router = Router()
-        router.push(.contacts)
+        router.push(.contacts())
         XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .contacts)
+        XCTAssertEqual(router.currentRoute, .contacts())
+    }
+
+    func test_push_contactsCallsTab_addsToPath() {
+        let router = Router()
+        router.push(.contacts(.calls))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .contacts(.calls))
     }
 
     func test_push_peopleDiscovery_addsToPath() {

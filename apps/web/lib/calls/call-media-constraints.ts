@@ -36,9 +36,22 @@ export function getCallMediaConstraints(type: CallMediaType): MediaStreamConstra
  * Must be called on any failure between acquiring the stream and the
  * VideoCallInterface mount that would otherwise consume it — leaving the
  * mic/camera hot after a failed join is a privacy regression of its own.
+ *
+ * The global handoff has exactly one slot, but two independent, uncoordinated
+ * flows can write to it: an outbound call (use-video-call.ts) and an inbound
+ * accept (CallManager.tsx). Each has its own re-entrancy guard, but neither
+ * knows about the other — an outbound call's ack can fail (or time out) AFTER
+ * an unrelated incoming call has already been accepted and overwritten the
+ * global with its own, still-live stream. Only clear the global when it still
+ * points at the stream THIS call owns; otherwise this cleanup would delete a
+ * different flow's live stream reference, orphaning it (camera/mic stays hot,
+ * nothing ever calls stop() on it) and forcing a redundant getUserMedia()
+ * re-prompt on the flow that legitimately owns the handoff.
  */
 export function stopPreauthorizedStream(stream: MediaStream | null): void {
   if (!stream) return;
   stream.getTracks().forEach((track) => track.stop());
-  delete (window as any).__preauthorizedMediaStream;
+  if ((window as any).__preauthorizedMediaStream === stream) {
+    delete (window as any).__preauthorizedMediaStream;
+  }
 }
