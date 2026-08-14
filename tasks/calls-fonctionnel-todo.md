@@ -8273,3 +8273,96 @@ Vague 111). Voir `tasks/2026-08-13-group-calls-gap-analysis.md` pour le reste
 du chantier « appels de groupe » : grille adaptative web, roster, `onRemove`
 branché sur le kick REST, i18n roster (W6/W7), mesh iOS mono-PC (I1-I7), SFU
 (Phase 4, optionnel — déclencheur : besoin réel >4-5 participants).
+
+## Vague 124 — `stopPreauthorizedStream` effaçait le handoff global même quand un AUTRE flux d'appel venait de l'écraser (web) (2026-08-14)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent — branche dédiée réalignée sur
+`origin/main` (`72421185`, contient la Vague 122 — PR mergée), aucune PR ouverte de cette routine
+au démarrage, aucun commit d'avance/retard. Ce sandbox n'a ni Xcode ni SDK Android (`swift`/
+`xcodebuild` absents) : périmètre web+gateway, comme la quasi-totalité des vagues récentes.
+Recensement par audit ciblé (agent en lecture seule) plutôt que relecture linéaire d'un dossier
+déjà labouré 122 fois : trois candidats remontés, classés par confiance/valeur/surface de fix.
+Les deux runners-up sont documentés en fin de section plutôt que traités ce cycle (l'un est une
+décision produit — plafond de mesh P2P — trop large pour un fix chirurgical isolé ; l'autre est
+un nettoyage de code mort à faible enjeu, laissé pour un cycle dédié « suppression » comme les
+Vagues 117/118).
+
+- **Root cause** : `window.__preauthorizedMediaStream` est un handoff global à UN SEUL slot, écrit
+  par deux flux d'appel indépendants et non coordonnés — l'appel SORTANT
+  (`use-video-call.ts#startCall`) et l'ACCEPTATION d'un appel ENTRANT
+  (`CallManager.tsx#handleAcceptCall`). Chacun a déjà son propre garde de ré-entrance
+  (`startCallInFlightRef`, `acceptingCallIdRef`), documenté en commentaire comme protégeant contre
+  un double-clic sur LE MÊME flux — mais ni l'un ni l'autre ne sait que l'autre existe. Rien
+  n'empêche un utilisateur d'avoir un `call:initiate` sortant en vol (ack jusqu'à 10s,
+  `CALL_INITIATE_ACK_TIMEOUT_MS`) pendant qu'un appel entrant SANS RAPPORT arrive et est accepté
+  dans le même onglet — séquence tout à fait ordinaire, rien ne marque l'appelant « occupé » tant
+  que son propre ack n'a pas résolu. `stopPreauthorizedStream` (`call-media-constraints.ts`),
+  appelée sur CHAQUE chemin d'échec des deux flux, effaçait le global sans jamais vérifier qu'il
+  pointait encore vers le stream qu'elle vient d'arrêter.
+- **Scénario de défaillance** : (1) appel sortant vers la conversation A → `getUserMedia()` réussit
+  → `streamA` publié dans le global → `call:initiate` en vol. (2) Pendant l'attente, un appel
+  entrant B arrive, l'utilisateur clique Accepter → `getUserMedia()` réussit → `streamB` ÉCRASE le
+  même global → `call:join` en vol, pas encore résolu. (3) L'ack de A revient rejeté/expiré (occupé,
+  bloqué, rate-limité, ou simplement un paquet perdu — n'importe lequel de ces cas peut arriver
+  avant le round-trip de B sur un réseau réel) → `stopPreauthorizedStream(streamA)` arrête bien les
+  pistes de A, mais efface AUSSI le global qui contient à cet instant `streamB`, toujours vivant et
+  sur le point d'être consommé. (4) L'ack de B réussit ensuite, `VideoCallInterface` monte pour B,
+  lit le global → `undefined` → retombe sur `initializeLocalStream()`, qui rappelle `getUserMedia()`
+  une seconde fois pour un appel dont la permission a déjà été accordée secondes plus tôt (re-prompt
+  surprise, échec possible sur des navigateurs stricts) — pendant que les pistes originales de
+  `streamB` ne sont plus référencées par personne et ne sont jamais `.stop()`ées : capture
+  caméra/micro vivante et orpheline pour le reste de la session (fuite de ressource + régression de
+  vie privée, le voyant caméra reste allumé).
+- **Fix** : même idiome « snapshot-et-compare avant de muter un état partagé » déjà utilisé ailleurs
+  dans cette base (`VideoCallInterface.tsx`, garde `connectionAtLeave` avant son propre nettoyage
+  différé). `stopPreauthorizedStream` n'efface le global que s'il pointe ENCORE vers le stream
+  qu'elle vient d'arrêter (`=== stream`) — sinon elle arrête ses propres pistes et laisse le global
+  intact, quel que soit son contenu actuel. Un seul appelant, deux comportements : le cas normal
+  (rien n'a écrasé le handoff) est inchangé bit à bit ; le cas de course laisse désormais le flux
+  gagnant consommer son propre stream sans re-prompt ni fuite.
+- **Tests** (TDD, RED confirmé en exécutant le nouveau cas AVANT le fix — `1 failed, 4 passed`) :
+  nouveau cas dans `call-media-constraints.test.ts` — streamA publié puis écrasé par streamB,
+  `stopPreauthorizedStream(streamA)` arrête UNIQUEMENT les pistes de A, ne touche jamais aux pistes
+  de B, et le global reste `=== streamB` après l'appel. Sweep `--testPathPatterns="call"` :
+  **53 suites / 472 tests verts**, 0 régression. `npx tsc --noEmit` : diff ligne-à-ligne AVANT/APRÈS
+  (`git stash`) — mêmes **1764 erreurs préexistantes**, seul le bruit d'ordre d'union non
+  déterministe entre deux runs (3 lignes, aucune ne touchant le fichier modifié) ; 0 nouvelle
+  erreur. `eslint` : non exécutable dans ce sandbox (même `TypeError: Converting circular
+  structure to JSON` pré-existant sur le plugin `react`, reproductible hors de ce diff) —
+  limitation d'environnement documentée depuis la Vague 111, pas un signal sur ce changement.
+  Prérequis CLAUDE.md rejoués : `bun install --ignore-scripts` (bun 1.3.11 disponible localement,
+  pas 1.3.14), puis `packages/shared && npx prisma generate --generator client` + `bun run build`.
+
+### Reste ouvert
+
+Reconduit tel quel : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+(Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; sélection
+réelle de périphérique de sortie audio (`setSinkId`, confirmé toujours absent — `rg setSinkId
+apps/web` → 0 résultat — candidat plus ambitieux nécessitant un sélecteur d'UI, hors scope d'un
+fix chirurgical).
+
+**Nouveau (audit de cette vague, non traités)** :
+- **`MAX_CALL_PARTICIPANTS = 9999` (gateway `CallService.ts`) sans plafond effectif sur le mesh
+  P2P.** Le verrou 1:1 a été levé le 2026-08-13 (`b06d54681`) mais l'architecture reste un mesh
+  full-P2P pur (aucun SFU dans le dépôt, `CallSession.mode` figé `'p2p'`) ; le plan produit dédié
+  (`tasks/2026-08-13-group-calls-gap-analysis.md`) chiffre lui-même le plafond praticable à
+  ~4-5 participants et prescrit `CallMetadata.maxParticipants` (déjà typé dans
+  `packages/shared/types/video-call.ts`) comme mécanisme — jamais lu par `CallService.ts`, qui ne
+  gate que sur la constante quasi-illimitée. Au-delà de ~5-6 participants actifs (taille de groupe
+  courante), chaque client ouvre une `RTCPeerConnection` par pair et encode/envoie sa propre vidéo à
+  chacun (pas de simulcast/SVC câblé côté client non plus) : dégradation silencieuse, gel vidéo,
+  drain CPU/batterie ou crash d'onglet, sans AUCUN avertissement (9999 ne se déclenche jamais).
+  Non traité ce cycle : décision produit (quel plafond, quel comportement de dégradation) qui
+  dépasse un fix chirurgical isolé — mais l'écart entre le diagnostic déjà fait par l'équipe et le
+  code qui ne le lit pas mérite un chantier dédié plutôt qu'un nouveau report.
+- **Code mort dérivé dans `WebRTCService`** (`webrtc-service.ts` — `startQualityMonitor`/
+  `stopQualityMonitor`/`computeQualityLevel`/`onConnectionQualityChange`) : jamais appelé en
+  production (le pipeline de qualité réel est `use-call-quality.ts`, entièrement séparé), et les
+  deux implémentations ont DÉRIVÉ (seuils RTT différents : `good < 200`/`< 400` côté mort vs.
+  `< 300`/`< 450` côté vivant, recalibré mobile). Aucun symptôme aujourd'hui (code inatteignable),
+  mais même famille que les Vagues 117/118 (`CallStatusIndicator`, `ConnectionQualityBadgeCompact`)
+  — un futur correctif de qualité risque d'éditer la mauvaise implémentation. Candidat direct pour
+  un cycle « suppression » dédié.

@@ -950,7 +950,14 @@ describe('CallStore', () => {
       removeSpy.mockRestore();
     });
 
-    it('beforeunload handler emits CALL_END when socket is connected', () => {
+    // Regression (2026-08-14): this used to emit CALL_END unconditionally.
+    // CALL_END always terminates the WHOLE CallSession — correct for a 1:1
+    // call, but for a group call it ended the meeting for every OTHER
+    // participant just because one tab closed. CALL_LEAVE routes through
+    // `CallService.leaveCall()`, which already knows the difference: it ends
+    // the call only when this is a direct (1:1) conversation or the last
+    // remaining participant, and otherwise just removes this participant.
+    it('beforeunload handler emits CALL_LEAVE (not CALL_END) when socket is connected', () => {
       const capturedHandlers: EventListener[] = [];
       const addSpy = jest.spyOn(window, 'addEventListener').mockImplementation(
         (event: string, handler: EventListenerOrEventListenerObject) => {
@@ -971,9 +978,13 @@ describe('CallStore', () => {
       capturedHandlers[capturedHandlers.length - 1](new Event('beforeunload'));
 
       expect(mockSocketEmit).toHaveBeenCalledWith(
+        expect.stringContaining('leave'),
+        { callId: 'call-unload-end' }
+      );
+      expect(mockSocketEmit).not.toHaveBeenCalledWith(
         expect.stringContaining('end'),
-        { callId: 'call-unload-end', reason: 'completed' },
-        expect.any(Function)
+        expect.anything(),
+        expect.anything()
       );
     });
 

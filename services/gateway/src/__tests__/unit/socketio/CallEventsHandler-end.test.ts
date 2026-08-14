@@ -212,7 +212,8 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('calls callService.endCall with the correct arguments', () => {
       expect(mockEndCall).toHaveBeenCalledWith(
-        CALL_ID, CALLER_ID, PARTICIPANT_ID, false, END_DATA.reason
+        CALL_ID, CALLER_ID, PARTICIPANT_ID, false, END_DATA.reason,
+        { preJoinDecline: false }
       );
     });
 
@@ -631,6 +632,139 @@ describe('CallEventsHandler — call:end handler', () => {
 
     it('does NOT call endCall', () => {
       expect(mockEndCall).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Decline-before-join fix (2026-08-14): a callee declining a still-ringing
+  // call has NO CallParticipant row yet — `call:join` is the only path that
+  // creates one for a callee, and the decline button fires `call:end` with
+  // reason='rejected' before ever joining. resolveActiveCallParticipantId
+  // correctly returns null for them; the handler must fall back to
+  // resolvePreJoinDeclineParticipantId (itself backed by getCallSession +
+  // conversation-membership) instead of rejecting outright.
+  // -------------------------------------------------------------------------
+
+  describe('pre-join decline: callee declines a still-ringing call before ever joining', () => {
+    const REJECT_DATA = { callId: CALL_ID, reason: 'rejected' };
+
+    it('authorizes the decline and calls endCall with preJoinDecline: true', async () => {
+      // No CallParticipant row at all for CALLER_ID (the callee here) —
+      // resolveActiveCallParticipantId returns null. Call never answered.
+      mockGetCallSession.mockResolvedValue({
+        answeredAt: null,
+        participants: [{ participantId: 'other-participant', leftAt: null, participant: { userId: 'other-user' } }],
+      });
+      mockEndCall.mockResolvedValue(makeCallSession({ status: 'rejected', endReason: 'rejected', duration: 0 }));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](REJECT_DATA, ack);
+
+      expect(mockEndCall).toHaveBeenCalledWith(
+        CALL_ID, CALLER_ID, PARTICIPANT_ID, false, 'rejected',
+        { preJoinDecline: true }
+      );
+      expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('does NOT authorize a stranger with no conversation membership', async () => {
+      mockGetCallSession.mockResolvedValue({ answeredAt: null, participants: [] });
+
+      const prisma = makePrisma({
+        // Not a conversation member either.
+        participantFindFirst: jest.fn<any>().mockResolvedValue(null),
+      });
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](REJECT_DATA, ack);
+
+      expect(mockEndCall).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+
+    it('does NOT authorize a caller who already has a row for this call (even a left one) — stays on the stricter path', async () => {
+      // Has a row, but it's left — this is 2026-07-10b's exact target, must
+      // stay blocked regardless of reason='rejected'.
+      mockGetCallSession.mockResolvedValue({
+        answeredAt: null,
+        participants: [{ participantId: PARTICIPANT_ID, leftAt: new Date(), participant: { userId: CALLER_ID } }],
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](REJECT_DATA, ack);
+
+      expect(mockEndCall).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+    });
+
+    it('does NOT authorize a pre-join decline once the call has already been answered', async () => {
+      mockGetCallSession.mockResolvedValue({
+        answeredAt: new Date(),
+        participants: [{ participantId: 'other-participant', leftAt: null, participant: { userId: 'other-user' } }],
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](REJECT_DATA, ack);
+
+      expect(mockEndCall).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+    });
+
+    it('does not affect the non-decline non-participant path (reason != rejected stays rejected outright)', async () => {
+      // Same "never joined, but IS a conversation member" shape as the
+      // authorized case above, but with the default reason ('hangup') — the
+      // pre-join fallback must not even be attempted.
+      mockGetCallSession.mockResolvedValue({
+        answeredAt: null,
+        participants: [{ participantId: 'other-participant', leftAt: null, participant: { userId: 'other-user' } }],
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(mockEndCall).not.toHaveBeenCalled();
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
     });
   });
 

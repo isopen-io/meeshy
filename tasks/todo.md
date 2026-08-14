@@ -1,72 +1,235 @@
-# Cycle 16 — le socket restait scellé sur le jeton de sa naissance
+# Cycle 17 — « Retrouver mes contacts » échouait, et ne gardait rien
 
-Branche : `claude/keen-hamilton-55j95x`, partie de `origin/main` (le cycle
-précédent — miroir de connexion, PR #2991 — était intégralement mergé).
+Branche : `claude/meeshy-contacts-sync-8gexy1`, partie de `origin/main`.
 
-## Point de départ (Phase 1)
+## Point de départ
 
-Pas de recensement neuf : reprise directe du reste ouvert nommé en fin de
-cycle 15, « `initializeConnection()` rend `null` sur JWT expiré et rien ne
-réessaie ». L'instruction de la routine est de partir du développement
-précédent, c'est donc sa dette qui ouvre ce cycle.
+Rapport utilisateur : « Lorsque je fais retrouver mes contacts sur meeshy, j'ai
+une erreur gateway », logs à l'appui —
 
-## Défauts retenus (Phases 2 / 3 / 10)
+```
+[WARN] [GWY] [Normalize] {"msg":"normalizePhoneWithCountry parse error","data":{"name":"ParseError"}}
+```
 
-**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
-`io(url, { auth: { token } })` fige les identifiants à la construction et
-Socket.IO rejoue cette charge à CHAQUE reconnexion. Trois chemins font tourner
-le jeton sous ses pieds (401 REST, pré-contrôle d'expiration, rotation de
-session anonyme) : après l'un d'eux, chaque handshake présente un jeton refusé,
-la boucle interne brûle ses 5 tentatives, `reconnect_failed` passe la main à
-notre backoff, qui represente le même jeton mort — indéfiniment. Déclencheur
-le plus banal : un redéploiement de la passerelle.
+Et une demande de fond : pouvoir **synchroniser et CONSERVER** le carnet
+d'adresses, puis **consulter ce répertoire** avec un bouton « Lui écrire »
+quand le contact est sur Meeshy (rapproché par email, numéro, ou pseudo vCard).
 
-**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne
-revient.** Le rafraîchissement REST réussit sans que personne ne le dise à la
-couche temps réel. Seules les actions SORTANTES (`sendMessage`,
-`joinConversation`) réveillent la connexion : un lecteur resté sur la liste des
-conversations n'en déclenche aucune et n'a plus RIEN en temps réel pour toute
-la session.
+## Défauts retenus
 
-**D3 — `expiresIn` écrit dans l'emplacement du jeton de session** (décalage de
-position d'argument dans `authService.refreshToken()`). Sans conséquence
-observable, le test existant verrouillait le décalage.
+**D1 — un carnet d'adresses réel faisait rejeter le lot entier.** `POST
+/users/me/contacts/match` validait le payload avec un Zod strict : `.max(50)`
+numéros, `.max(64)` caractères par numéro, `.min(1)` contact, et surtout
+`defaultCountry: z.string().length(2)`. Or `Locale.current.region?.identifier`
+(iOS) peut rendre un identifiant UN M49 numérique — « 419 » pour l'Amérique
+latine. Une seule de ces conditions ⇒ `400 Invalid contacts payload` pour
+TOUT le carnet. Un carnet vide (permission accordée, aucun contact) partait
+lui aussi en 400.
 
-Analyse complète : `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 16.
+**D2 — chaque entrée illisible levait une exception et écrivait un WARN.**
+`parsePhoneNumber` de libphonenumber-js **lève** une `ParseError` sur `*123#`,
+`SOS`, une chaîne vide, un indicatif inconnu — tout ce dont un carnet réel est
+plein. `normalizePhoneWithCountry` l'absorbait déjà (retour `null`), mais la
+journalisait en WARN : des centaines de lignes et autant d'exceptions
+levées/attrapées par synchronisation. C'est la ligne que l'utilisateur a
+collée. La garde `looksLikePhoneNumber` existait déjà dans le module — la
+route ne s'en servait pas.
 
-## Correctifs
+**D3 — `normalizePhoneWithCountry` remontait une TypeError sur entrée
+non-string.** `phoneNumber.trim()` était appelé AVANT le `try`, donc un
+`42` ou un `null` glissé dans un tableau de numéros traversait la fonction et
+finissait en 500.
 
-- `auth` devient un **résolveur** réévalué à chaque handshake, et le rustinage
-  impératif `socket.auth = { token }` disparaît (il remplacerait le résolveur).
-- `authManager.registerOnTokensUpdated()` — l'orchestrateur (et non
-  `ConnectionService`, qui ne sait pas brancher les écouteurs) rouvre le socket
-  quand il n'en existe aucun.
-- `refreshToken()` passe `expiresIn` dans son propre emplacement.
+**D4 — rien n'était conservé.** Le commentaire de tête l'assumait (« Les
+contacts ne sont JAMAIS persistés »). Conséquence produit : le filtre
+« Repertoire » de l'onglet Contacts était un bouton mort qui affichait
+« Bientot disponible », et chaque consultation aurait imposé un re-scan du
+carnet.
 
-## Fichiers touchés
+**D5 — le pseudo vCard n'était pas un identifiant de rapprochement.** Seuls
+numéro et email étaient interrogés, alors que la fiche porte un `nickname` et
+des profils sociaux.
 
-- `apps/web/services/socketio/connection.service.ts`
-- `apps/web/services/socketio/orchestrator.service.ts`
-- `apps/web/services/auth-manager.service.ts`
-- `apps/web/services/auth.service.ts`
-- 6 fichiers de tests (+14 tests neufs, 2 doublures mises à jour)
-- `CHANGELOG.md`, `tasks/lessons.md` (leçon 247), journal du cycle
+## Ce qui a été fait
 
-## Gates
+### Gateway
+- `utils/contact-identifiers.ts` (neuf) — normalisation tolérante : pré-filtre
+  `looksLikePhoneNumber` avant libphonenumber, emails/pseudos normalisés,
+  entrées malformées écartées, lot surdimensionné TRONQUÉ (jamais rejeté),
+  `contactKey` = SHA-256 des identifiants triés (clé d'upsert idempotente).
+- `utils/normalize.ts` — `ParseError` en DEBUG (donnée, pas incident), WARN
+  réservé à l'inattendu ; garde `typeof !== 'string'` avant `.trim()`.
+- `services/ContactDirectoryService.ts` (neuf) — `match` (rapprochement pur,
+  téléphone > email > pseudo, exclusion des blocages dans les deux sens),
+  `sync` (upsert `(ownerId, contactKey)`, mode `merge`/`replace`), `list`,
+  `clear`.
+- `routes/users/contacts-match.ts` — réécrite sur ces briques ; plus aucun 400
+  sur un carnet atypique ou vide ; `processedContacts` dit au client ce qui a
+  réellement été traité.
+- `routes/users/contacts-directory.ts` (neuf) — `POST /users/me/contacts/sync`,
+  `GET /users/me/contacts`, `DELETE /users/me/contacts`.
+- Prisma : modèle `UserContact` (+ relations `User`).
 
-- 14 tests vus ROUGES avant les correctifs, verts après.
-- `apps/web` : **571 suites / 12 231 tests verts**, 21 skipped (suite complète).
-- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique
-  au cycle 15, rien de neuf sur les fichiers touchés.
-- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
-  ce runner Linux). Le SDK a été LU et vérifié exempt de D1/D2 —
-  `AuthManager.applySession` reconnecte les sockets sur rotation de jeton.
+### SDK
+- `ContactDirectoryModels.swift`, `ContactDirectoryService.swift`,
+  `usernames` sur `ContactMatchEntry`, store de cache `phonebook` (chiffré).
 
-## Prochains candidats
+### iOS
+- `ContactSyncService` — lit `nickname` + profils sociaux, expose
+  `syncDirectory(mode:)`.
+- `PhonebookViewModel` + `PhonebookListView` (neufs) — répertoire cache-first,
+  filtres Tous / Sur Meeshy / À inviter, recherche locale, **« Lui écrire »**
+  (conversation directe) ou **« Inviter »** (SMS).
+- `ContactsListTab` — le filtre « Repertoire » n'est plus un placeholder.
+- `DiscoverViewModel.importContacts` — « Retrouver mes contacts » synchronise
+  et CONSERVE désormais, puis relit le répertoire pour l'affichage.
 
-- `visibilitychange` → `connect()` (hérité du cycle 15, toujours sans risque).
-- Un socket existant mais bloqué en reconnexion n'est pas relancé par
-  `onTokensUpdated` — volontaire (D1 le couvre), à regarder si un onglet reste
-  muet malgré un socket présent.
-- Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
-  `user:preferences-updated` côté iOS.
+## Deuxième passe (demande utilisateur en cours de cycle)
+
+Synchronisation avec la PR #2996 (échelle du menu flottant → journal d'appels)
+mergée dans cette branche, puis trois points :
+
+**D6 — le sous-menu « Repertoire » n'affichait rien à l'ouverture.** Le
+répertoire ne se remplit qu'à la synchronisation ; un onglet vide avec un
+bouton était une impasse alors que la permission Contacts est souvent DÉJÀ
+accordée (accordée depuis « Retrouver mes contacts »). `load()` déclenche
+désormais un remplissage SILENCIEUX quand le répertoire est vide **et** que
+l'autorisation existe déjà — jamais de demande de permission depuis cet écran,
+et une seule tentative par cycle de vie du ViewModel.
+
+**D7 — la recherche s'arrêtait au répertoire.** Elle cherche maintenant
+d'abord dans le carnet (local, instantané) et RELAIE vers les utilisateurs de
+la plateforme quand le carnet ne répond rien : requête ≥ 2 caractères, temps
+mort de 300 ms, résultats sous un en-tête « Sur Meeshy, hors de ton
+repertoire » pour qu'aucune ligne ne se fasse passer pour un contact du carnet.
+Chaque ligne porte « Lui écrire ».
+
+**D8 — « Affilies » était un autre bouton mort, et sa source de données était
+vide.** `GET /affiliate/stats` déclarait `data` comme un objet SANS
+`properties` : fast-json-stringify sérialisait `{}`. Compteurs, filleuls et
+tokens étaient effacés à la sérialisation, silencieusement — le test existant
+n'assertait que `success: true`. Corrigé (`additionalProperties: true`) et
+verrouillé par un test sur le contenu. L'onglet liste maintenant les filleuls
+avec « Lui écrire ».
+
+## Vérification
+
+- Suite gateway complète : **714 suites / 17 487 tests verts** (`npx jest`).
+- `tsc --noEmit` gateway : propre.
+- Nouveaux tests : 27 (`contact-identifiers`), 4 (`normalize-logging`),
+  21 (`ContactDirectoryService`), 18 (`contacts-directory` routes),
+  15 (`contacts-match` routes, dont 5 neufs sur la tolérance),
+  1 (`affiliate` — la charge de stats survit à la sérialisation).
+- iOS : tests écrits (`PhonebookViewModelTests` — 26,
+  `AffiliatesViewModelTests` — 8, `DiscoverViewModelTests` mis à jour, mocks).
+  **Non exécutés** — pas de toolchain Swift/Xcode sur l'hôte de ce cycle.
+  `./apps/ios/meeshy.sh test` reste à passer sur une machine macOS.
+
+## Reste ouvert
+
+- `ContactSyncProviding.findFriendsFromContacts()` n'a plus d'appelant côté app
+  (le chemin produit passe par `syncDirectory`). Conservé : c'est la façade du
+  endpoint `/match`, toujours servi pour les versions déjà déployées.
+- Le répertoire n'est pas encore paginé côté client (200 premières entrées) ;
+  les affiliés non plus (tout ce que rend `/affiliate/stats`).
+- Aucune préférence de découvrabilité (« ne pas me retrouver par numéro ») —
+  parité avec le comportement d'avant ce cycle, à traiter séparément.
+
+---
+
+# Cycle 17 (2026-08-14) — les préférences de conversation ne traversaient ni le sérialiseur ni le socket web
+
+Routine « amélioration continue temps réel », phases 2 / 3 / 11.
+Base : `origin/main` @ `14c226e08` (le cycle 16 est mergé).
+
+## Défauts retenus
+
+**D1 — le compteur `version` n'a jamais quitté le serveur.**
+`conversationPreferencesSchema` (le sérialiseur de réponse Fastify des trois
+surfaces REST : `GET` unitaire, `GET` liste, `PUT`) n'énumère pas `version`.
+Fastify retire toute propriété absente du schéma : le compteur monotone sur
+lequel TOUS les clients sont censés arbitrer (`incoming.version <= local →
+drop`) est effacé de chaque réponse. Côté iOS, `DefaultPreferenceWritingAdapter`
+refait un GET APRÈS le PUT dans le seul but de récupérer ce `version` — et
+reçoit `nil` à tous les coups, donc `authoritativeVersion` n'est jamais
+appliqué et `userState.version` reste sur l'estimation optimiste locale.
+
+**D2 — le web jette le scope conversation de `user:preferences-updated`.**
+`use-socket-cache-sync.ts` discrimine l'union à trois branches et n'en traite
+que deux (`category`, `communityId`) ; la branche `conversationId` sort de la
+fonction sans rien faire. Le store Zustand `conversation-preferences-store`
+n'a AUCUN câblage socket. Épingler / couper le son / archiver depuis un autre
+appareil ne parvient donc jamais à un onglet web ouvert : la liste garde son
+état périmé (et son tri) jusqu'à un rechargement.
+
+**D3 — le type partagé n'a pas de `version`.**
+`UserConversationPreferences` ne modélise pas le compteur, donc le web ne peut
+pas arbitrer de manière typée même une fois D1 corrigé.
+
+**D3 — `normalizePhoneWithCountry` remontait une TypeError sur entrée
+non-string.** `phoneNumber.trim()` était appelé AVANT le `try`, donc un
+`42` ou un `null` glissé dans un tableau de numéros traversait la fonction et
+finissait en 500.
+
+- `version` ajouté à `conversationPreferencesSchema` ; la branche « aucune
+  ligne stockée » du GET unitaire répond `version: 0` explicitement.
+- `readonly version?: number` sur `UserConversationPreferences`, porté par
+  `transformPreferencesData` côté web.
+- `applyRemotePreferences()` sur le store web : arbitrage par `version`,
+  gestion de `reset`, création d'entrée absente.
+- Branche `conversationId` câblée dans `use-socket-cache-sync.ts`.
+
+### Gateway
+- `utils/contact-identifiers.ts` (neuf) — normalisation tolérante : pré-filtre
+  `looksLikePhoneNumber` avant libphonenumber, emails/pseudos normalisés,
+  entrées malformées écartées, lot surdimensionné TRONQUÉ (jamais rejeté),
+  `contactKey` = SHA-256 des identifiants triés (clé d'upsert idempotente).
+- `utils/normalize.ts` — `ParseError` en DEBUG (donnée, pas incident), WARN
+  réservé à l'inattendu ; garde `typeof !== 'string'` avant `.trim()`.
+- `services/ContactDirectoryService.ts` (neuf) — `match` (rapprochement pur,
+  téléphone > email > pseudo, exclusion des blocages dans les deux sens),
+  `sync` (upsert `(ownerId, contactKey)`, mode `merge`/`replace`), `list`,
+  `clear`.
+- `routes/users/contacts-match.ts` — réécrite sur ces briques ; plus aucun 400
+  sur un carnet atypique ou vide ; `processedContacts` dit au client ce qui a
+  réellement été traité.
+- `routes/users/contacts-directory.ts` (neuf) — `POST /users/me/contacts/sync`,
+  `GET /users/me/contacts`, `DELETE /users/me/contacts`.
+- Prisma : modèle `UserContact` (+ relations `User`).
+
+- Tests vus ROUGES avant correctifs, verts après.
+- Suite gateway + suite web complètes.
+
+## Revue
+
+Les trois correctifs sont livrés. Détail complet et surfaces vérifiées correctes :
+`tasks/realtime-sync-audit-2026-07-11.md` § Cycle 17.
+
+### Fichiers touchés
+
+- `services/gateway/src/routes/conversation-preferences.ts` (schéma + branche defaults)
+- `packages/shared/types/user-preferences.ts` (`version?: number`)
+- `apps/web/services/user-preferences.service.ts` (`transformPreferencesData`)
+- `apps/web/stores/conversation-preferences-store.ts` (`applyRemotePreferences`)
+- `apps/web/hooks/queries/use-socket-cache-sync.ts` (branche `conversationId`)
+- 4 fichiers de tests (+13 tests neufs, 1 suite neuve)
+- `CHANGELOG.md`, `tasks/lessons.md` (leçon 249), journal du cycle
+
+### Gates
+
+- 13 tests vus ROUGES avant correctifs, verts après.
+- passerelle **711 suites / 17 420 tests** · web **572 suites / 12 251 tests**
+  · shared **54 fichiers / 1 542 tests** — tous verts.
+- `tsc --noEmit` : passerelle 0 erreur ; web 1229 avant ET après (base
+  pré-existante inchangée, rien sur les fichiers touchés).
+- iOS hors périmètre : aucun fichier Swift touché, et le correctif D1 lui
+  profite sans changement.
+
+### Prochains candidats
+
+- `clear-history` sans client, et le faux succès local d'iOS sur
+  `.setClearHistoryBefore` (dimension vie privée le jour où une UI l'appelle).
+- `deletedForUserAt` / `clearHistoryBefore` absents du même sérialiseur REST.
+- Restes des cycles 14/16 : validation ObjectId de `categoryId`, scope
+  communauté de `user:preferences-updated` non routé côté iOS,
+  `visibilitychange` → `connect()` côté web.

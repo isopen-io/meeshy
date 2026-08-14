@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import type { UserPreferencesConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 interface ConversationPreferencesState {
   // Preferences map by conversation ID
@@ -49,6 +50,9 @@ interface ConversationPreferencesActions {
 
   // Update preferences
   updatePreference: (conversationId: string, prefs: Partial<UserConversationPreferences>) => void;
+
+  // Apply a `user:preferences-updated` broadcast (conversation scope)
+  applyRemotePreferences: (event: UserPreferencesConversationUpdatedEventData) => void;
 
   // Reload from backend
   refreshPreferences: () => Promise<void>;
@@ -271,6 +275,43 @@ export const useConversationPreferencesStore = create<ConversationPreferencesSta
         newMap.set(conversationId, { ...currentPrefs, ...prefs });
       }
 
+      set({ preferencesMap: newMap });
+    },
+
+    applyRemotePreferences: (event: UserPreferencesConversationUpdatedEventData) => {
+      const { conversationId, version } = event;
+      const current = get().preferencesMap.get(conversationId);
+
+      // La ligne est PAR UTILISATEUR : `writeConversationPreferences` diffuse à
+      // tous ses appareils, y compris celui qui vient d'écrire. `version` est
+      // l'arbitre — une diffusion qui ne dépasse pas l'état local décrit un
+      // passé, et l'appliquer rembobinerait une action plus récente.
+      if (version <= (current?.version ?? 0)) return;
+
+      // `reset: false` sans snapshot n'apprend rien. Avancer le compteur ferait
+      // alors tomber la PROCHAINE diffusion, celle qui portait l'état.
+      if (!event.reset && !event.preferences) return;
+
+      const payload = event.preferences;
+      const next: UserConversationPreferences = {
+        id: current?.id ?? '',
+        userId: current?.userId || event.userId,
+        conversationId,
+        isPinned: payload?.isPinned ?? false,
+        isMuted: payload?.isMuted ?? false,
+        isArchived: payload?.isArchived ?? false,
+        tags: payload ? [...payload.tags] : [],
+        categoryId: payload?.categoryId ?? undefined,
+        orderInCategory: payload?.orderInCategory ?? undefined,
+        customName: payload?.customName ?? undefined,
+        reaction: payload?.reaction ?? undefined,
+        createdAt: current?.createdAt ?? new Date(),
+        updatedAt: new Date(),
+        version,
+      };
+
+      const newMap = new Map(get().preferencesMap);
+      newMap.set(conversationId, next);
       set({ preferencesMap: newMap });
     },
 

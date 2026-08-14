@@ -43,6 +43,11 @@ public actor CacheCoordinator {
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
+    /// Répertoire — carnet d'adresses synchronisé. Chiffré : ce sont les
+    /// contacts de l'utilisateur, la donnée la plus personnelle du cache.
+    public let phonebook: GRDBCacheStore<String, DirectoryContact>
+    /// Filleuls de l'affiliation (onglet « Affilies » de l'annuaire).
+    public let affiliates: GRDBCacheStore<String, AffiliateReferral>
     public let callHistory: GRDBCacheStore<String, APICallRecord>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
     /// User-defined conversation categories. Single key "list" stores the full
@@ -278,6 +283,8 @@ public actor CacheCoordinator {
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
+        self.phonebook = GRDBCacheStore(policy: .participants, db: db, namespace: "phonebook", encrypted: true)
+        self.affiliates = GRDBCacheStore(policy: .participants, db: db, namespace: "affiliates")
         self.callHistory = GRDBCacheStore(policy: .callHistory, db: db, namespace: "callhist", encrypted: true)
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
         self.categories = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-cat")

@@ -6758,6 +6758,46 @@ l'unique déclencheur, donc la file des messages en échec silencieusement gelé
 ne se manifeste pas là où il est faux, mais chez ses lecteurs : recenser les lecteurs fait partie du
 diagnostic, pas de la rédaction.
 
+---
+
+## Leçon 246 — Quand deux éléments se disputent une bande, la géométrie sépare ; l'exclusion mutuelle ampute
+
+**Symptôme.** La pastille de jour d'une conversation et la rangée du header flottant vivaient toutes
+deux juste sous l'encoche. Le 12/08 le chevauchement est signalé, le 13/08 au soir il est « résolu »
+par une EXCLUSION MUTUELLE : la pastille n'apparaît que pendant le défilement actif, moment où le
+header s'efface entièrement en retour. Retour user le lendemain : « remets la gestion des dates et
+l'affichage du header comme c'était avant hier soir ».
+
+**Ce que l'exclusion mutuelle coûte, et qu'on ne voit pas en l'écrivant.** Elle a l'air élégante :
+un seul occupant à la fois, plus aucun pixel en conflit, et le code se lit comme une invariante
+propre. Mais elle paie ce zéro-conflit avec la DISPONIBILITÉ des deux éléments — chacun devient
+absent pendant toute la fenêtre de l'autre. Ici : plus de retour, d'avatar ni de titre dès que le
+doigt touche la liste ; et la date qui s'évanouit à l'arrêt, c'est-à-dire exactement au moment où on
+la LIT. Aucun des deux n'était en trop, et c'est là le point : on n'arbitre pas entre deux éléments
+que le produit veut tous les deux, on leur donne chacun leur bande.
+
+**Le remède était déjà là — et il avait été jeté.** L'offset de 60 pt (padding haut du header +
+rangée de contrôles + marge) posait déjà la pastille SOUS le header depuis le 12/08. Il a été
+supprimé au profit de l'exclusion, au motif qu'un « grand offset fixe » ne permettait pas de poser
+la pastille près de l'encoche. C'est un objectif esthétique qui a désarmé une solution
+fonctionnelle : la contrainte réelle n'était pas « près de l'encoche », c'était « lisible et sans
+chevauchement ».
+
+**Règle : face à deux éléments qui se chevauchent, chercher d'abord la séparation SPATIALE
+(offset, bande, colonne) ; ne réserver l'exclusion temporelle qu'aux éléments dont le produit
+accepte l'absence.** Un test de disponibilité écrit avant l'arbitrage l'aurait dit : « le header
+est-il joignable pendant un défilement ? », « la date est-elle lisible à l'arrêt ? » — deux
+questions auxquelles l'exclusion répond non, et qu'aucune garde de chevauchement ne pose.
+
+**Ce qui méritait d'être gardé.** Le signal de défilement construit pour l'exclusion
+(`onScrollingActiveChanged`, drag ou décélération) était bon ; c'est son USAGE qui était trop
+large. Rebranché sur la seule grappe d'ACTIONS du header — appel, recherche — il devient la loi
+`ScrollMotion`, généralisée aux quatre en-têtes à liste : une vue en mouvement ne montre pas ses
+boutons d'action, mais elle garde son identité et ses repères de lecture. Un signal juste mal
+appliqué se réoriente ; il ne se jette pas avec la solution qu'il servait.
+
+---
+
 ## Leçon 247 — Une valeur passée à une couche qui la REJOUERA est une copie, pas une référence
 
 Cycle 16 temps réel (`ConnectionService`, `auth` du socket, web).
@@ -6848,3 +6888,83 @@ documentait le danger. La source de socket.io-client-swift 16.1.1 dit autre chos
 code mort sophistiqué. **Quand un correctif consiste à surveiller ce qu'une dépendance surveille
 peut-être déjà, aller lire sa source est moins cher que de livrer le doublon.** Une dépendance
 épinglée (`exact: "16.1.1"`) se lit en une requête ; c'est le prix d'une hypothèse non vérifiée.
+
+---
+
+## Leçon 249 — Un schéma de réponse est un FILTRE, pas une documentation : ce qu'il oublie n'existe plus sur le fil
+
+Fastify sérialise la réponse **à travers** le schéma déclaré : toute propriété absente de
+`properties` est retirée de la charge, sans avertissement, sans log, sans erreur de type. Un schéma
+de réponse ne décrit donc pas ce que la route rend — il **décide** ce qu'elle rend.
+
+`conversationPreferencesSchema` énumérait les onze champs de préférence et oubliait `version`. Le
+résultat n'était pas une documentation incomplète : c'était la suppression, sur les trois surfaces
+REST à la fois, du compteur monotone sur lequel tous les clients arbitrent (`incoming.version <=
+local -> drop`). Tout le reste de la chaîne était pourtant correct et se lisait comme si le contrat
+tenait : la passerelle incrémente bien `version` à chaque écriture, la diffusion socket le porte, le
+type partagé le documente comme « payload complet incluant `version` », le modèle Swift le déclare
+« populated by the gateway ». Le seul maillon qui ne le disait nulle part était celui qui l'effaçait.
+
+**Le signal qui aurait dû alerter plus tôt** : iOS refait un `GET` juste après son `PUT` dans le
+**seul** but de récupérer ce champ, avec un commentaire expliquant l'adaptateur. Du code écrit
+exprès pour aller chercher une valeur est la preuve que quelqu'un a cru qu'elle arrivait. Quand ce
+code existe et que la valeur est toujours `nil`, ce n'est pas le lecteur qu'il faut suspecter.
+
+**Règle** : quand une donnée est censée traverser une frontière HTTP, la vérifier sur le **fil**
+(un test d'injection qui lit `res.json()`), pas dans le handler. Un test qui assert le retour du
+handler passe au vert sur une charge que le client ne recevra jamais. Corollaire pour la revue :
+tout ajout de colonne destinée aux clients se relit dans DEUX fichiers — le writer et le schéma de
+réponse.
+
+**Deuxième moitié — une union dont on ne traite que N-1 branches est une panne, pas une couverture
+partielle.** `user:preferences-updated` porte trois scopes ; le web en traitait deux, la troisième
+sortant de la fonction sans rien faire, sous un commentaire annonçant une « phase ultérieure ». Le
+commentaire est ce qui a fait tenir l'oubli : il transformait un trou en jalon. Mais la ligne
+`UserConversationPreferences` est **par utilisateur, pas par appareil** — la diffusion était le seul
+chemin par lequel un épinglage fait sur le téléphone pouvait atteindre un onglet ouvert, et rien
+d'autre n'allait le combler. **Quand un client déclare consommer un événement, la question n'est
+jamais « combien de branches sont traitées » mais « que se passe-t-il pour l'utilisateur sur celles
+qui ne le sont pas ».** Ici : la liste gardait son état et son tri jusqu'à un rechargement de page.
+## Leçon 250 — Un durcissement de sécurité qui exige « une ligne existante » exclut par construction l'appelant légitime qui n'en a pas encore une (2026-08-14, routine appels audio/vidéo)
+
+Audit du calling stack (`services/gateway/src/socketio/CallEventsHandler.ts`) : le bouton
+« Refuser » d'un appel entrant était cassé depuis le durcissement de sécurité du 2026-07-10b.
+`call:end` exigeait `resolveActiveCallParticipantId` — une ligne `CallParticipant` ACTIVE pour CE
+call précis, pour fermer une faille réelle (un appelant resté dans la room après avoir quitté ce
+call pouvait le raccrocher pour l'autre). Mais `call:join` est le SEUL chemin qui crée cette ligne
+pour un callee — `call:initiate` n'en crée une que pour l'initiateur. Un callee qui tape « Refuser »
+avant d'avoir jamais rejoint n'a donc JAMAIS eu de ligne à trouver : le check légitime le rejetait
+au même titre qu'un imposteur. Résultat silencieux : `ack` jamais vérifié côté client (aucun
+callback enregistré), l'appelant continuait de sonner jusqu'au timeout 60s au lieu de voir le refus.
+
+**Le signal de reconnaissance** : une autorisation qui teste « CE user a-t-il déjà une ligne dans
+CETTE table » exclut structurellement deux populations différentes qu'on confond trop vite en une
+seule catégorie « non autorisé » — celui qui n'a JAMAIS eu de ligne (légitime mais pas encore
+inscrit) et celui qui EN A EU une et l'a quittée (exactement la fraude que le check visait). Le
+correctif du 2026-07-10b avait raison de fermer la seconde ; il a fermé la première par le même
+geste parce que le test ne distingue pas « absent » de « parti ».
+
+**La règle** : avant de resserrer une autorisation sur « a une ligne active », énumérer TOUS les
+chemins qui peuvent légitimement atteindre ce contrôle sans qu'une ligne existe encore — pas
+seulement ceux qui en ont une et l'ont perdue. Ici il suffisait de relire quel événement crée la
+ligne (`call:join`) contre quel événement porte le contrôle (`call:end`) pour voir l'écart : le
+premier ne couvre pas tous les appelants qui peuvent légitimement déclencher le second.
+
+**Le correctif reste étroit à dessein** : la voie de secours (`resolvePreJoinDeclineParticipantId`)
+ne s'active que si (a) `resolveActiveCallParticipantId` a échoué, (b) `reason === 'rejected'`
+explicitement — jamais pour un `call:end` générique —, (c) l'appel n'a jamais été décroché
+(`!answeredAt`), (d) l'appelant n'a AUCUNE ligne pour ce call, même quittée (sinon il retombe sur le
+chemin strict), et (e) il est un membre de la conversation. Élargir la portée « pour être sûr » (par
+exemple accepter n'importe quel `reason`, ou sauter la vérification de membership) aurait rouvert
+exactement la faille du 2026-07-10 — un inconnu qui devine un `callId` pourrait y mettre fin.
+
+**Corollaire côté web, même cycle** : `call-store.ts`'s `beforeunload` émettait `CALL_END`
+inconditionnellement — correct tant que 1:1 était le seul mode (raccrocher termine forcément
+l'appel pour les deux), devenu faux le jour où les appels de groupe ont supprimé le plafond à deux
+participants (`b06d54681`, la veille). Fermer un onglet dans un appel à 5 terminait l'appel pour les
+4 autres. Le correctif n'a touché AUCUNE logique serveur : `CallService.leaveCall()` distinguait déjà
+1:1 (`isDirectCall` → toute sortie termine l'appel) de groupe (seule la sortie du DERNIER participant
+le termine) — le bug entier tenait dans le nom d'un seul événement émis côté client
+(`CALL_END` → `CALL_LEAVE`). **Un event socket au nom générique (« end ») porté par un flux qui
+n'a plus le contexte qui le rendait sûr (1:1 devenu N:N) doit être ré-audité au moment où ce contexte
+change — pas seulement au moment où on l'écrit.**

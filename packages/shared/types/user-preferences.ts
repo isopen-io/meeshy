@@ -29,6 +29,20 @@ export interface UserConversationPreferences {
   // Métadonnées
   readonly createdAt: Date;
   readonly updatedAt: Date;
+
+  /**
+   * Compteur monotone de la ligne, incrémenté par
+   * `writeConversationPreferences` à chaque écriture et porté par chaque
+   * `USER_PREFERENCES_UPDATED` (scope conversation). C'est l'arbitre entre un
+   * snapshot optimiste local et une diffusion socket :
+   * `incoming.version <= local -> drop`.
+   *
+   * Optionnel : une réponse antérieure à l'ajout du champ au sérialiseur de
+   * réponse, ou une ligne de cache écrite avant, n'en portent pas. Le lecteur
+   * traite alors l'absence comme la version 0 — une ligne jamais diffusée est
+   * sous TOUTE version que le serveur peut émettre.
+   */
+  readonly version?: number;
 }
 
 /**

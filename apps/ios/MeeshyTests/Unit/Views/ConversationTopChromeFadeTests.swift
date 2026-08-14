@@ -12,13 +12,14 @@ import XCTest
 //    header flottant — elle démarre désormais SOUS le header
 //    (MessageDayStickyPlacement.topOffset).
 //
-// 2026-08-13 — suite : la pill doit se poser plus haut, tout près de
-// l'encoche, avec une animation d'émergence/rétraction dans l'îlot au
-// changement de jour. Un grand offset fixe ne peut plus dégager le header en
-// même temps que se poser près de l'encoche — remplacé par une EXCLUSION
-// MUTUELLE : la pill ne s'affiche que pendant le défilement actif de la
-// liste, moment où le header flottant s'efface (voir
-// `test_stickyDayPill_hidesFloatingHeaderDuringActiveScroll`).
+// 2026-08-13 (soir) → 2026-08-14 (soir) : la parenthèse « exclusion mutuelle »
+// (pill visible seulement pendant le défilement, header flottant effacé en
+// retour) est CLOSE sur retour user — « remets la gestion des dates et
+// l'affichage du header comme c'était avant hier soir ». La pill retrouve son
+// offset de 60pt, qui la pose sous la rangée du header, et le header retrouve
+// sa présence permanente. Ce qui RESTE de la parenthèse : le signal de
+// défilement actif, qui efface les seuls BOUTONS D'ACTION du header le temps
+// du mouvement — loi commune `ScrollMotion`, généralisée à l'app.
 @MainActor
 final class ConversationTopChromeFadeTests: XCTestCase {
 
@@ -128,38 +129,60 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
     }
 
-    func test_stickyDayPillOffset_staysAtTheNotch() {
-        // 2026-08-13 : le fix du 12/08 (offset fixe à 60pt pour dégager la
-        // rangée du header) est remplacé par une exclusion mutuelle — la pill
-        // ne s'affiche QUE pendant le défilement actif, moment où le header
-        // flottant s'efface (`hidesFloatingHeaderForScroll`). Ils ne se
-        // chevauchent donc plus jamais, quel que soit l'offset, qui peut
-        // redescendre au ras de l'encoche. `IslandEmergingBanner` porte déjà
-        // son propre dégagement sous l'îlot (`IslandGeometry.clearanceBelow`) — cumuler un
-        // second offset ici repousserait la pill trop bas.
-        XCTAssertEqual(MessageDayStickyPlacement.topOffset, 0,
-                       "la pill sticky doit démarrer au ras de l'encoche, sans offset supplémentaire")
+    func test_stickyDayPillOffset_clearsTheFloatingHeaderRow() {
+        // 60 = padding haut du header (8) + rangée de contrôles (~44) + marge
+        // (8). C'est cet offset — et non une exclusion mutuelle — qui empêche
+        // le chevauchement signalé le 2026-08-12 : les deux sont visibles en
+        // même temps, chacun dans sa bande.
+        XCTAssertEqual(MessageDayStickyPlacement.topOffset, 60,
+                       "la pill sticky doit démarrer SOUS la rangée du header flottant")
     }
 
-    func test_stickyDayPill_hidesFloatingHeaderDuringActiveScroll() throws {
+    // MARK: - Boutons d'action effacés pendant le mouvement
+
+    func test_floatingHeader_staysVisibleWhileScrolling() throws {
+        let viewSource = try conversationViewSource()
+        XCTAssertFalse(
+            viewSource.contains("hidesFloatingHeaderForScroll"),
+            "Le header flottant ne doit plus disparaître en bloc pendant le " +
+            "défilement : retour, avatar et titre restent lisibles (retour " +
+            "user 2026-08-14). Seuls ses boutons d'action s'effacent."
+        )
+    }
+
+    func test_headerActionButtons_fadeDuringActiveScroll() throws {
         let controllerSource = try messageListControllerSource()
         XCTAssertTrue(
             controllerSource.contains("var onScrollingActiveChanged: ((Bool) -> Void)?"),
             "MessageListViewController doit exposer le défilement actif au " +
-            "parent SwiftUI — c'est le signal qui pilote l'exclusion mutuelle " +
-            "avec le header flottant."
-        )
-        XCTAssertTrue(
-            controllerSource.contains("stickyDayState.isScrollingActive = active"),
-            "La pill sticky ne doit être éligible à l'affichage que pendant le défilement actif."
+            "parent SwiftUI — c'est le signal qui efface les boutons d'action."
         )
 
         let viewSource = try conversationViewSource()
         XCTAssertTrue(
-            viewSource.contains("scrollState.isScrollingActiveList && !headerState.showSearch"),
-            "Le header flottant doit s'effacer pendant le défilement actif " +
-            "(sauf recherche ouverte) pour ne jamais chevaucher la pill " +
-            "sticky de jour."
+            viewSource.contains(".scrollMotionActive(hidesHeaderActionsForScroll)"),
+            "Le header doit PUBLIER le mouvement via la loi commune " +
+            "`ScrollMotion` plutôt que de câbler son propre fondu."
         )
+        XCTAssertTrue(
+            viewSource.contains(".hiddenWhileScrolling()"),
+            "La grappe de boutons d'action (appel + recherche) doit s'y abonner."
+        )
+    }
+
+    // MARK: - La règle, sans passer par le rendu
+
+    func test_hidesHeaderActions_whileScrolling_isTrue() {
+        XCTAssertTrue(ConversationView.hidesHeaderActions(isScrollingList: true, isSearchOpen: false))
+    }
+
+    func test_hidesHeaderActions_atRest_isFalse() {
+        XCTAssertFalse(ConversationView.hidesHeaderActions(isScrollingList: false, isSearchOpen: false))
+    }
+
+    /// La barre de recherche ouverte est un champ de SAISIE : elle doit rester
+    /// joignable pendant qu'on fait défiler les résultats.
+    func test_hidesHeaderActions_whileSearchingAndScrolling_isFalse() {
+        XCTAssertFalse(ConversationView.hidesHeaderActions(isScrollingList: true, isSearchOpen: true))
     }
 }

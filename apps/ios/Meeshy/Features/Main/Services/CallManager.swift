@@ -235,7 +235,9 @@ final class CallManager: ObservableObject {
     /// in-app banner is enough — the redundant CallKit banner is suppressed). The
     /// VoIP-push incoming path (`reportIncomingVoIPCall`) ALWAYS keeps CallKit —
     /// Apple requires `reportNewIncomingCall` there. Set per call in `startCall` /
-    /// `handleIncomingCallNotification`; gates CallKit transactions + audio-session
+    /// `handleIncomingCallNotification` / `reportIncomingVoIPCall` /
+    /// `rejoinActiveCall` (always `false` — a rejoin never has a CallKit
+    /// transaction behind it); gates CallKit transactions + audio-session
     /// self-activation (when false, no CallKit means we own the session lifecycle).
     private var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
@@ -1290,6 +1292,17 @@ final class CallManager: ObservableObject {
         isSpeaker = isVideo
         displayMode = .fullScreen
         callState = .connecting
+        // Audio-recovery fix (2026-08-14): this method's own doc comment says
+        // it "NEVER touches CallKit" — but it never reset the flag that says
+        // otherwise. `callUsesCallKit` defaults to `true` and is left over
+        // from whatever the last call was (or never touched at all on a
+        // fresh relaunch), so `configureAudioSession()`/`transitionToConnected()`
+        // deferred activation to CallKit's `provider:didActivate:`, which is
+        // never called for a rejoin (no `reportNewIncomingCall` /
+        // `CXStartCallAction`). Net effect: every rejoined call started with
+        // dead audio (no mic, no speaker) until the unrelated stuck-muted
+        // fallback timer force-activated it ~2s later.
+        callUsesCallKit = false
 
         // iceServers: nil — a rejoin has no incoming push/ACK payload to source
         // them from. armTurnCredentialsAfterConfigure detects the empty case

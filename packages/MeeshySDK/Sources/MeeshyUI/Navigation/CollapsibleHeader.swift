@@ -8,6 +8,20 @@ public enum CollapsibleHeaderMetrics {
     nonisolated public static var expandedHeight: CGFloat { 64 }
     nonisolated public static var collapsedHeight: CGFloat { 44 }
 
+    /// Marge horizontale de la rangée de la barre.
+    nonisolated public static var barHorizontalPadding: CGFloat { 12 }
+
+    /// Marge SUPPLÉMENTAIRE réservée aux boutons d'action, à droite. S'ajoute
+    /// à `barHorizontalPadding` pour atteindre les 16 pt de marge standard
+    /// iOS : à 12 pt, un cercle de verre de 40 pt affleurait le bord de
+    /// l'écran (retour user 2026-08-14 sur (+) de la liste et (map) du feed).
+    ///
+    /// Vit ICI et pas dans chaque écran : posée par call site, elle dérive —
+    /// le feed iPad portait son propre `.padding(.trailing, 12)`, la liste de
+    /// conversations rien du tout, et c'est cette dérive qui a laissé deux
+    /// boutons au bord.
+    nonisolated public static var trailingActionsInset: CGFloat { 4 }
+
     /// Reveal curve [0, 1] for a pinned accessory that takes over the TITLE's
     /// slot inside the header bar (e.g. a compact story trail that replaces
     /// « Meeshy Feed » / « Meeshy Chats » once the full-size trail has scrolled
@@ -277,10 +291,19 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
                 Spacer(minLength: 8)
 
+                // Chrome de taille FIXE, servi avant la fente du titre : celle-ci
+                // réclame `maxWidth: .infinity` avec `layoutPriority(1)` dès
+                // qu'elle porte la trail, et prenait donc toute la largeur —
+                // les boutons débordaient de la barre par la droite, hors du
+                // viewport ((+) de la liste, (map) du feed, retour user
+                // 2026-08-14). La trail est l'occupant ÉLASTIQUE des deux :
+                // c'est à elle de prendre ce qui reste, pas l'inverse.
                 trailing()
                     .frame(minWidth: 44, minHeight: 44)
+                    .layoutPriority(2)
+                    .padding(.trailing, CollapsibleHeaderMetrics.trailingActionsInset)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, CollapsibleHeaderMetrics.barHorizontalPadding)
             .padding(.bottom, titleBottomPadding)
             // With a reveal the chip is vertically centered in the taller header
             // (the bottom edge stays faded/transparent); otherwise the title sits

@@ -1,80 +1,58 @@
 import SwiftUI
-import MeeshyUI
+import Combine
 
 /// Placement vertical de la pill sticky de jour dans le viewport de la liste.
 ///
-/// La pill et la rangée du header flottant (retour + avatar + titre) se
-/// disputaient la même bande, juste sous l'encoche / Dynamic Island — la pill
-/// à `safeArea + 4` recouvrait le header (retour user 2026-08-12), d'où un
-/// repli à +60 pour la faire démarrer SOUS lui. Résolu autrement le lendemain
-/// (2026-08-13) : **exclusion mutuelle** plutôt qu'un grand offset fixe. La
-/// pill n'est visible QUE pendant le défilement actif
-/// (`MessageDayStickyState.isScrollingActive`), moment où `ConversationView`
-/// masque le header flottant en retour (`onScrollingActiveChanged`) — les deux
-/// ne sont donc plus jamais à l'écran en même temps.
+/// Décalage sous le bord haut de la safe area. La pill vivait à +4, en plein
+/// sous la Dynamic Island : une Live Activity (bandeau noir étendu sous
+/// l'îlot) la recouvrait, et elle chevauchait la rangée du header flottant
+/// (retour user 2026-08-12, capture à l'appui). 60 = padding haut du header
+/// (8) + rangée de contrôles (~44) + marge (8) — la pill démarre SOUS le
+/// header, hors de la barre noire status bar / îlot.
 ///
-/// L'offset reste à 0, mais sa raison a changé avec la simplification de
-/// l'overlay (2026-08-14) : ce n'est plus `IslandEmergingBanner` qui garantit
-/// l'air sous l'îlot, c'est `MessageDayStickyOverlay` lui-même, via son
-/// `.padding(.top, 6)`. Cumuler une marge ici la doublerait.
-///
-/// Vit dans ce fichier et pas dans `MessageListViewController` parce que c'est
-/// l'overlay qui porte l'autre moitié de la marge : les deux valeurs se lisent
-/// ensemble ou elles dérivent.
+/// C'est la géométrie qui sépare les deux, PAS une exclusion mutuelle : le
+/// header reste lisible pendant que la pill suit le défilement (retour user
+/// 2026-08-14, retour à la gestion d'avant le 13/08 au soir). Seuls les
+/// BOUTONS D'ACTION du header s'effacent pendant le mouvement — loi commune
+/// `ScrollMotion`, cf. `ConversationView.hidesHeaderActions(...)`.
 enum MessageDayStickyPlacement {
-    nonisolated static let topOffset: CGFloat = 0
+    nonisolated static let topOffset: CGFloat = 60
 }
 
 /// État réactif qui pilote l'affichage de la pill flottante « Aujourd'hui /
 /// Hier / Lundi 9 mai » au top de la liste des messages. Sert de pont entre
-/// `MessageListViewController` (UIKit : calcul du `dayStart` du message en
-/// haut visible + détection du défilement actif via les délégués
-/// `UIScrollView`) et l'overlay SwiftUI hébergé via `UIHostingController`.
+/// `MessageListViewController.scrollViewDidScroll` (UIKit, calcul du
+/// `dayStart` du message en haut visible) et l'overlay SwiftUI hébergé via
+/// `UIHostingController`. Quand `label == nil`, l'overlay ne rend rien et
+/// laisse passer les évènements vers le collectionView en-dessous.
 @MainActor
 final class MessageDayStickyState: ObservableObject {
     @Published var label: String? = nil
-    /// True pendant que l'utilisateur fait défiler activement la liste (drag
-    /// ou décélération). Seule fenêtre où la pill est autorisée à s'afficher
-    /// — au repos, le header flottant reprend cette bande (exclusion mutuelle).
-    @Published var isScrollingActive: Bool = false
+    @Published var isDark: Bool = false
     /// True quand le header de conversation est DÉPLIÉ (tap sur l'avatar ou
-    /// l'icône de conversation). La pill se retire pour ne pas encombrer la vue.
+    /// l'icône de conversation). Déplié, le header descend jusque dans la
+    /// bande de la pill — et l'utilisateur vient de demander à voir les
+    /// détails de la conversation, pas la date du haut de l'écran.
     @Published var isHeaderExpanded: Bool = false
 }
 
-/// Overlay SwiftUI piné au top du collectionView : affiche le séparateur de
-/// jour du message en haut visible pendant le défilement actif. Simple pill
-/// posée sous l'îlot sans animation complexe — l'utilisateur voit juste le
-/// label du jour changer au fil du scroll.
+/// Overlay SwiftUI piné au top du collectionView : affiche le séparateur
+/// de jour du message en haut visible. Indépendant du flux scrollable —
+/// c'est la pill « sticky » qui ne défile pas avec le contenu.
 struct MessageDayStickyOverlay: View {
     @ObservedObject var state: MessageDayStickyState
-    @Environment(\.colorScheme) private var colorScheme
-
-    /// La pill n'a droit à la bande haute que quand personne d'autre ne la
-    /// réclame : défilement en cours (le header flottant s'efface) ET header
-    /// replié (sinon l'utilisateur regarde les détails de la conversation).
-    private var isVisible: Bool {
-        state.label != nil && state.isScrollingActive && !state.isHeaderExpanded
-    }
 
     var body: some View {
         Group {
-            if let label = state.label, isVisible {
-                Text(label)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(colorScheme == .dark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(colorScheme == .dark ? MeeshyColors.indigo900 : MeeshyColors.indigo50)
-                    .cornerRadius(20)
-                    .padding(.top, 6)
-                    .padding(.horizontal, 16)
-                    .accessibilityLabel(label)
-                    .accessibilityAddTraits(.isHeader)
-                    .id(label)
-                    .transition(.opacity)
+            if let label = state.label, !state.isHeaderExpanded {
+                MessageDaySeparator(label: label, isDark: state.isDark)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                Color.clear.frame(height: 0)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: state.label)
+        .animation(.easeInOut(duration: 0.18), value: state.isHeaderExpanded)
         .allowsHitTesting(false)
     }
 }

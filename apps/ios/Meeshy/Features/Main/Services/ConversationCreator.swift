@@ -45,3 +45,26 @@ final class ConversationCreator: ConversationCreating {
         let participantIds: [String]
     }
 }
+
+// MARK: - Ouverture d'une conversation directe depuis l'annuaire
+
+extension ConversationCreating {
+    /// « Lui écrire » — ouvre (ou crée) la conversation directe avec `userId`,
+    /// et signale l'échec à l'utilisateur. Renvoie `nil` en cas d'échec, le
+    /// site d'appel restant maître de la navigation.
+    ///
+    /// Partagé par le répertoire et les affiliés : les deux écrans posaient le
+    /// même appel, le même `catch` et le même toast.
+    @MainActor
+    func openDirectConversation(with userId: String, currentUserId: String) async -> Conversation? {
+        do {
+            return try await createDirectConversation(with: userId, currentUserId: currentUserId)
+        } catch {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(
+                String(localized: "contacts.phonebook.open-error", defaultValue: "Impossible d'ouvrir la conversation", bundle: .main)
+            )
+            return nil
+        }
+    }
+}
