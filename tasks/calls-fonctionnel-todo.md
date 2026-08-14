@@ -8046,3 +8046,78 @@ piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device r
 iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique de sortie audio
 (`setSinkId`, Vague 111). Voir aussi `tasks/2026-08-13-group-calls-gap-analysis.md` pour le
 chantier « appels de groupe ».
+
+## Vague 121 — `comment:updated` : le web était le SEUL client sans auditeur, une édition faite depuis iOS n'atteignait jamais un onglet ouvert (2026-08-14)
+
+Point d'entrée : routine automatique d'amélioration continue (temps réel messagerie), base explicite
+sur le développement précédent — `git fetch origin main`, branche `claude/keen-hamilton-6g9wel`
+réalignée sur `origin/main` (`505425bc`, contient la Vague 120 — PR mergée), aucune PR ouverte sur le
+dépôt au démarrage. Contrainte de sandbox inchangée (ni Xcode ni SDK Android) : périmètre
+web+gateway+shared, vérifiable localement.
+
+Méthode : au lieu de relire un dossier déjà labouré par 120 vagues, recensement MÉCANIQUE des 125
+`SERVER_EVENTS` du contrat partagé, croisé par plateforme (émetteur gateway × auditeur web ×
+auditeur iOS). Sept écarts sortent ; six sont des fonctionnalités absentes du web (réactions de
+pièce jointe, localisation live — aucune surface web, donc un manque de produit, pas un bug de
+synchro) ou un doublon d'alias déjà couvert (`message:read-status-updated` émis en parallèle de
+`read-status:updated`, que le web écoute). Le septième est un vrai trou.
+
+- **Root cause** : `comment:updated` est diffusé par la gateway
+  (`SocialEventsHandler.broadcastCommentUpdated`, mêmes rooms et même filtrage de visibilité que
+  `comment:added`, appelé par `PATCH /posts/:postId/comments/:commentId`) et appliqué par iOS
+  (`SocialSocketManager` → `PostDetailViewModel`, `FeedCommentsSheet`, `StoryViewerView`). Le web
+  n'avait **aucun** `socket.on` pour cet événement — alors qu'il en a un pour TOUTES les mutations
+  voisines de commentaire : `added`, `deleted`, `liked`, `media-updated`, `translation-updated`,
+  `reaction-added/removed`. Le web ne pouvant pas éditer un commentaire (aucun appel `PATCH`
+  côté `posts.service.ts`), le trou est purement en RÉCEPTION, donc invisible en test web-à-web :
+  il ne se manifeste qu'en cross-platform, le seul scénario que ce dépôt ne peut pas jouer en CI.
+  Conséquence : une édition faite depuis un iPhone laissait un onglet web ouvert sur le même post
+  afficher le texte d'AVANT jusqu'à un refetch complet.
+- **Aggravation par les traductions** : `PostCommentService.updateComment` purge `translations` ET
+  `originalLanguage` dans la MÊME écriture que le contenu (ils décrivaient l'ancien texte) et
+  relance le pipeline. Le lecteur web gardait donc non seulement le texte d'avant, mais une carte de
+  traductions périmée qui, une fois le nouveau `comment:translation-updated` reçu, se mélangeait au
+  texte d'avant — un affichage traduit qui ment, ce que la règle #1 du Prisme interdit.
+- **Fix** : `handleCommentUpdated` dans `use-post-socket-cache-sync.ts` (le seul endroit où les
+  caches de commentaires sont écrits côté web), branché sur `COMMENT_UPDATED` avec son `off`
+  symétrique. Il recopie le commentaire ENTIER (`{...c, ...data.comment}`) — jamais le seul
+  `content` : c'est ce qui fait tomber `translations: {}` / `originalLanguage: null` en même temps
+  que le texte. Le spread préserve à l'inverse ce que le payload ne porte PAS (`currentUserReactions`,
+  `reactionSummary` : la diffusion est une charge unique pour toute la room, elle ne peut pas être
+  propre au lecteur) — clés ABSENTES, donc valeur en cache conservée. Réutilise
+  `patchCommentInPostCaches`, qui balaie déjà `queryKeys.posts.comments(postId)` en préfixe : la
+  liste de premier niveau ET les sous-caches de réponses, car le payload ne dit pas où vit la ligne
+  et une réponse s'édite comme une racine. Aucun compteur de post touché — éditer ne crée ni ne
+  retire rien.
+- **Non fait volontairement** : pas de callback `onCommentUpdated` ajouté à `use-social-socket.ts`.
+  C'est un pur fan-out de callbacks optionnels ; aucun consommateur n'en a besoin aujourd'hui, et un
+  callback jamais branché serait exactement le code mort décrivant un contrat que la Leçon 241
+  apprend à ne pas semer.
+- **Tests** (TDD, RED confirmé avant écriture de la production — 3 échecs sur 5) : nouveau bloc
+  `describe('comment:updated')` dans `use-post-socket-cache-sync.test.tsx`, 5 cas — remplacement du
+  texte au premier niveau sans toucher les voisins, péremption des traductions de l'ancien texte,
+  patch d'une RÉPONSE dans le sous-cache de son parent, préservation de l'état de réaction propre au
+  lecteur, et non-résurrection d'un commentaire absent du cache. Les deux assertions de comptage
+  d'auditeurs passent de 28 à 29. Suite du fichier : **104/104 verts**. Sweep
+  `--testPathPatterns="comment|post-socket|social-socket"` : **9 suites / 189 tests verts**, zéro
+  régression. `npx tsc --noEmit` (apps/web) : 1764 lignes de sortie AVANT et APRÈS le fix
+  (comparaison par `git stash` du seul fichier de production), zéro occurrence du fichier modifié —
+  bruit d'environnement préexistant, aucune erreur imputable. Prérequis CLAUDE.md rejoués :
+  `bun install --ignore-scripts`, puis `packages/shared && npx prisma generate --generator client` +
+  `bun run build`.
+
+### Reste ouvert
+
+Reconduit : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue`
+non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6 trouvailles Android
+de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device
+requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique
+de sortie audio (`setSinkId`, Vague 111) ; `CallInfoOverlay.participantCount` à 0 transitoire côté
+caller (Vague 112, cosmétique).
+
+**Nouveau (recensement de cette vague)** — deux fonctionnalités présentes iOS + gateway et ABSENTES
+du web, à trancher en produit avant tout code : les réactions sur pièce jointe
+(`attachment:reaction-added/removed`, `AttachmentReactionHandler` gateway) et la localisation en
+direct (`location:live-started/updated/stopped`, `LocationHandler` gateway). Ce ne sont pas des bugs
+de synchronisation — le web n'a aucune surface pour les émettre ni les afficher — mais des écarts de
+parité de plateforme qu'un chantier dédié devra couvrir.
