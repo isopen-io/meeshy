@@ -399,8 +399,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
     /// Invoked when active scrolling (drag or deceleration) starts/stops.
-    /// Wire to hide the floating header row while true — the sticky day
-    /// pill takes over that band instead (exclusion mutuelle).
+    /// Wire to fade the header's ACTION BUTTONS while true (loi `ScrollMotion`) —
+    /// le header et la pill de jour, eux, restent posés.
     var onScrollingActiveChanged: ((Bool) -> Void)?
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Voir
