@@ -1397,7 +1397,16 @@ model Notification {
   /// notification créée ; avec elle, les deux branches du OU restent deux
   /// plages d'index et le compte reste couvert.
   @@index([userId, isRead, expiresAt])
-  @@index([userId, type])
+  // Les onglets de la cloche (`GET /notifications?types=`) filtrent par type
+  // puis servent la page dans l'ordre total `(createdAt desc, id desc)`. Égalité
+  // d'abord, tri ensuite : sans les deux clés de tri dans l'index, MongoDB
+  // parcourt la plage `[userId, type]` puis TRIE tout ce qu'elle contient — soit
+  // l'historique entier de l'onglet à chaque page, alors que l'écran en demande
+  // vingt lignes. ÉTEND l'ancien `[userId, type]` plutôt que de s'y ajouter :
+  // même préfixe, donc `markNotificationsByTypesAsRead` reste servi, sans second
+  // index à écrire. Prod : l'entrypoint ne joue aucune migration — index à créer
+  // à la main.
+  @@index([userId, type, createdAt(sort: Desc), id(sort: Desc)])
   // `id` fait partie de la clé de TRI de l'inbox, pas seulement du filtre : la
   // pagination keyset `(createdAt, id)` de `GET /notifications?cursor=` trie par
   // `{createdAt:-1, _id:-1}`, et sans `_id` dans l'index MongoDB ne peut pas

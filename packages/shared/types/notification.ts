@@ -732,6 +732,24 @@ export interface NotificationResponse {
   readonly unreadCount: number;
 }
 
+/**
+ * Totaux de l'inbox ENTIÈRE — la réponse de `GET /notifications/counts`.
+ *
+ * `byType` porte les types BRUTS tels que stockés ; le regroupement en onglets
+ * (`user_mentioned` et `mention` sous « mentions ») appartient au client qui les
+ * dessine. Un type absent de la carte vaut zéro : le serveur ne rend que les
+ * types réellement présents, et énumérer les autres à zéro ferait grossir la
+ * réponse à chaque type ajouté.
+ *
+ * `total` et `unread` répondent à DEUX questions et se lisent séparément — les
+ * avoir confondus a fait afficher « 15 non lues » sur une inbox entièrement lue.
+ */
+export interface NotificationCounts {
+  readonly total: number;
+  readonly unread: number;
+  readonly byType: Readonly<Partial<Record<NotificationType, number>>>;
+}
+
 // =====================================================
 // NOTIFICATION PREFERENCES
 // =====================================================

@@ -14,6 +14,29 @@ import {
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
 import { decodeCursor, keysetBeforeClause } from '../utils/keyset-cursor';
 
+/**
+ * L'onglet choisi par le lecteur, traduit en clause — ou rien du tout.
+ *
+ * Un onglet de la cloche nomme plusieurs types BRUTS (« mentions » couvre
+ * `user_mentioned` ET `mention`), d'où un ensemble et non une égalité. Le
+ * groupement des alias appartient au client qui dessine les onglets ; le serveur
+ * ne connaît que la liste qu'on lui donne, ce qui lui évite d'avoir à être
+ * redéployé pour un onglet de plus.
+ *
+ * Une liste VIDE rend `{}`, jamais `{ type: { in: [] } }` : le second ne
+ * ramènerait aucune ligne, et une chaîne mal formée viderait l'inbox au lieu de
+ * la laisser entière. Le repli d'un filtre illisible est l'absence de filtre —
+ * le même arbitrage que le curseur illisible juste en dessous.
+ */
+function notificationTypesClause(types: string | undefined): { type?: { in: string[] } } {
+  const wanted = (types ?? '')
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+
+  return wanted.length === 0 ? {} : { type: { in: wanted } };
+}
+
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
 
@@ -55,6 +78,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
               description:
                 'Opaque keyset cursor (createdAt, id) returned as pagination.nextCursor. Takes precedence over offset.',
             },
+            types: {
+              type: 'string',
+              description:
+                'Comma-separated raw notification types to keep (e.g. user_mentioned,mention). Empty or absent = whole inbox.',
+            },
           },
         },
         response: {
@@ -91,13 +119,16 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
-        const { offset = 0, limit = 20, unreadOnly = false, cursor } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string };
+        const { offset = 0, limit = 20, unreadOnly = false, cursor, types } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string; types?: string };
 
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
         // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
         // une liste et un badge qui ne s'accordent pas sur ce qui est visible
         // se contredisent à l'écran.
-        const visibleWhere = visibleNotificationsWhere({ userId, unreadOnly });
+        const visibleWhere = {
+          ...visibleNotificationsWhere({ userId, unreadOnly }),
+          ...notificationTypesClause(types),
+        };
 
         // Un curseur illisible vaut « pas de curseur » — le repli du reste du
         // dépôt (`PostFeedService`). Refuser la requête couperait le défilement
@@ -148,6 +179,77 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching notifications');
         return sendInternalError(reply, 'Failed to fetch notifications');
+      }
+    }
+  );
+
+  // ============================================
+  // GET /notifications/counts - Totaux par type
+  // ============================================
+
+  fastify.get(
+    '/notifications/counts',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Inbox-wide notification totals, grouped by raw type',
+        tags: ['notifications'],
+        summary: 'Get notification counts',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  total: { type: 'number' },
+                  unread: { type: 'number' },
+                  // Une carte dont les CLÉS sont les types : `additionalProperties`
+                  // est ce qui la laisse passer. Déclarée par `properties`, elle
+                  // exigerait de réénumérer chaque type ici, et Fastify retirerait
+                  // en silence tout type qu'on aurait oublié d'y écrire.
+                  byType: {
+                    type: 'object',
+                    additionalProperties: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+
+        // Le MÊME prédicat que la liste : un onglet qui annonce « 3 » et n'en
+        // montre que deux (la troisième expirée) rejoue exactement la
+        // contradiction cloche/liste que `visibleNotificationsWhere` supprime.
+        const [groups, unread] = await Promise.all([
+          fastify.prisma.notification.groupBy({
+            by: ['type'],
+            where: visibleNotificationsWhere({ userId }),
+            _count: { _all: true },
+          }),
+          notificationService.getUnreadCount(userId),
+        ]);
+
+        // `total` se DÉDUIT du regroupement — un `count()` de plus répondrait à
+        // la même question par une seconde lecture, donc à un autre instant, et
+        // les deux chiffres pourraient se contredire à l'écran.
+        const byType = Object.fromEntries(
+          groups.map((group) => [group.type, group._count._all])
+        );
+        const total = Object.values(byType).reduce<number>((sum, count) => sum + count, 0);
+
+        return sendSuccess(reply, { total, unread, byType });
+      } catch (error) {
+        fastify.log.error({ error }, 'Error fetching notification counts');
+        return sendInternalError(reply, 'Failed to fetch notification counts');
       }
     }
   );

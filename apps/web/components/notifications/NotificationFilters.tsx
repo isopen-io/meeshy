@@ -11,9 +11,30 @@ import {
   UserPlus,
   Heart,
 } from 'lucide-react';
-import type { Notification } from '@/types/notification';
+import type { NotificationCounts } from '@/types/notification';
 
 export type FilterType = 'all' | 'new_message' | 'conversation' | 'missed_call' | 'friend_request' | 'mention' | 'reaction';
+
+/**
+ * Un onglet, et les types BRUTS qu'il recouvre — dits UNE fois.
+ *
+ * Le groupement des alias (`user_mentioned` et `mention` sous un seul onglet)
+ * est une décision d'affichage, pas de stockage : la gateway ne connaît que la
+ * liste qu'on lui passe, ce qui laisse ajouter un onglet sans la redéployer.
+ *
+ * `all` rend une liste VIDE, jamais l'énumération de tous les types : un onglet
+ * « tout » qui énumère devient faux le jour où un type de plus est créé, et il
+ * le devient en silence.
+ */
+export const FILTER_TYPES: Record<FilterType, readonly string[]> = {
+  all: [],
+  new_message: ['new_message', 'message'],
+  mention: ['user_mentioned', 'mention'],
+  reaction: ['message_reaction', 'reaction'],
+  conversation: ['conversation', 'new_conversation'],
+  missed_call: ['missed_call'],
+  friend_request: ['friend_request'],
+};
 
 type FilterOption = {
   value: FilterType;
@@ -27,7 +48,8 @@ type TranslateFunction = (key: string, params?: Record<string, string>) => strin
 type NotificationFiltersProps = {
   activeFilter: FilterType;
   onFilterChange: (filter: FilterType) => void;
-  notifications: Notification[];
+  /** Totaux de l'inbox ENTIÈRE — absents tant que la lecture serveur n'a pas répondu. */
+  counts: NotificationCounts | undefined;
   t: TranslateFunction;
 };
 
@@ -43,40 +65,24 @@ function getFilterOptions(t: TranslateFunction): FilterOption[] {
   ];
 }
 
-function countByFilter(notifications: Notification[], filter: FilterType): number {
-  if (filter === 'all') return notifications.length;
+/**
+ * Le compte de l'onglet, lu sur les totaux SERVEUR.
+ *
+ * Il se calculait sur les notifications déjà chargées : « 0 mention » ne
+ * signifiait alors que « 0 mention parmi les vingt dernières », et le chiffre
+ * changeait à chaque défilement.
+ */
+function countByFilter(counts: NotificationCounts | undefined, filter: FilterType): number {
+  if (!counts) return 0;
+  if (filter === 'all') return counts.total;
 
-  return notifications.filter((n) => {
-    switch (filter) {
-      case 'new_message': return n.type === 'new_message' || n.type === 'message';
-      case 'mention': return n.type === 'user_mentioned' || n.type === 'mention';
-      case 'reaction': return n.type === 'message_reaction' || n.type === 'reaction';
-      case 'conversation': return n.type === 'conversation' || n.type === 'new_conversation';
-      case 'missed_call': return n.type === 'missed_call';
-      case 'friend_request': return n.type === 'friend_request';
-      default: return false;
-    }
-  }).length;
-}
-
-export function matchesFilter(notification: Notification, filter: FilterType): boolean {
-  if (filter === 'all') return true;
-
-  switch (filter) {
-    case 'new_message': return notification.type === 'new_message' || notification.type === 'message';
-    case 'mention': return notification.type === 'user_mentioned' || notification.type === 'mention';
-    case 'reaction': return notification.type === 'message_reaction' || notification.type === 'reaction';
-    case 'conversation': return notification.type === 'conversation' || notification.type === 'new_conversation';
-    case 'missed_call': return notification.type === 'missed_call';
-    case 'friend_request': return notification.type === 'friend_request';
-    default: return false;
-  }
+  return FILTER_TYPES[filter].reduce((sum, type) => sum + (counts.byType?.[type] ?? 0), 0);
 }
 
 export const NotificationFilters = memo(function NotificationFilters({
   activeFilter,
   onFilterChange,
-  notifications,
+  counts,
   t,
 }: NotificationFiltersProps) {
   const filters = getFilterOptions(t);
@@ -85,7 +91,7 @@ export const NotificationFilters = memo(function NotificationFilters({
     <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
       {filters.map((filter) => {
         const Icon = filter.icon;
-        const count = countByFilter(notifications, filter.value);
+        const count = countByFilter(counts, filter.value);
         const isActive = activeFilter === filter.value;
 
         return (

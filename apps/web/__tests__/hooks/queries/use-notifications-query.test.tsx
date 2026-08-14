@@ -47,17 +47,9 @@ jest.mock('@/services/notification.service', () => ({
   },
 }));
 
-// Mock query keys
-jest.mock('@/lib/react-query/query-keys', () => ({
-  queryKeys: {
-    notifications: {
-      all: ['notifications'],
-      lists: () => ['notifications', 'list'],
-      list: (filters?: { unreadOnly?: boolean }) => ['notifications', 'list', filters],
-      unreadCount: () => ['notifications', 'unreadCount'],
-    },
-  },
-}));
+// `queryKeys` n'est PAS doublé : c'est un module pur, et la copie manuelle qui
+// tenait ici a figé un contrat que le vrai module avait dépassé — la clé des
+// compteurs y manquait, et le hook jetait sur une fonction absente.
 
 // Test data
 const mockNotification = {

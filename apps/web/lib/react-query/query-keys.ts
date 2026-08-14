@@ -47,9 +47,10 @@ export const queryKeys = {
   notifications: {
     all: ['notifications'] as const,
     lists: () => [...queryKeys.notifications.all, 'list'] as const,
-    list: (filters?: { unreadOnly?: boolean }) =>
+    list: (filters?: Record<string, unknown>) =>
       [...queryKeys.notifications.lists(), filters] as const,
     unreadCount: () => [...queryKeys.notifications.all, 'unreadCount'] as const,
+    counts: () => [...queryKeys.notifications.all, 'counts'] as const,
   },
 
   attachments: {
