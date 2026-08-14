@@ -84,6 +84,9 @@ function makePrisma(participantResult: unknown = null): any {
   };
 }
 
+/** Une appartenance active — `makePrisma` refuse par défaut. */
+const MEMBERSHIP = { id: 'participant-1', bannedAt: null, leftAt: null, isActive: true };
+
 function makeConnectedUsers() {
   const users = new Map();
   users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [], userId: USER_ID });
@@ -104,8 +107,9 @@ function makeHandler({
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
   readStatusService = makeReadStatusService(),
   retractTyping = undefined as undefined | ((socket: any, conversationId: string) => Promise<void>),
+  replayLiveLocations = undefined as undefined | ((socket: any, conversationId: string) => void),
 } = {}) {
-  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any, retractTyping });
+  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any, retractTyping, replayLiveLocations });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -490,6 +494,63 @@ describe('ConversationHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
         expect.objectContaining({ conversationId: '' })
+      );
+    });
+
+    // Entrer dans une conversation rattrape les partages de position en cours.
+    // `location:live-started` ne touche que les sockets présents à l'instant du
+    // départ : sans ce rejeu, l'épingle d'un pair qui partage déjà reste
+    // invisible à l'arrivant pour toute sa session.
+    it('replays the live locations of the joined conversation', async () => {
+      const replayLiveLocations = jest.fn<(socket: unknown, conversationId: string) => void>();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma: makePrisma(MEMBERSHIP), replayLiveLocations });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(replayLiveLocations).toHaveBeenCalledWith(socket, CONV_ID);
+    });
+
+    // Le rejeu part APRÈS la jonction à la room, jamais avant : le socket doit
+    // être dans la room quand la conversation commence à lui parler.
+    it('replays after joining the room', async () => {
+      const order: string[] = [];
+      const replayLiveLocations = jest.fn<(socket: unknown, conversationId: string) => void>()
+        .mockImplementation(() => { order.push('replay'); });
+      const socket = makeSocket();
+      (socket.join as jest.Mock).mockImplementation(async () => { order.push('join'); });
+      const handler = makeHandler({ prisma: makePrisma(MEMBERSHIP), replayLiveLocations });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(order).toEqual(['join', 'replay']);
+    });
+
+    // Rien ne doit être rejoué à qui n'a pas passé le contrôle d'appartenance —
+    // la liste des partageurs d'une conversation est déjà une information.
+    it('does not replay when membership is refused', async () => {
+      const replayLiveLocations = jest.fn<(socket: unknown, conversationId: string) => void>();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma: makePrisma(null), replayLiveLocations });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(replayLiveLocations).not.toHaveBeenCalled();
+    });
+
+    // Un rejeu qui échoue ne doit pas faire échouer la jonction : l'accusé et
+    // le compteur de non-lus qui suivent sont, eux, le contrat de `join`.
+    it('still acknowledges the join when the replay throws', async () => {
+      const replayLiveLocations = jest.fn<(socket: unknown, conversationId: string) => void>()
+        .mockImplementation(() => { throw new Error('boom'); });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma: makePrisma(MEMBERSHIP), replayLiveLocations });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOINED,
+        expect.objectContaining({ conversationId: CONV_ID })
       );
     });
   });
