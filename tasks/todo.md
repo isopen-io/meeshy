@@ -1,306 +1,72 @@
-<!-- Deux routines ont tourné en parallèle et écrivent chacune sa fiche dans ce fichier
-     ÉPHÉMÈRE. Les deux sont conservées telles quelles : une fiche de cycle est le compte
-     rendu d'un travail précis, elle ne se fusionne pas avec celle d'un autre. -->
+# Cycle 16 — le socket restait scellé sur le jeton de sa naissance
 
-# Cycle 123bis — Suites du filtre d'onglet, après collision avec #2986
+Branche : `claude/keen-hamilton-55j95x`, partie de `origin/main` (le cycle
+précédent — miroir de connexion, PR #2991 — était intégralement mergé).
 
-Ce cycle a implémenté le même correctif que #2986 en parallèle, sans le savoir (voir leçon 246).
-#2986 ayant fusionné le premier, sa version fait foi ; ce qui suit est le seul DELTA qui lui
-manquait, repris depuis `main`.
+## Point de départ (Phase 1)
 
-- **Le squelette emportait toute la page.** Le retour anticipé sur `isLoading && notifications
-  .length === 0` a été écrit quand l'onglet filtrait CÔTÉ CLIENT — il ne se déclenchait donc qu'au
-  tout premier chargement. Depuis que l'onglet filtre côté serveur, chaque onglet jamais ouvert a
-  un cache vide : le squelette plein écran emporte les onglets que le lecteur vient de toucher et
-  la recherche qu'il est en train de taper, à CHAQUE premier passage. Il remplace maintenant la
-  seule liste. Deux témoins (`__tests__/app/notifications/page.test.tsx`).
-- **`{ types: [] }` dédoublait le cache de la cloche.** `FILTER_TYPES.all` vaut `[]`, donc l'onglet
-  « tout » et la cloche posent la même question — mais `{ types: [] }` et `{}` ne se hachent pas
-  pareil. Deux caches, deux appels, et un écran vide à l'ouverture de `/notifications` le temps de
-  refaire ce que la cloche tenait déjà. La clé normalise : un filtre vide n'est pas un filtre.
-  Deux témoins (partage de cache / séparation par jeu de types).
-- **`docs/notifications/STRUCTURE.md` annonçait toujours les paramètres fantômes** (`type`,
-  `priority`, `conversationId`, `sortBy`, `sortOrder`) — la source même de la croyance du client.
-  Remplacés par la liste exhaustive de ce que la route déclare, plus `GET /notifications/counts`
-  et les cas d'absence de `nextCursor`.
+Pas de recensement neuf : reprise directe du reste ouvert nommé en fin de
+cycle 15, « `initializeConnection()` rend `null` sur JWT expiré et rien ne
+réessaie ». L'instruction de la routine est de partir du développement
+précédent, c'est donc sa dette qui ouvre ce cycle.
 
-## Gates
+## Défauts retenus (Phases 2 / 3 / 10)
 
-- Web : **571 suites / 12 216 témoins verts** ; `tsc --noEmit` sans erreur nouvelle sur les
-  fichiers touchés.
-- Gateway : aucun fichier touché ce cycle.
-- iOS : non concerné.
+**D1 — le socket ne rejoue jamais que le jeton avec lequel il est né.**
+`io(url, { auth: { token } })` fige les identifiants à la construction et
+Socket.IO rejoue cette charge à CHAQUE reconnexion. Trois chemins font tourner
+le jeton sous ses pieds (401 REST, pré-contrôle d'expiration, rotation de
+session anonyme) : après l'un d'eux, chaque handshake présente un jeton refusé,
+la boucle interne brûle ses 5 tentatives, `reconnect_failed` passe la main à
+notre backoff, qui represente le même jeton mort — indéfiniment. Déclencheur
+le plus banal : un redéploiement de la passerelle.
 
-## Reste ouvert (inchangé)
+**D2 — le démarrage à jeton expiré ne produit aucun socket, et rien ne
+revient.** Le rafraîchissement REST réussit sans que personne ne le dise à la
+couche temps réel. Seules les actions SORTANTES (`sendMessage`,
+`joinConversation`) réveillent la connexion : un lecteur resté sur la liste des
+conversations n'en déclenche aucune et n'a plus RIEN en temps réel pour toute
+la session.
 
-- **La recherche texte de `/notifications` porte le même défaut que l'ancien filtre** : elle
-  cherche dans les seules pages chargées. Le code le dit maintenant en toutes lettres et l'assume ;
-  le remède (`?q=` serveur) demande un index texte — fiche à instruire.
-- `useNotificationsQuery` (non infinie) n'a toujours aucun appelant — code mort à retirer.
-- iOS n'envoie ni `types` ni ne lit `/notifications/counts`.
+**D3 — `expiresIn` écrit dans l'emplacement du jeton de session** (décalage de
+position d'argument dans `authService.refreshToken()`). Sans conséquence
+observable, le test existant verrouillait le décalage.
 
+Analyse complète : `tasks/realtime-sync-audit-2026-07-11.md` § Cycle 16.
 
-# Cycle — Routine appels audio/vidéo : `CallNotification` distingue enfin 1:1 vs groupe
+## Correctifs
 
-## Contexte
-
-Routine programmée "audio/video calling continuous improvement" (Principal
-Apple Platform Architect / WebRTC / Security scope). Le prompt demande un
-audit complet 12 phases (iOS/WebRTC/CallKit/PushKit/sécurité/UX/tests/perf) et
-un merge en fin de cycle. Plutôt que de tenter les 12 phases d'un coup — pas
-réaliste ni sûr sur du code d'appel — cette exécution reprend le travail de la
-routine précédente : `tasks/2026-08-13-group-calls-gap-analysis.md`, dont la
-mise à jour du 2026-08-13(3) laissait W6/W7 (UI web groupe) et I1-I7 (mesh iOS
-mono-PC) comme prochains candidats.
-
-## Choix du cycle
-
-**Un sous-item précis de W6** : `CallNotification` (bannière d'appel entrant
-web) affichait le même texte pour un 1:1 et un appel de groupe — aucun moyen
-pour l'appelé de savoir, avant de décrocher, s'il rejoint un appel à deux ou à
-cinq. Corrigé en TDD (RED : 5 tests sur `isGroupCall`/`groupSize`, GREEN :
-badge « {count} personnes » + sous-titre « Appel de groupe » quand
-`participants.length > 2`, inchangé sinon). Détail complet dans le fichier
-d'analyse (section « Mise à jour 2026-08-14 »).
-
-## Fichiers touchés
-
-- `apps/web/components/video-call/CallNotification.tsx`
-- `apps/web/locales/{en,fr,es,pt}/calls.json` (+`incoming.groupSubtitle`,
-  `+incoming.groupCallLabel`)
-- `apps/web/__tests__/components/video-call/CallNotification.groupCall.test.tsx` (nouveau)
-- `tasks/2026-08-13-group-calls-gap-analysis.md` (journal)
-
-## Gates
-
-- `apps/web` : suite `__tests__/components/video-call/` +
-  `__tests__/components/video-calls/` — 36 suites / 182 tests verts.
-- `tsc --noEmit` (`apps/web`) : mêmes erreurs pré-existantes qu'avant le
-  changement (baseline inchangée), rien de nouveau dans les fichiers touchés.
-- 4 locales validées JSON-valides.
-- iOS : hors scope de ce correctif (aucun fichier Swift touché).
-
-## Prochains candidats (W6/W7 restants, inchangés)
-
-- Grille adaptative multi-participants (`VideoCallInterface.tsx`, aujourd'hui
-  1 plein écran + vignettes flottantes).
-- Roster avec états mute/vidéo par participant.
-- `onRemove` (déclenché sur déconnexion, `VideoStream.tsx`) reste purement
-  local — pas branché sur `DELETE /calls/:id/participants/:pid` pour une
-  vraie éviction modérateur.
-- Timeout global 45 s (`CallManager.tsx` `CALL_TIMEOUT_MS`) — déjà atténué par
-  Vague 113/114 (2026-08-12, clear sur `status === 'active'`, qui se pose dès
-  la 1re réponse en groupe) ; à vérifier explicitement par un test group-call
-  dédié avant de le déclarer clos.
-- i18n groupe pour le reste de l'UI d'appel (roster, toasts join/leave).
-- Mesh iOS mono-PC (I1-I7, `tasks/2026-08-13-group-calls-gap-analysis.md`
-  §iOS) — le chantier le plus large, non commencé.
-
----
-
-# Cycle 123 — Le filtre de la cloche ne filtrait que le déjà-chargé, et ses pastilles ne comptaient que lui
-
-## Le défaut
-
-`GET /notifications` ne déclarait dans son querystring que `offset`, `limit`, `unreadOnly` et
-`cursor`. Le web lui envoyait pourtant sept paramètres de plus :
-
-```ts
-params.set('sortBy', sortBy);
-params.set('sortOrder', sortOrder);
-if (type && type !== 'all') params.set('type', type);
-if (priority) params.set('priority', priority);
-if (conversationId) params.set('conversationId', conversationId);
-if (startDate) params.set('startDate', startDate.toISOString());
-if (endDate) params.set('endDate', endDate.toISOString());
-```
-
-Fastify retire de `request.query` toute clé absente du schéma de la route. Les sept partaient donc
-sur le fil et ne filtraient rien — en silence, sans erreur, sans trace.
-
-### Ce n'était pas du gaspillage, c'était un mensonge
-
-Le filtrage réel se faisait côté client, `matchesFilter` appliqué aux notifications déjà chargées.
-Sur une liste PAGINÉE, cela ne veut pas dire « filtrer » : **« aucune mention » ne signifiait que
-« aucune mention parmi les vingt dernières notifications »**, et rien n'allait chercher les autres.
-Un onglet vide n'était pas une réponse — c'était une fenêtre.
-
-Le même défaut frappait deux autres chiffres du même écran, pour la même raison :
-
-- **les pastilles de comptage** (`countByFilter(notifications, filter)`) — le nombre affiché sur
-  chaque onglet changeait à chaque défilement ;
-- **le sous-titre de la page** (`total: String(notifications.length)`) — « 20 notifications »
-  annoncées à qui en a trois cents.
-
-### La moitié du correctif était déjà écrite, et morte
-
-`NotificationCounts.byType` était **déclaré** dans le type depuis toujours, sans qu'aucun producteur
-ne l'écrive. `useNotificationCountsQuery` existait, exporté par la barrel, **sans consommateur**. Et
-`getCounts()` rendait `total = unread = /notifications/unread-count` : deux questions différentes
-servies par le même chiffre. Les deux moitiés d'une même fonctionnalité, mortes chacune de son côté
-— le motif exact de la Leçon 241.
-
-## Livré
-
-- **Gateway** — `GET /notifications?types=` : CSV de types BRUTS, déclaré au querystring et appliqué
-  en `type: { in: [...] }`, actif dans les DEUX modes de pagination (offset et curseur). Une liste
-  vide rend `{}` et jamais `{ type: { in: [] } }` : le repli d'un paramètre illisible est l'absence
-  de filtre — le même arbitrage que le curseur illisible, quinze lignes plus bas.
-- **Gateway** — `GET /notifications/counts` → `{ total, unread, byType }`. Un `groupBy(['type'])`
-  sous le MÊME `visibleNotificationsWhere` que la liste ; `total` se DÉDUIT du regroupement plutôt
-  que d'un `count()` séparé (deux lectures = deux instants = deux chiffres qui peuvent se
-  contredire). `byType` passe par `additionalProperties` dans le schéma de réponse : déclaré par
-  `properties`, il aurait fallu réénumérer chaque type, et Fastify aurait retiré du fil en silence
-  tout type oublié.
-- **`@@index([userId, type, createdAt(sort: Desc), id(sort: Desc)])`** — égalité puis tri (ESR). Il
-  **REMPLACE** `[userId, type]` : même préfixe, donc `markNotificationsByTypesAsRead` reste servi,
-  sans second index à écrire. Sans les deux clés de tri dans l'index, MongoDB parcourt la plage
-  `[userId, type]` puis TRIE tout ce qu'elle contient — l'historique entier de l'onglet à chaque
-  page, pour vingt lignes à l'écran. **Prod : l'entrypoint ne joue aucune migration, index à créer
-  à la main.**
-- **Web — `FILTER_TYPES`**, source unique du groupement d'alias. Il remplace **deux `switch`
-  recopiés dans le même fichier** (`countByFilter` et `matchesFilter`, identiques ligne pour ligne).
-  L'onglet « tout » y rend une liste VIDE et non l'énumération de tous les types : une énumération
-  devient fausse le jour où un type de plus est créé, et elle le devient en silence.
-- **Web** — la page envoie l'onglet actif au serveur ; les pastilles et le sous-titre lisent
-  `GET /notifications/counts`. Le sous-titre ne s'affiche PAS tant que le total n'est pas connu :
-  un chiffre provisoire qui saute ensuite se lit comme une correction, pas comme un chargement.
-- **Web** — les paramètres que la gateway ne déclare pas ne sont plus envoyés, **et la signature de
-  `fetchNotifications` cesse de les admettre** (`NotificationQueryOptions` : `types`, `isRead`,
-  pagination). Une signature qui accepte un filtre non honoré fait croire à un filtrage qui n'a pas
-  lieu — c'est exactement ainsi que les sept ont voyagé sans lecteur. `sortBy`/`sortOrder` ne
-  peuvent pas être ouverts : le curseur keyset est ancré sur l'ordre total `(createdAt desc,
-  id desc)`, et servir un autre ordre lui ferait sauter des lignes sans rien signaler.
-- **Temps réel — `listAcceptsType`.** Filtrer côté serveur crée un danger neuf : le socket insérait
-  chaque `notification:new` dans TOUTES les listes (`setQueriesData`, préfixe `lists()`). Sur une
-  liste qui n'a demandé que les mentions, cela ferait apparaître une demande d'ami que le serveur
-  n'aurait jamais servie. L'insertion lit désormais les `types` dans la CLÉ de chaque query et écrit
-  clé par clé. Les totaux d'onglets sont reportés en optimiste sur la même arrivée.
-- **`NotificationCounts` monte dans `@meeshy/shared`** — ce n'est plus un type « frontend-specific »
-  mais le corps d'une réponse, donc un contrat de fil, avec un seul lieu de déclaration.
-
-### Ce que les doubles ont dû apprendre avant le code
-
-`matchesNotificationWhere` savait filtrer par `userId`, `isRead`, `expiresAt`, `createdAt`, `id` —
-pas par `type`, et sa doctrine est de **jeter** sur une clé inconnue. `groupByNotificationType` a été
-ajouté à côté de `findManyNotifications`, appliquant le même `where` : un compteur qui verrait les
-expirées ou l'inbox d'autrui recréerait la contradiction cloche/liste que le prédicat partagé existe
-pour supprimer, et seul un double qui rejoue le prédicat peut le montrer.
-
-### Un double de test qui figeait un contrat périmé
-
-`use-notifications-query.test.tsx` doublait `@/lib/react-query/query-keys` par une copie manuelle.
-La clé des compteurs n'y était pas — le hook jetait sur une fonction absente. Le double est retiré :
-`queryKeys` est un module PUR, il n'y avait rien à isoler, seulement un contrat à figer par erreur.
-
-## Gates
-
-- Gateway : `tsc --noEmit` propre ; suite `notifications-routes` 47/47 ; suite complète jest.
-- Web : `tsc --noEmit` sans erreur nouvelle (les deux restantes,
-  `notification-socketio.singleton.test.ts` et `NotificationTest.tsx`, sont antérieures et dans des
-  fichiers non touchés) ; 21 suites / 553 témoins verts sur `hooks/queries`, `services`,
-  `components/NotificationItem`, `stores/notification-store`.
-- RED vérifié des deux côtés : 6 rouges gateway avant implémentation ; le témoin d'insertion filtrée
-  retombe rouge dès qu'on neutralise `listAcceptsType` (sabotage joué et annulé).
-- iOS : **non exécuté** — runner Linux, aucun gate `meeshy.sh build`/XCTest. Aucun fichier Swift
-  touché par ce cycle.
-
-## Écarts assumés
-
-- **La recherche TEXTE reste locale**, sur les pages chargées. Contrairement à l'onglet, elle ne
-  prétend pas compter : le champ est vide par défaut, et l'utilisateur voit défiler ce qu'il a sous
-  les yeux. Un `?q=` serveur est un chantier à part (index texte).
-- **`priority`, `conversationId`, `startDate`, `endDate` ne sont pas honorés — ils sont retirés.**
-  Aucune UI ne les commande ; les faire honorer par le serveur aurait été construire un filtre sans
-  lecteur, l'exacte symétrie du défaut corrigé ici.
-- **iOS n'envoie pas de `types` et ne lit pas `/notifications/counts`.** Les deux sont additifs : la
-  cloche iOS se comporte exactement comme avant.
-
-## Prochains candidats
-
-- **`GET /notifications/counts` n'a pas d'ETag** alors que la gateway a un hook `onSend` généralisé
-  (`utils/etag.ts`). Une pastille relue à chaque montage de page pour un chiffre qui bouge rarement
-  est le cas d'école du 304. À vérifier d'abord : le hook s'applique-t-il déjà aux réponses
-  `sendSuccess` ? Si oui, il n'y a rien à faire et c'est le constat qui est faux.
-- **Auditer les PRESCRIPTIONS écrites dans `packages/shared/types/`** (leçon 238) — reporté du
-  cycle 122. Les commentaires du type « à POSER, pas à incrémenter », « absent ⇒ `true` », « ne
-  jamais soustraire » prescrivent un comportement CLIENT : chacun nomme un bug possible, et se
-  vérifie par un grep du nom du champ chez chaque client.
-- **`conversation:left` n'a pas de branche « c'est MOI qui suis parti »** (reporté du cycle 122) :
-  `ConversationSyncEngine.startSocketRelay` n'y fait qu'un `cache.participants.invalidate(for:)`,
-  alors que `conversation:closed` et `conversation:deleted` ont leur branche de retrait.
-- **`updatedSince` (gwcontract-06, étape 1)** — toujours bloqué par l'absence de son consommateur
-  iOS, et les tombstones (étape 4) toujours impossibles (hard delete, aucun `deletedAt`).
-- **`GET /sync`** — reste sans client ; le brancher côté iOS est un chantier à part entière.
-
----
-
-# Cycle — Routine temps réel : le miroir de connexion qui n'avait pas de chemin de retour
-
-## Contexte
-
-Routine programmée « real-time messaging continuous improvement ». Le prompt
-demande un audit 16 phases et un merge en fin de cycle. Comme aux cycles
-précédents, l'exécution ne tente pas les 16 phases d'un coup : elle fait un
-recensement neuf, retient UN défaut prouvable et le mène jusqu'au merge.
-
-Branche : `claude/keen-hamilton-85hts2`, partie de `origin/main` (le cycle
-précédent — `CallNotification` groupe, PR #2989 — était intégralement mergé).
-
-## Recensement (Phase 1)
-
-Croisement mécanique des 125 `SERVER_EVENTS` contre les écouteurs web, en
-résolvant les constantes (`SERVER_EVENTS.X`) et non les littéraux. 16
-événements sans écouteur, **tous écartés** : alias de migration volontaire
-(`message:read-status-updated`), écarts de parité (réactions de pièce jointe,
-localisation live), hors périmètre (`call:*`), sans consommateur applicatif.
-
-Surfaces re-parcourues et trouvées correctes, consignées dans le journal pour
-ne pas être re-défrichées : `delta-sync.ts`, `typing.service.ts`,
-`messaging.service.ts`, `use-auto-retry-failed-messages.ts`,
-`emitToConversationParticipants.ts`, `broadcastMessageMutation.ts`.
-
-## Défaut retenu (Phases 2 / 3 / 4)
-
-`ConnectionService.state.isConnected` est un miroir qui pouvait descendre sans
-jamais remonter. Le handler `offline` le met à `false` sans toucher au socket ;
-une coupure plus courte que le cycle ping/pong de Socket.IO ne fait pas tomber
-le socket ; `connect()` sortait alors en silence sur `!socket.connected`, donc
-aucun `connect` n'était réémis et l'état restait faux pour le reste de la
-session.
-
-Coût réel : `useAutoRetryFailedMessages` a `isReady` pour unique déclencheur —
-la file des messages en échec n'était plus jamais rejouée, en silence, sur un
-lien qui portait pourtant normalement les messages entrants.
-
-Correctif : la réconciliation « le socket est la vérité » vit dans `connect()`,
-point de passage de tous les appelants. Analyse complète dans
-`tasks/realtime-sync-audit-2026-07-11.md` § Cycle 15.
+- `auth` devient un **résolveur** réévalué à chaque handshake, et le rustinage
+  impératif `socket.auth = { token }` disparaît (il remplacerait le résolveur).
+- `authManager.registerOnTokensUpdated()` — l'orchestrateur (et non
+  `ConnectionService`, qui ne sait pas brancher les écouteurs) rouvre le socket
+  quand il n'en existe aucun.
+- `refreshToken()` passe `expiresIn` dans son propre emplacement.
 
 ## Fichiers touchés
 
 - `apps/web/services/socketio/connection.service.ts`
-- `apps/web/__tests__/services/socketio/connection.service.test.ts` (+5 tests)
-- `CHANGELOG.md` (§ `🐛 Fixed`)
-- `tasks/realtime-sync-audit-2026-07-11.md` (journal du cycle)
+- `apps/web/services/socketio/orchestrator.service.ts`
+- `apps/web/services/auth-manager.service.ts`
+- `apps/web/services/auth.service.ts`
+- 6 fichiers de tests (+14 tests neufs, 2 doublures mises à jour)
+- `CHANGELOG.md`, `tasks/lessons.md` (leçon 247), journal du cycle
 
 ## Gates
 
-- 3 tests vus ROUGES avant le correctif (dont le scénario `offline`→`online`
-  de bout en bout), 2 verrous verts avant ET après.
-- `apps/web` : 159 suites / 4001 tests verts (`__tests__/services`,
-  `__tests__/hooks`, `hooks/__tests__`, indicateur de connexion).
-- `tsc --noEmit` : 1229 erreurs avant ET après le changement — base
-  pré-existante inchangée, rien de neuf sur les fichiers touchés.
-- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift
-  sur ce runner Linux).
+- 14 tests vus ROUGES avant les correctifs, verts après.
+- `apps/web` : **571 suites / 12 231 tests verts**, 21 skipped (suite complète).
+- `tsc --noEmit` : 1229 erreurs avant ET après — base pré-existante identique
+  au cycle 15, rien de neuf sur les fichiers touchés.
+- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift sur
+  ce runner Linux). Le SDK a été LU et vérifié exempt de D1/D2 —
+  `AuthManager.applySession` reconnecte les sockets sur rotation de jeton.
 
 ## Prochains candidats
 
-- `initializeConnection()` rend `null` sur JWT expiré et rien ne rappelle
-  `connect()` après un refresh réussi quand AUCUN socket n'a été créé — même
-  classe de défaut que celui-ci.
-- `visibilitychange` → `connect()` pour couvrir le retour d'un onglet bfcaché
-  (`connect()` est désormais idempotent, l'ajout est sans risque).
+- `visibilitychange` → `connect()` (hérité du cycle 15, toujours sans risque).
+- Un socket existant mais bloqué en reconnexion n'est pas relancé par
+  `onTokensUpdated` — volontaire (D1 le couvre), à regarder si un onglet reste
+  muet malgré un socket présent.
 - Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
   `user:preferences-updated` côté iOS.

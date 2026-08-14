@@ -93,6 +93,7 @@ const mockGenerateClientMessageId = jest.fn();
 // authManager mocks
 const mockAuthGetAuthToken = jest.fn();
 const mockAuthGetAnonymousSession = jest.fn();
+const mockAuthRegisterOnTokensUpdated = jest.fn();
 
 // getConversationApiId mock
 const mockGetConversationApiId = jest.fn();
@@ -219,6 +220,7 @@ jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: (...args: unknown[]) => mockAuthGetAuthToken(...args),
     getAnonymousSession: (...args: unknown[]) => mockAuthGetAnonymousSession(...args),
+    registerOnTokensUpdated: (...args: unknown[]) => mockAuthRegisterOnTokensUpdated(...args),
   },
 }));
 
@@ -287,6 +289,7 @@ describe('SocketIOOrchestrator', () => {
     mockGenerateClientMessageId.mockReturnValue('cid_generated');
     mockAuthGetAuthToken.mockReturnValue('token-xyz');
     mockAuthGetAnonymousSession.mockReturnValue(null);
+    mockAuthRegisterOnTokensUpdated.mockReturnValue(jest.fn());
     mockConnOnStatusChange.mockReturnValue(jest.fn());
     mockMsgOnNewMessage.mockReturnValue(jest.fn());
     mockMsgOnMessageEdited.mockReturnValue(jest.fn());
@@ -340,6 +343,51 @@ describe('SocketIOOrchestrator', () => {
       resetSingleton();
       const b = SocketIOOrchestrator.getInstance();
       expect(a).not.toBe(b);
+    });
+  });
+
+  // ─── Recovery after a silent token refresh ────────────────────────────────
+
+  describe('token refresh recovery', () => {
+    function fireTokensUpdated(): void {
+      const subscriber = mockAuthRegisterOnTokensUpdated.mock.calls[0]?.[0] as (() => void) | undefined;
+      if (!subscriber) throw new Error('orchestrator never subscribed to token updates');
+      subscriber();
+    }
+
+    it('opens the socket that a boot with an expired JWT never got to create', () => {
+      // Boot path: the token in storage is expired, so ConnectionService
+      // returns null and NOTHING is wired — no socket, no listeners.
+      mockConnGetSocket.mockReturnValue(null);
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      orchestrator.setCurrentUser({ id: 'user-1' } as never);
+      mockConnInitializeConnection.mockClear();
+
+      // The first REST call refreshes the token silently.
+      fireTokensUpdated();
+
+      expect(mockConnInitializeConnection).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves a live socket untouched — its handshake resolver already reads the new token', () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      orchestrator.setCurrentUser({ id: 'user-1' } as never);
+      mockConnGetSocket.mockReturnValue({ connected: true } as never);
+      mockConnInitializeConnection.mockClear();
+
+      fireTokensUpdated();
+
+      expect(mockConnInitializeConnection).not.toHaveBeenCalled();
+    });
+
+    it('stays out of the way when no user session is active yet', () => {
+      SocketIOOrchestrator.getInstance();
+      mockConnGetSocket.mockReturnValue(null);
+      mockConnInitializeConnection.mockClear();
+
+      fireTokensUpdated();
+
+      expect(mockConnInitializeConnection).not.toHaveBeenCalled();
     });
   });
 

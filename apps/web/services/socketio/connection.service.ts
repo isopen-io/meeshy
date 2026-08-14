@@ -87,6 +87,26 @@ export class ConnectionService {
     }
   }
 
+  /**
+   * Credentials for the NEXT handshake, read at the moment it happens.
+   *
+   * Socket.IO replays the `auth` option on every reconnection attempt. Passed
+   * as a literal, the socket stayed pinned for life to the token it was built
+   * with: a silent REST refresh, an anonymous session rotation, or a gateway
+   * restart after the token had already turned over left every retry
+   * presenting credentials the gateway rejects — the built-in loop burned its
+   * attempts, `reconnect_failed` handed off to our backoff, and that one
+   * re-presented the same dead token. An auth-locked tab, on a session whose
+   * valid credentials were sitting in storage the whole time.
+   *
+   * As a callback, each handshake asks again. Nothing has to remember to push
+   * a new token in — and nothing may pin one back onto `socket.auth`, which
+   * would replace this resolver and restore the old failure.
+   */
+  private resolveHandshakeToken(): string | undefined {
+    return authManager.getAuthToken() || authManager.getAnonymousSession()?.token;
+  }
+
   initializeConnection(): TypedSocket | null {
     if (this.state.socket) return this.state.socket;
     const token = authManager.getAuthToken();
@@ -104,7 +124,7 @@ export class ConnectionService {
 
     const socketUrl = getWebSocketUrl();
     const socket = io(socketUrl, {
-      auth: { token: token || sessionToken },
+      auth: (cb: (data: Record<string, unknown>) => void) => cb({ token: this.resolveHandshakeToken() }),
       transports: ['websocket', 'polling'],
       autoConnect: false,
       reconnection: true,
@@ -247,11 +267,11 @@ export class ConnectionService {
 
     socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
       logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
+      // No token is pushed onto the socket here: `resolveHandshakeToken()`
+      // reads storage at the handshake, so the reconnect below already carries
+      // whatever the refresh just stored. Assigning `socket.auth` would swap
+      // the resolver out for a literal and re-pin the socket.
       authService.refreshToken().then(() => {
-        const newToken = authManager.getAuthToken();
-        if (newToken && this.state.socket) {
-          (this.state.socket as any).auth = { token: newToken };
-        }
         this.reconnect();
       }).catch((err) => {
         logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });
