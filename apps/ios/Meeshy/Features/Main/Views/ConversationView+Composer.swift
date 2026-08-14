@@ -213,7 +213,7 @@ extension ConversationView {
         // `photoLibrary: .shared()` est requis pour la présélection : les
         // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
         // matchent les assets du picker que sur la photothèque partagée.
-        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
+        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
@@ -391,12 +391,13 @@ extension ConversationView {
     /// checked. The picker binding is primed with identifier-based items
     /// (`photoLibrary: .shared()` makes them match real assets); the priming
     /// echo on the selection onChange is swallowed via `photoPickerPriming`.
-    /// The handoff is capped at the picker's `maxSelectionCount` (10). With no
-    /// strip selection, stale primed items from a cancelled run are dropped so
+    /// The handoff is capped at the picker's `maxSelectionCount`
+    /// (`ConversationComposerState.maxMediaSelection`). With no strip
+    /// selection, stale primed items from a cancelled run are dropped so
     /// the picker opens clean.
     func openPhotoLibraryPreselecting(_ assetIds: [String]) {
         if !assetIds.isEmpty {
-            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            let primed = assetIds.prefix(ConversationComposerState.maxMediaSelection).map { PhotosPickerItem(itemIdentifier: $0) }
             // Arm the echo-swallow ONLY when priming actually mutates the
             // binding — an unchanged binding (same picks re-handed after a
             // cancelled run) fires no onChange, and a stale armed flag would
