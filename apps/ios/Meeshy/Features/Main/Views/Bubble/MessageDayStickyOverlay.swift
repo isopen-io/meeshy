@@ -16,7 +16,7 @@ import MeeshyUI
 /// L'offset reste à 0, mais sa raison a changé avec la simplification de
 /// l'overlay (2026-08-14) : ce n'est plus `IslandEmergingBanner` qui garantit
 /// l'air sous l'îlot, c'est `MessageDayStickyOverlay` lui-même, via son
-/// `.padding(.top, 8)`. Cumuler une marge ici la doublerait.
+/// `.padding(.top, 6)`. Cumuler une marge ici la doublerait.
 ///
 /// Vit dans ce fichier et pas dans `MessageListViewController` parce que c'est
 /// l'overlay qui porte l'autre moitié de la marge : les deux valeurs se lisent
@@ -67,7 +67,7 @@ struct MessageDayStickyOverlay: View {
                     .padding(.vertical, 7)
                     .background(colorScheme == .dark ? MeeshyColors.indigo900 : MeeshyColors.indigo50)
                     .cornerRadius(20)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
                     .padding(.horizontal, 16)
                     .accessibilityLabel(label)
                     .accessibilityAddTraits(.isHeader)
