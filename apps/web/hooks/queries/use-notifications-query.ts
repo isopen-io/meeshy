@@ -24,7 +24,14 @@ export function useNotificationsQuery(options: NotificationQueryOptions = {}) {
 export function useInfiniteNotificationsQuery(
   options: NotificationQueryOptions & { enabled?: boolean } = {}
 ) {
-  const { limit = 50, enabled = true, ...filters } = options;
+  const { limit = 50, enabled = true, types, ...rest } = options;
+
+  // `FILTER_TYPES.all` vaut `[]`, et l'onglet « tout » demande donc exactement
+  // ce que demande la cloche : l'inbox entière. Laisser `{ types: [] }` dans la
+  // clé en ferait une SECONDE question aux yeux du cache — un cache de plus, un
+  // appel de plus, et un écran vide à l'ouverture de /notifications le temps de
+  // refaire ce que la cloche tenait déjà. Un filtre vide n'est pas un filtre.
+  const filters = types && types.length > 0 ? { ...rest, types } : rest;
 
   return useInfiniteQuery({
     enabled,

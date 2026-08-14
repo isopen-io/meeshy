@@ -2,6 +2,44 @@
      ÉPHÉMÈRE. Les deux sont conservées telles quelles : une fiche de cycle est le compte
      rendu d'un travail précis, elle ne se fusionne pas avec celle d'un autre. -->
 
+# Cycle 123bis — Suites du filtre d'onglet, après collision avec #2986
+
+Ce cycle a implémenté le même correctif que #2986 en parallèle, sans le savoir (voir leçon 245).
+#2986 ayant fusionné le premier, sa version fait foi ; ce qui suit est le seul DELTA qui lui
+manquait, repris depuis `main`.
+
+- **Le squelette emportait toute la page.** Le retour anticipé sur `isLoading && notifications
+  .length === 0` a été écrit quand l'onglet filtrait CÔTÉ CLIENT — il ne se déclenchait donc qu'au
+  tout premier chargement. Depuis que l'onglet filtre côté serveur, chaque onglet jamais ouvert a
+  un cache vide : le squelette plein écran emporte les onglets que le lecteur vient de toucher et
+  la recherche qu'il est en train de taper, à CHAQUE premier passage. Il remplace maintenant la
+  seule liste. Deux témoins (`__tests__/app/notifications/page.test.tsx`).
+- **`{ types: [] }` dédoublait le cache de la cloche.** `FILTER_TYPES.all` vaut `[]`, donc l'onglet
+  « tout » et la cloche posent la même question — mais `{ types: [] }` et `{}` ne se hachent pas
+  pareil. Deux caches, deux appels, et un écran vide à l'ouverture de `/notifications` le temps de
+  refaire ce que la cloche tenait déjà. La clé normalise : un filtre vide n'est pas un filtre.
+  Deux témoins (partage de cache / séparation par jeu de types).
+- **`docs/notifications/STRUCTURE.md` annonçait toujours les paramètres fantômes** (`type`,
+  `priority`, `conversationId`, `sortBy`, `sortOrder`) — la source même de la croyance du client.
+  Remplacés par la liste exhaustive de ce que la route déclare, plus `GET /notifications/counts`
+  et les cas d'absence de `nextCursor`.
+
+## Gates
+
+- Web : **571 suites / 12 216 témoins verts** ; `tsc --noEmit` sans erreur nouvelle sur les
+  fichiers touchés.
+- Gateway : aucun fichier touché ce cycle.
+- iOS : non concerné.
+
+## Reste ouvert (inchangé)
+
+- **La recherche texte de `/notifications` porte le même défaut que l'ancien filtre** : elle
+  cherche dans les seules pages chargées. Le code le dit maintenant en toutes lettres et l'assume ;
+  le remède (`?q=` serveur) demande un index texte — fiche à instruire.
+- `useNotificationsQuery` (non infinie) n'a toujours aucun appelant — code mort à retirer.
+- iOS n'envoie ni `types` ni ne lit `/notifications/counts`.
+
+
 # Cycle — Routine appels audio/vidéo : `CallNotification` distingue enfin 1:1 vs groupe
 
 ## Contexte

@@ -84,17 +84,12 @@ function NotificationsPageContent() {
     [t]
   );
 
-  if (isLoading && notifications.length === 0) {
-    return (
-      <DashboardLayout title={t('pageTitle')} hideSearch={true}>
-        <div className="py-6">
-          <div className="max-w-2xl mx-auto">
-            <NotificationSkeleton count={5} />
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // Le squelette remplace la LISTE, jamais la page. Depuis que l'onglet filtre
+  // côté serveur, en changer ouvre une requête, et le cache d'un onglet jamais
+  // ouvert est vide : un squelette plein écran emporterait alors les onglets que
+  // le lecteur vient de toucher et la recherche qu'il est en train de taper — à
+  // chaque premier passage sur chaque onglet.
+  const isColdList = isLoading && notifications.length === 0;
 
   return (
     <DashboardLayout title={t('pageTitle')} hideSearch={true}>
@@ -168,20 +163,24 @@ function NotificationsPageContent() {
 
           <PushPermissionBanner />
 
-          <NotificationList
-            notifications={filteredNotifications}
-            isLoading={isLoadingMore}
-            hasMore={hasMore}
-            onFetchMore={fetchMore}
-            onMarkAsRead={markAsRead}
-            onDelete={deleteNotification}
-            onClick={handleNotificationClick}
-            formatTimeAgo={formatTimeAgo}
-            t={t}
-            locale={locale}
-            searchQuery={searchQuery}
-            grouped={!searchQuery && activeFilter === 'all'}
-          />
+          {isColdList ? (
+            <NotificationSkeleton count={5} />
+          ) : (
+            <NotificationList
+              notifications={filteredNotifications}
+              isLoading={isLoadingMore}
+              hasMore={hasMore}
+              onFetchMore={fetchMore}
+              onMarkAsRead={markAsRead}
+              onDelete={deleteNotification}
+              onClick={handleNotificationClick}
+              formatTimeAgo={formatTimeAgo}
+              t={t}
+              locale={locale}
+              searchQuery={searchQuery}
+              grouped={!searchQuery && activeFilter === 'all'}
+            />
+          )}
         </div>
       </div>
     </DashboardLayout>
