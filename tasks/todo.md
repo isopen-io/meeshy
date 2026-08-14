@@ -1,55 +1,69 @@
-# Cycle — Routine appels audio/vidéo : `CallNotification` distingue enfin 1:1 vs groupe
+# Cycle — Routine temps réel : le miroir de connexion qui n'avait pas de chemin de retour
 
 ## Contexte
 
-Routine programmée "audio/video calling continuous improvement" (Principal
-Apple Platform Architect / WebRTC / Security scope). Le prompt demande un
-audit complet 12 phases (iOS/WebRTC/CallKit/PushKit/sécurité/UX/tests/perf) et
-un merge en fin de cycle. Plutôt que de tenter les 12 phases d'un coup — pas
-réaliste ni sûr sur du code d'appel — cette exécution reprend le travail de la
-routine précédente : `tasks/2026-08-13-group-calls-gap-analysis.md`, dont la
-mise à jour du 2026-08-13(3) laissait W6/W7 (UI web groupe) et I1-I7 (mesh iOS
-mono-PC) comme prochains candidats.
+Routine programmée « real-time messaging continuous improvement ». Le prompt
+demande un audit 16 phases et un merge en fin de cycle. Comme aux cycles
+précédents, l'exécution ne tente pas les 16 phases d'un coup : elle fait un
+recensement neuf, retient UN défaut prouvable et le mène jusqu'au merge.
 
-## Choix du cycle
+Branche : `claude/keen-hamilton-85hts2`, partie de `origin/main` (le cycle
+précédent — `CallNotification` groupe, PR #2989 — était intégralement mergé).
 
-**Un sous-item précis de W6** : `CallNotification` (bannière d'appel entrant
-web) affichait le même texte pour un 1:1 et un appel de groupe — aucun moyen
-pour l'appelé de savoir, avant de décrocher, s'il rejoint un appel à deux ou à
-cinq. Corrigé en TDD (RED : 5 tests sur `isGroupCall`/`groupSize`, GREEN :
-badge « {count} personnes » + sous-titre « Appel de groupe » quand
-`participants.length > 2`, inchangé sinon). Détail complet dans le fichier
-d'analyse (section « Mise à jour 2026-08-14 »).
+## Recensement (Phase 1)
+
+Croisement mécanique des 125 `SERVER_EVENTS` contre les écouteurs web, en
+résolvant les constantes (`SERVER_EVENTS.X`) et non les littéraux. 16
+événements sans écouteur, **tous écartés** : alias de migration volontaire
+(`message:read-status-updated`), écarts de parité (réactions de pièce jointe,
+localisation live), hors périmètre (`call:*`), sans consommateur applicatif.
+
+Surfaces re-parcourues et trouvées correctes, consignées dans le journal pour
+ne pas être re-défrichées : `delta-sync.ts`, `typing.service.ts`,
+`messaging.service.ts`, `use-auto-retry-failed-messages.ts`,
+`emitToConversationParticipants.ts`, `broadcastMessageMutation.ts`.
+
+## Défaut retenu (Phases 2 / 3 / 4)
+
+`ConnectionService.state.isConnected` est un miroir qui pouvait descendre sans
+jamais remonter. Le handler `offline` le met à `false` sans toucher au socket ;
+une coupure plus courte que le cycle ping/pong de Socket.IO ne fait pas tomber
+le socket ; `connect()` sortait alors en silence sur `!socket.connected`, donc
+aucun `connect` n'était réémis et l'état restait faux pour le reste de la
+session.
+
+Coût réel : `useAutoRetryFailedMessages` a `isReady` pour unique déclencheur —
+la file des messages en échec n'était plus jamais rejouée, en silence, sur un
+lien qui portait pourtant normalement les messages entrants.
+
+Correctif : la réconciliation « le socket est la vérité » vit dans `connect()`,
+point de passage de tous les appelants. Analyse complète dans
+`tasks/realtime-sync-audit-2026-07-11.md` § Cycle 15.
 
 ## Fichiers touchés
 
-- `apps/web/components/video-call/CallNotification.tsx`
-- `apps/web/locales/{en,fr,es,pt}/calls.json` (+`incoming.groupSubtitle`,
-  `+incoming.groupCallLabel`)
-- `apps/web/__tests__/components/video-call/CallNotification.groupCall.test.tsx` (nouveau)
-- `tasks/2026-08-13-group-calls-gap-analysis.md` (journal)
+- `apps/web/services/socketio/connection.service.ts`
+- `apps/web/__tests__/services/socketio/connection.service.test.ts` (+5 tests)
+- `CHANGELOG.md` (§ `🐛 Fixed`)
+- `tasks/realtime-sync-audit-2026-07-11.md` (journal du cycle)
 
 ## Gates
 
-- `apps/web` : suite `__tests__/components/video-call/` +
-  `__tests__/components/video-calls/` — 36 suites / 182 tests verts.
-- `tsc --noEmit` (`apps/web`) : mêmes erreurs pré-existantes qu'avant le
-  changement (baseline inchangée), rien de nouveau dans les fichiers touchés.
-- 4 locales validées JSON-valides.
-- iOS : hors scope de ce correctif (aucun fichier Swift touché).
+- 3 tests vus ROUGES avant le correctif (dont le scénario `offline`→`online`
+  de bout en bout), 2 verrous verts avant ET après.
+- `apps/web` : 159 suites / 4001 tests verts (`__tests__/services`,
+  `__tests__/hooks`, `hooks/__tests__`, indicateur de connexion).
+- `tsc --noEmit` : 1229 erreurs avant ET après le changement — base
+  pré-existante inchangée, rien de neuf sur les fichiers touchés.
+- iOS : hors périmètre (aucun fichier Swift touché ; pas de toolchain Swift
+  sur ce runner Linux).
 
-## Prochains candidats (W6/W7 restants, inchangés)
+## Prochains candidats
 
-- Grille adaptative multi-participants (`VideoCallInterface.tsx`, aujourd'hui
-  1 plein écran + vignettes flottantes).
-- Roster avec états mute/vidéo par participant.
-- `onRemove` (déclenché sur déconnexion, `VideoStream.tsx`) reste purement
-  local — pas branché sur `DELETE /calls/:id/participants/:pid` pour une
-  vraie éviction modérateur.
-- Timeout global 45 s (`CallManager.tsx` `CALL_TIMEOUT_MS`) — déjà atténué par
-  Vague 113/114 (2026-08-12, clear sur `status === 'active'`, qui se pose dès
-  la 1re réponse en groupe) ; à vérifier explicitement par un test group-call
-  dédié avant de le déclarer clos.
-- i18n groupe pour le reste de l'UI d'appel (roster, toasts join/leave).
-- Mesh iOS mono-PC (I1-I7, `tasks/2026-08-13-group-calls-gap-analysis.md`
-  §iOS) — le chantier le plus large, non commencé.
+- `initializeConnection()` rend `null` sur JWT expiré et rien ne rappelle
+  `connect()` après un refresh réussi quand AUCUN socket n'a été créé — même
+  classe de défaut que celui-ci.
+- `visibilitychange` → `connect()` pour couvrir le retour d'un onglet bfcaché
+  (`connect()` est désormais idempotent, l'ajout est sans risque).
+- Restes du cycle 14 : validation ObjectId de `categoryId`, scope communauté de
+  `user:preferences-updated` côté iOS.
