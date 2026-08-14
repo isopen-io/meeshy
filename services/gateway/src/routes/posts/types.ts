@@ -4,29 +4,11 @@ import { z } from 'zod';
 // CURSOR PAGINATION HELPERS
 // ============================================
 
-export interface CursorData {
-  createdAt: string;
-  id: string;
-}
-
-export function encodeCursor(createdAt: Date | string, id: string): string {
-  const data: CursorData = {
-    createdAt: typeof createdAt === 'string' ? createdAt : createdAt.toISOString(),
-    id,
-  };
-  return Buffer.from(JSON.stringify(data)).toString('base64url');
-}
-
-export function decodeCursor(cursor: string): CursorData | null {
-  try {
-    const json = Buffer.from(cursor, 'base64url').toString('utf-8');
-    const data = JSON.parse(json);
-    if (data.createdAt && data.id) return data;
-    return null;
-  } catch {
-    return null;
-  }
-}
+// L'implémentation vit dans `utils/keyset-cursor` — hors du domaine posts, qui
+// n'est plus son seul lecteur. Ré-exportée ici pour que les imports existants
+// (PostFeedService, PostCommentService) ne bougent pas.
+export { decodeCursor, encodeCursor, keysetBeforeClause } from '../../utils/keyset-cursor';
+export type { CursorData } from '../../utils/keyset-cursor';
 
 // ============================================
 // ZOD SCHEMAS

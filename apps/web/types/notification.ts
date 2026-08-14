@@ -64,6 +64,12 @@ export {
  */
 export type NotificationPaginationOptions = {
   offset?: number;
+  /**
+   * Curseur keyset rendu par `pagination.nextCursor`. Prioritaire sur `offset` :
+   * une inbox qui reçoit pendant qu'on la lit décale ses rangs, le curseur est
+   * ancré sur une ligne.
+   */
+  cursor?: string;
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -165,10 +171,14 @@ export interface NotificationQuickAction {
 export interface NotificationPaginatedResponse {
   notifications: Notification[];
   pagination: {
-    offset: number;
+    /** Mode offset uniquement — une page servie par curseur n'a pas de rang. */
+    offset?: number;
     limit: number;
-    total: number;
+    /** Mode offset uniquement — non compté sous curseur (un `count()` par page). */
+    total?: number;
     hasMore: boolean;
+    /** Absent = gateway antérieure au curseur ; `null` = fin de liste. */
+    nextCursor?: string | null;
   };
   unreadCount?: number;
 }

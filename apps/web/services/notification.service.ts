@@ -12,6 +12,7 @@ import type {
   Notification,
   NotificationFilters,
   NotificationPaginatedResponse,
+  NotificationPaginationOptions,
   NotificationCounts,
 } from '@/types/notification';
 
@@ -111,10 +112,11 @@ export const NotificationService = {
    * Récupère les notifications avec pagination et filtres
    */
   async fetchNotifications(
-    options: Partial<NotificationFilters> = {}
+    options: Partial<NotificationFilters> & NotificationPaginationOptions = {}
   ): Promise<ApiResponse<NotificationPaginatedResponse>> {
     const {
       offset = 0,
+      cursor,
       limit = 50,
       type,
       isRead,
@@ -128,7 +130,13 @@ export const NotificationService = {
 
     return withRetry(async () => {
       const params = new URLSearchParams();
-      params.set('offset', offset.toString());
+      // Le curseur REMPLACE le rang, il ne l'accompagne pas : envoyer les deux
+      // laisserait le serveur arbitrer entre une ancre et un rang périmé.
+      if (cursor) {
+        params.set('cursor', cursor);
+      } else {
+        params.set('offset', offset.toString());
+      }
       params.set('limit', limit.toString());
       params.set('sortBy', sortBy);
       params.set('sortOrder', sortOrder);

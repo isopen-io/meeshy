@@ -20,7 +20,7 @@ export interface NotificationRow {
 }
 
 export function matchesNotificationWhere(
-  row: Pick<NotificationRow, 'userId' | 'isRead' | 'expiresAt'>,
+  row: Partial<NotificationRow>,
   where: Record<string, unknown> | undefined
 ): boolean {
   if (!where) return true;
@@ -32,6 +32,27 @@ export function matchesNotificationWhere(
       return (condition as Array<Record<string, unknown>>).some((branch) =>
         matchesNotificationWhere(row, branch)
       );
+    }
+    if (key === 'AND') {
+      return (condition as Array<Record<string, unknown>>).every((branch) =>
+        matchesNotificationWhere(row, branch)
+      );
+    }
+    if (key === 'createdAt') {
+      // Une borne de keyset : `{ lt }` seule, ou l'égalité qui départage
+      // l'ex-æquo de la seconde branche.
+      if (condition instanceof Date) return row.createdAt?.getTime() === condition.getTime();
+      const range = condition as { lt?: Date; gt?: Date };
+      if (range.lt instanceof Date) return (row.createdAt as Date).getTime() < range.lt.getTime();
+      if (range.gt instanceof Date) return (row.createdAt as Date).getTime() > range.gt.getTime();
+      throw new Error(
+        `double Prisma: condition createdAt non supportée ${JSON.stringify(condition)}`
+      );
+    }
+    if (key === 'id') {
+      const range = condition as { lt?: string };
+      if (typeof range.lt === 'string') return (row.id as string) < range.lt;
+      throw new Error(`double Prisma: condition id non supportée ${JSON.stringify(condition)}`);
     }
     if (key === 'expiresAt') {
       if (condition === null) return row.expiresAt === null;
@@ -45,4 +66,42 @@ export function matchesNotificationWhere(
     }
     throw new Error(`double Prisma: clé de filtre non supportée « ${key} »`);
   });
+}
+
+/**
+ * `findMany` d'une inbox, joué sur un tableau : filtre, TRI, puis fenêtre.
+ *
+ * Le tri est ce qui fait la valeur du double ici. Une pagination par offset et
+ * une pagination par curseur rendent la même chose tant que le tableau ne bouge
+ * pas ; leur différence n'apparaît qu'en INSÉRANT une ligne entre deux pages, et
+ * seule une source qui reclasse ses lignes à chaque lecture peut la montrer.
+ *
+ * Le tri est fixé à `(createdAt desc, id desc)` — l'ordre total de l'inbox, et
+ * la clé exacte que le curseur transporte. Un `orderBy` différent jette : une
+ * page servie dans un ordre que le curseur ne sait pas reprendre saute des
+ * lignes en silence, c'est précisément ce que ce double doit rendre visible.
+ */
+export function findManyNotifications<T extends Partial<NotificationRow>>(
+  rows: readonly T[],
+  args: {
+    where?: Record<string, unknown>;
+    orderBy?: unknown;
+    take?: number;
+    skip?: number;
+  } = {}
+): T[] {
+  const orderBy = JSON.stringify(args.orderBy ?? [{ createdAt: 'desc' }, { id: 'desc' }]);
+  if (orderBy !== JSON.stringify([{ createdAt: 'desc' }, { id: 'desc' }])) {
+    throw new Error(`double Prisma: orderBy non supporté ${orderBy}`);
+  }
+
+  const matched = rows
+    .filter((row) => matchesNotificationWhere(row, args.where))
+    .sort((a, b) => {
+      const delta = (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime();
+      return delta !== 0 ? delta : (b.id as string).localeCompare(a.id as string);
+    });
+
+  const from = args.skip ?? 0;
+  return args.take === undefined ? matched.slice(from) : matched.slice(from, from + args.take);
 }

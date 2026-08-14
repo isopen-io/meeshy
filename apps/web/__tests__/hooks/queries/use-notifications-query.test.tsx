@@ -269,20 +269,22 @@ describe('useInfiniteNotificationsQuery', () => {
     expect(result.current.hasNextPage).toBe(true);
   });
 
-  it('should fetch next page with correct offset', async () => {
-    // First page - response.data should have pagination
+  it('reprend la page suivante au CURSEUR rendu par la précédente', async () => {
+    // Une cloche vivante décale ses rangs entre deux pages : le socket insère
+    // en tête pendant la lecture. Un offset re-servirait la dernière ligne déjà
+    // affichée et sauterait la première jamais vue ; le curseur est ancré sur
+    // une LIGNE, pas sur un rang.
     mockFetchNotifications.mockResolvedValueOnce({
       data: {
         notifications: mockNotifications,
-        pagination: { limit: 50, offset: 0, total: 100, hasMore: true },
+        pagination: { limit: 50, offset: 0, total: 100, hasMore: true, nextCursor: 'cur-page-1' },
       },
     });
 
-    // Second page
     mockFetchNotifications.mockResolvedValueOnce({
       data: {
         notifications: [{ ...mockNotification, id: 'notif-4' }],
-        pagination: { limit: 50, offset: 50, total: 100, hasMore: false },
+        pagination: { limit: 50, hasMore: false, nextCursor: null },
       },
     });
 
@@ -295,7 +297,6 @@ describe('useInfiniteNotificationsQuery', () => {
       expect(result.current.hasNextPage).toBe(true);
     });
 
-    // Fetch next page
     await act(async () => {
       result.current.fetchNextPage();
     });
@@ -304,12 +305,70 @@ describe('useInfiniteNotificationsQuery', () => {
       expect(mockFetchNotifications).toHaveBeenCalledTimes(2);
     });
 
-    // Second call should have offset 50
+    const secondCall = mockFetchNotifications.mock.calls[1][0];
+    expect(secondCall).toEqual(expect.objectContaining({ cursor: 'cur-page-1' }));
+    expect(secondCall.offset).toBeUndefined();
+
+    await waitFor(() => {
+      expect(result.current.hasNextPage).toBe(false);
+    });
+  });
+
+  it("retombe sur l'offset tant que la gateway ne rend pas de curseur", async () => {
+    // Le web se déploie avant la gateway : une réponse sans `nextCursor` est
+    // celle d'un serveur plus ancien, pas une fin de liste. La couper à la
+    // page 1 serait une régression de défilement livrée par le client.
+    mockFetchNotifications.mockResolvedValueOnce({
+      data: {
+        notifications: mockNotifications,
+        pagination: { limit: 50, offset: 0, total: 100, hasMore: true },
+      },
+    });
+    mockFetchNotifications.mockResolvedValueOnce({
+      data: {
+        notifications: [{ ...mockNotification, id: 'notif-4' }],
+        pagination: { limit: 50, offset: 50, total: 100, hasMore: false },
+      },
+    });
+
+    const { result } = renderHook(() => useInfiniteNotificationsQuery(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasNextPage).toBe(true);
+    });
+
+    await act(async () => {
+      result.current.fetchNextPage();
+    });
+
+    await waitFor(() => {
+      expect(mockFetchNotifications).toHaveBeenCalledTimes(2);
+    });
+
     expect(mockFetchNotifications).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        offset: 50,
-      })
+      expect.objectContaining({ offset: 50 })
     );
+  });
+
+  it('arrête le défilement sur un nextCursor null même si hasMore est vrai', async () => {
+    mockFetchNotifications.mockResolvedValue({
+      data: {
+        notifications: mockNotifications,
+        pagination: { limit: 50, hasMore: true, nextCursor: null },
+      },
+    });
+
+    const { result } = renderHook(() => useInfiniteNotificationsQuery(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.hasNextPage).toBe(false);
   });
 });
 

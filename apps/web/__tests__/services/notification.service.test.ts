@@ -297,6 +297,26 @@ describe('NotificationService - Structure Groupée V2', () => {
       );
     });
 
+    it('demande la page par CURSEUR quand il en tient un — et jamais par offset', async () => {
+      (apiService.get as jest.Mock).mockResolvedValue({
+        success: true,
+        data: {
+          data: [],
+          pagination: { limit: 20, hasMore: false, nextCursor: null },
+          unreadCount: 0,
+        },
+      });
+
+      await NotificationService.fetchNotifications({ cursor: 'Y3Vyc2V1cg', limit: 20 });
+
+      const callArg = (apiService.get as jest.Mock).mock.calls[0][0];
+      expect(callArg).toContain('cursor=Y3Vyc2V1cg');
+      // Un offset envoyé À CÔTÉ du curseur n'est pas inoffensif : c'est le rang
+      // périmé que le curseur existe pour remplacer, et une gateway qui
+      // choisirait l'offset re-servirait la ligne déjà lue.
+      expect(callArg).not.toContain('offset=');
+    });
+
     it('devrait gérer les dates dans les filtres', async () => {
       (apiService.get as jest.Mock).mockResolvedValue({
         success: true,

@@ -5,6 +5,9 @@ import type { Notification, NotificationFilters, NotificationPaginationOptions }
 
 type NotificationsFiltersAndPagination = Partial<NotificationFilters & NotificationPaginationOptions>;
 
+/** Une page se demande par ANCRE (curseur) ou par RANG (offset) — jamais les deux. */
+type NotificationPageParam = { cursor: string } | { offset: number };
+
 export function useNotificationsQuery(options: NotificationsFiltersAndPagination = {}) {
   const { limit = 50, ...filters } = options;
 
@@ -25,18 +28,32 @@ export function useInfiniteNotificationsQuery(
   return useInfiniteQuery({
     enabled,
     queryKey: [...queryKeys.notifications.lists(), 'infinite', filters],
-    queryFn: async ({ pageParam = 0 }) => {
+    queryFn: async ({ pageParam }) => {
       const response = await NotificationService.fetchNotifications({
         ...filters,
         limit,
-        offset: pageParam,
+        ...pageParam,
       });
       return response.data;
     },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => {
-      if (!lastPage?.pagination?.hasMore) return undefined;
-      return lastPage.pagination.offset + lastPage.pagination.limit;
+    initialPageParam: { offset: 0 } as NotificationPageParam,
+    // Une cloche reçoit PENDANT qu'on la lit, et le socket insère en tête du
+    // cache. Sous pagination par rang, chaque arrivée décale la liste d'un
+    // cran : la page suivante re-sert la dernière ligne déjà affichée (doublon,
+    // clés React en conflit) et saute la première jamais vue. Le curseur
+    // keyset, lui, est ancré sur une LIGNE — l'insertion ne le déplace pas.
+    getNextPageParam: (lastPage): NotificationPageParam | undefined => {
+      const pagination = lastPage?.pagination;
+      if (!pagination?.hasMore) return undefined;
+
+      // `nextCursor` absent = gateway antérieure au curseur (le web se déploie
+      // en premier) : l'offset reste le seul moyen d'avancer. `null` = fin de
+      // liste, et sans ancre il n'y a rien à demander de plus.
+      if (pagination.nextCursor !== undefined) {
+        return pagination.nextCursor === null ? undefined : { cursor: pagination.nextCursor };
+      }
+
+      return { offset: (pagination.offset ?? 0) + pagination.limit };
     },
     // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
     // (Socket.IO est la source temps réel). Mais le socket ne pousse RIEN quand
