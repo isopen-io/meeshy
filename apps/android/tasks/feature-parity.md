@@ -229,14 +229,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Outbox-backed optimistic send: instant SENDING bubble, server-ACK swap,
       FAILED + tap-to-retry (EN/FR), WorkManager flush
 - [x] Message pagination (before-cursor, scroll-top trigger, history-safe cache prune)
-- [~] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
+- [x] `:feature:feed` — cache-first feed (SWR), Prisme-resolved post content,
       optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats,
       cursor-paginated infinite scroll (`PostRepository.loadMore` + `feedHasMore`,
       `loadMoreIfNeeded` 5-from-tail trigger, footer spinner, dedupe-append, history-safe
-      freshness watermark — port of `FeedViewModel.loadMoreIfNeeded`)
-- [ ] Pending: Stories / Calls slices, feed new-posts banner + post detail, reactions UI polish
-      optimistic like toggle (`isLikedByMe`), image collage, like/comment/repost stats
-- [~] `:feature:stories` — story **tray** end-to-end : `toStoryGroups` (sdk-core,
+      freshness watermark — port of `FeedViewModel.loadMoreIfNeeded`), new-posts banner
+      (`NewPostsBanner` in `FeedScreen.kt`), post detail (`PostDetailViewModel`, wired).
+      Re-verified 2026-08-15 — was carried as `[~]` with a "Pending: new-posts banner +
+      post detail" note; both exist and are wired, upgraded to done.
+- [x] `:feature:stories` — story **tray** end-to-end : `toStoryGroups` (sdk-core,
       port fidèle = filtre STORY, groupe par auteur, tri stories asc, tri groupes
       moi→non-vus→récent desc) + `hasUnviewed`/`latestStory`/`isExpired` (fallback
       21h)/`isFullyExpired` ; `StoryTrayBuilder` (self vs others, filtre groupes
@@ -254,12 +255,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       posting optimiste → ACK swap → Failed/retry + `received` socket dedupe) +
       `StoryCommentsViewModel` (Instant-App + optimiste + realtime `comment:added`) +
       `StoryCommentsSheet` (input accent, pending dimmé, tap-to-retry) câblé au viewer.
-      Pending : count-dots, composer/publish, reactions UI polish, prefetch média.
-- [ ] Pending: Stories composer + viewer richness, Calls slice, feed pagination +
-      post detail, reactions UI polish
-- [ ] Pending: Stories / Calls slices, feed pagination + post detail
+      **Composer/publish** : `StoryComposerScreen` (câblé dans `MeeshyApp.kt`) +
+      `StoryComposerViewModel`/`StoryComposerDraft`/`ComposerBandState` + publish
+      outbox-backed (`StoryRepository.enqueuePublish`, `StoryPublishFailures` retry/discard).
+      **Count-dots** : `StoryCountDots` (+ test). **Prefetch média** : `StoryPrefetchPlanner`
+      (+ test) câblé dans `StoryViewerScreen`/`StoryViewerViewModel`. **Reactions** :
+      `StoryReactionState` + `StoryViewerViewModel.react()`. Re-verified 2026-08-15 — this
+      bullet carried a "Pending : count-dots, composer/publish, reactions UI polish, prefetch
+      média" note; all four exist and are wired, upgraded from `[~]` to done.
 - [x] Reactions UI: usage-ordered quick-strip (`EmojiQuickStrip`) + full categorised picker
       (`EmojiFullPicker`) wired into chat long-press sheet
+- [x] `:feature:calls` — WebRTC calling (`WebRtcCallCoordinator`), Telecom integration
+      (`TelecomCallReporter`), incoming/active call UI (`IncomingCallViewModel`, `CallScreen`,
+      `CallPill`, ringtone/quality/reconnect timers), call history (`CallHistoryScreen`),
+      wired into `MeeshyApp.kt` navigation + FCM push (`MeeshyFcmService`,
+      `DeclineCallReceiver`). Re-verified 2026-08-15 — three duplicate "Pending: ... Calls
+      slice ..." bullets this section carried (stale, some malformed/duplicated text) removed;
+      the slice exists and is wired.
 
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)

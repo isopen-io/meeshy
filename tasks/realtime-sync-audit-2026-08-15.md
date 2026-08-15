@@ -1574,7 +1574,260 @@ communauté archivée — chacun a des routes qui écrivent dedans. Recenser, po
 chaque conteneur porteur d'un état terminal, les écrivains qui ne le vérifient
 pas.
 
-# Cycle 31 (2026-08-15) — la règle existait, sans un seul appelant
+---
+
+# Cycle 31 (2026-08-15) — les écrivains ignoraient l'état TERMINAL de leur conteneur
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 30 (mergé,
+PR #3031). Sonde annoncée en clôture de ce cycle-là, et prise ici telle quelle :
+**quels chemins d'écriture ignorent l'état TERMINAL de leur conteneur ?**
+
+Le cycle 30 l'avait déjà rencontrée sans la traiter — sa dernière phrase de
+CHANGELOG dit exactement ce que celui-ci ferme : « aucune garde
+`Conversation.isActive` n'existant sur le chemin d'envoi, il peut y écrire des
+messages que l'appelant ne recevra jamais ».
+
+## L'oracle n'était pas à trouver — il est au schéma
+
+`packages/shared/prisma/schema.prisma`, sur `Conversation.closedAt` :
+
+```
+/// Conversation closed for all — no one can write, messages stay readable
+```
+
+La moitié droite est tenue par tout le monde. La gauche par personne. Ce cycle
+ne découvre donc pas une règle : il constate qu'une règle **déclarée** n'a
+jamais eu d'exécutant.
+
+## Le recensement — la classe est vide au sens fort
+
+Balayage complet de `services/gateway/src`. `Conversation.isActive` et
+`Conversation.closedAt` apparaissent en trois rôles, jamais en quatrième :
+
+| Rôle | Sites | Verdict |
+|---|---|---|
+| ÉCRITS | `core.ts` (clôture), `delete-for-me.ts` ×2, `leave.ts` | 4 écrivains |
+| DIFFUSÉS | `CONVERSATION_CLOSED` | 2 émetteurs (depuis le cycle 30) |
+| LUS pour le rattrapage | `delta-tombstones.ts` (`closedAt > since`) | 1 |
+| **LUS comme GARDE** | — | **0** |
+
+La seule autre déréférence non-test de `conversation.isActive` est
+`search.ts:293`, un écho de payload de réponse.
+
+**Et la clôture est irréversible** : aucun écrivain du dépôt ne repose
+`Conversation.isActive: true`. L'état terminal l'est vraiment.
+
+## Pourquoi personne ne l'a vu — la collision de noms
+
+`isActive` existe sur DEUX modèles. **Toutes** les gardes d'envoi en portent
+une :
+
+```ts
+where: { conversationId, userId, isActive: true }   // ← Participant.isActive
+```
+
+Une relecture qui cherche « l'état actif est-il vérifié ? » le trouve partout et
+s'arrête. Or fermer une conversation ne touche **aucune** ligne `Participant` :
+les quatre routes de clôture n'écrivent que sur `Conversation`. Les membres
+restent donc actifs, indéfiniment, d'un fil que le serveur a déclaré mort.
+
+Même forme que les cycles 26 et 29 : la garde jumelle existe, sur l'autre
+modèle, et sa présence rassure la relecture qui aurait dû poser la question au
+bon endroit.
+
+## Ce que ça coûtait
+
+`GET /conversations` filtre `isActive: true` à la racine du `whereClause` : la
+conversation close disparaît de la liste de **tout le monde**. Les clients qui
+reçoivent `conversation:closed` la retirent aussi de leur cache (web
+`use-socket-cache-sync.ts`, iOS `SocialSocketManager`).
+
+Un message écrit après coup arrive donc dans un conteneur que le destinataire
+n'a plus : notification poussée, badge non lu incrémenté, fil introuvable dans
+la liste. **La clôture et l'envoi tardif courent l'un contre l'autre, et l'envoi
+gagne** — il n'existait rien pour l'arrêter.
+
+Le cas le plus sévère est l'invité **anonyme** : son lien de partage est son
+seul transport d'envoi, et la clôture ne désactive pas les liens. Fermer une
+conversation ne fermait rien pour l'inconnu qui détient l'URL.
+
+## Le correctif
+
+`services/messaging/conversationWriteAdmission.ts` — sœur exacte de
+`forwardAdmission` : `admitConversationWrite` + `isConversationWriteRefused`,
+plus un prédicat pur `isConversationClosed` exporté pour les appelants qui
+tiennent déjà la ligne.
+
+**Position — le point de convergence.** Câblé dans
+`MessagingService.handleMessage`, où REST, socket texte et socket pièces
+jointes se rejoignent. Ce n'est pas un choix neuf : le commentaire
+d'`admitMessageForward`, trente lignes plus bas, le justifie déjà mot pour mot
+— « un garde par route aurait été la quatrième copie d'une règle de
+permission ». Le correctif recopie la décision plutôt que de la rejouer.
+
+**APRÈS le dedup précoce, et c'est la seule position juste.** Sur un rejeu la
+ligne existe déjà : le message avait été accepté quand la conversation était
+ouverte. Le refuser maintenant ferait marquer « échoué » un message pourtant
+délivré à tous ses destinataires. C'est le **discriminant de placement** de la
+suite — une garde posée avant le dedup passe les quatre témoins de refus et
+échoue celui-là seul.
+
+**AVANT la détection de langue.** Quand le client omet `originalLanguage`,
+l'étape suivante paie un aller-retour HTTP vers le translator. Un envoi voué au
+refus ne doit pas l'acheter.
+
+**Les deux routes de lien de partage contournent ce funnel** (le manager le dit
+lui-même : « Those routes bypass both `MessagingService.handleMessage` and this
+manager's `_broadcastNewMessage` »). Elles reçoivent la même garde, mais par le
+**prédicat partagé** — la règle n'existe qu'en un exemplaire. Côté authentifié
+l'état terminal est ramené par la relation `conversation` **déjà chargée** :
+coût de lecture nul. Côté anonyme il s'ajoute au `select` du lien de session.
+Le `410` rendu voisine les `410` que ces routes rendent déjà pour un lien
+inactif ou expiré — la sémantique « ce n'est plus ouvert » y était déjà.
+
+**Le prédicat lit les DEUX colonnes, et ce n'est pas de la ceinture-bretelles.**
+Les quatre écrivains de clôture ne s'accordent pas : `core.ts` et les deux
+branches de `delete-for-me.ts` posent `{ isActive: false, closedAt, closedBy }`,
+mais `leave.ts` n'écrit que `isActive: false` — le constat latent nº 2 du cycle
+30, toujours non corrigé. Une garde qui ne lirait que `closedAt` laisserait ce
+quatrième écrivain hors de la règle. Lire les deux fait tenir la garde sur
+l'état réel de la base plutôt que sur la discipline de ses écrivains — et rend
+la correction de `leave.ts`, quand elle viendra, sans effet de bord ici.
+
+**« Inconnu » n'est pas « terminal ».** Une ligne absente n'est pas un refus.
+L'unité n'est pas l'autorité d'appartenance — celle-là est le `Participant`,
+vérifié une ligne plus haut. Lui faire aussi arbitrer l'existence lui donnerait
+deux raisons de changer et inventerait un mode d'échec là où le gardien d'à côté
+répond déjà. Même choix qu'`admitMessageForward` face à une source introuvable.
+
+**La lecture n'est PAS enveloppée dans un `try`.** L'appelant interroge déjà la
+base une ligne plus haut sans filet, et un envoi ne survit pas davantage à une
+base en panne. Avaler l'erreur n'ajouterait pas de robustesse — seulement un
+trou par lequel un envoi passerait dans une conversation close le jour où la
+base hoquette.
+
+**Coût.** +1 `findUnique` par clé primaire, deux colonnes, par envoi passant par
+le funnel ; zéro sur la route de lien authentifiée ; +1 relation sur la route
+anonyme. Coût constant, non dimensionné par l'état accumulé — contrairement aux
+fenêtres des cycles 24, 25 et 29.
+
+**Aucun changement client** : le refus emprunte les canaux d'erreur existants.
+
+## Le correctif a d'abord été POSÉ À MOITIÉ — et la suite était verte
+
+Consigné parce que c'est la partie instructive du cycle, et qu'elle s'est
+produite sur le défaut qu'on venait de nommer.
+
+La route de lien authentifiée résout le lien par DEUX branches — `mshy_…`
+(la forme des URLs réelles) et id brut — chacune avec son propre `include`
+jumeau. La garde n'avait été posée que sur la SECONDE. Sur la première, la
+projection ne ramenait pas `isActive`/`closedAt`, `isConversationClosed` lisait
+`undefined`, et **admettait**. Une garde inerte sur le chemin majoritaire.
+
+**Les deux témoins étaient VERTS.** Le double `conversationShareLink.findUnique`
+rendait son objet entier quel que soit le `select` demandé : il prouvait que la
+route sait DÉCIDER, jamais qu'elle a demandé de quoi décider. La forme exacte du
+piège que les leçons 258/260/262 décrivent, rencontrée en l'écrivant.
+
+Deux remèdes, tous deux nécessaires :
+
+1. **Le double PROJETTE** — il ne rend une colonne que si la requête l'a
+   réclamée. Idiom déjà présent dans le dépôt (`MessagingService.test.ts`, double
+   d'`earlyDedup` : « The mock models a real projection »). Et le témoin est
+   `describe.each` sur les DEUX branches, pas sur celle qu'on corrige en premier.
+   Vérifié rouge contre la version inerte avant de la remplacer.
+2. **La projection est NOMMÉE** (`SHARE_LINK_CONVERSATION_SELECT`) au lieu d'être
+   recopiée. Deux `select` jumeaux à quinze lignes d'écart sont une garde à
+   moitié posée qui a l'air d'une garde entière — la cause racine, pas le
+   symptôme.
+
+Leçon opérationnelle : **quand une garde neuve dépend d'une colonne PROJETÉE,
+le témoin doit passer par un double qui projette.** Sinon il mesure la logique
+de la garde et jamais son alimentation — et les deux échouent séparément.
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif (conversation close ;
+      forme `isActive` seul de `leave.ts` ; les deux routes de lien)
+- [x] 2 non-régressions vertes d'emblée, dont le discriminant de PLACEMENT
+      (un rejeu aboutit alors même que la conversation vient de fermer)
+- [x] 1 RED supplémentaire, vu rouge contre le correctif à moitié posé
+      (branche `mshy_…`), sur un double qui PROJETTE
+- [x] Suites voisines : 3 suites / 179 tests verts
+- [x] Suite gateway complète : **721 suites / 17 664 tests verts**
+      (cycle 30 : 720 / 17 649 — +1 suite, +15 témoins, exactement les ajoutés) ;
+      **17 665 après merge manuel de `origin/main`** (une passe parallèle sur
+      `participantCount` des appels en apporte 1 — aucune suite déplacée,
+      aucun test perdu au passage)
+- [x] CI verte sur la PR #3033 : 13 jobs, dont `Test gateway` et `Build (bun)`
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + `tasks/todo.md`
+
+## Constats latents — relevés, NON livrés
+
+1. **`MessageValidator.checkPermissions` est MORT.** Tout un pan de politique
+   d'autorisation d'envoi (`canSend`, `canSendAnonymous`, `canAttachFiles`,
+   `canMentionUsers`, `isAnnouncementChannel`, `defaultWriteRole`) —
+   ~230 lignes — n'est appelé que par ses propres tests. Vérifié par balayage
+   repo-wide : zéro appelant de production. Ce n'est PAS l'endroit où poser une
+   garde d'envoi, et c'est le premier réflexe qu'aurait une relecture rapide
+   (l'unité charge déjà la conversation et arbitre déjà l'écriture).
+
+   **Et ce n'est pas seulement du code mort — vérifié, pas supposé.**
+   `isAnnouncementChannel` et `defaultWriteRole` n'ont, dans tout le gateway,
+   que trois rôles : ÉCRITS à la création (`core.ts:1260`, branche `isBroadcast`
+   → `{ isAnnouncementChannel: true, defaultWriteRole: 'admin' }`), ÉCRITS au
+   `PATCH` (`core.ts:1523-1524`), RENDUS dans la réponse de liste
+   (`core.ts:557`). **La seule lecture qui les OPPOSE à un écrivain est celle de
+   l'unité morte** (`MessageValidator.ts:273`). Un canal d'annonces accepte donc
+   aujourd'hui les messages de n'importe quel membre : exactement la forme de
+   défaut que ce cycle vient de fermer, sur deux autres champs du même modèle,
+   et avec une victime plus immédiate — le champ est réglable depuis l'UI, donc
+   la promesse est faite à l'utilisateur, pas seulement au schéma.
+
+   Non livré ICI pour tenir le diff sur un défaut prouvé à la fois : la garde
+   d'annonce demande la résolution du RÔLE de l'appelant, que l'unité de ce
+   cycle n'a pas et n'a pas à avoir. C'est le candidat du cycle suivant.
+
+2. **La règle ne couvre que l'ENVOI.** Le recensement a trouvé la même absence
+   sur toute la surface d'interaction d'une conversation close — réactions
+   (REST et socket), édition, suppression, épinglage, consommation de vue
+   unique, accusés de lecture, `typing:start`. Non livré délibérément : ces
+   gestes portent sur des messages qui restent **lisibles pour toujours** par
+   contrat, ils ne créent pas de contenu neuf dans un conteneur mort, et aucun
+   ne déclenche de notification vers un fil disparu. Le rapport dégât/diff est
+   sans commune mesure avec celui de l'envoi. À reprendre comme une passe
+   dédiée, en tranchant d'abord la question produit : « lisible » autorise-t-il
+   « réagissable » ? Les deux réponses se défendent ; le code n'en a choisi
+   aucune.
+
+3. **`messageEditAdmission` et `messageDeleteAdmission` ne peuvent PAS accueillir
+   la garde en l'état.** Leurs lecteurs structuraux (`EditAdmissionReader`,
+   `DeleteAdmissionReader`) n'exposent que `user` et `participant` : la
+   `Conversation` leur est inatteignable par construction. C'est un choix
+   délibéré (doubles de test triviaux) qui a un prix — toute règle portant sur
+   le conteneur devra vivre chez leurs appelants, ou élargir les deux
+   interfaces. À décider si le constat nº 2 est un jour livré.
+
+4. **Deux caches mémoïsent l'appartenance** — `participant-lookup-cache` (TTL
+   30 s) et `MessageHandler.participantIdCache`. Ils n'ont PAS été touchés, et
+   c'est délibéré : la garde de ce cycle porte sur une lecture de `Conversation`
+   faite à chaque envoi, hors cache, donc aucune clôture n'est servie périmée.
+   Le noter parce que l'optimisation évidente — ranger l'état terminal à côté du
+   participant mémoïsé — rouvrirait une fenêtre de 30 s sur la seule règle que
+   ce cycle vient de poser, et transformerait les quatre routes de clôture en
+   sites d'invalidation obligatoire (la maladie que le docstring du cache
+   raconte déjà à propos d'`unban`).
+
+# Cycle 31, seconde passe (2026-08-15) — la règle existait, sans un seul appelant
+
+*La passe précédente a fermé la moitié « état terminal » de cette question et
+créé `conversationWriteAdmission`. Celle-ci reprend le MÊME chemin avec la
+sonde plus large — « que lit-il de la conversation avant d'écrire dedans ? » —
+et y trouve une seconde règle, écrite en entier et appelée par personne. Les
+deux passes ont travaillé en parallèle ; ce texte est réconcilié APRÈS le
+merge manuel de `main`, et ne revendique que ce que la première n'avait pas
+livré.*
 
 ## Méthode — la sonde annoncée par le cycle 30, posée sans détour
 
@@ -1639,11 +1892,9 @@ sans requête forgée, sans rien contourner. Un `defaultWriteRole` réglé à
 `moderator` sur un groupe ordinaire était tout aussi décoratif.
 
 **2. Une conversation FERMÉE acceptait encore des messages** — la question
-exacte du cycle 30 (son constat latent #4). `Conversation.isActive: false` est
-l'état terminal, écrit par quatre sites (`core.ts` `DELETE`, les deux branches
-de clôture de `delete-for-me.ts`, `leave.ts`). Aucun chemin d'écriture ne le
-lisait : un participant resté actif écrivait dans une conversation close, et le
-message était persisté, diffusé et traduit comme les autres.
+exacte du cycle 30 (son constat latent #4), **livrée par la première passe** et
+rappelée ici seulement parce que les deux règles partagent une unité, une
+position et un prédicat. Ce texte ne la revendique pas.
 
 ## Le correctif — la règle redevient une règle, au seul endroit qui la voit
 
@@ -1750,9 +2001,29 @@ ici elle n'en protège aucun, et sa seule existence dissuade de la réécrire.
    archivée. Ce cycle n'a instruit que la conversation. Les trois autres
    méritent le même balayage — quatre sites d'écriture chacun, la même question.
 
+
 ## Reste ouvert (inchangé depuis le cycle 23)
 
 - **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+
+## Candidat pour le cycle suivant
+
+Le constat latent nº 1, désormais VÉRIFIÉ : **un canal d'annonces n'est un
+canal d'annonces pour personne.** `isAnnouncementChannel` et `defaultWriteRole`
+sont réglables depuis l'UI, écrits par deux routes, rendus dans la liste — et
+opposés à un écrivain uniquement par une unité que rien n'appelle. La garde va
+au même point de convergence que celle de ce cycle, et demande en plus la
+résolution du rôle de l'appelant ; le retrait de l'unité morte devient alors un
+effet de bord du correctif plutôt qu'une passe d'hygiène séparée.
+
+La sonde générale reste par ailleurs ouverte au-delà de la conversation :
+`Post.deletedAt`, `Call` terminé, communauté archivée — chacun a des écrivains
+qui ne vérifient pas l'état terminal de leur conteneur. Ce cycle n'a instruit
+que le conteneur `Conversation`.
+
   Aucune toolchain Swift sous Linux.
 - **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
   `PRUNE_STALE_LUA`.
@@ -1768,3 +2039,4 @@ en était une ; le constat latent #1 en est une seconde, écrite au schéma plut
 qu'en TypeScript. Une règle sans appelant est indistinguable d'une règle
 appliquée pour quiconque la lit — c'est la classe de défaut la moins visible du
 dépôt, et la seule qu'un audit par le NOM du champ ne trouvera jamais.
+

@@ -350,16 +350,55 @@ describe('MessagingService', () => {
       });
     });
 
-    describe('état de la conversation — le conteneur gouverne enfin ce qu’on y écrit', () => {
-      // La règle vivait dans `MessageValidator.checkPermissions`, que ce
-      // service n'appelle PAS : ni le canal d'annonces ni la clôture n'étaient
-      // appliqués sur le seul chemin d'envoi. Ces cas prouvent le CÂBLAGE —
-      // la règle est prouvée dans `conversationWriteAdmission.test.ts`.
+    describe('conteneur TERMINAL et RANG D’ÉCRITURE — le conteneur gouverne enfin', () => {
+      // Deux règles, une position. Le schéma déclare la première sur
+      // `Conversation.closedAt` ; la clôture ne touche PAS les lignes
+      // `Participant`, et TOUTES les gardes d'envoi lisent
+      // `Participant.isActive` — un champ homonyme sur un autre modèle. La
+      // seconde vivait dans `MessageValidator.checkPermissions`, que ce service
+      // n'appelle PAS. Ces cas prouvent le CÂBLAGE ; les règles sont prouvées
+      // dans `conversationWriteAdmission.test.ts`.
+      const closed = {
+        id: testConversationId,
+        type: 'private',
+        isActive: false,
+        closedAt: new Date('2026-08-15T10:00:00.000Z')
+      };
 
-      it('refuse d’écrire dans une conversation clôturée, sans rien persister', async () => {
+      const announcementChannel = {
+        id: testConversationId,
+        type: 'group',
+        isActive: true,
+        closedAt: null,
+        isAnnouncementChannel: true,
+        defaultWriteRole: 'admin'
+      };
+
+      const senderWithRole = (role: string) => ({
+        id: testParticipantId,
+        conversationId: testConversationId,
+        isActive: true,
+        type: 'user',
+        userId: testUserId,
+        role,
+        user: { role: 'USER' }
+      });
+
+      it('refuse l’envoi dans une conversation close, sans rien écrire', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue(closed);
+
+        const response = await service.handleMessage(validRequest, testParticipantId);
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      // `leave.ts` ferme en n'écrivant QUE `isActive` (constat latent nº 2 du
+      // cycle 30) : le câblage doit tenir sur cette forme-là aussi.
+      it('refuse l’envoi dans une conversation fermée sans `closedAt`', async () => {
         mockPrisma.conversation.findUnique.mockResolvedValue({
           id: testConversationId,
-          type: 'group',
+          type: 'private',
           isActive: false
         });
 
@@ -370,22 +409,8 @@ describe('MessagingService', () => {
       });
 
       it('refuse un simple membre dans un canal d’annonces', async () => {
-        mockPrisma.conversation.findUnique.mockResolvedValue({
-          id: testConversationId,
-          type: 'group',
-          isActive: true,
-          isAnnouncementChannel: true,
-          defaultWriteRole: 'admin'
-        });
-        mockPrisma.participant.findUnique.mockResolvedValue({
-          id: testParticipantId,
-          conversationId: testConversationId,
-          isActive: true,
-          type: 'user',
-          userId: testUserId,
-          role: 'member',
-          user: { role: 'USER' }
-        });
+        mockPrisma.conversation.findUnique.mockResolvedValue(announcementChannel);
+        mockPrisma.participant.findUnique.mockResolvedValue(senderWithRole('member'));
 
         const response = await service.handleMessage(validRequest, testParticipantId);
 
@@ -393,23 +418,11 @@ describe('MessagingService', () => {
         expect(mockPrisma.message.create).not.toHaveBeenCalled();
       });
 
+      // Non-régression jumelle de celle du bas : une garde qui refuserait tout
+      // canal d'annonces passerait le cas précédent.
       it('laisse un admin publier dans le même canal d’annonces', async () => {
-        mockPrisma.conversation.findUnique.mockResolvedValue({
-          id: testConversationId,
-          type: 'group',
-          isActive: true,
-          isAnnouncementChannel: true,
-          defaultWriteRole: 'admin'
-        });
-        mockPrisma.participant.findUnique.mockResolvedValue({
-          id: testParticipantId,
-          conversationId: testConversationId,
-          isActive: true,
-          type: 'user',
-          userId: testUserId,
-          role: 'admin',
-          user: { role: 'USER' }
-        });
+        mockPrisma.conversation.findUnique.mockResolvedValue(announcementChannel);
+        mockPrisma.participant.findUnique.mockResolvedValue(senderWithRole('admin'));
 
         const response = await service.handleMessage(validRequest, testParticipantId);
 
@@ -417,21 +430,57 @@ describe('MessagingService', () => {
         expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
       });
 
-      it('refuse AVANT la détection de langue — un refus ne paie pas le traducteur', async () => {
-        mockPrisma.conversation.findUnique.mockResolvedValue({
-          id: testConversationId,
-          type: 'group',
-          isActive: false
+      // Le discriminant de PLACEMENT. Un rejeu porte un `clientMessageId` dont
+      // la ligne existe déjà : le message a été accepté AVANT la clôture. Le
+      // refuser maintenant ferait marquer « échoué » un message pourtant
+      // délivré. Même raison, et même position, que `admitMessageForward` :
+      // après le dedup précoce. Une garde posée avant le dedup passe les deux
+      // premiers cas et échoue celui-ci.
+      it('laisse un REJEU aboutir alors même que la conversation vient de fermer', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue(closed);
+        mockPrisma.message.findFirst.mockResolvedValueOnce({
+          ...createMockMessage(),
+          translations: [{ language: 'fr', content: 'bonjour' }]
         });
+
+        const response = await service.handleMessage(
+          { ...validRequest, clientMessageId: 'cmid-retry-après-clôture' },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      // L'autre borne du placement : `detectLanguage` sort par `global.fetch`
+      // vers le translator (~266 ms à froid). Un envoi qui va être refusé ne
+      // doit pas l'acheter.
+      it('refuse AVANT la détection de langue — un refus ne paie pas le traducteur', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue(closed);
 
         await service.handleMessage(
           { conversationId: testConversationId, content: 'Bonjour' },
           testParticipantId
         );
 
-        // `detectLanguage` sort par `global.fetch` vers le translator (~266 ms
-        // à froid) : le refus doit tomber avant.
         expect(global.fetch).not.toHaveBeenCalled();
+      });
+
+      // Non-régression : une garde qui refuserait TOUJOURS passerait tous les
+      // cas de refus ci-dessus.
+      it('laisse passer l’envoi dans une conversation active', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue({
+          id: testConversationId,
+          type: 'private',
+          isActive: true,
+          closedAt: null
+        });
+
+        const response = await service.handleMessage(validRequest, testParticipantId);
+
+        expect(response.success).toBe(true);
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
       });
     });
 

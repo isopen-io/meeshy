@@ -429,6 +429,97 @@ describe('POST /links/:id/messages — anonymous: participantShareLink expired',
   });
 });
 
+// Les deux routes de lien de partage CONTOURNENT
+// `MessagingService.handleMessage` — le point de convergence où la règle « une
+// conversation close n'accepte plus d'écriture » est posée pour REST et socket.
+// Elles gardaient déjà l'état terminal du LIEN (`isActive`, `expiresAt`) ;
+// aucune ne regardait celui de la CONVERSATION. Le lien de partage est par
+// ailleurs le seul transport d'envoi d'un invité anonyme : sans cette garde,
+// fermer une conversation ne fermait rien pour l'inconnu qui détient l'URL.
+const CLOSED_AT = new Date('2026-08-15T10:00:00.000Z');
+
+/**
+ * Le double PROJETTE, comme la vraie base.
+ *
+ * Un double qui rend son objet entier quel que soit le `select` prouve que la
+ * route sait décider — jamais qu'elle a DEMANDÉ de quoi décider. La première
+ * version de cette garde n'avait été posée que sur la seconde branche de
+ * résolution du lien authentifié (`where: { id }`), laissant la première
+ * (`where: { linkId: 'mshy_…' }`, celle des URLs réelles) sans les colonnes
+ * d'état terminal : la garde y lisait `undefined` et admettait tout. Les deux
+ * témoins ci-dessous étaient VERTS sur ce code inerte.
+ *
+ * Même remède que le double d'`earlyDedup` dans `MessagingService.test.ts` :
+ * ne rendre une colonne que si la requête l'a réclamée.
+ */
+const projectConversation = (args: any, conversation: Record<string, unknown>) => {
+  const select = args?.include?.conversation?.select ?? args?.select?.conversation?.select;
+  if (!select) return undefined;
+  return Object.fromEntries(
+    Object.keys(select).filter((k) => select[k]).map((k) => [k, conversation[k]])
+  );
+};
+
+describe('POST /links/:id/messages — anonymous: conversation close', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>()
+      .mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async (args: any) => ({
+        ...mockParticipantShareLink,
+        conversation: projectConversation(args, { isActive: false, closedAt: CLOSED_AT }),
+      }));
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410 and writes nothing when the conversation is closed', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
+// Les DEUX branches de résolution, et pas seulement celle qu'on corrige en
+// premier : `mshy_…` est la forme que produisent les URLs réelles, l'id brut
+// celle des appels internes. Une garde posée sur une seule des deux a l'air
+// d'une garde entière.
+describe.each([
+  ['mshy_ link id', MSHY_ID],
+  ['raw db id', DB_ID],
+])('POST /links/:id/messages/auth — conversation close (%s)', (_label, linkParam) => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(
+      async (args: any) => ({
+        ...mockShareLink,
+        conversation: projectConversation(args, {
+          ...mockShareLink.conversation,
+          isActive: false,
+          closedAt: CLOSED_AT,
+        }),
+      })
+    );
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410 and writes nothing when the conversation is closed', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${linkParam}/messages/auth`, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: allowAnonymousMessages=false', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -470,53 +561,80 @@ describe('POST /links/:id/messages — anonymous: canSendMessages=false', () => 
   });
 });
 
-// Ces deux routes CONTOURNENT `MessagingService.handleMessage`, où vit
-// l'admission par l'état du conteneur. Sans garde propre, un lien de partage
-// restait le seul tuyau capable d'écrire dans une conversation clôturée ou
-// dans un canal d'annonces. La règle est prouvée dans
-// `conversationWriteAdmission.test.ts` ; ces témoins prouvent le CÂBLAGE.
+// Le RANG d'écriture, sur les mêmes deux routes. Les droits du LIEN vérifiés
+// autour disent ce que le lien autorise ; ils ne disent rien de ce que la
+// conversation accepte. Un lien anonyme ouvert sur un canal d'annonces est la
+// contradiction que la garde tranche — et sans elle, le lien de partage restait
+// le seul tuyau par lequel un simple membre y publiait.
 
-describe('POST /links/:id/messages — anonymous: conversation clôturée', () => {
+describe('POST /links/:id/messages — anonymous: canal d’annonces', () => {
   let app: FastifyInstance;
-  let prisma: ReturnType<typeof makePrisma>;
+  let prisma: any;
   beforeAll(async () => {
     prisma = makePrisma();
-    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
-      type: 'group', isActive: false, isAnnouncementChannel: false, defaultWriteRole: 'everyone',
+    prisma.conversationShareLink.findUnique = jest.fn<any>()
+      .mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async (args: any) => ({
+        ...mockParticipantShareLink,
+        conversation: projectConversation(args, {
+          type: 'group',
+          isActive: true,
+          closedAt: null,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin',
+        }),
+      }));
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      role: 'member', user: null,
     });
     app = await buildApp({ prisma });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 410 and persists nothing', async () => {
+  it('returns 403 and writes nothing for a plain member', async () => {
     const res = await app.inject({
       method: 'POST', url: `/links/${MSHY_ID}/messages`,
       headers: ANON_HEADERS, payload: VALID_BODY,
     });
-    expect(res.statusCode).toBe(410);
+    expect(res.statusCode).toBe(403);
     expect(prisma.message.create).not.toHaveBeenCalled();
   });
 });
 
-describe('POST /links/:id/messages — anonymous: canal d\'annonces', () => {
+// Les DEUX branches ici aussi : le rang d'écriture se lit dans la MÊME
+// projection que l'état terminal, donc un champ oublié dans l'une des deux la
+// rendrait inerte exactement comme la garde de clôture l'avait été.
+describe.each([
+  ['mshy_ link id', MSHY_ID],
+  ['raw db id', DB_ID],
+])('POST /links/:id/messages/auth — canal d’annonces (%s)', (_label, linkParam) => {
   let app: FastifyInstance;
-  let prisma: ReturnType<typeof makePrisma>;
+  let prisma: any;
   beforeAll(async () => {
     prisma = makePrisma();
-    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
-      type: 'group', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin',
-    });
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(
+      async (args: any) => ({
+        ...mockShareLink,
+        conversation: projectConversation(args, {
+          ...mockShareLink.conversation,
+          isActive: true,
+          closedAt: null,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin',
+        }),
+      })
+    );
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
     prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
-      role: 'member', user: null, userId: null, displayName: 'anon', avatar: null,
+      role: 'member', user: { role: 'USER' },
     });
     app = await buildApp({ prisma });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 — un lien anonyme ouvert ne prime pas sur le canal d\'annonces', async () => {
+  it('returns 403 and writes nothing for a plain member', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
+      method: 'POST', url: `/links/${linkParam}/messages/auth`, payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(403);
     expect(prisma.message.create).not.toHaveBeenCalled();
@@ -858,29 +976,6 @@ describe('POST /links/:id/messages/auth — non-mshy_ identifier', () => {
   it('returns 201 when using db id (non-mshy_ path)', async () => {
     const res = await app.inject({ method: 'POST', url: `/links/${DB_ID}/messages/auth`, payload: VALID_BODY });
     expect(res.statusCode).toBe(201);
-  });
-});
-
-describe('POST /links/:id/messages/auth — canal d\'annonces', () => {
-  let app: FastifyInstance;
-  let prisma: ReturnType<typeof makePrisma>;
-  beforeAll(async () => {
-    prisma = makePrisma();
-    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
-      type: 'group', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin',
-    });
-    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
-      role: 'member', user: { role: 'USER' },
-    });
-    app = await buildApp({ prisma });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 for a plain member, and persists nothing', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(403);
-    expect(prisma.message.create).not.toHaveBeenCalled();
   });
 });
 

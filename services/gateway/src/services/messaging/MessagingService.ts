@@ -169,38 +169,43 @@ export class MessagingService {
         }
       }
 
-      // 3.6. Admission par l'ÉTAT DU CONTENEUR — la clôture et le canal
-      //      d'annonces. Le garde de l'étape 3 répond « cette personne
-      //      appartient-elle à la conversation » ; il ne répond pas « cette
-      //      conversation accepte-t-elle encore des messages, et de qui ». La
-      //      règle existait (`MessageValidator.checkPermissions`) mais aucun
-      //      appelant de production ne l'invoquait : le drapeau
-      //      `isAnnouncementChannel` ne gouvernait rien, et une conversation
-      //      `isActive: false` acceptait encore des écritures.
+      // 3.6. Admission par l'ÉTAT DU CONTENEUR — la clôture, puis le rang
+      //      d'écriture. Aucune des gardes traversées jusqu'ici ne lit l'état de
+      //      la conversation : celle du dessus porte bien un `isActive`, mais
+      //      c'est celui du `Participant`, et fermer une conversation ne touche
+      //      aucune ligne `Participant`. Le drapeau `isAnnouncementChannel` ne
+      //      gouvernait rien non plus — sa règle vivait dans
+      //      `MessageValidator.checkPermissions`, sans un seul appelant de
+      //      production. Voir `conversationWriteAdmission`.
       //
-      //      Posé ICI, entre le dedup et la détection de langue : après le
-      //      dedup parce qu'un rejeu porte une ligne DÉJÀ écrite et diffusée —
-      //      la refuser transformerait un envoi réussi en erreur rendue au
-      //      client ; avant la détection parce qu'un refus ne doit pas payer
-      //      l'aller-retour HTTP vers le translator.
-      const writeAdmission = await performanceLogger.withTiming(
+      //      Posé ICI, comme `admitMessageForward` plus bas, parce que les
+      //      trois transports d'envoi convergent sur `handleMessage`.
+      //
+      //      APRÈS le dedup précoce, et c'est la seule position juste : sur un
+      //      rejeu la ligne existe déjà — le message avait été accepté quand la
+      //      conversation était ouverte. Le refuser maintenant ferait marquer
+      //      « échoué » un message pourtant délivré à tous ses destinataires.
+      //
+      //      AVANT la détection de langue : quand le client omet
+      //      `originalLanguage`, l'étape suivante paie un aller-retour HTTP
+      //      vers le translator. Un envoi qui va être refusé ne doit pas
+      //      l'acheter.
+      const conversationAdmission = await performanceLogger.withTiming(
         'messaging.conversationWriteAdmission',
-        () =>
-          admitConversationWrite({
-            prisma: this.prisma,
-            conversationId,
-            senderParticipantId: participant.id,
-            onError: (err) =>
-              logger.error('conversation write admission read failed', err as Error)
-          }),
+        () => admitConversationWrite(this.prisma, {
+          conversationId,
+          senderParticipantId: participant.id
+        }),
         { ...corr, conversationId }
       );
-      if (isConversationWriteRefused(writeAdmission)) {
-        logger.info('conversation write refused', { ...corr, reason: writeAdmission.reason });
+      if (isConversationWriteRefused(conversationAdmission)) {
+        logger.info('conversation write refused', {
+          ...corr, conversationId, reason: conversationAdmission.reason
+        });
         return this.createErrorResponse(
-          writeAdmission.reason === 'conversation-closed'
-            ? 'Cette conversation est fermée'
-            : 'Vous n\'avez pas le droit d\'écrire dans cette conversation'
+          conversationAdmission.reason === 'conversation-closed'
+            ? 'Cette conversation est fermée : elle n’accepte plus de messages'
+            : 'Vous n’avez pas le droit d’écrire dans cette conversation'
         );
       }
 
