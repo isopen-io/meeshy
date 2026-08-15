@@ -46,12 +46,13 @@ final class AssistTierVectorTests: XCTestCase {
         guard let url = Bundle(for: AssistTierVectorTests.self).url(
             forResource: "assist-tier.vectors",
             withExtension: "json",
-            subdirectory: "reading-modes"
+            subdirectory: "fixtures/reading-modes"
         ) else {
             XCTFail("""
                 assist-tier.vectors.json introuvable dans le bundle de tests sous \
-                `reading-modes/`. Vérifier la ressource `../../packages/shared/fixtures` \
-                (type: folder) dans project.yml, puis `xcodegen generate`.
+                `fixtures/reading-modes/`. Vérifier la ressource `../../packages/shared/fixtures` \
+                (type: folder, buildPhase: resources, sous `sources:`) dans project.yml, \
+                puis `xcodegen generate`.
                 """)
             return []
         }
