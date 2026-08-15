@@ -1,0 +1,467 @@
+[
+  {
+    "input": {
+      "conversations": [],
+      "categories": [],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": []
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "pin-1",
+          "isPinned": true,
+          "updatedAt": "2026-08-15T09:00:00Z"
+        },
+        {
+          "id": "pin-live",
+          "isPinned": true,
+          "liveCall": {
+            "voices": 2,
+            "startedAt": "2026-08-15T11:00:00Z",
+            "joined": true
+          },
+          "updatedAt": "2026-08-15T09:30:00Z"
+        },
+        {
+          "id": "live-1",
+          "isPinned": false,
+          "liveCall": {
+            "voices": 1,
+            "startedAt": "2026-08-15T11:30:00Z",
+            "joined": false
+          },
+          "updatedAt": "2026-08-15T08:00:00Z"
+        },
+        {
+          "id": "cat-1",
+          "isPinned": false,
+          "categoryId": "work",
+          "updatedAt": "2026-08-15T07:00:00Z"
+        },
+        {
+          "id": "today-1",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T06:00:00Z"
+        },
+        {
+          "id": "yesterday-1",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T10:00:00Z"
+        },
+        {
+          "id": "thisweek-1",
+          "isPinned": false,
+          "updatedAt": "2026-08-10T10:00:00Z"
+        },
+        {
+          "id": "older-1",
+          "isPinned": false,
+          "updatedAt": "2026-07-01T10:00:00Z"
+        }
+      ],
+      "categories": [
+        {
+          "id": "work"
+        }
+      ],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "pinned",
+        "ids": [
+          "pin-live",
+          "pin-1"
+        ]
+      },
+      {
+        "kind": "live",
+        "ids": [
+          "live-1"
+        ]
+      },
+      {
+        "kind": "category",
+        "categoryId": "work",
+        "ids": [
+          "cat-1"
+        ]
+      },
+      {
+        "kind": "today",
+        "ids": [
+          "today-1"
+        ]
+      },
+      {
+        "kind": "yesterday",
+        "ids": [
+          "yesterday-1"
+        ]
+      },
+      {
+        "kind": "thisWeek",
+        "ids": [
+          "thisweek-1"
+        ]
+      },
+      {
+        "kind": "older",
+        "ids": [
+          "older-1"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "both",
+          "isPinned": true,
+          "liveCall": {
+            "voices": 3,
+            "startedAt": "2026-08-15T11:00:00Z",
+            "joined": true
+          },
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "live-only",
+          "isPinned": false,
+          "liveCall": {
+            "voices": 1,
+            "startedAt": "2026-08-15T11:00:00Z",
+            "joined": false
+          },
+          "updatedAt": "2026-08-15T09:00:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "pinned",
+        "ids": [
+          "both"
+        ]
+      },
+      {
+        "kind": "live",
+        "ids": [
+          "live-only"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "live-cat",
+          "isPinned": false,
+          "categoryId": "work",
+          "liveCall": {
+            "voices": 2,
+            "startedAt": "2026-08-15T11:00:00Z",
+            "joined": true
+          },
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "cat-only",
+          "isPinned": false,
+          "categoryId": "work",
+          "updatedAt": "2026-08-15T09:00:00Z"
+        }
+      ],
+      "categories": [
+        {
+          "id": "work"
+        }
+      ],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "live",
+        "ids": [
+          "live-cat"
+        ]
+      },
+      {
+        "kind": "category",
+        "categoryId": "work",
+        "ids": [
+          "cat-only"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "c1",
+          "isPinned": false,
+          "categoryId": "populated",
+          "updatedAt": "2026-08-15T09:00:00Z"
+        }
+      ],
+      "categories": [
+        {
+          "id": "empty"
+        },
+        {
+          "id": "populated"
+        }
+      ],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "category",
+        "categoryId": "populated",
+        "ids": [
+          "c1"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "orphan",
+          "isPinned": false,
+          "categoryId": "deleted-category",
+          "updatedAt": "2026-08-15T09:00:00Z"
+        }
+      ],
+      "categories": [
+        {
+          "id": "work"
+        }
+      ],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "today",
+        "ids": [
+          "orphan"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "honolulu-today",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T20:00:00Z"
+        },
+        {
+          "id": "honolulu-yesterday",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T09:30:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T09:00:00Z",
+      "timeZone": "Pacific/Honolulu"
+    },
+    "expected": [
+      {
+        "kind": "today",
+        "ids": [
+          "honolulu-today"
+        ]
+      },
+      {
+        "kind": "yesterday",
+        "ids": [
+          "honolulu-yesterday"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "utc-yesterday-a",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T20:00:00Z"
+        },
+        {
+          "id": "utc-yesterday-b",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T09:30:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T09:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "yesterday",
+        "ids": [
+          "utc-yesterday-a",
+          "utc-yesterday-b"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "paris-today",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T04:00:00Z"
+        },
+        {
+          "id": "paris-today-utc-yesterday",
+          "isPinned": false,
+          "updatedAt": "2026-08-14T23:00:00Z"
+        },
+        {
+          "id": "paris-thisweek",
+          "isPinned": false,
+          "updatedAt": "2026-08-11T10:00:00Z"
+        },
+        {
+          "id": "paris-older",
+          "isPinned": false,
+          "updatedAt": "2026-07-01T10:00:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T20:00:00Z",
+      "timeZone": "Europe/Paris"
+    },
+    "expected": [
+      {
+        "kind": "today",
+        "ids": [
+          "paris-today",
+          "paris-today-utc-yesterday"
+        ]
+      },
+      {
+        "kind": "thisWeek",
+        "ids": [
+          "paris-thisweek"
+        ]
+      },
+      {
+        "kind": "older",
+        "ids": [
+          "paris-older"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "fallback-updatedat",
+          "isPinned": false,
+          "lastMessageAt": null,
+          "updatedAt": "2026-08-15T05:00:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "today",
+        "ids": [
+          "fallback-updatedat"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "z-conv",
+          "isPinned": false,
+          "categoryId": "zeta",
+          "updatedAt": "2026-08-15T09:00:00Z"
+        },
+        {
+          "id": "a-conv",
+          "isPinned": false,
+          "categoryId": "alpha",
+          "updatedAt": "2026-08-15T08:00:00Z"
+        }
+      ],
+      "categories": [
+        {
+          "id": "zeta"
+        },
+        {
+          "id": "alpha"
+        }
+      ],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "category",
+        "categoryId": "zeta",
+        "ids": [
+          "z-conv"
+        ]
+      },
+      {
+        "kind": "category",
+        "categoryId": "alpha",
+        "ids": [
+          "a-conv"
+        ]
+      }
+    ]
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "future",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T13:00:00Z"
+        }
+      ],
+      "categories": [],
+      "now": "2026-08-15T12:00:00Z",
+      "timeZone": "UTC"
+    },
+    "expected": [
+      {
+        "kind": "today",
+        "ids": [
+          "future"
+        ]
+      }
+    ]
+  }
+]

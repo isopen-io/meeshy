@@ -1,0 +1,299 @@
+[
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 0
+    },
+    "expected": null
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 2
+    },
+    "expected": {
+      "authors": [
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 2,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "u2",
+          "senderName": "Bob"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 2
+    },
+    "expected": {
+      "authors": [
+        "Alice",
+        "Bob"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 2,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "u2",
+          "senderName": "Bob"
+        },
+        {
+          "senderId": "u3",
+          "senderName": "Carla"
+        },
+        {
+          "senderId": "u4",
+          "senderName": "Dan"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 4
+    },
+    "expected": {
+      "authors": [
+        "Alice",
+        "Bob"
+      ],
+      "extraAuthorCount": 2,
+      "messageCount": 4,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "viewer",
+          "senderName": "Moi"
+        },
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "viewer",
+          "senderName": "Moi"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 3
+    },
+    "expected": {
+      "authors": [
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 1,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice",
+          "attachments": [
+            {
+              "type": "image"
+            },
+            {
+              "type": "image"
+            },
+            {
+              "type": "audio"
+            },
+            {
+              "type": "video"
+            },
+            {
+              "type": "location"
+            }
+          ]
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 1
+    },
+    "expected": {
+      "authors": [
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 1,
+      "mediaCounts": {
+        "images": 2,
+        "audio": 1,
+        "files": 2
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice",
+          "attachments": [
+            {
+              "type": "file"
+            }
+          ]
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 1
+    },
+    "expected": {
+      "authors": [
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 1,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 1
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "viewer",
+          "senderName": "Moi"
+        },
+        {
+          "senderId": "viewer",
+          "senderName": "Moi"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 2
+    },
+    "expected": {
+      "authors": [],
+      "extraAuthorCount": 0,
+      "messageCount": 0,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u2",
+          "senderName": "Bob"
+        },
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "u2",
+          "senderName": "Bob"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 3
+    },
+    "expected": {
+      "authors": [
+        "Bob",
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 3,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        {
+          "senderId": "u1",
+          "senderName": "Alice"
+        },
+        {
+          "senderId": "u5",
+          "senderName": "Alice"
+        }
+      ],
+      "viewerId": "viewer",
+      "unreadCount": 2
+    },
+    "expected": {
+      "authors": [
+        "Alice",
+        "Alice"
+      ],
+      "extraAuthorCount": 0,
+      "messageCount": 2,
+      "mediaCounts": {
+        "images": 0,
+        "audio": 0,
+        "files": 0
+      }
+    }
+  }
+]

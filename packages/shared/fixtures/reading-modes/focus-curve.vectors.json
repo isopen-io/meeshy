@@ -1,0 +1,134 @@
+[
+  {
+    "_label": "thread-0",
+    "input": {
+      "distance": 0,
+      "variant": "thread"
+    },
+    "expected": {
+      "alpha": 1,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "thread-190",
+    "input": {
+      "distance": 190,
+      "variant": "thread"
+    },
+    "expected": {
+      "alpha": 0.5900000000000001,
+      "scale": 0.8
+    }
+  },
+  {
+    "_label": "thread-380",
+    "input": {
+      "distance": 380,
+      "variant": "thread"
+    },
+    "expected": {
+      "alpha": 0.18000000000000005,
+      "scale": 0.6
+    }
+  },
+  {
+    "_label": "thread-400",
+    "input": {
+      "distance": 400,
+      "variant": "thread"
+    },
+    "expected": {
+      "alpha": 0.18000000000000005,
+      "scale": 0.6
+    }
+  },
+  {
+    "_label": "list-0",
+    "input": {
+      "distance": 0,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 1,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "list-260",
+    "input": {
+      "distance": 260,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.775,
+      "scale": 0.98
+    }
+  },
+  {
+    "_label": "list-520",
+    "input": {
+      "distance": 520,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.55,
+      "scale": 0.96
+    }
+  },
+  {
+    "_label": "list-600",
+    "input": {
+      "distance": 600,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.55,
+      "scale": 0.96
+    }
+  },
+  {
+    "_label": "list-neg16",
+    "input": {
+      "distance": -16,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.9,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "list-neg56",
+    "input": {
+      "distance": -56,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.65,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "list-neg100",
+    "input": {
+      "distance": -100,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.65,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "thread-neg50",
+    "input": {
+      "distance": -50,
+      "variant": "thread"
+    },
+    "expected": {
+      "alpha": 1,
+      "scale": 1
+    }
+  }
+]
