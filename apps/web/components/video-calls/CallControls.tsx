@@ -64,13 +64,29 @@ export function CallControls({
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
   const videoAutoPaused = videoEnabled && videoSuspended;
 
+  // Re-checked on every `devicechange`, not just once at mount — a call can
+  // start before camera permission/labels are ready, or a second camera
+  // (e.g. a USB webcam) can be plugged in mid-call. A one-shot check would
+  // leave the switch-camera button permanently hidden in both cases.
   React.useEffect(() => {
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then(devices => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      return;
+    }
+    const mediaDevices = navigator.mediaDevices;
+
+    const checkCameraSwitchSupport = () => {
+      mediaDevices.enumerateDevices().then(devices => {
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
         setSupportsCameraSwitch(videoDevices.length > 1);
       });
+    };
+
+    checkCameraSwitchSupport();
+    if (typeof mediaDevices.addEventListener !== 'function') {
+      return;
     }
+    mediaDevices.addEventListener('devicechange', checkCameraSwitchSupport);
+    return () => mediaDevices.removeEventListener('devicechange', checkCameraSwitchSupport);
   }, []);
 
   return (
