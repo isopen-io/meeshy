@@ -192,6 +192,16 @@ data class ReadStatusSummary(
 data class ReadStatusUpdatedEvent(
     val conversationId: String,
     val participantId: String,
+    /**
+     * `User.id` of the actor, or `null` when the actor is an ANONYMOUS
+     * participant — they have no `User` row, so [participantId] is their only
+     * identity. Expected on every action of a share-link guest.
+     *
+     * A `Participant.id` must never arrive here: both id spaces are 24-char
+     * ObjectId strings, so nothing downstream could tell them apart. Consumers
+     * identifying the actor must read `userId ?: participantId`, in that order
+     * — the same rule that names the actor's personal room.
+     */
     val userId: String? = null,
     val type: String = "read",
     val updatedAt: String? = null,

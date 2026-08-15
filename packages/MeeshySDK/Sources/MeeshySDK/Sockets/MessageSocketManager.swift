@@ -485,15 +485,23 @@ public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let type: String
     public let updatedAt: Date
     public let summary: ReadStatusSummary
-    /// Read frontier of `userId` (the actor) at broadcast time. Lets that
-    /// user's OTHER devices sync their own read cursor (multi-device read
-    /// sync). `nil` from a pre-rollout gateway or when the actor has no
-    /// cursor yet. Scoped to `userId` — a recipient whose id differs MUST
-    /// ignore it. Read receipts are monotone, so a client applies it only
-    /// when strictly newer than its local cursor.
+    /// Read frontier of the ACTOR at broadcast time. Lets the actor's OTHER
+    /// devices sync their own read cursor (multi-device read sync). `nil` from
+    /// a pre-rollout gateway or when the actor has no cursor yet. A recipient
+    /// who is not the actor MUST ignore it. Read receipts are monotone, so a
+    /// client applies it only when strictly newer than its local cursor.
+    ///
+    /// The actor is `userId ?? participantId`, in that order. `userId` alone is
+    /// `nil` for a share-link guest, whose devices could then never recognise
+    /// themselves; `participantId` is non-nil for the whole population and
+    /// shared by every device of one identity. Same rule that names the
+    /// personal room. This client has no accountless session, so it matches on
+    /// `userId` only — the second branch stays unused here, and
+    /// `ConversationStoreSocketBridge` is correct as written.
     public let lastReadAt: Date?
-    /// Server-authoritative unread count for `userId` after the action.
-    /// Same `userId` scoping as `lastReadAt`. `nil` from a pre-rollout gateway.
+    /// Server-authoritative unread count for the ACTOR after the action.
+    /// Same `userId ?? participantId` scoping as `lastReadAt`. `nil` from a
+    /// pre-rollout gateway.
     public let unreadCount: Int?
 
     public init(
