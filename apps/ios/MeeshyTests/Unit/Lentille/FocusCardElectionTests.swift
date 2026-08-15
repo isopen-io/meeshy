@@ -3,8 +3,8 @@ import XCTest
 
 /// Élection de la focus card (contrat LWS-8 / I-070, §4.2).
 ///
-/// **Suite PARTIELLE, ouverte** : I-073 la complète. Ce lot verrouille les
-/// trois critères que la tâche nomme, plus ce qui les rend vérifiables :
+/// **Suite COMPLÉTÉE par I-073.** Ce lot verrouille les trois critères que
+/// la tâche nomme, plus ce qui les rend vérifiables :
 ///
 /// 1. **La bande vient du miroir gelé.** `bas de la région visible −
 ///    FocalFocusCurve.focusBandOffset`, hystérésis =
@@ -33,6 +33,12 @@ import XCTest
 /// fallu, en plus, la même mesure de rangs, c'est-à-dire un observateur de
 /// plus pour la même information. La garde I-064 reste donc INCHANGÉE, et
 /// cette suite l'étend au dossier neuf.
+///
+/// **I-073 ajoute** : candidats vides ⇒ `nil` ; la garde qui prouve que
+/// l'élection ne porte AUCUNE dépendance `#available(iOS 17…)` (elle
+/// fonctionne donc là où la perspective, elle, s'arrête) ; la garde qui
+/// prouve qu'elle ne lit jamais `reduceMotion` (« élection conservée » est
+/// structurel, pas incident).
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1584`) : cette suite reste en phase 1.
@@ -223,6 +229,23 @@ final class FocusCardElectionTests: XCTestCase {
         XCTAssertEqual(
             elect(first.candidates, current: nil), "alpha",
             "À égalité de distance, le miroir départage par `id` croissant."
+        )
+    }
+
+    /// I-073 : « candidats vides ⇒ nil ». Une liste filtrée (recherche sans
+    /// résultat, section repliée jusqu'au dernier rang) ne doit jamais faire
+    /// planter l'élection ni lui faire inventer un gagnant — le registre vide
+    /// est un état ATTEIGNABLE, pas une erreur de programmation.
+    func test_election_withNoCandidates_returnsNil() {
+        XCTAssertNil(
+            elect([], current: nil),
+            "Aucun candidat, aucun courant : `nil` — pas de crash, pas de gagnant inventé."
+        )
+        XCTAssertNil(
+            elect([], current: "quelqu-un-de-parti"),
+            "Aucun candidat MÊME avec un `currentId` non-nil : le miroir garde `nil` sur " +
+            "`candidates.isEmpty`, avant même de chercher le courant parmi les candidats — " +
+            "un `currentId` fantôme ne doit pas survivre à une liste vidée."
         )
     }
 
@@ -461,6 +484,60 @@ final class FocusCardElectionTests: XCTestCase {
             "La bande de l'élection doit être CELLE de la perspective (I-069) : un seul " +
             "`LentilleFocusBand`, sinon la carte s'élit là où la perspective ne pique pas."
         )
+    }
+
+    /// I-073 : « iOS 16 (perspective inerte) : élection FONCTIONNE quand même
+    /// (le relais est disponible partout) ». `LentillePerspective.swift` garde
+    /// son `.visualEffect` derrière `#available(iOS 17.0, *)` (iOS 16 y rend
+    /// le rang tel quel) — mais l'élection, elle, ne dépend d'AUCUNE API
+    /// iOS 17+ : `GeometryReader`, `ScrollOffsetRelay` et `ObservableObject`
+    /// existent depuis toujours sur la cible `16.0` du projet. Témoin de
+    /// discrimination (leçon 266) : la perspective PORTE la garde, l'élection
+    /// ne la porte PAS — sans le premier membre de la comparaison, une classe
+    /// qui ne contiendrait jamais `#available` par accident (fichier vide,
+    /// faute de frappe) passerait la moitié « élection » sans rien prouver.
+    func test_electionHasNoIOS17AvailabilityGate_soItStillWorksWherePerspectiveGoesInert() throws {
+        let perspectiveCode = normalizedCode(try source(at: "Meeshy/Features/Main/Lentille/Perspective/LentillePerspective.swift"))
+        XCTAssertTrue(
+            perspectiveCode.contains("#available(iOS 17"),
+            "Prérequis du témoin : la perspective DOIT porter la garde iOS 17+, sinon la " +
+            "comparaison ci-dessous ne discrimine rien."
+        )
+
+        for file in ["LentilleFocusElection.swift", "LentilleFocusElectionHost.swift"] {
+            let code = normalizedCode(try source(at: "Meeshy/Features/Main/Lentille/Perspective/\(file)"))
+            XCTAssertEqual(
+                occurrences(of: "#available(iOS", in: code), 0,
+                "\(file) porte une garde `#available(iOS …)` : l'élection doit rester " +
+                "disponible sur TOUTE la plage de déploiement (16.0+), y compris là où la " +
+                "perspective (`.visualEffect`, iOS 17+) est inerte — sinon un utilisateur " +
+                "iOS 16 perdrait la focus card en même temps que le fondu, alors que rien " +
+                "dans l'élection n'en dépend."
+            )
+        }
+    }
+
+    /// I-073, corollaire du critère « reduce motion ⇒ … élection CONSERVÉE » :
+    /// le magasin et l'hôte d'élection ne lisent JAMAIS
+    /// `accessibilityReduceMotion`. Ce n'est pas une précaution qu'il faudrait
+    /// se souvenir d'appliquer à chaque évolution — c'est une IMPOSSIBILITÉ
+    /// structurelle que l'élection réagisse au réglage : elle ne le connaît
+    /// pas. `LentillePerspectiveCurveTests` verrouille déjà le symétrique côté
+    /// transformation (reduce motion ⇒ identité) ; ce témoin verrouille le
+    /// fait que l'élection, elle, n'a même pas la donnée pour varier.
+    func test_electionNeverReadsReduceMotion_conservationIsStructuralNotIncidental() throws {
+        for file in ["LentilleFocusElection.swift", "LentilleFocusElectionHost.swift"] {
+            let code = normalizedCode(try source(at: "Meeshy/Features/Main/Lentille/Perspective/\(file)"))
+            for forbidden in ["reduceMotion", "accessibilityReduceMotion"] {
+                XCTAssertEqual(
+                    occurrences(of: forbidden, in: code), 0,
+                    "\(file) référence « \(forbidden) » : l'élection ne doit dépendre du " +
+                    "réglage sous AUCUNE forme — « élection conservée » (LWS-8) est garanti " +
+                    "par l'ABSENCE de cette dépendance, pas par un `if` qui pourrait un jour " +
+                    "être inversé par erreur."
+                )
+            }
+        }
     }
 
     /// L'écriture de l'élu est gardée par l'inégalité — la même discipline que

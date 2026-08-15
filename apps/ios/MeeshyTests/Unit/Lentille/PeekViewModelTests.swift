@@ -5,12 +5,18 @@ import MeeshySDK
 /// `LentillePeekViewModel` — ce que l'aperçu affiche (contrat LWS-8/I-072,
 /// troisième point d'entrée du menu de mode).
 ///
-/// **Suite PARTIELLE, ouverte** (le contrat le nomme explicitement pour ce
-/// lot) : verrouille la CONSTRUCTION du modèle — titre, préview résolu par
-/// le Prisme, délégation au MÊME `LentilleModeMenuModel` que l'encoche et le
-/// sous-menu. I-073 complète (timings du geste d'appui long, intégration
-/// bout en bout des deux chemins OS — voir le commentaire d'en-tête de
-/// `LentillePeekView.swift` pour l'écart signalé sur le chemin natif).
+/// **Suite COMPLÉTÉE par I-073.** I-072 verrouillait la CONSTRUCTION du
+/// modèle — titre, préview résolu par le Prisme, délégation au MÊME
+/// `LentilleModeMenuModel` que l'encoche et le sous-menu.
+///
+/// **I-073 ajoute** : les gardes source des timings/cotes gelés
+/// (`Lentille/Mode/` ne redéfinit ni le spring 0.55/0.25 de
+/// `RowPressBounceModifier`, ni le littéral `70` de la zone d'exclusion
+/// avatar) et le verrouillage exécutable de l'écart déjà signalé par
+/// l'en-tête de `LentillePeekView.swift` — le chemin natif iOS 26+ n'est
+/// PAS câblé sur `LentillePeekView` (fichier `+Rows.swift`, propriété
+/// LWS-7, hors périmètre d'édition de cette tâche) : DÉFAUT RÉEL DOCUMENTÉ,
+/// NON CORRIGÉ.
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1591`, qui contient `Conversation`) :
@@ -186,5 +192,130 @@ final class PeekViewModelTests: XCTestCase {
             "Le repli drapeau OFF doit être la branche `else` EXACTE du même conditionnel " +
             "— pas un second site de montage indépendant qui pourrait diverger."
         )
+    }
+
+    /// I-073 — DÉFAUT RÉEL DOCUMENTÉ, NON CORRIGÉ. Critère LWS-8 littéral :
+    /// « `LentillePeekView` en `preview:` des DEUX chemins OS ». Le chemin
+    /// natif iOS 26+ (`.contextMenu(menuItems:preview:)`,
+    /// `ConversationListView+Rows.swift:125-142`) appartient à LWS-7 (mux de
+    /// rang, contrat §1.4), PAS à LWS-8 — ce fichier de test NE PEUT PAS
+    /// éditer `+Rows.swift` sans violer la règle d'or des contrats (un agent
+    /// n'édite jamais un fichier dont il n'est pas propriétaire). L'écart est
+    /// déjà signalé par l'en-tête de `LentillePeekView.swift` lui-même : ce
+    /// témoin le VERROUILLE en test exécutable, pour qu'un lecteur qui ne
+    /// lit pas les commentaires de production le voie quand même rougir s'il
+    /// disparaît silencieusement (ex. `+Rows.swift` réécrit sans que
+    /// personne ne recâble la preview).
+    ///
+    /// Conséquence produit concrète : sous Lentille ON, un utilisateur iOS
+    /// 26+ qui déclenche le menu contextuel NATIF (pas l'overlay custom < iOS
+    /// 26) voit encore l'ancienne `ConversationPreviewView`, jamais
+    /// `LentillePeekView` — le troisième point d'entrée du menu de mode
+    /// (contrat « trois points d'entrée, une préférence ») n'existe donc que
+    /// sur UN SEUL des deux chemins d'appui long.
+    func test_nativeContextMenuPreviewPath_stillUsesTheOldPreview_documentedLWS7ScopeGap() throws {
+        let rowsRaw = try String(
+            contentsOf: Self.iosRoot.appendingPathComponent(
+                "Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
+            ),
+            encoding: .utf8
+        )
+
+        XCTAssertEqual(
+            rowsRaw.components(separatedBy: "LentillePeekView(").count - 1, 0,
+            "`ConversationListView+Rows.swift` (chemin natif iOS 26+) contient désormais " +
+            "`LentillePeekView(` : l'écart documenté par cette suite et par l'en-tête de " +
+            "`LentillePeekView.swift` a été comblé — mettre ce test à jour (il doit alors " +
+            "vérifier la présence, pas l'absence) plutôt que le supprimer en silence."
+        )
+        XCTAssertEqual(
+            rowsRaw.components(separatedBy: "ConversationPreviewView(").count - 1, 1,
+            "Le chemin natif doit continuer d'utiliser `ConversationPreviewView` tant que " +
+            "l'écart n'est pas comblé — sa disparition SANS remplacement par " +
+            "`LentillePeekView` casserait l'aperçu du chemin natif purement et simplement."
+        )
+    }
+
+    // MARK: - 4. Gardes de source — timings et cotes gelés NON redéfinis dans Lentille/Mode/
+
+    private static var modeDirectory: URL {
+        Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Lentille/Mode")
+    }
+
+    /// Découverte dynamique (leçon 257) — jamais une liste de fichiers
+    /// recopiée à la main : un fichier ajouté demain à `Lentille/Mode/`
+    /// entre automatiquement sous cette garde.
+    private func modeSources() throws -> [(name: String, code: String)] {
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: Self.modeDirectory, includingPropertiesForKeys: nil
+        )
+        return try entries
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
+    }
+
+    func test_guardDiscoversAtLeastOneModeSourceFile_neverSilentlyEmpty() throws {
+        XCTAssertFalse(
+            try modeSources().isEmpty,
+            "La garde n'a chargé AUCUN fichier depuis `\(Self.modeDirectory.path)` — elle " +
+            "passerait alors au vert sans rien vérifier (leçon 257)."
+        )
+    }
+
+    /// Critère LWS-8 : « timings, spring 0.55/0.25 … gelés ». Le spring peu
+    /// amorti du rebond de long-press (`RowPressBounceModifier
+    /// .spring(response: 0.55, dampingFraction: 0.25)`) vit dans
+    /// `ConversationListView+Rows.swift` et SEULEMENT là — `Lentille/Mode/`
+    /// ne doit jamais recomposer sa propre paire `(0.55, 0.25)`, ce qui
+    /// romprait la synchronisation (documentée dans le commentaire du
+    /// modifier) entre le rebond de la ligne et l'émergence de l'aperçu.
+    func test_modeFiles_neverRedefineTheFrozenPressBounceSpring() throws {
+        for source in try modeSources() {
+            for forbidden in ["0.55", "0.25"] {
+                XCTAssertEqual(
+                    source.code.components(separatedBy: forbidden).count - 1, 0,
+                    "\(source.name) contient « \(forbidden) » (source BRUTE, commentaires " +
+                    "compris) : les timings du geste d'appui long sont GELÉS dans " +
+                    "`RowPressBounceModifier` (`ConversationListView+Rows.swift`) — " +
+                    "critère LWS-8, « timings … gelés »."
+                )
+            }
+        }
+    }
+
+    /// Critère LWS-8 : « zone d'exclusion avatar 70 pt … consommée pas
+    /// recalculée ». La bande avant de la ligne réservée aux gestes de
+    /// l'avatar (`ConversationRowMetrics.avatarInteractionExclusionWidth` =
+    /// `MeeshySpacing.md + AvatarContext.conversationList.ringSize`, soit
+    /// `12 + 58 = 70`) est calculée UNE fois dans
+    /// `ConversationListView+Rows.swift` ; `Lentille/Mode/` (l'aperçu compris)
+    /// ne doit jamais recomposer son propre littéral `70` pour la même
+    /// notion — la CONSOMMER, jamais la RECALCULER.
+    ///
+    /// Recherche par LIMITE DE MOT (`\b70\b`), pas par sous-chaîne brute :
+    /// `Lentille/Mode/` cite abondamment des identifiants de tâche comme
+    /// `I-070` en commentaire, et `"70"` y est une sous-chaîne de `"070"` —
+    /// une garde en sous-chaîne braillerait sur CHAQUE renvoi à I-070 sans
+    /// jamais avoir vu la cote. `\b` ne coupe pas entre deux chiffres : il ne
+    /// matche donc pas à l'intérieur de `070`, seulement un `70` isolé.
+    func test_modeFiles_neverHardcodeTheAvatarExclusionZoneAsALiteral() throws {
+        let pattern = "\\b70\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("Regex de garde invalide pour la zone d'exclusion avatar — corriger le motif avant de faire confiance à ce témoin.")
+            return
+        }
+        for source in try modeSources() {
+            let range = NSRange(source.code.startIndex..<source.code.endIndex, in: source.code)
+            let matches = regex.numberOfMatches(in: source.code, range: range)
+            XCTAssertEqual(
+                matches, 0,
+                "\(source.name) contient un « 70 » isolé (pas un renvoi `I-070`) : si c'est " +
+                "la zone d'exclusion avatar, elle doit être LUE sur " +
+                "`ConversationRowMetrics.avatarInteractionExclusionWidth`, jamais réécrite " +
+                "en dur ici — deux constantes qui dérivent au premier ajustement de " +
+                "`MeeshySpacing.md` ou de l'anneau d'avatar."
+            )
+        }
     }
 }

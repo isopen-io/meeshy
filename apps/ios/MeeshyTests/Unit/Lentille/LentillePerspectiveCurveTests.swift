@@ -5,9 +5,8 @@ import SwiftUI
 /// Perspective de liste (contrat LWS-8 / I-069, §4.1) — la passe de
 /// compositor `LentillePerspective`.
 ///
-/// **Suite PARTIELLE, ouverte** : I-073 la complète (le contrat la nomme dans
-/// ses cinq fichiers de test LWS-8). Ce que ce lot verrouille tient en quatre
-/// phrases :
+/// **Suite COMPLÉTÉE par I-073** (le contrat la nomme dans ses cinq fichiers
+/// de test LWS-8). Ce que ce lot verrouille tient en quatre phrases :
 ///
 /// 1. La passe **rend exactement ce que le miroir gelé prédit** — sur une
 ///    dizaine de distances couvrant les deux côtés de la bande, la borne de
@@ -29,6 +28,10 @@ import SwiftUI
 /// entre automatiquement dans le périmètre, et la suite échoue explicitement
 /// si elle n'en charge aucun. Une garde qui charge zéro fichier passe toujours
 /// au vert sans rien vérifier.
+///
+/// **I-073 ajoute** : le témoin explicite de SATURATION du fondu court
+/// (« plafonné à −0.35 », distinct de la simple parité miroir déjà couverte
+/// ci-dessus).
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1584`) dans `LentillePerspectiveCurveTests` : cette
@@ -285,6 +288,38 @@ final class LentillePerspectiveCurveTests: XCTestCase {
             below.scale, 1,
             "Sous la bande, seule l'OPACITÉ bouge : le terme d'échelle du miroir est borné " +
             "à `[0, 1]` en `f` et ne contribue rien pour `d < 0`."
+        )
+    }
+
+    /// I-073 : le mot « plafonné » du critère (« sous-focus, fondu court sur
+    /// `d/160`, plafonné à −0.35 ») a son propre témoin, distinct de la parité
+    /// miroir ci-dessus. `clampUnit(-d/160)` sature à `1` pour tout `d ≤ -160` :
+    /// deux distances sous la bande, l'une pile au rayon du fondu court,
+    /// l'autre bien au-delà, DOIVENT rendre EXACTEMENT la même opacité — sinon
+    /// le plafond n'existe pas et le fondu continuerait de s'assombrir sans
+    /// fin à mesure qu'on descend, ce que la maquette normative exclut
+    /// explicitement (miroir : « rampe PROPORTIONNELLE plafonnée »).
+    func test_belowTheBand_theShortFade_saturatesAtItsOwnCap_neverDeepensFurther() {
+        let atTheCap = LentillePerspective.pass(
+            distance: -FocalFocusCurve.listBelowBandDistance, reduceMotion: false
+        )
+        let wellBeyondTheCap = LentillePerspective.pass(
+            distance: -4 * FocalFocusCurve.listBelowBandDistance, reduceMotion: false
+        )
+
+        assertClose(
+            atTheCap.alpha, wellBeyondTheCap.alpha,
+            "L'opacité à `d = -160` (pile le rayon du fondu court) et à `d = -640` (bien " +
+            "au-delà) doit être IDENTIQUE : au-delà de son propre rayon, le fondu court ne " +
+            "descend plus — il est PLAFONNÉ, pas juste ralenti. Une divergence ici " +
+            "signalerait la forme interdite `max(d/160, −0.35)` (BLOCAGE 1 REV-1, dont le " +
+            "commentaire du miroir documente qu'elle saturait au mauvais endroit, `d=-56` " +
+            "au lieu de `d=-160`)."
+        )
+        assertClose(
+            atTheCap.alpha, 1 - FocalFocusCurve.listBelowBandAlphaCap,
+            "La valeur de saturation elle-même doit être `1 − listBelowBandAlphaCap` — " +
+            "recomposée depuis la CONSTANTE du miroir, jamais `0.65` écrit en dur ici."
         )
     }
 

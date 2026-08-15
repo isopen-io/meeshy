@@ -4,10 +4,13 @@ import XCTest
 /// `LentilleModeMenuModel` — le catalogue Auto 🪄 / Focal / Script / Résumé /
 /// Rivière (contrat LWS-8/I-072).
 ///
-/// **Suite PARTIELLE, ouverte** : ce lot verrouille ce que la mission I-072
-/// nomme explicitement — Rivière grisée + sa raison réelle sur des seuils
-/// VIVANTS, et la structure des cinq entrées. I-073 complète (parité avec le
-/// menu web, matrice comportementale).
+/// **Suite COMPLÉTÉE par I-073.** I-072 verrouillait ce que la mission
+/// nommait explicitement — Rivière grisée + sa raison réelle sur des seuils
+/// VIVANTS, et la structure des cinq entrées. **I-073 ajoute** : le témoin
+/// (défaut réel documenté, non corrigé — la loi vit dans le miroir gelé
+/// `ReadingModeOrchestrator`, hors `Lentille/Mode|Perspective`) qui verrouille
+/// qu'une conversation `.direct` reçoit la MÊME formule numérique que
+/// n'importe quel groupe sous seuil, plutôt qu'un message dédié.
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1591`) : `ModeMenuModelTests`, phase 1 (nom repris
@@ -109,6 +112,46 @@ final class ModeMenuModelTests: XCTestCase {
             "DIFFÉRENTES — sinon la raison serait un texte figé, pas composée depuis les " +
             "seuils vivants (leçon 266 : sans ce témoin, un texte statique passerait le " +
             "précédent au vert)."
+        )
+    }
+
+    /// I-073 — DÉFAUT RÉEL DOCUMENTÉ, NON CORRIGÉ (hors périmètre LWS-8 :
+    /// la loi vit dans le miroir GELÉ `ReadingModeOrchestrator.resolveCapabilities`,
+    /// `Focal/Core/`, propriété M-042 — pas `Lentille/Mode/`).
+    ///
+    /// Ce témoin verrouille le comportement RÉEL d'aujourd'hui plutôt qu'un
+    /// oubli : sur une conversation `.direct`, la raison Rivière reste la
+    /// MÊME formule numérique que sur un groupe — « s'ouvrira à 5 personnes
+    /// actives — N aujourd'hui » — alors que `riverEligible` EXCLUT les
+    /// conversations directes STRUCTURELLEMENT
+    /// (`conversationType != .direct`), quel que soit `N`. Amener une
+    /// conversation directe à 5 participants actifs est de toute façon
+    /// impossible (elle n'a que deux), mais le TEXTE promet une porte qui
+    /// s'ouvrira "à 5" alors qu'elle ne s'ouvrira JAMAIS pour ce type de
+    /// conversation — un texte du type « jamais disponible en conversation
+    /// directe » serait honnête là où le comptage ne l'est qu'à moitié.
+    /// `resolveCapabilities` (`ReadingModeOrchestrator.swift`) ET son miroir
+    /// TypeScript (`packages/shared/utils/reading-modes.ts`) composent la
+    /// MÊME `RiverEligibilityReason(threshold:current:)` sans branche sur
+    /// `conversationType` — ce n'est donc pas une divergence iOS↔loi
+    /// (auquel cas la garde source trivial l'aurait autorisée à corriger),
+    /// c'est un trait de la loi PARTAGÉE, gelée S1, hors des deux dossiers
+    /// que possède LWS-8 (`Lentille/Perspective/`, `Lentille/Mode/`).
+    func test_riviere_reasonOnADirectConversation_staysTheSameNumericFormula_neverADedicatedMessage() throws {
+        let directCaps = capabilities(conversationType: .direct, activeParticipantCount: 3)
+        XCTAssertFalse(directCaps.riverEligible, "Prérequis : `direct` reste structurellement inéligible.")
+
+        let model = LentilleModeMenuModel.build(capabilities: directCaps, currentPreference: .auto)
+        let reason = try XCTUnwrap(try entry(.riviere, in: model).disabledReason)
+
+        XCTAssertEqual(
+            reason,
+            "s'ouvrira à \(ReadingModeOrchestrator.riverEligibilityThreshold) personnes actives — 3 aujourd'hui",
+            "Comportement RÉEL, verrouillé : la raison d'une conversation directe est " +
+            "composée par la MÊME formule qu'un groupe sous le seuil — le miroir gelé ne " +
+            "distingue pas « inéligible par nature » de « inéligible par manque de " +
+            "participants ». Rapporté comme défaut réel non trivial (mission I-073) : " +
+            "SANS correction, la loi vivant hors `Lentille/Mode|Perspective`."
         )
     }
 
