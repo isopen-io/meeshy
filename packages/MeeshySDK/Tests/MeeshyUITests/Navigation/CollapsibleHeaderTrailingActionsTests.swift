@@ -24,15 +24,65 @@ final class CollapsibleHeaderTrailingActionsTests: XCTestCase {
         )
     }
 
-    /// La marge droite des actions s'ajoute au padding de la rangée : le
-    /// total doit atteindre la marge standard iOS (16 pt), sans quoi un
-    /// cercle de verre de 40 pt affleure le bord de l'écran.
-    func test_trailingActionsInset_bringsTheRowMarginToTheStandardSixteenPoints() {
+    /// La marge droite des actions s'ajoute au padding de la rangée. 16 pt —
+    /// la marge d'un TEXTE — ne suffisent pas : le chrome du header est fait de
+    /// disques de verre de 40 pt, et un disque affleure là où une ligne de texte
+    /// respire encore (retour user 2026-08-15, second signalement). La gouttière
+    /// des ronds est celle du chrome flottant : 20 pt
+    /// (`FreeFloatingButtonsContainer.minEdgePadding`), la seule marge de rond
+    /// que l'utilisateur n'a jamais signalée.
+    func test_trailingActionsInset_bringsTheRowMarginToTheRoundChromeGutter() {
         XCTAssertGreaterThan(CollapsibleHeaderMetrics.trailingActionsInset, 0)
         XCTAssertGreaterThanOrEqual(
             CollapsibleHeaderMetrics.barHorizontalPadding + CollapsibleHeaderMetrics.trailingActionsInset,
-            16
+            CollapsibleHeaderMetrics.roundChromeEdgeGutter
         )
+        XCTAssertEqual(CollapsibleHeaderMetrics.roundChromeEdgeGutter, 20)
+    }
+
+    /// Le défaut RÉSIDUEL du 14/08 : `layoutPriority(2)` fait servir les actions
+    /// en premier, mais l'écart entre la trail et elles restait porté par un
+    /// `Spacer(minLength: 8)` de priorité 0 — donc servi APRÈS la fente
+    /// élastique, qui a déjà pris tout le reste. Un `Spacer` à qui l'on propose
+    /// 0 rend quand même son `minLength` : la rangée dépasse de 8 pt la largeur
+    /// proposée, la barre se recentre, et les actions perdent la moitié de cet
+    /// excédent sur leur marge droite. L'écart doit être réservé AVEC les
+    /// actions, où il ne peut rien faire déborder.
+    func test_theGapToTheActions_isReservedWithThemRatherThanBySpacer() throws {
+        let code = try headerSource()
+        XCTAssertFalse(
+            code.contains("Spacer(minLength: 8)"),
+            "Un `Spacer` de priorité 0 et de longueur minimale non nulle, servi " +
+            "après une fente `maxWidth: .infinity`, fait déborder la rangée de " +
+            "sa largeur proposée — et pousse les actions vers le bord."
+        )
+        XCTAssertTrue(
+            code.contains(".padding(.leading, CollapsibleHeaderMetrics.titleActionsGap)"),
+            "L'écart titre ↔ actions doit être un padding des ACTIONS : réservé " +
+            "avec elles au titre de la priorité 2, il ne peut pas élargir la " +
+            "rangée."
+        )
+    }
+
+    /// Toute la chaîne de modificateurs des actions — écart et marge de bord
+    /// compris — doit rester SOUS la priorité 2, sinon la part réservée ne
+    /// couvre pas les paddings et la fente élastique les reprend.
+    func test_theActionsGapAndEdgeMargin_sitUnderTheirLayoutPriority() throws {
+        let code = try headerSource()
+        let call = try XCTUnwrap(code.range(of: "trailing()"))
+        let afterCall = String(code[call.upperBound...])
+        let priority = try XCTUnwrap(afterCall.range(of: "layoutPriority(2)"))
+        let afterPriority = String(afterCall[priority.upperBound...])
+        for padding in [
+            ".padding(.leading, CollapsibleHeaderMetrics.titleActionsGap)",
+            ".padding(.trailing, CollapsibleHeaderMetrics.trailingActionsInset)"
+        ] {
+            let range = try XCTUnwrap(afterPriority.range(of: padding), "\(padding) manquant")
+            XCTAssertLessThan(
+                afterPriority.distance(from: afterPriority.startIndex, to: range.lowerBound), 300,
+                "\(padding) doit suivre immédiatement `layoutPriority(2)`."
+            )
+        }
     }
 
     func test_trailingActions_areLaidOutBeforeTheElasticTitleSlot() throws {
