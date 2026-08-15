@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Delete-for-me shipped** (slice `conversation-delete-for-me`, PR #3057, merged
+> `ebabd7bde`) — three quarters of `feature-parity.md`'s "Leave / archive / delete-for-me /
+> delete-for-all conversation" line now wired (archive/leave already shipped). Chosen as the
+> natural continuation of `conversation-leave`: checked the gateway route
+> (`routes/conversations/delete-for-me.ts`) first rather than assuming symmetry, and confirmed it
+> shares the exact same client-side shape *despite* the route itself being considerably more
+> complex server-side (creator-ownership transfer, empty-DM closing, successor promotion) — none
+> of that complexity reaches the client. The route's final write emits `conversation:deleted`
+> (`SERVER_EVENTS.CONVERSATION_DELETED`) to `ROOMS.user(userId)` — every one of the caller's own
+> devices — with the exact payload shape `ConversationPurge.onConversationDeleted` already
+> consumes (already wired for the socket/delete-for-all case). So, same as `leave`: **zero new
+> purge logic**, just `ConversationApi.deleteForMe` (`DELETE conversations/{id}/delete-for-me`) +
+> `ConversationRepository.deleteForMe` (direct `NetworkResult<Unit>`, mirrors `leave` exactly) +
+> `ConversationListViewModel.deleteConversationForMe`. UI: a second context-menu item ("Delete for
+> me", `DeleteForever` icon) with its own `AlertDialog` confirmation, right after "Leave" —
+> message clarifies it only removes the conversation from the caller's own devices, other
+> participants keep it (matches the route's actual semantics, not a generic "delete" wording that
+> would misdescribe a personal-only removal).
+>
+> **TDD**: RED confirmed via compile failure (`deleteForMe` unresolved) before either the
+> interface or the repository method existed. GREEN: 2 new `ConversationRepositoryTest` cases +
+> 2 new `ConversationListViewModelTest` cases, same shape as `leave`'s.
+>
+> **CI flake — 4th occurrence this session, same signature.** The Android check failed on its
+> first run: `NotificationPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`,
+> `kotlinx.coroutines.TimeoutCancellationException` — a file this diff never touches (the diff is
+> entirely `ConversationApi`/`ConversationRepository`/`ConversationListViewModel`/
+> `ConversationListScreen`, zero DataStore involvement). Same exact shape as the 3 prior
+> occurrences this session (`ThemeStoreTest`, `MediaDownloadPreferencesStoreTest`,
+> `PrivacyPreferencesStoreTest`, all `dataStore_*`-pattern tests under CI load). `gh run rerun
+> <run-id> --failed` resolved it on the first retry, as it has every prior time. **This is now a
+> 4/4 pattern in one session — worth escalating from "flag as systemic" (prior wording) to an
+> actual dedicated backlog item**, since a fifth occurrence is likely and the routine keeps paying
+> a full rerun (~3 min) per affected PR rather than fixing the root cause (a shared test
+> helper's timeout too tight for a loaded CI runner, or a coroutine dispatcher difference — still
+> unconfirmed, still not investigated).
+>
+> **Verified**: `./apps/android/meeshy.sh check` green locally (970 tasks, `BUILD SUCCESSFUL` —
+> the local run never hit the flake, consistent with it being a CI-load-specific timing issue);
+> CI green after the one rerun (16 checks pass/skip, PR #3057).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=conversation-delete-for-me` —
+> one more ANDROID slice before the streak≥5 bascule rule triggers IOS_DETTE.
+
+
 > On 2026-08-16 **Leave conversation shipped** (slice `conversation-leave`, PR #3055, merged
 > `32475f49f`) — one quarter of `feature-parity.md`'s "Leave / archive / delete-for-me /
 > delete-for-all conversation" line (archive already existed; delete-for-me/delete-for-all remain
