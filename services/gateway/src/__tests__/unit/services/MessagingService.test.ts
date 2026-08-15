@@ -350,6 +350,91 @@ describe('MessagingService', () => {
       });
     });
 
+    describe('état de la conversation — le conteneur gouverne enfin ce qu’on y écrit', () => {
+      // La règle vivait dans `MessageValidator.checkPermissions`, que ce
+      // service n'appelle PAS : ni le canal d'annonces ni la clôture n'étaient
+      // appliqués sur le seul chemin d'envoi. Ces cas prouvent le CÂBLAGE —
+      // la règle est prouvée dans `conversationWriteAdmission.test.ts`.
+
+      it('refuse d’écrire dans une conversation clôturée, sans rien persister', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue({
+          id: testConversationId,
+          type: 'group',
+          isActive: false
+        });
+
+        const response = await service.handleMessage(validRequest, testParticipantId);
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('refuse un simple membre dans un canal d’annonces', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue({
+          id: testConversationId,
+          type: 'group',
+          isActive: true,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin'
+        });
+        mockPrisma.participant.findUnique.mockResolvedValue({
+          id: testParticipantId,
+          conversationId: testConversationId,
+          isActive: true,
+          type: 'user',
+          userId: testUserId,
+          role: 'member',
+          user: { role: 'USER' }
+        });
+
+        const response = await service.handleMessage(validRequest, testParticipantId);
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('laisse un admin publier dans le même canal d’annonces', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue({
+          id: testConversationId,
+          type: 'group',
+          isActive: true,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin'
+        });
+        mockPrisma.participant.findUnique.mockResolvedValue({
+          id: testParticipantId,
+          conversationId: testConversationId,
+          isActive: true,
+          type: 'user',
+          userId: testUserId,
+          role: 'admin',
+          user: { role: 'USER' }
+        });
+
+        const response = await service.handleMessage(validRequest, testParticipantId);
+
+        expect(response.success).toBe(true);
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('refuse AVANT la détection de langue — un refus ne paie pas le traducteur', async () => {
+        mockPrisma.conversation.findUnique.mockResolvedValue({
+          id: testConversationId,
+          type: 'group',
+          isActive: false
+        });
+
+        await service.handleMessage(
+          { conversationId: testConversationId, content: 'Bonjour' },
+          testParticipantId
+        );
+
+        // `detectLanguage` sort par `global.fetch` vers le translator (~266 ms
+        // à froid) : le refus doit tomber avant.
+        expect(global.fetch).not.toHaveBeenCalled();
+      });
+    });
+
     it('carries no metadata envelope on the ACK — the send response is the message and nothing else', async () => {
       const response = await service.handleMessage(
         validRequest,

@@ -25,6 +25,10 @@ import {
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
+import {
+  admitConversationWrite,
+  isConversationWriteRefused
+} from '../../services/messaging/conversationWriteAdmission.js';
 
 /**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
@@ -240,6 +244,25 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (!anonymousParticipant.permissions.canSendMessages) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
+      }
+
+      // Ce chemin CONTOURNE `MessagingService.handleMessage` (cf. la note plus
+      // bas) : l'admission par l'état du conteneur — clôture, canal d'annonces,
+      // `defaultWriteRole` — ne s'appliquerait donc à aucun envoi anonyme si on
+      // ne la posait pas ici aussi. Les droits du LIEN ci-dessus disent ce que
+      // le lien autorise ; ils ne disent rien de ce que la conversation
+      // accepte, et un lien anonyme ouvert sur un canal d'annonces est
+      // précisément la contradiction que ce garde tranche.
+      const anonymousWriteAdmission = await admitConversationWrite({
+        prisma: fastify.prisma,
+        conversationId: participantShareLink.conversationId,
+        senderParticipantId: anonymousParticipant.id,
+        onError: (err) => logError(fastify.log, 'Conversation write admission read failed:', err)
+      });
+      if (isConversationWriteRefused(anonymousWriteAdmission)) {
+        return anonymousWriteAdmission.reason === 'conversation-closed'
+          ? sendError(reply, 410, 'Cette conversation est fermée')
+          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
       }
 
       // Traiter les liens dans le message AVANT la sauvegarde
@@ -542,6 +565,20 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (!participant) {
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
+      }
+
+      // Même garde que sur le jumeau anonyme, et pour la même raison : ce
+      // chemin contourne l'entonnoir où l'admission vit.
+      const linkWriteAdmission = await admitConversationWrite({
+        prisma: fastify.prisma,
+        conversationId: shareLink.conversationId,
+        senderParticipantId: participant.id,
+        onError: (err) => logError(fastify.log, 'Conversation write admission read failed:', err)
+      });
+      if (isConversationWriteRefused(linkWriteAdmission)) {
+        return linkWriteAdmission.reason === 'conversation-closed'
+          ? sendError(reply, 410, 'Cette conversation est fermée')
+          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
       }
 
       // Traiter les liens dans le message AVANT la sauvegarde

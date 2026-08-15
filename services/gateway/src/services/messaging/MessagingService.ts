@@ -15,6 +15,7 @@ import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { admitMessageForward, isForwardRefused } from './forwardAdmission';
+import { admitConversationWrite, isConversationWriteRefused } from './conversationWriteAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -166,6 +167,41 @@ export class MessagingService {
           });
           return this.createSuccessResponse(earlyHit);
         }
+      }
+
+      // 3.6. Admission par l'ÉTAT DU CONTENEUR — la clôture et le canal
+      //      d'annonces. Le garde de l'étape 3 répond « cette personne
+      //      appartient-elle à la conversation » ; il ne répond pas « cette
+      //      conversation accepte-t-elle encore des messages, et de qui ». La
+      //      règle existait (`MessageValidator.checkPermissions`) mais aucun
+      //      appelant de production ne l'invoquait : le drapeau
+      //      `isAnnouncementChannel` ne gouvernait rien, et une conversation
+      //      `isActive: false` acceptait encore des écritures.
+      //
+      //      Posé ICI, entre le dedup et la détection de langue : après le
+      //      dedup parce qu'un rejeu porte une ligne DÉJÀ écrite et diffusée —
+      //      la refuser transformerait un envoi réussi en erreur rendue au
+      //      client ; avant la détection parce qu'un refus ne doit pas payer
+      //      l'aller-retour HTTP vers le translator.
+      const writeAdmission = await performanceLogger.withTiming(
+        'messaging.conversationWriteAdmission',
+        () =>
+          admitConversationWrite({
+            prisma: this.prisma,
+            conversationId,
+            senderParticipantId: participant.id,
+            onError: (err) =>
+              logger.error('conversation write admission read failed', err as Error)
+          }),
+        { ...corr, conversationId }
+      );
+      if (isConversationWriteRefused(writeAdmission)) {
+        logger.info('conversation write refused', { ...corr, reason: writeAdmission.reason });
+        return this.createErrorResponse(
+          writeAdmission.reason === 'conversation-closed'
+            ? 'Cette conversation est fermée'
+            : 'Vous n\'avez pas le droit d\'écrire dans cette conversation'
+        );
       }
 
       // 4. Détection de langue — trust the client's `originalLanguage` when

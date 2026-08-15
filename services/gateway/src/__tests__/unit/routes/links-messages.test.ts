@@ -470,6 +470,59 @@ describe('POST /links/:id/messages — anonymous: canSendMessages=false', () => 
   });
 });
 
+// Ces deux routes CONTOURNENT `MessagingService.handleMessage`, où vit
+// l'admission par l'état du conteneur. Sans garde propre, un lien de partage
+// restait le seul tuyau capable d'écrire dans une conversation clôturée ou
+// dans un canal d'annonces. La règle est prouvée dans
+// `conversationWriteAdmission.test.ts` ; ces témoins prouvent le CÂBLAGE.
+
+describe('POST /links/:id/messages — anonymous: conversation clôturée', () => {
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      type: 'group', isActive: false, isAnnouncementChannel: false, defaultWriteRole: 'everyone',
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410 and persists nothing', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /links/:id/messages — anonymous: canal d\'annonces', () => {
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      type: 'group', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin',
+    });
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      role: 'member', user: null, userId: null, displayName: 'anon', avatar: null,
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 — un lien anonyme ouvert ne prime pas sur le canal d\'annonces', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: with tracking links', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
@@ -805,6 +858,29 @@ describe('POST /links/:id/messages/auth — non-mshy_ identifier', () => {
   it('returns 201 when using db id (non-mshy_ path)', async () => {
     const res = await app.inject({ method: 'POST', url: `/links/${DB_ID}/messages/auth`, payload: VALID_BODY });
     expect(res.statusCode).toBe(201);
+  });
+});
+
+describe('POST /links/:id/messages/auth — canal d\'annonces', () => {
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      type: 'group', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin',
+    });
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      role: 'member', user: { role: 'USER' },
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 for a plain member, and persists nothing', async () => {
+    const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.message.create).not.toHaveBeenCalled();
   });
 });
 
