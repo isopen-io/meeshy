@@ -525,3 +525,16 @@ jobs:
             || xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
             || echo "xcresulttool could not read the bundle."
           echo "::endgroup::"
+          # Le même résumé, publié dans le step summary : la page publique du run
+          # l'affiche sans authentification — le log brut, lui, exige un token.
+          # (Leçon 265 : écrire les messages d'échec pour le lecteur distant qui
+          # n'a QUE la page du run.)
+          {
+            echo '## Résumé XCTest (échecs)'
+            echo ''
+            echo '```json'
+            xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null | head -c 24000 \
+              || echo 'xcresulttool could not read the bundle.'
+            echo ''
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
