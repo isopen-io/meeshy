@@ -52,26 +52,15 @@ nonisolated struct LentillePeekViewModel: Equatable {
 /// L'aperçu de la Lentille (contrat LWS-8/I-072) — en `preview:` du menu
 /// contextuel.
 ///
-/// **Les DEUX chemins OS, ré-preuve d'ancrage (règle §0).** Le contrat cite
-/// « `LentillePeekView` en `preview:` des DEUX chemins OS ». Ré-preuve
-/// faite : le chemin natif iOS 26+ (`.contextMenu(menuItems:preview:)`,
-/// closure `preview:`) vit dans `ConversationListView+Rows.swift:125-142`,
-/// un fichier possédé par LWS-7 (mux de rang, contrat §1.4) — PAS par LWS-8,
-/// et absent de la liste des fichiers ouverts à cette tâche (mission I-072 :
-/// « ConversationListView+Overlays.swift — édite CE fichier … UNIQUEMENT »).
-/// Ce fichier-ci ne peut donc PAS câbler `LentillePeekView` sur ce chemin
-/// sans éditer un fichier dont LWS-8 n'est pas propriétaire (règle d'or,
-/// contrat §1.4) — écart signalé au rapport, pas contourné. **Ce que ce lot
-/// livre reste fonctionnellement complet malgré ce trou** : ce même chemin
-/// natif documente LUI-MÊME (`+Rows.swift`, commentaire au-dessus de
-/// `ConversationPreviewView`) que sa preview est « STATIQUE (non
-/// interactive dans un contextMenu natif) » — un aperçu qui autorise un
-/// changement de mode n'y serait de toute façon jamais actionnable, quelle
-/// que soit la vue qui le remplit. Le chemin < iOS 26
+/// **Les DEUX chemins OS.** Le chemin < iOS 26
 /// (`conversationContextMenuOverlay`, `+Overlays.swift`, possédé par LWS-8)
-/// EST interactif et embarque `LentilleModeMenu` ci-dessous — c'est donc le
-/// SEUL endroit où « l'aperçu, troisième point d'entrée » a un sens
-/// fonctionnel, et c'est celui que ce lot câble.
+/// est interactif et embarque `LentilleModeMenu` ci-dessous — c'est là que
+/// « l'aperçu, troisième point d'entrée » a son sens fonctionnel. Le chemin
+/// natif iOS 26+ (`.contextMenu(menuItems:preview:)`,
+/// `ConversationListView+Rows.swift`, propriété LWS-7) rend AUSSI cette vue
+/// sous drapeau depuis I-067ter — en aperçu statique (un `preview:` natif
+/// n'est pas interactif), le changement de mode y passe par les items du
+/// menu, pas par l'aperçu.
 struct LentillePeekView: View {
     let conversation: Conversation
     var isDark: Bool = false
