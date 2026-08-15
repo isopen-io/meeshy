@@ -147,12 +147,16 @@ Réutilisés **verbatim**. Toute envie de les « améliorer au passage » est ho
 Ordre = ordre de dépendance. Un workstream ne démarre que quand ses dépendances sont mergées.
 
 ```
-LWS-0 ─┬─ LWS-1 ─┬─ LWS-2 ─┬─ LWS-5 ── LWS-6 ── LWS-7 ── LWS-8 ─┐   (iOS)
-       │         │         ├─ LWS-9 ── LWS-10 ── LWS-11 ────────┤   (web)
-       │         │         └─ LWS-12 ───────────────────────────┤   (android)
-       └─ LWS-3 ─┴─ LWS-4 ─────────────────────────────────────┴── LWS-13 (recette)
-                    (gateway)
+LWS-0 ── LWS-1 ── LWS-2 ── LWS-2bis ─┬─ LWS-5 ─ LWS-6 ─ LWS-7 ─ LWS-8 ─▸ PORTE V1 (iOS)
+  lois     liste    tokens    mocks   │                                        │
+                              (§4.2)  └─ LWS-9 ─ LWS-10 ─ LWS-11 ─────────▸ PORTE V2 (web)
+                                                                                │
+                                        LWS-3 ── LWS-4  ◂── GATEWAY, EN DERNIER ┘
+                                                    │
+                                        LWS-12 (android) ── LWS-13 (recette + activation)
 ```
+
+> **L'ordre des lots gateway a changé.** LWS-3 et LWS-4 étaient initialement placés tôt ; ils passent **après les portes V1 et V2**, conformément à l'exigence produit « les features qui nécessitent une retouche backend se font en dernier, mockées en attendant ». Le substitut est LWS-2bis. Voir workshop §4.2 et §5.
 
 ---
 
@@ -212,7 +216,11 @@ LWS-0 ─┬─ LWS-1 ─┬─ LWS-2 ─┬─ LWS-5 ── LWS-6 ── LWS-7 
 
 **But.** Fermer les deux trous qui empêchent respectivement le web de voir les couleurs et les rangs de se rafraîchir.
 
-**Fichiers possédés.** `packages/shared/utils/conversation-colors.ts`, vecteurs `accent`, `packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`.
+**Fichiers possédés.** `packages/shared/utils/conversation-colors.ts`, `packages/shared/design/lentille-tokens.json`, `packages/shared/fixtures/conformance/behaviour-matrix.json`, vecteurs `accent`, `packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`.
+
+**Ajout de fidélité (workshop §2.5).** Ce workstream publie aussi les deux instruments de conformité :
+- `lentille-tokens.json` — domicile de **tous** les nombres de §4.3. Trois consommateurs (`LentilleMetrics.swift`, tokens CSS, `LentilleDimens.kt`), trois tests de parité sur le modèle de `MeeshyTokenParityTest.kt`, dont la règle est reprise mot pour mot : *« ne jamais réparer le test en y recopiant la valeur qui a dérivé — réparer le token »*.
+- `behaviour-matrix.json` — les 28 lignes de la matrice vol. 5 §5.3 et les 16 de vol. 4 §5, chacune avec un `id`. Chaque plateforme référence les `id` dans ses tests ; une **garde d'ensemble** échoue si un `id` n'est couvert par aucun test (et non pas une garde de présence individuelle — leçon 257).
 
 **Travaux.**
 
@@ -229,7 +237,36 @@ LWS-0 ─┬─ LWS-1 ─┬─ LWS-2 ─┬─ LWS-5 ── LWS-6 ── LWS-7 
 
 ---
 
-### LWS-3 — Préférence de mode de lecture (gateway)
+### LWS-2bis — Providers de substitution *(le backend est mocké jusqu'à LWS-3/4)*
+
+**But.** Rendre les trois surfaces qui dépendent de la gateway utilisables **maintenant**, derrière le protocole définitif, sans jamais fabriquer de donnée.
+
+**Fichiers possédés.** `packages/shared/providers/{ConversationBridgeProviding,ReadingModePreferenceStoring,ConversationLiveCallProviding}.ts` (les **protocoles**, figés ici et implémentés deux fois), plus les implémentations locales et leurs miroirs Swift.
+
+**Les trois substituts** (détail et justification : workshop §4.2).
+
+| Protocole | Implémentation de substitution | Implémentation définitive (LWS-3/4) |
+|---|---|---|
+| `ConversationBridgeProviding` | `LocalBridgeProvider` — exécute `buildBridgeData` (LWS-1) sur les messages **déjà en cache**, et pose `isComplete: false` quand la fenêtre ne couvre pas tout l'intervalle non lu | `GatewayBridgeProvider` — lit le champ `bridge` du payload |
+| `ReadingModePreferenceStoring` | Store local (`UserDefaults` iOS / store web), clé `(scope, conversationId)` — mémorisé **par appareil** | Le même store, **rétrogradé en cache optimiste** devant `UserConversationPreferences` |
+| `ConversationLiveCallProviding` | `LocalLiveCallProvider` — l'état d'appel que le client connaît déjà ; `nil` sinon | Lit le payload `ConversationLiveCall` |
+
+**Contraintes dures.**
+- **Un seul protocole, deux implémentations.** Aucune vue ne sait laquelle est injectée. La bascule de LWS-3/4 change **l'injection**, jamais une ligne d'UI. Garde source : aucun fichier de peau ne nomme `Local…Provider` ni `Gateway…Provider`.
+- **Zéro donnée fabriquée.** Un substitut calcule moins, ou rend `nil`. Il n'invente pas. Un pont incomplet **se déclare** incomplet et l'UI dit « sur les N derniers messages » ; un appel inconnu n'est pas affiché, et la section EN DIRECT reste vide plutôt que fausse.
+- **Le mock passe les mêmes vecteurs que le vrai.** Un substitut qui divergerait de la loi validerait une UI sur un comportement que le backend ne reproduira pas — c'est le piège que ce workstream doit éviter, pas créer.
+
+**Fichiers de test.** `packages/shared/__tests__/providers/local-bridge-provider.test.ts`, `apps/ios/MeeshyTests/Unit/Lentille/LocalBridgeProviderTests.swift`, `ProviderSubstitutionTests.swift`.
+
+**Critères d'acceptation.**
+- `LocalBridgeProvider` et `GatewayBridgeProvider` rendent le **même** objet sur le même jeu de vecteurs, quand la fenêtre du client est complète.
+- Fenêtre incomplète ⇒ `isComplete === false` **et** l'UI porte la mention de partialité — vérifié par un test de vue, pas seulement de modèle.
+- Aucun appel réseau nouveau : garde — les providers de substitution ne montent aucune requête.
+- Basculer l'injection ne change **aucun** snapshot de vue à données égales.
+
+---
+
+### LWS-3 — Préférence de mode de lecture (gateway) — *après la porte V2*
 
 **But.** Faire du mode une préférence **serveur**, multi-appareils, dans le canal versionné existant (E9, workshop A5).
 
@@ -250,7 +287,7 @@ LWS-0 ─┬─ LWS-1 ─┬─ LWS-2 ─┬─ LWS-5 ── LWS-6 ── LWS-7 
 
 ---
 
-### LWS-4 — Le pont ✦ côté gateway
+### LWS-4 — Le pont ✦ côté gateway — *après la porte V2*
 
 **But.** Calculer l'étage déterministe et l'attacher aux deux surfaces existantes. Aucun événement nouveau.
 
@@ -398,7 +435,24 @@ LWS-0 ─┬─ LWS-1 ─┬─ LWS-2 ─┬─ LWS-5 ── LWS-6 ── LWS-7 
 
 **But.** Le rang plat, les stickers, le rail, la pilule, le squelette — derrière le drapeau `lentille_list`.
 
-**Fichiers possédés.** `components/conversations/lentille/*.tsx`, `hooks/lentille/*.ts`, `ConversationList.tsx` (mux + typing).
+**Fichiers possédés.** `components/conversations/lentille/*.tsx`, `hooks/lentille/*.ts`, `hooks/use-feature-flags.ts` (extension), `ConversationList.tsx` (mux + typing).
+
+**Le drapeau et sa mise sur `main`** (workshop §6.2 — l'exigence « déployable sur `main`, accessible, sans casser le reste »).
+
+1. **Extension de `useFeatureFlags`.** Le hook actuel ne lit que `process.env.NEXT_PUBLIC_*` : un drapeau de **build**, tout-ou-rien, incapable de donner accès à une personne sans l'imposer à toutes. Il gagne un résolveur pur, **unique décideur** du web :
+   ```
+   resolveLentilleFlag({ searchParam, cookie, env })
+     ?lentille=1 → actif pour ce navigateur + pose le cookie meeshy_lentille=1
+     ?lentille=0 → efface le cookie
+     cookie      → persiste entre les visites
+     env         → NEXT_PUBLIC_LENTILLE_DEFAULT, le jour de l'activation générale
+     défaut      → OFF
+   ```
+2. **Aucune route nouvelle.** `/conversations/[[...id]]` reste la seule route : le paramètre est un modificateur de rendu, pas une destination. Ni câblage dupliqué, ni deuxième copie de l'écran à maintenir.
+3. **Dégradation au lieu d'écran blanc.** La sous-arborescence Lentille est enveloppée dans `FeatureErrorBoundary` — qui existe et **accepte un `fallback`** (`FeatureErrorBoundary.tsx:10, :93`) — dont le repli est le rendu **historique**. Une exception en production ramène l'utilisateur à la liste d'aujourd'hui ; il ne voit jamais une page morte.
+4. **Coût nul pour qui n'active pas.** Sous-arborescence chargée en `next/dynamic` : drapeau off ⇒ bundle non téléchargé.
+
+> **Garde de contrat, vérifiée en CI** : hors de son résolveur et de ses tests, le nom du drapeau n'apparaît **qu'une fois** — au mux. Une seconde occurrence signifie que la logique a fui hors du point de branchement, et « sans casser le reste » cesse alors d'être garanti par construction.
 
 **Travaux.**
 - `LentilleRow` : rang plat 64, avatar 44 + anneau `--row-accent` (issu de `conversation-colors.ts`, LWS-2), dot de présence par `ParticipantPresenceIndicator` réutilisé — **dots aussi pour les groupes** (« quelqu'un d'actif »), offline = **aucun dot**.
@@ -620,20 +674,32 @@ Reprise 1:1 du vol. 5 §7, avec le propriétaire de la preuve.
 | R14 | Les 7 fichiers de vecteurs sont verts dans les **trois** suites, sur le même commit de `packages/shared/fixtures/` | Jest + XCTest + JUnit |
 | R15 | Aucune constante de loi n'est écrite hors `packages/shared/` | garde source sur les trois arbres : aucun `520`, `380`, `0.45`, `0.82`, `900`, `25`, `24` littéral dans un fichier de peau |
 | R16 | Le pont survit à un changement de langue du lecteur **sans** aller-retour serveur (étage déterministe) et par re-résolution (étage agent) | test unitaire par plateforme |
+| R17 | **Fidélité des cotes** : les métriques rendues par chaque plateforme égalent `lentille-tokens.json` au réglage d'accessibilité par défaut | test de conformité d'anatomie × 3 (workshop §2.5 ②) |
+| R18 | **Fidélité comportementale** : les 44 `id` de `behaviour-matrix.json` sont couverts sur chaque plateforme, et le web se comporte comme iOS `id` par `id` | garde d'ensemble (déclarés == couverts) + recette de parité |
+| R19 | **Substituts honnêtes** : mock et implémentation gateway rendent le même objet sur les mêmes vecteurs ; une fenêtre incomplète est **affichée** comme telle ; la bascule d'injection ne change aucun snapshot | tests LWS-2bis + diff de snapshots P7 |
+| R20 | **Innocuité sur `main`** : drapeau off ⇒ snapshot identique et bundle Lentille non téléchargé ; une exception dans la peau dégrade vers le rendu historique, jamais vers une page morte ; le nom du drapeau n'apparaît qu'une fois hors du résolveur | snapshots + test de boundary + garde source |
 
 ---
 
 ## 6. Découpage des PR
 
-| PR | Contenu | Dépend de | Livrable seule ? |
-|---|---|---|---|
-| **P0** | LWS-0 + LWS-1 + LWS-2 — lois, types, vecteurs, accent TS, portillon SDK | — | oui (aucune UI) |
-| **P1** | LWS-3 + LWS-4 — gateway : préférence de mode + pont ✦ | P0 (types) | oui (champ optionnel, clients anciens l'ignorent) |
-| **P2** | LWS-9 — corrections d'écarts web, **hors drapeau** | — | oui, immédiatement |
-| **P3** | LWS-5 + LWS-6 + LWS-7 — iOS : miroirs, conteneur sticky, rang plat | P0 | oui, drapeau OFF |
-| **P4** | LWS-10 + LWS-11 — web : peau, menu, aperçu | P0, P1 | oui, drapeau OFF |
-| **P5** | LWS-8 — iOS : perspective, focus card, encoche, aperçu | P3 | oui, drapeau OFF |
-| **P6** | LWS-12 — Android | P0, P3 | oui, drapeau OFF |
-| **P7** | LWS-13 — recette croisée, levée progressive des drapeaux | toutes | non — c'est la fermeture |
+L'ordre suit les portes du workshop §6.1 : **iOS entier, puis web entier, puis la gateway**.
 
-P2 est indépendante de tout : elle corrige des défauts réels du web aujourd'hui (tri faux, recherche sur l'original, ligne dupliquée, clé i18n manquante) et n'attend aucune décision de design. Elle part la première.
+| PR | Contenu | Dépend de | Peut aller sur `main` ? |
+|---|---|---|---|
+| **P0** | LWS-9 — corrections d'écarts web, **hors drapeau** | — | **oui, immédiatement** |
+| **P1** | LWS-0 + LWS-1 + LWS-2 — lois, types, vecteurs, **tokens**, matrice de conformité, accent TS, portillon SDK | — | oui (aucune UI) |
+| **P2** | LWS-2bis — providers de substitution derrière les protocoles définitifs | P1 | oui (aucune UI) |
+| **P3** | LWS-5 + LWS-6 + LWS-7 — iOS : miroirs, conteneur sticky, rang plat | P1, P2 | oui, drapeau OFF |
+| **P4** | LWS-8 — iOS : perspective, focus card, encoche, aperçu | P3 | oui, drapeau OFF |
+| | ▸ **PORTE V1** — recette iOS intégrale sur mocks | P4 | — |
+| **P5** | LWS-10 + LWS-11 — web : peau, menu, aperçu, **résolveur de drapeau + boundary + dynamic** | P1, P2, V1 | oui, **dormant et accessible** (§LWS-10) |
+| | ▸ **PORTE V2** — recette web intégrale + parité web↔iOS | P5 | — |
+| **P6** | LWS-3 + LWS-4 — **gateway** : préférence de mode + pont ✦ réel | V2 | oui (champ optionnel, clients anciens l'ignorent) |
+| **P7** | Bascule d'injection : les substituts cèdent la place | P6 | oui — **aucun snapshot de vue ne bouge** |
+| **P8** | LWS-12 — Android | P1, V1 | oui, drapeau OFF |
+| **P9** | LWS-13 — recette croisée finale, puis **activation** progressive | toutes | non — c'est la fermeture |
+
+**P0 part la première et n'attend rien** : elle corrige des défauts réels du web aujourd'hui (tri sur le mauvais champ, recherche sur le contenu original, ligne dupliquée en frontière de page, chemin i18n désaccordé), sans drapeau et sans décision de design.
+
+**P3 à P5 vont sur `main` drapeau éteint.** Poser le code n'est pas l'activer : dormant, la peau est du code inerte et l'app rend exactement ce qu'elle rend aujourd'hui — prouvé à chaque CI par les snapshots drapeau off. Garder ce travail sur une branche longue serait le vrai risque.

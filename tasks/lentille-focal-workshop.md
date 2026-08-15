@@ -90,11 +90,33 @@ packages/shared/fixtures/reading-modes/
 2. Un fichier de vecteurs vide, ou une suite qui charge **zéro** cas, doit **échouer**. Le vert silencieux d'un harnais débranché est le mode de panne le plus coûteux du dépôt (cf. leçon 257 : une capacité câblée de bout en bout et jamais montée, que rien ne pouvait faire rougir).
 3. Les flottants se comparent à 1e-4. Une courbe qui diverge au cinquième chiffre est identique à l'œil et identique en intention ; une tolérance plus lâche laisserait passer une constante fausse.
 
-### 2.4 Ce que l'unification **ne** signifie **pas**
+### 2.4 La fidélité entre frontends — l'exigence, et ce qu'elle recouvre
 
-- **Pas de moteur de rendu partagé.** SwiftUI reste SwiftUI, React reste React, Compose reste Compose. Ce sont les **lois** qui convergent, pas les vues.
-- **Pas de gel des idiomes de plateforme.** Le long press iOS garde ses deux chemins OS ; le web garde clic droit + appui long pointeur ; Android garde son `combinedClickable`. La spec vol. 5 §5.3/§6.2 le dit déjà — ce workshop ne l'élargit pas.
-- **Pas d'alignement pixel entre plateformes.** Les cotes du vol. 5 (rang 64, avatar 44, nom 15) sont un **design commun**, appliqué avec l'échelle de chaque OS (`MeeshyFont.relative` côté iOS suit Dynamic Type ; `rem`/`clamp` côté web ; `sp` côté Compose). Le critère est « même hiérarchie », pas « même nombre de pixels ».
+> **Exigence produit** : les trois frontends doivent être fidèles **visuellement et comportementalement**. Le web sur téléphone ne doit plus se distinguer d'iOS, et Android suivra à l'identique.
+
+Cette exigence porte sur trois plans, et chacun a son moyen de preuve. Elle **n'est pas** une invitation à partager un moteur de rendu : SwiftUI reste SwiftUI, React reste React, Compose reste Compose, et les idiomes d'interaction propres à chaque OS sont conservés (long press à deux chemins sur iOS, clic droit + appui long pointeur sur le web, `combinedClickable` sur Android). Ce qui converge, ce sont les **valeurs**, les **règles** et les **états**.
+
+| Plan | Ce qui doit être identique | Ce qui reste propre à la plateforme | Preuve |
+|---|---|---|---|
+| **Cotes** | Chaque nombre : rang 64, avatar 44, anneau 1,5, point 8, nom 15, heure 12, ligne 2 13, opacité sourdine 0,55, ring interne 1,5, sticker 10,5/800/.1em… (§4.3 du contrat Lentille) | L'**unité** et la mise à l'échelle accessible : `MeeshyFont.relative` → Dynamic Type ; `rem`/`clamp` → réglage navigateur ; `sp` → police système Android | Fichier de tokens partagé + **test de conformité d'anatomie** par plateforme (§2.5) |
+| **Comportement** | Chaque règle et chaque transition d'état : quand le pont apparaît, quand la pilule s'efface, quel rang gagne le focus, dans quel ordre les sections tombent, quelle ligne 2 l'emporte (typing > brouillon > pont > préview) | Le **geste** qui déclenche, et lui seul | Vecteurs partagés (§2.3) + **matrice de conformité comportementale** (§2.5) |
+| **Rendu** | La hiérarchie perçue : même chose au premier coup d'œil, mêmes états visibles, mêmes absences (aucun badge chiffré, aucun dot hors ligne, aucune carte hors focus) | Le sous-pixel, l'anticrénelage, la courbe d'animation native | Recette visuelle sur la **même planche de 25 cas** que la maquette, rejouée sur les trois (§6.3) |
+
+**Sur la mise à l'échelle accessible.** Un utilisateur en Dynamic Type XL sur iOS et un utilisateur en zoom 200 % sur le web ne verront pas le même nombre de pixels — c'est le comportement correct, et l'exiger identique casserait l'accessibilité. La fidélité porte sur la valeur **au réglage par défaut** : à 100 %, les trois rendent 64, 44, 15, 12. C'est cette valeur-là qui est testée.
+
+### 2.5 Les trois mécanismes de fidélité
+
+Le dépôt a déjà inventé le bon patron, et il est meilleur que tout ce qu'on écrirait de neuf. `apps/android/sdk-ui/src/test/.../MeeshyTokenParityTest.kt` le formule ainsi :
+
+> *« Non-regression contract: every design token must stay byte-identical to the iOS source of truth… If a palette or dimen drifts, this test fails. **Never "fix" the test by copying the drifted value; fix the token.** »*
+
+Les trois mécanismes ci-dessous étendent ce patron des couleurs vers les cotes, les comportements et les états.
+
+**① Tokens de cotes partagés.** `packages/shared/design/lentille-tokens.json` devient le domicile de tous les nombres de §4.3. Trois consommateurs (`LentilleMetrics.swift`, tokens CSS, `LentilleDimens.kt`), trois tests de parité sur le modèle de `MeeshyTokenParityTest`. Le web est le seul à lire le JSON directement ; iOS et Android le mirroir et le **prouvent**.
+
+**② Test de conformité d'anatomie.** Comparer des captures d'écran entre trois OS n'est ni stable ni utile en CI. À la place, chaque plateforme **interroge son propre rendu** et compare aux tokens : hauteur de rang, taille d'avatar, épaisseur d'anneau, tailles de police résolues, opacités appliquées. C'est testable sans image, ça tourne en CI, et ça attrape exactement ce qu'une capture attraperait — une cote qui a dérivé.
+
+**③ Matrice de conformité comportementale.** Les 28 lignes de la matrice vol. 5 §5.3 et les 16 lignes de vol. 4 §5 deviennent un fichier **identifié** : `packages/shared/fixtures/conformance/behaviour-matrix.json`, une ligne = un `id` + son comportement attendu. Chaque plateforme référence les `id` dans ses tests, et une garde **échoue si un `id` n'est couvert par aucun test**. C'est ce qui transforme « on a tout testé » en une affirmation vérifiable plutôt qu'en une intention — et c'est directement la leçon 257 du dépôt : une garde d'ensemble (déclarés == couverts) attrape le membre ajouté demain et oublié, là où une garde de présence individuelle ne le voit pas.
 
 ---
 
@@ -117,32 +139,55 @@ Le contrat `tasks/focal-implementation-contract.md` reste la référence d'exéc
 
 ---
 
-## 4. La carte du chantier — cinq lots
+## 4. La carte du chantier — les lots
 
 ```
-L0  NOYAU PARTAGÉ ······ packages/shared + miroirs Swift/Kotlin + vecteurs
+L0  NOYAU PARTAGÉ ······ packages/shared + miroirs Swift/Kotlin + vecteurs + tokens
      │                    (lois, types, accent TS, renderFingerprint étendu)
-     ├──────────────┬──────────────┬──────────────┐
-     ▼              ▼              ▼              ▼
-L1  GATEWAY       L2  iOS        L3  WEB        L4  ANDROID
-    pont ✦          Lentille       Lentille       Lentille + Focal
-    préférence      + Focal        + Focal        (dernier)
-    de mode         (#3010)        (portage)
-     │              │              │              │
-     └──────────────┴──────────────┴──────────────┘
-                            ▼
-                   L5  RECETTE CROISÉE
-                   (vecteurs verts × 3, matrices, a11y, perf)
+     ▼
+LM  COUCHE DE SUBSTITUTION ··· providers mockés (pont ✦, préférence, appel live)
+     │                          — MÊME protocole que le futur backend
+     ├──────────────┬──────────────┐
+     ▼              ▼              ▼
+L2  iOS          L3  WEB        L4  ANDROID
+    Lentille       Lentille       Lentille + Focal
+    + Focal        + Focal        (après validation iOS)
+     │              │              │
+     └──────────────┴──────────────┘
+                    ▼
+           L1  GATEWAY  ← EN DERNIER (exigence produit)
+               pont ✦ réel, readingMode serveur, payload d'appel
+                    ▼
+           L5  RECETTE CROISÉE puis activation
 ```
 
 | Lot | Périmètre | Contrat d'exécution | Peut démarrer quand |
 |---|---|---|---|
-| **L0** | Lois TS + vecteurs + miroirs Swift/Kotlin + `conversation-colors.ts` + extension `renderFingerprint` | `lentille-implementation-contract.md` §2, LWS-0 → LWS-2 | immédiatement |
-| **L1** | Gateway : champ `bridge` sur `GET /conversations` et `conversation:unread-updated` ; `readingMode` sur `UserConversationPreferences` ; fallback déterministe | idem, LWS-3 → LWS-4 | dès que les **types** de L0 sont figés (pas besoin des miroirs) |
+| **L0** | Lois TS + vecteurs + **tokens de cotes** + miroirs Swift/Kotlin + `conversation-colors.ts` + extension `renderFingerprint` | `lentille-implementation-contract.md` §2, LWS-0 → LWS-2 | immédiatement |
+| **LM** | Providers de substitution derrière le protocole définitif (§4.2) | idem, LWS-2bis | dès que les **types** de L0 sont figés |
 | **L2** | iOS : peau Lentille (liste) + Focal (fil), derrière deux drapeaux distincts | `lentille-…` LWS-5 → LWS-8 **et** `focal-…` WS-1 → WS-11 amendés | dès que le miroir Swift de L0 est mergé |
-| **L3** | Web : peau Lentille + Focal, derrière un drapeau | `lentille-…` LWS-9 → LWS-11 | dès que L0 est mergé (le web consomme le domicile **directement**, sans miroir) |
-| **L4** | Android : peau Lentille + Focal | `lentille-…` LWS-12 | après L2 — Android suit iOS par convention de parité (`tasks/android-parity-ios-debt-agent-prompt.md`) |
-| **L5** | Recette croisée : vecteurs verts sur 3 plateformes, matrices de couverture, a11y, perf | `lentille-…` §7 + `focal-…` WS-11 | en continu ; **bloquant** pour la fermeture |
+| **L3** | Web : peau Lentille + Focal, derrière un drapeau, **déployable dormant sur `main`** (§6.2) | `lentille-…` LWS-9 → LWS-11 | dès que L0 est mergé (le web consomme le domicile **directement**, sans miroir) |
+| **L4** | Android : peau Lentille + Focal | `lentille-…` LWS-12 | après validation iOS — Android suit iOS par convention de parité (`tasks/android-parity-ios-debt-agent-prompt.md`) |
+| **L1** | **Gateway, en dernier** : champ `bridge` réel, `readingMode` serveur, payload d'appel live | idem, LWS-3 → LWS-4 | après validation iOS **et** web sur les mocks |
+| **L5** | Recette croisée puis activation progressive | `lentille-…` §7 + `focal-…` WS-11 | en continu ; **bloquant** pour l'activation |
+
+### 4.2 Inventaire du backend — ce qui en a besoin, et son substitut
+
+> **Exigence produit** : toute fonctionnalité qui demande une retouche backend est **signalée**, et **faite en dernier** ; en attendant, elle est **mockée** derrière le protocole définitif.
+
+Trois surfaces seulement demandent la gateway. Elles sont isolées ici pour que rien d'autre n'attende.
+
+| Surface | Retouche backend requise | Substitut pendant l'attente | Le substitut est-il honnête ? |
+|---|---|---|---|
+| **Pont ✦** (ligne 2 des rangs non lus) | `bridge` dans le mapping de `GET /conversations` et dans `conversation:unread-updated` — **LWS-4** | `LocalBridgeProvider` : le client exécute `buildBridgeData` (la **même** loi partagée, LWS-1) sur les messages qu'il a déjà en cache | **Oui** — c'est la même loi sur moins de données. Le provider marque `isComplete: false` quand sa fenêtre ne couvre pas tout l'intervalle non lu, et l'UI dit alors « sur les N derniers messages ». Aucun chiffre extrapolé, aucune phrase fabriquée — la contrainte d'honnêteté de #3010 WS-8, appliquée telle quelle |
+| **Préférence de mode** (encoche actionnable, multi-appareils) | `readingMode` sur `UserConversationPreferences` + route + broadcast — **LWS-3** | Le store local de #3010 WS-1 (`UserDefaults` iOS / store web), clé `(scope, conversationId)` | **Oui, avec une limite affichée** — le mode est mémorisé **par appareil**, pas encore synchronisé. C'est exactement l'amendement A5 en deux temps : le store local n'est pas du travail jeté, il **devient** le cache optimiste devant le canal serveur quand L1 atterrit |
+| **Appel en cours sur le rang** (● pulsant, « n voix · depuis X », Rejoindre) | Payload `ConversationLiveCall` — aucun champ d'appel n'existe aujourd'hui sur le modèle de conversation (vérifié : `CoreModels.swift` n'a ni `activeCall`, ni `callState`) | `LocalLiveCallProvider` : dérivé de l'état d'appel que le client connaît **déjà** pour la conversation ouverte ; **absent** pour les autres | **Oui** — un appel non connu est un appel **non affiché**, jamais un appel inventé. La section EN DIRECT reste vide plutôt que fausse |
+
+**Trois règles qui font que ce détour ne coûte rien.**
+
+1. **Un seul protocole, deux implémentations.** `ConversationBridgeProviding`, `ReadingModePreferenceStoring`, `ConversationLiveCallProviding` sont écrits **une fois**, par L0. Le mock et le futur client gateway s'y conforment tous les deux. Quand L1 atterrit, on **change l'injection**, pas les vues. Aucune ligne d'UI ne sait d'où vient sa donnée.
+2. **Zéro donnée fabriquée, jamais.** Un substitut calcule moins, ou renvoie `nil` — il n'invente pas. Une heuristique client déterministe est honnête ; un pont codé en dur ne l'est pas. C'est la même frontière que #3010 §6 trace pour les surfaces agent.
+3. **Le mock est testé comme le vrai.** Les deux implémentations passent le **même** fichier de vecteurs. Un substitut qui divergerait de la loi serait un piège : on validerait une UI sur un comportement que le backend ne reproduira pas.
 
 ### 4.1 Propriété des fichiers — la règle d'or élargie
 
@@ -170,32 +215,40 @@ L1  GATEWAY       L2  iOS        L3  WEB        L4  ANDROID
 ## 5. Séquencement — l'ordre qui évite d'écrire deux fois
 
 ```
-Semaine-lot 1 ── L0.a  lois TS + vecteurs (orchestrateur, courbe, pilule, sections, tri)
-                 L0.b  conversation-colors.ts (débloque L3)
-                 L1.a  types du pont + préférence readingMode (schéma Prisma + route)
-                        └─ L0.a et L1.a sont parallèles : L1 code contre les TYPES, pas les lois
+Étape 1 ── L0.a  lois TS + vecteurs (orchestrateur, courbe, pilule, sections, tri)
+           L0.b  tokens de cotes + conversation-colors.ts (débloquent la fidélité et L3)
+           L0.c  les TROIS protocoles (pont, préférence, appel live) — figés ici
 
-Semaine-lot 2 ── L0.c  miroirs Swift + suite de vecteurs iOS
-                 L0.d  miroirs Kotlin + suite de vecteurs Android
-                 L1.b  fallback déterministe du pont + enrichissement des payloads
-                 L3.a  web — peau Lentille (rang plat, stickers, perspective) derrière drapeau
+Étape 2 ── L0.d  miroirs Swift + suite de vecteurs iOS + test de parité des tokens
+           LM    providers de substitution (§4.2), testés sur les MÊMES vecteurs
 
-Semaine-lot 3 ── L2.a  iOS — peau Lentille (LWS-5 → LWS-8)
-                 L2.b  iOS — Focal (WS-1 → WS-6 de #3010, amendés)
-                        └─ L2.a et L2.b sont DISJOINTS en fichiers : liste vs fil
-                 L3.b  web — Focal (fil)
+Étape 3 ── L2.a  iOS — peau Lentille (LWS-5 → LWS-8)
+           L2.b  iOS — Focal (WS-1 → WS-6 de #3010, amendés)
+                  └─ disjoints en fichiers : ConversationListView* vs MessageListView*
+           L2.c  iOS — coquille : encoche, menu de mode, aperçu (WS-7)
+           ▸ PORTE V1 — recette iOS INTÉGRALE sur mocks (§6.1)
 
-Semaine-lot 4 ── L2.c  iOS — coquille : encoche actionnable, menu de mode, aperçu (WS-7)
-                 L3.c  web — menu de mode + aperçu
-                 L4    Android — les deux peaux, sur des lois déjà vertes
+Étape 4 ── L3.a  web — peau Lentille, déployée DORMANTE sur main (§6.2)
+           L3.b  web — Focal (fil)
+           L3.c  web — menu de mode + aperçu
+           ▸ PORTE V2 — recette web INTÉGRALE + parité web↔iOS (§6.1)
 
-Semaine-lot 5 ── L5    recette croisée, perf, a11y, levée progressive des drapeaux
+Étape 5 ── L1    GATEWAY — pont ✦ réel, readingMode serveur, payload d'appel
+           ▸ bascule d'injection : les mocks cèdent la place, les vues ne bougent pas
+
+Étape 6 ── L0.e  miroirs Kotlin + vecteurs Android
+           L4    Android — les deux peaux, sur des lois déjà vertes et un backend réel
+
+Étape 7 ── L5    recette croisée finale, perf, a11y, ACTIVATION progressive
 ```
 
-**Les deux points de synchronisation durs.**
+**Pourquoi la gateway est en dernier.** Elle ne bloque personne : les trois surfaces qui la demandent ont un substitut honnête derrière le protocole définitif (§4.2). L'y placer tôt aurait figé un contrat de données **avant** que trois interfaces l'aient éprouvé — le meilleur moyen de livrer un champ dont la forme ne convient à personne. En la plaçant après V2, elle implémente un protocole déjà validé par deux frontends en usage réel.
 
-- **S1 — après L0.a** : les lois et les vecteurs sont figés. Tout lot qui code une constante après S1 est en violation de contrat. Un seuil qui doit bouger repasse par L0, et les trois plateformes rougissent ensemble.
-- **S2 — après L1.b** : le contrat du pont ✦ est figé (forme *et* sémantique de langue, cf. contrat Lentille §5). Les trois peaux peuvent l'afficher. Avant S2, elles affichent le préview résolu du Prisme, ce qui est le comportement de repli permanent — jamais un écran vide.
+**Les trois points de synchronisation durs.**
+
+- **S1 — après l'étape 1** : lois, vecteurs, tokens et **protocoles** sont figés. Tout lot qui code une constante ou invente une signature après S1 est en violation de contrat. Un seuil qui doit bouger repasse par L0, et toutes les plateformes rougissent ensemble.
+- **S2 — porte V1** : rien ne commence sur le web tant que la recette iOS n'est pas intégralement verte. C'est l'exigence produit, et c'est aussi ce qui rend la parité web↔iOS mesurable : on compare à une référence figée, pas à deux cibles mouvantes.
+- **S3 — porte V2** : la gateway ne démarre qu'une fois les deux frontends validés. Le contrat de données qu'elle implémente est alors éprouvé, pas supposé.
 
 **Ce qui peut se paralléliser sans risque** : L2.a ⊥ L2.b (fichiers disjoints : `ConversationListView*` vs `MessageListView*`), L3 ⊥ L2 (langages disjoints), L1 ⊥ tout (service disjoint). **Ce qui ne le peut pas** : deux agents sur `ConversationListView.swift`, deux agents sur `packages/shared/utils/`.
 
@@ -212,7 +265,76 @@ Ordre de merge : **core → gateway → web → iOS → android**. `project.pbxp
 
 ---
 
-## 6. Portes de qualité
+## 6. Validation par étapes et mise sur `main`
+
+> **Exigence produit** : les vues sont testées **intégralement sur iOS, puis sur le web**, avant déploiement ; et la version web doit pouvoir vivre sur `main` avec un **accès à la nouvelle vue de conversation**, **sans casser le reste**.
+
+### 6.0 Une distinction qui lève la tension apparente
+
+« Déployer sur `main` » et « activer » sont deux choses différentes, et les confondre est ce qui rendrait l'exigence contradictoire.
+
+- **Poser le code sur `main`** est sûr et continu, dès l'étape 3 : drapeau éteint, la peau Lentille est du code inerte, l'app rend exactement ce qu'elle rend aujourd'hui. Rien à retenir sur une branche longue — les branches longues sont elles-mêmes un risque.
+- **Activer** — changer le défaut pour les utilisateurs — n'arrive qu'après les portes V1 et V2, puis la recette croisée L5.
+
+Entre les deux vit le **chemin d'accès** : un moyen d'atteindre la nouvelle vue, sur `main`, sans l'imposer à personne (§6.2).
+
+### 6.1 Les deux portes — ce que « testé intégralement » veut dire
+
+Une porte n'est pas une impression : c'est une liste close, et chaque ligne a sa preuve.
+
+| | **Porte V1 — iOS** | **Porte V2 — web** |
+|---|---|---|
+| Vecteurs partagés | 7 fichiers verts en XCTest | 7 fichiers verts en Jest |
+| Parité des tokens | `LentilleMetrics` == `lentille-tokens.json` | tokens CSS == `lentille-tokens.json` |
+| Conformité d'anatomie | cotes rendues == tokens (§2.5 ②) | idem |
+| Matrice comportementale | **28** `id` de la liste + **16** `id` du fil couverts, garde d'ensemble verte | idem, **plus** : chaque `id` se comporte comme sur iOS |
+| Planche des 25 cas | rejouée à l'écran, les 25 conformes (§6.3) | rejouée, **comparée à la planche iOS** |
+| Accessibilité | VoiceOver, Dynamic Type XL sans troncature, reduce motion, contrastes AA | lecteur d'écran, zoom 200 %, `prefers-reduced-motion`, axe-core |
+| Performance | < 1 ms/frame, zéro allocation, aucun relayout — **aux Instruments** | idem, **au profiler navigateur** (Performance + Layout Shift à 0) |
+| Réversibilité | drapeau éteint ⇒ snapshot identique à aujourd'hui | idem |
+| Non-régression | matrice §5.3 rejouée : swipes, menus, drag & drop, pagination, pull-to-refresh | idem + le test de câblage Prisme existant reste vert |
+
+**V2 porte une exigence que V1 n'a pas** : la parité. Le web ne se valide pas seul, il se valide **contre iOS**, planche contre planche et `id` contre `id`. C'est pour cela que l'ordre est imposé : on ne compare pas deux cibles mouvantes.
+
+### 6.2 Le web sur `main` : dormant, accessible, et incapable de casser le reste
+
+Trois propriétés à tenir simultanément. Chacune a son mécanisme, et tous réutilisent ce qui existe.
+
+**① Dormant par défaut.** Le drapeau `lentille_list` est éteint ; le mux de rang rend `ConversationItem`, exactement comme aujourd'hui. Un test de snapshot drapeau éteint le prouve à chaque CI.
+
+**② Accessible sans build spécial.** Le `useFeatureFlags` actuel ne lit que `process.env.NEXT_PUBLIC_*` — c'est un drapeau de **build**, tout-ou-rien, qui ne peut pas donner accès à une personne sans l'imposer à toutes. Il est donc **étendu**, pas contourné, avec une résolution à trois niveaux :
+
+```
+resolveLentilleFlag({ searchParam, cookie, env })
+  ?lentille=1  → active pour CE navigateur, et pose le cookie meeshy_lentille=1
+  ?lentille=0  → désactive et efface le cookie
+  cookie       → persiste entre les visites
+  env          → NEXT_PUBLIC_LENTILLE_DEFAULT, le jour de l'activation générale
+  défaut       → OFF
+```
+
+Une seule fonction, pure, testée. C'est le **seul** endroit du web qui décide — toute autre lecture du drapeau est un bug de contrat.
+
+**③ Incapable de casser le reste.** C'est la propriété la plus importante, et elle ne s'obtient pas par de la prudence mais par de la structure :
+
+- **Un seul point de branchement.** Le drapeau n'est lu qu'au mux de rang et au conteneur de sections. Le pipeline de données, les handlers socket, le cache, les préférences, le routage : **aucun** ne le connaît. Un drapeau qui ne traverse pas la couche de données ne peut pas corrompre la couche de données.
+- **Dégradation au lieu d'écran blanc.** La sous-arborescence Lentille est enveloppée dans un `FeatureErrorBoundary` — qui existe déjà et **accepte un `fallback`** — dont le repli est le rendu **historique**. Si la peau lève une exception en production, l'utilisateur retombe sur la liste d'aujourd'hui ; il ne voit pas une page morte. C'est ce qui rend le déploiement dormant réellement sûr, et pas seulement improbable.
+- **Coût nul pour qui ne l'active pas.** La sous-arborescence est chargée en `next/dynamic`, drapeau off ⇒ le bundle n'est pas téléchargé. Un utilisateur qui ne demande rien ne paie rien, ni en octets ni en risque.
+- **Aucune route nouvelle.** `/conversations/[[...id]]` reste la seule route. Le paramètre est un modificateur de rendu, pas une destination — donc ni duplication de câblage, ni deuxième chemin à maintenir, ni divergence possible entre deux copies de l'écran.
+
+> **Garde de contrat, vérifiée en CI** : le nom du drapeau n'apparaît **qu'une fois** hors de son résolveur et de ses tests. Une seconde occurrence signifie que la logique a fui hors du mux — c'est le moment où « sans casser le reste » cesse d'être garanti par construction.
+
+Côté iOS, le même besoin est servi par `MeeshyFeatureFlags` (`UserDefaults` + surcharge `ProcessInfo`), plus une bascule cachée dans les réglages pour les builds TestFlight. Aucun mécanisme neuf.
+
+### 6.3 La planche des 25 cas — l'instrument de la fidélité visuelle
+
+La maquette Lentille embarque **25 rangs qui couvrent l'intégralité de la matrice §5.3** : épinglé, live, pont ✦ (≤ 25 et > 25), typing, brouillon, pièces jointes sans texte, vocal, localisation, éphémère, vue unique, expiré, masqué, sourdine, verrou, agent ✦, outbox, mood vs présence, anneau story, tags, préview traduit 🌐, présence online/away/hors-ligne, mode mémorisé, et le cas de base.
+
+Cette planche devient l'**instrument de recette partagé** : le même jeu de 25 conversations est monté sur les trois frontends, dans les deux thèmes, et comparé rang par rang à la maquette. Elle sert aussi de jeu de données aux tests de conformité d'anatomie — les mêmes 25 cas, mesurés au lieu d'être regardés.
+
+---
+
+## 7. Portes de qualité
 
 | Porte | Commande | Bloque |
 |---|---|---|
@@ -238,7 +360,7 @@ Les drapeaux sont **indépendants** : la Lentille sans Focal est un état livrab
 
 ---
 
-## 7. Hors périmètre — dit une fois, pour ne pas y revenir
+## 8. Hors périmètre — dit une fois, pour ne pas y revenir
 
 - **La Scène** (couche live d'appel). La liste **affiche** son existence (section EN DIRECT, « n voix · depuis X », bouton Rejoindre) ; elle ne l'implémente pas. Chantier séparé.
 - **La Rivière.** Présente dans le catalogue et le menu de mode, **toujours grisée avec sa raison réelle** (« s'ouvrira à 5 personnes actives — 3 aujourd'hui »). Elle n'entre que si elle gagne son procès (vol. 3).
@@ -248,7 +370,7 @@ Les drapeaux sont **indépendants** : la Lentille sans Focal est un état livrab
 
 ---
 
-## 8. La définition de « fini »
+## 9. La définition de « fini »
 
 Le chantier ferme quand, et seulement quand :
 
@@ -258,5 +380,9 @@ Le chantier ferme quand, et seulement quand :
 4. La matrice §5 du vol. 4 (16 lignes temps réel du fil) idem, en Focal **et** en Script.
 5. Drapeaux éteints ⇒ les trois apps sont **bit-à-bit identiques** à aujourd'hui (test de snapshot par plateforme).
 6. Budget de défilement tenu sur les deux écrans : < 1 ms/frame, zéro allocation dans la passe, aucune invalidation de layout — **mesuré** aux Instruments et au profiler navigateur, pas déduit.
+7. **Fidélité prouvée, pas affirmée** : cotes rendues == `lentille-tokens.json` sur les trois plateformes (§2.5 ①②), et les 44 `id` de `behaviour-matrix.json` couverts partout, le web comparé à iOS `id` par `id` (§2.5 ③).
+8. **Les portes ont été franchies dans l'ordre** : recette iOS intégrale (V1) avant tout travail web, recette web intégrale et parité (V2) avant tout travail gateway.
+9. **La bascule des substituts est neutre** : quand la gateway remplace les mocks, aucun snapshot de vue ne bouge à données égales — la preuve que le protocole était le bon et que l'UI n'a jamais dépendu de la provenance.
+10. **`main` n'a jamais été mis en danger** : à chaque étape, drapeaux éteints, l'app est identique ; la peau dégrade vers le rendu historique si elle lève ; le bundle n'est pas servi à qui ne l'a pas demandé.
 
-Une régression silencieuse vaut mieux qu'un joli effet : si un des six points est rouge, le chantier n'est pas fini, quel que soit l'état visuel.
+Une régression silencieuse vaut mieux qu'un joli effet : si un des dix points est rouge, le chantier n'est pas fini, quel que soit l'état visuel.
