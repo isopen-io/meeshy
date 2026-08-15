@@ -7668,3 +7668,202 @@ implémentation, jamais avant.
 
 Parente des leçons 258, 261 et 263 : là-bas une garde jumelle rassurait la
 relecture ; ici ce sont deux suites de tests qui se rassurent l'une l'autre.
+
+---
+
+## Leçon 267 — Quand un fait a un porteur ET un drapeau, le code finit par lire le drapeau (2026-08-15, routine temps réel, cycle 33)
+
+Le schéma d'envoi REST compte `encryptedContent` parmi les porteurs de contenu :
+un corps n'apportant que du chiffré est un message valide. La route consommait
+ce chiffré sous condition d'`isEncrypted` — un booléen SÉPARÉ, optionnel, que le
+schéma n'a jamais lié au chiffré.
+
+**Les deux ordres perdaient.** Chiffré sans le drapeau : la charge chiffrée est
+jetée, et le corps que le schéma venait d'approuver ressort en 400 « contenu
+vide ». Drapeau sans le chiffré : `ciphertext: encryptedContent!` ment, et le
+message est écrit EN CLAIR avec `isEncrypted: false`, puis traduit, scanné,
+poussé en notification. Un message déclaré chiffré, rétrogradé sans un mot.
+
+**La règle.** Un fait porté par une donnée ne doit jamais être relu à travers un
+drapeau posé à côté. `encryptedContent` EST le fait du chiffrement ; `isEncrypted`
+n'en est qu'un écho, et un écho peut arriver seul. Gater sur l'écho, c'est
+garantir qu'un jour les deux divergeront — et le code lira le mauvais. Le dépôt
+interdit déjà la forme la plus connue de cette faute (« pas de booléen redondant
+avec un timestamp », CLAUDE.md) : elle vaut à l'identique pour tout booléen
+d'entrée qui double un champ porteur. Le chemin socket, lui, était juste depuis
+toujours — il teste `!data.encryptedPayload`, la présence, jamais un booléen.
+
+**Le corollaire sur l'ordre des correctifs.** Le même champ portait un troisième
+défaut : `encryptionMode` rejetait sur sa casse le `"E2EE"` qu'iOS émet.
+Normaliser la casse SEULE aurait converti un 400 franc en rétrogradation
+silencieuse — le corps serait enfin passé la validation, pour se faire écrire en
+clair. **Lever une barrière d'entrée avant d'avoir réparé ce qui est derrière
+transforme un refus en corruption.** Vérifier systématiquement ce qu'un
+assouplissement de validateur laisse désormais atteindre.
+
+**Le signal qu'on aurait pu lire plus tôt.** Deux clients avaient CONTOURNÉ la
+branche au lieu de la signaler : le web refuse son repli REST pour les messages
+chiffrés (« REST can't handle E2EE yet »), iOS documente la même impasse dans
+son `decisions.md`. Un contournement écrit dans le code client est un rapport de
+bug serveur que personne n'a déposé — les relire comme tels.
+
+Parente de la leçon 266 (cycle 32) : là-bas une branche de validateur sans
+implémentation, ici une branche dont l'implémentation était conditionnée à un
+AUTRE champ. Même famille — la suite de tests couvrait la conjonction des deux
+champs, jamais l'un sans l'autre, c'est-à-dire jamais ce que le schéma admet.
+
+## Leçon 268 — copier la référence sans copier ce qui la décrit (cycle 34)
+
+**Le défaut.** `copyForwardedAttachments` dupliquait une pièce jointe en
+reprenant `filePath`/`fileUrl` À L'IDENTIQUE : la copie et l'original désignent
+le MÊME blob sur disque. Mais la projection, écrite champ par champ à la main,
+énumérait 25 colonnes sur 40 — et aucune des onze qui disent que ce blob est du
+chiffré. La copie naissait sur le défaut Prisma `isEncrypted: false`.
+
+**Pourquoi c'était grave.** Le gateway ne déchiffre rien : `download.ts` sert les
+octets bruts et c'est le CLIENT qui déchiffre, d'après ce que la ligne DÉCLARE.
+Une ligne qui annonce « clair » en pointant du chiffré fait rendre le chiffré TEL
+QUEL comme s'il était le média — le client ne déchiffre pas, puisqu'on vient de
+lui dire qu'il n'y a rien à déchiffrer. Le mensonge ne produit pas une erreur :
+il produit un fichier silencieusement illisible, et `isAttachmentEncrypted()`
+confirmait `false`.
+
+**La règle.** *Quand on copie une donnée PAR RÉFÉRENCE, tout ce qui décrit cette
+donnée doit voyager avec la référence.* Un chemin de fichier n'emporte pas son
+mode de chiffrement, sa taille d'origine ni ses empreintes : ces faits vivent
+dans les colonnes voisines. Dupliquer l'un sans les autres crée une ligne qui
+ment sur ce qu'elle contient — et le mensonge est INVISIBLE, parce que le blob
+existe et se lit très bien, seulement il ne veut pas dire ce que la ligne
+prétend.
+
+**Le corollaire sur les projections manuelles.** Une copie partielle ne se trahit
+JAMAIS à la compilation : à la création Prisma, tout champ omis prend son défaut,
+et un défaut est syntaxiquement irréprochable. Elle ne se trahit pas non plus au
+test tant que le test compte les APPELS (`attCreate` appelé 1 fois) ou vérifie
+une valeur DÉRIVÉE (`messageType` déduit du MIME) au lieu de regarder la ligne
+écrite. Toute duplication ligne-à-ligne réénumérée à la main est une dette qui
+grandit en silence à chaque colonne ajoutée au modèle : la tester, c'est diffing
+l'ensemble des champs écrits contre les champs du modèle, pas compter les appels.
+
+**Le discriminant qui interdit la sur-correction.** Copier le fait, c'est copier
+son ABSENCE aussi fidèlement que sa présence : une pièce en clair ne doit surtout
+pas se voir inventer un chiffrement. Le test « un transfert en clair reste en
+clair » vaut autant que les cinq qui exigent la propagation.
+
+**La limite de portée, énoncée plutôt que franchie.** Dire la vérité sur les
+octets et POUVOIR les déchiffrer sont deux problèmes distincts. En `e2ee` pur,
+les destinataires d'arrivée n'ont pas la clé : ils verront désormais un échec
+explicite là où ils voyaient du charabia. C'est strictement mieux, et ce n'est
+pas la fin — propager la clé, re-chiffrer, ou REFUSER le transfert (comme le
+cycle 93 l'a fait pour la vue unique) est une décision produit, consignée en
+constat latent plutôt que tranchée en douce dans un correctif de défaut.
+
+Parente des leçons 266 (cycle 32) et 267 (cycle 33) : même famille de suites
+vertes qui affirment la forme sans jamais demander le CONTENU de ce qui est écrit.
+
+## Leçon 269 — la copie savait où étaient les octets, plus ce qu'ils voulaient dire (cycle 35)
+
+**Le défaut.** `repostPost` duplique VRAIMENT les fichiers d'une source éphémère
+(STORY 21h, STATUS 1h) : c'est la garantie qui empêche un repost de se vider
+quand l'original expire. La duplication des octets est irréprochable. La ligne
+`PostMedia` écrite par-dessus, elle, était réénumérée à la main sur huit champs
+quand `mediaSelect` en avait chargé dix-sept. `width`, `height`, `thumbHash`,
+`duration`, `caption`, `alt`, `language`, `transcription` : tout ce qui DÉCRIT
+ces pixels restait derrière, et la copie naissait sur le défaut Prisma.
+
+**Pourquoi c'était grave, et invisible.** Aucun de ces manques ne produit
+d'erreur. L'image s'affiche, la vidéo se lit. Ce qui disparaît, c'est ce que le
+produit promet par ailleurs :
+- sans `width`/`height`, `FeedMedia.aspectRatio` rend `nil` et le lecteur ne peut
+  pas réserver le cadre — le repost SAUTE au chargement, l'original non ;
+- sans `thumbHash`, plus de placeholder instantané — le champ MÊME que le cycle
+  34 venait de rétablir sur les pièces jointes de message, le défaut jumeau
+  vivant à un fichier de distance dans la famille post ;
+- sans `alt`, **le média reposté devient muet à VoiceOver**. Une description
+  qu'un auteur avait pris la peine d'écrire, effacée par une republication ;
+- sans `language`/`transcription`, **le Prisme Linguistique n'a plus rien à
+  résoudre** : le contenu retombe dans la langue de l'auteur d'origine.
+
+**La règle.** *Quand on copie des octets, tout ce qui DIT CE QU'ILS VEULENT DIRE
+doit voyager avec eux.* La leçon 268 l'a énoncée pour la copie PAR RÉFÉRENCE (le
+même blob, deux lignes) ; elle vaut à l'identique pour la copie PAR VALEUR (deux
+blobs, deux lignes). Le mode de partage des octets ne change rien : ce sont les
+colonnes voisines qui portent le sens, et un `copyFile` n'en transporte aucune.
+Dupliquer un fichier sans dupliquer ce qui le décrit produit une ligne qui SAIT
+où sont les octets et ne sait plus ce qu'ils sont.
+
+**Le corollaire qui distingue un FAIT d'un POINTEUR.** Copier « tout ce que la
+projection a chargé » serait une sur-correction. Deux champs devaient rester
+dehors, et la raison est la même pour les deux : ce ne sont pas des faits sur ces
+octets. `variantOf` désigne une AUTRE ligne, que le hard-delete de la source va
+effacer. `translations` porte les URL de variantes TTS qui n'ont PAS été
+dupliquées : les recopier promettrait au lecteur des pistes destinées à
+disparaître. **Un fait sur les octets se copie ; un pointeur vers une ligne ou
+vers un blob qu'on n'a pas dupliqué se remappe, se duplique aussi, ou se laisse
+tomber — jamais se recopie.** La même fonction appliquait déjà ce raisonnement
+dix lignes plus bas, en remappant les ids de médias dans `storyEffects` : le
+principe était présent, il n'avait simplement pas été étendu aux colonnes.
+
+**Le signal qu'on aurait pu lire plus tôt.** Le champ manquant le plus parlant
+était `thumbHash` — le cycle 34 venait de le rétablir sur `MessageAttachment`, un
+correctif fraîchement mergé, pour la même raison, avec le même commentaire. *Un
+défaut qu'on vient de corriger dans une famille est une requête à lancer dans
+toutes les autres*, et la recherche coûte une minute. Quatre cycles de suite ont
+maintenant trouvé le même mode d'échec (32 : branche sans implémentation ; 33 :
+implémentation conditionnée au mauvais champ ; 34 et 35 : projection amputée), et
+chaque fois la suite était VERTE parce qu'elle comptait les appels ou lisait une
+valeur dérivée. Le test qui aurait vu celui-ci ne demande rien de plus que : *que
+contient la ligne qu'on vient de demander à écrire ?*
+
+## Leçon 270 — un test d'égalité littérale dit moins que le commentaire posé au-dessus de lui (2026-08-15, routine temps réel, cycle 36)
+
+**Le défaut.** L'accusé de remise du drain filtrait
+`(entry.eventType ?? 'new') === 'new'`, sous un commentaire qui énonçait la BONNE
+règle — « seuls les VRAIS nouveaux messages » — et une justification qui ne
+nommait que `edited`/`deleted`, les deux seules familles existant le jour où la
+ligne a été écrite. `link-message` est arrivée plus tard. C'est une CRÉATION,
+rejouée sous `message:new` autant que sous `link:message:new` ; l'égalité
+littérale la lisait comme une mutation, et le message d'un invité de lien
+n'accusait jamais réception au rejeu.
+
+**Pourquoi c'était invisible.** Le commentaire et le code ne disaient pas la même
+chose, mais rien ne les confrontait : un commentaire décrit une INTENTION, une
+égalité teste une VALEUR, et l'écart entre les deux ne grandit qu'au moment où
+quelqu'un ajoute une valeur — c'est-à-dire loin du commentaire, dans un autre
+fichier, pour une autre raison. La suite était verte parce qu'elle testait les
+familles nommées dans la justification, jamais celle qui n'existait pas encore.
+
+**La règle.** *Quand un filtre trie une UNION, il doit énumérer, pas comparer.*
+Une égalité littérale (`=== 'new'`) répond `false` par défaut à tout ce qu'elle ne
+connaît pas : la famille suivante hérite du silence, et le silence a l'air d'une
+décision. Un prédicat nommé, vivant en face du vocabulaire qu'il interroge, force
+la question à être posée à chaque ajout. Le corollaire porte sur le TEST : la
+seule garde qui tienne est une table EXHAUSTIVE sur l'union
+(`Record<NonNullable<T['eventType']>, boolean>`), qui ne compile pas tant que la
+nouvelle famille n'a pas sa réponse. Un compte d'entrées ne garde rien — il se met
+à jour tout seul sous les doigts de celui qui ajoute la famille.
+
+**Le signal qu'on aurait pu lire plus tôt, et qui vaut plus que le défaut.** La
+justification du champ, dans le type, affirmait « no delivery receipt — the
+share-link send path creates no read-status rows ». **Elle était fausse au commit
+qui l'écrivait** : le même commit branchait `autoDeliverToOnlineRecipients` sur ce
+même chemin, dont le cœur est `markMessagesAsReceived`. Une justification écrite
+dans le même souffle que le code qui la contredit ne se relit jamais — elle a
+l'air fraîche. *L'âge d'une note ne dit rien de sa véracité ; seule la relecture
+du code cité le dit* (leçon 2 du run #2 IOS_DETTE, ré-attestée ici sur une note
+vieille de zéro jour). Et le contre-indice était à portée : le fan-out du même
+accusé porte un correctif dédié pour adresser les pairs SANS COMPTE « parce que
+c'est peut-être l'AUTEUR qui attend son tic ». *Un effort fait pour servir un
+acteur, à un cran donné, est la preuve qu'il doit être servi aux crans
+au-dessus* — celui-ci était annulé par un filtre que l'entrée n'atteignait jamais.
+
+**Le discriminant qui interdit la sur-correction.** Élargir aux arrivées ne doit
+rien élargir d'autre : les huit familles de mutation restent muettes, parce que
+leur accuser réception affirmerait une remise qui n'a pas eu lieu — et pour
+`deleted`, celle d'un message qui n'existe plus. Le témoin qui l'exige s'écrit ;
+il ne se déduit pas du prédicat.
+
+Parente des leçons 256 (une audience ajoutée doit hériter des bornes de sa
+voisine) et 264 (« qui l'appelle ? »), vue depuis l'autre bout : ici la famille
+nouvelle n'a pas hérité des TRAITEMENTS EN AVAL de la famille dont elle est le
+jumeau.

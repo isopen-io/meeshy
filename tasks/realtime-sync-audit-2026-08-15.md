@@ -2185,3 +2185,400 @@ schéma, en demandant pour chaque branche admise quel site d'écriture la
 consomme. Le corollaire vaut comme règle de conception : une dispense doit
 arriver AVEC son implémentation, jamais avant, sans quoi elle n'ouvre pas une
 permission mais une porte vers du code qui suppose l'autre branche.
+
+---
+
+# Cycle 33 (2026-08-15) — le fait était dans le chiffré, la route lisait le drapeau
+
+Sonde annoncée en clôture du cycle 32 : **quelles disjonctions de validateur
+n'ont pas d'implémentation derrière chaque branche ?** Le balayage s'est fait
+par schéma (`.refine`, `superRefine`, `z.union`, `.or`) sur `services/gateway`
+et `packages/shared`, en demandant pour CHAQUE branche admise quel site
+d'écriture la consomme.
+
+## Le balayage — ce qu'il a écarté
+
+Trois candidats ont été remontés puis classés sans suite, chacun vérifié
+jusqu'au site d'écriture :
+
+| schéma | branche suspecte | verdict |
+|---|---|---|
+| `anonymous.ts` — `email`/`birthday` `.or(z.literal(''))` | la chaîne vide | **servie** : `body.birthday ? new Date(...) : null` la traite en falsy, et `requireBirthday` la teste explicitement |
+| `translation.ts` — `text` **ou** `message_id` | `message_id` seul | **servie** : la route relit le message et emploie `existingMessage.content` |
+| `posts/sounds.ts` — `isPublic` **ou** `title` | chacune seule | **servies** toutes deux |
+
+## Le défaut — la quatrième branche du schéma d'envoi
+
+`SendMessageBodySchema` (`routes/conversations/messages.ts`) admet quatre
+porteurs de contenu : `content`, `attachmentIds`, `forwardedFromId`, et
+**`encryptedContent`**. La quatrième affirme qu'un corps n'apportant QUE du
+chiffré est un message valide. La route ne consommait ce chiffré que sous
+condition d'`isEncrypted` — un booléen SÉPARÉ, optionnel, que le schéma n'a
+jamais lié au chiffré :
+
+```ts
+encryptedPayload: isEncrypted ? { ciphertext: encryptedContent!, … } : undefined
+```
+
+**Les deux ordres perdaient**, et c'est ce qui rend le défaut instructif — ce
+n'est pas une branche oubliée, c'est un fait lu au mauvais endroit.
+
+1. **Chiffré sans le drapeau.** `encryptedPayload` reste `undefined`, le chiffré
+   est jeté. `MessageValidator` refuse alors le message pour cause de contenu
+   vide : le corps que le schéma venait d'approuver ressort en 400 **« Message
+   content cannot be empty »**. Variante plus grave quand un `content`
+   accompagne le chiffré (forme `server`/`hybrid` du web) : la validation passe,
+   le chiffré est jeté, et le CLAIR est persisté.
+2. **Drapeau sans le chiffré.** Le `!` ment. La charge part avec
+   `ciphertext: undefined`, que `MessageProcessor` refuse à son tour
+   (`data.encryptedContent && data.encryptionMetadata`), et le message est écrit
+   **en clair avec `isEncrypted: false`** — puis traduit (NLLB sur du base64),
+   scanné pour ses liens, poussé en notification. Un message déclaré chiffré,
+   rétrogradé sans un mot.
+
+## Le troisième défaut, sur le même champ
+
+`encryptionMode` était `z.enum(['e2ee','server','hybrid'])`, strictement
+minuscule. Or :
+
+- le client iOS émet **`"E2EE"`** (`ConversationViewModel.swift:2700`, chemin
+  E2EE des messages directs) ⇒ **400 sur l'enum**, corps entier rejeté ;
+- la description OpenAPI de la route annonçait **`enum: ['e2e','server']`** —
+  une valeur que le serveur refusait, et le silence sur `hybrid` qu'il
+  acceptait.
+
+Contrat publié et contrat appliqué en désaccord sur les deux bords à la fois.
+
+**Ordre de livraison contraint.** Normaliser la casse SEULE aurait converti le
+400 iOS en rétrogradation silencieuse (défaut nº 2) : le corps serait passé la
+validation pour se faire écrire en clair. Les trois correctifs ne sont pas
+trois passes, c'est un seul geste — la sonde a d'ailleurs livré le défaut nº 2
+en cherchant pourquoi le nº 1 n'avait jamais de victime.
+
+## Pourquoi ça a survécu
+
+Le chemin socket, lui, était JUSTE : `MessageHandler` teste
+`!validation.isValid && !data.encryptedPayload` et transmet la charge telle
+quelle — il lit la présence, jamais un booléen. Seul REST divergeait.
+
+Et les deux moitiés étaient testées, vertes, exactement comme au cycle 32 :
+
+| suite | ce qu'elle affirmait | ce qu'elle ne demandait jamais |
+|---|---|---|
+| `messages-routes.test.ts:533` | `accepts encryptedContent only` | ce que la route fait de ce corps |
+| `messages-routes.test.ts:3388` | la route sert `isEncrypted` **+** `encryptedContent` | ce qu'elle fait de l'un SANS l'autre |
+
+La seconde ne testait que la CONJONCTION. Aucune des deux ne regardait un
+ordre isolé — c'est-à-dire précisément ce que le schéma admet.
+
+Corroboration côté client, écrite noir sur blanc dans le dépôt : le web refuse
+son propre repli REST pour les messages chiffrés (« REST can't handle E2EE
+yet », `messaging.service.ts`), et iOS documente la même impasse
+(`apps/ios/decisions.md:139`). **Les clients avaient contourné la branche
+plutôt que la signaler.**
+
+## Correctifs
+
+- [x] La route gate sur la PRÉSENCE du chiffré, plus sur `isEncrypted` — le `!`
+      disparaît avec la condition qui le rendait faux
+- [x] `mode` vaut `e2ee` par défaut quand un chiffré arrive sans mode (plus
+      jamais `undefined` dans `encryptionMetadata`)
+- [x] Le schéma REFUSE explicitement `isEncrypted` sans chiffré, au lieu de le
+      rétrograder en clair
+- [x] `encryptionMode` normalisé en casse à la frontière, jeu de valeurs FERMÉ
+      (`e2e` reste refusé)
+- [x] Description OpenAPI réalignée sur ce qui est appliqué (`e2e` → `e2ee`,
+      `hybrid` publié, exigence d'`isEncrypted` énoncée)
+
+## Gates
+
+- [x] 8 RED discriminants vus rouges avant correctif (5 route + 3 schéma)
+- [x] 5 non-régressions vertes d'emblée, dont la forme du contrat
+      (drapeau + chiffré + mode), le message en clair, et le corps vide
+- [x] Suite gateway complète : **722 suites / 17 682 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 267
+
+## Constats latents — relevés, NON livrés
+
+1. **La casse du mode n'est PAS normalisée sur le chemin socket.** Un
+   `encryptedPayload.mode` majuscule y serait stocké tel quel, et
+   `MessageHandler:1897` compare `=== 'e2ee'` : l'écho `encryptedPayload` vers
+   les clients tomberait. Aucun émetteur majuscule vérifié sur ce chemin
+   aujourd'hui (iOS n'y envoie pas de chiffré) — latent, sans victime.
+2. **iOS ne sait toujours pas parler la forme du contrat.** Son chiffré voyage
+   dans `content` (base64) avec `isEncrypted`/`encryptionMode` à côté, sans
+   `encryptedContent`. Il reçoit désormais un 400 qui NOMME le manquant au lieu
+   d'une erreur d'enum. Le chantier reste ouvert et hors de portée ici (aucune
+   toolchain Swift sous Linux).
+3. **`editMessageRequestSchema` (`packages/shared/types/api-schemas.ts`) annonce
+   un `encryptedPayload` que la route d'édition ne lit pas** — mais l'export est
+   SANS AUCUN consommateur (vérifié sur tout le monorepo), donc il n'est publié
+   dans aucune doc et ne trompe personne à l'exécution. Famille 1 du balayage du
+   cycle 32 (export de confort mort) : à supprimer avec le cluster
+   `admin-permissions.middleware.ts`, pas à mêler à un correctif de défaut vivant.
+
+## Reste ouvert (inchangé)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30, sans victime vérifiée).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32 nº 2).
+
+## Candidat pour le cycle suivant
+
+La sonde du cycle 32 est close et elle a rendu son défaut. La question qui la
+prolonge, tirée de ce qui a réellement caché celui-ci : **quels FAITS ce dépôt
+lit-il à travers un drapeau plutôt qu'à travers la donnée qui les porte ?**
+`isEncrypted` à côté d'`encryptedContent` en était un ; le dépôt en interdit
+déjà la forme la plus connue (« pas de booléen redondant avec un timestamp »,
+CLAUDE.md), mais la règle n'est écrite que pour les paires booléen/date. Le
+balayage se fait en cherchant les champs booléens optionnels d'entrée dont un
+AUTRE champ porte déjà le fait, et en demandant pour chacun lequel des deux le
+site d'écriture consulte. Quand les deux existent, ils divergent un jour — et
+c'est le porteur, jamais le drapeau, qui dit la vérité.
+
+# Cycle 34 — les octets partaient, le fait qui les décrit restait
+
+Sonde annoncée en clôture du cycle 33 : **quels FAITS ce dépôt lit-il à travers
+un drapeau plutôt qu'à travers la donnée qui les porte ?** Balayage des champs
+booléens dont un AUTRE champ porte déjà le fait, en demandant pour chacun lequel
+des deux le site d'écriture consulte.
+
+## Candidats écartés — vérifiés jusqu'au site d'écriture
+
+| candidat | pourquoi écarté |
+|---|---|
+| `Message.isEdited` + `editedAt` | la paire interdite par CLAUDE.md, mais les QUATRE transports d'édition écrivent les deux ensemble (`messages.ts`, `messages-advanced.ts` ×2, `MessageHandler`) — jamais l'un sans l'autre |
+| `UpdateMessageBodySchema.isEdited` | champ d'entrée accepté du client et consommé par PERSONNE : la route ne déstructure que `content` et force `isEdited: true`. Inerte, pas vivant — famille « export de confort » du cycle 32 |
+| `attachment.isForwarded` + `forwardedFromAttachmentId` | `AttachmentTranslateService:337` lit la disjonction des deux, mais le résolveur de chaîne ne remonte que par `forwardedFromAttachmentId` : la branche `isForwarded` seule est rattrapée par `attachment.id !== originalAttachmentId`. Sans victime |
+| `attachment.isViewOnce` / `isBlurred` / `effectFlags` / `maxViewOnceCount` | AUCUN écrivain sur le modèle `MessageAttachment` (tous les sites trouvés portent sur `Message`). Latents |
+| `attachment.scanStatus` / `moderationStatus` | AUCUN lecteur dans tout le gateway. Pas de contournement de modération à revendiquer |
+
+## Constat
+
+- [x] Défaut : `copyForwardedAttachments` (`MessageProcessor.ts`) reprend
+      `filePath`/`fileUrl` À L'IDENTIQUE — copie et original désignent le MÊME
+      blob — et laisse derrière les ONZE champs qui disent que ce blob est du
+      chiffré. La copie naît sur le défaut Prisma `isEncrypted: false`
+- [x] Le gateway ne déchiffre RIEN : `routes/attachments/download.ts` sert les
+      octets bruts, le CLIENT déchiffre d'après ce que la ligne déclare
+      (`attachmentIncludes` publie `isEncrypted`/`encryptionMode`/`encryptionIv`/
+      `encryptionAuthTag` exactement pour ça)
+- [x] Conséquence : le chiffré est rendu TEL QUEL comme s'il était le média,
+      sous le `mimeType` et le nom d'origine. `isAttachmentEncrypted()` répond
+      `false` sur la copie — rien ne signale l'anomalie
+- [x] `fileSize` porte la taille CHIFFRÉE (`UploadProcessor`) et il EST copié,
+      sans `originalFileSize` ni `originalFileHash` à côté
+- [x] `thumbHash` / `imageVariants` (écrivain réel : `UploadProcessor`) perdus
+      aussi — la copie retombe au téléchargement pleine taille pour un média
+      DÉJÀ dérivé
+- [x] Le garde du cycle 93 (`admitMessageForward`) ne couvrait pas ce cas : il
+      lit `Message.isViewOnce`/`effectFlags`/`expiresAt`, jamais l'état des
+      pièces jointes
+
+Et la suite était verte, exactement comme aux cycles 32 et 33 :
+
+| test | ce qu'il affirmait | ce qu'il ne demandait jamais |
+|---|---|---|
+| `MessageProcessor.test.ts` « copies attachments » | `attCreate` appelé 1 fois | ce que la copie CONTIENT |
+| « updates message type to image » | le `messageType` dérivé du MIME | idem |
+
+Le compte d'appels et le type dérivé, jamais le contenu de la ligne écrite.
+
+## Correctifs
+
+- [x] La copie emporte les onze champs qui décrivent SES octets : `isEncrypted`,
+      `encryptionMode`, `encryptionIv`, `encryptionAuthTag`, `encryptionHmac`,
+      `originalFileHash`, `encryptedFileHash`, `originalFileSize`, `serverKeyId`,
+      `thumbnailEncryptionIv`, `thumbnailEncryptionAuthTag`
+- [x] `thumbHash` et `imageVariants` suivent le média dont ils sont dérivés
+- [x] Une pièce en clair reste en clair — l'ABSENCE du fait est copiée aussi
+      fidèlement que sa présence (discriminant anti-sur-correction)
+
+## Gates
+
+- [x] 5 RED discriminants vus rouges avant correctif
+- [x] 2 non-régressions vertes d'emblée (clair→clair, lignage+propriété)
+- [x] Suite gateway complète : **722 suites / 17 689 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG (changeset) + ce journal + leçon 268
+
+## Constats latents — relevés, NON livrés
+
+1. **La distribution de clés d'un transfert e2ee reste ouverte.** La copie dit
+   désormais la VÉRITÉ sur ses octets, ce qui est strictement mieux dans tous
+   les modes et indispensable en `server`/`hybrid` (le serveur détient la clé via
+   `serverKeyId`). Mais en `e2ee` pur, les destinataires de la conversation
+   d'arrivée n'ont pas la clé : ils verront un échec de déchiffrement explicite
+   là où ils voyaient du charabia silencieux. Reste à trancher — propager la clé,
+   re-chiffrer à l'envoi, ou REFUSER le transfert comme le cycle 93 l'a fait pour
+   la vue unique. C'est une décision produit, pas un correctif de défaut.
+2. **`attachment.isViewOnce` / `isBlurred` sont publiés aux clients et écrits par
+   personne.** Le schéma d'upload (`validation.ts` § `upload`) les accepte,
+   `UploadProcessor.create` ne les range pas. Soit les câbler, soit les retirer.
+3. **`attachment.scanStatus` / `moderationStatus` n'ont aucun lecteur** dans tout
+   le gateway — colonnes écrites nulle part, lues nulle part.
+
+## Reste ouvert (inchangé depuis le cycle 33)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32).
+- **Casse du mode NON normalisée sur le chemin socket** (cycle 33, nº 1).
+- **iOS ne sait pas parler la forme du contrat de chiffrement** (cycle 33, nº 2).
+
+## Candidat pour le cycle suivant
+
+Ce défaut n'est pas né d'un drapeau mal lu mais d'une COPIE PARTIELLE : une
+projection champ-par-champ, écrite à la main, qui a cessé d'être exhaustive dès
+que le modèle a gagné des colonnes. `copyForwardedAttachments` énumérait 25
+champs sur les 40 et rien ne l'a signalé — ni le typage (tout est optionnel à la
+création), ni les tests (qui comptaient les appels). La question qui prolonge :
+**où ce dépôt DUPLIQUE-t-il une ligne en la réénumérant à la main, et que
+chacune de ces projections a-t-elle cessé d'emporter ?** Le balayage se fait en
+cherchant les `create` dont les données proviennent d'une ligne LUE du même
+modèle, puis en diffant l'ensemble des champs écrits contre les champs du modèle.
+Une copie partielle ne se trahit jamais à la compilation — seulement le jour où
+l'on demande à la copie ce que l'original savait.
+
+# Cycle 35 — la copie partait sans ce qui décrit ses propres pixels
+
+Sonde annoncée en clôture du cycle 34 : **où ce dépôt DUPLIQUE-t-il une ligne en
+la réénumérant à la main, et qu'a cessé d'emporter chacune de ces projections ?**
+Balayage des `create` dont les données proviennent d'une ligne LUE du même
+modèle, puis diff de l'ensemble des champs écrits contre les champs chargés.
+
+## Candidats écartés — vérifiés jusqu'au site d'écriture
+
+| candidat | pourquoi écarté |
+|---|---|
+| `copyForwardedAttachments` (`MessageProcessor`) | c'est le défaut du cycle 34, déjà corrigé — les 11 champs de chiffrement + `thumbHash`/`imageVariants` suivent désormais la référence |
+| `SoundCaptureService.captureOne` / `captureTracks` | ne duplique PAS une ligne : compose un modèle DIFFÉRENT (`Sound`) à partir d'un audio EXTRAIT puis copié dans son propre dossier. La composition est exhaustive et `sourceLanguage` y est bien repris de `media.language` |
+| `buildPostReplyTo` + `POST_REPLY_SNAPSHOT_SELECT` | projection VOULUE et NOMMÉE : un type (`PostReplyTo`) jumelé à son select, pour un APERÇU de 11 champs. Ce n'est pas une copie qui prétend valoir l'original |
+| `repostPost`, branche NON éphémère | aucune copie média par conception — le repost référence la source vivante via `repostOfId`, qui ne peut pas disparaître |
+| `tus-handler.ts` → `postMedia.create` / `messageAttachment.create` | création d'un upload NEUF, aucune ligne source à emporter |
+| `reproduceEditedSubjectNotifications` | reproduit des notifications à partir des lignes existantes, mais l'exhaustivité y est déjà gardée par un test qui diffe la ligne écrite |
+
+## Constat
+
+- [x] Défaut : `repostPost`, branche éphémère (STORY 21h, STATUS 1h). Les OCTETS
+      sont réellement dupliqués (`trackedDuplicate` → nouveau fichier) — c'est ce
+      qui empêche le « statut/story vide » quand la source expire. Mais la ligne
+      `PostMedia` écrite par-dessus n'énumérait que **8 champs sur les 17** que
+      `mediaSelect` avait chargés
+- [x] `width` / `height` perdues → `FeedMedia.aspectRatio` rend `nil`, le lecteur
+      ne peut plus réserver le cadre : le repost SAUTE au chargement là où
+      l'original ne sautait pas (violation directe de « Zero Unnecessary
+      Re-render » et de l'attente cache-first)
+- [x] `thumbHash` perdu → plus de placeholder instantané. **Exactement le champ
+      que le cycle 34 venait de rétablir sur la famille message** ; la famille
+      post portait le même défaut, à un fichier de distance
+- [x] `duration` perdue → barre de progression indessinable avant téléchargement
+      complet
+- [x] `alt` / `caption` perdus → **le média reposté devient muet à VoiceOver**.
+      Rien ne le signale : l'image s'affiche normalement, seule la description
+      qu'un auteur avait pris la peine d'écrire a disparu
+- [x] `language` / `transcription` perdues → **le Prisme Linguistique n'a plus
+      rien à résoudre**. Une story repostée perd la transcription Whisper de son
+      audio, donc ses sous-titres et toute traduction ultérieure : le contenu
+      retombe dans la langue de l'auteur d'origine
+- [x] `uploaderId` jamais posé → la copie naît sur le régime de TOLÉRANCE que le
+      schéma ne réserve qu'aux lignes antérieures au champ (« toute création
+      nouvelle le pose »)
+- [x] Même oubli d'un cran au-dessus, sur la ligne `Post` : `audioUrl` est
+      remplacé par celui de la copie, `audioDuration` reste derrière — la note
+      vocale d'un statut reposté affiche 0:00 jusqu'au téléchargement complet
+
+Et la suite était verte, exactement comme aux cycles 32, 33 et 34 :
+
+| test | ce qu'il affirmait | ce qu'il ne demandait jamais |
+|---|---|---|
+| « duplicates media to new CDN URLs » | `duplicateMedia` appelé sur chaque `fileUrl` | ce que la ligne écrite CONTIENT |
+| « rolls back media snapshot if a duplication fails » | la compensation supprime le blob | idem |
+| « snapshots moodEmoji, content and audio » | `audioUrl` pointe la copie | `audioDuration` à côté |
+
+Le compte d'appels et l'URL, jamais le contenu de la ligne écrite.
+
+## Correctifs
+
+- [x] La copie emporte les faits que ces pixels portent déjà : `width`,
+      `height`, `thumbHash`, `duration`, `caption`, `alt`, `language`,
+      `transcription`
+- [x] `uploaderId` = le reposteur, qui vient d'en écrire les octets
+- [x] `audioDuration` suit `audioUrl` sur la ligne `Post`
+- [x] L'ABSENCE est copiée aussi fidèlement que la présence (`?? undefined`,
+      jamais `?? null`) — discriminant anti-sur-correction
+
+## Ce qui est VOLONTAIREMENT hors de la copie
+
+- **`variantOf`** pointe vers une AUTRE ligne `PostMedia`. Un pointeur n'est pas
+  un fait sur ces octets : recopié tel quel il désignerait la ligne SOURCE, que
+  le hard-delete de l'éphémère va effacer. C'est le raisonnement que la fonction
+  applique déjà, dix lignes plus bas, au remap des ids de `storyEffects`.
+- **`translations`** porte les URL des variantes TTS. Ces blobs-là n'ont PAS été
+  dupliqués : les recopier promettrait au lecteur des pistes audio destinées à
+  disparaître avec la source. Constat latent nº 1 ci-dessous.
+
+## Gates
+
+- [x] 7 RED discriminants vus rouges avant correctif
+- [x] 4 non-régressions vertes d'emblée (les 2 exclusions volontaires, la copie
+      de l'absence, les octets dupliqués et non ceux de la source)
+- [x] Suite gateway complète : **723 suites / 17 700 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG (changeset) + ce journal + leçon 269
+
+## Constats latents — relevés, NON livrés
+
+1. **Les blobs TTS d'un média détruit ne sont récupérés par personne.**
+   `reclaimPostMediaBytes` récupère `fileUrl` et `thumbnailUrl` d'une ligne
+   `PostMedia` détruite, jamais les URL rangées dans `translations`. Le préambule
+   de ce module décrit précisément ce que devient un tel octet : irrécupérable
+   (plus aucune ligne ne porte son chemin) et éternel (l'URL publique est servie
+   SANS authentification, seul l'`unlink` la révoque). C'est le même défaut, sur
+   les variantes TTS. À traiter avec la question « faut-il dupliquer les TTS d'un
+   repost ? » — les deux touchent le même champ.
+2. **`PostMedia.thumbnailPath` et `codec` sont absents de `mediaSelect`**, donc
+   invisibles de tout appelant qui passe par la projection canonique — y compris
+   cette copie, qui ne peut pas emporter ce qu'elle n'a pas lu. Soit les publier,
+   soit constater qu'aucun lecteur n'en veut et les retirer du modèle.
+3. **Rien n'oblige une projection manuelle à rester exhaustive.** Ni le typage
+   (tout est optionnel à la création Prisma), ni les tests tant qu'ils comptent
+   les appels. `SYNC_MESSAGE_RENDERABLE_KEYS` (voir CHANGELOG § `GET /sync`) est
+   la seule forme de garde que ce dépôt ait construite contre cette dérive : un
+   témoin de FORME qui oppose au select réel la liste des champs contractuels.
+   Généraliser ce motif aux duplications serait le correctif de FOND.
+
+## Reste ouvert (inchangé depuis le cycle 34)
+
+- **La distribution de clés d'un transfert e2ee** (cycle 34, nº 1).
+- **`attachment.isViewOnce` / `isBlurred` publiés et écrits par personne** (nº 2).
+- **`attachment.scanStatus` / `moderationStatus` sans aucun lecteur** (nº 3).
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32).
+- **Casse du mode NON normalisée sur le chemin socket** (cycle 33, nº 1).
+- **iOS ne sait pas parler la forme du contrat de chiffrement** (cycle 33, nº 2).
+
+## Candidat pour le cycle suivant
+
+Trois cycles de suite ont trouvé le même mode d'échec sous trois formes — une
+branche de validateur sans implémentation (32), une implémentation conditionnée
+au mauvais champ (33), une projection amputée (34, 35) — et à chaque fois la
+suite était VERTE parce qu'elle regardait la forme, jamais le contenu. Le constat
+latent nº 3 nomme la seule garde existante contre la dérive : un témoin de FORME
+qui oppose au select réel une liste de champs contractuels. La question qui
+prolonge : **quelles duplications et projections de ce dépôt mériteraient une
+telle garde, et laquelle des trois formes — témoin de forme, dérivation du type
+depuis le select, exhaustivité vérifiée contre le modèle — convient à chacune ?**
+Le balayage part des sites déjà identifiés (`copyForwardedAttachments`,
+`repostPost`, `attachmentIncludes` et ses cinq copies locales déjà rapatriées)
+et demande, pour chacun : qu'est-ce qui ferait ROUGIR le prochain champ ajouté au
+modèle ?

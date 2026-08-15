@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.outbox.OutboxKind
@@ -51,7 +52,8 @@ class SessionTeardownTest {
     private fun teardown(
         categoryStore: InMemoryCategorySnapshotStore = InMemoryCategorySnapshotStore(),
         draftStore: InMemoryConversationDraftStore = InMemoryConversationDraftStore(),
-    ) = DefaultSessionTeardown(db, categoryStore, draftStore)
+        lockStore: InMemoryConversationLockStore = InMemoryConversationLockStore(),
+    ) = DefaultSessionTeardown(db, categoryStore, draftStore, lockStore)
 
     @Test
     fun wipe_clearsEveryRoomTable() = runTest {
@@ -92,10 +94,23 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_resetsConversationLockState() = runTest {
+        val lockStore = InMemoryConversationLockStore()
+        lockStore.setMasterPin("123456")
+        lockStore.setLock("c1", "1111")
+
+        teardown(lockStore = lockStore).wipe()
+
+        assertThat(lockStore.hasMasterPin()).isFalse()
+        assertThat(lockStore.lockedConversationIds).isEmpty()
+    }
+
+    @Test
     fun wipe_isIdempotentOnAnAlreadyClearDevice() = runTest {
         val categoryStore = InMemoryCategorySnapshotStore()
         val draftStore = InMemoryConversationDraftStore()
-        val instance = teardown(categoryStore = categoryStore, draftStore = draftStore)
+        val lockStore = InMemoryConversationLockStore()
+        val instance = teardown(categoryStore = categoryStore, draftStore = draftStore, lockStore = lockStore)
 
         instance.wipe()
         instance.wipe()
@@ -103,5 +118,7 @@ class SessionTeardownTest {
         assertThat(outboxRepository.observeAll().first()).isEmpty()
         assertThat(categoryStore.observe().first()).isNull()
         assertThat(draftStore.observeAll().first()).isEmpty()
+        assertThat(lockStore.hasMasterPin()).isFalse()
+        assertThat(lockStore.lockedConversationIds).isEmpty()
     }
 }

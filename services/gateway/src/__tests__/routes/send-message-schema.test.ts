@@ -103,3 +103,46 @@ describe('SendMessageBodySchema — clientMessageId is optional', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('SendMessageBodySchema — le chiffrement', () => {
+  it('accepte un corps qui n\'apporte QUE du chiffré', () => {
+    const result = SendMessageBodySchema.safeParse({ encryptedContent: 'ct-b64' });
+    expect(result.success).toBe(true);
+  });
+
+  it('normalise la casse du mode — "E2EE" est ce que le client iOS émet', () => {
+    const result = SendMessageBodySchema.safeParse({ encryptedContent: 'ct-b64', encryptionMode: 'E2EE' });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.encryptionMode).toBe('e2ee');
+  });
+
+  it('normalise aussi Server et Hybrid', () => {
+    expect(SendMessageBodySchema.safeParse({ content: 'x', encryptedContent: 'c', encryptionMode: 'Server' }).success).toBe(true);
+    expect(SendMessageBodySchema.safeParse({ content: 'x', encryptedContent: 'c', encryptionMode: 'HYBRID' }).success).toBe(true);
+  });
+
+  it('le jeu de valeurs reste FERMÉ — la normalisation n\'ouvre pas la porte', () => {
+    const result = SendMessageBodySchema.safeParse({ encryptedContent: 'ct-b64', encryptionMode: 'e2e' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejette la promesse sans porteur : isEncrypted sans encryptedContent', () => {
+    const result = SendMessageBodySchema.safeParse({ content: 'Y2lwaGVy', isEncrypted: true, encryptionMode: 'e2ee' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepte la forme du contrat : drapeau ET chiffré', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      isEncrypted: true,
+      encryptedContent: 'ct-b64',
+      encryptionMode: 'e2ee',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('isEncrypted: false n\'exige aucun chiffré', () => {
+    const result = SendMessageBodySchema.safeParse({ content: 'bonjour', isEncrypted: false });
+    expect(result.success).toBe(true);
+  });
+});

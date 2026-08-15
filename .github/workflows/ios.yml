@@ -525,3 +525,36 @@ jobs:
             || xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
             || echo "xcresulttool could not read the bundle."
           echo "::endgroup::"
+          # Le même résumé, publié dans le step summary : la page publique du run
+          # l'affiche sans authentification — le log brut, lui, exige un token.
+          # (Leçon 265 : écrire les messages d'échec pour le lecteur distant qui
+          # n'a QUE la page du run.)
+          {
+            echo '## Résumé XCTest (échecs)'
+            echo ''
+            echo '```json'
+            xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null | head -c 24000 \
+              || echo 'xcresulttool could not read the bundle.'
+            echo ''
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Les step summaries sont rendus par XHR : un lecteur sans token ne les
+          # voit pas. Les ANNOTATIONS, elles, sont server-rendered sur la page du
+          # run — chaque échec devient donc une annotation (plafond GitHub :
+          # 10 par étape ; l'étape suivante prend le relais pour les suivants).
+          xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null \
+            | jq -r '(.testFailures // [])[] | "\(.targetName // "?")/\(.testName // .testIdentifier // "?") — \((.failureText // "?") | .[0:180] | gsub("\n"; " "))"' \
+            > /tmp/xctest-failures.txt || true
+          TOTAL=$(wc -l < /tmp/xctest-failures.txt | tr -d ' ')
+          echo "::notice title=Échecs XCTest::${TOTAL} test(s) en échec (liste en annotations ci-dessous)"
+          head -n 9 /tmp/xctest-failures.txt | while IFS= read -r line; do
+            echo "::error title=XCTest échec::${line}"
+          done
+
+      - name: Annoter les échecs restants (10 à 27)
+        if: always() && env.COMPILE_ONLY != 'true'
+        run: |
+          [ -f /tmp/xctest-failures.txt ] || exit 0
+          sed -n '10,27p' /tmp/xctest-failures.txt | while IFS= read -r line; do
+            echo "::error title=XCTest échec (suite)::${line}"
+          done

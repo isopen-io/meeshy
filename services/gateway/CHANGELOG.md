@@ -1,5 +1,49 @@
 # @meeshy/gateway
 
+## 1.26.3
+
+### Patch Changes
+
+- 94222b9: Le repost d'une story ou d'un statut ne perd plus les dimensions, l'accessibilité et la transcription du média qu'il duplique.
+
+  **Les octets étaient dupliqués, la ligne qui les décrit était réénumérée à la main.** Quand la source est ÉPHÉMÈRE (STORY 21h, STATUS 1h), `repostPost` copie réellement les fichiers pour que le repost survive au hard-delete de l'original — c'est la garantie qui empêche le « statut/story vide ». Mais la ligne `PostMedia` créée par-dessus n'énumérait que huit champs, alors que `mediaSelect` en avait chargé dix-sept. Tout le reste naissait sur le défaut Prisma, c'est-à-dire nul :
+
+  - `width` / `height` : sans elles, `FeedMedia.aspectRatio` rend `nil` et le lecteur ne peut pas réserver le cadre avant le téléchargement — le repost saute au chargement, là où l'original ne sautait pas ;
+  - `thumbHash` : le placeholder instantané est DÉRIVÉ de ces pixels-là. Le laisser derrière condamnait la copie à l'attente pleine taille pour un travail déjà fait — exactement le défaut corrigé sur les pièces jointes de message au correctif précédent, ici sur la famille post ;
+  - `duration` : un lecteur audio/vidéo sans durée ne sait pas dessiner sa barre de progression tant que le média entier n'est pas descendu ;
+  - `alt` / `caption` : le texte alternatif EST l'accessibilité du média. Un repost qui le perd rend muet à VoiceOver un contenu que son auteur avait pris la peine de décrire — et rien ne le signalait, l'image s'affichant normalement ;
+  - `language` / `transcription` : le Prisme Linguistique s'applique à TOUT le contenu, transcriptions comprises. Une story repostée perdait la transcription Whisper de son audio, donc ses sous-titres et toute traduction ultérieure : le prisme n'avait plus rien à résoudre et le contenu retombait dans la langue de l'auteur d'origine.
+
+  `Post.audioDuration` relevait du même oubli : `audioUrl` était remplacé par celui de la copie, `audioDuration` restait derrière, et la note vocale d'un statut reposté affichait 0:00 jusqu'au téléchargement complet du fichier.
+
+  La copie emporte désormais ces faits, et elle emporte l'ABSENCE aussi fidèlement que la présence : un média sans dimensions ni légende ne s'en voit pas inventer. Elle pose aussi son `uploaderId` — le reposteur vient d'en écrire les octets, et le schéma ne tolère ce champ nul que pour les lignes antérieures à son introduction.
+
+  Deux champs restent volontairement en dehors de la copie, et c'est un choix, pas un oubli. `variantOf` pointe vers une AUTRE ligne `PostMedia` : un pointeur n'est pas un fait sur ces octets, et recopié tel quel il désignerait la ligne source que le balayage de l'éphémère va effacer — même raisonnement que le remap d'ids déjà appliqué à `storyEffects` juste en dessous. `translations` porte les URL des variantes TTS, dont les blobs n'ont PAS été dupliqués : les recopier promettrait au lecteur des pistes audio qui disparaîtront avec la source. Dupliquer ou régénérer les TTS d'un repost est une décision produit, consignée comme telle.
+
+## 1.26.2
+
+### Patch Changes
+
+- 8495c31: Le transfert d'une pièce jointe chiffrée ne fabrique plus une copie qui ment sur ses propres octets.
+
+  **Les octets voyagent par référence, le fait qui les décrit restait derrière.** `copyForwardedAttachments` reprend `filePath` et `fileUrl` À L'IDENTIQUE : la copie et l'original désignent le MÊME blob sur disque. Quand l'original est chiffré, ce blob est du chiffré — et la copie naissait pourtant sans un seul des onze champs de chiffrement, donc avec le défaut Prisma `isEncrypted: false`, sans IV et sans tag d'authentification.
+
+  Or le gateway ne déchiffre rien : `routes/attachments/download.ts` sert les octets bruts (`createReadStream(filePath)`) et c'est le CLIENT qui déchiffre, d'après ce que la ligne DÉCLARE — `attachmentIncludes` publie `isEncrypted`, `encryptionMode`, `encryptionIv` et `encryptionAuthTag` exactement pour ça. Une copie qui annonce « clair » en pointant du chiffré fait donc rendre le CHIFFRÉ TEL QUEL comme s'il était le média, sous le `mimeType` et le nom d'origine : le client ne déchiffre pas, puisqu'on vient de lui dire qu'il n'y avait rien à déchiffrer. Transférer une photo chiffrée produisait un fichier illisible que rien, ni côté serveur ni côté client, ne signalait comme tel — `isAttachmentEncrypted()` répondait `false` sur la copie.
+
+  `originalFileSize` comptait au même titre : `fileSize` porte la taille CHIFFRÉE quand la pièce est chiffrée (`UploadProcessor`) et il EST copié, si bien que la copie annonçait la taille du chiffré comme celle du fichier, sans le `originalFileHash` qui permet de vérifier un déchiffrement.
+
+  La copie emporte désormais les onze champs qui décrivent ses octets — `isEncrypted`, `encryptionMode`, `encryptionIv`, `encryptionAuthTag`, `encryptionHmac`, `originalFileHash`, `encryptedFileHash`, `originalFileSize`, `serverKeyId`, `thumbnailEncryptionIv`, `thumbnailEncryptionAuthTag` — ainsi que `thumbHash` et `imageVariants`, déjà dérivés de ce même média, dont la perte condamnait la copie au téléchargement pleine taille pour un travail déjà fait. Une pièce jointe en clair reste en clair : la copie recopie l'ABSENCE du fait aussi fidèlement que sa présence.
+
+## 1.26.1
+
+### Patch Changes
+
+- 2838397: Le chemin REST d'envoi ne gate plus le chiffrement sur un booléen posé à côté du chiffré.
+
+  **Le fait, c'est le chiffré — pas le drapeau.** `SendMessageBodySchema` compte `encryptedContent` parmi les porteurs de contenu : son `.refine()` admet, en quatrième branche, un corps qui n'apporte QUE du chiffré. La route, elle, ne consommait ce chiffré que sous condition d'`isEncrypted` — un booléen SÉPARÉ, optionnel, que le schéma n'a jamais lié au chiffré. Les deux ordres perdaient. Chiffré sans le drapeau : `encryptedPayload` restait `undefined`, le chiffré était jeté, et le corps que le schéma venait d'approuver ressortait en 400 « Message content cannot be empty » — la branche validée ne menait à aucune écriture. Drapeau sans le chiffré : `ciphertext: encryptedContent!` mentait, la charge partait avec un `ciphertext: undefined` que `MessageProcessor` refusait à son tour (`data.encryptedContent && data.encryptionMetadata`), et le message était écrit EN CLAIR avec `isEncrypted: false` — puis traduit, scanné pour ses liens et poussé en notification. Un message que le client avait déclaré chiffré, rétrogradé sans un mot. La route sert désormais la présence du chiffré, comme le chemin socket le faisait déjà ; le schéma refuse explicitement la promesse sans porteur plutôt que de la rétrograder.
+
+  **Le mode n'est plus rejeté sur sa casse.** `encryptionMode` était un enum strictement minuscule là où le client iOS émet `"E2EE"` et où la description OpenAPI de la route annonçait `e2e` — deux valeurs que la validation retournait en 400 sur un champ dont le jeu est pourtant connu et fermé. La casse est normalisée à la frontière d'écriture, comme le code de langue l'est déjà ; le jeu de valeurs reste fermé (`e2e` reste refusé), et il vaut désormais `e2ee` par défaut quand un chiffré arrive sans mode. La description publiée est réalignée sur ce qui est réellement appliqué : elle annonçait un jeu de valeurs que le serveur n'acceptait pas, et taisait `hybrid` qu'il acceptait.
+
 ## 1.26.0
 
 ### Minor Changes

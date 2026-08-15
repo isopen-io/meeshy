@@ -32,10 +32,17 @@ export type QueuedMessagePayload = {
    * wraps it as `{ message }` — one queued envelope, two shapes on the wire.
    * Replaying LINK_MESSAGE_NEW alone left iOS and Android, which listen to
    * `message:new` only, with nothing to converge on at reconnect. messageId
-   * dedup is correct (one creation per message) and it carries no delivery
-   * receipt — the share-link send path creates no read-status rows, so a
-   * receipt on drain alone would claim a delivery the rest of the pipeline
-   * never tracked.
+   * dedup is correct (one creation per message).
+   * It DOES bump the delivered receipt on drain, like 'new' — see
+   * `services/gateway/src/socketio/queuedMessageArrival.ts`. Cette ligne a
+   * d'abord affirmé le contraire, au motif que « le chemin d'envoi par lien ne
+   * crée aucune ligne de statut de lecture » : c'était déjà faux au commit qui
+   * l'écrivait, lequel branchait `autoDeliverToOnlineRecipients` sur ce même
+   * chemin (`broadcastLinkMessage`, audience 4) — donc `markMessagesAsReceived`
+   * pour tout destinataire CONNECTÉ. La moitié hors ligne, seule à ne rien
+   * écrire, laissait l'auteur — le plus souvent un invité, dont c'est l'unique
+   * transport d'envoi — sur un tic « envoyé » jusqu'à ce qu'on ouvre la
+   * conversation, l'attente même que le drain existe pour supprimer.
    * 'attachment-updated' replays MESSAGE_ATTACHMENT_UPDATED so a peer who was
    * offline when Whisper finished transcribing (or when NLLB+Chatterbox
    * finished one language of translated audio) still gets the enrichment. The

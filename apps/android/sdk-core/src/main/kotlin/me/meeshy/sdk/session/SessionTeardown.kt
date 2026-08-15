@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.lock.ConversationLockStore
 
 /**
  * Wipes every disk-persisted, per-account cache on logout/account-switch — parity
@@ -12,8 +13,8 @@ import me.meeshy.sdk.chat.ConversationDraftStore
  * clear, `apps/ios/Meeshy/App/MeeshyApp.swift`, part-13 audit). None of Meeshy's
  * on-device stores are namespaced by userId, so a second account signing in on the
  * same device would otherwise inherit the previous account's cached conversations,
- * messages, stories, categories and unsent drafts — a cross-account privacy leak on
- * a shared device.
+ * messages, stories, categories, unsent drafts, and — same reasoning as iOS's own
+ * `ConversationLockManager.resetForLogout` — conversation-lock PINs.
  *
  * [wipe] is called by [me.meeshy.sdk.auth.AuthRepository.logout] before the caller
  * treats the session as ended, so a subsequent login never races a still-running
@@ -30,6 +31,7 @@ public class DefaultSessionTeardown(
     private val database: MeeshyDatabase,
     private val categorySnapshotStore: CategorySnapshotStore,
     private val conversationDraftStore: ConversationDraftStore,
+    private val conversationLockStore: ConversationLockStore,
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -37,5 +39,6 @@ public class DefaultSessionTeardown(
         withContext(Dispatchers.IO) { database.clearAllTables() }
         categorySnapshotStore.clearAll()
         conversationDraftStore.clearAll()
+        conversationLockStore.resetForLogout()
     }
 }

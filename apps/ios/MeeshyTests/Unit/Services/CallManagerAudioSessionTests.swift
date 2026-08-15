@@ -1452,22 +1452,50 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
             "isVideoEnabled.didSet must call updateProximityMonitoring() on change")
     }
 
+    /// Le CORPS de `updateProximityMonitoring()`, borné à son accolade
+    /// fermante (indentation 4). L'ancienne rédaction de ces gardes découpait
+    /// « du début du helper jusqu'à la FIN DU FICHIER » : n'importe quelle
+    /// occurrence fortuite du motif ailleurs dans `CallManager.swift` les
+    /// satisfaisait. Borner le corps rend l'assertion réellement portante.
+    private func proximityHelperBody(_ source: String) -> String? {
+        guard let decl = source.range(of: "private func updateProximityMonitoring() {") else { return nil }
+        let end = source.range(of: "\n    }", range: decl.upperBound ..< source.endIndex)?.upperBound
+            ?? source.endIndex
+        return String(source[decl.upperBound ..< end])
+    }
+
     func test_proximityMonitoring_isDisabledDuringVideoCall() throws {
         let source = try callManagerSource()
+        guard let helperBody = proximityHelperBody(source) else {
+            XCTFail("updateProximityMonitoring() helper must exist"); return
+        }
+        // Gaté sur `isVideoUIActive` (caméra locale OU flux distant), pas sur
+        // le drapeau LOCAL `isVideoEnabled` : une escalade vidéo unilatérale
+        // du pair bascule l'UI de cet appareil en vidéo sans jamais toucher
+        // `isVideoEnabled`, et le capteur restait alors armé pendant tout
+        // l'appel — écran noirci + tactile mort dès qu'une main couvre le
+        // capteur, exactement la panne que cette fonction existe pour éviter.
         XCTAssertTrue(
-            source.contains("!isVideoEnabled"),
-            "updateProximityMonitoring must guard on !isVideoEnabled: proximity must be OFF during video calls")
+            helperBody.contains("!isVideoUIActive"),
+            "updateProximityMonitoring must guard on !isVideoUIActive: proximity must be OFF " +
+            "whenever the call UI shows video — including a video call this device never " +
+            "opted into locally (remote-initiated escalation leaves isVideoEnabled false).")
     }
 
     func test_updateProximityMonitoring_guardsBothActiveAndVideoState() throws {
         let source = try callManagerSource()
-        // The helper must check BOTH conditions: call active AND audio-only.
-        let helperRange = source.range(of: "private func updateProximityMonitoring()")
-        XCTAssertNotNil(helperRange, "updateProximityMonitoring() helper must exist")
-        let helperBody = String(source[helperRange!.upperBound...])
+        guard let helperBody = proximityHelperBody(source) else {
+            XCTFail("updateProximityMonitoring() helper must exist"); return
+        }
+        // The helper must check BOTH conditions: call active AND audio-only UI.
+        // Asserted on the composed expression, not on the two tokens taken
+        // independently — « isActive quelque part » ET « !isVideoUIActive
+        // quelque part » se satisferaient de deux branches disjointes.
         XCTAssertTrue(
-            helperBody.contains("isActive") && helperBody.contains("!isVideoEnabled"),
-            "updateProximityMonitoring must evaluate BOTH callState.isActive AND !isVideoEnabled")
+            helperBody.contains("callState.isActive && !isVideoUIActive"),
+            "updateProximityMonitoring must evaluate BOTH callState.isActive AND !isVideoUIActive " +
+            "in a single conjunction — arming the sensor outside a call, or during a video UI, " +
+            "is a defect in either direction.")
     }
 }
 
