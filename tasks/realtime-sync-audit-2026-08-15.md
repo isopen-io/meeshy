@@ -1254,6 +1254,9 @@ avant que son écriture ne soit committée laisse les clients tenir un fait que 
 serveur peut encore nier, et rien ne le rétracte. Recenser les émetteurs qui
 diffusent depuis l'intérieur d'une transaction, ou avant le `await` qui persiste.
 
+> Cette sonde a été portée par le **cycle 30**, pas 29 : une session parallèle a
+> pris le numéro 29 entre-temps (PR #3029).
+
 
 # Cycle 29 (2026-08-15) — la déconnexion d'un invité anonyme ouvrait une fenêtre de perte sèche
 
@@ -1358,3 +1361,215 @@ chemin de SORTIE la question que le chemin d'ENTRÉE avait déjà résolue.
 3. **`next/font/google` résout au BUILD** — chaque build CI dépend de
    l'accessibilité de `fonts.gstatic.com`. Observé rouge une fois sur la PR
    #3024, vert au rejeu. Fragilité réelle de la CI, hors du domaine temps réel.
+---
+
+# Cycle 30 (2026-08-15) — le MOMENT de la diffusion par rapport à la durabilité du fait
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 28 (mergé,
+PR #3027). Numéroté 30 et non 29 : une session parallèle a pris le 29 pendant
+cette passe (PR #3029, la fenêtre de perte sèche de l'invité anonyme) — les deux
+passes coexistent sans conflit résiduel, seuls trois fichiers de journal se
+touchaient et les deux contributions y sont conservées.
+
+Sonde annoncée en clôture du cycle 28 : **un événement émis avant que son
+écriture ne soit committée laisse les clients tenir un fait que le serveur peut
+encore nier, et rien ne le rétracte.** Recenser les émetteurs qui diffusent
+depuis l'intérieur d'une transaction, ou avant l'`await` qui persiste.
+
+## Sondes rendues vides — la classe « annoncer avant d'écrire » est propre
+
+| Sous-classe | Méthode | Verdict |
+|---|---|---|
+| Émission DANS un callback `$transaction` | balayage par appariement d'accolades des 35 blocs `$transaction` de la gateway, prédicat `emit\|broadcast\|to(ROOMS\|notify\|publish` | **0 site** |
+| Émission AVANT l'`await` qui persiste | balayage de tout `src/`, tout `.emit(` suivi d'une écriture Prisma dans les 25 lignes | 1 candidat, **faux positif** (`NotificationService.markAsRead` : l'écriture repérée appartient à `markAllAsRead`, la voisine) |
+| Écriture Prisma détachée (`void` / sans `await`) sous une émission | balayage des écritures non attendues | 12 sites, **tous** dans `StatusService` / caches — aucun ne porte d'annonce conditionnée |
+
+Le domaine APPEL est la **référence** de la classe, pas son défaut : `call:end`
+diffuse volontairement AVANT l'écriture autoritaire (`fast-path broadcast`) et
+compense l'échec par `forceEndOrphanedCallSession` +
+`forceEndOrphanedCallAfterOptimisticBroadcast` — annonce optimiste ET
+rétractation. `buildRingingTimeoutHandler` fait l'inverse et le fait aussi bien :
+`updateMany` conditionnel gagnant d'abord, émissions ensuite.
+
+L'oracle utile n'était donc pas « qui annonce trop tôt ? » mais **« qui annonce
+un fait DIFFÉRENT de celui qu'il a écrit ? »** — et là, un site diverge.
+
+## Défaut corrigé — une clôture GLOBALE annoncée comme une suppression PERSONNELLE
+
+`DELETE /conversations/:id/delete-for-me` (`routes/conversations/delete-for-me.ts`)
+
+Les deux événements de la famille portent leur contrat dans
+`socketio-events.ts`, et ils s'opposent terme à terme :
+
+| Événement | Contrat déclaré |
+|---|---|
+| `CONVERSATION_CLOSED` | « `Conversation.isActive` is set to `false` … disappears from **every member's list**. Broadcast to the **conversation room** so all members react » |
+| `CONVERSATION_DELETED` | « removes the conversation from the **caller's own** device list only — the conversation **stays active for every other participant** » |
+
+La route n'émettait que le SECOND. Or deux de ses branches exécutent le PREMIER :
+
+```
+if (participant.role === 'creator') {
+  if (isEmptyDirect)      → conversation.update({ isActive: false })   ← clôture GLOBALE
+  else if (!successor)    → conversation.update({ isActive: false })   ← clôture GLOBALE
+}
+→ io.to(ROOMS.user(caller)).emit(CONVERSATION_DELETED)   ← « stays active for every other participant »
+```
+
+La branche `isEmptyDirect` **nomme elle-même** le cas qui fait mal, dans son
+propre commentaire : « fermer plutôt que transférer, **même s'il reste un autre
+participant actif** ». Ce participant-là :
+
+1. **n'apprend rien en direct** — aucune émission ne le vise. `CONVERSATION_DELETED`
+   part vers `ROOMS.user(<appelant>)` ;
+2. **n'apprend rien plus tard** — et c'est le point non évident.
+   `loadConversationTombstones` (`utils/delta-tombstones.ts`) reconstitue les
+   disparitions à partir de TROIS sources : `closedAt > since`,
+   `Participant.deletedForMe > since`, `Participant.leftAt|bannedAt > since`.
+   La route n'écrivait **aucune des trois** pour lui : `deletedForMe` est celle
+   de l'appelant, il n'a ni quitté ni été banni, et la clôture n'écrivait que
+   `isActive: false` — **jamais `closedAt`**. Aucun delta ne pouvait donc porter
+   la fermeture, à aucune date.
+
+Le `@@index([closedAt])` du schéma dit d'ailleurs la même chose en clair :
+« `closedAt > since` est le SEUL des trois streams … qui ne parte pas d'un
+`userId` indexé ». Le champ n'est pas décoratif, **il EST le canal de rattrapage**.
+
+Reste au participant orphelin : `GET /conversations` filtre bien `isActive: true`
+à la racine du `whereClause`, donc une réconciliation COMPLÈTE finit par retirer
+la ligne. Entre-temps — et les deux clients PERSISTENT (cache disque iOS,
+`staleTime: Infinity` web) — il garde à l'écran une conversation que le serveur a
+fermée, et **aucune garde `Conversation.isActive` n'existe sur le chemin d'envoi** :
+il peut y écrire des messages que l'appelant (participant `isActive: false`,
+`deletedForMe` posé) ne recevra jamais.
+
+### Le jumeau correct, à quelques fichiers de là
+
+`DELETE /conversations/:id` (`core.ts`) fait exactement les deux gestes qui
+manquaient, et son commentaire décrit **le même bug déjà corrigé une fois** :
+« Adressée à la seule room de conversation, la clôture n'atteignait que les
+membres ayant le fil OUVERT ». Le correctif le recopie plutôt que de l'inventer :
+
+- **écriture** : `{ isActive: false, closedAt: now, closedBy: userId }` sur les
+  DEUX branches. La branche « aucun successeur » n'a aucun AUTRE membre à
+  prévenir (c'est sa condition même) mais doit rester ENREGISTRÉE comme
+  clôture : une ligne `isActive: false` sans `closedAt` est une conversation
+  fermée dont la base ignore qu'elle l'a été ;
+- **diffusion** : `emitToConversationParticipants(CONVERSATION_CLOSED)` — les
+  rooms PERSONNELLES, pas la seule room de conversation, parce qu'un client posé
+  sur la LISTE a quitté `conversation:<id>` et n'est joignable que là ;
+- **audience ramenée PAR l'écriture** (`include: { participants: … }`), jamais
+  par une requête de plus. Raison de `core.ts` mot pour mot — « une seconde
+  requête … pourrait tomber sur un état déjà modifié » — plus une raison propre
+  à cette sonde : une requête supplémentaire APRÈS des écritures committées est
+  un mode d'échec gratuit, qui rendrait `500` une opération intégralement réussie ;
+- **émission après la DERNIÈRE écriture** — une annonce ne précède jamais la
+  durabilité du fait qu'elle annonce, ce que cette sonde même exige. L'appelant
+  figure dans l'audience (capturée à l'écriture, où il est encore actif) et
+  reçoit donc les deux événements : c'est exact — les deux faits sont vrais pour
+  lui — et c'est la sémantique de `core.ts`, où l'auteur de la clôture reçoit
+  aussi son annonce.
+
+**Tests** — 6 témoins neufs dans
+`__tests__/unit/routes/conversations/delete-for-me.test.ts` (4 rouges avant
+correctif, 2 verts d'emblée : les non-régressions). La suite ne mesurait PAS la
+propriété en cause — le scénario « DM vide » n'instanciait aucun autre
+participant, donc aucune assertion ne pouvait distinguer « annonce correcte » de
+« aucune annonce ». Deux assertions préexistantes épinglaient `data: { isActive:
+false }` à l'exact : elles figeaient la forme INCOMPLÈTE de l'écriture, réalignées.
+
+### Les deux clients consomment déjà l'événement — vérifié, aucun changement requis
+
+La correction ne vaut que si `conversation:closed` est écouté. Il l'est, des
+deux côtés, et avec exactement le payload que le nouvel émetteur produit :
+
+- **web** — `presence.service.ts` s'abonne à `SERVER_EVENTS.CONVERSATION_CLOSED`
+  et `use-socket-cache-sync.ts` (l. 795) retire la conversation du cache
+  infini + purge sa `detail` query ;
+- **iOS/SDK** — `SocialSocketManager` fanne le payload dans le publisher
+  `conversationDeleted` (témoin B6, `SocialSocketAdditionalTests`), dont le
+  commentaire dit s'aligner sur « the live `conversation:closed` payload from
+  `core.ts` » — la forme `{ conversationId, closedBy, closedAt }` que ce
+  correctif émet à l'identique.
+
+C'est ce qui rend l'entrée CHANGELOG « aucun changement client » vérifiée et
+non supposée : le canal existait, seul l'émetteur manquait.
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif (2 adresse/audience, 2 durabilité)
+- [x] 2 non-régressions vertes d'emblée (membre ordinaire, transfert d'ownership :
+      une garde qui émettrait TOUJOURS passerait les 4 premiers)
+- [x] Suites voisines : 62 suites / 720 tests verts
+- [x] Suite gateway complète : **720 suites / 17 647 tests verts** ; **17 649
+      après merge manuel de `main`**, le cycle 29 parallèle en apportant 2
+      (aucune suite déplacée, aucun test perdu au passage)
+- [x] `tsc --noEmit` gateway : 0, avant ET après le merge
+- [x] CHANGELOG + ce journal + leçon 262
+
+## Constats latents — relevés, NON livrés
+
+1. **`presence:user:<id>` et `presence:anon:<id>` sont ÉCRITS et jamais LUS.**
+   `StatusService` renouvelle ces deux clés Redis à chaque tick d'activité
+   (throttle 5 s) ; un `grep` sur tout le monorepo — gateway, web, translator,
+   iOS — ne rend aucun lecteur. Deux `SET` réseau par tick pour une valeur que
+   personne ne consulte. Non livré ce cycle : c'est de l'hygiène, pas un défaut
+   de synchronisation, et le retrait mérite sa propre passe (vérifier qu'aucun
+   outil d'exploitation ne les lit hors dépôt).
+2. **`leave.ts` est le 4e écrivain de `isActive: false` et n'écrit pas non plus
+   `closedAt` — mais sans victime.** Balayage complet de la famille (méthode du
+   cycle 26 : ne jamais s'arrêter au site qui a déclenché la sonde) :
+
+   | Écrivain | `closedAt` | Diffusion | Verdict |
+   |---|---|---|---|
+   | `core.ts` `DELETE /conversations/:id` | ✅ | `CONVERSATION_CLOSED` | ✅ le jumeau modèle |
+   | `delete-for-me.ts` — DM vide | ❌ → ✅ | aucune → `CONVERSATION_CLOSED` | ❌ **ce cycle** |
+   | `delete-for-me.ts` — sans successeur | ❌ → ✅ | aucune (personne d'autre) | ❌ **ce cycle** |
+   | `leave.ts` — créateur dernier membre | ❌ | aucune | ⚠️ latent |
+
+   `leave.ts` ne ferme que si `otherActiveCount === 0` : par construction il n'y
+   a personne à prévenir, donc l'absence de diffusion est correcte. Reste le
+   `closedAt` manquant — et il n'a pas de victime non plus, vérifié plutôt que
+   supposé : le partant reçoit un tombstone `leftAt` (posé par la même route),
+   et tout participant devenu inactif en tient un aussi (`participants.ts`
+   estampille `leftAt` au retrait, `ban.ts` `bannedAt`, `delete-for-me`
+   `deletedForMe`) — les trois sources du stream sont couvertes. C'est donc une
+   incohérence de champ, pas un trou de synchronisation : une conversation
+   fermée dont la base ignore qu'elle l'a été. **Non livré** pour tenir le diff
+   sur le défaut réel ; à reprendre avec la sonde ci-dessous, dont il relève.
+
+3. **L'`include` de l'audience charge TOUS les participants, actifs ou non** —
+   filtrés ensuite en JS. Sur la branche « aucun successeur » d'un grand groupe
+   dont tout le monde est déjà parti, c'est N lignes chargées pour en garder
+   une. Prisma sait pourtant filtrer dans l'`include`
+   (`participants: { where: { isActive: true } }`). **Non livré, et surtout pas
+   ici seulement** : `core.ts` a exactement la même forme, et ne corriger qu'un
+   des deux jumeaux recréerait la dérive que ce cycle vient de refermer. Le coût
+   est par ailleurs payé une fois par clôture — une opération terminale et rare.
+   À traiter comme une passe unique sur les deux sites.
+
+4. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
+   encore actif d'une conversation FERMÉE peut y écrire ; le message est
+   persisté et diffusé normalement. Le correctif ci-dessus retire la cause
+   principale (l'orphelin apprend maintenant la clôture), mais la garde
+   elle-même reste absente — un client qui ignore l'événement, ou une clôture
+   concurrente d'un envoi en vol, retombent dessus. À traiter comme sa propre
+   sonde : « quels chemins d'écriture ignorent l'état terminal de leur conteneur ? »
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+  S'y ajoute maintenant : vérifier que les clients traitent `conversation:closed`
+  reçu hors du fil ouvert (le correctif l'y adresse désormais).
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+
+## Candidat pour le cycle suivant
+
+Le constat latent #2 généralisé, et jamais posé par les cycles 21–30 : **quels
+chemins d'écriture ignorent l'état TERMINAL de leur conteneur ?** Une
+conversation `isActive: false`, un post supprimé, un appel `ended`, une
+communauté archivée — chacun a des routes qui écrivent dedans. Recenser, pour
+chaque conteneur porteur d'un état terminal, les écrivains qui ne le vérifient
+pas.

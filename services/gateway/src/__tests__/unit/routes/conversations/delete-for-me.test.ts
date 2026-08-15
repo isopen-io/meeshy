@@ -25,6 +25,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
     CONVERSATION_DELETED: 'conversation:deleted',
+    CONVERSATION_CLOSED: 'conversation:closed',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
@@ -72,6 +73,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(mockParticipant),
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
+      // Membres encore actifs APRÈS la désactivation de l'appelant — l'audience
+      // de `conversation:closed`. Vide par défaut : les scénarios qui ne
+      // ferment rien ne doivent nommer personne.
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
@@ -84,23 +89,44 @@ function makePrisma(overrides: Record<string, any> = {}) {
   };
 }
 
+// Double Socket.IO chaînable : `to()` se rend lui-même, donc
+// `io.to(a).to(b).emit(e, p)` enregistre les DEUX rooms dans `to.mock.calls` et
+// l'émission unique dans `emit.mock.calls` — la forme exacte
+// qu'`emitToConversationParticipants` produit.
+function makeMockIO() {
+  return {
+    to: jest.fn().mockReturnThis(),
+    emit: jest.fn(),
+    in: jest.fn().mockReturnThis(),
+    fetchSockets: jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]),
+  };
+}
+
+/** Les rooms nommées pour un événement donné, dans l'ordre du chaînage. */
+function roomsFor(io: ReturnType<typeof makeMockIO>, event: string): string[] {
+  return io.emit.mock.calls.some(([e]: any[]) => e === event)
+    ? io.to.mock.calls.map(([room]: any[]) => room as string)
+    : [];
+}
+
+/** La charge utile émise pour un événement, ou `undefined` s'il n'a pas été émis. */
+function payloadFor(io: ReturnType<typeof makeMockIO>, event: string): any {
+  return io.emit.mock.calls.find(([e]: any[]) => e === event)?.[1];
+}
+
 async function buildApp(opts: {
   authenticated?: boolean;
   prisma?: any;
   withSocket?: boolean;
+  io?: ReturnType<typeof makeMockIO>;
 } = {}): Promise<FastifyInstance> {
   const { authenticated = true, prisma = makePrisma(), withSocket = false } = opts;
 
   const app = Fastify({ logger: false });
   const requiredAuth = makePreValidationAuth(authenticated);
 
-  if (withSocket) {
-    const mockIO = {
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn(),
-      in: jest.fn().mockReturnThis(),
-      fetchSockets: jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]),
-    };
+  if (withSocket || opts.io) {
+    const mockIO = opts.io ?? makeMockIO();
     app.decorate('socketIOHandler', {
       getManager: jest.fn(() => ({
         getIO: jest.fn(() => mockIO),
@@ -187,8 +213,12 @@ describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM',
     expect(prisma.conversation.count).toHaveBeenCalledWith({
       where: { id: 'conv-resolved-id', type: 'direct', firstMessageSentAt: null },
     });
+    // La clôture s'ENREGISTRE comme telle : `isActive: false` seul laissait la
+    // fermeture hors de portée du stream de tombstones (`closedAt > since`).
     expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { isActive: false } })
+      expect.objectContaining({
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
+      })
     );
     expect(prisma.participant.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { role: 'creator' } })
@@ -259,6 +289,192 @@ describe('DELETE /conversations/:id/delete-for-me — success with socket events
     const app = await buildApp({ withSocket: true });
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── Clôture GLOBALE : le fait est durable, l'annonce doit l'être aussi ───────
+//
+// Cycle 29 — la sonde « moment de la diffusion vs durabilité du fait ». Deux
+// branches de cette route ferment la conversation POUR TOUT LE MONDE
+// (`Conversation.isActive = false`), et la seule chose qu'elles émettaient est
+// `conversation:deleted` vers la room de l'APPELANT — l'événement dont le
+// contrat dit mot pour mot « the conversation stays active for every other
+// participant ». L'annonce contredisait le fait.
+//
+// Le jumeau CORRECT est `DELETE /conversations/:id` (`core.ts`) : il écrit
+// `closedAt`/`closedBy` et diffuse `conversation:closed` par
+// `emitToConversationParticipants`. Ces témoins mesurent la seule propriété que
+// la suite ne mesurait pas : ce qu'apprend le participant qui RESTE.
+
+const OTHER_PARTICIPANT = { id: '507f1f77bcf86cd799439055', userId: 'other-user' };
+
+function makeClosingPrisma(overrides: Record<string, any> = {}) {
+  const creatorParticipant = { ...mockParticipant, role: 'creator' };
+  return makePrisma({
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+      update: jest.fn<any>().mockResolvedValue({}),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    conversation: {
+      // L'audience sort de l'ÉCRITURE (`include`), comme chez le jumeau
+      // `core.ts` : pas de seconde requête à retomber sur un état déjà modifié,
+      // et pas un mode d'échec de plus après des écritures committées.
+      // L'appelant y figure encore — il n'est désactivé qu'ensuite — et c'est
+      // sans conséquence : les deux annonces sont des événements DISTINCTS
+      // (`conversation:deleted` le concerne, `conversation:closed` décrit la
+      // clôture globale), une copie chacun.
+      update: jest.fn<any>().mockResolvedValue({
+        id: CONV_ID,
+        isActive: false,
+        participants: [
+          { id: PART_ID, userId: USER_ID, isActive: true },
+          { ...OTHER_PARTICIPANT, isActive: true },
+        ],
+      }),
+      count: jest.fn<any>().mockResolvedValue(1), // DM vide → branche de clôture
+    },
+    ...overrides,
+  });
+}
+
+describe('DELETE /conversations/:id/delete-for-me — DM vide fermé alors qu\'un membre reste actif', () => {
+  it('annonce la clôture au membre restant sur sa room PERSONNELLE', async () => {
+    // Le cas que le commentaire de la route nomme lui-même : « fermer plutôt
+    // que transférer, MÊME S'IL RESTE UN AUTRE PARTICIPANT ACTIF ». Ce
+    // participant n'apprenait rien, par aucun canal.
+    const io = makeMockIO();
+    const prisma = makeClosingPrisma();
+    const app = await buildApp({ prisma, io });
+
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(res.statusCode).toBe(200);
+    // La room personnelle, pas seulement la room de conversation : un client
+    // posé sur la LISTE a quitté `conversation:<id>` et n'est joignable que là
+    // — c'est la raison d'être d'`emitToConversationParticipants`.
+    expect(roomsFor(io, 'conversation:closed')).toContain('user:other-user');
+    await app.close();
+  });
+
+  it('porte closedBy et closedAt dans la charge utile', async () => {
+    const io = makeMockIO();
+    const app = await buildApp({ prisma: makeClosingPrisma(), io });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(payloadFor(io, 'conversation:closed')).toEqual({
+      conversationId: 'conv-resolved-id',
+      closedBy: USER_ID,
+      closedAt: expect.any(String),
+    });
+    await app.close();
+  });
+
+  it('écrit closedAt/closedBy, sans quoi AUCUN delta ne portera jamais la clôture', async () => {
+    // `loadConversationTombstones` (delta-tombstones.ts) interroge
+    // `conversation.findMany({ where: { closedAt: { gt: since } } })`. Une
+    // clôture qui n'écrit que `isActive: false` est invisible pour ce stream :
+    // le membre restant garde la ligne dans son cache persistant (disque iOS,
+    // `staleTime: Infinity` web) delta après delta, jusqu'à une réconciliation
+    // COMPLÈTE. Le champ n'est pas décoratif — il EST le canal de rattrapage.
+    const prisma = makeClosingPrisma();
+    const app = await buildApp({ prisma, withSocket: true });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'conv-resolved-id' },
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
+      })
+    );
+    await app.close();
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — clôture faute de successeur', () => {
+  it('écrit closedAt/closedBy comme la branche jumelle', async () => {
+    // Aucun AUTRE membre actif ne subsiste ici — mais la clôture doit rester
+    // ENREGISTRÉE comme telle. Une ligne `isActive: false`
+    // sans `closedAt` est une conversation fermée dont la base ne sait pas
+    // qu'elle l'a été, et les deux branches produisaient exactement ça.
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce(creatorParticipant) // l'appelant
+          .mockResolvedValueOnce(null)               // aucun modérateur
+          .mockResolvedValueOnce(null),              // aucun autre membre
+        update: jest.fn<any>().mockResolvedValue({}),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+      conversation: {
+        update: jest.fn<any>().mockResolvedValue({
+          id: CONV_ID,
+          isActive: false,
+          participants: [{ id: PART_ID, userId: USER_ID, isActive: true }],
+        }),
+        count: jest.fn<any>().mockResolvedValue(0),
+      },
+    });
+    const app = await buildApp({ prisma, withSocket: true });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'conv-resolved-id' },
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
+      })
+    );
+    await app.close();
+  });
+});
+
+describe('DELETE /conversations/:id/delete-for-me — ce qui ne ferme rien n\'annonce rien', () => {
+  it('un membre ordinaire ne déclenche ni clôture ni conversation:closed', async () => {
+    // Le pendant indispensable des témoins ci-dessus : une garde qui émet
+    // TOUJOURS passerait les trois premiers et serait pourtant une régression
+    // bien pire — la conversation reste ouverte pour tout le monde.
+    const io = makeMockIO();
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParticipant), // role: 'member'
+        update: jest.fn<any>().mockResolvedValue({}),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma, io });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    expect(payloadFor(io, 'conversation:closed')).toBeUndefined();
+    await app.close();
+  });
+
+  it('un transfert d\'ownership n\'annonce pas une clôture qui n\'a pas eu lieu', async () => {
+    const io = makeMockIO();
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce(creatorParticipant)
+          .mockResolvedValueOnce({ id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' }),
+        update: jest.fn<any>().mockResolvedValue({}),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma, io });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    expect(payloadFor(io, 'conversation:closed')).toBeUndefined();
+    // Le canal qui DOIT rester : la promotion du successeur.
+    expect(payloadFor(io, 'participant:role-updated')).toBeDefined();
     await app.close();
   });
 });
