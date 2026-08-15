@@ -28,7 +28,7 @@ final class LentilleMetricsTests: XCTestCase {
     /// même mécanique que `packages/shared/fixtures`). `design/` n'était PAS
     /// accessible en ressource avant ce ticket — la ligne additionnelle a
     /// été posée dans `project.yml` (cf. son commentaire, propriété LWS-5).
-    private static let listTokens: [String: Any] = {
+    private static var listTokens: [String: Any] {
         guard let url = Bundle(for: LentilleMetricsTests.self).url(
             forResource: "lentille-tokens",
             withExtension: "json",
@@ -50,7 +50,7 @@ final class LentilleMetricsTests: XCTestCase {
             return [:]
         }
         return list
-    }()
+    }
 
     /// Descend un chemin de clés dans `listTokens` et lit un nombre.
     /// Échec de lecture (chemin absent, mauvais type) ⇒ `nil`, pas `0` — un
