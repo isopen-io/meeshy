@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`ConversationLock`'s fourth slice — reactive state plumbing into
+> `ConversationListViewModel` — shipped** (slice `conversation-lock-list-state-plumbing`, PR #3053,
+> merged `80e87ed0d`). Picks up exactly where the previous run's deferred investigation left off:
+> read `ConversationListView+Rows.swift`'s `Equatable` extension in full before designing the
+> Compose shape, per that run's explicit note. Confirmed the iOS mechanism: the list observes
+> `ConversationLockManager` (an `ObservableObject` with `@Published lockedConversationIds`)
+> *directly*, so a lock/unlock re-evaluates every row; `ConversationRowItem.==` then compares the
+> resulting swipe-action *icons* (not just counts) to catch the state change through the equatable
+> gate. Ported the Kotlin-idiomatic equivalent of the `@Published` half of that mechanism — the
+> reactive *source*, not the row-level render gate (Compose's own recomposition model handles the
+> render side differently once state is actually read at the right level; that's slice (2)/(3)'s
+> problem, not this one's).
+>
+> `ConversationLockStore` gained `lockedConversationIdsFlow: StateFlow<Set<String>>`, implemented
+> in both `InMemoryConversationLockStore` (backed by a `MutableStateFlow`, updated on every mutation)
+> and `EncryptedConversationLockStore` (same shape, seeded + recomputed from the encrypted prefs —
+> no dedicated test, same documented Robolectric/AndroidKeyStore constraint as its sibling methods).
+> `ConversationListUiState` gained `lockedConversationIds: Set<String>`, kept in sync via a new
+> `viewModelScope.launch { lockStore.lockedConversationIdsFlow.collect { ... } }` block in `init` —
+> the exact same shape as the existing `presenceByUserId`/`observePresence()` plumbing-only
+> precedent, reused deliberately rather than inventing a new pattern.
+>
+> **TDD**: RED confirmed via compile failure (`Unresolved reference 'lockedConversationIdsFlow'`)
+> before either the interface member or the ViewModel constructor param existed. GREEN: 5 new tests
+> in `InMemoryConversationLockStoreTest` (initial-empty, setLock/removeLock/removeAllLocks/
+> resetForLogout all reflected in the flow's `.value`), 2 new tests in `ConversationListViewModelTest`
+> (a store emission and a removal reflected in `state.value.lockedConversationIds`, mirroring
+> `a_live_user_status_event_is_stored_in_presence_by_user_id`'s exact shape).
+>
+> **Verified**: `./apps/android/meeshy.sh check` green locally (`assembleDebug` + `testDebugUnitTest`,
+> 970 actionable tasks, `BUILD SUCCESSFUL`) — this session's JDK 21 (`/opt/homebrew/opt/openjdk@21`)
+> and the pre-bootstrapped Android SDK were both available, so the local gate ran directly (CI was
+> also green independently: `Android (assemble + unit tests)` + the unrelated `ci.yml` matrix, PR
+> #3053, all 16 checks pass/skip).
+>
+> **Still open**: swipe-action UI (icon swap, recomposition-correctness per the iOS reference),
+> the PIN entry sheet(s), the unlock flow itself. `feature-parity.md`'s "Conversation lock" line
+> stays `[ ]` — this slice is data plumbing only, same as its predecessor.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=conversation-lock-list-state-plumbing`.
+
+
 > On 2026-08-15 **`ConversationLock`'s third slice (UI/`ConversationListViewModel` wiring)
 > investigated, deferred — no code shipped this run.** Scan of reprise clean (one unrelated open
 > PR). Checked the iOS reference (`ConversationListView+Rows.swift`) before scoping a Compose
