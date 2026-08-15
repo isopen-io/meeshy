@@ -123,21 +123,57 @@ struct ConversationRowItem: View {
                     .contextMenu {
                         nativeContextMenu
                     } preview: {
-                        // Preview statique (non interactive dans un contextMenu
-                        // natif) — mêmes inputs que l'overlay custom, sans
-                        // callbacks. Largeur pilotée par le call site, comme
-                        // l'overlay (source de vérité unique).
-                        ConversationPreviewView(
-                            conversation: conversation,
-                            cachedMessages: cachedPreviewMessages,
-                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
-                                .flatMap { MeeshyConfig.resolveMediaURL($0) },
-                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                            storyState: storyRingState,
-                            moodEmoji: moodStatus?.moodEmoji,
-                            presenceState: conversation.type == .direct ? presenceState : nil,
-                            isDirect: conversation.type == .direct
-                        )
+                        // Preview — troisième point d'entrée du menu de mode
+                        // (contrat LWS-8, « trois points d'entrée, une
+                        // préférence »), câblée sur CE chemin par I-067ter :
+                        // jusque-là seul le chemin < iOS 26
+                        // (`conversationContextMenuOverlay`, +Overlays.swift,
+                        // I-072) montait `LentillePeekView` — écart documenté
+                        // par l'en-tête de `LentillePeekView.swift` et
+                        // verrouillé par `PeekViewModelTests
+                        // .test_nativeContextMenuPreviewPath_…`, comblé ici.
+                        // Mêmes entrées que le montage du chemin fallback,
+                        // relues sur les propriétés DÉJÀ stockées de cette
+                        // row (mêmes valeurs, sans re-lire les singletons
+                        // qu'elles encapsulent) — seule `isAnonymous` n'a pas
+                        // d'équivalent stocké et se lit sur `AuthManager
+                        // .shared`, comme +Overlays.swift : ce closure est
+                        // long-press-only (voir le commentaire du portillon
+                        // `.equatable()` plus bas — « minor staleness there
+                        // is acceptable »), jamais évalué à chaque passe de
+                        // body. `Group` fait du if/else UNE expression pour
+                        // que `.frame(width: 340)` s'applique aux deux
+                        // branches, comme l'overlay custom.
+                        Group {
+                            if LentilleFeatureFlag.isLentilleListEnabled {
+                                LentillePeekView(
+                                    conversation: conversation,
+                                    isDark: isDark,
+                                    isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
+                                    preferredContentLanguages: preferredContentLanguages,
+                                    presenceState: conversation.type == .direct ? presenceState : nil,
+                                    storyState: storyRingState,
+                                    moodEmoji: moodStatus?.moodEmoji
+                                )
+                            } else {
+                                // Preview statique (non interactive dans un
+                                // contextMenu natif) — mêmes inputs que
+                                // l'overlay custom, sans callbacks. Largeur
+                                // pilotée par le call site, comme l'overlay
+                                // (source de vérité unique).
+                                ConversationPreviewView(
+                                    conversation: conversation,
+                                    cachedMessages: cachedPreviewMessages,
+                                    bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
+                                        .flatMap { MeeshyConfig.resolveMediaURL($0) },
+                                    avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                                    storyState: storyRingState,
+                                    moodEmoji: moodStatus?.moodEmoji,
+                                    presenceState: conversation.type == .direct ? presenceState : nil,
+                                    isDirect: conversation.type == .direct
+                                )
+                            }
+                        }
                         .frame(width: 340)
                     }
                     .task {

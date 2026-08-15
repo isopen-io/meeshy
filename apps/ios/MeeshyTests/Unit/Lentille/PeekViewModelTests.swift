@@ -194,26 +194,22 @@ final class PeekViewModelTests: XCTestCase {
         )
     }
 
-    /// I-073 — DÉFAUT RÉEL DOCUMENTÉ, NON CORRIGÉ. Critère LWS-8 littéral :
-    /// « `LentillePeekView` en `preview:` des DEUX chemins OS ». Le chemin
-    /// natif iOS 26+ (`.contextMenu(menuItems:preview:)`,
-    /// `ConversationListView+Rows.swift:125-142`) appartient à LWS-7 (mux de
-    /// rang, contrat §1.4), PAS à LWS-8 — ce fichier de test NE PEUT PAS
-    /// éditer `+Rows.swift` sans violer la règle d'or des contrats (un agent
-    /// n'édite jamais un fichier dont il n'est pas propriétaire). L'écart est
-    /// déjà signalé par l'en-tête de `LentillePeekView.swift` lui-même : ce
-    /// témoin le VERROUILLE en test exécutable, pour qu'un lecteur qui ne
-    /// lit pas les commentaires de production le voie quand même rougir s'il
-    /// disparaît silencieusement (ex. `+Rows.swift` réécrit sans que
-    /// personne ne recâble la preview).
+    /// I-067ter — ÉCART COMBLÉ. Critère LWS-8 littéral tenu sur les DEUX
+    /// chemins désormais : « `LentillePeekView` en `preview:` des DEUX
+    /// chemins OS ». Le chemin natif iOS 26+
+    /// (`.contextMenu(menuItems:preview:)`,
+    /// `ConversationListView+Rows.swift`, propriété LWS-7) monte maintenant
+    /// `LentillePeekView` sous le même drapeau que le chemin fallback
+    /// (`conversationContextMenuOverlay`, `+Overlays.swift`, I-072) — micro-
+    /// tâche I-067ter, routée par le rapport I-073 qui avait verrouillé le
+    /// trou EXÉCUTABLEMENT plutôt que de le laisser dériver en commentaire
+    /// seul. Ce témoin bascule de « verrouille l'absence » à « verrouille
+    /// la présence », comme son ancien texte l'annonçait déjà lui-même.
     ///
-    /// Conséquence produit concrète : sous Lentille ON, un utilisateur iOS
-    /// 26+ qui déclenche le menu contextuel NATIF (pas l'overlay custom < iOS
-    /// 26) voit encore l'ancienne `ConversationPreviewView`, jamais
-    /// `LentillePeekView` — le troisième point d'entrée du menu de mode
-    /// (contrat « trois points d'entrée, une préférence ») n'existe donc que
-    /// sur UN SEUL des deux chemins d'appui long.
-    func test_nativeContextMenuPreviewPath_stillUsesTheOldPreview_documentedLWS7ScopeGap() throws {
+    /// Conséquence produit : sous Lentille ON, le troisième point d'entrée
+    /// du menu de mode (« trois points d'entrée, une préférence ») existe
+    /// désormais sur les DEUX chemins d'appui long, iOS 26+ compris.
+    func test_nativeContextMenuPreviewPath_mountsLentillePeekView_behindTheFlag_gapClosed() throws {
         let rowsRaw = try String(
             contentsOf: Self.iosRoot.appendingPathComponent(
                 "Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
@@ -222,17 +218,29 @@ final class PeekViewModelTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            rowsRaw.components(separatedBy: "LentillePeekView(").count - 1, 0,
-            "`ConversationListView+Rows.swift` (chemin natif iOS 26+) contient désormais " +
-            "`LentillePeekView(` : l'écart documenté par cette suite et par l'en-tête de " +
-            "`LentillePeekView.swift` a été comblé — mettre ce test à jour (il doit alors " +
-            "vérifier la présence, pas l'absence) plutôt que le supprimer en silence."
+            rowsRaw.components(separatedBy: "LentillePeekView(").count - 1, 1,
+            "Le chemin natif iOS 26+ doit monter `LentillePeekView` — UNE fois — dans son " +
+            "`preview:` : le troisième point d'entrée du menu de mode doit exister sur les " +
+            "DEUX chemins d'appui long (contrat LWS-8)."
         )
         XCTAssertEqual(
             rowsRaw.components(separatedBy: "ConversationPreviewView(").count - 1, 1,
-            "Le chemin natif doit continuer d'utiliser `ConversationPreviewView` tant que " +
-            "l'écart n'est pas comblé — sa disparition SANS remplacement par " +
-            "`LentillePeekView` casserait l'aperçu du chemin natif purement et simplement."
+            "Le repli drapeau OFF (`ConversationPreviewView`) doit rester monté UNE fois sur " +
+            "le chemin natif — sa disparition romprait le rendu identique à aujourd'hui, " +
+            "drapeau éteint."
+        )
+
+        let normalized = normalizedCode(rowsRaw)
+        XCTAssertTrue(
+            normalized.contains("if LentilleFeatureFlag.isLentilleListEnabled { LentillePeekView("),
+            "L'aperçu Lentille doit être monté DERRIÈRE le drapeau sur le chemin natif — " +
+            "jamais inconditionnel."
+        )
+        XCTAssertTrue(
+            normalized.contains("} else { ConversationPreviewView("),
+            "Le repli drapeau OFF doit être la branche `else` EXACTE du même conditionnel " +
+            "sur le chemin natif — pas un second site de montage indépendant qui pourrait " +
+            "diverger."
         )
     }
 
