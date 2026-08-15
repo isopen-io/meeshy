@@ -47,6 +47,20 @@ import MeeshyUI
 /// **NON Sendable** (contrat §3.6) : embarque `BubbleContent`, qui embarque
 /// des modèles applicatifs `@MainActor`-implicites (cible `Meeshy`,
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`).
+///
+/// **F-083ter — exception NARROW et documentée au gel** : `effects:
+/// MessageEffects` est AJOUTÉ (pas remodelé — un seul champ, en toute fin de
+/// liste, valeur par défaut `.none`) pour porter F15 (« les effets
+/// s'appliquent au bloc contenu »), qui n'a AUCUNE autre source possible
+/// (`BubbleContent` ne porte pas `effects`, et `FocalRowInput` reste
+/// « primitifs uniquement »). Le paramètre par défaut préserve le site de
+/// montage existant (`MessageListViewController.swift:1159`, propriété
+/// WS-6, hors périmètre de cette tâche — NON MODIFIÉ, continue de compiler
+/// sans passer `effects`) : tant que WS-6 ne le fournit pas explicitement,
+/// la rangée reçoit `.none` et ne rend aucun effet — comportement identique
+/// à avant cette extension. Flagué pour confirmation orchestrateur : ajouter
+/// UN champ pour honorer une consigne explicite de CE lot n'est pas un
+/// remodelage de la forme figée.
 public struct FocalRowInput: Equatable {
     /// Les deux densités de la rangée plate (contrat Focal §3.1 :
     /// `ConversationReadingMode.usesFlatRow`). `.summary`/`.river`/`.bubbles`
@@ -104,6 +118,12 @@ public struct FocalRowInput: Equatable {
     public let allAudioItems: [ConversationViewModel.AudioItem]
     public let conversationName: String
 
+    // MARK: - Effets (F-083ter, F15)
+
+    /// AJOUTÉ (pas dans le contrat §3.6 littéral) — voir doc de tête pour la
+    /// justification et la garantie de compatibilité du site de montage.
+    public let effects: MessageEffects
+
     public init(
         localId: String,
         serverId: String?,
@@ -135,7 +155,8 @@ public struct FocalRowInput: Equatable {
         transcription: String?,
         translatedAudios: [MessageTranslatedAudio],
         allAudioItems: [ConversationViewModel.AudioItem],
-        conversationName: String
+        conversationName: String,
+        effects: MessageEffects = .none
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -168,6 +189,7 @@ public struct FocalRowInput: Equatable {
         self.translatedAudios = translatedAudios
         self.allAudioItems = allAudioItems
         self.conversationName = conversationName
+        self.effects = effects
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -211,6 +233,7 @@ public struct FocalRowInput: Equatable {
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
             && lhs.conversationName == rhs.conversationName
+            && lhs.effects == rhs.effects
     }
 }
 

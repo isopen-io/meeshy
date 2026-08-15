@@ -142,18 +142,14 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    // MARK: - F05 — réactions live en pilule plate MÉTA (TROU RÉEL, non couvert)
+    // MARK: - F05 — réactions live en pilule plate MÉTA (corrigé F-083ter)
 
-    /// **Trou réel découvert par F-090, documenté sans correction.** Aucun
-    /// fichier de `Focal/Row/**` ne rend `content.reactions` — `FocalRow`
-    /// n'affiche donc AUCUNE réaction, contrairement à F05 (« pilule plate
-    /// en méta … pop springBouncy à l'arrivée »). Seul le LIBELLÉ VoiceOver
-    /// les annonce (`MessageAccessibilityLabelComposer`, F-080) — un
-    /// utilisateur voyant l'écran ne voit AUCUNE réaction sur le Fil. Ce
-    /// test affirme l'invariant que F05 exige ; il est ROUGE aujourd'hui —
-    /// c'est la preuve du trou. Corriger exige une nouvelle vue (pilule de
-    /// réactions), hors périmètre WS-11 (« aucune feature », pas une garde
-    /// source triviale) : ticket de suivi WS-4.
+    /// **Trou réel découvert par F-090, corrigé par F-083ter.** `FocalRow.reactionsSection`
+    /// réutilise `BubbleReactionsOverlay` (§1.3, `internal`, vérifié non
+    /// `fileprivate`) TEL QUEL — pilule `11`pt, comptes monospaced, pop
+    /// `springBouncy`, picker/détail inchangés : exactement F05. L'invariant
+    /// affirmé ici est INCHANGÉ (même assertion qu'avant le correctif) — ce
+    /// qui a changé, c'est le code qui la satisfait désormais.
     func test_F05_reactionsAreRenderedSomewhereInFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
@@ -178,13 +174,10 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// **Trou réel découvert par F-090, documenté sans correction.** Le chip
-    /// méta `🌐` qui signale la traduction (F06, `BubbleFooter.swift` côté
-    /// bulle) n'a AUCUN équivalent dans `Focal/Row/**` — un lecteur Focal ne
-    /// sait donc PAS visuellement qu'un texte est traduit (seul le fait de
-    /// lire une langue différente le suggère). Rouge = preuve du trou ;
-    /// ticket de suivi WS-4 (le composeur riche §3.10 documente `hasTranslationChip`
-    /// mais reste déclaré, non câblé — écart déjà noté au contrat).
+    /// **Trou réel découvert par F-090, corrigé par F-083ter.** `FocalRow.translationChip`
+    /// rend `Image(systemName: "globe")` en méta quand `translation.activeLangCode
+    /// != translation.originalLangCode` (les deux déjà résolus, aucune
+    /// seconde résolution Prisme). Invariant INCHANGÉ.
     func test_F06_globeChipSignalsTranslation_inFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
@@ -283,13 +276,12 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// **Trou réel découvert par F-090, documenté sans correction.** Le
-    /// libellé VISUEL « modifié » (10.5, méta) n'apparaît NULLE PART dans
-    /// `Focal/Row/**` — `FocalMetaRow`/`FocalIdentityHeader` ne portent
-    /// aucun paramètre `editedAt`/`isEdited`. Seul le libellé VoiceOver
-    /// l'annonce (`MessageAccessibilityLabelComposer`, déjà testé) : un
-    /// lecteur voyant l'écran ne peut PAS distinguer un message modifié.
-    /// Rouge = preuve du trou ; ticket de suivi WS-4.
+    /// **Trou réel découvert par F-090, corrigé par F-083ter.**
+    /// `FocalMetaRow`/`FocalIdentityHeader` portent désormais `editedAt`/
+    /// `isEditSaving`/`hasEditHistory` (déjà dans `BubbleContent`, aucune
+    /// extension de `FocalRowInput`) et rendent `BubbleEditedIndicator`
+    /// (§1.3, `internal`, vérifié non `fileprivate`) TEL QUEL. Invariant
+    /// INCHANGÉ.
     func test_F10_editedLabel_isVisibleSomewhereInFocalRow() throws {
         let metaRow = try source(rowRoot().appendingPathComponent("FocalMetaRow.swift"))
         let header = try source(rowRoot().appendingPathComponent("FocalIdentityHeader.swift"))
@@ -324,19 +316,14 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// **Trou réel découvert par F-090, documenté sans correction.** Les
-    /// TROIS badges visuels « au-dessus de l'identité » que F11 exige
-    /// (épinglé, transféré, éphémère — `BubblePinnedIndicator`/
-    /// `BubbleForwardedIndicator`/`BubbleEphemeralBadge` côté bulle
-    /// historique, `BubbleStandardLayout.swift` VStack avant l'identité)
-    /// n'ont AUCUN équivalent dans `FocalRow.standardBody` : la VStack
-    /// commence directement par `FocalIdentityHeader`, sans section de
-    /// badges au-dessus. `content.isPinned`/`content.ephemeral` alimentent
-    /// SEULEMENT le libellé VoiceOver (F-080) ; `content.isForwarded` n'est
-    /// même pas lu UNE SEULE FOIS dans tout `Focal/**` (RE-PREUVE : zéro
-    /// occurrence). Rouge = preuve du trou ; ticket de suivi WS-4 (réutiliser
-    /// les trois composants historiques, §1.3, dans une nouvelle section
-    /// `Focal/Row/`).
+    /// **Trou réel découvert par F-090, corrigé par F-083ter.**
+    /// `FocalRow.badgesSection` (au-dessus de `FocalIdentityHeader`, avant
+    /// toute chose, indépendant de `isFirstInGroup`) rend
+    /// `BubblePinnedIndicator`/`BubbleForwardedIndicator` (§1.3, `internal`,
+    /// vérifiés non `fileprivate`) TELS QUELS + `FocalEphemeralBadge`
+    /// (countdown vivant, ce chantier — enveloppe `BubbleEphemeralController`/
+    /// `BubbleEphemeralBadge`, §1.3). `content.isForwarded` est maintenant lu.
+    /// Invariant INCHANGÉ (l'assertion ci-dessous n'a pas bougé).
     func test_F11_pinnedForwardedEphemeralBadges_appearAboveIdentityInFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         let hasAnyBadge = code.contains("BubblePinnedIndicator")
@@ -443,13 +430,17 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// **Trou réel découvert par F-090, documenté sans correction.** Les
-    /// EFFETS (bitfield — confettis/particules sur le contenu) n'ont AUCUNE
-    /// trace dans `Focal/Row/**` : ni `effectBitfield`, ni `MessageEffect`,
-    /// ni un quelconque overlay d'effet. Un message avec effet s'affiche en
-    /// Focal comme un message sans effet. Rouge = preuve du trou ; ticket de
-    /// suivi WS-4 (portée précise à établir : quel(s) fichier(s)
-    /// `Bubble/*Effect*.swift` réutiliser, §1.3 les liste-t-il déjà ?).
+    /// **Trou réel découvert par F-090, corrigé par F-083ter.** RE-PREUVE :
+    /// aucun fichier `Bubble/*Effect*.swift` n'existe (recherche vide) — le
+    /// composant réel est `Components/MessageEffectModifiers.swift`
+    /// (`View.messageEffects(_ effects: MessageEffects)`, `internal`, non
+    /// `fileprivate`), déjà consommé par `ThemedMessageBubble.swift:317`
+    /// (`.messageEffects(message.effects)`). `FocalRow.standardBody` pose
+    /// désormais LE MÊME modifier — `.messageEffects(input.effects)`,
+    /// AUCUNE réimplémentation d'effet. `input.effects: MessageEffects` est
+    /// un AJOUT narrow à `FocalRowInput` (valeur par défaut `.none` — le
+    /// site de montage WS-6 continue de compiler sans le fournir tant qu'il
+    /// n'est pas mis à jour, hors périmètre de ce lot). Invariant INCHANGÉ.
     func test_F15_effectsBitfield_isAppliedSomewhereInFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(

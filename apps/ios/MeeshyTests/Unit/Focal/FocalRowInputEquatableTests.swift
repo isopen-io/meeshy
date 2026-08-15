@@ -28,7 +28,8 @@ final class FocalRowInputEquatableTests: XCTestCase {
         content: BubbleContent? = nil,
         density: FocalRowInput.Density = .focal,
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
-        allAudioItems: [ConversationViewModel.AudioItem] = []
+        allAudioItems: [ConversationViewModel.AudioItem] = [],
+        effects: MessageEffects = .none
     ) -> FocalRowInput {
         FocalRowInput(
             localId: "m1", serverId: "s1", content: content ?? makeContent(), density: density,
@@ -40,7 +41,7 @@ final class FocalRowInputEquatableTests: XCTestCase {
             highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: userLanguages,
             activeDisplayLangCode: "en", secondaryLangCode: nil, voiceConsentMissing: false,
             transcription: nil, translatedAudios: [], allAudioItems: allAudioItems,
-            conversationName: "Conv"
+            conversationName: "Conv", effects: effects
         )
     }
 
@@ -56,6 +57,20 @@ final class FocalRowInputEquatableTests: XCTestCase {
 
     func test_differentDensity_areNotEqual() {
         XCTAssertNotEqual(makeInput(density: .focal), makeInput(density: .script))
+    }
+
+    // MARK: - `effects` (F-083ter, F15) — AJOUT narrow au gel, valeur par défaut `.none`
+
+    /// Le site de montage historique (`MessageListViewController.swift:1159`,
+    /// hors périmètre F-083ter) ne passe pas `effects` — la valeur par
+    /// défaut `.none` garantit sa compilation SANS modification.
+    func test_effects_defaultsToNone() {
+        XCTAssertEqual(makeInput().effects, .none)
+    }
+
+    func test_differentEffects_areNotEqual() {
+        let flagged = MessageEffects(flags: .confetti)
+        XCTAssertNotEqual(makeInput(effects: .none), makeInput(effects: flagged))
     }
 
     // MARK: - Le tuple `userLanguages` — la raison d'être du `==` manuel

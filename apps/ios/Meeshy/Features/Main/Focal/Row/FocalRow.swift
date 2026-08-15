@@ -73,6 +73,12 @@ struct FocalRow: View {
     @ViewBuilder
     private var standardBody: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
+            // F-083ter (F11) : « les badges éphémère/épinglé/transféré
+            // restent AU-DESSUS DE L'IDENTITÉ » — avant FocalIdentityHeader,
+            // pas après, et indépendants de isFirstInGroup (ce sont des
+            // propriétés du MESSAGE, pas du groupe).
+            badgesSection
+
             if input.isFirstInGroup {
                 FocalIdentityHeader(
                     isMe: content.isMe,
@@ -99,7 +105,11 @@ struct FocalRow: View {
                         isAgentAuthored: input.isAgentAuthored,
                         isAgentGrammarEnabled: input.showsAgentGrammar
                     ),
-                    onOpenProfile: actions.onOpenProfile
+                    onOpenProfile: actions.onOpenProfile,
+                    // F-083ter (F10) — « modifié » visible en tête de groupe.
+                    editedAt: content.editedAt,
+                    isEditSaving: content.isEditSaving,
+                    hasEditHistory: content.hasEditHistory
                 )
             }
 
@@ -117,15 +127,85 @@ struct FocalRow: View {
             visualBlock
             audioBlock
             textOrEmojiBlock
+            reactionsSection
 
             if !input.isFirstInGroup {
                 FocalMetaRow(
                     isMe: content.isMe,
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
-                    isDark: input.isDark
+                    isDark: input.isDark,
+                    // F-083ter (F10) — « modifié » visible en rangée de suite.
+                    editedAt: content.editedAt,
+                    isEditSaving: content.isEditSaving,
+                    hasEditHistory: content.hasEditHistory
                 )
             }
+        }
+        // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
+        // contenu » — même overlay que le chemin bulle
+        // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
+        // §1.3 réutilisé tel quel via `View.messageEffects(_:)`, PAS
+        // réimplémenté). Posé sur la VStack de contenu entière (identité +
+        // citation + média + texte + méta), exactement le même périmètre que
+        // la bulle historique applique à `BubbleStandardLayout(...)`.
+        .messageEffects(input.effects)
+    }
+
+    // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
+
+    /// `content.isPinned`/`content.isForwarded`/`content.ephemeral` LUS et
+    /// RENDUS (jusqu'ici seul le libellé VoiceOver les portait, F-080) —
+    /// réutilise `BubblePinnedIndicator`/`BubbleForwardedIndicator` (§1.3,
+    /// `internal`, vérifiés non `fileprivate`) TELS QUELS, et
+    /// `FocalEphemeralBadge` (ce chantier) pour un countdown vivant sans
+    /// faire porter le `@StateObject` par `FocalRow`.
+    ///
+    /// `BubbleForwardedIndicator` accepte `senderName`/`conversationName`
+    /// pour un libellé enrichi (« Fwd. from X • Y ») — `BubbleContent` ne
+    /// porte que le booléen `isForwarded` (pas de `ForwardReference`
+    /// résolue), donc ces deux paramètres restent `nil` ici : repli sur le
+    /// libellé générique « Forwarded ». Écart signalé, pas une seconde
+    /// résolution inventée.
+    @ViewBuilder
+    private var badgesSection: some View {
+        if content.isPinned {
+            BubblePinnedIndicator()
+        }
+        if content.isForwarded {
+            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, senderName: nil, conversationName: nil)
+        }
+        if let ephemeral = content.ephemeral {
+            FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)
+        }
+    }
+
+    // MARK: - F-083ter (F05) — réactions live en pilule plate méta
+
+    /// Réutilise `BubbleReactionsOverlay` (§1.3, `internal`, vérifié non
+    /// `fileprivate`) TEL QUEL — pilule `11`pt, fond `backgroundSecondary`,
+    /// comptes monospaced, pop `springBouncy` à l'arrivée, picker/détail
+    /// inchangés : exactement F05. `isLastReceivedMessage` reste `false`
+    /// (le bouton `(+)` d'ajout rapide ne s'affiche donc jamais côté Focal
+    /// pour l'instant — `FocalRowInput`, figé, ne porte pas ce signal de
+    /// position de défilement ; écart signalé, pas une extension inventée).
+    @ViewBuilder
+    private var reactionsSection: some View {
+        if !content.reactions.isEmpty {
+            BubbleReactionsOverlay(
+                messageId: content.messageId,
+                summaries: content.reactions,
+                isMe: content.isMe,
+                isDark: input.isDark,
+                isLastReceivedMessage: false,
+                accentHex: input.accentHex,
+                onAddReaction: actions.onAddReaction,
+                onToggleReaction: actions.onToggleReaction,
+                onOpenReactPicker: actions.onOpenReactPicker,
+                onShowReactions: actions.onShowReactions
+            )
+            .equatable()
+            .padding(.leading, FocalMetrics.Text.indent)
         }
     }
 
@@ -202,21 +282,52 @@ struct FocalRow: View {
     /// à `FocalMetrics.Text.size` (`MeeshyFont.bodySize`), aucun `.font()`
     /// externe à appliquer. Seul l'interligne additif (`1.42`, `.lineSpacing`
     /// est en points côté SwiftUI) et le retrait `29` sont posés ICI.
+    ///
+    /// **F-083ter (F06)** : le SWAP de texte était déjà branché
+    /// (`content.translation?.preferredContent`, résolution Prisme
+    /// inchangée) — il manquait le chip `🌐` qui le SIGNALE visuellement
+    /// (présent côté bulle, `BubbleFooter` translate button). Ajouté en
+    /// méta, juste après le texte : `showsTranslationChip` ne fait AUCUNE
+    /// seconde résolution, elle compare deux champs déjà résolus par
+    /// `BubbleContentBuilder` (`activeLangCode`/`originalLangCode`).
     private var textBlock: some View {
-        BubbleExpandableText(
-            content: content.translation?.preferredContent ?? content.text?.raw ?? "",
-            isMe: content.isMe,
-            mentionDisplayNames: input.mentionDisplayNames,
-            highlightTerm: input.highlightSearchTerm,
-            mentionTint: MeeshyColors.mentionColor(isDark: input.isDark),
-            hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
-            linkTint: Color(hex: input.accentHex),
-            isDark: input.isDark,
-            trackedLinks: content.text?.trackedLinks ?? [:]
-        )
-        .equatable()
-        .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+        HStack(alignment: .top, spacing: 4) {
+            BubbleExpandableText(
+                content: content.translation?.preferredContent ?? content.text?.raw ?? "",
+                isMe: content.isMe,
+                mentionDisplayNames: input.mentionDisplayNames,
+                highlightTerm: input.highlightSearchTerm,
+                mentionTint: MeeshyColors.mentionColor(isDark: input.isDark),
+                hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
+                linkTint: Color(hex: input.accentHex),
+                isDark: input.isDark,
+                trackedLinks: content.text?.trackedLinks ?? [:]
+            )
+            .equatable()
+            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+
+            translationChip
+        }
         .padding(.leading, FocalMetrics.Text.indent)
+    }
+
+    /// « Apparition du chip 🌐 en méta » (F06) quand le texte affiché EST
+    /// une traduction — `translation.activeLangCode != translation.originalLangCode`,
+    /// les deux déjà résolus en amont (aucune seconde résolution Prisme).
+    @ViewBuilder
+    private var translationChip: some View {
+        if let translation = content.translation,
+           translation.preferredContent != nil,
+           translation.activeLangCode != translation.originalLangCode {
+            Image(systemName: "globe")
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(MeeshyColors.indigo400)
+                // Purement visuel (F06 demande un SIGNAL visuel, le texte
+                // traduit se lit déjà tel quel) — masqué de VoiceOver pour
+                // éviter un doublon si un futur segment de traduction
+                // rejoint `MessageAccessibilityLabelComposer`.
+                .accessibilityHidden(true)
+        }
     }
 }
 
