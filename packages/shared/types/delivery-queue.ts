@@ -84,3 +84,35 @@ export type QueuedMessagePayload = {
 
 export const DELIVERY_QUEUE_PREFIX = 'delivery:queue:' as const;
 export const DELIVERY_QUEUE_TTL_SECONDS = 172800;
+
+/**
+ * Hard bound on the number of entries the DURABLE (Redis) slice keeps per user.
+ *
+ * The queue holds up to `DELIVERY_QUEUE_TTL_SECONDS` (48 h) of events for one
+ * absent participant, and without a bound that is 48 h of a busy conversation.
+ * Three costs grow with that backlog, and only the first is about storage:
+ *
+ * 1. **Enqueue cost.** The enqueue script reads the WHOLE list and cjson-decodes
+ *    every entry to find the (dedup identity, eventType) it may have to
+ *    supersede. Lua runs atomically inside Redis's SINGLE thread, so the cost of
+ *    queueing one event for an absent participant was paid by every other client
+ *    of that Redis — and it grew with how much was already queued for them.
+ *    Filling a queue of N therefore cost O(N²) decodes of blocked Redis time.
+ * 2. **Replay burst.** `_drainPendingMessages` emits every drained entry, so the
+ *    reconnect of one long-absent user turned into an unbounded emit loop.
+ * 3. **Redis memory**, held for the full TTL.
+ *
+ * Capping the list bounds all three at once: the scan can never read more than
+ * this many entries, the replay can never exceed it, and neither can the stored
+ * backlog. 500 keeps the scan well inside a sub-millisecond budget while staying
+ * far above any plausible legitimate backlog — the drop only starts once the
+ * replay was already pathological, and clients reconcile the remainder through
+ * `/sync` and the normal message fetch when they open the conversation.
+ *
+ * The in-process memory fallback keeps a much tighter cap of its own
+ * (`MEMORY_QUEUE_MAX_PER_USER`, 50) because it bounds a different resource —
+ * gateway heap during a Redis outage, across up to 1000 users at once — not
+ * Redis CPU. The two numbers are deliberately different; see
+ * `RedisDeliveryQueue`.
+ */
+export const DELIVERY_QUEUE_MAX_PER_USER = 500;

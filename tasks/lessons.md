@@ -7204,7 +7204,7 @@ n'est donc pas « plusieurs émetteurs » mais « **plusieurs émetteurs dont au
 moins un CONTOURNE le typage** » (nom d'event en littéral de chaîne). Affiner un
 prédicat d'audit qui ne trouve plus rien vaut mieux que le relancer tel quel.
 
-## Leçon 257 — « A-t-il le droit ? » et « où ça part ? » sont DEUX questions (2026-08-15, routine temps réel, cycle 25)
+## Leçon 257 — « A-t-il le droit ? » et « où ça part ? » sont DEUX questions (2026-08-15, routine temps réel, cycle 26)
 
 `CommentReactionHandler` vérifiait scrupuleusement l'audience du commentaire visé
 — `loadCommentPostAcl` + `canUserInteractWithPost`, refus indistinct, pas
