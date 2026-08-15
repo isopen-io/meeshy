@@ -546,3 +546,17 @@ Append-only log of gotchas and decisions that save time next run.
   trying before assuming it is blocked — an earlier lesson documented `rerun-failed-jobs` as 403 for
   the bot on a DIFFERENT workflow (`ci.yml` on a gateway PR); it worked fine here on `android.yml`.
   Don't let one documented 403 generalise to "reruns never work" without re-checking.**
+  **CLOSED, root-caused, and fixed** (`datastore-test-timeout-flake`, PR #3058, 2026-08-16, after 2
+  more occurrences brought the total to 4/4 PRs touching Android this session): `git log -p` on the
+  two files that never flaked (`MediaDownloadPreferencesStoreTest`/`PrivacyPreferencesStoreTest`)
+  showed they were authored from day one with `withTimeout(15_000)` for the identical
+  real-DataStore-Flow-collection pattern (`runBlocking`, real wall-clock time), while the 4 files
+  that DID flake (`ThemeStoreTest`, `CategorySnapshotStoreTest`, `NotificationPreferencesStoreTest`,
+  `InterfaceLanguageStoreTest`) all used the tighter `withTimeout(5_000)`. Bumped all 19 occurrences
+  to `15_000` to match the already-proven value. CI on the fix's own PR ran the full matrix clean on
+  the first attempt (no Android retry needed) — first live signal it addresses the mechanism, not
+  just a coincidence of timing. **Generalises: when the SAME class of flake recurs 3+ times with the
+  same exception signature, check whether a sibling file already solved it with a different constant
+  before reaching for a rerun again — `git log -p` on the never-flaky siblings is a cheap, decisive
+  check that turns "known flake, keep rerunning" into "known fix, already proven elsewhere in this
+  exact codebase."**
