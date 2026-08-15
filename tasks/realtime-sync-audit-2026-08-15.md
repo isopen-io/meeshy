@@ -2445,3 +2445,140 @@ cherchant les `create` dont les données proviennent d'une ligne LUE du même
 modèle, puis en diffant l'ensemble des champs écrits contre les champs du modèle.
 Une copie partielle ne se trahit jamais à la compilation — seulement le jour où
 l'on demande à la copie ce que l'original savait.
+
+# Cycle 35 — la copie partait sans ce qui décrit ses propres pixels
+
+Sonde annoncée en clôture du cycle 34 : **où ce dépôt DUPLIQUE-t-il une ligne en
+la réénumérant à la main, et qu'a cessé d'emporter chacune de ces projections ?**
+Balayage des `create` dont les données proviennent d'une ligne LUE du même
+modèle, puis diff de l'ensemble des champs écrits contre les champs chargés.
+
+## Candidats écartés — vérifiés jusqu'au site d'écriture
+
+| candidat | pourquoi écarté |
+|---|---|
+| `copyForwardedAttachments` (`MessageProcessor`) | c'est le défaut du cycle 34, déjà corrigé — les 11 champs de chiffrement + `thumbHash`/`imageVariants` suivent désormais la référence |
+| `SoundCaptureService.captureOne` / `captureTracks` | ne duplique PAS une ligne : compose un modèle DIFFÉRENT (`Sound`) à partir d'un audio EXTRAIT puis copié dans son propre dossier. La composition est exhaustive et `sourceLanguage` y est bien repris de `media.language` |
+| `buildPostReplyTo` + `POST_REPLY_SNAPSHOT_SELECT` | projection VOULUE et NOMMÉE : un type (`PostReplyTo`) jumelé à son select, pour un APERÇU de 11 champs. Ce n'est pas une copie qui prétend valoir l'original |
+| `repostPost`, branche NON éphémère | aucune copie média par conception — le repost référence la source vivante via `repostOfId`, qui ne peut pas disparaître |
+| `tus-handler.ts` → `postMedia.create` / `messageAttachment.create` | création d'un upload NEUF, aucune ligne source à emporter |
+| `reproduceEditedSubjectNotifications` | reproduit des notifications à partir des lignes existantes, mais l'exhaustivité y est déjà gardée par un test qui diffe la ligne écrite |
+
+## Constat
+
+- [x] Défaut : `repostPost`, branche éphémère (STORY 21h, STATUS 1h). Les OCTETS
+      sont réellement dupliqués (`trackedDuplicate` → nouveau fichier) — c'est ce
+      qui empêche le « statut/story vide » quand la source expire. Mais la ligne
+      `PostMedia` écrite par-dessus n'énumérait que **8 champs sur les 17** que
+      `mediaSelect` avait chargés
+- [x] `width` / `height` perdues → `FeedMedia.aspectRatio` rend `nil`, le lecteur
+      ne peut plus réserver le cadre : le repost SAUTE au chargement là où
+      l'original ne sautait pas (violation directe de « Zero Unnecessary
+      Re-render » et de l'attente cache-first)
+- [x] `thumbHash` perdu → plus de placeholder instantané. **Exactement le champ
+      que le cycle 34 venait de rétablir sur la famille message** ; la famille
+      post portait le même défaut, à un fichier de distance
+- [x] `duration` perdue → barre de progression indessinable avant téléchargement
+      complet
+- [x] `alt` / `caption` perdus → **le média reposté devient muet à VoiceOver**.
+      Rien ne le signale : l'image s'affiche normalement, seule la description
+      qu'un auteur avait pris la peine d'écrire a disparu
+- [x] `language` / `transcription` perdues → **le Prisme Linguistique n'a plus
+      rien à résoudre**. Une story repostée perd la transcription Whisper de son
+      audio, donc ses sous-titres et toute traduction ultérieure : le contenu
+      retombe dans la langue de l'auteur d'origine
+- [x] `uploaderId` jamais posé → la copie naît sur le régime de TOLÉRANCE que le
+      schéma ne réserve qu'aux lignes antérieures au champ (« toute création
+      nouvelle le pose »)
+- [x] Même oubli d'un cran au-dessus, sur la ligne `Post` : `audioUrl` est
+      remplacé par celui de la copie, `audioDuration` reste derrière — la note
+      vocale d'un statut reposté affiche 0:00 jusqu'au téléchargement complet
+
+Et la suite était verte, exactement comme aux cycles 32, 33 et 34 :
+
+| test | ce qu'il affirmait | ce qu'il ne demandait jamais |
+|---|---|---|
+| « duplicates media to new CDN URLs » | `duplicateMedia` appelé sur chaque `fileUrl` | ce que la ligne écrite CONTIENT |
+| « rolls back media snapshot if a duplication fails » | la compensation supprime le blob | idem |
+| « snapshots moodEmoji, content and audio » | `audioUrl` pointe la copie | `audioDuration` à côté |
+
+Le compte d'appels et l'URL, jamais le contenu de la ligne écrite.
+
+## Correctifs
+
+- [x] La copie emporte les faits que ces pixels portent déjà : `width`,
+      `height`, `thumbHash`, `duration`, `caption`, `alt`, `language`,
+      `transcription`
+- [x] `uploaderId` = le reposteur, qui vient d'en écrire les octets
+- [x] `audioDuration` suit `audioUrl` sur la ligne `Post`
+- [x] L'ABSENCE est copiée aussi fidèlement que la présence (`?? undefined`,
+      jamais `?? null`) — discriminant anti-sur-correction
+
+## Ce qui est VOLONTAIREMENT hors de la copie
+
+- **`variantOf`** pointe vers une AUTRE ligne `PostMedia`. Un pointeur n'est pas
+  un fait sur ces octets : recopié tel quel il désignerait la ligne SOURCE, que
+  le hard-delete de l'éphémère va effacer. C'est le raisonnement que la fonction
+  applique déjà, dix lignes plus bas, au remap des ids de `storyEffects`.
+- **`translations`** porte les URL des variantes TTS. Ces blobs-là n'ont PAS été
+  dupliqués : les recopier promettrait au lecteur des pistes audio destinées à
+  disparaître avec la source. Constat latent nº 1 ci-dessous.
+
+## Gates
+
+- [x] 7 RED discriminants vus rouges avant correctif
+- [x] 4 non-régressions vertes d'emblée (les 2 exclusions volontaires, la copie
+      de l'absence, les octets dupliqués et non ceux de la source)
+- [x] Suite gateway complète : **723 suites / 17 700 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG (changeset) + ce journal + leçon 269
+
+## Constats latents — relevés, NON livrés
+
+1. **Les blobs TTS d'un média détruit ne sont récupérés par personne.**
+   `reclaimPostMediaBytes` récupère `fileUrl` et `thumbnailUrl` d'une ligne
+   `PostMedia` détruite, jamais les URL rangées dans `translations`. Le préambule
+   de ce module décrit précisément ce que devient un tel octet : irrécupérable
+   (plus aucune ligne ne porte son chemin) et éternel (l'URL publique est servie
+   SANS authentification, seul l'`unlink` la révoque). C'est le même défaut, sur
+   les variantes TTS. À traiter avec la question « faut-il dupliquer les TTS d'un
+   repost ? » — les deux touchent le même champ.
+2. **`PostMedia.thumbnailPath` et `codec` sont absents de `mediaSelect`**, donc
+   invisibles de tout appelant qui passe par la projection canonique — y compris
+   cette copie, qui ne peut pas emporter ce qu'elle n'a pas lu. Soit les publier,
+   soit constater qu'aucun lecteur n'en veut et les retirer du modèle.
+3. **Rien n'oblige une projection manuelle à rester exhaustive.** Ni le typage
+   (tout est optionnel à la création Prisma), ni les tests tant qu'ils comptent
+   les appels. `SYNC_MESSAGE_RENDERABLE_KEYS` (voir CHANGELOG § `GET /sync`) est
+   la seule forme de garde que ce dépôt ait construite contre cette dérive : un
+   témoin de FORME qui oppose au select réel la liste des champs contractuels.
+   Généraliser ce motif aux duplications serait le correctif de FOND.
+
+## Reste ouvert (inchangé depuis le cycle 34)
+
+- **La distribution de clés d'un transfert e2ee** (cycle 34, nº 1).
+- **`attachment.isViewOnce` / `isBlurred` publiés et écrits par personne** (nº 2).
+- **`attachment.scanStatus` / `moderationStatus` sans aucun lecteur** (nº 3).
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32).
+- **Casse du mode NON normalisée sur le chemin socket** (cycle 33, nº 1).
+- **iOS ne sait pas parler la forme du contrat de chiffrement** (cycle 33, nº 2).
+
+## Candidat pour le cycle suivant
+
+Trois cycles de suite ont trouvé le même mode d'échec sous trois formes — une
+branche de validateur sans implémentation (32), une implémentation conditionnée
+au mauvais champ (33), une projection amputée (34, 35) — et à chaque fois la
+suite était VERTE parce qu'elle regardait la forme, jamais le contenu. Le constat
+latent nº 3 nomme la seule garde existante contre la dérive : un témoin de FORME
+qui oppose au select réel une liste de champs contractuels. La question qui
+prolonge : **quelles duplications et projections de ce dépôt mériteraient une
+telle garde, et laquelle des trois formes — témoin de forme, dérivation du type
+depuis le select, exhaustivité vérifiée contre le modèle — convient à chacune ?**
+Le balayage part des sites déjà identifiés (`copyForwardedAttachments`,
+`repostPost`, `attachmentIncludes` et ses cinq copies locales déjà rapatriées)
+et demande, pour chacun : qu'est-ce qui ferait ROUGIR le prochain champ ajouté au
+modèle ?

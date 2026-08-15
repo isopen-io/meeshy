@@ -294,3 +294,49 @@ candidats écartés, pourquoi le garde du cycle 93 ne couvrait pas ce cas (il li
 distribution de clés e2ee, et la question proposée au cycle 35 : où ce dépôt
 duplique-t-il une ligne en la réénumérant à la main, et qu'a cessé d'emporter
 chacune de ces projections ?
+
+# Cycle 35 — la copie partait sans ce qui décrit ses propres pixels
+
+Sonde annoncée en clôture du cycle 34 : où ce dépôt duplique-t-il une ligne en la
+réénumérant à la main, et qu'a cessé d'emporter chacune de ces projections ?
+
+## Constat
+
+- [x] 6 candidats écartés, vérifiés jusqu'au site d'écriture (`SoundCaptureService`
+      compose un modèle différent ; `buildPostReplyTo` est un aperçu NOMMÉ et
+      jumelé à son select ; branche non éphémère de `repostPost` sans copie par
+      conception ; `tus-handler` crée du neuf ; `reproduceEditedSubjectNotifications`
+      déjà gardé par un test qui diffe la ligne)
+- [x] Défaut : `repostPost`, branche éphémère — les OCTETS sont dupliqués, la
+      ligne `PostMedia` écrite par-dessus n'énumérait que 8 champs sur 17
+- [x] `width`/`height` perdues ⇒ `aspectRatio` nil, le repost SAUTE au chargement
+- [x] `thumbHash` perdu ⇒ plus de placeholder instantané (le champ même que le
+      cycle 34 venait de rétablir sur la famille message)
+- [x] `alt`/`caption` perdus ⇒ **le média reposté devient muet à VoiceOver**
+- [x] `language`/`transcription` perdues ⇒ **le Prisme n'a plus rien à résoudre**
+- [x] `uploaderId` jamais posé ; `Post.audioDuration` laissé derrière `audioUrl`
+
+## Correctifs
+
+- [x] La copie emporte les 8 faits que ses pixels portent déjà + `uploaderId`
+- [x] `audioDuration` suit `audioUrl` sur la ligne `Post`
+- [x] `variantOf` et `translations` VOLONTAIREMENT hors de la copie — un pointeur
+      et des URL de blobs non dupliqués ne sont pas des faits sur ces octets
+- [x] L'absence copiée aussi fidèlement que la présence
+
+## Gates
+
+- [x] 7 RED discriminants vus rouges avant correctif
+- [x] 4 non-régressions vertes d'emblée
+- [x] Suite gateway complète : **723 suites / 17 700 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 35) + leçon 269
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 35 — le tableau des 6
+candidats écartés, le tableau des 3 tests verts qui comptaient les appels sans
+jamais lire la ligne écrite, les 3 constats latents dont les blobs TTS qu'aucun
+balayage ne récupère, et la question proposée au cycle 36 : quelles duplications
+mériteraient une garde d'exhaustivité, et laquelle des trois formes convient à
+chacune ?
