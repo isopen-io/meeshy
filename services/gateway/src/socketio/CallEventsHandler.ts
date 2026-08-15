@@ -3813,6 +3813,17 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
 
+        // Rate limiting — the last call:* lifecycle signal left unthrottled
+        // (every sibling — BACKGROUNDED/FOREGROUNDED/CHECK_ACTIVE — already
+        // checks). Each event triggers a nested Prisma call-session lookup
+        // plus a second unconditional status read, so a flooding client
+        // could still amplify DB load even though authorization is enforced
+        // below. Same fix as BACKGROUNDED/FOREGROUNDED.
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_TRANSCRIPTION_ACTIVE, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketTranscriptionActiveSchema, data);
         if (!validation.success) return;
 
