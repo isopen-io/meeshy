@@ -1,9 +1,26 @@
 # Contrat d'implémentation — Modes de lecture de conversation (Focal · Script · Résumé Vivant)
 
-> **Statut** : contrat d'ingénierie, branche prototype iOS.
+> **Statut** : contrat d'ingénierie, branche prototype iOS. **Amendé** — voir l'encadré ci-dessous.
 > **Sources normatives** : `docs/design/2026-08-15-conversation-modes-use-cases.html` (vol. 2 — orchestrateur, seuils, API agent), `docs/design/2026-08-15-conversation-modes-verdict.html` (vol. 3 — ce qui est gardé), `docs/design/2026-08-15-focal-spec-integration.html` (vol. 4 — la spec d'implémentation).
-> **Portée** : iOS uniquement (`apps/ios`, `packages/MeeshySDK`). Le web et Android sont hors périmètre de ce contrat.
+> **Portée** : iOS uniquement (`apps/ios`, `packages/MeeshySDK`). Le web et Android sont hors périmètre de ce contrat. — *amendée par A1, cf. ci-dessous.*
 > **Public** : agents TDD travaillant en parallèle. Chaque fichier a **un seul propriétaire**. Deux workstreams ne modifient jamais le même fichier.
+
+> ### ⚠ Amendements — lire avant d'exécuter
+>
+> Ce contrat est désormais la moitié « fil » d'un chantier à deux écrans. Les amendements **liants** sont déclarés au §3 de `tasks/lentille-focal-workshop.md` et priment sur le texte ci-dessous là où ils se contredisent :
+>
+> | A | Porte sur | En une phrase |
+> |---|---|---|
+> | A1 | en-tête (portée) | iOS d'abord, web et Android en suivant, sur le **même** noyau |
+> | A2 | **WS-0** | les lois **pures** partent en TypeScript dans `packages/shared/` ; `Focal/Core/*.swift` devient un jeu de **miroirs** adossés à des vecteurs partagés. Les fichiers non-lois (`FocalRowInput`, `ComposerRichTextContracts`, `LivingSummaryModels`) restent Swift |
+> | A3 | §3.3 `FocalFocusCurve` | courbe **paramétrée** `.thread` / `.list` — une forme, deux jeux de constantes |
+> | A4 | **WS-2** `ScrollTimePillLaw` | devient `scrollActivityLaw`, partagée avec la pilule de section de la liste. Les 900 ms sont **une** constante |
+> | A5 | **WS-1** `ReadingModePreferenceStore` | la préférence devient **serveur et multi-appareils** (`UserConversationPreferences`) ; le store local devient un cache optimiste |
+> | A6 | **WS-7** | la décision dans `ConversationView.init` est inchangée ; s'y **ajoute** une décision côté liste, précalculée serveur (`bridge.suggestedMode`) |
+> | A7 | §1.2 | le tableau des propriétaires accueille un propriétaire **SDK** et un propriétaire **shared** — `CoreModels.swift` (`renderFingerprint`) appartient au lot noyau |
+> | A8 | **WS-10** | inchangé côté fil ; le **pont ✦ de la liste** ne dépend pas de `assist:*` — son étage déterministe est calculé par la gateway |
+>
+> Les **onze écarts du §0** ci-dessous sont des faits sur le code iOS. Ils restent valides mot pour mot et ne sont **pas** amendés.
 
 ---
 
