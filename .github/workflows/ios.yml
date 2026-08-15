@@ -1,4 +1,4 @@
-name: iOS Tests
+name: iOS
 
 # Re-enabled 2026-06-07. Runs the app's MeeshyTests suite. The MeeshySDK package
 # suite lives in a separate workflow (sdk-tests.yml) gated only on
@@ -132,7 +132,7 @@ on:
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
-      - '.github/workflows/ios-tests.yml'
+      - '.github/workflows/ios.yml'
   pull_request:
     branches:
       - main
@@ -144,7 +144,7 @@ on:
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
-      - '.github/workflows/ios-tests.yml'
+      - '.github/workflows/ios.yml'
   workflow_dispatch:
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
@@ -239,9 +239,15 @@ jobs:
 
   ios-tests:
     needs: scope
-    # The check name says which half ran, so a green tick is never mistaken for
-    # "the suite passed".
-    name: ${{ needs.scope.outputs.run_tests == 'true' && 'iOS tests (full suite)' || 'iOS compile' }}
+    # Le nom du check DIT ce qui a tourné. C'est la seule chose qui distingue,
+    # dans l'interface de la PR, un vert qui a bâti l'app d'un vert qui a bâti
+    # ET tout exécuté — et sans cette distinction, « iOS Tests : vert » se lit
+    # comme « les tests passent » alors que la plupart des runs n'en exécutent
+    # aucun. Les deux moitiés restent un seul job : `test-without-building`
+    # consomme le produit de `build-for-testing` pour une destination donnée,
+    # les séparer imposerait soit de reconstruire, soit de faire transiter
+    # ~635 Mo de DerivedData entre deux jobs.
+    name: ${{ needs.scope.outputs.run_tests == 'true' && 'Build app + tests unitaires' || 'Build app (app + cibles de test)' }}
     # A draft PR is work in progress; its compile is the author's business, not
     # the shared macOS pool's. `ready_for_review` above brings the gate back.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false

@@ -1,7 +1,7 @@
 // packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts
 //
 // Le dépôt n'avait aucun gate qui réponde à « le Swift que je viens d'écrire
-// compile-t-il ? » au moment de la PR. `ios-tests.yml` a bien porté un
+// compile-t-il ? » au moment de la PR. `ios.yml` (ex-`ios-tests.yml`) a bien porté un
 // déclencheur `pull_request`, retiré le 2026-07-27 : la SUITE COMPLÈTE (29-45 min
 // de job, plus 24-49 min de file d'attente) saturait le plafond de concurrence
 // macOS du compte dès 5-6 PR simultanées. Le retrait était juste ; ce qu'il a
@@ -25,7 +25,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const WORKFLOW_PATH = fileURLToPath(
-  new URL('../../../../.github/workflows/ios-tests.yml', import.meta.url),
+  new URL('../../../../.github/workflows/ios.yml', import.meta.url),
 );
 
 /**
@@ -65,7 +65,7 @@ const steps = (yaml: string): readonly Step[] => {
 
 const stepNamed = (name: string): Step => {
   const found = steps(WORKFLOW).find((step) => step.name === name);
-  if (!found) throw new Error(`Étape introuvable dans ios-tests.yml : « ${name} »`);
+  if (!found) throw new Error(`Étape introuvable dans ios.yml : « ${name} »`);
   return found;
 };
 
