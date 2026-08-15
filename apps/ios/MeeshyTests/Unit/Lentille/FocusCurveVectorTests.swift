@@ -22,7 +22,7 @@ final class FocusCurveVectorTests: XCTestCase {
     /// Même tolérance que Jest (`toBeCloseTo(value, 4)` ≈ `1e-4`).
     private static let tolerance: CGFloat = 0.0001
 
-    private func closeEnough(_ a: CGFloat, _ b: CGFloat, tolerance: CGFloat = Self.tolerance) -> Bool {
+    private func closeEnough(_ a: CGFloat, _ b: CGFloat, tolerance: CGFloat = FocusCurveVectorTests.tolerance) -> Bool {
         abs(a - b) <= tolerance
     }
 
