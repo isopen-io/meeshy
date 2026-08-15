@@ -54,6 +54,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
     CALL_TRANSCRIPTION_SEGMENT: { maxRequests: 60, windowMs: 10000, keyPrefix: 'socket:call:transcription' },
+    CALL_TRANSCRIPTION_ACTIVE: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:call:transcription-active' },
   },
 }));
 
@@ -592,6 +593,25 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       const { handlers, roomEmit } = setup();
       await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: 'yes' });
       expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    describe('rate limiting', () => {
+      it('checks the rate limit before relaying the presence signal', async () => {
+        const { handlers, roomEmit } = setup();
+        await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+        expect(mockCheckSocketRateLimit).toHaveBeenCalledTimes(1);
+        expect(roomEmit).toHaveBeenCalledTimes(1);
+      });
+
+      it('does NOT relay the signal when the rate limit is exceeded', async () => {
+        mockCheckSocketRateLimit.mockResolvedValueOnce(false);
+        const { handlers, roomEmit, directEmit } = setup();
+        await handlers[CALL_EVENTS.TRANSCRIPTION_ACTIVE]({ callId: VALID_CALL_ID, active: true });
+        expect(roomEmit).not.toHaveBeenCalled();
+        // The handler itself must not emit a second error on top of whatever
+        // checkSocketRateLimit already reports to the sender.
+        expect(directEmit).not.toHaveBeenCalled();
+      });
     });
   });
 
