@@ -212,10 +212,15 @@ final class LentilleFocusCardTests: XCTestCase {
     /// aucun `frame(height:` dans les fichiers de carte) ». La carte est un
     /// fond/overlay du rang élu — imposer une hauteur LUE depuis le layout
     /// serait la porte d'entrée du relayout que le contrat interdit.
+    /// Code NORMALISÉ (commentaires retirés, même patron que
+    /// `LentillePerspectiveCurveTests.test_perspective_neverTouchesLayout`) :
+    /// ce sont des gardes de PATRON de code, pas de littéraux R15 — la prose
+    /// d'un commentaire qui nomme la règle (comme celui-ci) ne doit pas la
+    /// déclencher.
     func test_modeFiles_neverHardcodeFrameHeight() throws {
         for source in try modeSources() {
             XCTAssertEqual(
-                occurrences(of: "frame(height:", in: source.code), 0,
+                occurrences(of: "frame(height:", in: normalizedCode(source.code)), 0,
                 "\(source.name) contient « frame(height: » — la carte doit contraindre sa " +
                 "hauteur via `.frame(width:height:)` (les deux, jamais `height:` seul), " +
                 "sur la constante `LentilleMetrics.Row.height`, jamais une mesure de layout."
@@ -227,7 +232,7 @@ final class LentilleFocusCardTests: XCTestCase {
     func test_modeFiles_neverUseOnTapGesture() throws {
         for source in try modeSources() {
             XCTAssertEqual(
-                occurrences(of: ".onTapGesture", in: source.code), 0,
+                occurrences(of: ".onTapGesture", in: normalizedCode(source.code)), 0,
                 "\(source.name) contient « .onTapGesture » — l'encoche et toute action de " +
                 "`Lentille/Mode/` doivent être des `Button` en style `.plain`, jamais un " +
                 "geste de tap nu (accessibilité : un `.onTapGesture` n'est pas exposé comme " +

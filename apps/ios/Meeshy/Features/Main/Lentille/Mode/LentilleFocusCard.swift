@@ -46,10 +46,9 @@ struct LentilleFocusCard: View {
     let decision: ReadingModeOrchestrator.OrchestratorDecision
     let isDark: Bool
     let reduceMotion: Bool
-    /// Tap sur l'encoche — OUVRE le menu I-072. En I-071, câblage préparé
-    /// SEUL (`Button(.plain)` + `.contentShape`) : aucun menu n'est encore
-    /// présenté, la fermeture reste `{}` tant que `LentilleFocusCardHost` ne
-    /// la branche pas (I-072).
+    /// Tap sur l'encoche — `Button(.plain)` + `.contentShape` (câblage
+    /// préparé par I-071). `LentilleFocusCardHost` (ci-dessous) le branche
+    /// depuis I-072 à la présentation du popover `LentilleModeMenu`.
     var onNotchTap: () -> Void = {}
 
     private var accent: Color { Color(hex: conversation.accentColor) }
@@ -151,12 +150,21 @@ struct LentilleFocusCardHost: View {
     let conversations: [Conversation]
     let isAnonymous: Bool
     var preferenceStore: ReadingModePreferenceStoring = LentilleReadingModePreferenceCenter.shared
+    /// Notifié à chaque tap sur l'encoche, EN PLUS de la présentation du menu
+    /// gérée par cet hôte (ci-dessous) — point d'extension conservé depuis
+    /// I-071 (câblage préparé), sans usage réel aujourd'hui.
     var onOpenModeMenu: (Conversation) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var preference: ReadingModeOrchestrator.ReadingModePreference = .auto
     @State private var unsubscribe: (() -> Void)?
+    /// L'encoche est le PREMIER des trois points d'entrée du menu de mode
+    /// (contrat LWS-8, I-072) — les deux autres sont le sous-menu « Mode de
+    /// lecture » (`nativeContextMenuView`, `ConversationListView+Overlays
+    /// .swift`) et l'aperçu (`LentillePeekView`). Les trois écrivent dans le
+    /// MÊME magasin (`LentilleModeMenuActions.select`, `preferenceStore`).
+    @State private var isModeMenuPresented = false
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -188,19 +196,48 @@ struct LentilleFocusCardHost: View {
                     ),
                     isDark: isDark,
                     reduceMotion: reduceMotion,
-                    onNotchTap: { onOpenModeMenu(conversation) }
+                    onNotchTap: {
+                        onOpenModeMenu(conversation)
+                        isModeMenuPresented = true
+                    }
                 )
                 .frame(
                     width: geo.size.width - 2 * LentilleMetrics.Row.marginHorizontal,
                     height: LentilleMetrics.Row.height
                 )
                 .position(x: geo.size.width / 2, y: localY)
+                .popover(isPresented: $isModeMenuPresented) {
+                    modeMenu(for: conversation)
+                }
             }
         }
         .adaptiveOnChange(of: electedConversation?.id, initial: true) { _, newId in
             resubscribe(to: newId)
         }
         .onDisappear { unsubscribe?() }
+    }
+
+    // MARK: - Menu de mode (I-072) — encoche = premier point d'entrée
+
+    /// Contenu du popover de l'encoche : le catalogue de `LentilleModeMenu`,
+    /// construit sur les MÊMES capacités que la décision affichée
+    /// (`LentilleReadingModeContext.capabilities`), pour que Rivière y
+    /// affiche la MÊME raison — seuils vivants — que partout ailleurs.
+    /// Revenir sur Auto réengage l'orchestrateur (`LentilleModeMenuActions
+    /// .select` écrit `.auto` comme n'importe quelle autre valeur ; c'est
+    /// `resolveOrchestratorDecision` qui sait que `.auto` rend la main).
+    private func modeMenu(for conversation: Conversation) -> some View {
+        let capabilities = LentilleReadingModeContext.capabilities(
+            for: conversation, isAnonymous: isAnonymous, isLentilleFlagEnabled: true
+        )
+        let model = LentilleModeMenuModel.build(capabilities: capabilities, currentPreference: preference)
+        return VStack(alignment: .leading, spacing: 0) {
+            LentilleModeMenu(model: model) { selected in
+                LentilleModeMenuActions.select(selected, conversationId: conversation.id, store: preferenceStore)
+                isModeMenuPresented = false
+            }
+        }
+        .padding(MeeshySpacing.sm)
     }
 
     // MARK: - Abonnement à la préférence (M-048) — la SEULE lecture/écriture
