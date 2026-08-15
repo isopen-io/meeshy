@@ -1,5 +1,38 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`ConversationLockStore` wired into the logout-time wipe** (slice
+> `conversation-lock-logout-wiring`, PR #3048, merged `f651681d9`) — the second, small
+> foundation-then-consumer slice off `conversation-lock-store-foundation` (previous run).
+> `ConversationLockStore.resetForLogout()` existed on the interface but nothing called it: a second
+> account signing in on the same device would have inherited the previous account's master PIN and
+> conversation locks — the exact cross-account leak `SessionTeardown`'s own doc comment already
+> describes for every other on-device store, and the exact seam that comment explicitly anticipated
+> ("this seam is where that clear would land once one exists").
+>
+> Wired into `DefaultSessionTeardown.wipe()` (called alongside the existing Room/category/draft
+> clears), new Hilt provider `providesConversationLockStore` mirroring `providesTokenStore`'s
+> `EncryptedTokenStore(context)` pattern exactly. Two tests via the SAME `InMemoryConversationLockStore`
+> fake `conversation-lock-store-foundation` already shipped — no new test infrastructure.
+>
+> **CI flake pattern — now 3 occurrences in one session, worth flagging as systemic**: `Android`
+> failed on its first CI run for THIS PR too, exactly like the previous slice — but on a THIRD
+> different, unrelated DataStore test this time (`ThemeStoreTest` → `MediaDownloadPreferencesStoreTest`
+> → now `PrivacyPreferencesStoreTest`, all `dataStore_set*_isReflectedInTheFlow`, all
+> `kotlinx.coroutines.TimeoutCancellationException`). `gh run rerun --failed` resolved it again on
+> the first retry. Three different files, same exact test-name pattern and same exception class, in
+> the same session — this reads like a genuine, systemic CI-runner timing issue affecting DataStore
+> Flow-collection tests broadly (not a random one-off), not three independent flaky tests. **Worth a
+> dedicated future item**: investigate why `dataStore_set*_isReflectedInTheFlow`-shaped tests
+> specifically time out under CI load (a shared test helper's timeout too tight for a loaded runner?
+> a coroutine dispatcher difference between local/CI?) rather than continuing to pay a rerun per
+> affected PR indefinitely.
+>
+> **Still open**: PIN entry UI, `ConversationListViewModel` wiring (hide locked conversations from
+> the list), the unlock flow itself. `feature-parity.md`'s "Conversation lock" line stays `[ ]`.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=conversation-lock-logout-wiring`.
+
+
 > On 2026-08-15 **`ConversationLockStore` foundation shipped** (slice
 > `conversation-lock-store-foundation`, PR #3045, merged `498a33ca4`) — the storage primitive for
 > the `ConversationLock` gap scoped at the previous run (zero PIN/biometric infra existed on

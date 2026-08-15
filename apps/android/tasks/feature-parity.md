@@ -2699,8 +2699,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
-      hashing/storage only. Still needed: PIN entry UI, `ConversationListViewModel` wiring (hide
-      locked conversations), unlock flow, logout hook. Box stays unchecked until those land.
+      hashing/storage only. **Logout hook wired 2026-08-15** (slice `conversation-lock-logout-wiring`,
+      PR #3048) — `DefaultSessionTeardown.wipe()` now clears the master PIN and every conversation
+      lock, closing the cross-account leak the foundation slice deferred. Still needed: PIN entry
+      UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
+      flow itself. Box stays unchecked until those land.
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
 - [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
