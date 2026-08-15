@@ -50,15 +50,17 @@ import type { ConversationBridge } from '../../types/conversation-bridge.js'
 import type { ConversationBridgeInput, ConversationBridgeProviding } from '../ConversationBridgeProviding.js'
 
 /**
- * Fenêtre de non-lus connue localement : `unreadCount` est le nombre de
- * messages non lus COUVERTS par le cache disponible, `windowCoversUnread`
- * dit si ce cache couvre TOUT l'intervalle non lu (`true`) ou seulement une
- * borne récente (`false`, typiquement un cache limité aux N derniers
- * messages). Les deux voyagent ensemble : c'est la même fenêtre qui définit
- * le compte ET sa complétude.
+ * Fenêtre de non-lus connue localement : `windowCoversUnread` dit si le
+ * cache disponible couvre TOUT l'intervalle non lu (`true`) ou seulement
+ * une borne récente (`false`, typiquement un cache limité aux N derniers
+ * messages). La fenêtre déclare une COMPLÉTUDE, jamais un compte : le
+ * compteur autoritatif est `input.unreadCount` du protocole gelé
+ * (`ConversationBridgeProviding`), exactement comme `UnreadWindow` côté
+ * Swift — REV-2, blocker 1 : un second compteur porté par le cache faisait
+ * diverger les deux miroirs dès que compteur appelant ≠ couverture de
+ * fenêtre (gate `== 0`, champ `unreadCount` ET `suggestedMode`).
  */
 export type LocalBridgeUnreadWindow = {
-  readonly unreadCount: number
   readonly windowCoversUnread: boolean
 }
 
@@ -88,14 +90,14 @@ export class LocalBridgeProvider implements ConversationBridgeProviding {
     const data = buildBridgeData({
       messages,
       viewerId: input.viewerId,
-      unreadCount: window.unreadCount,
+      unreadCount: input.unreadCount,
     })
     if (data === null) return null
 
     return {
       kind: 'fallback',
-      unreadCount: window.unreadCount,
-      suggestedMode: window.unreadCount <= ORCHESTRATOR_UNREAD_CAP ? 'focal' : 'resume',
+      unreadCount: input.unreadCount,
+      suggestedMode: input.unreadCount <= ORCHESTRATOR_UNREAD_CAP ? 'focal' : 'resume',
       data,
       ...(window.windowCoversUnread ? {} : { isComplete: false }),
     }

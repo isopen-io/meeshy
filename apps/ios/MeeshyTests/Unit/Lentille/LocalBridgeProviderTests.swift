@@ -156,6 +156,24 @@ final class LocalBridgeProviderTests: XCTestCase {
         XCTAssertEqual(bridge?.suggestedMode, .resume, "> 25 ⇒ Résumé Vivant")
     }
 
+    // MARK: - Compteur du protocole autoritatif (REV-2, blocker 1 — parité TS)
+
+    /// Cas discriminant : le compteur APPELANT (30) diverge de la couverture
+    /// du cache (2 messages). Le pont doit porter le compteur du protocole —
+    /// gate, champ `unreadCount` ET `suggestedMode` — jamais un compte dérivé
+    /// du cache. Témoin jumeau du test TS de `local-bridge-provider.test.ts` :
+    /// c'est l'absence de CE cas des deux côtés qui a laissé le miroir TS
+    /// lire un second compteur pendant que Swift lisait le bon.
+    func test_bridgeFor_callerCountDivergesFromCacheCoverage_protocolCountWins() async {
+        let sut = makeSUT(messages: makeMessagesFromOthers(), window: .init(isComplete: true))
+
+        let bridge = await sut.bridgeFor(conversationId: "c1", viewerId: "me", unreadCount: 30)
+
+        XCTAssertEqual(bridge?.unreadCount, 30, "le compteur du protocole prime la couverture du cache")
+        XCTAssertEqual(bridge?.suggestedMode, .resume, "30 > 25 ⇒ résumé, même si le cache ne couvre que 2 messages")
+        XCTAssertEqual(bridge?.data?.messageCount, 2, "la data, elle, reste celle de la fenêtre en cache")
+    }
+
     func test_suggestedMode_pureFunction_matchesCapBoundary() {
         XCTAssertEqual(LocalBridgeProvider.suggestedMode(forUnreadCount: 1), .focal)
         XCTAssertEqual(LocalBridgeProvider.suggestedMode(forUnreadCount: 25), .focal)

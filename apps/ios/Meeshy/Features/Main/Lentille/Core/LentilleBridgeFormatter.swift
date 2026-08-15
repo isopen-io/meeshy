@@ -173,13 +173,18 @@ nonisolated enum LentilleBridgeFormatter {
         return t(key, ["count": String(data.messageCount)])
     }
 
+    /// Un compteur EXPLICITEMENT à `0` est ignoré, comme le `count > 0` du
+    /// miroir TS (`formatMediaSegment`, conversation-bridge.ts). Inatteignable
+    /// via `buildBridgeData` (qui n'émet jamais `0`), mais un
+    /// `ConversationBridgeData` venu de la gateway (G-124) peut le porter —
+    /// REV-2, réserve R3.
     private static func formatMediaSegment(data: ConversationBridgeData, t: BridgeTranslate) -> String? {
         guard let counts = data.mediaCounts else { return nil }
 
         let parts: [String] = [
-            counts.images.map { t(mediaImagesKey, ["count": String($0)]) },
-            counts.audio.map { t(mediaAudioKey, ["count": String($0)]) },
-            counts.files.map { t(mediaFilesKey, ["count": String($0)]) },
+            counts.images.flatMap { $0 > 0 ? t(mediaImagesKey, ["count": String($0)]) : nil },
+            counts.audio.flatMap { $0 > 0 ? t(mediaAudioKey, ["count": String($0)]) : nil },
+            counts.files.flatMap { $0 > 0 ? t(mediaFilesKey, ["count": String($0)]) : nil },
         ].compactMap { $0 }
 
         return parts.isEmpty ? nil : parts.joined(separator: ", ")

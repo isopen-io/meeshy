@@ -47,10 +47,7 @@ describe('LocalBridgeProvider — vecteurs bridge.vectors.json rejoués via le p
 
   vectors.forEach((vector, index) => {
     it(`case ${index} — fenêtre complète ⇒ même data que la loi`, async () => {
-      const provider = makeProvider(vector.input.messages, {
-        unreadCount: vector.input.unreadCount,
-        windowCoversUnread: true,
-      })
+      const provider = makeProvider(vector.input.messages, { windowCoversUnread: true })
 
       const result = await provider.bridgeFor({
         conversationId: 'conv-vector',
@@ -78,7 +75,7 @@ describe('LocalBridgeProvider — vecteurs bridge.vectors.json rejoués via le p
 describe('LocalBridgeProvider — fenêtres et zéro donnée fabriquée', () => {
   it('fenêtre partielle (windowCoversUnread: false) ⇒ isComplete: false SUR le pont', async () => {
     const messages: readonly BridgeMessage[] = [{ senderId: 'u1', senderName: 'Alice' }]
-    const provider = makeProvider(messages, { unreadCount: 4, windowCoversUnread: false })
+    const provider = makeProvider(messages, { windowCoversUnread: false })
 
     const result = await provider.bridgeFor({ conversationId: 'conv-1', viewerId: 'viewer', unreadCount: 4 })
 
@@ -96,7 +93,7 @@ describe('LocalBridgeProvider — fenêtres et zéro donnée fabriquée', () => 
   })
 
   it('messages en cache inconnus (getCachedMessages ⇒ null) ⇒ provider rend null', async () => {
-    const provider = makeProvider(null, { unreadCount: 4, windowCoversUnread: true })
+    const provider = makeProvider(null, { windowCoversUnread: true })
 
     const result = await provider.bridgeFor({ conversationId: 'conv-1', viewerId: 'viewer', unreadCount: 4 })
 
@@ -105,7 +102,7 @@ describe('LocalBridgeProvider — fenêtres et zéro donnée fabriquée', () => 
 
   it(`unreadCount 26 (> ORCHESTRATOR_UNREAD_CAP = ${ORCHESTRATOR_UNREAD_CAP}) ⇒ suggestedMode 'resume'`, async () => {
     const messages: readonly BridgeMessage[] = [{ senderId: 'u1', senderName: 'Alice' }]
-    const provider = makeProvider(messages, { unreadCount: 26, windowCoversUnread: true })
+    const provider = makeProvider(messages, { windowCoversUnread: true })
 
     const result = await provider.bridgeFor({ conversationId: 'conv-1', viewerId: 'viewer', unreadCount: 26 })
 
@@ -114,10 +111,7 @@ describe('LocalBridgeProvider — fenêtres et zéro donnée fabriquée', () => 
 
   it(`unreadCount ${ORCHESTRATOR_UNREAD_CAP} (== ORCHESTRATOR_UNREAD_CAP, frontière basse) ⇒ suggestedMode 'focal'`, async () => {
     const messages: readonly BridgeMessage[] = [{ senderId: 'u1', senderName: 'Alice' }]
-    const provider = makeProvider(messages, {
-      unreadCount: ORCHESTRATOR_UNREAD_CAP,
-      windowCoversUnread: true,
-    })
+    const provider = makeProvider(messages, { windowCoversUnread: true })
 
     const result = await provider.bridgeFor({
       conversationId: 'conv-1',
@@ -126,5 +120,29 @@ describe('LocalBridgeProvider — fenêtres et zéro donnée fabriquée', () => 
     })
 
     expect(result?.suggestedMode).toBe('focal')
+  })
+})
+
+describe('LocalBridgeProvider — le compteur du protocole est autoritatif (REV-2, blocker 1, parité Swift)', () => {
+  it('compteur appelant ≠ couverture du cache ⇒ le pont porte le compteur APPELANT, suggestedMode compris', async () => {
+    const messages: readonly BridgeMessage[] = [
+      { senderId: 'u1', senderName: 'Alice' },
+      { senderId: 'u2', senderName: 'Bob' },
+    ]
+    const provider = makeProvider(messages, { windowCoversUnread: true })
+
+    const result = await provider.bridgeFor({ conversationId: 'conv-1', viewerId: 'viewer', unreadCount: 30 })
+
+    expect(result?.unreadCount).toBe(30)
+    expect(result?.suggestedMode).toBe('resume')
+    expect(result?.data).toEqual({ authors: ['Alice', 'Bob'], extraAuthorCount: 0, messageCount: 2 })
+  })
+
+  it('unreadCount 0 au protocole ⇒ null, même quand le cache contient des messages d’autrui', async () => {
+    const provider = makeProvider([{ senderId: 'u1', senderName: 'Alice' }], { windowCoversUnread: true })
+
+    const result = await provider.bridgeFor({ conversationId: 'conv-1', viewerId: 'viewer', unreadCount: 0 })
+
+    expect(result).toBeNull()
   })
 })

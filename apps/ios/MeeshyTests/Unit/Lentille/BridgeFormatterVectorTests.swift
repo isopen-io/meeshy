@@ -223,4 +223,33 @@ final class BridgeFormatterVectorTests: XCTestCase {
 
         XCTAssertEqual(LentilleBridgeFormatter.formatBridge(data: data, t: t), "Alice · 1 message · 2 photos, 1 audio")
     }
+
+    /// Un compteur EXPLICITEMENT à `0` est ignoré — miroir du `count > 0` TS
+    /// et du témoin `audio: 0` de `conversation-bridge.test.ts`. Inatteignable
+    /// via `buildBridgeData`, mais un `ConversationBridgeData` gateway (G-124)
+    /// peut le porter — REV-2, réserve R3.
+    func test_formatBridge_explicitZeroCount_isSkippedLikeTS() {
+        let data = ConversationBridgeData(
+            authors: ["Alice"],
+            extraAuthorCount: 0,
+            messageCount: 1,
+            mediaCounts: ConversationBridgeMediaCounts(images: 2, audio: 0, files: 1)
+        )
+        let t: LentilleBridgeFormatter.BridgeTranslate = { key, params in
+            switch key {
+            case "lentille.bridge.authorsOne": return "\(params["name"] ?? "")"
+            case "lentille.bridge.messagesOne": return "1 message"
+            case "lentille.bridge.media.images": return "\(params["count"] ?? "") photos"
+            case "lentille.bridge.media.audio": return "\(params["count"] ?? "") audio"
+            case "lentille.bridge.media.files": return "\(params["count"] ?? "") fichiers"
+            default: return key
+            }
+        }
+
+        XCTAssertEqual(
+            LentilleBridgeFormatter.formatBridge(data: data, t: t),
+            "Alice · 1 message · 2 photos, 1 fichiers",
+            "audio: 0 explicite ⇒ bucket ignoré, jamais « 0 audio » rendu"
+        )
+    }
 }
