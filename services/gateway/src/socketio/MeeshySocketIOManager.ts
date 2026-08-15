@@ -1578,12 +1578,21 @@ export class MeeshySocketIOManager {
         // l'identité de dédup par défaut (messageId, eventType) les écraserait
         // l'une après l'autre — le lecteur hors ligne ne convergerait que sur la
         // dernière arrivée.
+        // Borné aux lecteurs dont le Prisme porte CETTE langue — la même règle
+        // que `emitConversationPreviewUpdate` applique juste en dessous avec
+        // `onlyIfPreviewCarriesLanguage`. Sans ce bornage, un message d'une
+        // conversation à L langues déposait L entrées chez CHAQUE absent, dont
+        // L−1 dans des langues qu'il ne peut pas afficher : la file qui porte
+        // les vrais messages était diluée d'autant, et le repli mémoire
+        // (plafonné à 50 entrées par utilisateur) évinçait des messages réels
+        // au profit de traductions illisibles.
         await this._enqueueForOfflineParticipants({
           conversationId: normalizedId,
           eventType: 'translation',
           messageId: result.messageId,
           payload: translationData as unknown as Record<string, unknown>,
           dedupKey: `${result.messageId}:${targetLanguage}`,
+          restrictToReadersOfLanguage: targetLanguage,
         });
 
         // `message:translation` ne porte QUE la room de conversation. Un lecteur
