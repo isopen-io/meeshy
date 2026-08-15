@@ -116,6 +116,16 @@ class ConversationRepository @Inject constructor(
         apiCall { conversationApi.leave(id) }
 
     /**
+     * Permanently hides [id] for the calling user only (destructive, confirmed
+     * by the caller UI). No local cache mutation here: the gateway broadcasts
+     * `conversation:deleted` to every one of the caller's own devices, and
+     * [ConversationPurge.onConversationDeleted] ([me.meeshy.app.conversations])
+     * already drops the row once that event round-trips.
+     */
+    suspend fun deleteForMe(id: String): NetworkResult<Unit> =
+        apiCall { conversationApi.deleteForMe(id) }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or

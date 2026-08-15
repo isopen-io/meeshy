@@ -56,6 +56,10 @@
     <string name="conversations_leave_confirm_message">Vas a abandonar «%1$s». Ya no recibirás nuevos mensajes de esta conversación.</string>
     <string name="conversations_leave_confirm_button">Abandonar</string>
     <string name="conversations_leave_cancel_button">Cancelar</string>
+    <string name="conversations_action_delete_for_me">Eliminar para mí</string>
+    <string name="conversations_delete_for_me_confirm_title">¿Eliminar conversación?</string>
+    <string name="conversations_delete_for_me_confirm_message">«%1$s» se eliminará permanentemente solo de tus dispositivos. Los demás participantes la conservan.</string>
+    <string name="conversations_delete_for_me_confirm_button">Eliminar</string>
     <string name="conversations_action_more">Más acciones</string>
     <string name="conversations_badge_pinned">Fijada</string>
     <string name="conversations_badge_muted">Silenciada</string>

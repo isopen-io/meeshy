@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -81,4 +82,13 @@ interface ConversationApi {
      *  caller; the row drops from their own list once `conversation:participant-left` round-trips. */
     @POST("conversations/{id}/leave")
     suspend fun leave(@Path("id") id: String): ApiResponse<Unit>
+
+    /**
+     * Permanently hides the conversation for the caller only (gateway
+     * `routes/conversations/delete-for-me.ts`) — other participants are never
+     * notified; the row drops from the caller's own devices once
+     * `conversation:deleted` round-trips.
+     */
+    @DELETE("conversations/{id}/delete-for-me")
+    suspend fun deleteForMe(@Path("id") id: String): ApiResponse<Unit>
 }

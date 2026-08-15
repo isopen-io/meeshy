@@ -42,6 +42,7 @@ private class FakeConversationApi(
     ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
 
     override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingSettingsApi(
@@ -71,6 +72,7 @@ private class RecordingSettingsApi(
         return response
     }
     override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingLeaveApi(
@@ -95,6 +97,35 @@ private class RecordingLeaveApi(
         body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
     ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
     override suspend fun leave(id: String): ApiResponse<Unit> {
+        lastId = id
+        return response
+    }
+    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
+}
+
+private class RecordingDeleteForMeApi(
+    private val response: ApiResponse<Unit>,
+) : ConversationApi {
+    var lastId: String? = null
+
+    override suspend fun list(offset: Int?, limit: Int?) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
+    override suspend fun create(body: CreateConversationRequest) =
+        ApiResponse<ApiConversation>(success = false)
+    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
+    override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun deleteForMe(id: String): ApiResponse<Unit> {
         lastId = id
         return response
     }
@@ -533,6 +564,28 @@ class ConversationRepositoryTest {
         val repo = repository(RecordingLeaveApi(ApiResponse(success = false, error = "Not a participant")))
 
         val result = repo.leave("c1")
+
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
+        assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message)
+            .isEqualTo("Not a participant")
+    }
+
+    @Test
+    fun `deleteForMe forwards the id and returns Success`() = runTest {
+        val api = RecordingDeleteForMeApi(ApiResponse(success = true, data = Unit))
+        val repo = repository(api)
+
+        val result = repo.deleteForMe("c1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `deleteForMe folds an unsuccessful envelope into a Failure`() = runTest {
+        val repo = repository(RecordingDeleteForMeApi(ApiResponse(success = false, error = "Not a participant")))
+
+        val result = repo.deleteForMe("c1")
 
         assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
         assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message)
