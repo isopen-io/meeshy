@@ -1,0 +1,674 @@
+<title>La Lentille</title>
+<style>
+  :root{
+    --m-bg:#FFFFFF; --m-bg2:#F8F7FF; --m-bg3:#EEF2FF;
+    --m-text:#1E1B4B; --m-text2:#4A4770; --m-text3:#8B89A6;
+    --m-brand:#6366F1; --m-deep:#4338CA;
+    --m-green:#34D399; --m-away:#FBBF24;
+    --m-hair:rgba(30,27,75,.08);
+    --page:#FAFAFC; --card:#FFFFFF; --ink:#1E1B4B; --ink2:#4A4770; --ink3:#8B89A6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --m-bg:#09090B; --m-bg2:#13111C; --m-bg3:#1E1B4B;
+      --m-text:#EEF2FF; --m-text2:#B9B7D8; --m-text3:#706E92;
+      --m-hair:rgba(238,242,255,.08);
+      --page:#0C0C10; --card:#131318; --ink:#EEF2FF; --ink2:#B9B7D8; --ink3:#706E92;
+    }
+  }
+  :root[data-theme="dark"]{
+    --m-bg:#09090B; --m-bg2:#13111C; --m-bg3:#1E1B4B;
+    --m-text:#EEF2FF; --m-text2:#B9B7D8; --m-text3:#706E92;
+    --m-hair:rgba(238,242,255,.08);
+    --page:#0C0C10; --card:#131318; --ink:#EEF2FF; --ink2:#B9B7D8; --ink3:#706E92;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--page); color:var(--ink); font-family:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; margin:0; padding:0 0 80px; line-height:1.55}
+  .wrap{max-width:1060px; margin:0 auto; padding:0 20px}
+  h1{font-size:34px; font-weight:900; letter-spacing:-.5px; margin:48px 0 6px}
+  h2{font-size:22px; font-weight:900; margin:56px 0 10px; letter-spacing:-.3px}
+  h3{font-size:16px; font-weight:800; margin:26px 0 8px}
+  p{margin:8px 0; color:var(--ink2); font-size:14.5px}
+  .lead{font-size:16px; color:var(--ink2)}
+  .kicker{display:inline-block; font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--m-brand); background:color-mix(in srgb, var(--m-brand) 10%, transparent); padding:4px 10px; border-radius:99px; margin-top:40px}
+  .tag{display:inline-block; font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:99px; margin-right:6px; background:var(--m-bg3); color:var(--m-brand)}
+  code{font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:12.5px; background:var(--m-bg2); border:1px solid var(--m-hair); padding:1px 5px; border-radius:5px; color:var(--ink)}
+  pre{background:var(--m-bg2); border:1px solid var(--m-hair); border-radius:12px; padding:14px 16px; overflow-x:auto; font-size:12px; line-height:1.6}
+  pre code{background:none; border:none; padding:0}
+  table{border-collapse:collapse; width:100%; font-size:13px; margin:12px 0}
+  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink3); padding:8px 10px; border-bottom:2px solid var(--m-hair)}
+  td{padding:9px 10px; border-bottom:1px solid var(--m-hair); vertical-align:top; color:var(--ink2)}
+  td:first-child{color:var(--ink); font-weight:700; white-space:nowrap}
+  .tablewrap{overflow-x:auto}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+  @media(max-width:800px){.grid2{grid-template-columns:1fr}}
+  .note{background:color-mix(in srgb, var(--m-brand) 6%, var(--card)); border:1px solid color-mix(in srgb, var(--m-brand) 25%, transparent); border-radius:14px; padding:14px 18px; margin:16px 0}
+  .note b{color:var(--ink)}
+  .figbox{background:var(--card); border:1px solid var(--m-hair); border-radius:16px; padding:18px; margin:16px 0; overflow-x:auto}
+  .cap{font-size:12px; color:var(--ink3); margin-top:8px; text-align:center}
+
+  /* ================= PHONE PROTOTYPE ================= */
+  .stage{display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap; margin:22px 0}
+  .phone{width:390px; height:780px; background:var(--m-bg); border:1px solid var(--m-hair); border-radius:38px; overflow:hidden; position:relative; box-shadow:0 24px 60px -30px rgba(30,27,75,.35); flex:none}
+  .lhead{position:absolute; top:0; left:0; right:0; z-index:30; padding:18px 20px 10px; background:linear-gradient(var(--m-bg) 68%, transparent); display:flex; align-items:center; justify-content:space-between}
+  .lhead .ttl{font-size:26px; font-weight:900; letter-spacing:-.4px}
+  .lhead .me{width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center}
+  .timepill{position:absolute; top:64px; left:50%; transform:translateX(-50%) translateY(-6px); z-index:40; background:color-mix(in srgb, var(--m-text) 88%, transparent); color:var(--m-bg); font-size:11.5px; font-weight:800; padding:5px 13px; border-radius:99px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none}
+  .timepill.on{opacity:1; transform:translateX(-50%) translateY(0)}
+  .lscroll{position:absolute; inset:0; overflow-y:auto; padding:64px 0 96px; scrollbar-width:none}
+  .lscroll::-webkit-scrollbar{display:none}
+
+  /* rail des vivants */
+  .rail{display:flex; gap:16px; padding:8px 20px 14px; overflow-x:auto; scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .railitem{flex:none; width:56px; text-align:center; cursor:pointer}
+  .railava{width:48px; height:48px; border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:900; color:#fff; position:relative; box-shadow:0 0 0 2px var(--m-bg), 0 0 0 3.5px var(--ra)}
+  .railitem.live .railava{animation:livering 2s ease-in-out infinite}
+  @keyframes livering{0%,100%{box-shadow:0 0 0 2px var(--m-bg), 0 0 0 3.5px var(--ra)}50%{box-shadow:0 0 0 2px var(--m-bg), 0 0 0 6px color-mix(in srgb, var(--ra) 45%, transparent)}}
+  .raillbl{font-size:9.5px; font-weight:800; color:var(--ink3); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .railbadge{position:absolute; bottom:-2px; right:-4px; background:var(--ra); color:#fff; font-size:8.5px; font-weight:900; padding:1px 5px; border-radius:99px; border:2px solid var(--m-bg)}
+
+  /* sticker de section */
+  .lsticker{position:sticky; top:0; z-index:20; display:flex; justify-content:center; padding:10px 0 8px; pointer-events:none}
+  .lsticker span{background:color-mix(in srgb, var(--m-bg2) 82%, transparent); backdrop-filter:blur(8px); border:1px solid var(--m-hair); color:var(--ink3); font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; padding:4px 13px; border-radius:99px}
+
+  /* rang */
+  .crow{display:flex; align-items:center; gap:12px; padding:10px 16px; margin:0 8px; border-radius:16px; cursor:pointer; position:relative; will-change:transform,opacity; transform-origin:16% 50%}
+  .crow .ava{width:44px; height:44px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:900; color:#fff; position:relative; box-shadow:0 0 0 1.5px color-mix(in srgb, var(--ac) 55%, transparent)}
+  .crow .dot{position:absolute; bottom:0; right:0; width:11px; height:11px; border-radius:50%; border:2.5px solid var(--m-bg)}
+  .crow .dot.on{background:var(--m-green); animation:pulse 2.2s ease-in-out infinite}
+  .crow .dot.away{background:var(--m-away)}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--m-green) 45%, transparent)}50%{box-shadow:0 0 0 4px transparent}}
+  .crow .body{flex:1; min-width:0}
+  .crow .l1{display:flex; align-items:baseline; gap:6px}
+  .crow .nm{font-size:15px; font-weight:800; color:var(--m-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .crow .mid{color:var(--ink3); font-size:12px}
+  .crow .tm{font-size:12px; font-weight:700; color:var(--ink3); flex:none}
+  .crow .pin{font-size:10px; color:var(--ink3)}
+  .crow .l2{font-size:13px; color:var(--ink3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
+  .crow.unread .l2{color:var(--m-text); font-weight:600}
+  .crow .udot{width:8px; height:8px; border-radius:50%; background:var(--ac); flex:none; margin-left:8px}
+  .crow.muted{opacity:.55}
+  .crow .l2 .pont{color:color-mix(in srgb, var(--ac) 80%, var(--m-text)); font-weight:700}
+  .crow .l2 .pont::before{content:"✦ "; font-weight:900}
+  .crow.agentrow .ava{background:transparent !important; color:var(--m-brand); box-shadow:none; border:1.5px dashed var(--m-brand)}
+  .crow.agentrow .l2{color:var(--m-brand); font-weight:700}
+  .crow .l2 .drafttag{color:#F87171; font-weight:800}
+  .crow .l2 .kind{font-style:italic}
+  .crow .l2 .kind.once, .crow .l2 .kind.eph{color:var(--ac)}
+  .crow .l2 .kind.exp{color:var(--ink3); opacity:.8}
+  .crow .l2 .kind.hidden{color:var(--ink3)}
+  .crow .moodb{position:absolute; bottom:-3px; right:-3px; font-size:13px; background:var(--m-bg); border-radius:50%; padding:1px; line-height:1}
+  .crow .syncg{color:color-mix(in srgb, var(--ac) 70%, transparent); font-size:12px; font-weight:900; margin-left:5px}
+  .crow .tagdots{display:inline-flex; gap:3px; margin-left:6px; flex:none}
+  .crow .tagdots i{width:6px; height:6px; border-radius:50%; display:inline-block}
+  .crow.storyrow .ava{box-shadow:0 0 0 2px var(--m-bg), 0 0 0 4px var(--m-brand)}
+  .caselbl{display:none; position:absolute; right:10px; bottom:-6px; z-index:5; background:color-mix(in srgb, var(--m-brand) 92%, black); color:#fff; font-size:8.5px; font-weight:800; letter-spacing:.03em; padding:2px 8px; border-radius:99px; pointer-events:none; white-space:nowrap}
+  .phone.annot .caselbl{display:block}
+  .phone.annot .crow{margin-bottom:10px}
+  .skelrow{display:flex; align-items:center; gap:12px; padding:10px 16px; margin:0 8px}
+  .skelrow .sa{width:44px; height:44px; border-radius:50%; background:var(--m-hair); flex:none}
+  .skelrow .sb{flex:1}
+  .skelrow .sb div{height:11px; border-radius:6px; background:var(--m-hair); margin:5px 0}
+  .skelrow .sb div:first-child{width:55%}
+  .skelrow .sb div:last-child{width:80%; opacity:.6}
+  @keyframes shimmer{0%,100%{opacity:.5}50%{opacity:1}}
+  .skelrow{animation:shimmer 1.4s ease-in-out infinite}
+  .crow .l2 .typing{color:var(--ac); font-weight:800}
+  .crow .l2 .typing i{font-style:normal; animation:blink 1.2s infinite}
+  .crow .l2 .typing i:nth-child(2){animation-delay:.2s}
+  .crow .l2 .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .crow .l2 .glb{font-size:11px; opacity:.7}
+  .crow.liverow .l2{color:var(--ac); font-weight:800}
+  .crow.liverow .l2::before{content:"●"; margin-right:5px; animation:blink 1.4s infinite}
+  /* focus card — la seule carte de l'écran */
+  .crow.cur{background:var(--m-bg2); box-shadow:inset 0 0 0 1.5px var(--ac)}
+  .crow.cur .modechip{display:flex}
+  .modechip{display:none; position:absolute; right:14px; top:-9px; background:var(--m-bg); border:1px solid color-mix(in srgb, var(--ac) 45%, transparent); color:var(--ac); font-size:9.5px; font-weight:900; letter-spacing:.05em; padding:2px 9px; border-radius:99px; align-items:center; gap:4px}
+
+  .fab{position:absolute; right:20px; bottom:24px; width:54px; height:54px; border-radius:18px; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; z-index:35; box-shadow:0 10px 26px -8px rgba(67,56,202,.55); cursor:pointer}
+  .toast{position:absolute; left:50%; bottom:92px; transform:translateX(-50%) translateY(8px); z-index:50; background:color-mix(in srgb, var(--m-text) 90%, transparent); color:var(--m-bg); font-size:12px; font-weight:700; padding:9px 16px; border-radius:14px; opacity:0; transition:.3s; pointer-events:none; max-width:330px; text-align:center}
+  .toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  .simbar{display:flex; flex-direction:column; gap:10px; min-width:230px; flex:1}
+  .simbar button{background:var(--card); border:1px solid var(--m-hair); color:var(--ink); font-family:inherit; font-size:13px; font-weight:800; padding:11px 16px; border-radius:12px; cursor:pointer; text-align:left; transition:.15s}
+  .simbar button:hover{border-color:var(--m-brand); color:var(--m-brand)}
+  .simbar .hint{font-size:12px; color:var(--ink3); line-height:1.5}
+</style>
+
+<div class="wrap">
+<span class="kicker">Meeshy · Design Vol.5 · PR 1</span>
+<h1>La Lentille — le listing des conversations repensé</h1>
+<p class="lead">La liste des conversations est le premier écran vu à chaque ouverture de l'app — et le premier étage de l'orchestrateur. Ce document applique <b>toutes les leçons</b> des volumes 1–4 (design plat, focus card unique, grammaire « Nom · heure », stickers sticky, pilule de défilement, Prisme Linguistique, présence 1/3/5, accent conversationnel, ✦ pointillé pour l'assistance) à cet écran, avec un prototype grandeur nature et les spécifications d'implémentation iOS et web.</p>
+
+<h2>1 · Le principe : la liste raconte, elle ne compte pas</h2>
+<p>Un listing classique affiche un badge rouge « 12 ». Ce chiffre ne dit rien : 12 messages de logistique ? une décision prise ? une question qui m'attend ? La Lentille remplace le comptage par le récit : chaque rang <b>non lu</b> affiche son <b>pont ✦</b> — la même synthèse d'une ligne que celle qui accueille l'utilisateur en tête de Focal. La décision d'ouverture de l'orchestrateur (Focal + pont si ≤ 25 non lus, Résumé Vivant au-delà) est ainsi <b>annoncée dès la liste</b> : on sait ce qu'on va trouver avant de taper.</p>
+<div class="tablewrap"><table>
+<tr><th>État du rang</th><th>Ligne 2 (préview)</th><th>Signal</th></tr>
+<tr><td>Tout lu</td><td>Dernier message, résolu par le Prisme (<code>resolveLastMessagePreview</code>), texte tertiaire</td><td>aucun</td></tr>
+<tr><td>Non lu</td><td><b>Pont ✦</b> : synthèse 1 ligne (agent) ou fallback déterministe « Nadia, Samir +2 · 12 messages · 3 photos »</td><td>point accent 8 px à droite — <b>jamais de badge chiffré rouge</b></td></tr>
+<tr><td>Quelqu'un écrit</td><td>« Karim écrit… » en accent + points animés</td><td>dot présence forcé vert (typing = preuve d'activité)</td></tr>
+<tr><td>Scène en direct</td><td>« En direct · 4 voix · traduction FR active »</td><td>rang remonté en section « En direct », anneau accent pulsé</td></tr>
+<tr><td>Agent (membre ✦)</td><td>Préview en indigo, avatar en <b>pointillé</b> (trait plein = humain)</td><td>grammaire ✦ imposée</td></tr>
+<tr><td>Sourdine</td><td>Rang à 55 % d'opacité, pont grisé</td><td>🔕 après le nom</td></tr>
+</table></div>
+<div class="note"><b>Prisme Linguistique, règle intacte.</b> Le préview est résolu par les sources jumelles <code>resolveLastMessagePreview()</code> (TS) / <code>MeeshyConversation.resolvedLastMessagePreview</code> (Swift) : parcours des langues du lecteur DANS L'ORDRE, jamais <code>translations.first</code>, jamais de court-circuit « langue d'origine ∈ prisme ». Une traduction qui arrive tardivement fait <b>cross-fader le préview</b> en place, avec le glyphe 🌐 discret.</div>
+
+<h2>2 · Prototype grandeur nature</h2>
+<p>Défilez dans le téléphone : perspective douce (les rangs s'estompent vers les bords, <b>aucun changement de taille de rang</b> — le scan reste net), <b>focus card</b> sur le rang en zone de pouce (fond bg2 + anneau à l'accent de CETTE conversation + chip du mode mémorisé), stickers de section sticky, pilule de section pendant le défilement. Tapez un rang pour voir la décision d'orchestrateur. Les boutons simulent le temps réel.</p>
+<p><b>Les 25 rangs couvrent TOUS les cas de figure</b> de la matrice §5.3 : épinglé, live, pont ✦ (≤ 25 et &gt; 25), typing, brouillon, pièces jointes sans texte, vocal, localisation, éphémère, vue unique, expiré, masqué, sourdine, verrou, agent ✦, outbox en attente (↻), mood badge vs présence, anneau story, tags, préview traduit 🌐, présence online/away/hors-ligne (aucun dot), mode mémorisé Rivière, et le cas de base. Le bouton « Annoter les cas » étiquette chaque rang ; « Démarrage à froid » montre le squelette (affiché UNIQUEMENT à cache vide — règle Instant App).</p>
+
+<div class="stage">
+  <div class="phone" id="ph">
+    <div class="lhead"><span class="ttl">Messages</span><span class="me">SY</span></div>
+    <div class="timepill" id="tpill">Aujourd'hui</div>
+    <div class="lscroll" id="lsc"></div>
+    <div class="fab">✎</div>
+    <div class="toast" id="toast"></div>
+  </div>
+  <div class="simbar">
+    <div class="hint"><b>Simulateur temps réel</b> — chaque bouton rejoue un événement socket réel et son effet exact sur la liste :</div>
+    <button onclick="simNew()">⚡ message:new → « Marché de Wazemmes »</button>
+    <button onclick="simTyping()">⌨️ typing:start → « Mamie Jo »</button>
+    <button onclick="simRead()">👁 lecture → le pont ✦ de l'Ardèche s'éteint</button>
+    <button onclick="simTrad()">🌐 traduction tardive → préview de Yuki</button>
+    <button onclick="simLive()">🔴 Scène démarre → « Club course »</button>
+    <button onclick="toggleAnnot()" id="annotbtn">🏷 Annoter les cas de figure</button>
+    <button onclick="simSkeleton()">💀 Démarrage à froid (squelette)</button>
+    <div class="hint">Le rang qui reçoit <code>message:new</code> remonte en tête de sa section par une transition FLIP (transform uniquement, aucun relayout du reste de la liste). La focus card suit le défilement, pas les événements : rien ne « saute » sous le pouce.</div>
+  </div>
+</div>
+
+<h2>3 · Anatomie cotée</h2>
+<div class="figbox">
+<svg viewBox="0 0 1000 430" style="min-width:820px; width:100%; font-family:inherit">
+  <defs><marker id="ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0L7,3.5L0,7" fill="none" stroke="#8B89A6" stroke-width="1.2"/></marker></defs>
+  <style>.cot{font-size:10.5px; fill:#8B89A6; font-weight:700}.lbl{font-size:11.5px; fill:#6366F1; font-weight:800}.ln{stroke:#8B89A6; stroke-width:1; marker-end:url(#ar)}</style>
+  <!-- rang repos -->
+  <text x="30" y="28" class="lbl">RANG AU REPOS · hauteur 64, marge latérale 8, padding 10/16</text>
+  <rect x="30" y="40" width="440" height="64" rx="16" fill="none" stroke="#8B89A6" stroke-dasharray="3 3" opacity=".4"/>
+  <circle cx="76" cy="72" r="22" fill="#31B6BB"/>
+  <circle cx="76" cy="72" r="23.5" fill="none" stroke="#31B6BB" stroke-opacity=".45" stroke-width="1.5"/>
+  <circle cx="92" cy="88" r="5.5" fill="#34D399" stroke="#fff" stroke-width="2.5"/>
+  <text x="112" y="68" font-size="15" font-weight="800" fill="#1E1B4B">Week-end Ardèche 🏕</text>
+  <text x="292" y="68" font-size="12" fill="#8B89A6">·</text>
+  <text x="302" y="68" font-size="12" font-weight="700" fill="#8B89A6">14:32</text>
+  <text x="112" y="90" font-size="13" fill="#8B89A6">Louis : Météo de samedi : 27° et grand soleil ☀️</text>
+  <line x1="76" y1="118" x2="76" y2="132" class="ln"/><text x="60" y="146" class="cot">avatar 44 + anneau accent 1.5</text>
+  <line x1="94" y1="98" x2="120" y2="120" class="ln" transform="translate(160,-10)"/><text x="236" y="122" class="cot">dot présence 11, bordure 2.5 bg — offline = aucun dot</text>
+  <line x1="330" y1="52" x2="330" y2="40" class="ln"/><text x="240" y="34" class="cot" text-anchor="start"></text>
+  <text x="112" y="146" class="cot">nom 15 extrabold · point médian · heure 12 (TimeStringCache)</text>
+
+  <!-- rang non lu -->
+  <text x="530" y="28" class="lbl">RANG NON LU · le pont ✦ remplace le préview</text>
+  <rect x="530" y="40" width="440" height="64" rx="16" fill="none" stroke="#8B89A6" stroke-dasharray="3 3" opacity=".4"/>
+  <circle cx="576" cy="72" r="22" fill="#8B5CF6"/>
+  <text x="612" y="68" font-size="15" font-weight="800" fill="#1E1B4B">Ciné-club VO 🎬</text>
+  <text x="762" y="68" font-size="12" font-weight="700" fill="#8B89A6">12:05</text>
+  <text x="612" y="90" font-size="13" font-weight="700" fill="#7C57D4">✦ Séance déplacée mardi + débat programme (27 msgs)</text>
+  <circle cx="946" cy="72" r="4" fill="#8B5CF6"/>
+  <line x1="946" y1="82" x2="946" y2="118" class="ln"/><text x="850" y="132" class="cot">point accent 8 — pas de badge chiffré</text>
+  <text x="612" y="146" class="cot">pont ✦ teinté accent·texte — annonce la décision d'ouverture</text>
+
+  <!-- focus card -->
+  <text x="30" y="196" class="lbl">FOCUS CARD · la seule carte de l'écran (zone de pouce, bottom − 140)</text>
+  <rect x="30" y="208" width="440" height="64" rx="16" fill="#F8F7FF"/>
+  <rect x="30" y="208" width="440" height="64" rx="16" fill="none" stroke="#31B6BB" stroke-width="1.5"/>
+  <rect x="330" y="199" width="118" height="18" rx="9" fill="#FFFFFF" stroke="#31B6BB" stroke-opacity=".45"/>
+  <text x="389" y="212" font-size="9.5" font-weight="900" fill="#31B6BB" text-anchor="middle">FOCAL · ✦ PONT PRÊT</text>
+  <circle cx="76" cy="240" r="22" fill="#31B6BB"/>
+  <text x="112" y="236" font-size="15" font-weight="800" fill="#1E1B4B">Week-end Ardèche 🏕</text>
+  <text x="302" y="236" font-size="12" font-weight="700" fill="#8B89A6">14:32</text>
+  <text x="112" y="258" font-size="13" font-weight="700" fill="#2A9296">✦ Gîte réservé, canoë samedi 10 h — Nadia attend les allergies</text>
+  <line x1="470" y1="240" x2="500" y2="240" class="ln"/>
+  <text x="508" y="230" class="cot">fond bg2 + anneau 1.5 à l'accent de la conversation</text>
+  <text x="508" y="246" class="cot">chip mode : Focal / Résumé / Rivière / Scène — mémoire du choix</text>
+  <text x="508" y="262" class="cot">hauteur INCHANGÉE (64) : zéro relayout pendant le scroll</text>
+
+  <!-- perspective -->
+  <text x="30" y="316" class="lbl">PERSPECTIVE DOUCE · opacité seule, jamais la taille du texte</text>
+  <text x="34" y="344" font-size="13" fill="#1E1B4B" opacity=".30">Vide-grenier quartier · 12 août</text>
+  <text x="34" y="366" font-size="13" fill="#1E1B4B" opacity=".55">Club course 🏃 · mardi</text>
+  <text x="34" y="388" font-size="13" fill="#1E1B4B" opacity=".85">Karim · 12:30 — écrit…</text>
+  <text x="34" y="410" font-size="13" font-weight="800" fill="#1E1B4B">Week-end Ardèche 🏕 · 14:32 (focus)</text>
+  <line x1="330" y1="330" x2="330" y2="410" class="ln"/>
+  <text x="344" y="348" class="cot">f = min(1, d/520) au-dessus du focus</text>
+  <text x="344" y="364" class="cot">opacité = 1 − 0.45·f · scale = 1 − 0.04·f (origin 16 %)</text>
+  <text x="344" y="380" class="cot">sous le focus : fondu court d/160, −0.35 max</text>
+  <text x="344" y="396" class="cot">reduced-motion → tout à 1, focus = fond seul</text>
+  <text x="344" y="412" class="cot">transform/opacity compositor · &lt; 1 ms/frame · zéro allocation</text>
+</svg>
+<div class="cap">Fig. 1 — Anatomie du rang : repos, non-lu (pont ✦), focus card, courbe de perspective. Tailles designées Vol.5 — seule l'accessibilité (Dynamic Type, VoiceOver) suit l'app.</div>
+</div>
+
+<h3>Structure de l'écran</h3>
+<div class="tablewrap"><table>
+<tr><th>Zone</th><th>Contenu</th><th>Règle</th></tr>
+<tr><td>Header</td><td>« Messages » 26 · avatar profil 34</td><td>Fond dégradé vers transparent ; la recherche se révèle par tirer-vers-le-bas (pas de barre permanente : un écran = une intention)</td></tr>
+<tr><td>Rail des vivants</td><td>Pastilles 48 des conversations où il se passe quelque chose MAINTENANT (Scène live, typing, salve de non-lus)</td><td>≤ 6 entrées, disparaît si vide. Anneau accent pulsé si live. Remplace l'entrée stories sur cet écran</td></tr>
+<tr><td>Stickers sticky</td><td>ÉPINGLÉES · EN DIRECT · AUJOURD'HUI · HIER · CETTE SEMAINE · PLUS ANCIEN</td><td>Même capsule que les stickers de date du Focal — grammaire commune. Pas de section vide</td></tr>
+<tr><td>Pilule de défilement</td><td>Nom de la section courante</td><td>Apparaît au premier scroll event, disparaît 900 ms après l'arrêt — identique au Focal</td></tr>
+<tr><td>Liste</td><td>Rangs plats 64, aucun séparateur</td><td>Tri : épinglées, live, puis lastMessageAt desc. Swipe actions existantes conservées à l'identique</td></tr>
+<tr><td>Compose</td><td>Bouton flottant 54 dégradé brand</td><td>Position et geste inchangés (habitude préservée)</td></tr>
+</table></div>
+
+<h2>4 · La Lentille comme premier étage de l'orchestrateur</h2>
+<p>La décision d'ouverture (Vol.3 §orchestrateur) ne change pas — elle devient <b>visible avant le tap</b> :</p>
+<div class="tablewrap"><table>
+<tr><th>État</th><th>Annonce dans la liste</th><th>Tap → ouverture</th></tr>
+<tr><td>≤ 25 non lus</td><td>Pont ✦ 1 ligne + chip « Focal · ✦ pont prêt » sur la focus card</td><td>Focal, pont ✦ en tête, descend jusqu'au premier non-lu</td></tr>
+<tr><td>&gt; 25 non lus, ou &gt; 24 h et ≥ 10</td><td>Pont ✦ + chip « Résumé Vivant »</td><td>Résumé Vivant (épisodes), zoom sémantique vers Focal</td></tr>
+<tr><td>Scène active</td><td>Section EN DIRECT + « ● En direct · 4 voix »</td><td>Rejoint la Scène (couche live), Focal dessous</td></tr>
+<tr><td>Choix manuel mémorisé</td><td>Chip du mode choisi</td><td>Le mode mémorisé, toujours (sticky par conversation)</td></tr>
+</table></div>
+<div class="note"><b>Le pont ✦ est un contenu d'assistance</b> : généré par l'agent observer (<code>assist:summary-patch</code>) quand il est branché, sinon fallback déterministe côté gateway (« auteurs + volume + types de médias »). Il respecte la grammaire ✦ et n'écrit jamais dans le thread. Confidentialité : le pont est calculé par conversation côté serveur avec les mêmes droits de lecture que l'utilisateur — rien de nouveau n'est exposé.</div>
+
+<h2 id="ios-spec">5 · Spécification d'implémentation — iOS</h2>
+<p>Fondée sur l'audit du code réel (chemins et lignes vérifiés). Le principe « sans trop casser » s'applique strictement : <b>toute la mécanique de données, de temps réel et de gestes est conservée</b> — seule la couche visuelle du rang, des sections et du header change, derrière un flag réversible <code>lentilleListEnabled</code>.</p>
+
+<h3>5.1 · Ce qui est conservé tel quel (ne pas toucher)</h3>
+<div class="tablewrap"><table>
+<tr><th>Brique</th><th>Fichier / point d'entrée</th><th>Pourquoi</th></tr>
+<tr><td>ViewModel & pipeline</td><td><code>ConversationListViewModel</code> — CombineLatest4 + debounce 16 ms, tri (épinglées → brouillons → lastMessageAt), <code>performLoadConversations</code> cache-first (.fresh/.stale/.expired/.empty), pagination curseur (pageLimit 100, garde anti-boucle)</td><td>Déjà conforme Instant App ; la Lentille est une peau</td></tr>
+<tr><td>Temps réel</td><td><code>subscribeToSocketEvents</code> (typing, <code>conversation:updated</code> → <code>bumpToTop(LastMessageFacet)</code> avec paire Prisme translations+originalLanguage, participants, préférences) ; chaîne unread <code>ConversationSyncEngine.handleUnreadUpdated</code> (+ clamp conversation ouverte), <code>read-status:updated</code>, APNs neutre</td><td>Aucun événement modifié ; le pont ✦ arrive par enrichissement de payloads existants (§6.4)</td></tr>
+<tr><td>Gestes</td><td><code>SwipeableRow</code> (actions leading/trailing intactes), menus contextuels des deux chemins OS (natif iOS 26 / <code>RowPressBounceModifier</code>), drag & drop vers sections</td><td>Habitudes utilisateur — la Lentille s'insère DANS <code>ConversationRowItem</code>, pas autour</td></tr>
+<tr><td>Prisme</td><td><code>resolvedLastMessagePreview(preferredLanguages:)</code> (CoreModels.swift) + câblage <code>preferredContentLanguages</code></td><td>Source de vérité jumelle — réutilisée à l'identique</td></tr>
+<tr><td>Présence</td><td><code>PresenceManager.refreshSignal</code> (pulse débouncé) + gate <code>.equatable()</code> par rang ; règle mood > présence sur le coin d'avatar</td><td>Modèle perf correct : seuls les rangs concernés re-rendent</td></tr>
+<tr><td>Stories</td><td>Anneaux story sur avatars (unread = brand 5 pt), <code>PinnedStoryTrailBand</code> du header, routage tap</td><td>Conservés — le rail des vivants remplace uniquement le <code>StoryTrayView</code> de 120 pt en tête de liste (flag on), les stories restent accessibles par anneaux + bande du header</td></tr>
+</table></div>
+
+<h3>5.2 · La peau Lentille — nouveaux fichiers (app-side, <code>Features/Main/Views/Lentille/</code>)</h3>
+<div class="tablewrap"><table>
+<tr><th>Fichier</th><th>Rôle & décisions</th></tr>
+<tr><td><code>LentilleConversationRow.swift</code></td><td>Rang PLAT : fond transparent — suppression de la carte actuelle (backgroundSecondary + gradient de chaleur + bordure radius 14). Avatar <b>44</b> (au lieu de 52) + anneau accent 1.5 (<code>colorPalette.primary</code>) ; nom <code>MeeshyFont.relative(15, .heavy)</code> · point médian · heure <code>relative(12)</code> ; ligne 2 <code>relative(13)</code>. Le signal « chaleur » est remplacé par le pont ✦ + point accent. Mêmes ENTRÉES que <code>ThemedConversationRow</code> (le <code>Equatable</code> miroir est copié puis étendu au champ <code>bridge</code>) — bascule par flag dans <code>ConversationListView.conversationRow</code>, l'ancien rang reste le fallback</td></tr>
+<tr><td><code>LentilleSticker.swift</code></td><td>Capsules de section sticky via <code>LazyVStack(pinnedViews: [.sectionHeaders])</code> — remplace les <code>SectionHeaderView</code> à cercle lumineux. Sections calculées : Épinglées / En direct / Aujourd'hui / Hier / Cette semaine / Plus ancien (dérivées de <code>lastMessageAt</code>) ; les catégories utilisateur restent des sections nommées, même capsule, insérées après En direct</td></tr>
+<tr><td><code>LivesRail.swift</code></td><td>Rail ≤ 6 pastilles 48, dérivé de signaux existants : <code>typers</code>, salves de non-lus, Scène live. Prend la place du <code>StoryTrayView</code> (flag on) ; masqué si vide</td></tr>
+<tr><td><code>LentillePerspective.swift</code></td><td>Perspective douce par <code>.visualEffect { content, proxy in }</code> (pur, compositor, aucun état) : f = min(1, d/520) au-dessus de la bande de focus, opacité 1−0.45f, scale 1−0.04f, anchor (0.16, 0.5) ; fondu court d/160 dessous. Élection de la focus card : <code>onScrollGeometryChange</code> (iOS 18) publie l'offset → id du rang dont midY ∈ bande (bottom−140 ± 45) ; fallback iOS 17 : PreferenceKey throttlée à 60 Hz. La focus card = fond backgroundSecondary + ring 1.5 accent + chip du mode mémorisé, hauteur inchangée</td></tr>
+<tr><td><code>SectionScrollPill.swift</code></td><td>Pilule de section pendant le défilement — branchée sur le signal de scroll existant (celui qui masque déjà <code>ConversationListBottomBar</code>), minuterie 900 ms</td></tr>
+<tr><td><code>LentilleSkeletonRow.swift</code></td><td>Squelette à la géométrie EXACTE du rang Lentille (avatar 44, deux barres) — corrige l'écart actuel 48 pt/radius 18/padding 14 vs rang réel 52/14/12 (transition non pixel-stable relevée à l'audit)</td></tr>
+</table></div>
+<div class="note"><b>Tailles designées Vol.5, accessibilité de l'app.</b> Les valeurs (44, 15, 13, 12, 64) sont celles du design, pas celles du rang actuel — mais toutes passent par <code>MeeshyFont.relative()</code> donc suivent Dynamic Type (15 → .subheadline, 13 → .footnote, 12 → .caption). Au passage la hiérarchie typographique actuelle (titre ET préview en .footnote 13, différenciés à la graisse seule) est corrigée : le nom monte d'un cran.</div>
+
+<h3>5.3 · Matrice de couverture — toutes les features du rang actuel</h3>
+<div class="tablewrap"><table>
+<tr><th>Feature (code actuel)</th><th>Rendu Lentille</th></tr>
+<tr><td>Typing (<code>typingUsernames</code>, multi-membres, sélection déterministe, timer 15 s)</td><td>Ligne 2 « X écrit… » accent + <code>TypingDotsView</code> conservée (déjà reduce-motion-aware) ; dot présence forcé vert</td></tr>
+<tr><td>Brouillons (<code>draftSummaries</code>, flottent en tête du tri)</td><td>Précédence inchangée typing &gt; brouillon &gt; préview ; « ✎ Brouillon » en erreur + texte tertiaire</td></tr>
+<tr><td>Kinds du dernier message (expired / hidden / viewOnce / ephemeral)</td><td>Mêmes glyphes SF (timer, eye.slash, flame) en tête de ligne 2, italique conservé</td></tr>
+<tr><td>Branche pièces jointes sans texte (icône + méta W×H / durée / nom + « +N »)</td><td>Identique, glyphes teintés accent — le Prisme ne s'applique toujours pas à cette branche</td></tr>
+<tr><td>Localisation (fallback <code>lastMessageLocation</code>)</td><td>Identique (mappin + nom du lieu)</td></tr>
+<tr><td>Badge rouge 99+ (<code>unreadBadgeBackground</code>) & timestamp rouge si non-lu</td><td><b>Supprimés</b> — point accent 8 + pont ✦ ; l'heure reste tertiaire (grammaire « · HH:mm » du jour, « hier », jour abrégé, date — via <code>RelativeTimestampText</code>/TimelineView conservé, seul le format change)</td></tr>
+<tr><td>Épingle (section dédiée), mute, verrou, archive, blocage (swipes)</td><td>Swipes intacts ; 📌 glyphe avant le nom + sticker ÉPINGLÉES ; sourdine = rang 0.55 + 🔕 (enfin visible — aujourd'hui le mute n'a aucune affordance sur le rang)</td></tr>
+<tr><td>Badge de type (groupe/canal/bot + memberCount)</td><td>Absorbé par la focus card (chip) et l'anneau accent ; les tags utilisateur deviennent ≤ 3 pastilles 6 px après le nom</td></tr>
+<tr><td>Glyphe <code>hasPendingSync</code> (outbox)</td><td>Conservé tel quel (arrow.triangle.2.circlepath accent 70 %)</td></tr>
+<tr><td>Mood badge vs dot présence (un seul coin)</td><td>Règle conservée : mood gagne le coin, présence sinon — dots aussi pour les groupes (« quelqu'un d'actif ») via l'agrégat <code>PresenceManager</code></td></tr>
+<tr><td>Sélection iPad (barre accent 3 pt + teinte)</td><td>= style focus card persistant sur le rang sélectionné</td></tr>
+<tr><td>Timestamp ticker (TimelineView 60 s, hors gate Equatable)</td><td>Conservé — seul élément vivant du rang au repos</td></tr>
+<tr><td><code>renderFingerprint</code> (contrat de re-render, valeurs de traductions incluses)</td><td>Étendu : + <code>bridge</code> (texte du pont, unreadCount, suggestedMode) — sinon le gate gèlerait les mises à jour du pont</td></tr>
+<tr><td>VoiceOver</td><td>Label étendu : « {nom}, {heure}, {n} non lus, {pont ou préview} » ; perspective ignorée ; stickers lus comme en-têtes de section</td></tr>
+<tr><td>Pull-to-refresh, pagination (sentinelle + count−5), branches vides (skeleton / recherche vide / erreur sync / première conversation)</td><td>Inchangés ; états vides restylés plats, résolveur <code>ConversationListEmptyBranch</code> non modifié</td></tr>
+</table></div>
+
+<h3>5.4 · Header & structure</h3>
+<p><code>CollapsibleHeader</code> conservé (64→44, bande stories du header intacte). Titre « Messages » — la typo dégradée 28 rounded actuelle passe au style Vol.5 (26, −0.4 tracking, couleur texte pleine). Recherche : le geste tirer-vers-le-bas révèle la barre existante (<code>showSearchOverlay</code> et son panneau filtres/communautés sont conservés tels quels — l'audit note qu'ils sont déjà cachés derrière la recherche). <code>ConversationListBottomBar</code> et les boutons flottants de <code>RootView</code> ne bougent pas.</p>
+
+<h2 id="web-spec">6 · Spécification d'implémentation — Web</h2>
+<p>Fondée sur l'audit du code réel (<code>apps/web</code>, chemins vérifiés). Stratégie identique au Focal : <b>on garde l'ossature, on change la peau</b> — le pipeline de données, le temps réel et les préférences sont déjà corrects et ne bougent pas.</p>
+
+<h3>6.1 · Ce qui est conservé tel quel (ne pas toucher)</h3>
+<div class="tablewrap"><table>
+<tr><th>Brique</th><th>Fichier</th><th>Pourquoi</th></tr>
+<tr><td>Pipeline de données</td><td><code>hooks/queries/use-conversations-query.ts</code> (cache infini unique <code>['conversations','infinite']</code>, staleTime ∞ + IndexedDB, delta-sync monté dans le hook)</td><td>Cache-first déjà conforme aux principes Instant App</td></tr>
+<tr><td>Temps réel</td><td><code>hooks/use-socket-cache-sync.ts</code> — tous les handlers (<code>onNewMessage</code> → remontée index 0, <code>onUnreadUpdated</code> + clamp conversation active, <code>onConversationUpdated</code>, delta-sync reconnexion/focus)</td><td>La Lentille est une couche de PRÉSENTATION ; aucun événement nouveau côté liste (le pont ✦ arrive par <code>conversation:unread-updated</code> enrichi, cf. 6.4)</td></tr>
+<tr><td>Préférences (pin/mute/archive)</td><td><code>stores/conversation-preferences-store.ts</code> (écritures optimistes versionnées + <code>onPreferencesUpdated</code>)</td><td>Fonctionnel, multi-appareils</td></tr>
+<tr><td>Résolution Prisme</td><td><code>ConversationItem</code> → <code>getUserLanguagePreferences()</code> → <code>resolveLastMessagePreview()</code> + test de câblage <code>ConversationItem.prisme.test.tsx</code></td><td>Source de vérité — le nouveau rang réutilise EXACTEMENT ce chemin, test de régression conservé</td></tr>
+<tr><td>Boundary & états</td><td><code>FeatureErrorBoundary</code>, <code>EmptyConversations</code>, squelette (rôle/aria)</td><td>Restylés, pas réécrits</td></tr>
+</table></div>
+
+<h3>6.2 · Nouveaux composants (peau Lentille)</h3>
+<div class="tablewrap"><table>
+<tr><th>Composant</th><th>Emplacement</th><th>Contenu</th></tr>
+<tr><td><code>LentilleRow.tsx</code></td><td><code>components/conversations/lentille/</code></td><td>Rang plat 64 : avatar 44 + anneau <code>--row-accent</code>, dot présence (réutilise <code>ParticipantPresenceIndicator</code>, dots aussi pour les groupes : « quelqu'un d'actif »), ligne 1 « nom 15 extrabold · heure 12 », ligne 2 préview/pont ✦/typing/live. Rend selon un flag <code>lentille</code> dans <code>ConversationGroup</code>, sinon <code>ConversationItem</code> actuel (réversibilité)</td></tr>
+<tr><td><code>LentilleSticker.tsx</code></td><td>idem</td><td>Capsule de section sticky (Épinglées / En direct / Aujourd'hui / Hier / Cette semaine / Plus ancien) — même style que les stickers de date du Focal</td></tr>
+<tr><td><code>SectionScrollPill.tsx</code></td><td>idem</td><td>Pilule flottante : nom de section courante, visible pendant le scroll, cachée 900 ms après le dernier événement (même minuterie que <code>ScrollTimePill</code> du Focal — factoriser le hook <code>useScrollActivity</code>)</td></tr>
+<tr><td><code>LivesRail.tsx</code></td><td>idem</td><td>Rail horizontal ≤ 6 pastilles (live / typing / salve) ; masqué si vide</td></tr>
+<tr><td><code>useLentillePerspective.ts</code></td><td>idem</td><td>rAF unique sur le conteneur scroll : opacité/scale par rang (courbe §3) + élection de la focus card. Inline style sur un wrapper interne — ne touche pas au layout ni aux mesures</td></tr>
+</table></div>
+
+<h3>6.3 · Corrections d'écarts révélées par l'audit (incluses dans la PR)</h3>
+<div class="tablewrap"><table>
+<tr><th>Écart constaté (code actuel)</th><th>Traitement Lentille</th></tr>
+<tr><td>Sourdine invisible sur le rang (<code>localIsMuted</code> ne nourrit que le menu ⋮)</td><td>Rang à 0.55 + 🔕 — enfin visible</td></tr>
+<tr><td>Aucun typing dans la liste (<code>typingUsers</code> jamais transmis à <code>ConversationList</code>)</td><td>S'abonner au même service typing que le thread ; ligne 2 « X écrit… » + dot vert forcé</td></tr>
+<tr><td>Badge chiffré rouge <code>variant="destructive"</code></td><td>Supprimé — point accent 8 px + pont ✦ (le chiffre vit dans le pont)</td></tr>
+<tr><td>Aucun accent par conversation (seuls les tags sont colorés, hashés sur le nom du tag)</td><td>Portage TS de <code>DynamicColorGenerator</code>/<code>ColorGeneration</code> → <code>packages/shared/utils/conversation-colors.ts</code> (déjà spécifié Vol.4 §6) → <code>--row-accent</code> ; snapshot-testé contre les hex Swift</td></tr>
+<tr><td>Tri liste sur <code>lastMessage.createdAt</code> alors que le serveur trie sur <code>lastMessageAt</code> (`useConversationSorting.ts`)</td><td>Aligner sur <code>lastMessageAt</code> (fallback <code>updatedAt</code>) — supprime les inversions aux limites de page</td></tr>
+<tr><td>Recherche sur le contenu ORIGINAL (<code>useConversationFiltering.ts</code> matche <code>lastMessage.content</code>)</td><td>Matcher le préview résolu Prisme (ce que l'utilisateur voit) en plus du titre</td></tr>
+<tr><td>Squelette 40 px vs avatar réel 48 px (saut visuel à l'hydratation)</td><td>Squelette = géométrie EXACTE du rang Lentille (avatar 44, deux lignes)</td></tr>
+<tr><td>Clé i18n <code>noConversationsFound</code> absente de <code>locales/fr/conversations.json</code></td><td>Ajoutée</td></tr>
+<tr><td>Aside en gris bruts (<code>bg-white dark:bg-gray-950 border-r-2</code>) vs tokens sémantiques dans la liste</td><td>Unifié sur les tokens Lentille (<code>--m-bg/--m-bg2</code> mappés sur les vars shadcn)</td></tr>
+</table></div>
+
+<h3>6.4 · Le pont ✦ côté données</h3>
+<pre><code>// Enrichissement de GET /conversations et de conversation:unread-updated (gateway)
+type ConversationBridge = {
+  kind: "agent" | "fallback";
+  text: string;            // 1 ligne, déjà dans la langue du lecteur (Prisme appliqué serveur)
+  unreadCount: number;     // le chiffre vit ICI, plus dans un badge
+  mediaCounts?: { images?: number; audio?: number; files?: number };
+  suggestedMode: "focal" | "resume";   // décision d'orchestrateur pré-calculée
+};
+// Fallback déterministe (gateway, aucun agent requis) :
+//   auteurs distincts (2 max + "+N") · nombre de messages · types de médias
+// Agent observer branché : assist:summary-patch scope "bridge" remplace le fallback.
+// Champ optionnel : bridge?: ConversationBridge sur ConversationListItem —
+// un client ancien l'ignore, la Lentille l'affiche. Zéro breaking change.</code></pre>
+
+<h3>6.5 · Accessibilité (suit l'app, pas le design)</h3>
+<p>Rang = <code>role="button"</code> + Enter/Espace (conservés de <code>ConversationItem</code>) ; aria-label « {nom}, {heure}, {n} non lus, {pont} » ; la perspective est purement décorative — <code>prefers-reduced-motion</code> la désactive (opacités à 1, focus card = fond seul) ; la pilule et les stickers sont <code>aria-hidden</code> (l'information de section existe dans l'ordre du DOM) ; contrastes AA vérifiés sur le pont teinté accent (mélange <code>color-mix(accent 80 %, texte)</code> jamais en dessous de 4.5:1 sur bg).</p>
+
+<h2 id="recette">7 · Recette — critères d'acceptation</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Critère</th><th>Vérification</th></tr>
+<tr><td>R1</td><td>Rangs plats : aucun fond, aucune bordure, aucun gradient de chaleur hors focus card ; la focus card est l'unique carte</td><td>Inspection visuelle + snapshot test des deux thèmes</td></tr>
+<tr><td>R2</td><td>Perspective : opacité/scale compositor uniquement, hauteur de rang constante 64, aucun relayout pendant le scroll ; &lt; 1 ms/frame, zéro allocation dans le handler</td><td>Instruments (Core Animation + Allocations), 60 et 120 Hz</td></tr>
+<tr><td>R3</td><td>Pont ✦ : affiché si non-lu, éteint à la lecture (y c. autre appareil via <code>conversation:unread-updated</code>), clamp conversation active respecté, jamais de badge chiffré</td><td>Test 2 appareils + test unitaire du mapping bridge</td></tr>
+<tr><td>R4</td><td>Prisme : préview via <code>resolveLastMessagePreview</code>/<code>resolvedLastMessagePreview</code> exclusivement ; traduction tardive = cross-fade en place + 🌐 ; test de câblage conservé (web) + test VM (iOS)</td><td>Suites existantes vertes + cas « prisme [fr,en], original en, trad fr → Bonjour »</td></tr>
+<tr><td>R5</td><td>Temps réel : message:new (remontée FLIP en tête de section), typing (dot vert forcé), présence 1/3/5 (offline = pas de dot), participants, préférences multi-appareils, delta-sync reconnexion — comportements identiques à l'actuel</td><td>Matrice §5.3/§6.1 rejouée manuellement + tests socket existants verts</td></tr>
+<tr><td>R6</td><td>Pilule de section : apparaît au premier événement de scroll, disparaît 900 ms après l'arrêt ; stickers sticky corrects aux frontières</td><td>Test UI scripté</td></tr>
+<tr><td>R7</td><td>Accessibilité : VoiceOver lit nom/heure/non-lus/pont ; Dynamic Type suit (relative) ; reduced-motion → perspective désactivée, focus = fond seul ; contrastes AA sur le pont teinté</td><td>Audit Accessibility Inspector + axe-core (web)</td></tr>
+<tr><td>R8</td><td>Réversibilité : flag off → rendu bit-à-bit identique à l'actuel (iOS : <code>ThemedConversationRow</code> ; web : <code>ConversationItem</code>)</td><td>Snapshot tests flag off</td></tr>
+<tr><td>R9</td><td>Gestes : swipes, menus contextuels (2 chemins OS), drag & drop, pull-to-refresh, pagination — inchangés flag on</td><td>Passe manuelle + tests existants</td></tr>
+<tr><td>R10</td><td>Écarts d'audit corrigés : mute visible, typing en liste (web), tri <code>lastMessageAt</code> (web), recherche sur préview résolu (web), squelettes pixel-stables, clé i18n manquante</td><td>Revue de code + tests ciblés</td></tr>
+</table></div>
+
+<h3>Découpage de la PR 1 (cette branche)</h3>
+<p><b>PR 1 = ce document</b> (design + spec, aucun code produit). Les PR d'implémentation qui en découlent : <b>1a</b> gateway — champ <code>bridge</code> (fallback déterministe) sur <code>GET /conversations</code> + <code>conversation:unread-updated</code> ; <b>1b</b> iOS — peau Lentille derrière flag ; <b>1c</b> web — peau Lentille derrière flag + portage TS des couleurs ; <b>1d</b> corrections d'écarts d'audit (indépendantes du flag, livrables immédiatement).</p>
+
+</div>
+
+<script>
+/* ===================== DATASET — tous les cas de figure ===================== */
+const CONVS = [
+ {id:"ardeche", nm:"Week-end Ardèche 🏕", ini:"WA", ac:"#31B6BB", grp:9, sec:"pin", tm:"14:32", unread:12, mode:"FOCAL · ✦ PONT PRÊT",
+  pont:"Gîte réservé, canoë samedi 10 h — Nadia attend les allergies", prev:"Louis : Météo de samedi : 27° et grand soleil ☀️", dot:"on", pin:true,
+  cs:"épinglé · groupe actif · pont ✦"},
+ {id:"louise", nm:"Louise 💛", ini:"L", ac:"#E1618C", grp:0, sec:"pin", tm:"13:05", unread:0, mode:"FOCAL",
+  prev:"On se voit dimanche alors ! 😊", dot:"on", pin:true, story:true,
+  cs:"épinglé · lu · anneau story non vue"},
+ {id:"produit", nm:"Équipe Produit", ini:"EP", ac:"#6366F1", grp:14, sec:"live", tm:"14:41", unread:0, mode:"SCÈNE",
+  live:"En direct · 4 voix · traduction FR active", dot:"on",
+  cs:"Scène live · section EN DIRECT"},
+ {id:"lena", nm:"Léna", ini:"L", ac:"#C25B9E", grp:0, sec:"today", tm:"13:58", unread:0, mode:"FOCAL",
+  draft:"il faut qu'on parle du budget avant samedi…", prev:"Vu, je te rappelle", dot:"on",
+  cs:"brouillon (flotte en tête, préfixe erreur)"},
+ {id:"wazemmes", nm:"Marché de Wazemmes", ini:"MW", ac:"#E8A13F", grp:23, sec:"today", tm:"12:47", unread:3, mode:"FOCAL · ✦ PONT PRÊT",
+  pont:"Tomates anciennes dispo — commande groupée avant 18 h", prev:"Assia : je prends la caisse de pêches",
+  cs:"non-lu ≤ 25 · pont ✦ + point accent"},
+ {id:"karim", nm:"Karim", ini:"K", ac:"#5FA8E8", grp:0, sec:"today", tm:"12:30", unread:0, mode:"FOCAL",
+  typing:"Karim", prev:"Grave, on se cale ça vendredi", dot:"on",
+  cs:"typing → dot forcé vert"},
+ {id:"cine", nm:"Ciné-club VO 🎬", ini:"CV", ac:"#8B5CF6", grp:8, sec:"today", tm:"12:05", unread:27, mode:"RÉSUMÉ VIVANT",
+  pont:"Séance déplacée mardi + débat programme d'octobre (27 msgs)", prev:"Théo : qui vote pour Kurosawa ?",
+  cs:"non-lu > 25 → ouvre en Résumé Vivant"},
+ {id:"famphotos", nm:"Photos famille", ini:"PH", ac:"#5B9E6F", grp:6, sec:"today", tm:"11:40", unread:0, mode:"FOCAL",
+  prev:"📷 Karine · 3072×2048 · +3", kind:"att",
+  cs:"pièces jointes sans texte (hors Prisme)"},
+ {id:"mamie", nm:"Mamie Jo", ini:"MJ", ac:"#34B379", grp:0, sec:"today", tm:"11:12", unread:0, mode:"FOCAL",
+  prev:"Merci pour les photos mon grand 💕", dot:"away",
+  cs:"présence away (1–3 min) → dot orange"},
+ {id:"sacha", nm:"Sacha", ini:"S", ac:"#7A6FE0", grp:0, sec:"today", tm:"10:44", unread:0, mode:"FOCAL",
+  prev:"Je dors encore une heure, réveille-moi pas", mood:"😴",
+  cs:"mood badge — gagne le coin sur la présence"},
+ {id:"bureau", nm:"Bureau · CR mensuel", ini:"BC", ac:"#4C7DD9", grp:11, sec:"today", tm:"10:12", unread:0, mode:"FOCAL", sync:true,
+  prev:"Toi : compte-rendu envoyé ✓",
+  cs:"outbox en attente → glyphe ↻ (hasPendingSync)"},
+ {id:"support", nm:"Support Meeshy", ini:"✦", ac:"#6366F1", grp:0, sec:"today", tm:"09:58", unread:1, agent:true, mode:"ASSISTANT",
+  prev:"✦ Votre export est prêt — 2 actions proposées",
+  cs:"agent ✦ — avatar pointillé, jamais de trait plein"},
+ {id:"coloc", nm:"Colocation Balzac", ini:"CB", ac:"#D96A4C", grp:4, sec:"yday", tm:"22:41", unread:5, muted:true, mode:"FOCAL",
+  pont:"Tour de ménage + facture internet à répartir", prev:"Jules : je paie et on divise ?",
+  cs:"sourdine 🔕 — rang 0.55, pont grisé"},
+ {id:"nico", nm:"Nico", ini:"N", ac:"#DB8A3C", grp:0, sec:"yday", tm:"21:15", unread:1, mode:"FOCAL",
+  kindtxt:"🔥 Photo à vue unique", kind:"once",
+  cs:"vue unique (flame, italique accent)"},
+ {id:"jade", nm:"Jade", ini:"J", ac:"#4FA3A5", grp:0, sec:"yday", tm:"20:02", unread:0, mode:"FOCAL",
+  kindtxt:"🙈 Message masqué", kind:"hidden",
+  cs:"masqué/flouté (eye.slash, italique)"},
+ {id:"anais", nm:"Anaïs", ini:"A", ac:"#B0559A", grp:0, sec:"yday", tm:"19:20", unread:0, mode:"FOCAL",
+  prev:"La trad vocale a bluffé mes parents 😂",
+  cs:"hors-ligne > 5 min → AUCUN dot"},
+ {id:"rando", nm:"Rando dimanche", ini:"RD", ac:"#6FA85B", grp:5, sec:"yday", tm:"18:30", unread:0, mode:"FOCAL",
+  prev:"📍 Léa · Col de la Bonette", kind:"loc",
+  cs:"localisation (fallback lastMessageLocation)"},
+ {id:"fresque", nm:"Projet Fresque", ini:"PF", ac:"#4C7DD9", grp:6, sec:"yday", tm:"17:03", unread:0, mode:"FOCAL",
+  tags:["#E8A13F","#8B5CF6","#34B379"], prev:"Nour : maquette v3 validée par la mairie 🎨",
+  cs:"tags → ≤ 3 pastilles 6 px après le nom"},
+ {id:"rh", nm:"Confidentiel RH", ini:"RH", ac:"#8F6BD9", grp:3, sec:"week", tm:"jeu.", unread:0, mode:"FOCAL",
+  kindtxt:"⏳ Message éphémère · expire dans 2 h", kind:"eph",
+  cs:"éphémère actif (timer, italique accent)"},
+ {id:"journal", nm:"Journal perso", ini:"JP", ac:"#9C8F4A", grp:1, sec:"week", tm:"jeu.", unread:0, mode:"FOCAL", lock:true,
+  prev:"Toi : idée d'article sur les prismes",
+  cs:"conversation verrouillée 🔒"},
+ {id:"papa", nm:"Papa", ini:"P", ac:"#34B379", grp:0, sec:"week", tm:"mer.", unread:0, mode:"FOCAL",
+  prev:"🎵 Message vocal · 0:42", kind:"att", dot:"away",
+  cs:"vocal — méta durée, glyphe teinté accent"},
+ {id:"course", nm:"Club course 🏃", ini:"CC", ac:"#E8657A", grp:31, sec:"week", tm:"mar.", unread:0, mode:"RIVIÈRE",
+  prev:"Sam : sortie longue dimanche 9 h, parcours canal",
+  cs:"mode mémorisé Rivière (chip focus)"},
+ {id:"yuki", nm:"Yuki 🇯🇵", ini:"Y", ac:"#5FA8E8", grp:0, sec:"week", tm:"mar.", unread:0, mode:"FOCAL",
+  prev:"🌐 Le colis est arrivé, merci !", glb:true,
+  cs:"préview traduit (Prisme) + glyphe 🌐"},
+ {id:"vide", nm:"Vide-grenier quartier", ini:"VG", ac:"#8A8F5A", grp:17, sec:"old", tm:"12 août", unread:0, mode:"FOCAL",
+  kindtxt:"⌛ Message expiré", kind:"exp",
+  cs:"expiré (timer.badge.xmark, texte muet)"},
+ {id:"leo", nm:"Léo", ini:"L", ac:"#D9A44C", grp:0, sec:"old", tm:"8 août", unread:0, mode:"FOCAL",
+  prev:"Ok pour le squash jeudi prochain",
+  cs:"lu · au repos — le cas de base"}
+];
+const SECTIONS = [["pin","Épinglées"],["live","En direct"],["today","Aujourd'hui"],["yday","Hier"],["week","Cette semaine"],["old","Plus ancien"]];
+const RAIL = ["produit","karim","ardeche","cine"];
+
+/* ===================== RENDER ===================== */
+const lsc = document.getElementById('lsc');
+const tpill = document.getElementById('tpill');
+const toast = document.getElementById('toast');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function railHtml(){
+  const items = RAIL.map(id=>{
+    const c = CONVS.find(x=>x.id===id);
+    const badge = c.live ? `<span class="railbadge">LIVE</span>` : (c.unread ? `<span class="railbadge">✦</span>` : (c.typing?`<span class="railbadge">…</span>`:""));
+    return `<div class="railitem${c.live?' live':''}" style="--ra:${c.ac}" onclick="openConv('${c.id}')">
+      <div class="railava" style="background:${c.ac}">${c.ini}${badge}</div>
+      <div class="raillbl">${c.nm.split(' ')[0]}</div></div>`;
+  }).join('');
+  return `<div class="rail">${items}</div>`;
+}
+
+function rowHtml(c){
+  const cls = ["crow"];
+  if(c.unread && !c.typing) cls.push("unread");
+  if(c.muted) cls.push("muted");
+  if(c.agent) cls.push("agentrow");
+  if(c.live) cls.push("liverow");
+  if(c.story) cls.push("storyrow");
+  const badge = c.mood ? `<span class="moodb">${c.mood}</span>`
+    : c.dot==="on" ? `<span class="dot on"></span>` : c.dot==="away" ? `<span class="dot away"></span>` : "";
+  let l2;
+  if(c.typing) l2 = `<span class="typing">${c.typing} écrit<i>.</i><i>.</i><i>.</i></span>`;
+  else if(c.draft) l2 = `<span class="drafttag">✎ Brouillon</span> ${c.draft}`;
+  else if(c.live) l2 = c.live;
+  else if(c.unread && c.pont && !c.muted) l2 = `<span class="pont">${c.pont}</span>`;
+  else if(c.unread && c.pont && c.muted) l2 = `✦ ${c.pont}`;
+  else if(c.kindtxt) l2 = `<span class="kind ${c.kind}">${c.kindtxt}</span>`;
+  else if(c.glb) l2 = `<span class="glb">🌐</span> ${c.prev.replace('🌐 ','')}`;
+  else l2 = c.prev;
+  const udot = (c.unread && !c.live) ? `<span class="udot"></span>` : "";
+  const pin = c.pin ? `<span class="pin">📌</span> ` : "";
+  const lock = c.lock ? `<span class="pin">🔒</span> ` : "";
+  const mut = c.muted ? ` <span class="pin">🔕</span>` : "";
+  const sync = c.sync ? `<span class="syncg" title="synchronisation en attente">↻</span>` : "";
+  const tags = c.tags ? `<span class="tagdots">${c.tags.map(t=>`<i style="background:${t}"></i>`).join('')}</span>` : "";
+  const caselbl = c.cs ? `<div class="caselbl">${c.cs}</div>` : "";
+  return `<div class="crow" id="row-${c.id}" style="--ac:${c.ac}" onclick="openConv('${c.id}')">
+    <div class="ava" style="background:${c.agent?'transparent':c.ac}">${c.ini}${badge}</div>
+    <div class="body">
+      <div class="l1">${pin}${lock}<span class="nm">${c.nm}</span>${tags}${mut}<span class="mid">·</span><span class="tm">${c.tm}</span>${sync}</div>
+      <div class="l2">${l2}</div>
+    </div>${udot}
+    <div class="modechip">${c.mode}</div>${caselbl}
+  </div>`.replace('class="crow"', `class="${cls.join(' ')}"`);
+}
+
+function renderList(){
+  let html = railHtml();
+  for(const [key,label] of SECTIONS){
+    const rows = CONVS.filter(c=>c.sec===key);
+    if(!rows.length) continue;
+    html += `<div class="lsticker" data-sec="${label}"><span>${label}</span></div>`;
+    html += rows.map(rowHtml).join('');
+  }
+  lsc.innerHTML = html;
+  applyPerspective();
+}
+
+/* ===================== PERSPECTIVE + FOCUS ===================== */
+let raf = null;
+function applyPerspective(){
+  const vp = lsc.getBoundingClientRect();
+  const focusY = vp.bottom - 140;
+  let best = null, bestD = 1e9;
+  lsc.querySelectorAll('.crow').forEach(el=>{
+    const r = el.getBoundingClientRect();
+    const my = r.top + r.height/2;
+    if(!reducedMotion){
+      const base = el.classList.contains('muted') ? 0.55 : 1;
+      let op = 1, sc = 1;
+      if(my < focusY){ const f = Math.min(1,(focusY-my)/520); op = 1-0.45*f; sc = 1-0.04*f; }
+      else { const f2 = Math.min(1,(my-focusY)/160); op = 1-0.35*f2; }
+      el.style.opacity = (base*op).toFixed(3);
+      el.style.transform = `scale(${sc.toFixed(4)})`;
+    }
+    const d = Math.abs(my - focusY);
+    if(my <= focusY + 45 && d < bestD){ bestD = d; best = el; }
+  });
+  lsc.querySelectorAll('.crow.cur').forEach(el=>{ if(el!==best) el.classList.remove('cur'); });
+  if(best) best.classList.add('cur');
+}
+
+let hideTimer = null;
+lsc && document.getElementById('lsc').addEventListener('scroll', ()=>{
+  if(raf) return;
+  raf = requestAnimationFrame(()=>{ raf = null; applyPerspective(); updatePill(); });
+  tpill.classList.add('on');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(()=>tpill.classList.remove('on'), 900);
+});
+
+function updatePill(){
+  const vp = lsc.getBoundingClientRect();
+  let label = "Épinglées";
+  lsc.querySelectorAll('.lsticker').forEach(s=>{
+    if(s.getBoundingClientRect().top <= vp.top + 70) label = s.dataset.sec;
+  });
+  tpill.textContent = label;
+}
+
+/* ===================== INTERACTIONS ===================== */
+function showToast(msg){
+  toast.innerHTML = msg;
+  toast.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>toast.classList.remove('on'), 3200);
+}
+function openConv(id){
+  const c = CONVS.find(x=>x.id===id);
+  let dec;
+  if(c.live) dec = "rejoint la <b>Scène</b> (couche live, Focal dessous)";
+  else if(c.unread > 25) dec = "ouvre en <b>Résumé Vivant</b> (" + c.unread + " non lus &gt; 25)";
+  else if(c.unread > 0) dec = "ouvre en <b>Focal</b> + pont ✦ (" + c.unread + " non lus ≤ 25)";
+  else if(c.mode === "RIVIÈRE") dec = "ouvre en <b>Rivière</b> (choix mémorisé)";
+  else dec = "ouvre en <b>Focal</b>, au dernier lu";
+  showToast("Orchestrateur : « " + c.nm + " » " + dec);
+}
+
+/* FLIP : remonter un rang en tête de sa section, transform uniquement */
+function flipMove(id, mutate){
+  const el = document.getElementById('row-'+id);
+  const before = new Map();
+  lsc.querySelectorAll('.crow').forEach(r=>before.set(r.id, r.getBoundingClientRect().top));
+  mutate();
+  renderList();
+  lsc.querySelectorAll('.crow').forEach(r=>{
+    const b = before.get(r.id);
+    if(b===undefined) return;
+    const dy = b - r.getBoundingClientRect().top;
+    if(Math.abs(dy) < 2) return;
+    r.style.transition = 'none';
+    r.style.transform += ` translateY(${dy}px)`;
+    requestAnimationFrame(()=>{
+      r.style.transition = 'transform .38s cubic-bezier(.22,.9,.26,1)';
+      r.style.transform = r.style.transform.replace(/ translateY\([^)]+\)/,'');
+      setTimeout(()=>{ r.style.transition=''; }, 420);
+    });
+  });
+}
+
+function simNew(){
+  flipMove('wazemmes', ()=>{
+    const c = CONVS.find(x=>x.id==='wazemmes');
+    c.unread = 4; c.tm = "14:43";
+    c.pont = "Rappel commande 18 h + nouvelle offre : miel du marché";
+    CONVS.splice(CONVS.indexOf(c),1);
+    CONVS.splice(CONVS.findIndex(x=>x.sec==='today'),0,c);
+  });
+  showToast("<b>message:new</b> → préview recalculé (Prisme), rang remonté (FLIP), point accent MAJ");
+}
+function simTyping(){
+  const c = CONVS.find(x=>x.id==='mamie');
+  c.typing = c.typing ? null : "Mamie Jo"; if(c.typing) c.dot = "on";
+  renderList();
+  showToast("<b>typing:start</b> → « écrit… » en accent + dot forcé VERT (typing = preuve d'activité)");
+}
+function simRead(){
+  const c = CONVS.find(x=>x.id==='ardeche');
+  c.unread = 0; renderList();
+  showToast("Lecture (autre appareil) → le pont ✦ s'éteint, le préview redevient tertiaire");
+}
+function simTrad(){
+  const c = CONVS.find(x=>x.id==='yuki');
+  const el = document.getElementById('row-yuki');
+  const l2 = el && el.querySelector('.l2');
+  if(l2){ l2.style.transition='opacity .3s'; l2.style.opacity='0';
+    setTimeout(()=>{ c.prev = "🌐 Colis bien reçu — j'adore le motif, photo ce soir !"; renderList();
+      const n = document.getElementById('row-yuki').querySelector('.l2');
+      n.style.opacity='0'; n.style.transition='opacity .3s'; requestAnimationFrame(()=>n.style.opacity='1');
+    }, 300);
+  }
+  showToast("<b>Traduction tardive</b> → cross-fade du préview en place, glyphe 🌐 — résolution Prisme inchangée");
+}
+function toggleAnnot(){
+  const ph = document.getElementById('ph');
+  ph.classList.toggle('annot');
+  document.getElementById('annotbtn').textContent = ph.classList.contains('annot') ? "🏷 Masquer les annotations" : "🏷 Annoter les cas de figure";
+  applyPerspective();
+}
+function simSkeleton(){
+  const saved = lsc.innerHTML;
+  lsc.innerHTML = Array.from({length:9}, ()=>`<div class="skelrow"><div class="sa"></div><div class="sb"><div></div><div></div></div></div>`).join('');
+  showToast("<b>Cache vide (cold start)</b> → squelette à la géométrie EXACTE du rang. Cache présent = peinture immédiate, jamais de squelette");
+  setTimeout(()=>{ renderList(); }, 1800);
+}
+function simLive(){
+  flipMove('course', ()=>{
+    const c = CONVS.find(x=>x.id==='course');
+    c.sec = 'live'; c.live = "En direct · 2 voix · rejoindre"; c.tm = "14:45";
+  });
+  showToast("<b>Scène démarre</b> → le rang rejoint la section EN DIRECT, anneau accent pulsé");
+}
+
+renderList();
+updatePill();
+</script>
