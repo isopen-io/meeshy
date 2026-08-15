@@ -172,3 +172,45 @@ reste consultable).**
 5. **Un seul atelier** — sélecteur de format, `content` mappé, CanvasPlayer
    dans le feed, réels.
 6. **Démolition** — code mort, composeurs legacy, support v1, doc Prisma.
+
+## 11. Carte d'intégration des features existantes (addendum 2026-08-15)
+
+Inventaire exhaustif des six surfaces de création (StoryComposer, PostComposer,
+AudioPostComposer, FeedComposerSheet, composer inline, StatusComposer) :
+**39 features recensées**, chacune reçoit UNE destination. Bugs supplémentaires
+découverts et corrigés par le passage au contrat :
+- médias des posts web jamais rattachés (`/attachments/upload` → `MessageAttachment`
+  vs claim `postMedia`) ⇒ **aucun réel web n'a jamais existé** (dégradation
+  systématique faute de médias) ;
+- chemins iOS inline qui perdent `visibility` et `location`
+  (`FeedView+Attachments.swift:369-378`) ;
+- `PostMedia.order` jamais écrit (tri de lecture sur une constante 0) ;
+- `originalLanguage` jamais envoyée par le web pour un post ordinaire ;
+- `visibilityUserIds` jamais transmis par `PostService.swift` iOS ;
+- `RepostSchema.visibility` rempli par aucun chemin feed ;
+- `allowSoundExtraction` déclaré, jamais envoyé.
+
+| Destination | Features intégrées |
+|---|---|
+| **Barre de publication** | visibilité 6 niveaux + EXCEPT/ONLY (iOS transmet enfin) · langue de publication (héritée par les textes) · qualification réel affichée · repost/quote (`repostOfId` au create, audience comprise) · lieu-métadonnée + découvrabilité (`discoverabilityPrecision`, premier client) · communauté |
+| **Dock** | texte content + compteur 5 000 partagé (iOS sans limite aujourd'hui) · mentions @/# autocomplétées (contrôleur des commentaires réutilisé) · médias TUS + éditeurs via Inspecteur · audio 3 onglets (micro/fichier/bibliothèque) · transcription live · `allowSoundExtraction` en toggle |
+| **Canvas** | slides ↔ carrousel (`PostMedia.order` écrit à l'index) · son emprunté = élément audio standard · tous les objets story servent post/réel |
+| **Amorce** | caméra/galerie/texte/dernière capture · audio express (raccourci publiant direct, même PublishIntent) · humeur STATUS (raccourci distinct) |
+| **Étagère** | brouillons + outbox durable généralisés au web · offline pour l'audio aussi · édition = intent `edit` (atelier complet, `UpdatePost.mediaIds` vivant) |
+| **Serveur (auto)** | extraction mentions/hashtags · liens tracés · Whisper · `hasAnyContentCarrier` · idempotence · rate limit · dégradation REEL→POST — inchangés |
+
+Inexistantes partout (hors périmètre, accueillies plus tard comme contrôle/champ,
+jamais comme vue) : sondages, programmation, alt text, désactivation des
+commentaires.
+
+### Cas complexes — deux options, recommandation
+
+| Cas | Option A | Option B | Reco |
+|---|---|---|---|
+| C1 Mentions/# | autocomplétion champ content seul | élément « mention » tappable du canvas | **A** (phase 5), B ensuite (extension kind sticker) |
+| C2 Audio express | tout par le canvas (audio-first) | raccourci micro d'Amorce → publier direct, même PublishIntent | **B par-dessus A** (les 3 chemins iOS divergents meurent) |
+| C3 Carrousel | 1 slide = 1 carte, order écrit | pas de slides en Post, grille de médias | **A** (un seul modèle mental) |
+| C4 Repost | repostOfId dans PublishIntent (audience comprise) | garder /repost + envoyer enfin visibility | **A** ; B = correctif d'attente |
+| C5 Lieu | pastille et métadonnée indépendantes | une source, deux rendus (+ toggle découvrabilité) | **B** (fuite iOS impossible) |
+| C6 Langue | par objet seulement | langue de publication héritée + surcharge par objet | **B** (Prisme fiable partout) |
+| C7 Édition | intent edit = atelier complet | inline léger + escalade atelier | **A** socle, B raccourci contextuel |
