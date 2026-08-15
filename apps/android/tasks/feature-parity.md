@@ -2696,7 +2696,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ConversationSettingsForm 10, MemberRole 5, ConversationRepository +2, ConversationSettingsViewModel 7);
       mutation-checked (neutralising the diff killed exactly the 5 partial-patch/dirty tests).
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
-- [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all
+- [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
+      **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
+      `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
+      hashing/storage only. Still needed: PIN entry UI, `ConversationListViewModel` wiring (hide
+      locked conversations), unlock flow, logout hook. Box stays unchecked until those land.
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
 - [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
