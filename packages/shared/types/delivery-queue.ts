@@ -46,7 +46,20 @@ export type QueuedMessagePayload = {
    * audio attachments on one message would otherwise collapse into a single
    * entry, and the supersede-in-place rule (latest payload wins) is exactly
    * right per attachment since the payload carries its FULL state. Never a
-   * delivery receipt. */
+   * delivery receipt.
+   * 'translation' replays MESSAGE_TRANSLATION so a peer who was offline when
+   * NLLB finished translating a TEXT message still gets the translation. Exact
+   * text sibling of 'attachment-updated': the `message:new` queued at SEND time
+   * carries `translations: []` — the translation lands a second or two later
+   * over ZMQ — so without this entry the replayed message is permanently the
+   * untranslated one, and the Prisme Linguistique becomes a function of whether
+   * the reader happened to be connected when NLLB finished. It needs a dedupKey
+   * scoped to the TARGET LANGUAGE: one message fans out to as many translations
+   * as the conversation has reader languages, and messageId+eventType alone
+   * would collapse them into a single entry, keeping only the first language.
+   * Supersede-in-place (latest payload wins) is right per language — a
+   * re-translation of the same (message, language) replaces the previous text.
+   * Never a delivery receipt: a translation is not a message arriving. */
   readonly eventType?:
     | 'new'
     | 'edited'
@@ -58,7 +71,8 @@ export type QueuedMessagePayload = {
     | 'pinned'
     | 'unpinned'
     | 'link-message'
-    | 'attachment-updated';
+    | 'attachment-updated'
+    | 'translation';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:
