@@ -1573,3 +1573,198 @@ conversation `isActive: false`, un post supprimé, un appel `ended`, une
 communauté archivée — chacun a des routes qui écrivent dedans. Recenser, pour
 chaque conteneur porteur d'un état terminal, les écrivains qui ne le vérifient
 pas.
+
+# Cycle 31 (2026-08-15) — la règle existait, sans un seul appelant
+
+## Méthode — la sonde annoncée par le cycle 30, posée sans détour
+
+Le cycle 30 avait nommé le candidat : **quels chemins d'écriture ignorent l'état
+TERMINAL de leur conteneur ?** La sonde a rendu son défaut au premier site
+instruit — et bien plus large que ce que la question demandait.
+
+Recensement des chemins d'envoi, d'abord. `MessagingService.handleMessage` est
+l'entonnoir : cinq appelants (socket texte, socket pièces jointes,
+`MeeshySocketIOManager`, `POST /conversations/:id/messages`,
+`translation-non-blocking`). Deux routes le contournent par construction et le
+documentent — les deux envois de `routes/links/messages.ts`. Quatre sites
+d'écriture au total, aucun autre.
+
+Balayage de contrôle par le SITE D'ÉCRITURE plutôt que par la route, pour
+qu'aucun tuyau n'échappe au recensement — `message.create(` sur tout le
+gateway rend sept sites, et seulement quatre sont des écritures d'UTILISATEUR :
+
+| Site | Nature | Verdict |
+|---|---|---|
+| `MessageProcessor.saveMessage` | l'entonnoir | ✅ gardé ce cycle |
+| `routes/links/messages.ts` ×2 | envoi par lien de partage | ✅ gardés ce cycle |
+| `CallService` ×2 | messages SYSTÈME d'appel | hors sujet — délibérément |
+| `MessageTranslationService` | ligne de traduction | hors sujet |
+| `routes/conversation-encryption.ts` | message SYSTÈME de chiffrement | hors sujet |
+
+Les messages SYSTÈME ne sont pas gardés, et c'est un choix : ils relatent un
+fait déjà survenu (un appel terminé, un chiffrement activé) et les gater
+retirerait au dernier état d'une conversation close la trace de ce qui l'a
+close.
+
+Puis la question posée à l'entonnoir : que lit-il de la conversation avant
+d'écrire dedans ? Réponse : **rien**. L'étape 3 vérifie `Participant.isActive` —
+« cette personne appartient-elle à la conversation » — et l'entonnoir passe
+directement à la détection de langue.
+
+## Le défaut — un garde complet, sur un chemin que personne n'emprunte
+
+`MessageValidator.checkPermissions` porte la règle en entier : hiérarchie
+`everyone < member < moderator < admin < creator`, dispense de la conversation
+globale, échappatoire du staff plateforme (`ADMIN`/`BIGBOSS`/`MODERATOR`),
+message d'erreur dédié au canal d'annonces. Un `grep` sur tout le monorepo —
+gateway, web, shared, iOS — rend **un seul invocateur : son propre fichier de
+test.** Le module n'expose à la production que `validateRequest`,
+`resolveConversationId` et `detectLanguage`.
+
+Deux promesses tombaient donc ensemble, pour la même et unique raison.
+
+**1. Le canal d'annonces n'annonçait rien.** La fonctionnalité est complète de
+bout en bout, sauf son application :
+
+| Site | Ce qu'il fait |
+|---|---|
+| `POST /conversations` `type: 'broadcast'` | écrit `{ isAnnouncementChannel: true, defaultWriteRole: 'admin' }` |
+| `PATCH /conversations/:id` | laisse un admin basculer un groupe dedans, et l'INTERDIT explicitement aux modérateurs |
+| `GET /conversations` (`core.ts:557`) | sélectionne `isAnnouncementChannel` et le sert aux clients |
+| `schema.prisma:404` | « Announcement-only mode (only creator/admins can write, overrides defaultWriteRole) » |
+| **chemin d'envoi** | **ne le lit jamais** |
+
+Tout membre pouvait publier dans un canal d'annonces. Avec le client officiel,
+sans requête forgée, sans rien contourner. Un `defaultWriteRole` réglé à
+`moderator` sur un groupe ordinaire était tout aussi décoratif.
+
+**2. Une conversation FERMÉE acceptait encore des messages** — la question
+exacte du cycle 30 (son constat latent #4). `Conversation.isActive: false` est
+l'état terminal, écrit par quatre sites (`core.ts` `DELETE`, les deux branches
+de clôture de `delete-for-me.ts`, `leave.ts`). Aucun chemin d'écriture ne le
+lisait : un participant resté actif écrivait dans une conversation close, et le
+message était persisté, diffusé et traduit comme les autres.
+
+## Le correctif — la règle redevient une règle, au seul endroit qui la voit
+
+`services/messaging/conversationWriteAdmission.ts`, unité à lecteur structurel
+du grain de `forwardAdmission` / `messageEditAdmission`. Elle répond à la
+question que l'étape 3 ne pose pas : *cette conversation accepte-t-elle encore
+des messages, et de qui ?*
+
+**Placement dans l'entonnoir — étape 3.6, et les deux bornes comptent.**
+
+- **Après le dedup précoce.** Un rejeu porte une ligne DÉJÀ écrite et diffusée ;
+  la refuser transformerait un envoi réussi en erreur rendue au client, qui
+  rejouerait indéfiniment. Précédent explicite : `forwardAdmission` est posé
+  après le dedup pour la raison jumelle.
+- **Avant la détection de langue.** `detectLanguage` sort par HTTP vers le
+  translator (~266 ms à froid). Un refus ne paie pas ce billet — et le témoin
+  l'épingle en observant `global.fetch`.
+
+**Les deux routes de lien de partage reçoivent le même garde.** Elles
+contournent l'entonnoir par construction (le fichier le documente déjà pour le
+lieu partagé et le chiffrement) : sans garde propre, un lien de partage restait
+le SEUL tuyau capable d'écrire dans une conversation clôturée, et un lien
+anonyme ouvert sur un canal d'annonces aurait tranché en faveur du lien. Les
+droits du LIEN disent ce que le lien autorise ; ils ne disent rien de ce que la
+conversation accepte.
+
+**Le coût, mesuré plutôt que supposé.** Une lecture de conversation à quatre
+scalaires par envoi. C'est l'ordre de grandeur que le chemin paie DÉJÀ :
+`MessageProcessor.getEncryptionContext` lit la conversation à chaque message,
+sans cache. Le rang du participant n'est lu QUE si la conversation restreint
+réellement l'écriture — donc jamais sur le chemin nominal (groupe ou DM à
+`defaultWriteRole: 'everyone'`), et le rang de conversation et le rôle global de
+plateforme arrivent en UNE lecture, jamais deux.
+
+**Aucun cache, et c'est un choix argumenté.** Une police d'écriture mise en
+cache 30 s laisserait une conversation clôturée accepter des messages pendant
+une demi-minute, et exigerait d'invalider à cinq sites d'écriture. Ce dépôt
+s'est déjà fait mordre par cette forme exacte — la note d'en-tête de
+`participant-lookup-cache` raconte comment `unban` avait manqué à la liste et
+refusait les messages de la personne qu'on venait de réintégrer. Une
+autorisation se lit fraîche.
+
+**L'asymétrie des échecs est la règle, pas une commodité.**
+
+- **Police illisible ⇒ ADMETTRE.** Ce garde AJOUTE une restriction qui
+  n'existait pas ; un hoquet de base ne doit pas convertir un envoi ordinaire en
+  erreur. C'est aussi la protection des documents hérités : les trois champs
+  « WRITE PERMISSIONS » sont ABSENTS de toute conversation créée avant leur
+  migration, et un `undefined` y dégénère en « aucune restriction » — l'état
+  exact d'avant ce module.
+- **Rang illisible ⇒ REFUSER.** La restriction est CONNUE ; seule l'identité
+  manque. Admettre ouvrirait le canal d'annonces à tout le monde pendant la
+  panne. On refuse ce qu'on ne peut pas prouver.
+
+**L'orphelin est supprimé, avec ses témoins.** 222 lignes de
+`MessageValidator` et les six blocs de tests qui les couvraient. Un garde
+orphelin à côté d'un garde réel est pire qu'aucun garde : il fait croire la
+règle appliquée — ce qui est très exactement le mécanisme qui a produit ce
+défaut. Ses règles ANONYMES (lien actif, non expiré, `allowAnonymousMessages`,
+`permissions.canSendMessages`) ne perdent rien : `routes/links/messages.ts` les
+applique en propre, et est le seul site à les avoir jamais fait respecter.
+
+## Pourquoi ça a survécu
+
+La règle est **écrite, complète et juste**. Elle se lit bien, elle a des tests
+verts, elle porte des messages d'erreur soignés en français. Tout audit qui
+cherche « le canal d'annonces est-il appliqué ? » par le nom du champ tombe
+dessus et conclut oui. La seule question qui l'aurait démasquée est celle qu'on
+ne pose pas à une fonction qu'on vient de lire : **qui l'appelle ?**
+
+C'est la variante la plus coûteuse de la leçon du cycle 28 (« la garde jumelle
+existait, sur l'autre chemin »). Là-bas la garde protégeait un chemin sur deux ;
+ici elle n'en protège aucun, et sa seule existence dissuade de la réécrire.
+
+## Gates
+
+- [x] `conversationWriteAdmission.test.ts` — 27 cas, fichier neuf
+- [x] `MessagingService.test.ts` — 4 témoins de câblage (3 rouges sans le garde,
+      le 4e est le témoin de NON-RÉGRESSION : l'admin publie toujours)
+- [x] `links-messages.test.ts` — 3 témoins de câblage, les 3 rouges sans le garde
+- [x] RED prouvé par neutralisation de chaque garde, pas par raisonnement
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 263
+
+## Constats latents — relevés, NON livrés
+
+1. **`Conversation.slowModeSeconds` n'est appliqué nulle part.** Même famille
+   exactement — un réglage de conteneur que `PATCH /conversations/:id` écrit,
+   que les modérateurs se voient explicitement refuser, et que personne ne lit.
+   **Non livré parce que ce n'est pas une admission** : il demande un état
+   « dernier envoi par personne et par conversation » qui n'existe nulle part,
+   donc un limiteur de débit, pas un prédicat. Le poser dans cette unité aurait
+   fait entrer un état mutable dans une décision pure.
+2. **Le chemin socket ANONYME ne vérifie pas les droits du lien de partage.**
+   `permissions.canSendMessages`, `allowAnonymousMessages`, l'expiration du lien
+   sont appliqués par `routes/links/messages.ts` (REST) et l'étaient par
+   l'orphelin — mais `MessageHandler.handleMessageSend` avec `isAnonymous`
+   utilise le `participantId` du socket sans les relire. Non livré : la
+   vérification demande le contexte lien+session, une surface différente de
+   celle de ce cycle, et livrer une moitié de règle est ce que ce cycle vient de
+   corriger.
+3. **Les autres conteneurs à état terminal restent non instruits.** La sonde du
+   cycle 30 nommait aussi le post supprimé, l'appel `ended`, la communauté
+   archivée. Ce cycle n'a instruit que la conversation. Les trois autres
+   méritent le même balayage — quatre sites d'écriture chacun, la même question.
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux.
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30, sans victime vérifiée).
+
+## Candidat pour le cycle suivant
+
+Le prédicat qui a rendu ce défaut, généralisé, et jamais appliqué par les cycles
+21–31 : **quelles règles de ce dépôt sont écrites sans être appelées ?** Un
+`grep` par symbole exporté, en écartant les points d'entrée. `checkPermissions`
+en était une ; le constat latent #1 en est une seconde, écrite au schéma plutôt
+qu'en TypeScript. Une règle sans appelant est indistinguable d'une règle
+appliquée pour quiconque la lit — c'est la classe de défaut la moins visible du
+dépôt, et la seule qu'un audit par le NOM du champ ne trouvera jamais.
