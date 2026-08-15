@@ -360,6 +360,8 @@ Bits partagés : `packages/shared/types/message-effect-flags.ts` ↔ `MessageEff
 5. **Les particules se décrivent en coordonnées relatives figées + une progression animée**, jamais en mutant un `@State` vide depuis `onAppear` puis en l'animant dans le même tour : sans frame initiale rendue, il n'y a rien à interpoler.
 6. **`reduceMotion` : le message perd son mouvement, pas son intention.** Aucune apparition ne joue ; `glow` et `rainbow` sont rendus FIXES (`reduceMotionSafeMask`) ; `pulse` et `sparkle` sont du mouvement pur et sont retirés.
 7. **Plan vide ⇒ vue intacte.** `plan.isEmpty` doit court-circuiter tout wrapper : l'écrasante majorité des messages a `effectFlags == 0` et ne doit pas payer huit ViewModifier inertes par cellule.
+8. **Un effet déclaré doit être MONTÉ.** `ExplodeOverlay` et `WaooOverlay` ont vécu déclarés et jamais branchés : `explode` et `waoo` jouaient leur transform pendant que leurs particules ne s'exécutaient jamais, et rien ne rougissait — le plan de lecture était correct, les vues compilaient, et l'effet PARAISSAIT jouer grâce à son transform. Garde : `EffectOverlayMountingSourceGuardTests` exige l'égalité entre overlays déclarés et overlays montés, chacun derrière son propre drapeau.
+9. **Le 4ᵉ axe « interface » (bits 24-30) n'existe pas encore, et le bit 31 est interdit.** Les trois axes actuels s'appliquent tous à la VUE DU MESSAGE ; aucun effet ne s'exerce à l'échelle de l'écran. Si cet axe s'ouvre : `1 << 31` vaut **−2147483648** en TypeScript (opérateurs bit-à-bit en int32 signé) et dépasse l'`Int` signé stocké par Prisma — un drapeau posé là serait négatif côté web et positif côté Swift (`UInt32`). Sept emplacements utilisables, pas huit.
 
 ## TDD & Testing Standards
 
