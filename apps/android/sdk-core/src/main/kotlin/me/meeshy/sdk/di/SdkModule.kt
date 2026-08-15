@@ -40,6 +40,8 @@ import me.meeshy.sdk.privacy.DataStorePrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
 import me.meeshy.sdk.session.DefaultSessionTeardown
@@ -212,11 +214,18 @@ object SdkModule {
 
     @Provides
     @Singleton
+    fun providesConversationLockStore(@ApplicationContext context: Context): ConversationLockStore =
+        EncryptedConversationLockStore(context)
+
+    @Provides
+    @Singleton
     fun providesSessionTeardown(
         database: MeeshyDatabase,
         categorySnapshotStore: CategorySnapshotStore,
         conversationDraftStore: ConversationDraftStore,
-    ): SessionTeardown = DefaultSessionTeardown(database, categorySnapshotStore, conversationDraftStore)
+        conversationLockStore: ConversationLockStore,
+    ): SessionTeardown =
+        DefaultSessionTeardown(database, categorySnapshotStore, conversationDraftStore, conversationLockStore)
 
     @Provides
     @Singleton
