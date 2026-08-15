@@ -995,6 +995,127 @@ final class MessageListViewController: UIViewController {
                 )
             }
             let messageBubble = EquatableMessageBubble(bubble: makeThemedBubble(false)).equatable()
+
+            // WS-7 (F-086) — mux de rangée SOUS DRAPEAU (contrat §WS-6 travail
+            // 2) : Focal/Script (FocalRow, WS-4 GELÉ) vs bulle historique.
+            // `readingMode.usesFlatRow` (extension F-085) est le SEUL point de
+            // branchement — vrai pour `.focal` ET `.script`, jamais pour
+            // `.summary`/`.river`/`.bubbles`. Gardé SOUS `if` (pas un ternaire) :
+            // la construction (BubbleContent, groupement, présence) ne doit
+            // JAMAIS s'exécuter sur le chemin bulle — flag off ⇒ zéro coût
+            // additionnel, bit-à-bit identique (contrat §WS-6).
+            //
+            // ÉCART SIGNALÉ (RE-PREUVE, rapport F-086) : le contrat §WS-6
+            // travail 2 assume que WS-6 construit `FocalRowInput` « à partir
+            // des lets déjà snapés — aucun calcul nouveau ». Trois lookups
+            // s'avèrent RÉELLEMENT nouveaux — aucun équivalent ailleurs dans
+            // le dépôt : `isFirstInGroup` (aucun groupement par expéditeur
+            // n'existe — les bulles posent `isLastInGroup: true` EN DUR
+            // ci-dessus, `makeThemedBubble`), `senderPresence`
+            // (`PresenceManager.shared`, déjà utilisé par `ConversationView
+            // .headerPresenceState`) et `isRightToLeft`
+            // (`collectionView.effectiveUserInterfaceLayoutDirection`, déjà
+            // utilisé par `FocalScrollPass`, F-084). Les trois sont des
+            // lookups TRIVIAUX via des API déjà établies ailleurs dans le
+            // dépôt — signalés, pas improvisés à l'aveugle.
+            let focalRow: EquatableFocalRow?
+            if self.readingMode.usesFlatRow {
+                let record = self.store.message(for: localId)
+                let isOptimistic = record.map { Self.optimisticStates.contains($0.state) } ?? false
+                let focalContent = BubbleContent(
+                    message: message,
+                    translations: translations,
+                    preferredTranslation: preferred,
+                    translatedAudios: translatedAudios,
+                    userLanguages: userLanguages,
+                    secondaryLangCode: languageSelection?.secondaryLangCode,
+                    activeDisplayLangCode: languageSelection?.activeDisplayLangCode,
+                    currentUserId: myId,
+                    recipientCount: recipients
+                )
+                // « Pseudo · HH:mm en tête de groupe uniquement » (contrat
+                // §WS-4) : un message ouvre un nouveau groupe quand son
+                // voisin CHRONOLOGIQUEMENT PRÉCÉDENT (`store.messages`,
+                // ordre chronologique croissant, `index - 1`) change
+                // d'expéditeur ou de jour calendaire. Heuristique standard
+                // (iMessage/WhatsApp) — voir écart signalé ci-dessus.
+                let isFirstInGroup: Bool = {
+                    guard let index = self.store.index(of: localId), index > 0 else { return true }
+                    let previous = self.store.messages[index - 1]
+                    guard previous.senderId == senderId else { return true }
+                    return !Calendar.current.isDate(previous.createdAt, inSameDayAs: message.createdAt)
+                }()
+                let focalInput = FocalRowInput(
+                    localId: localId,
+                    serverId: record?.serverId,
+                    content: focalContent,
+                    density: self.readingMode == .script ? .script : .focal,
+                    isFirstInGroup: isFirstInGroup,
+                    senderId: senderId,
+                    senderDisplayName: message.senderName ?? message.senderUsername ?? "",
+                    senderUsername: message.senderUsername,
+                    senderAvatarURL: message.senderAvatarURL,
+                    senderThumbHash: nil,
+                    senderColorHex: message.senderColor ?? accent,
+                    senderPresence: PresenceManager.shared.presenceState(for: senderId),
+                    senderStoryRing: senderRingState,
+                    senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
+                    accentHex: accent,
+                    isDark: dark,
+                    isDirect: direct,
+                    isRightToLeft: self.collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft,
+                    isOptimistic: isOptimistic,
+                    isAgentAuthored: message.messageSource == .agent,
+                    // WS-10 (F-089) n'a pas encore livré `isAgentGrammarEnabled` —
+                    // OFF tant que le drapeau n'existe pas (`grep` vide sur le
+                    // dépôt à l'ouverture de F-086).
+                    showsAgentGrammar: false,
+                    highlightSearchTerm: highlightTerm,
+                    mentionDisplayNames: mentionDisplayNames,
+                    userLanguages: userLanguages,
+                    activeDisplayLangCode: languageSelection?.activeDisplayLangCode,
+                    secondaryLangCode: languageSelection?.secondaryLangCode,
+                    voiceConsentMissing: vm?.voiceConsentMissing ?? false,
+                    transcription: transcription?.text,
+                    translatedAudios: translatedAudios,
+                    allAudioItems: allAudioItems,
+                    conversationName: conversationName ?? ""
+                )
+                var focalActions = FocalRowActions()
+                focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
+                focalActions.onAddReaction = addReactionHandler
+                focalActions.onOpenReactPicker = openReactPickerHandler
+                focalActions.onShowReactions = showReactionsHandler
+                focalActions.onShowReadStatus = showReadStatusHandler
+                focalActions.onRetry = retryHandler
+                focalActions.onReplyTap = scrollHandler
+                focalActions.onStoryReplyTap = storyReplyHandler
+                focalActions.onMediaTap = mediaTapHandler
+                focalActions.onConsumeViewOnce = consumeViewOnceHandler
+                focalActions.onReactToAttachment = { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) }
+                focalActions.onRequestTranslation = requestTranslationHandler
+                focalActions.onShowTranslationDetail = showTranslationHandler
+                focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
+                    self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)
+                }
+                focalActions.onSetSecondaryLanguage = { [weak self] msgId, code in
+                    self?.conversationViewModel?.setBubbleSecondaryLanguage(code, for: msgId)
+                }
+                focalActions.onPlayAudio = { [weak self] attachmentId in
+                    self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
+                }
+                focalActions.onOpenProfile = openProfileHandler
+                focalActions.onViewStory = (senderRingState != .none) ? { viewSenderStoryHandler?(senderId) } : nil
+                focalActions.onCallBack = { _ in
+                    guard let summary = message.callSummary else { return }
+                    callBackHandler?(summary)
+                }
+                focalActions.onLongPressCallDetail = { _ in callDetailHandler?(messageId) }
+                focalRow = EquatableFocalRow(row: FocalRow(input: focalInput, actions: focalActions))
+            } else {
+                focalRow = nil
+            }
+
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
@@ -1011,7 +1132,11 @@ final class MessageListViewController: UIViewController {
                     // custom — le `.contextMenu` natif possède la pression.
                     enableLongPress: nativeMenu == nil
                 ) {
-                    messageBubble
+                    if let focalRow {
+                        focalRow.equatable()
+                    } else {
+                        messageBubble
+                    }
                 }
                 .environmentObject(host)
                 .environmentObject(stories)

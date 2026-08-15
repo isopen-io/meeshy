@@ -261,6 +261,11 @@ struct ConversationView: View {
     /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
+    /// Bascule Reduce Motion IN-APP (§4.9) — la source SYSTÈME
+    /// (`UIAccessibility.isReduceMotionEnabled`) est lue directement par
+    /// `MessageListViewController` (UIKit), qui combine les DEUX. Ce
+    /// contrôleur ne transmet QUE l'override applicatif à `MessageListView`.
+    @Environment(\.meeshyForceReduceMotion) private var meeshyForceReduceMotion
     var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
@@ -270,6 +275,17 @@ struct ConversationView: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
+    /// WS-7 (F-086, contrat §WS-7/A6) — décision de l'orchestrateur des modes
+    /// de lecture, prise UNE SEULE FOIS dans `init` (écart #4 du contrat :
+    /// `viewModel.start()` marque déjà lu avant la première frame,
+    /// `unreadCount` y vaudrait 0 si la décision attendait `onAppear`).
+    /// Enveloppe la loi GELÉE `ReadingModeOrchestrator.resolveOrchestratorDecision`
+    /// (`Focal/Core/`, M-042) + le stockage local scopé (`ReadingModePreferenceStore`,
+    /// F-080). Préférence collante PRIME sur la décision auto ; `auto` rend
+    /// la main à l'orchestrateur (seuils ≤25 / >25 / absence>24h∧≥10) —
+    /// `ReadingModeController` (F-080, GELÉ) porte cette résolution, non
+    /// dupliquée ici.
+    @StateObject var readingModeController: ReadingModeController
     /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
@@ -494,6 +510,53 @@ struct ConversationView: View {
         // Wire the typing observer separately so typing changes don't re-evaluate
         // the full conversation body — only typing-specific sub-views update.
         _typingObserver = ObservedObject(wrappedValue: vm.stateStore)
+
+        // WS-7 (F-086, A6) — décision de l'orchestrateur, ICI, UNE SEULE
+        // FOIS. `identity`/`capabilities`/`isFlagEnabled` sont les mêmes
+        // entrées que celles déjà lues plus haut pour `vm` — aucune seconde
+        // résolution invité/inscrit (§5.1 : `ConversationViewerIdentityResolver`
+        // est l'UNIQUE point de branchement).
+        let identity = ConversationViewerIdentityResolver.resolve(
+            authManager: AuthManager.shared,
+            anonymousSession: anonymousSession
+        )
+        let isFlagEnabled = MeeshyFeatureFlags.isReadingModesEnabled
+        let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init(
+            identity: identity.readingModeIdentity,
+            isFlagEnabled: isFlagEnabled,
+            conversationType: Self.readingModeConversationType(for: conversation?.type),
+            activeParticipantCount: conversation?.memberCount ?? 0
+        ))
+        _readingModeController = StateObject(wrappedValue: ReadingModeController(
+            conversationId: conversation?.id ?? "",
+            scope: identity.scope,
+            unreadCount: conversation?.userState.unreadCount ?? 0,
+            capabilities: capabilities,
+            isFlagEnabled: isFlagEnabled
+        ))
+    }
+
+    /// SDK `MeeshyConversation.ConversationType` (8 cas) → miroir GELÉ de la
+    /// loi de lecture (`ReadingModeOrchestrator.ConversationType`, 5 cas —
+    /// RE-PREUVE : `community`/`channel`/`bot` n'y existent pas). Les trois
+    /// cas absents sont des conversations multi-parties comme `.group` —
+    /// jamais `.direct`, la seule distinction qui compte pour
+    /// `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
+    /// `nil` (aucune conversation) ⇒ `.group`, cohérent avec `isDirect`
+    /// (calculée plus haut), qui traite déjà un `conversation` nil comme
+    /// « pas direct ».
+    /// `internal` (pas `private`) : lu directement par
+    /// `ConversationViewReadingModeInitTests` (`@testable import Meeshy`).
+    static func readingModeConversationType(
+        for sdkType: MeeshyConversation.ConversationType?
+    ) -> ReadingModeOrchestrator.ConversationType {
+        switch sdkType {
+        case .direct: return .direct
+        case .group, .community, .channel, .bot, nil: return .group
+        case .public: return .public
+        case .global: return .global
+        case .broadcast: return .broadcast
+        }
     }
 
     // MARK: - Encryption Disclaimer
@@ -1172,6 +1235,22 @@ struct ConversationView: View {
                 // explicite vers les détails de la conversation, c'est lui qui
                 // gagne (retour user 2026-08-13).
                 isHeaderExpanded: composerState.showOptions,
+                // WS-7 (F-086) — décision de l'orchestrateur (§WS-6 travail
+                // 10 : props posées AVANT les closures on…, contrainte
+                // d'ordre de l'init memberwise). `readingModeController.mode`
+                // et `MessageListView.readingMode` sont le MÊME type
+                // (`ConversationReadingMode`, typealias sur
+                // `ReadingModeOrchestrator.ConversationReadingMode`,
+                // F-080) — aucune conversion.
+                readingMode: readingModeController.mode,
+                // « Piège connu » (contrat §4.5) : une conversation courte
+                // jamais paginée ne verrait `hasOlderMessages` passer à
+                // `false` qu'après le premier aller-retour REST —
+                // `messages.count < 200` couvre l'intervalle avant ce
+                // premier chargement.
+                hasReachedOldest: !viewModel.hasOlderMessages
+                    || (viewModel.messages.count < 200 && !viewModel.isLoadingInitial && !viewModel.isRevalidating),
+                isReduceMotionEnabled: meeshyForceReduceMotion,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
                 },
