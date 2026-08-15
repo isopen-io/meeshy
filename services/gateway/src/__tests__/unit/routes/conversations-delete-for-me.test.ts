@@ -256,8 +256,13 @@ describe('DELETE /conversations/:id/delete-for-me — creator, empty direct DM',
     expect(prisma.conversation.count).toHaveBeenCalledWith({
       where: { id: CONV_ID, type: 'direct', firstMessageSentAt: null },
     });
+    // La clôture porte son horodatage : `loadConversationTombstones` interroge
+    // `closedAt > since`, donc une fermeture qui n'écrit que `isActive: false`
+    // n'est portée par aucun delta de rattrapage.
     expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { isActive: false } })
+      expect.objectContaining({
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
+      })
     );
     expect(prisma.participant.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { role: 'creator' } })
@@ -409,7 +414,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: CONV_ID },
-        data: { isActive: false },
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
       })
     );
   });
