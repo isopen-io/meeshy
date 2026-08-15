@@ -56,13 +56,31 @@ UnifiedAuthContext {
   type: 'registered' | 'anonymous',
   registeredUser?: RegisteredUser,  // JWT auth
   anonymousUser?: AnonymousUser,    // sessionToken auth
-  userId: string,                   // user.id or sessionToken
+  userId: string,                   // User.id (registered) | Participant.id (anonymous)
+  participantId?: string,           // present for anonymous, == userId
   hasFullAccess: boolean,           // true for JWT, false for anon
 }
 ```
 - JWT: `Authorization: Bearer {token}`
 - Anonymous: `X-Session-Token` header
 - Admin: role-based permissions + audit trail
+
+**`authContext.userId` n'est PAS toujours un `User.id`.** Pour un invité de lien
+partagé il porte un `Participant.id` (`middleware/auth.ts`) — jamais le jeton de
+session, qui ne quitte pas le middleware. C'est délibéré : ce champ nomme la
+**room personnelle** de l'appelant (`ROOMS.user(userId ?? id)`, cf. § Room
+Organization), et un participant sans ligne `User` en a bien une.
+
+Ne jamais le recopier tel quel dans un champ de payload nommé `userId` : ces
+champs déclarent un `User.id` et sont nullables pour ce cas précis
+(`ReadStatusUpdatedEventData.userId`, `ReadStatusUpdateEvent` iOS,
+`ReadStatusUpdatedEvent` Android). Les deux rôles se dérivent séparément, à
+partir d'`isAnonymous` :
+
+```typescript
+const actorUserId = isAnonymous ? null : authContext.userId; // champ du contrat
+const personalRoomKey = actorUserId ?? membership.id;        // clé de room
+```
 
 ## Socket.IO Conventions
 
