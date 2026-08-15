@@ -56,6 +56,10 @@
     <string name="conversations_leave_confirm_message">You will leave \"%1$s\". You won\'t receive new messages from this conversation.</string>
     <string name="conversations_leave_confirm_button">Leave</string>
     <string name="conversations_leave_cancel_button">Cancel</string>
+    <string name="conversations_action_delete_for_me">Delete for me</string>
+    <string name="conversations_delete_for_me_confirm_title">Delete conversation?</string>
+    <string name="conversations_delete_for_me_confirm_message">\"%1$s\" will be permanently deleted from your devices only. Other participants keep it.</string>
+    <string name="conversations_delete_for_me_confirm_button">Delete</string>
     <string name="conversations_action_more">More actions</string>
     <string name="conversations_badge_pinned">Pinned</string>
     <string name="conversations_badge_muted">Muted</string>

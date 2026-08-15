@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
@@ -206,6 +207,7 @@ fun ConversationListScreen(
                                 onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onLeaveConversation = { viewModel.leaveConversation(conversation.id) },
+                                onDeleteForMe = { viewModel.deleteConversationForMe(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -369,6 +371,7 @@ private fun ConversationRow(
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -423,6 +426,7 @@ private fun ConversationRow(
             onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
             onLeaveConversation = onLeaveConversation,
+            onDeleteForMe = onDeleteForMe,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -474,6 +478,7 @@ private fun ConversationRowContent(
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -618,6 +623,7 @@ private fun ConversationRowContent(
             onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
             onLeaveConversation = onLeaveConversation,
+            onDeleteForMe = onDeleteForMe,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -650,6 +656,7 @@ private fun ConversationContextMenu(
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
+    onDeleteForMe: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -657,6 +664,7 @@ private fun ConversationContextMenu(
     onCreateCategory: (String) -> Unit,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
+    var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
@@ -812,6 +820,11 @@ private fun ConversationContextMenu(
             },
             onClick = { showLeaveConfirm = true },
         )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.conversations_action_delete_for_me)) },
+            leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
+            onClick = { showDeleteForMeConfirm = true },
+        )
     }
 
     if (showLeaveConfirm) {
@@ -832,6 +845,30 @@ private fun ConversationContextMenu(
             },
             dismissButton = {
                 TextButton(onClick = { showLeaveConfirm = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
+    }
+
+    if (showDeleteForMeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteForMeConfirm = false },
+            title = { Text(stringResource(R.string.conversations_delete_for_me_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_delete_for_me_confirm_message, title)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteForMeConfirm = false
+                        onDeleteForMe()
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_delete_for_me_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteForMeConfirm = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },

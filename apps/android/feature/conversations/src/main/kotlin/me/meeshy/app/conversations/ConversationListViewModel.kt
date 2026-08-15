@@ -347,6 +347,22 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Permanently hides [id] for this user only (context menu, gated by a
+     * confirmation dialog in the caller UI). No optimistic local removal: the
+     * socket-driven purge path (`ConversationPurge.onConversationDeleted`)
+     * drops the row once the server confirms and broadcasts the event back to
+     * this account's devices.
+     */
+    fun deleteConversationForMe(id: String) {
+        viewModelScope.launch {
+            when (val result = repository.deleteForMe(id)) {
+                is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
     /** Marks a conversation read from the list (swipe action). */
     fun markRead(id: String) {
         runPrefMutation { repository.markReadOptimistic(id) }

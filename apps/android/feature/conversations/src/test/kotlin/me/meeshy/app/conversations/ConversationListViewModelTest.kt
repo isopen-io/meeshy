@@ -831,6 +831,38 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun deleteConversationForMe_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.deleteForMe("c1") } returns me.meeshy.sdk.net.NetworkResult.Success(Unit)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.deleteConversationForMe("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.deleteForMe("c1") }
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun deleteConversationForMe_surfaces_the_error_on_failure() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.deleteForMe("c1") } returns
+            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "Not a participant"))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.deleteConversationForMe("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("Not a participant")
+    }
+
+    @Test
     fun a_no_op_mutation_does_not_schedule_a_flush() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
