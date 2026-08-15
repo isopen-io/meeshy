@@ -115,9 +115,7 @@ public struct MeeshyImageEditorView: View {
     /// applique au chrome, en laissant le canvas immersif. Même pattern que
     /// `MeeshyVideoEditorView` et `StoryComposerView.safeAreaBottomInset`.
     private var deviceSafeAreaInsets: UIEdgeInsets {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+        WindowMetrics.safeAreaInsets
     }
 
     // MARK: - Body

@@ -42,9 +42,7 @@ public struct MeeshyVideoEditorView: View {
     /// toujours les insets physiques réels du device. Même pattern que
     /// `StoryComposerView.safeAreaBottomInset` et `ConversationView`.
     private var deviceSafeAreaInsets: UIEdgeInsets {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+        WindowMetrics.safeAreaInsets
     }
 
     public var body: some View {
