@@ -63,6 +63,10 @@
   .fbfloat.fbl{left:20px; background:var(--m-bg2); border:1px solid var(--m-hair); font-size:20px}
   .fbfloat.fbr{right:20px; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; font-size:15px; font-weight:900}
   .phone.scrolling .fbfloat{transform:translateY(94px); opacity:0}
+  .fbfloat.dragging{transition:none; cursor:grabbing}
+  .bsearch{position:absolute; left:84px; right:84px; bottom:28px; z-index:34; display:flex; align-items:center; gap:8px; background:color-mix(in srgb, var(--m-bg2) 86%, transparent); backdrop-filter:blur(10px); border:1px solid var(--m-hair); border-radius:22px; padding:11px 15px; font-size:13px; color:var(--ink3); font-weight:700; transition:transform .3s, opacity .3s; cursor:text}
+  .bsearch .gs{margin-left:auto; color:var(--m-brand); font-weight:900}
+  .phone.scrolling .bsearch{transform:translateY(94px); opacity:0}
   .crow .fav{font-size:11px; margin-left:4px}
   .timepill{position:absolute; top:64px; left:50%; transform:translateX(-50%) translateY(-6px); z-index:40; background:color-mix(in srgb, var(--m-text) 88%, transparent); color:var(--m-bg); font-size:11.5px; font-weight:800; padding:5px 13px; border-radius:99px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none}
   .timepill.on{opacity:1; transform:translateX(-50%) translateY(0)}
@@ -161,7 +165,6 @@
   .peek .pacts button{flex:1; min-width:70px; background:var(--m-bg2); border:1px solid var(--m-hair); border-radius:11px; font-family:inherit; font-size:11.5px; font-weight:800; color:var(--m-text); padding:9px 6px; cursor:pointer}
   .peek .pacts button:hover{border-color:var(--m-brand); color:var(--m-brand)}
 
-  .fab{position:absolute; right:20px; bottom:24px; width:54px; height:54px; border-radius:18px; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; z-index:35; box-shadow:0 10px 26px -8px rgba(67,56,202,.55); cursor:pointer}
   .toast{position:absolute; left:50%; bottom:92px; transform:translateX(-50%) translateY(8px); z-index:50; background:color-mix(in srgb, var(--m-text) 90%, transparent); color:var(--m-bg); font-size:12px; font-weight:700; padding:9px 16px; border-radius:14px; opacity:0; transition:.3s; pointer-events:none; max-width:330px; text-align:center}
   .toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
 
@@ -201,8 +204,9 @@
     </div>
     <div class="timepill" id="tpill">Aujourd'hui</div>
     <div class="lscroll" id="lsc"></div>
-    <div class="fbfloat fbl" title="Feed (glisser-déposer libre)">📰</div>
-    <div class="fbfloat fbr" title="Menu / profil">SY</div>
+    <div class="fbfloat fbl" title="Feed — déplaçable (appui long = Reels)">📰</div>
+    <div class="fbfloat fbr" title="Menu / profil — déplaçable">SY</div>
+    <div class="bsearch" onclick="showToast('Barre de recherche existante (ConversationListBottomBar) : filtres + communautés dans le panneau, recherche globale — conservée telle quelle')">🔎 Rechercher<span class="gs">⌕</span></div>
     <div class="peekback" id="peekback" onclick="closePeek()"></div>
     <div class="modemenu" id="modemenu"></div>
     <div class="toast" id="toast"></div>
@@ -290,7 +294,8 @@
 <tr><td>Stickers sticky</td><td>ÉPINGLÉES · EN DIRECT · <b>catégories utilisateur</b> (🗂 Travail…) · AUJOURD'HUI · HIER · CETTE SEMAINE · PLUS ANCIEN</td><td>Les catégories existantes (sections + drag & drop conservés) deviennent des capsules sticky, dans l'ordre déclaré par l'utilisateur, entre EN DIRECT et le flux chronologique. Même capsule que les stickers de date du Focal. Pas de section vide</td></tr>
 <tr><td>Pilule de défilement</td><td>Nom de la section courante</td><td>Apparaît au premier scroll event, disparaît 900 ms après l'arrêt — identique au Focal</td></tr>
 <tr><td>Liste</td><td>Rangs plats 64, aucun séparateur — 📌/🔒 avant le nom, <b>émoji favori</b> (<code>userState.reaction</code>) et <b>pastilles de tags</b> (≤ 3, 6 px) après le nom</td><td>Tri : épinglées, live, catégories, puis lastMessageAt desc. Swipe actions et menus contextuels existants conservés à l'identique</td></tr>
-<tr><td>Boutons flottants</td><td><b>Les deux FB actuels de <code>RootView</code></b> : Feed (gauche, déplaçable, appui long = Reels) et avatar/menu (droite)</td><td>Conservés tels quels, positions persistées ; masqués pendant le défilement (signal <code>isScrollingDown</code> existant), réapparaissent à l'arrêt. Aucun FAB supplémentaire — la création reste en haut</td></tr>
+<tr><td>Barre de recherche (bas)</td><td>La barre verre existante (<code>ConversationListBottomBar</code>) : champ de recherche, panneau filtres + communautés, recherche globale, dashboard</td><td>Conservée telle quelle — <b>disparaît pendant le défilement, réapparaît à l'arrêt</b> (comportement actuel : signal <code>isScrollingDown</code>, offset y 150 + opacité, easeOut 0.25). Essayez dans le prototype : elle plonge avec les boutons flottants et remonte à l'arrêt</td></tr>
+<tr><td>Boutons flottants</td><td><b>Les deux FB actuels de <code>RootView</code></b> : Feed (gauche, <b>déplaçable</b>, appui long = Reels) et avatar/menu (droite, <b>déplaçable</b>)</td><td>Conservés tels quels, positions libres persistées <code>@AppStorage</code> (essayez de les glisser dans le prototype) ; masqués pendant le défilement, réapparaissent à l'arrêt — même chorégraphie que la barre de recherche. Aucun FAB supplémentaire — la création reste en haut</td></tr>
 </table></div>
 
 <h2>4 · La Lentille comme premier étage de l'orchestrateur</h2>
@@ -339,7 +344,7 @@
 <tr><td><code>LentillePerspective.swift</code></td><td>Perspective douce par <code>.visualEffect { content, proxy in }</code> (pur, compositor, aucun état) : f = min(1, d/520) au-dessus de la bande de focus, opacité 1−0.45f, scale 1−0.04f, anchor (0.16, 0.5) ; fondu court d/160 dessous. Élection de la focus card : <code>onScrollGeometryChange</code> (iOS 18) publie l'offset → id du rang dont midY ∈ bande (bottom−140 ± 45) ; fallback iOS 17 : PreferenceKey throttlée à 60 Hz. La focus card = fond backgroundSecondary + ring 1.5 accent + chip du mode mémorisé, hauteur inchangée</td></tr>
 <tr><td><code>SectionScrollPill.swift</code></td><td>Pilule de section pendant le défilement — branchée sur le signal de scroll existant (celui qui masque déjà <code>ConversationListBottomBar</code>), minuterie 900 ms</td></tr>
 <tr><td><code>LentilleSkeletonRow.swift</code></td><td>Squelette à la géométrie EXACTE du rang Lentille (avatar 44, deux barres) — corrige l'écart actuel 48 pt/radius 18/padding 14 vs rang réel 52/14/12 (transition non pixel-stable relevée à l'audit)</td></tr>
-<tr><td><code>LentilleModeMenu.swift</code></td><td>Le menu Auto / Focal / Script / Résumé / Rivière (Rivière <code>.disabled</code> si &lt; 5 participants ou DM). Trois points d'entrée, une préférence : (1) tap sur l'encoche de la focus card (<code>Button</code> dans le chip) ; (2) sous-menu « Mode d'affichage » ajouté à <code>nativeContextMenuView(for:)</code> — donc présent dans les DEUX chemins long press ; (3) l'aperçu. Écriture : <code>ConversationStore.apply(.setReadingMode)</code> — optimiste + rollback + outbox, propagée par <code>user-preferences:updated</code> (multi-appareils) comme pin/mute aujourd'hui</td></tr>
+<tr><td><code>LentilleModeMenu.swift</code></td><td>Le menu Auto / Focal / Script / Résumé / Rivière (Rivière <code>.disabled</code> si &lt; 5 participants ou DM). Trois points d'entrée, une préférence : (1) tap sur l'encoche de la focus card (<code>Button</code> dans le chip) ; (2) sous-menu « Mode de lecture » <b>AJOUTÉ</b> à <code>nativeContextMenuView(for:)</code> — tous les items existants (Épingler, Sourdine, Recherche, Appel, Marquer lu/non lu, Détails, Renommer, drag vers catégorie) sont conservés tels quels, l'item s'insère après « Marquer lu » — donc présent dans les DEUX chemins long press ; (3) l'aperçu. Écriture : <code>ConversationStore.apply(.setReadingMode)</code> — optimiste + rollback + outbox, propagée par <code>user-preferences:updated</code> (multi-appareils) comme pin/mute aujourd'hui</td></tr>
 <tr><td><code>LentillePeekView.swift</code></td><td>L'aperçu long press : remplace <code>ConversationPreviewView</code> (le preview 340 pt du menu natif) quand le flag est actif — avatar + nom + méta (participants · encoche), <b>le pont ✦ en grand</b> (ou le préview résolu), actions rapides Épingler / Sourdine / Lu / Mode ▾. Branché sur les deux chemins existants : <code>preview:</code> du <code>.contextMenu</code> natif (iOS 26+) et le morph de <code>RowPressBounceModifier</code> (&lt; 26) — timings, spring 0.55/0.25 et zone d'exclusion avatar (70 pt) conservés tels quels</td></tr>
 </table></div>
 <div class="note"><b>Tailles designées Vol.5, accessibilité de l'app.</b> Les valeurs (44, 15, 13, 12, 64) sont celles du design, pas celles du rang actuel — mais toutes passent par <code>MeeshyFont.relative()</code> donc suivent Dynamic Type (15 → .subheadline, 13 → .footnote, 12 → .caption). Au passage la hiérarchie typographique actuelle (titre ET préview en .footnote 13, différenciés à la graisse seule) est corrigée : le nom monte d'un cran.</div>
@@ -358,7 +363,7 @@
 <tr><td>Glyphe <code>hasPendingSync</code> (outbox)</td><td>Conservé tel quel (arrow.triangle.2.circlepath accent 70 %)</td></tr>
 <tr><td>Mood badge vs dot présence (un seul coin)</td><td>Règle conservée : mood gagne le coin, présence sinon — dots aussi pour les groupes (« quelqu'un d'actif ») via l'agrégat <code>PresenceManager</code></td></tr>
 <tr><td>Sélection iPad (barre accent 3 pt + teinte)</td><td>= style focus card persistant sur le rang sélectionné</td></tr>
-<tr><td>Long press (2 chemins : <code>.contextMenu</code> natif iOS 26 avec preview 340, <code>RowPressBounceModifier</code> &lt; 26 — press scale 0.90, déclenchement 0.4 s, exclusion avatar 70 pt)</td><td>Conservés à l'identique ; le preview devient <code>LentillePeekView</code> (pont ✦ + actions rapides), le menu gagne le sous-menu « Mode d'affichage ». Le <code>.onDrag</code> (catégories) reste sur le chemin natif uniquement, comme aujourd'hui</td></tr>
+<tr><td>Long press (2 chemins : <code>.contextMenu</code> natif iOS 26 avec preview 340, <code>RowPressBounceModifier</code> &lt; 26 — press scale 0.90, déclenchement 0.4 s, exclusion avatar 70 pt)</td><td>Conservés à l'identique ; le preview devient <code>LentillePeekView</code> (pont ✦ + actions rapides), le menu gagne le sous-menu « Mode de lecture ». Le <code>.onDrag</code> (catégories) reste sur le chemin natif uniquement, comme aujourd'hui</td></tr>
 <tr><td>Appel en cours (Scène)</td><td>● pulsant (accent) + « {n} voix · depuis {durée} » — durée par le <code>TimelineView</code> 60 s déjà présent pour l'heure. Non rejoint : bouton <b>Rejoindre</b> capsule accent en trailing (remplace toute autre info à droite). Rejoint : pas de bouton. Tap rang = rejoindre/ouvrir la Scène</td></tr>
 <tr><td>Timestamp ticker (TimelineView 60 s, hors gate Equatable)</td><td>Conservé — seul élément vivant du rang au repos ; sert aussi la durée d'appel</td></tr>
 <tr><td><code>renderFingerprint</code> (contrat de re-render, valeurs de traductions incluses)</td><td>Étendu : + <code>bridge</code> (texte du pont, unreadCount, suggestedMode) — sinon le gate gèlerait les mises à jour du pont</td></tr>
@@ -367,7 +372,7 @@
 </table></div>
 
 <h3>5.4 · Header & structure</h3>
-<p><code>CollapsibleHeader</code> conservé (64→44) avec ses trois comportements actuels intacts : le cluster trailing <b>création de lien (<code>link.badge.plus</code>) + nouvelle conversation (<code>plus</code>)</b> en cercles verre 40, masqué pendant le défilement (<code>.hiddenWhileScrolling()</code>) ; <b>les stories qui remplacent le titre au scroll</b> via <code>PinnedStoryTrailBand</code> dans le slot <code>titleAccessory</code> ; la cloche/engrenage iPad. Titre « Messages » — la typo dégradée 28 rounded actuelle passe au style Vol.5 (26, −0.4 tracking, couleur texte pleine). Recherche : <code>ConversationListBottomBar</code> conservé tel quel (barre verre en bas, <code>showSearchOverlay</code> avec panneau filtres/communautés). <b>Les deux boutons flottants de <code>RootView</code></b> (Feed déplaçable à gauche — appui long = Reels — et avatar/menu à droite, positions persistées en <code>@AppStorage</code>) ne bougent pas et gardent leur masquage au scroll.</p>
+<p><code>CollapsibleHeader</code> conservé (64→44) avec ses trois comportements actuels intacts : le cluster trailing <b>création de lien (<code>link.badge.plus</code>) + nouvelle conversation (<code>plus</code>)</b> en cercles verre 40, masqué pendant le défilement (<code>.hiddenWhileScrolling()</code>) ; <b>les stories qui remplacent le titre au scroll</b> via <code>PinnedStoryTrailBand</code> dans le slot <code>titleAccessory</code> ; la cloche/engrenage iPad. Titre « Messages » — la typo dégradée 28 rounded actuelle passe au style Vol.5 (26, −0.4 tracking, couleur texte pleine). Recherche : <code>ConversationListBottomBar</code> conservé tel quel — la barre verre du bas <b>disparaît pendant le défilement et réapparaît à l'arrêt</b> (offset y 150 + opacité 0, easeOut 0.25, piloté par <code>isScrollingDown</code>), avec <code>showSearchOverlay</code> et son panneau filtres/communautés intacts ; la pilule de section, le masquage des FB et celui de la barre partagent ce même signal de scroll — un seul détecteur, trois consommateurs. <b>Les deux boutons flottants de <code>RootView</code></b> (Feed déplaçable à gauche — appui long = Reels — et avatar/menu à droite, positions persistées en <code>@AppStorage</code>) ne bougent pas et gardent leur masquage au scroll.</p>
 
 <h2 id="web-spec">6 · Spécification d'implémentation — Web</h2>
 <p>Fondée sur l'audit du code réel (<code>apps/web</code>, chemins vérifiés). Stratégie identique au Focal : <b>on garde l'ossature, on change la peau</b> — le pipeline de données, le temps réel et les préférences sont déjà corrects et ne bougent pas.</p>
@@ -390,7 +395,7 @@
 <tr><td><code>SectionScrollPill.tsx</code></td><td>idem</td><td>Pilule flottante : nom de section courante, visible pendant le scroll, cachée 900 ms après le dernier événement (même minuterie que <code>ScrollTimePill</code> du Focal — factoriser le hook <code>useScrollActivity</code>)</td></tr>
 <tr><td><code>LivesRail.tsx</code></td><td>idem</td><td>Rail horizontal ≤ 6 pastilles (live / typing / salve) ; masqué si vide</td></tr>
 <tr><td><code>useLentillePerspective.ts</code></td><td>idem</td><td>rAF unique sur le conteneur scroll : opacité/scale par rang (courbe §3) + élection de la focus card. Inline style sur un wrapper interne — ne touche pas au layout ni aux mesures</td></tr>
-<tr><td><code>ReadingModeMenu.tsx</code></td><td>idem</td><td>Menu Auto / Focal / Script / Résumé / Rivière (Rivière désactivée si &lt; 5 participants ou DM). Trois entrées, une préférence : tap sur l'encoche de la focus card ; item « Mode d'affichage » ajouté au dropdown ⋮ existant (<code>ConversationItemActions</code>) ; l'aperçu. Écriture via <code>conversation-preferences-store</code> (optimiste versionnée, comme pin/mute) → propagée par <code>onPreferencesUpdated</code> multi-onglets/appareils</td></tr>
+<tr><td><code>ReadingModeMenu.tsx</code></td><td>idem</td><td>Menu Auto / Focal / Script / Résumé / Rivière (Rivière désactivée si &lt; 5 participants ou DM). Trois entrées, une préférence : tap sur l'encoche de la focus card ; item « Mode de lecture » ajouté au dropdown ⋮ existant (<code>ConversationItemActions</code>) ; l'aperçu. Écriture via <code>conversation-preferences-store</code> (optimiste versionnée, comme pin/mute) → propagée par <code>onPreferencesUpdated</code> multi-onglets/appareils</td></tr>
 <tr><td><code>LentillePeek.tsx</code></td><td>idem</td><td>Aperçu : clic droit (<code>onContextMenu</code>) et appui long tactile (pointer 420 ms, annulé par scroll/move) — pont ✦ en grand + actions Épingler / Sourdine / Lu / Mode ▾. Desktop : le ⋮ au survol reste ; l'aperçu s'y ajoute, il ne le remplace pas</td></tr>
 </table></div>
 
@@ -799,7 +804,9 @@ function openPeek(id){
   back.classList.add('on'); back.dataset.menuonly = "";
   const meta = (c.grp ? c.grp + " participants" : "conversation directe")
     + " · " + chipLabel(c).toLowerCase();
-  const txt = c.pont ? `<span class="pont" style="color:${c.ac}">✦ ${c.pont}</span>` : (c.kindtxt || c.prev || "");
+  const txt = c.pont ? `<span class="pont" style="color:${c.ac}">✦ ${c.pont}</span>`
+    : c.live ? `<span style="color:${c.ac}; font-weight:800">● ${c.live}${c.joined ? "" : " — non rejoint"}</span>`
+    : (c.kindtxt || c.prev || "");
   back.innerHTML = `<div class="peek" onclick="event.stopPropagation()">
     <div class="ph1"><div class="pava" style="background:${c.ac}">${c.ini}</div>
       <div><div class="pnm">${c.nm}</div><div class="pmeta">${meta}</div></div></div>
@@ -841,6 +848,33 @@ function simLive(){
   });
   showToast("<b>Appel démarre</b> → section EN DIRECT : ● pulsant + voix + durée + bouton Rejoindre");
 }
+
+/* FB déplaçables (positions mémorisées — @AppStorage dans l'app) */
+document.querySelectorAll('.fbfloat').forEach(fb=>{
+  fb.addEventListener('pointerdown', e=>{
+    if(document.getElementById('ph').classList.contains('scrolling')) return;
+    const ph = document.getElementById('ph').getBoundingClientRect();
+    const r = fb.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY, ox = r.left - ph.left, oy = r.top - ph.top;
+    let moved = false;
+    fb.setPointerCapture(e.pointerId);
+    const mv = ev=>{
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if(Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+      if(!moved) return;
+      fb.classList.add('dragging');
+      fb.style.left = Math.max(6, Math.min(ph.width-58, ox+dx)) + 'px';
+      fb.style.top = Math.max(70, Math.min(ph.height-80, oy+dy)) + 'px';
+      fb.style.right = 'auto'; fb.style.bottom = 'auto';
+    };
+    const up = ()=>{
+      fb.removeEventListener('pointermove', mv); fb.removeEventListener('pointerup', up);
+      fb.classList.remove('dragging');
+      if(moved) showToast("Position du bouton flottant mémorisée (persistée @AppStorage, comme dans l'app)");
+    };
+    fb.addEventListener('pointermove', mv); fb.addEventListener('pointerup', up);
+  });
+});
 
 renderList();
 updatePill();
