@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Conversation } from '@meeshy/shared/types';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import { sortConversations, type SectionableConversation } from '@meeshy/shared/utils/conversation-sections';
 
 interface ConversationGroup {
   type: 'pinned' | 'category' | 'uncategorized';
@@ -16,6 +17,48 @@ interface UseConversationSortingParams {
 }
 
 /**
+ * Le wire `GET /conversations` porte `Conversation.updatedAt`/`lastMessageAt`
+ * comme `Date`, mais des appelants (React Query hydraté depuis du JSON,
+ * fixtures de test) laissent parfois passer une chaîne ISO. `sortConversations`
+ * exige des `Date` réels (`.getTime()` en interne) — normaliser ici plutôt que
+ * de dupliquer cette tolérance dans la loi partagée.
+ */
+const toDate = (value: Date | string | null | undefined): Date | null => {
+  if (value == null) return null;
+  return value instanceof Date ? value : new Date(value);
+};
+
+/**
+ * Adaptateur conversation web → `SectionableConversation` (loi partagée,
+ * `packages/shared/utils/conversation-sections.ts`).
+ *
+ * Provenance re-prouvée : `isPinned` / `categoryId` / `orderInCategory` ne
+ * viennent JAMAIS d'un champ de `Conversation` (elle n'en porte aucun
+ * exploitable) — uniquement de `preferencesMap.get(conversation.id)`
+ * (`UserConversationPreferences`), exactement comme le groupement plus bas
+ * dans ce fichier le lisait déjà avant ce correctif.
+ *
+ * `liveCall` n'existe sur aucune plateforme aujourd'hui (cf. doc de la loi
+ * partagée) : toujours `null` ici, ce qui neutralise ce critère de tri sans
+ * en fabriquer un.
+ */
+const toSectionable = (
+  conversation: Conversation,
+  preferencesMap: Map<string, UserConversationPreferences>
+): SectionableConversation => {
+  const prefs = preferencesMap.get(conversation.id);
+  return {
+    id: conversation.id,
+    isPinned: prefs?.isPinned ?? false,
+    categoryId: prefs?.categoryId ?? null,
+    orderInCategory: prefs?.orderInCategory ?? null,
+    lastMessageAt: toDate(conversation.lastMessageAt),
+    updatedAt: toDate(conversation.updatedAt) ?? new Date(0),
+    liveCall: null,
+  };
+};
+
+/**
  * Hook pour trier et grouper les conversations
  * Retourne les conversations triées et groupées par:
  * - Épinglées sans catégorie
@@ -27,23 +70,16 @@ export function useConversationSorting({
   preferencesMap,
   categories
 }: UseConversationSortingParams): ConversationGroup[] {
-  // Trier les conversations (pinned first, puis par date)
+  // Trier les conversations : délégué à la loi partagée `sortConversations`
+  // (pinned → live → catégorie/orderInCategory → lastMessageAt desc, repli
+  // updatedAt → id). Le hook ne fait plus qu'adapter web → SectionableConversation
+  // et reprojeter l'ordre résolu sur les `Conversation` d'origine — corrigé E11
+  // (`packages/shared/utils/conversation-sections.ts`), plus de tri sur
+  // `lastMessage.createdAt`.
   const sortedConversations = useMemo(() => {
-    return [...conversations].sort((a, b) => {
-      const aPrefs = preferencesMap.get(a.id);
-      const bPrefs = preferencesMap.get(b.id);
-      const aPinned = aPrefs?.isPinned || false;
-      const bPinned = bPrefs?.isPinned || false;
-
-      // Les conversations épinglées viennent en premier
-      if (aPinned && !bPinned) return -1;
-      if (!aPinned && bPinned) return 1;
-
-      // Pour les conversations du même statut d'épinglage, trier par date de dernier message
-      const aTime = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
-      const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
-      return bTime - aTime;
-    });
+    const byId = new Map(conversations.map((conversation) => [conversation.id, conversation] as const));
+    const sectionable = conversations.map((conversation) => toSectionable(conversation, preferencesMap));
+    return sortConversations(sectionable).map((entry) => byId.get(entry.id)!);
   }, [conversations, preferencesMap]);
 
   // Grouper les conversations
