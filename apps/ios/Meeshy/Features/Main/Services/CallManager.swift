@@ -5928,6 +5928,24 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             if let answerAction = action as? CXAnswerCallAction {
                 manager.discardTimedOutAnswerAction(answerAction)
             }
+            // Identity guard: mirrors CXAnswerCallAction/CXEndCallAction/
+            // CXSetMutedCallAction/CXSetHeldCallAction/CXPlayDTMFCallAction above —
+            // this is the only CXProviderDelegate method that was missing it.
+            // reportIncomingVoIPCall's busy path reports a SECOND, distinct
+            // CXCallUpdate/UUID via reportNewIncomingCall while a primary call is
+            // already active, then immediately retires it — activeCallUUID only
+            // ever tracks the primary call, so a timeout carrying that phantom/stale
+            // UUID (or any action type this proxy doesn't otherwise implement) is not
+            // ours to react to. Without this guard, a timed-out action belonging to
+            // an already-settled or foreign call unconditionally hangs up whatever
+            // call IS active. discardTimedOutAnswerAction above stays unguarded so a
+            // genuinely pending answer action is still released either way.
+            guard (action as? CXCallAction)?.callUUID == manager.activeCallUUID else {
+                Logger.calls.warning(
+                    "CallKit timed out performing \(type(of: action)) for non-active callUUID — not ending active call"
+                )
+                return
+            }
             manager.endCall()
         }
     }

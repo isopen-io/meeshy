@@ -523,6 +523,22 @@ final class WebRTCService {
 
     func close() {
         stopQualityMonitor()
+        // Cross-call quality-ladder leak: `stopQualityMonitor()` above resets
+        // `lastStats`/`qualityMonitorStartDate`/`jitterBitrateCapTracker`, but
+        // `currentQualityLevel`/`currentBitrate`/`qualityLevelDebounceDate`/
+        // `lastThermalState` survived — this service is a CallManager-owned
+        // singleton reused across calls. A call that dropped while `.critical`
+        // (debounced within `qualityLevelDebounceSeconds`) had an immediate
+        // redial inherit the stale `.critical` verdict: the new, healthy
+        // call's first stats tick gets suppressed by `adjustBitrate`'s
+        // debounce guard, so `currentQualityLevel` stays `.critical` and the
+        // "poor connection" banner + gateway quality report both fire on a
+        // call that never degraded. Reset to the same values these
+        // properties declare at init.
+        currentQualityLevel = .excellent
+        currentBitrate = QualityThresholds.defaultBitrate
+        qualityLevelDebounceDate = nil
+        lastThermalState = .nominal
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()
