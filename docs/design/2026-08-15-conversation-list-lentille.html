@@ -50,9 +50,20 @@
   /* ================= PHONE PROTOTYPE ================= */
   .stage{display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap; margin:22px 0}
   .phone{width:390px; height:780px; background:var(--m-bg); border:1px solid var(--m-hair); border-radius:38px; overflow:hidden; position:relative; box-shadow:0 24px 60px -30px rgba(30,27,75,.35); flex:none}
-  .lhead{position:absolute; top:0; left:0; right:0; z-index:30; padding:18px 20px 10px; background:linear-gradient(var(--m-bg) 68%, transparent); display:flex; align-items:center; justify-content:space-between}
-  .lhead .ttl{font-size:26px; font-weight:900; letter-spacing:-.4px}
-  .lhead .me{width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center}
+  .lhead{position:absolute; top:0; left:0; right:0; z-index:30; padding:16px 20px 10px; background:linear-gradient(var(--m-bg) 68%, transparent); display:flex; align-items:center; justify-content:space-between}
+  .lhead .tzone{position:relative; height:36px; flex:1; min-width:0}
+  .lhead .ttl{font-size:26px; font-weight:900; letter-spacing:-.4px; position:absolute; left:0; top:0; transition:opacity .25s, transform .25s}
+  .lhead .htrail{position:absolute; left:0; top:4px; display:flex; gap:8px; opacity:0; transform:translateY(6px); transition:opacity .25s, transform .25s; pointer-events:none}
+  .lhead.scrolled .ttl{opacity:0; transform:translateY(-6px)}
+  .lhead.scrolled .htrail{opacity:1; transform:translateY(0)}
+  .htrail .hava{width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; color:#fff; box-shadow:0 0 0 1.5px var(--m-bg), 0 0 0 3px var(--ha)}
+  .hbtns{display:flex; gap:10px; flex:none}
+  .hbtn{width:38px; height:38px; border-radius:50%; background:color-mix(in srgb, var(--m-bg2) 80%, transparent); border:1px solid var(--m-hair); color:var(--m-brand); font-size:16px; font-weight:800; display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter:blur(6px)}
+  .fbfloat{position:absolute; bottom:22px; z-index:35; width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 10px 26px -8px rgba(67,56,202,.45); transition:transform .3s, opacity .3s}
+  .fbfloat.fbl{left:20px; background:var(--m-bg2); border:1px solid var(--m-hair); font-size:20px}
+  .fbfloat.fbr{right:20px; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; font-size:15px; font-weight:900}
+  .phone.scrolling .fbfloat{transform:translateY(94px); opacity:0}
+  .crow .fav{font-size:11px; margin-left:4px}
   .timepill{position:absolute; top:64px; left:50%; transform:translateX(-50%) translateY(-6px); z-index:40; background:color-mix(in srgb, var(--m-text) 88%, transparent); color:var(--m-bg); font-size:11.5px; font-weight:800; padding:5px 13px; border-radius:99px; opacity:0; transition:opacity .25s, transform .25s; pointer-events:none}
   .timepill.on{opacity:1; transform:translateX(-50%) translateY(0)}
   .lscroll{position:absolute; inset:0; overflow-y:auto; padding:64px 0 96px; scrollbar-width:none}
@@ -156,15 +167,19 @@
 <div class="note"><b>Prisme Linguistique, règle intacte.</b> Le préview est résolu par les sources jumelles <code>resolveLastMessagePreview()</code> (TS) / <code>MeeshyConversation.resolvedLastMessagePreview</code> (Swift) : parcours des langues du lecteur DANS L'ORDRE, jamais <code>translations.first</code>, jamais de court-circuit « langue d'origine ∈ prisme ». Une traduction qui arrive tardivement fait <b>cross-fader le préview</b> en place, avec le glyphe 🌐 discret.</div>
 
 <h2>2 · Prototype grandeur nature</h2>
-<p>Défilez dans le téléphone : perspective douce (les rangs s'estompent vers les bords, <b>aucun changement de taille de rang</b> — le scan reste net), <b>focus card</b> sur le rang en zone de pouce (fond bg2 + anneau à l'accent de CETTE conversation + chip du mode mémorisé), stickers de section sticky, pilule de section pendant le défilement. Tapez un rang pour voir la décision d'orchestrateur. Les boutons simulent le temps réel.</p>
+<p>Défilez dans le téléphone : perspective douce (les rangs s'estompent vers les bords, <b>aucun changement de taille de rang</b> — le scan reste net), <b>focus card</b> sur le rang en zone de pouce (fond bg2 + anneau à l'accent de CETTE conversation + chip du mode mémorisé), stickers de section sticky, pilule de section pendant le défilement. L'ossature de l'app iOS actuelle est respectée : <b>création de conversation ＋ et création de lien 🔗 en haut</b> dans le header, <b>les stories remplacent le titre « Messages » au scroll</b> (défilez au-delà de la première section), et <b>les deux boutons flottants</b> (Feed à gauche, avatar/menu à droite) se masquent pendant le défilement — aucun FAB ajouté. Une catégorie utilisateur (🗂 Travail) montre la structuration par catégories ; tags et émoji favori vivent après le nom. Tapez un rang pour voir la décision d'orchestrateur. Les boutons simulent le temps réel.</p>
 <p><b>Les 25 rangs couvrent TOUS les cas de figure</b> de la matrice §5.3 : épinglé, live, pont ✦ (≤ 25 et &gt; 25), typing, brouillon, pièces jointes sans texte, vocal, localisation, éphémère, vue unique, expiré, masqué, sourdine, verrou, agent ✦, outbox en attente (↻), mood badge vs présence, anneau story, tags, préview traduit 🌐, présence online/away/hors-ligne (aucun dot), mode mémorisé Rivière, et le cas de base. Le bouton « Annoter les cas » étiquette chaque rang ; « Démarrage à froid » montre le squelette (affiché UNIQUEMENT à cache vide — règle Instant App).</p>
 
 <div class="stage">
   <div class="phone" id="ph">
-    <div class="lhead"><span class="ttl">Messages</span><span class="me">SY</span></div>
+    <div class="lhead" id="lhead">
+      <div class="tzone"><span class="ttl">Messages</span><div class="htrail" id="htrail"></div></div>
+      <div class="hbtns"><span class="hbtn" title="Créer un lien">🔗</span><span class="hbtn" title="Nouvelle conversation">＋</span></div>
+    </div>
     <div class="timepill" id="tpill">Aujourd'hui</div>
     <div class="lscroll" id="lsc"></div>
-    <div class="fab">✎</div>
+    <div class="fbfloat fbl" title="Feed (glisser-déposer libre)">📰</div>
+    <div class="fbfloat fbr" title="Menu / profil">SY</div>
     <div class="toast" id="toast"></div>
   </div>
   <div class="simbar">
@@ -244,13 +259,13 @@
 
 <h3>Structure de l'écran</h3>
 <div class="tablewrap"><table>
-<tr><th>Zone</th><th>Contenu</th><th>Règle</th></tr>
-<tr><td>Header</td><td>« Messages » 26 · avatar profil 34</td><td>Fond dégradé vers transparent ; la recherche se révèle par tirer-vers-le-bas (pas de barre permanente : un écran = une intention)</td></tr>
-<tr><td>Rail des vivants</td><td>Pastilles 48 des conversations où il se passe quelque chose MAINTENANT (Scène live, typing, salve de non-lus)</td><td>≤ 6 entrées, disparaît si vide. Anneau accent pulsé si live. Remplace l'entrée stories sur cet écran</td></tr>
-<tr><td>Stickers sticky</td><td>ÉPINGLÉES · EN DIRECT · AUJOURD'HUI · HIER · CETTE SEMAINE · PLUS ANCIEN</td><td>Même capsule que les stickers de date du Focal — grammaire commune. Pas de section vide</td></tr>
+<tr><th>Zone</th><th>Contenu</th><th>Règle (fidèle à l'ossature iOS actuelle)</th></tr>
+<tr><td>Header</td><td>« Messages » 26 + cluster trailing : <b>création de lien 🔗</b> et <b>nouvelle conversation ＋</b> (cercles verre 38–40)</td><td>La création vit EN HAUT, comme aujourd'hui (<code>link.badge.plus</code> + <code>plus</code> du <code>CollapsibleHeader</code>). <b>Au scroll, les stories remplacent le titre</b> : le « Messages » cède la place à la bande de mini-pastilles story (comportement <code>PinnedStoryTrailBand</code> existant, conservé tel quel)</td></tr>
+<tr><td>Rail stories & vivants</td><td>Pastilles 48 : d'abord les conversations où il se passe quelque chose MAINTENANT (Scène live, typing, salve ✦), puis les stories non vues (anneau brand)</td><td>Fusion du StoryTray actuel et du rail des vivants — un seul rail, priorité au vivant. ≤ 6 entrées, disparaît si vide, anneau accent pulsé si live</td></tr>
+<tr><td>Stickers sticky</td><td>ÉPINGLÉES · EN DIRECT · <b>catégories utilisateur</b> (🗂 Travail…) · AUJOURD'HUI · HIER · CETTE SEMAINE · PLUS ANCIEN</td><td>Les catégories existantes (sections + drag & drop conservés) deviennent des capsules sticky, dans l'ordre déclaré par l'utilisateur, entre EN DIRECT et le flux chronologique. Même capsule que les stickers de date du Focal. Pas de section vide</td></tr>
 <tr><td>Pilule de défilement</td><td>Nom de la section courante</td><td>Apparaît au premier scroll event, disparaît 900 ms après l'arrêt — identique au Focal</td></tr>
-<tr><td>Liste</td><td>Rangs plats 64, aucun séparateur</td><td>Tri : épinglées, live, puis lastMessageAt desc. Swipe actions existantes conservées à l'identique</td></tr>
-<tr><td>Compose</td><td>Bouton flottant 54 dégradé brand</td><td>Position et geste inchangés (habitude préservée)</td></tr>
+<tr><td>Liste</td><td>Rangs plats 64, aucun séparateur — 📌/🔒 avant le nom, <b>émoji favori</b> (<code>userState.reaction</code>) et <b>pastilles de tags</b> (≤ 3, 6 px) après le nom</td><td>Tri : épinglées, live, catégories, puis lastMessageAt desc. Swipe actions et menus contextuels existants conservés à l'identique</td></tr>
+<tr><td>Boutons flottants</td><td><b>Les deux FB actuels de <code>RootView</code></b> : Feed (gauche, déplaçable, appui long = Reels) et avatar/menu (droite)</td><td>Conservés tels quels, positions persistées ; masqués pendant le défilement (signal <code>isScrollingDown</code> existant), réapparaissent à l'arrêt. Aucun FAB supplémentaire — la création reste en haut</td></tr>
 </table></div>
 
 <h2>4 · La Lentille comme premier étage de l'orchestrateur</h2>
@@ -275,15 +290,16 @@
 <tr><td>Gestes</td><td><code>SwipeableRow</code> (actions leading/trailing intactes), menus contextuels des deux chemins OS (natif iOS 26 / <code>RowPressBounceModifier</code>), drag & drop vers sections</td><td>Habitudes utilisateur — la Lentille s'insère DANS <code>ConversationRowItem</code>, pas autour</td></tr>
 <tr><td>Prisme</td><td><code>resolvedLastMessagePreview(preferredLanguages:)</code> (CoreModels.swift) + câblage <code>preferredContentLanguages</code></td><td>Source de vérité jumelle — réutilisée à l'identique</td></tr>
 <tr><td>Présence</td><td><code>PresenceManager.refreshSignal</code> (pulse débouncé) + gate <code>.equatable()</code> par rang ; règle mood > présence sur le coin d'avatar</td><td>Modèle perf correct : seuls les rangs concernés re-rendent</td></tr>
-<tr><td>Stories</td><td>Anneaux story sur avatars (unread = brand 5 pt), <code>PinnedStoryTrailBand</code> du header, routage tap</td><td>Conservés — le rail des vivants remplace uniquement le <code>StoryTrayView</code> de 120 pt en tête de liste (flag on), les stories restent accessibles par anneaux + bande du header</td></tr>
+<tr><td>Stories & header</td><td>Anneaux story sur avatars (unread = brand 5 pt), <code>PinnedStoryTrailBand</code> (les stories remplacent le titre au scroll), cluster création 🔗/＋ du header, <code>FreeFloatingButtonsContainer</code> de RootView (Feed + avatar/menu déplaçables), routage tap story/mood</td><td>Conservés tels quels — le rail fusionne <code>StoryTrayView</code> et vivants en une seule bande (priorité au live/typing/✦, puis stories non vues), aucun FAB ajouté</td></tr>
+<tr><td>Catégories, tags, favoris</td><td><code>UserCategoryStore</code>, drag & drop vers sections, <code>userState.reaction</code> (émoji favori), tags + couleurs</td><td>Mécanique intacte — seule la présentation change : catégories = capsules sticky, tags = pastilles 6 px, favori = émoji après le nom</td></tr>
 </table></div>
 
 <h3>5.2 · La peau Lentille — nouveaux fichiers (app-side, <code>Features/Main/Views/Lentille/</code>)</h3>
 <div class="tablewrap"><table>
 <tr><th>Fichier</th><th>Rôle & décisions</th></tr>
 <tr><td><code>LentilleConversationRow.swift</code></td><td>Rang PLAT : fond transparent — suppression de la carte actuelle (backgroundSecondary + gradient de chaleur + bordure radius 14). Avatar <b>44</b> (au lieu de 52) + anneau accent 1.5 (<code>colorPalette.primary</code>) ; nom <code>MeeshyFont.relative(15, .heavy)</code> · point médian · heure <code>relative(12)</code> ; ligne 2 <code>relative(13)</code>. Le signal « chaleur » est remplacé par le pont ✦ + point accent. Mêmes ENTRÉES que <code>ThemedConversationRow</code> (le <code>Equatable</code> miroir est copié puis étendu au champ <code>bridge</code>) — bascule par flag dans <code>ConversationListView.conversationRow</code>, l'ancien rang reste le fallback</td></tr>
-<tr><td><code>LentilleSticker.swift</code></td><td>Capsules de section sticky via <code>LazyVStack(pinnedViews: [.sectionHeaders])</code> — remplace les <code>SectionHeaderView</code> à cercle lumineux. Sections calculées : Épinglées / En direct / Aujourd'hui / Hier / Cette semaine / Plus ancien (dérivées de <code>lastMessageAt</code>) ; les catégories utilisateur restent des sections nommées, même capsule, insérées après En direct</td></tr>
-<tr><td><code>LivesRail.swift</code></td><td>Rail ≤ 6 pastilles 48, dérivé de signaux existants : <code>typers</code>, salves de non-lus, Scène live. Prend la place du <code>StoryTrayView</code> (flag on) ; masqué si vide</td></tr>
+<tr><td><code>LentilleSticker.swift</code></td><td>Capsules de section sticky via <code>LazyVStack(pinnedViews: [.sectionHeaders])</code> — remplace les <code>SectionHeaderView</code> à cercle lumineux. Sections : Épinglées / En direct / <b>catégories utilisateur dans l'ordre déclaré</b> (🗂, drag & drop et pliage/dépliage persistant conservés — <code>expandedSections</code>) / Aujourd'hui / Hier / Cette semaine / Plus ancien (dérivées de <code>lastMessageAt</code>)</td></tr>
+<tr><td><code>StoriesVivantsRail.swift</code></td><td>Rail ≤ 6 pastilles 48 fusionnant <code>StoryTrayView</code> et les vivants : entrées live/typing/salve ✦ d'abord (signaux existants <code>typers</code>, unread, Scène), puis stories non vues (<code>StoryViewModel.storyRingState</code>) ; tap story = routage existant, bouton « + statut » conservé en tête ; masqué si vide</td></tr>
 <tr><td><code>LentillePerspective.swift</code></td><td>Perspective douce par <code>.visualEffect { content, proxy in }</code> (pur, compositor, aucun état) : f = min(1, d/520) au-dessus de la bande de focus, opacité 1−0.45f, scale 1−0.04f, anchor (0.16, 0.5) ; fondu court d/160 dessous. Élection de la focus card : <code>onScrollGeometryChange</code> (iOS 18) publie l'offset → id du rang dont midY ∈ bande (bottom−140 ± 45) ; fallback iOS 17 : PreferenceKey throttlée à 60 Hz. La focus card = fond backgroundSecondary + ring 1.5 accent + chip du mode mémorisé, hauteur inchangée</td></tr>
 <tr><td><code>SectionScrollPill.swift</code></td><td>Pilule de section pendant le défilement — branchée sur le signal de scroll existant (celui qui masque déjà <code>ConversationListBottomBar</code>), minuterie 900 ms</td></tr>
 <tr><td><code>LentilleSkeletonRow.swift</code></td><td>Squelette à la géométrie EXACTE du rang Lentille (avatar 44, deux barres) — corrige l'écart actuel 48 pt/radius 18/padding 14 vs rang réel 52/14/12 (transition non pixel-stable relevée à l'audit)</td></tr>
@@ -311,7 +327,7 @@
 </table></div>
 
 <h3>5.4 · Header & structure</h3>
-<p><code>CollapsibleHeader</code> conservé (64→44, bande stories du header intacte). Titre « Messages » — la typo dégradée 28 rounded actuelle passe au style Vol.5 (26, −0.4 tracking, couleur texte pleine). Recherche : le geste tirer-vers-le-bas révèle la barre existante (<code>showSearchOverlay</code> et son panneau filtres/communautés sont conservés tels quels — l'audit note qu'ils sont déjà cachés derrière la recherche). <code>ConversationListBottomBar</code> et les boutons flottants de <code>RootView</code> ne bougent pas.</p>
+<p><code>CollapsibleHeader</code> conservé (64→44) avec ses trois comportements actuels intacts : le cluster trailing <b>création de lien (<code>link.badge.plus</code>) + nouvelle conversation (<code>plus</code>)</b> en cercles verre 40, masqué pendant le défilement (<code>.hiddenWhileScrolling()</code>) ; <b>les stories qui remplacent le titre au scroll</b> via <code>PinnedStoryTrailBand</code> dans le slot <code>titleAccessory</code> ; la cloche/engrenage iPad. Titre « Messages » — la typo dégradée 28 rounded actuelle passe au style Vol.5 (26, −0.4 tracking, couleur texte pleine). Recherche : <code>ConversationListBottomBar</code> conservé tel quel (barre verre en bas, <code>showSearchOverlay</code> avec panneau filtres/communautés). <b>Les deux boutons flottants de <code>RootView</code></b> (Feed déplaçable à gauche — appui long = Reels — et avatar/menu à droite, positions persistées en <code>@AppStorage</code>) ne bougent pas et gardent leur masquage au scroll.</p>
 
 <h2 id="web-spec">6 · Spécification d'implémentation — Web</h2>
 <p>Fondée sur l'audit du code réel (<code>apps/web</code>, chemins vérifiés). Stratégie identique au Focal : <b>on garde l'ossature, on change la peau</b> — le pipeline de données, le temps réel et les préférences sont déjà corrects et ne bougent pas.</p>
@@ -407,8 +423,8 @@ const CONVS = [
   pont:"Tomates anciennes dispo — commande groupée avant 18 h", prev:"Assia : je prends la caisse de pêches",
   cs:"non-lu ≤ 25 · pont ✦ + point accent"},
  {id:"karim", nm:"Karim", ini:"K", ac:"#5FA8E8", grp:0, sec:"today", tm:"12:30", unread:0, mode:"FOCAL",
-  typing:"Karim", prev:"Grave, on se cale ça vendredi", dot:"on",
-  cs:"typing → dot forcé vert"},
+  typing:"Karim", prev:"Grave, on se cale ça vendredi", dot:"on", fav:"🔥",
+  cs:"typing → dot vert · émoji favori après le nom"},
  {id:"cine", nm:"Ciné-club VO 🎬", ini:"CV", ac:"#8B5CF6", grp:8, sec:"today", tm:"12:05", unread:27, mode:"RÉSUMÉ VIVANT",
   pont:"Séance déplacée mardi + débat programme d'octobre (27 msgs)", prev:"Théo : qui vote pour Kurosawa ?",
   cs:"non-lu > 25 → ouvre en Résumé Vivant"},
@@ -421,9 +437,9 @@ const CONVS = [
  {id:"sacha", nm:"Sacha", ini:"S", ac:"#7A6FE0", grp:0, sec:"today", tm:"10:44", unread:0, mode:"FOCAL",
   prev:"Je dors encore une heure, réveille-moi pas", mood:"😴",
   cs:"mood badge — gagne le coin sur la présence"},
- {id:"bureau", nm:"Bureau · CR mensuel", ini:"BC", ac:"#4C7DD9", grp:11, sec:"today", tm:"10:12", unread:0, mode:"FOCAL", sync:true,
+ {id:"bureau", nm:"Bureau · CR mensuel", ini:"BC", ac:"#4C7DD9", grp:11, sec:"cat", tm:"10:12", unread:0, mode:"FOCAL", sync:true,
   prev:"Toi : compte-rendu envoyé ✓",
-  cs:"outbox en attente → glyphe ↻ (hasPendingSync)"},
+  cs:"catégorie Travail · outbox ↻ (hasPendingSync)"},
  {id:"support", nm:"Support Meeshy", ini:"✦", ac:"#6366F1", grp:0, sec:"today", tm:"09:58", unread:1, agent:true, mode:"ASSISTANT",
   prev:"✦ Votre export est prêt — 2 actions proposées",
   cs:"agent ✦ — avatar pointillé, jamais de trait plein"},
@@ -436,18 +452,18 @@ const CONVS = [
  {id:"jade", nm:"Jade", ini:"J", ac:"#4FA3A5", grp:0, sec:"yday", tm:"20:02", unread:0, mode:"FOCAL",
   kindtxt:"🙈 Message masqué", kind:"hidden",
   cs:"masqué/flouté (eye.slash, italique)"},
- {id:"anais", nm:"Anaïs", ini:"A", ac:"#B0559A", grp:0, sec:"yday", tm:"19:20", unread:0, mode:"FOCAL",
+ {id:"anais", nm:"Anaïs", ini:"A", ac:"#B0559A", grp:0, sec:"yday", tm:"19:20", unread:0, mode:"FOCAL", story:true,
   prev:"La trad vocale a bluffé mes parents 😂",
-  cs:"hors-ligne > 5 min → AUCUN dot"},
+  cs:"hors-ligne → AUCUN dot · story non vue (anneau)"},
  {id:"rando", nm:"Rando dimanche", ini:"RD", ac:"#6FA85B", grp:5, sec:"yday", tm:"18:30", unread:0, mode:"FOCAL",
   prev:"📍 Léa · Col de la Bonette", kind:"loc",
   cs:"localisation (fallback lastMessageLocation)"},
  {id:"fresque", nm:"Projet Fresque", ini:"PF", ac:"#4C7DD9", grp:6, sec:"yday", tm:"17:03", unread:0, mode:"FOCAL",
   tags:["#E8A13F","#8B5CF6","#34B379"], prev:"Nour : maquette v3 validée par la mairie 🎨",
   cs:"tags → ≤ 3 pastilles 6 px après le nom"},
- {id:"rh", nm:"Confidentiel RH", ini:"RH", ac:"#8F6BD9", grp:3, sec:"week", tm:"jeu.", unread:0, mode:"FOCAL",
+ {id:"rh", nm:"Confidentiel RH", ini:"RH", ac:"#8F6BD9", grp:3, sec:"cat", tm:"jeu.", unread:0, mode:"FOCAL",
   kindtxt:"⏳ Message éphémère · expire dans 2 h", kind:"eph",
-  cs:"éphémère actif (timer, italique accent)"},
+  cs:"catégorie Travail · éphémère (timer, italique)"},
  {id:"journal", nm:"Journal perso", ini:"JP", ac:"#9C8F4A", grp:1, sec:"week", tm:"jeu.", unread:0, mode:"FOCAL", lock:true,
   prev:"Toi : idée d'article sur les prismes",
   cs:"conversation verrouillée 🔒"},
@@ -467,8 +483,8 @@ const CONVS = [
   prev:"Ok pour le squash jeudi prochain",
   cs:"lu · au repos — le cas de base"}
 ];
-const SECTIONS = [["pin","Épinglées"],["live","En direct"],["today","Aujourd'hui"],["yday","Hier"],["week","Cette semaine"],["old","Plus ancien"]];
-const RAIL = ["produit","karim","ardeche","cine"];
+const SECTIONS = [["pin","Épinglées"],["live","En direct"],["cat","🗂 Travail"],["today","Aujourd'hui"],["yday","Hier"],["week","Cette semaine"],["old","Plus ancien"]];
+const RAIL = ["produit","karim","ardeche","louise","anais","cine"];
 
 /* ===================== RENDER ===================== */
 const lsc = document.getElementById('lsc');
@@ -480,11 +496,20 @@ function railHtml(){
   const items = RAIL.map(id=>{
     const c = CONVS.find(x=>x.id===id);
     const badge = c.live ? `<span class="railbadge">LIVE</span>` : (c.unread ? `<span class="railbadge">✦</span>` : (c.typing?`<span class="railbadge">…</span>`:""));
-    return `<div class="railitem${c.live?' live':''}" style="--ra:${c.ac}" onclick="openConv('${c.id}')">
+    const ringColor = (c.story && !c.live && !c.unread && !c.typing) ? "var(--m-brand)" : c.ac;
+    return `<div class="railitem${c.live?' live':''}" style="--ra:${ringColor}" onclick="openConv('${c.id}')">
       <div class="railava" style="background:${c.ac}">${c.ini}${badge}</div>
       <div class="raillbl">${c.nm.split(' ')[0]}</div></div>`;
   }).join('');
   return `<div class="rail">${items}</div>`;
+}
+
+function headerTrailHtml(){
+  return RAIL.slice(0,5).map(id=>{
+    const c = CONVS.find(x=>x.id===id);
+    const ringColor = (c.story && !c.live && !c.unread && !c.typing) ? "var(--m-brand)" : c.ac;
+    return `<div class="hava" style="background:${c.ac}; --ha:${ringColor}">${c.ini}</div>`;
+  }).join('');
 }
 
 function rowHtml(c){
@@ -508,6 +533,7 @@ function rowHtml(c){
   const udot = (c.unread && !c.live) ? `<span class="udot"></span>` : "";
   const pin = c.pin ? `<span class="pin">📌</span> ` : "";
   const lock = c.lock ? `<span class="pin">🔒</span> ` : "";
+  const fav = c.fav ? `<span class="fav">${c.fav}</span>` : "";
   const mut = c.muted ? ` <span class="pin">🔕</span>` : "";
   const sync = c.sync ? `<span class="syncg" title="synchronisation en attente">↻</span>` : "";
   const tags = c.tags ? `<span class="tagdots">${c.tags.map(t=>`<i style="background:${t}"></i>`).join('')}</span>` : "";
@@ -515,7 +541,7 @@ function rowHtml(c){
   return `<div class="crow" id="row-${c.id}" style="--ac:${c.ac}" onclick="openConv('${c.id}')">
     <div class="ava" style="background:${c.agent?'transparent':c.ac}">${c.ini}${badge}</div>
     <div class="body">
-      <div class="l1">${pin}${lock}<span class="nm">${c.nm}</span>${tags}${mut}<span class="mid">·</span><span class="tm">${c.tm}</span>${sync}</div>
+      <div class="l1">${pin}${lock}<span class="nm">${c.nm}</span>${fav}${tags}${mut}<span class="mid">·</span><span class="tm">${c.tm}</span>${sync}</div>
       <div class="l2">${l2}</div>
     </div>${udot}
     <div class="modechip">${c.mode}</div>${caselbl}
@@ -560,11 +586,13 @@ function applyPerspective(){
 
 let hideTimer = null;
 lsc && document.getElementById('lsc').addEventListener('scroll', ()=>{
-  if(raf) return;
-  raf = requestAnimationFrame(()=>{ raf = null; applyPerspective(); updatePill(); });
+  if(!raf) raf = requestAnimationFrame(()=>{ raf = null; applyPerspective(); updatePill();
+    document.getElementById('lhead').classList.toggle('scrolled', lsc.scrollTop > 90);
+  });
   tpill.classList.add('on');
+  document.getElementById('ph').classList.add('scrolling');
   clearTimeout(hideTimer);
-  hideTimer = setTimeout(()=>tpill.classList.remove('on'), 900);
+  hideTimer = setTimeout(()=>{ tpill.classList.remove('on'); document.getElementById('ph').classList.remove('scrolling'); }, 900);
 });
 
 function updatePill(){
@@ -671,4 +699,5 @@ function simLive(){
 
 renderList();
 updatePill();
+document.getElementById('htrail').innerHTML = headerTrailHtml();
 </script>
