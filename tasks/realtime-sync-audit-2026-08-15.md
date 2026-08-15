@@ -1713,15 +1713,49 @@ fenêtres des cycles 24, 25 et 29.
 
 **Aucun changement client** : le refus emprunte les canaux d'erreur existants.
 
+## Le correctif a d'abord été POSÉ À MOITIÉ — et la suite était verte
+
+Consigné parce que c'est la partie instructive du cycle, et qu'elle s'est
+produite sur le défaut qu'on venait de nommer.
+
+La route de lien authentifiée résout le lien par DEUX branches — `mshy_…`
+(la forme des URLs réelles) et id brut — chacune avec son propre `include`
+jumeau. La garde n'avait été posée que sur la SECONDE. Sur la première, la
+projection ne ramenait pas `isActive`/`closedAt`, `isConversationClosed` lisait
+`undefined`, et **admettait**. Une garde inerte sur le chemin majoritaire.
+
+**Les deux témoins étaient VERTS.** Le double `conversationShareLink.findUnique`
+rendait son objet entier quel que soit le `select` demandé : il prouvait que la
+route sait DÉCIDER, jamais qu'elle a demandé de quoi décider. La forme exacte du
+piège que les leçons 258/260/262 décrivent, rencontrée en l'écrivant.
+
+Deux remèdes, tous deux nécessaires :
+
+1. **Le double PROJETTE** — il ne rend une colonne que si la requête l'a
+   réclamée. Idiom déjà présent dans le dépôt (`MessagingService.test.ts`, double
+   d'`earlyDedup` : « The mock models a real projection »). Et le témoin est
+   `describe.each` sur les DEUX branches, pas sur celle qu'on corrige en premier.
+   Vérifié rouge contre la version inerte avant de la remplacer.
+2. **La projection est NOMMÉE** (`SHARE_LINK_CONVERSATION_SELECT`) au lieu d'être
+   recopiée. Deux `select` jumeaux à quinze lignes d'écart sont une garde à
+   moitié posée qui a l'air d'une garde entière — la cause racine, pas le
+   symptôme.
+
+Leçon opérationnelle : **quand une garde neuve dépend d'une colonne PROJETÉE,
+le témoin doit passer par un double qui projette.** Sinon il mesure la logique
+de la garde et jamais son alimentation — et les deux échouent séparément.
+
 ## Gates
 
 - [x] 4 RED discriminants vus rouges avant correctif (conversation close ;
       forme `isActive` seul de `leave.ts` ; les deux routes de lien)
 - [x] 2 non-régressions vertes d'emblée, dont le discriminant de PLACEMENT
       (un rejeu aboutit alors même que la conversation vient de fermer)
-- [x] Suites voisines : 3 suites / 178 tests verts
-- [x] Suite gateway complète : **721 suites / 17 663 tests verts**
-      (cycle 30 : 720 / 17 649 — +1 suite, +14 témoins, exactement les ajoutés)
+- [x] 1 RED supplémentaire, vu rouge contre le correctif à moitié posé
+      (branche `mshy_…`), sur un double qui PROJETTE
+- [x] Suites voisines : 3 suites / 179 tests verts
+- [x] Suite gateway complète : **721 suites / 17 664 tests verts**
+      (cycle 30 : 720 / 17 649 — +1 suite, +15 témoins, exactement les ajoutés)
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + ce journal + `tasks/todo.md`
 

@@ -7522,3 +7522,15 @@ l'existence et l'appartenance. Faire arbitrer les deux à la même unité lui do
 deux raisons de changer, invente un mode d'échec là où le gardien voisin répond
 déjà — et, très concrètement, casse tous les doubles de test qui ne modélisaient
 pas un champ dont la règle n'a pas besoin.
+
+**Corollaire — une garde qui dépend d'une colonne PROJETÉE se teste avec un
+double qui projette.** Rencontré en écrivant ce cycle, sur son propre correctif :
+la route de lien authentifiée résout par DEUX branches jumelles, la garde n'avait
+été posée que sur la seconde, et la première lisait `undefined` — donc admettait.
+**Les deux témoins étaient verts**, parce que le double rendait son objet entier
+quel que soit le `select`. Un tel double prouve que le code sait DÉCIDER, jamais
+qu'il a demandé de quoi décider ; les deux se cassent séparément. Remède double,
+et les deux moitiés sont nécessaires : le double ne rend une colonne que si la
+requête l'a réclamée, ET la projection est NOMMÉE plutôt que recopiée — deux
+`select` jumeaux à quinze lignes d'écart sont une garde à moitié posée qui a
+l'air d'une garde entière.

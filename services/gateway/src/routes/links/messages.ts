@@ -28,6 +28,27 @@ import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
 
 /**
+ * La projection de conversation des DEUX branches de résolution du lien
+ * authentifié — `mshy_…` et id brut.
+ *
+ * Nommée plutôt que recopiée parce qu'elle a déjà divergé une fois : la garde
+ * d'état terminal ajoutée plus bas avait d'abord été posée sur la seule
+ * seconde branche, ce qui la rendait INERTE sur la première — celle que
+ * produisent les URLs réelles. Deux `select` jumeaux à quinze lignes d'écart
+ * sont une garde à moitié posée qui en a l'air d'une entière.
+ */
+const SHARE_LINK_CONVERSATION_SELECT = {
+  id: true,
+  identifier: true,
+  title: true,
+  type: true,
+  // L'état TERMINAL du conteneur. Ramené par la relation déjà chargée : la
+  // garde ne coûte aucune lecture supplémentaire.
+  isActive: true,
+  closedAt: true
+} as const;
+
+/**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
  *
  * Les deux routes servent le même message par deux tuyaux — l'événement socket
@@ -490,34 +511,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       if (isLinkId) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                identifier: true,
-                title: true,
-                type: true
-              }
-            }
-          }
+          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
         });
       } else {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                identifier: true,
-                title: true,
-                type: true,
-                // L'état TERMINAL du conteneur. Ramené par la relation déjà
-                // chargée : la garde ci-dessous ne coûte aucune lecture.
-                isActive: true,
-                closedAt: true
-              }
-            }
-          }
+          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
         });
       }
 
