@@ -35,16 +35,39 @@ final class CallManagerStopSystemPiPTests: XCTestCase {
     func test_stopSystemPiP_declaredNearStartSystemPiP() throws {
         // Keep the pair adjacent so the asymmetry can't silently regress again —
         // a future edit that touches one is more likely to notice the other.
+        //
+        // « Adjacent » se mesure sur la STRUCTURE, pas sur un nombre d'octets :
+        // la première rédaction bornait la fenêtre à 200 caractères après
+        // startSystemPiP(), et le doc comment de 4 lignes qui explique
+        // précisément cette symétrie a poussé la déclaration à 307 caractères.
+        // Un garde d'adjacence qui casse quand on DOCUMENTE l'adjacence est un
+        // garde mal posé. On exige donc que rien d'autre qu'un commentaire ne
+        // sépare les deux — c'est plus strict qu'une fenêtre (aucune autre
+        // déclaration ne peut se glisser entre elles) et insensible à la
+        // longueur de la documentation.
         let source = try callManagerSource()
         guard let startRange = source.range(of: "func startSystemPiP() { pip.start() }") else {
             XCTFail("CallManager must declare startSystemPiP()")
             return
         }
-        let windowEnd = source.index(startRange.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[startRange.upperBound..<windowEnd])
+        guard let stopRange = source.range(of: "func stopSystemPiP() { pip.stop() }") else {
+            XCTFail("CallManager must declare stopSystemPiP()")
+            return
+        }
+        XCTAssertLessThan(
+            startRange.upperBound, stopRange.lowerBound,
+            "stopSystemPiP() must follow startSystemPiP(), keeping the start/stop pair in reading order."
+        )
+        let between = String(source[startRange.upperBound ..< stopRange.lowerBound])
+        let codeBetween = between
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertTrue(
-            vicinity.contains("func stopSystemPiP() { pip.stop() }"),
-            "stopSystemPiP() must be declared immediately after startSystemPiP()."
+            codeBetween.isEmpty,
+            "stopSystemPiP() must be declared immediately after startSystemPiP() — only doc " +
+            "comments may separate them, never another declaration. Found in between: \(codeBetween)"
         )
     }
 }
