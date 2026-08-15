@@ -114,7 +114,17 @@ export const SendMessageBodySchema = z.object({
   forwardedFromId: z.string().optional(),
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
-  encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
+  // Le mode arrive avec la casse du client : iOS émet « E2EE », et la
+  // description OpenAPI de cette route annonçait « e2e » — deux valeurs que
+  // l'enum rejetait en 400, sur un champ dont le jeu est pourtant connu.
+  // Normalisé à la frontière d'écriture, comme le code de langue l'est déjà
+  // (`normalizeLanguageForDedup`). Le jeu de valeurs reste FERMÉ : la
+  // normalisation corrige la casse, elle n'ouvre aucune valeur nouvelle.
+  encryptionMode: z
+    .string()
+    .transform((v) => v.toLowerCase())
+    .pipe(z.enum(['e2ee', 'server', 'hybrid']))
+    .optional(),
   encryptionMetadata: z.record(z.string(), z.unknown())
     .refine(
       (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
@@ -140,6 +150,13 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.forwardedFromId) ||
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
+).refine(
+  (data) => !data.isEncrypted || Boolean(data.encryptedContent),
+  {
+    message:
+      "encryptedContent est requis quand isEncrypted vaut true — le serveur ne rétrograde jamais en clair un message déclaré chiffré",
+    path: ['encryptedContent'],
+  },
 );
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
@@ -1699,10 +1716,20 @@ export function registerMessagesRoutes(
           storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
           forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
-          encryptedContent: { type: 'string', description: 'Encrypted message content' },
-          encryptionMode: { type: 'string', enum: ['e2e', 'server'], description: 'Encryption mode' },
+          encryptedContent: {
+            type: 'string',
+            description: 'Ciphertext. Its presence is what makes the message encrypted — a body carrying only this field is a valid message.'
+          },
+          encryptionMode: {
+            type: 'string',
+            enum: ['e2ee', 'server', 'hybrid'],
+            description: 'Encryption mode. Case-insensitive on input, normalised lowercase. Defaults to e2ee when encryptedContent is present.'
+          },
           encryptionMetadata: { type: 'object', description: 'Encryption metadata' },
-          isEncrypted: { type: 'boolean', description: 'Whether message is encrypted' },
+          isEncrypted: {
+            type: 'boolean',
+            description: 'Optional echo of the encryption fact. When true, encryptedContent is REQUIRED — the server never downgrades a message declared encrypted to plaintext.'
+          },
           attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés' },
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
@@ -1760,7 +1787,6 @@ export function registerMessagesRoutes(
         encryptedContent,
         encryptionMode,
         encryptionMetadata,
-        isEncrypted,
         attachmentIds,
         isBlurred,
         expiresAt,
@@ -1863,9 +1889,15 @@ export function registerMessagesRoutes(
         // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
         // dans `metadata.location` par `MessageProcessor.saveMessage`.
         location,
-        encryptedPayload: isEncrypted ? {
-          ciphertext: encryptedContent!,
-          mode: encryptionMode as any,
+        // Le FAIT du chiffrement, c'est la présence du chiffré — pas un booléen
+        // posé à côté. Gater sur `isEncrypted` perdait dans les DEUX sens : un
+        // chiffré sans le drapeau était jeté (alors que le `.refine()` ci-dessus
+        // le compte comme porteur de contenu), et le drapeau sans le chiffré
+        // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
+        // refuse désormais le second cas ; ici on sert le premier.
+        encryptedPayload: encryptedContent ? {
+          ciphertext: encryptedContent,
+          mode: (encryptionMode ?? 'e2ee') as any,
           ...encryptionMetadata as any
         } : undefined,
         metadata: {

@@ -2185,3 +2185,157 @@ schéma, en demandant pour chaque branche admise quel site d'écriture la
 consomme. Le corollaire vaut comme règle de conception : une dispense doit
 arriver AVEC son implémentation, jamais avant, sans quoi elle n'ouvre pas une
 permission mais une porte vers du code qui suppose l'autre branche.
+
+---
+
+# Cycle 33 (2026-08-15) — le fait était dans le chiffré, la route lisait le drapeau
+
+Sonde annoncée en clôture du cycle 32 : **quelles disjonctions de validateur
+n'ont pas d'implémentation derrière chaque branche ?** Le balayage s'est fait
+par schéma (`.refine`, `superRefine`, `z.union`, `.or`) sur `services/gateway`
+et `packages/shared`, en demandant pour CHAQUE branche admise quel site
+d'écriture la consomme.
+
+## Le balayage — ce qu'il a écarté
+
+Trois candidats ont été remontés puis classés sans suite, chacun vérifié
+jusqu'au site d'écriture :
+
+| schéma | branche suspecte | verdict |
+|---|---|---|
+| `anonymous.ts` — `email`/`birthday` `.or(z.literal(''))` | la chaîne vide | **servie** : `body.birthday ? new Date(...) : null` la traite en falsy, et `requireBirthday` la teste explicitement |
+| `translation.ts` — `text` **ou** `message_id` | `message_id` seul | **servie** : la route relit le message et emploie `existingMessage.content` |
+| `posts/sounds.ts` — `isPublic` **ou** `title` | chacune seule | **servies** toutes deux |
+
+## Le défaut — la quatrième branche du schéma d'envoi
+
+`SendMessageBodySchema` (`routes/conversations/messages.ts`) admet quatre
+porteurs de contenu : `content`, `attachmentIds`, `forwardedFromId`, et
+**`encryptedContent`**. La quatrième affirme qu'un corps n'apportant QUE du
+chiffré est un message valide. La route ne consommait ce chiffré que sous
+condition d'`isEncrypted` — un booléen SÉPARÉ, optionnel, que le schéma n'a
+jamais lié au chiffré :
+
+```ts
+encryptedPayload: isEncrypted ? { ciphertext: encryptedContent!, … } : undefined
+```
+
+**Les deux ordres perdaient**, et c'est ce qui rend le défaut instructif — ce
+n'est pas une branche oubliée, c'est un fait lu au mauvais endroit.
+
+1. **Chiffré sans le drapeau.** `encryptedPayload` reste `undefined`, le chiffré
+   est jeté. `MessageValidator` refuse alors le message pour cause de contenu
+   vide : le corps que le schéma venait d'approuver ressort en 400 **« Message
+   content cannot be empty »**. Variante plus grave quand un `content`
+   accompagne le chiffré (forme `server`/`hybrid` du web) : la validation passe,
+   le chiffré est jeté, et le CLAIR est persisté.
+2. **Drapeau sans le chiffré.** Le `!` ment. La charge part avec
+   `ciphertext: undefined`, que `MessageProcessor` refuse à son tour
+   (`data.encryptedContent && data.encryptionMetadata`), et le message est écrit
+   **en clair avec `isEncrypted: false`** — puis traduit (NLLB sur du base64),
+   scanné pour ses liens, poussé en notification. Un message déclaré chiffré,
+   rétrogradé sans un mot.
+
+## Le troisième défaut, sur le même champ
+
+`encryptionMode` était `z.enum(['e2ee','server','hybrid'])`, strictement
+minuscule. Or :
+
+- le client iOS émet **`"E2EE"`** (`ConversationViewModel.swift:2700`, chemin
+  E2EE des messages directs) ⇒ **400 sur l'enum**, corps entier rejeté ;
+- la description OpenAPI de la route annonçait **`enum: ['e2e','server']`** —
+  une valeur que le serveur refusait, et le silence sur `hybrid` qu'il
+  acceptait.
+
+Contrat publié et contrat appliqué en désaccord sur les deux bords à la fois.
+
+**Ordre de livraison contraint.** Normaliser la casse SEULE aurait converti le
+400 iOS en rétrogradation silencieuse (défaut nº 2) : le corps serait passé la
+validation pour se faire écrire en clair. Les trois correctifs ne sont pas
+trois passes, c'est un seul geste — la sonde a d'ailleurs livré le défaut nº 2
+en cherchant pourquoi le nº 1 n'avait jamais de victime.
+
+## Pourquoi ça a survécu
+
+Le chemin socket, lui, était JUSTE : `MessageHandler` teste
+`!validation.isValid && !data.encryptedPayload` et transmet la charge telle
+quelle — il lit la présence, jamais un booléen. Seul REST divergeait.
+
+Et les deux moitiés étaient testées, vertes, exactement comme au cycle 32 :
+
+| suite | ce qu'elle affirmait | ce qu'elle ne demandait jamais |
+|---|---|---|
+| `messages-routes.test.ts:533` | `accepts encryptedContent only` | ce que la route fait de ce corps |
+| `messages-routes.test.ts:3388` | la route sert `isEncrypted` **+** `encryptedContent` | ce qu'elle fait de l'un SANS l'autre |
+
+La seconde ne testait que la CONJONCTION. Aucune des deux ne regardait un
+ordre isolé — c'est-à-dire précisément ce que le schéma admet.
+
+Corroboration côté client, écrite noir sur blanc dans le dépôt : le web refuse
+son propre repli REST pour les messages chiffrés (« REST can't handle E2EE
+yet », `messaging.service.ts`), et iOS documente la même impasse
+(`apps/ios/decisions.md:139`). **Les clients avaient contourné la branche
+plutôt que la signaler.**
+
+## Correctifs
+
+- [x] La route gate sur la PRÉSENCE du chiffré, plus sur `isEncrypted` — le `!`
+      disparaît avec la condition qui le rendait faux
+- [x] `mode` vaut `e2ee` par défaut quand un chiffré arrive sans mode (plus
+      jamais `undefined` dans `encryptionMetadata`)
+- [x] Le schéma REFUSE explicitement `isEncrypted` sans chiffré, au lieu de le
+      rétrograder en clair
+- [x] `encryptionMode` normalisé en casse à la frontière, jeu de valeurs FERMÉ
+      (`e2e` reste refusé)
+- [x] Description OpenAPI réalignée sur ce qui est appliqué (`e2e` → `e2ee`,
+      `hybrid` publié, exigence d'`isEncrypted` énoncée)
+
+## Gates
+
+- [x] 8 RED discriminants vus rouges avant correctif (5 route + 3 schéma)
+- [x] 5 non-régressions vertes d'emblée, dont la forme du contrat
+      (drapeau + chiffré + mode), le message en clair, et le corps vide
+- [x] Suite gateway complète : **722 suites / 17 682 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 267
+
+## Constats latents — relevés, NON livrés
+
+1. **La casse du mode n'est PAS normalisée sur le chemin socket.** Un
+   `encryptedPayload.mode` majuscule y serait stocké tel quel, et
+   `MessageHandler:1897` compare `=== 'e2ee'` : l'écho `encryptedPayload` vers
+   les clients tomberait. Aucun émetteur majuscule vérifié sur ce chemin
+   aujourd'hui (iOS n'y envoie pas de chiffré) — latent, sans victime.
+2. **iOS ne sait toujours pas parler la forme du contrat.** Son chiffré voyage
+   dans `content` (base64) avec `isEncrypted`/`encryptionMode` à côté, sans
+   `encryptedContent`. Il reçoit désormais un 400 qui NOMME le manquant au lieu
+   d'une erreur d'enum. Le chantier reste ouvert et hors de portée ici (aucune
+   toolchain Swift sous Linux).
+3. **`editMessageRequestSchema` (`packages/shared/types/api-schemas.ts`) annonce
+   un `encryptedPayload` que la route d'édition ne lit pas** — mais l'export est
+   SANS AUCUN consommateur (vérifié sur tout le monorepo), donc il n'est publié
+   dans aucune doc et ne trompe personne à l'exécution. Famille 1 du balayage du
+   cycle 32 (export de confort mort) : à supprimer avec le cluster
+   `admin-permissions.middleware.ts`, pas à mêler à un correctif de défaut vivant.
+
+## Reste ouvert (inchangé)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30, sans victime vérifiée).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32 nº 2).
+
+## Candidat pour le cycle suivant
+
+La sonde du cycle 32 est close et elle a rendu son défaut. La question qui la
+prolonge, tirée de ce qui a réellement caché celui-ci : **quels FAITS ce dépôt
+lit-il à travers un drapeau plutôt qu'à travers la donnée qui les porte ?**
+`isEncrypted` à côté d'`encryptedContent` en était un ; le dépôt en interdit
+déjà la forme la plus connue (« pas de booléen redondant avec un timestamp »,
+CLAUDE.md), mais la règle n'est écrite que pour les paires booléen/date. Le
+balayage se fait en cherchant les champs booléens optionnels d'entrée dont un
+AUTRE champ porte déjà le fait, et en demandant pour chacun lequel des deux le
+site d'écriture consulte. Quand les deux existent, ils divergent un jour — et
+c'est le porteur, jamais le drapeau, qui dit la vérité.
