@@ -1501,7 +1501,11 @@ non supposée : le canal existait, seul l'émetteur manquait.
 - [x] 2 non-régressions vertes d'emblée (membre ordinaire, transfert d'ownership :
       une garde qui émettrait TOUJOURS passerait les 4 premiers)
 - [x] Suites voisines : 62 suites / 720 tests verts
-- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : **720 suites / 17 647 tests verts** ; **17 649
+      après merge manuel de `main`**, le cycle 29 parallèle en apportant 2
+      (aucune suite déplacée, aucun test perdu au passage)
+- [x] `tsc --noEmit` gateway : 0, avant ET après le merge
+- [x] CHANGELOG + ce journal + leçon 262
 
 ## Constats latents — relevés, NON livrés
 
