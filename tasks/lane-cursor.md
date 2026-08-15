@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=4 last_run=profile-share-link-receiver
+lane=IOS_DETTE android_streak=0 last_run=guest-join-web-deep-link
