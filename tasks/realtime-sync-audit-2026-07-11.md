@@ -1839,3 +1839,132 @@ Inchangés depuis le cycle 17, et toujours dans cet ordre :
   le `PUT` porte désormais `version`. Demande un toolchain Swift.
 - **Le scope communauté de `user:preferences-updated` n'est routé nulle part
   côté iOS** (`MessageSocketManager:3280`).
+
+---
+
+## Cycle 20 (2026-08-14) — la boîte d'envoi web n'était ni durable ni ordonnée
+
+Base : `origin/main` @ `1be4876b` (PR #3003 mergée — le cycle 19 et ses trois
+correctifs sont dans main). Phases 3 / 4 / 11.
+
+Périmètre web seul. Les quatre dettes nommées par le cycle 19 ont été relues
+d'abord : trois demandent un toolchain Swift, absent de ce runner
+(`clear-history` sans client + faux succès local du dispatch iOS, l'aller-retour
+HTTP de trop de `DefaultPreferenceWritingAdapter`, le scope communauté de
+`user:preferences-updated` non routé côté iOS) ; la quatrième — `deletedForUserAt`
+/ `clearHistoryBefore` absents du sérialiseur REST — n'a aujourd'hui **aucun
+lecteur sur cette surface**, ce que le cycle 17 avait déjà noté en la laissant
+ouverte. Ce cycle repart donc d'un relevé neuf sur la **chaîne d'envoi** (Phase 3
+« optimistic UI / local queue / retry / ordering », Phase 4 « retry queue »),
+qu'aucun cycle n'avait encore tracée de bout en bout côté web.
+
+### Ce qui a été vérifié correct — ne pas re-défricher
+
+- `RedisDeliveryQueue` : dedup `(dedupId, eventType)`, remplacement EN PLACE des
+  événements mutables, et surtout **tri `byEnqueuedAt` au drain** — l'ordre de
+  slot n'est pas l'ordre causal après un remplacement, et les trois chemins
+  (drain Redis, drain mémoire, peek) le rétablissent explicitement. Le scénario
+  « épingler / dépingler / ré-épingler pendant que le destinataire est hors
+  ligne » converge donc correctement. Aucun défaut trouvé.
+- `enqueueForOfflineParticipants` et ses six appelants : audience unique, jamais
+  levée d'exception, exclusion de l'acteur sur les deux identités. Conforme.
+- `_drainPendingMessages` / `_emitDeliveryForDrainedMessages` : émission vers la
+  room UTILISATEUR (donc tous les appareils), accusés de remise recalculés,
+  découplé du snapshot de présence. Conforme.
+- `ConnectionService` : résolveur de jeton au handshake, reprise à la
+  visibilité, backoff manuel après `reconnect_failed`. Conforme (cycles 15/16/19).
+
+### D1 — le vidage de la file n'évaluait la liaison qu'une fois
+
+`apps/web/services/socketio/orchestrator.service.ts` — `processPendingMessages()`
+
+La file existe pour porter les envois que le socket ne peut pas prendre. Elle
+est vidée à l'authentification du socket. Le vidage lisait `getSocket()` **une
+seule fois**, en tête de fonction, puis parcourait la file jusqu'au bout.
+
+C'est l'hypothèse exactement inverse de la situation : une file non vide prouve
+que le lien a déjà lâché une fois, et un lien qui vient de revenir est celui qui
+peut relâcher au milieu du vidage. Le tour suivant appelait alors
+`messagingService.sendMessage` avec un socket mort — qui rend `{ success: false }`
+sans rien émettre, sur sa garde `!socket.connected` de première ligne. Le
+reliquat s'effondrait d'un bloc, chaque entrée ayant déjà été `shift()`ée et sa
+minuterie d'expiration déjà annulée : une rafale d'échecs dont **aucune
+tentative n'avait quitté l'onglet**.
+
+Conséquences mesurées : tout l'envoi vire au rouge d'un coup (une entrée dans
+`failed-messages-store` et un toast par message) pour une coupure d'une seconde ;
+chaque message perd le solde de son budget de deux minutes et ne dépend plus que
+de la file d'échecs, bornée à 3 essais avant abandon définitif.
+
+**Correctif.** La liaison est réévaluée à chaque tour, AVANT le `shift()`. Sur
+lien mort, le vidage sort et le reliquat reste en file, minuteries toujours
+armées ; la prochaine authentification reprend là où il s'était arrêté.
+`isProcessingQueue` passe sous `try/finally` — la sortie anticipée est
+désormais un chemin normal, et le laisser à `true` scellerait la file pour la
+session.
+
+Frontière volontaire : une tentative RÉELLE reste terminale. Un ack en erreur,
+ou une coupure survenue PENDANT l'attente, résout le message en échec et le sort
+de la file. Le remettre en file ferait tourner la boucle sur un lien vivant.
+
+### D2 — le chemin direct pouvait doubler la file
+
+`apps/web/services/socketio/orchestrator.service.ts` — `sendMessage()`
+
+Le choix « envoyer directement ou mettre en file » ne regardait que la liaison,
+jamais le reliquat. Un message tapé pendant le vidage — ou dans la fenêtre entre
+la reconnexion du socket et son authentification, qui est ce qui DÉCLENCHE le
+vidage — partait immédiatement pendant que des messages plus anciens attendaient
+encore leur tour.
+
+Le destinataire les recevait à l'envers de l'ordre d'écriture, et l'horodatage
+serveur — seul ordre que porte le fil — entérinait l'inversion. Aucune relecture
+ne la corrige : c'est une perte d'ordre définitive, pas un artefact d'affichage.
+
+**Correctif.** La règle de toute boîte d'envoi : tant qu'elle contient quelque
+chose, on entre par la queue. La liaison ne décide plus que de la SUITE —
+attendre une reconnexion (lien mort), ou relancer le vidage sur-le-champ (lien
+vivant). Sans cette relance on aurait échangé une inversion d'ordre contre un
+blocage : `onAuthenticated` est le seul autre appelant du vidage et il a déjà eu
+lieu. Un vidage déjà en cours relit la longueur de la file à chaque tour et
+prendra l'entrée sans qu'on l'appelle ; l'appel sort alors sur sa garde
+`isProcessingQueue`.
+
+La file reste garantie de se vider : sur lien vivant chaque tour retire une
+entrée (envoyée ou expirée), et chaque entrée porte de toute façon sa minuterie
+de deux minutes.
+
+### Gates
+
+- 5 tests vus ROUGES avant correctifs, verts après (reliquat conservé,
+  minuteries survivantes, reprise à la reconnexion, non-dépassement du fresh
+  message, relance immédiate sans reconnexion).
+- `orchestrator.service.test.ts` : **114 tests verts** (109 pré-existants
+  inchangés).
+- Suite web complète verte · `tsc --noEmit` web : base pré-existante inchangée,
+  zéro erreur sur le fichier touché.
+- Aucun fichier Swift ni passerelle touché.
+
+### Reste ouvert après ce cycle
+
+Inchangé depuis le cycle 17, même ordre :
+
+- **`clear-history` n'a aucun client**, et le dispatch iOS
+  (`ConversationStore.swift:731`) rend un faux succès local sur
+  `.setClearHistoryBefore`. Dimension vie privée. Toolchain Swift.
+- **`deletedForUserAt` / `clearHistoryBefore` absents du sérialiseur REST**
+  (`conversationPreferencesSchema`), aucun lecteur à ce jour.
+- **iOS paie un aller-retour HTTP de trop par mutation de préférence.**
+  Toolchain Swift.
+- **Le scope communauté de `user:preferences-updated` n'est routé nulle part
+  côté iOS** (`MessageSocketManager:3280`). Toolchain Swift.
+
+Nouveau, relevé pendant ce cycle :
+
+- **`location:live-started` / `live-updated` / `live-stopped` n'ont aucun
+  consommateur web** (déjà noté au cycle 18) ; `attachment:reaction-added` /
+  `-removed` non plus, mais le web n'a pas la fonctionnalité — ce n'est pas un
+  trou, c'est une absence de surface.
+- **La file d'échecs abandonne définitivement après 3 essais** et n'a aucun
+  chemin de reprise manuelle depuis la bannière au-delà. À trancher : abandon
+  définitif ou réarmement explicite par l'utilisateur.
