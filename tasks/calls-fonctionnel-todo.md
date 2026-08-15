@@ -8421,3 +8421,81 @@ relancer un audit générique — même famille que les Vagues 117/118.
   sélection réelle de périphérique de sortie audio (`setSinkId`) ; `MAX_CALL_PARTICIPANTS = 9999`
   sans plafond effectif sur le mesh P2P (Vague 124, décision produit hors scope d'un fix
   chirurgical).
+
+## Vague 126 — les appels de groupe web étaient une étoile, pas un maillage : deux participants non-initiateurs ne se connectaient jamais entre eux (2026-08-15)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée
+déjà alignée bit à bit sur `origin/main` (`ebf266869`, contient la Vague 125 — PR mergée), aucune
+PR ouverte de cette routine au démarrage. Ce sandbox n'a ni Xcode ni SDK Android exploitable
+(`javac`/`gradle` présents mais `com.android.application` reste irrésolu — le proxy réseau ne
+laisse pas passer `dl.google.com`, confirmé par une tentative directe cette session) : périmètre
+web, comme la quasi-totalité des vagues récentes. Recensement par audit ciblé (agent en lecture
+seule, liste explicite des faux-positifs déjà traités pour ne pas les faire ressurgir) plutôt que
+relecture linéaire d'un dossier déjà labouré 125 fois.
+
+- **Root cause** : `VideoCallInterface.tsx`, l'effet « Handle creating offers for participants »
+  était gardé par `if (currentCall.initiatorId !== user.id) return;` — c'est le SEUL site du client
+  web qui appelle `createOffer` (`CallManager.tsx` délègue explicitement cette responsabilité à
+  `CallInterface`, commentaire à l'appui). Résultat : seul l'initiateur d'un appel crée jamais une
+  `RTCPeerConnection`/offre vers les autres participants ; tout le reste se contente de RÉPONDRE à
+  l'offre de l'initiateur. Ça passait inaperçu tant que le cap serveur limitait les appels à 2
+  participants (toute paire incluait forcément l'initiateur) — mais le commit `b06d54681` qui a levé
+  ce cap à `MAX_CALL_PARTICIPANTS = 9999` affirmait dans son propre message « mesh web N-pairs déjà
+  en place », affirmation jamais vérifiée : `tasks/2026-08-13-group-calls-gap-analysis.md` la
+  reprenait telle quelle dans son tableau récapitulatif (« ✅ moteur web déjà N-pairs »), corrigé
+  ci-dessous.
+- **Scénario de défaillance** : conversation de groupe, A initie, B et C rejoignent. A crée une
+  offre vers B et vers C, se connecte aux deux — A voit/entend B et C normalement. Mais B ne crée
+  JAMAIS d'offre vers C, et C ne crée JAMAIS d'offre vers B (l'effet ne tourne même pas pour eux,
+  gardé sur `initiatorId !== user.id`). Aucune `RTCPeerConnection` n'existe jamais entre B et C :
+  le roster (`currentCall.participants`, peuplé pour tout le monde via `call:participant-joined`)
+  liste correctement les trois personnes, mais B et C ne se voient et ne s'entendent jamais entre
+  eux — dégradation silencieuse d'« appel de groupe » à « chacun parle à l'initiateur », précisément
+  le scénario que la levée du cap (2026-08-13) était censée débloquer.
+- **Fix** : retrait de la garde d'entrée. Au lieu d'un rôle fixe (initiateur = seul offreur), chaque
+  participant résout désormais localement le propriétaire de CHAQUE paire dont il fait partie :
+  l'initiateur possède toujours toutes ses paires (comportement 1:1 inchangé, aucune régression sur
+  la couverture de tests existante) ; pour une paire entre deux non-initiateurs, personne ne la
+  possède par rôle, donc chaque côté résout indépendamment le MÊME propriétaire via un tie-break
+  déterministe sur l'id (même idée que `WebRTCService.setNegotiationRole`, qui utilise déjà
+  `localUserId < remoteUserId` pour son distinguo poli/impoli glare-safe) : l'id le plus petit
+  lexicographiquement crée l'offre, l'autre côté attend. Zéro coordination réseau supplémentaire,
+  zéro glare (jamais les deux côtés n'appellent `createOffer` pour la même paire). `handleOffer`
+  (réception) était déjà générique — codé uniquement sur `fromUserId`, aucune hypothèse sur le rôle
+  de l'émetteur — donc aucun changement requis côté réponse.
+- **Tests** (TDD, RED confirmé en isolant temporairement le fix via `git stash` sur le seul fichier
+  de production puis en rejouant les tests neufs contre le code non corrigé — 1 échec net avant fix,
+  les deux autres cas neufs passant trivialement par construction avant comme après) : 3 cas neufs
+  dans `VideoCallInterface.test.tsx` — un non-initiateur crée l'offre vers un pair dont l'id trie
+  APRÈS le sien (et jamais vers l'initiateur) ; un non-initiateur NE crée PAS l'offre vers un pair
+  dont l'id trie AVANT le sien (l'autre côté la possède) ; l'initiateur continue de posséder toutes
+  ses paires quel que soit l'ordre des ids. Suite complète du fichier : **43/43** verts (+3 nets).
+  Sweep `--testPathPatterns="[Cc]all"` (apps/web) : **53 suites / 482 tests** verts (+4 nets, 0
+  régression). Couverture du fichier modifié : 80.96% stmts / 72.67% branches — le bloc de l'effet
+  modifié (lignes 314-345) n'apparaît dans aucune plage non couverte. `npx tsc --noEmit` : diff
+  `git stash`/`stash pop` — **1764 erreurs préexistantes identiques avant et après** (numéros de
+  ligne décalés de +18 par l'insertion, contenu textuel identique une fois les positions ignorées),
+  0 nouvelle erreur. Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) :
+  `bun install --ignore-scripts` (bun 1.3.11 disponible localement, pas 1.3.14), puis
+  `packages/shared && npx prisma generate --generator client && bun run build` sans erreur.
+- **Doc corrigée en même temps** : `tasks/2026-08-13-group-calls-gap-analysis.md`, tableau
+  récapitulatif — « 3+ flux média simultanés » passe de « ✅ moteur web déjà N-pairs » à l'état réel
+  (maillage web maintenant vrai POUR CE FIX, mais toujours plafonné par l'absence de SFU au-delà de
+  quelques participants actifs, cf. note Vague 124 sur `MAX_CALL_PARTICIPANTS`).
+- **Non fait volontairement** : le mesh iOS mono-PC (I1-I7, chantier séparé et plus large déjà
+  identifié dans le gap-analysis — Swift non vérifiable dans ce sandbox) et l'équivalent Android
+  (`WebRtcCallCoordinator.kt` — confirmé cette session que le SDK Android n'est pas non plus
+  atteignable : `gradle` et `javac` sont installés, mais le plugin `com.android.application` ne
+  résout ni hors-ligne ni en ligne, le proxy réseau de ce sandbox ne laissant pas passer le dépôt
+  Maven de Google) restent hors de portée pour vérifier un changement avant merge — mais partagent
+  très probablement le même bug si leur logique d'offre suit aussi un rôle fixe « initiateur = seul
+  offreur » plutôt qu'un tie-break par paire ; à vérifier lors d'un prochain cycle avec accès à ces
+  toolchains.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`) ; `MAX_CALL_PARTICIPANTS = 9999`
+  sans plafond effectif sur le mesh P2P (décision produit) ; mesh iOS/Android mono-PC potentiellement
+  affecté du même bug d'étoile-vs-maillage que ce fix web (à auditer avec toolchain disponible).

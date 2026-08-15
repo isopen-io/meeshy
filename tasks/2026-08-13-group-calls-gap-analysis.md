@@ -341,4 +341,4 @@ Tests : `CallNotification.groupCall.test.tsx` (5 cas) +
 | Y être ajouté | ✅ = être membre de la conversation (flux existant) + fan-out ring à tous les membres ; rien à construire de plus |
 | Quitter sans terminer l'appel | ✅ serveur (`leaveCall` groupe continue) ; ❌ clients traitent tout départ comme fin d'appel |
 | Revenir à tout moment | ✅ serveur (nouvelle ligne `CallParticipant`) ; ❌ aucun client ne propose le re-join après départ volontaire |
-| 3+ flux média simultanés | ❌ cap serveur 2 ; ✅ moteur web déjà N-pairs ; ❌ iOS mono-PC ; ❌ pas de SFU |
+| 3+ flux média simultanés | ❌ cap serveur 2 ; ✅ moteur web N-pairs (corrigé Vague 126 — était une étoile, pas un maillage : les non-initiateurs ne s'offraient jamais entre eux) ; ❌ iOS/Android mono-PC (probablement même bug, non vérifié — toolchains hors d'atteinte) ; ❌ pas de SFU |
