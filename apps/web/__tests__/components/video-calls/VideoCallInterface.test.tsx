@@ -462,6 +462,71 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
+  // Group calls used to be a star, not a mesh: the offer-creation effect
+  // bailed out entirely unless `currentCall.initiatorId === user.id`, so only
+  // the initiator ever called `createOffer`. Two non-initiator participants
+  // in the same 3+-person call never created an offer toward each other and
+  // so never connected at all — the roster listed everyone, but only the
+  // initiator's audio/video was ever received by anyone else. Local user is
+  // always 'u1' (mocked `useAuth` above).
+  describe('group calls — non-initiator participants must offer each other (mesh, not star)', () => {
+    it('a non-initiator creates an offer toward another non-initiator whose id sorts AFTER its own', () => {
+      storeState.currentCall = {
+        id: 'call1',
+        startedAt: new Date().toISOString(),
+        initiatorId: 'organizer',
+        participants: [
+          { userId: 'organizer', username: 'Organizer', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          // 'u1' < 'u2' — the local user owns this pair.
+          { userId: 'u2', username: 'Peer', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        ],
+      };
+
+      render(<VideoCallInterface callId="call1" />);
+
+      // Owns the pair with 'u2' (tie-break) — never the pair with the
+      // initiator, who owns every pair it's part of.
+      expect(webrtc.createOffer).toHaveBeenCalledTimes(1);
+      expect(webrtc.createOffer).toHaveBeenCalledWith('u2');
+      expect(webrtc.createOffer).not.toHaveBeenCalledWith('organizer');
+    });
+
+    it('a non-initiator does NOT create an offer toward a peer whose id sorts BEFORE its own (the peer owns it instead)', () => {
+      storeState.currentCall = {
+        id: 'call1',
+        startedAt: new Date().toISOString(),
+        initiatorId: 'organizer',
+        participants: [
+          { userId: 'organizer', username: 'Organizer', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          // 'u0' < 'u1' — the OTHER side owns this pair, not the local user.
+          { userId: 'u0', username: 'Peer', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        ],
+      };
+
+      render(<VideoCallInterface callId="call1" />);
+
+      expect(webrtc.createOffer).not.toHaveBeenCalled();
+    });
+
+    it('the initiator still owns every pair it is part of, regardless of id ordering', () => {
+      storeState.currentCall = {
+        id: 'call1',
+        startedAt: new Date().toISOString(),
+        initiatorId: 'u1',
+        participants: [
+          { userId: 'a-peer', username: 'A', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          { userId: 'z-peer', username: 'Z', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        ],
+      };
+
+      render(<VideoCallInterface callId="call1" />);
+
+      expect(webrtc.createOffer).toHaveBeenCalledTimes(2);
+      expect(webrtc.createOffer).toHaveBeenCalledWith('a-peer');
+      expect(webrtc.createOffer).toHaveBeenCalledWith('z-peer');
+    });
+  });
+
   // P0 rejoin-race fix: the 2s delayed cleanup used to tear down whatever
   // RTCPeerConnection was registered under the participant's id at the time it
   // fired, with no check that it was still the *same* connection scheduled for
