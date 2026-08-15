@@ -1298,10 +1298,30 @@ struct ConversationListView: View {
                             searchTextIsEmpty: conversationViewModel.searchText.isEmpty
                         ) {
                         case .skeleton:
+                            // Mux de squelette sous drapeau (contrat LWS-7,
+                            // workshop I-067bis — exception de périmètre
+                            // accordée par l'orchestrateur, seule ouverture
+                            // consentie dans ce fichier hors du mux de rang
+                            // I-067). `LentilleSkeletonRow` (`Lentille/Row/`,
+                            // I-066, vue pure prête depuis ce lot) ne pouvait
+                            // pas être montée depuis `ConversationRowItem`
+                            // (ÉCART CONTRAT↔CODE signalé par I-067,
+                            // `ConversationListView+Rows.swift` : cette
+                            // branche « cache vide » est un chemin de rendu
+                            // ENTIÈREMENT séparé, au niveau de la LISTE, où
+                            // aucune `Conversation` n'existe encore pour
+                            // instancier un `ConversationRowItem`). Drapeau
+                            // OFF : `SkeletonConversationRow()` INCHANGÉ, bit
+                            // à bit identique à avant ce lot.
                             LazyVStack(spacing: 8) {
                                 ForEach(0..<6, id: \.self) { index in
-                                    SkeletonConversationRow()
-                                        .staggeredAppear(index: index, baseDelay: 0.04)
+                                    if LentilleFeatureFlag.isLentilleListEnabled {
+                                        LentilleSkeletonRow()
+                                            .staggeredAppear(index: index, baseDelay: 0.04)
+                                    } else {
+                                        SkeletonConversationRow()
+                                            .staggeredAppear(index: index, baseDelay: 0.04)
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)
