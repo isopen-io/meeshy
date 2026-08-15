@@ -1,0 +1,138 @@
+/**
+ * Lentille Design Tokens — CSS Custom Properties
+ *
+ * Source: packages/shared/design/lentille-tokens.json
+ * Generated from sections: 'list' and 'thread'
+ *
+ * NOTE: This file is NOT imported anywhere by default.
+ * Wiring belongs to future work (WL-100+). Until then, this file is inert.
+ * The cost of an unimported stylesheet is negligible.
+ *
+ * Naming convention: --lentille-<section>-<path-kebab-case>
+ * Numeric values get units: px for sizes/lengths, ms for durations, no unit for ratios/weights/opacities
+ * String values (percentages, etc.) are preserved as-is
+ */
+
+:root {
+  /* ========== LIST SECTION ========== */
+
+  /* list.row */
+  --lentille-list-row-height: 64px;
+  --lentille-list-row-padding-vertical: 10px;
+  --lentille-list-row-padding-horizontal: 16px;
+  --lentille-list-row-margin-horizontal: 8px;
+  --lentille-list-row-radius: 16px;
+  --lentille-list-row-transform-origin-x: 16%;
+  --lentille-list-row-transform-origin-y: 50%;
+
+  /* list.avatar */
+  --lentille-list-avatar-size: 44px;
+  --lentille-list-avatar-ring-size: 1.5px;
+  --lentille-list-avatar-ring-opacity: 0.55;
+
+  /* list.presenceDot */
+  --lentille-list-presence-dot-size: 11px;
+  --lentille-list-presence-dot-border-size: 2.5px;
+
+  /* list.name */
+  --lentille-list-name-size: 15px;
+  --lentille-list-name-weight: 800;
+
+  /* list.time */
+  --lentille-list-time-size: 12px;
+  --lentille-list-time-weight: 700;
+
+  /* list.line2 */
+  --lentille-list-line2-size: 13px;
+
+  /* list.unreadDot */
+  --lentille-list-unread-dot-size: 8px;
+
+  /* list.focusCard */
+  --lentille-list-focus-card-ring-size: 1.5px;
+  --lentille-list-focus-card-radius: 16px;
+
+  /* list.modeNotch */
+  --lentille-list-mode-notch-size: 9.5px;
+  --lentille-list-mode-notch-weight: 900;
+  --lentille-list-mode-notch-top: -9px;
+  --lentille-list-mode-notch-right: 14px;
+
+  /* list.sticker */
+  --lentille-list-sticker-size: 10.5px;
+  --lentille-list-sticker-weight: 800;
+  --lentille-list-sticker-letter-spacing: 0.1em;
+  --lentille-list-sticker-padding-vertical: 4px;
+  --lentille-list-sticker-padding-horizontal: 13px;
+
+  /* list.pill */
+  --lentille-list-pill-top: 64px;
+  --lentille-list-pill-fade-duration: 250ms;
+  --lentille-list-pill-dismiss-after: 900ms;
+
+  /* list.rail */
+  --lentille-list-rail-size: 48px;
+  --lentille-list-rail-ring: 3.5px;
+  --lentille-list-rail-max-entries: 6;
+
+  /* list.tags */
+  --lentille-list-tags-size: 6px;
+  --lentille-list-tags-max-count: 3;
+  --lentille-list-tags-emoji-size: 11px;
+
+  /* list.muted */
+  --lentille-list-muted-opacity: 0.55;
+
+  /* list.agent */
+  --lentille-list-agent-avatar-ring-size: 1.5px;
+
+  /* ========== THREAD SECTION ========== */
+
+  /* thread.row */
+  --lentille-thread-row-padding-vertical: 5px;
+  --lentille-thread-row-padding-horizontal: 16px;
+
+  /* thread.avatar */
+  --lentille-thread-avatar-size: 22px;
+
+  /* thread.name */
+  --lentille-thread-name-size: 13px;
+  --lentille-thread-name-weight: 800;
+
+  /* thread.time */
+  --lentille-thread-time-size: 12px;
+  --lentille-thread-time-weight: 600;
+
+  /* thread.line2 */
+  --lentille-thread-line2-size: 15px;
+  --lentille-thread-line2-line-height: 1.42;
+  --lentille-thread-line2-indent: 29px;
+
+  /* thread.focusCard */
+  --lentille-thread-focus-card-ring-size: 1.5px;
+  --lentille-thread-focus-card-radius: 16px;
+  --lentille-thread-focus-card-margin-horizontal: 3px;
+  --lentille-thread-focus-card-margin-vertical: 8px;
+  --lentille-thread-focus-card-padding-horizontal: 8px;
+  --lentille-thread-focus-card-padding-vertical: 12px;
+
+  /* thread.quote */
+  --lentille-thread-quote-border-size: 2.5px;
+
+  /* thread.media */
+  --lentille-thread-media-radius: 16px;
+
+  /* thread.hiddenChrome */
+  --lentille-thread-hidden-chrome-translate-y: 94px;
+  --lentille-thread-hidden-chrome-opacity-end: 0;
+  --lentille-thread-hidden-chrome-ease-out: 0.25;
+
+  /* thread.pill */
+  --lentille-thread-pill-top: 72px;
+  --lentille-thread-pill-fade-duration: 280ms;
+  --lentille-thread-pill-dismiss-after: 900ms;
+
+  /* thread.agent */
+  --lentille-thread-agent-row-border-size: 1.5px;
+  --lentille-thread-agent-row-radius: 14px;
+}
