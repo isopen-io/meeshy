@@ -1257,6 +1257,51 @@ struct ConversationView: View {
                     .zIndex(1)
             }
 
+            // WS-9 (F-088) — le mode `.summary` route vers un HÔTE DÉDIÉ
+            // (contrat §WS-9 : « le mode résumé a peut-être besoin d'un hôte
+            // dédié »), ADDITIF à ce ZStack — aucun site F-085/086bis
+            // (`MessageListView` et ses closures ci-dessous) n'est touché.
+            // `LivingSummaryHost` construit son propre `@StateObject` — ce
+            // site d'appel ne passe que des primitives, zéro `@State` neuf
+            // ici. `zIndex(80)` : au-dessus du fil/composer/scroll-to-bottom
+            // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
+            // (100, toujours joignable) et de la barre d'erreur/quick-reaction
+            // (97/99, sans objet en mode résumé).
+            if readingModeController.mode == .summary {
+                LivingSummaryHost(
+                    messages: viewModel.messages,
+                    viewerId: viewModel.currentUserIdForView,
+                    viewerUsername: AuthManager.shared.currentUser?.username,
+                    windowCoversUnread: !viewModel.hasOlderMessages,
+                    analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
+                    conversationId: viewModel.conversationId,
+                    isDark: isDark,
+                    onReplyToPerson: { entry in
+                        readingModeController.select(.focal)
+                        guard let targetId = entry.evidenceMessageIds.first,
+                              let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = targetId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onOpenEpisode: { episode in
+                        readingModeController.select(.focal)
+                        guard let targetId = episode.messageIds.first else { return }
+                        scrollState.scrollToMessageId = targetId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onResumeThread: {
+                        readingModeController.select(.focal)
+                        if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
+                            scrollState.scrollToMessageId = firstUnread
+                            scrollState.scrollToMessageTrigger += 1
+                        }
+                    }
+                )
+                .zIndex(80)
+                .transition(.opacity)
+            }
+
             // UIKit bridge powered by GRDB store (always available after eager init)
             MessageListView(
                 store: viewModel.messageStore,
