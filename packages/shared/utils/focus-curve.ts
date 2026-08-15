@@ -24,22 +24,52 @@ export type FocusCurveResult = {
   readonly scale: number
 }
 
+/**
+ * Constantes gelées de la loi de focus (RÉSERVE 1, revue REV-1) — seule
+ * source de vérité pour les trois jeux de constantes de `focusCurve`.
+ * `thread` (Focal, fil), `list` (Lentille, liste), `belowBand` (fondu court
+ * sous la bande de focus, liste uniquement, §4.1).
+ *
+ * Exportée gelée (`as const`) pour que les peaux et outillages puissent
+ * introspecter les constantes sans les redéclarer en dur (garde R15).
+ */
+export const FOCUS_CURVE_CONSTANTS = {
+  thread: { maxDistance: 380, scaleDecay: 0.4, alphaDecay: 0.82 },
+  list: { maxDistance: 520, alphaDecay: 0.45, scaleDecay: 0.04 },
+  belowBand: { distance: 160, alphaCap: 0.35 },
+} as const
+
 /** Fil (Focal) : `f = min(1, d/380)`, `scale = 1 − 0.40f`, `alpha = 1 − 0.82f`. */
-const THREAD_MAX_DISTANCE = 380
-const THREAD_SCALE_DECAY = 0.4
-const THREAD_ALPHA_DECAY = 0.82
+export const THREAD_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.thread.maxDistance
+export const THREAD_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.thread.scaleDecay
+export const THREAD_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.thread.alphaDecay
 
 /** Liste (Lentille) : `f = min(1, d/520)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.04f`. */
-const LIST_MAX_DISTANCE = 520
-const LIST_ALPHA_DECAY = 0.45
-const LIST_SCALE_DECAY = 0.04
+export const LIST_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.list.maxDistance
+export const LIST_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.list.alphaDecay
+export const LIST_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.list.scaleDecay
 
 /**
  * Fondu court sous la bande de focus (liste uniquement, §4.1 : « sous la
- * bande : fondu court sur d/160, plafonné à −0.35 »).
+ * bande : fondu court sur d/160, plafonné à −0.35 »). Rampe PROPORTIONNELLE
+ * plafonnée — corrigée REV-1 BLOCAGE 1 (maquette normative
+ * `docs/design/2026-08-15-conversation-list-lentille.html:647` :
+ * `op = 1 − 0.35·min(1, d/160)`), jamais une rampe linéaire non mise à
+ * l'échelle (l'ancienne implémentation `max(d/160, −0.35)` saturait à
+ * `d=-56` au lieu de `d=-160`).
  */
-const LIST_BELOW_BAND_DISTANCE = 160
-const LIST_BELOW_BAND_ALPHA_CAP = 0.35
+export const LIST_BELOW_BAND_DISTANCE = FOCUS_CURVE_CONSTANTS.belowBand.distance
+export const LIST_BELOW_BAND_ALPHA_CAP = FOCUS_CURVE_CONSTANTS.belowBand.alphaCap
+
+/**
+ * Bande de focus (§4.2 : « bottom − 140 ± 45 ») — RÉSERVE 2, revue REV-1.
+ * `FOCUS_BAND_OFFSET` : distance verticale entre le bas du viewport et le
+ * centre de la bande de focus. `FOCUS_BAND_HALF_HEIGHT` : demi-hauteur de la
+ * bande, c'est-à-dire l'hystérésis passée à `electFocusRow`. Exportées pour
+ * que les peaux (I-070/WL-104…) ne les réécrivent JAMAIS en dur.
+ */
+export const FOCUS_BAND_OFFSET = 140
+export const FOCUS_BAND_HALF_HEIGHT = 45
 
 const clampUnit = (value: number): number => Math.min(1, Math.max(0, value))
 
@@ -59,14 +89,19 @@ const clampUnit = (value: number): number => Math.min(1, Math.max(0, value))
  *     (`clampUnit`) : pour `distance < 0`, `f = 0`, donc le terme de base ne
  *     contribue AUCUN fondu (`alpha` de base reste `1`, `scale` reste `1`).
  *     Le fondu sous la bande est un terme ADDITIF distinct — c'est le sens
- *     du « PLUS » du contrat : `belowBandFade = max(d/160, −0.35)`, qui est
- *     déjà négatif ou nul pour `d < 0` (le plafond `−0.35` fixe un plancher
- *     à `belowBandFade`, jamais un maximum au sens usuel du terme). Le
- *     fondu total sous la bande est donc `1 + belowBandFade`, borné à
- *     `[0.65, 1]` — un fondu volontairement COURT (rayon d'action `160px`
- *     contre `520px` au-dessus de la bande), cohérent avec « la carte de
- *     focus est déjà là, les quelques rangs sous elle ne doivent presque
- *     pas s'estomper ».
+ *     du « PLUS » du contrat : `belowBandFade = −0.35 · clampUnit(−d/160)`
+ *     (BLOCAGE 1, correction REV-1 — rampe PROPORTIONNELLE plafonnée, jamais
+ *     `max(d/160, −0.35)` : cette ancienne forme confondait la pente de la
+ *     rampe et son plafond, saturant à `d=-56` au lieu de `d=-160`). Reprise
+ *     littérale de la maquette normative
+ *     `docs/design/2026-08-15-conversation-list-lentille.html:647` :
+ *     `op = 1 − 0.35·min(1, d/160)` où le `d` de la maquette est la distance
+ *     SOUS la bande (positive), soit `−distance` dans la convention de ce
+ *     fichier. Le fondu total sous la bande est donc `1 + belowBandFade`,
+ *     borné à `[0.65, 1]` — un fondu volontairement COURT (rayon d'action
+ *     `160px` contre `520px` au-dessus de la bande), cohérent avec « la
+ *     carte de focus est déjà là, les quelques rangs sous elle ne doivent
+ *     presque pas s'estomper ».
  *   - Le variant `thread` n'a pas d'amendement « sous la bande » dans le
  *     contrat ; par symétrie et pour rester une loi pure et totale, une
  *     distance négative y est traitée comme dans le terme de base du
@@ -89,7 +124,7 @@ export const focusCurve = (
   const f = clampUnit(distance / LIST_MAX_DISTANCE)
   const belowBandFade =
     distance < 0
-      ? Math.max(distance / LIST_BELOW_BAND_DISTANCE, -LIST_BELOW_BAND_ALPHA_CAP)
+      ? -LIST_BELOW_BAND_ALPHA_CAP * clampUnit(-distance / LIST_BELOW_BAND_DISTANCE)
       : 0
 
   return {

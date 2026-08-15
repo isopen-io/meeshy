@@ -94,7 +94,7 @@
       "variant": "list"
     },
     "expected": {
-      "alpha": 0.9,
+      "alpha": 0.965,
       "scale": 1
     }
   },
@@ -105,7 +105,7 @@
       "variant": "list"
     },
     "expected": {
-      "alpha": 0.65,
+      "alpha": 0.8775000000000001,
       "scale": 1
     }
   },
@@ -113,6 +113,17 @@
     "_label": "list-neg100",
     "input": {
       "distance": -100,
+      "variant": "list"
+    },
+    "expected": {
+      "alpha": 0.78125,
+      "scale": 1
+    }
+  },
+  {
+    "_label": "list-neg160",
+    "input": {
+      "distance": -160,
       "variant": "list"
     },
     "expected": {

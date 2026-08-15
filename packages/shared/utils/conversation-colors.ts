@@ -57,6 +57,26 @@ const LANGUAGE_COLORS: Readonly<Record<string, string>> = {
   other: '9B59B6',
 };
 
+/**
+ * Codes ISO 639-1 vers les clés `ConversationContext.ConversationLanguage`
+ * (Swift) — RÉSERVE 7, revue REV-1. Couvre les 9 langues RÉELLES portées par
+ * `LANGUAGE_COLORS` (`other` exclu : c'est un repli catégoriel, pas une
+ * langue ISO). `conversationAccentPalette` normalise `input.language` à
+ * travers cette table AVANT le lookup dans `LANGUAGE_COLORS`, pour accepter
+ * indifféremment `'fr'` ou `'french'`.
+ */
+export const ISO_TO_CONVERSATION_LANGUAGE: Readonly<Record<string, string>> = {
+  fr: 'french',
+  en: 'english',
+  es: 'spanish',
+  de: 'german',
+  ja: 'japanese',
+  ar: 'arabic',
+  zh: 'chinese',
+  pt: 'portuguese',
+  it: 'italian',
+};
+
 const TYPE_COLORS: Readonly<Record<string, string>> = {
   direct: 'FF6B6B',
   group: '4ECDC4',
@@ -307,9 +327,18 @@ function shiftHue(hex: string, degrees: number): string {
 // Résolution des clés d'entrée → couleur de base
 // ---------------------------------------------------------------------------
 
+/**
+ * Normalise un code ISO 639-1 (`'fr'`) vers sa clé `ConversationLanguage`
+ * (`'french'`) via `ISO_TO_CONVERSATION_LANGUAGE` — une clé déjà pleine
+ * (`'french'`) ou inconnue des deux tables traverse inchangée (RÉSERVE 7).
+ */
+function normalizeLanguageKey(language: string): string {
+  return ISO_TO_CONVERSATION_LANGUAGE[language] ?? language;
+}
+
 function resolveLanguageColor(language: string | undefined): string {
   if (language === undefined) return LANGUAGE_COLORS[DEFAULT_LANGUAGE] as string;
-  return LANGUAGE_COLORS[language] ?? UNKNOWN_KEY_FALLBACK_HEX;
+  return LANGUAGE_COLORS[normalizeLanguageKey(language)] ?? UNKNOWN_KEY_FALLBACK_HEX;
 }
 
 function resolveThemeColor(theme: string | undefined): string {

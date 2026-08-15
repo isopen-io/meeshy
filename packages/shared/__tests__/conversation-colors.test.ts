@@ -12,7 +12,7 @@
  * l'exactitude sur ≥ 5 cas dérivés à la main, ce qu'elle fait (7 palettes +
  * les cas de repli).
  */
-import { conversationAccentPalette, colorForName } from '../utils/conversation-colors.js';
+import { conversationAccentPalette, colorForName, ISO_TO_CONVERSATION_LANGUAGE } from '../utils/conversation-colors.js';
 
 const HEX_RE = /^#[0-9A-F]{6}$/;
 
@@ -133,6 +133,51 @@ describe('conversationAccentPalette', () => {
   it('est pure : deux appels avec le même objet littéral rendent exactement le même résultat', () => {
     const input = { name: 'stable', type: 'direct', language: 'french', theme: 'general' } as const;
     expect(conversationAccentPalette({ ...input })).toEqual(conversationAccentPalette({ ...input }));
+  });
+
+  describe('RÉSERVE 7 (revue REV-1) — accepte aussi un code ISO 639-1 pour `language`', () => {
+    it('ISO_TO_CONVERSATION_LANGUAGE mappe les 9 langues réelles de LANGUAGE_COLORS (hors "other", pas une langue ISO)', () => {
+      expect(ISO_TO_CONVERSATION_LANGUAGE).toEqual({
+        fr: 'french',
+        en: 'english',
+        es: 'spanish',
+        de: 'german',
+        ja: 'japanese',
+        ar: 'arabic',
+        zh: 'chinese',
+        pt: 'portuguese',
+        it: 'italian',
+      });
+    });
+
+    it.each([
+      ['fr', 'french'],
+      ['en', 'english'],
+      ['es', 'spanish'],
+      ['de', 'german'],
+      ['ja', 'japanese'],
+      ['ar', 'arabic'],
+      ['zh', 'chinese'],
+      ['pt', 'portuguese'],
+      ['it', 'italian'],
+    ])('language=%s (ISO) produit exactement la même palette que language=%s (nom complet)', (iso, full) => {
+      const viaIso = conversationAccentPalette({ name: 'x', type: 'direct', language: iso, theme: 'general' });
+      const viaFull = conversationAccentPalette({ name: 'x', type: 'direct', language: full, theme: 'general' });
+      expect(viaIso).toEqual(viaFull);
+    });
+
+    it('language="fr" avec type=direct/theme=general → même palette que le cas documenté demo-fr (#7B9FB0)', () => {
+      const palette = conversationAccentPalette({ name: 'demo-fr-iso', type: 'direct', language: 'fr', theme: 'general' });
+      expect(palette.primary).toBe('#7B9FB0');
+      expect(palette.secondary).toBe('#7B84B0');
+      expect(palette.accent).toBe('#7BB0A6');
+    });
+
+    it('un code ISO inconnu (2 lettres hors table) retombe sur le repli langue-inconnue, comme un nom inconnu', () => {
+      const viaUnknownIso = conversationAccentPalette({ name: 'x', type: 'direct', language: 'xx', theme: 'general' });
+      const viaUnknownName = conversationAccentPalette({ name: 'x', type: 'direct', language: 'klingon', theme: 'general' });
+      expect(viaUnknownIso).toEqual(viaUnknownName);
+    });
   });
 });
 

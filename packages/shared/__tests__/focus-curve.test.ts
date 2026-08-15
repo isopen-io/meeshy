@@ -57,20 +57,34 @@ describe('focusCurve — list variant (Lentille)', () => {
     expect(focusCurve.length).toBe(2)
   })
 
-  describe('below-band fade (d < 0 — interpretation documented in focus-curve.ts)', () => {
-    it('at d=-16, belowBandFade = -16/160 = -0.10, so alpha = 0.90 and scale stays 1 (no geometry change)', () => {
+  describe('below-band fade (d < 0 — proportional ramp capped at −0.35 over 160px, BLOCAGE 1 REV-1 correction)', () => {
+    // Maquette normative : docs/design/2026-08-15-conversation-list-lentille.html:647
+    //   `op = 1 − 0.35·min(1, d/160)` où `d = my - focusY` (distance SOUS la
+    //   bande, positive) — soit, dans la convention de focus-curve.ts
+    //   (`distance` = distance AU-DESSUS de la bande), `d = -distance`.
+    //   belowBandFade = −0.35 · clampUnit(−distance / 160)
+    it('at d=-16, belowBandFade = -0.35 * (16/160) = -0.035, so alpha = 0.965 and scale stays 1', () => {
       const { alpha, scale } = focusCurve(-16, 'list')
-      expect(alpha).toBeCloseTo(0.9, 4)
+      expect(alpha).toBeCloseTo(0.965, 4)
       expect(scale).toBe(1)
     })
 
-    it('at d=-56, belowBandFade hits its -0.35 floor exactly (-56/160 = -0.35), alpha = 0.65', () => {
+    it('at d=-56, belowBandFade = -0.35 * (56/160) = -0.1225, alpha = 0.8775', () => {
       const { alpha } = focusCurve(-56, 'list')
-      expect(alpha).toBeCloseTo(0.65, 4)
+      expect(alpha).toBeCloseTo(0.8775, 4)
     })
 
-    it('beyond the -56 threshold (d=-160, d=-999), the fade is capped — alpha never drops below 0.65', () => {
+    it('at d=-100, belowBandFade = -0.35 * (100/160) = -0.21875, alpha = 0.78125', () => {
+      const { alpha } = focusCurve(-100, 'list')
+      expect(alpha).toBeCloseTo(0.78125, 4)
+    })
+
+    it('at d=-160, the ramp saturates exactly at its -0.35 floor, alpha = 0.65', () => {
       expect(focusCurve(-160, 'list').alpha).toBeCloseTo(0.65, 4)
+    })
+
+    it('beyond the -160 threshold (d=-300, d=-999), the fade is capped — alpha never drops below 0.65', () => {
+      expect(focusCurve(-300, 'list').alpha).toBeCloseTo(0.65, 4)
       expect(focusCurve(-999, 'list').alpha).toBeCloseTo(0.65, 4)
     })
 

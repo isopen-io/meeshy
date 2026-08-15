@@ -61,6 +61,11 @@ export type BuildBridgeDataParams = {
  *
  * Règles :
  * - `unreadCount === 0` ⇒ `null`, JAMAIS un pont vide (critère LWS-1).
+ * - `fromOthers.length === 0` (tous les messages de la fenêtre sont ceux du
+ *   lecteur, une fois exclus) ⇒ `null` aussi (BLOCAGE 5, revue REV-1) : il
+ *   n'y a RIEN à annoncer, un pont aux champs vides serait trompeur (« X a
+ *   écrit » sans X). Les deux conditions se combinent en un seul early
+ *   return : `unreadCount === 0 || fromOthers.length === 0`.
  * - Les messages envoyés par le lecteur lui-même n'alimentent ni les auteurs,
  *   ni `messageCount`, ni `mediaCounts` — un pont annonce ce que l'ON a
  *   manqué, jamais ses propres messages.
@@ -71,13 +76,19 @@ export type BuildBridgeDataParams = {
  *   `audio` ont chacun leur bucket ; tout le reste (`video`, `file`,
  *   `location` — et tout kind futur inconnu de ce triptyque) tombe dans
  *   `files`, seul bucket restant du type gelé `ConversationBridgeData`.
+ *   RÉSERVE 10 (revue REV-1) : la clé `mediaCounts` elle-même n'est émise
+ *   QUE s'il y a au moins un média dans la fenêtre, et à l'intérieur,
+ *   chaque compteur (`images`/`audio`/`files`) est ABSENT — pas `0` — quand
+ *   sa catégorie n'a rien à annoncer, alignement avec le miroir Swift
+ *   (`ConversationBridgeMediaCounts`, `CoreModels.swift`, commentaire
+ *   « chaque compteur est ABSENT — pas zéro »).
  */
 export function buildBridgeData(params: BuildBridgeDataParams): ConversationBridgeData | null {
   const { messages, viewerId, unreadCount } = params
 
-  if (unreadCount === 0) return null
-
   const fromOthers = messages.filter((message) => message.senderId !== viewerId)
+
+  if (unreadCount === 0 || fromOthers.length === 0) return null
 
   const seenAuthorIds = new Set<string>()
   const orderedAuthorNames: string[] = []
@@ -87,7 +98,7 @@ export function buildBridgeData(params: BuildBridgeDataParams): ConversationBrid
     orderedAuthorNames.push(message.senderName)
   }
 
-  const mediaCounts = fromOthers.reduce(
+  const rawMediaCounts = fromOthers.reduce(
     (counts, message) => {
       const attachments = message.attachments ?? []
       const images = attachments.filter((attachment) => attachment.type === 'image').length
@@ -102,11 +113,20 @@ export function buildBridgeData(params: BuildBridgeDataParams): ConversationBrid
     { images: 0, audio: 0, files: 0 }
   )
 
+  const hasAnyMedia = rawMediaCounts.images > 0 || rawMediaCounts.audio > 0 || rawMediaCounts.files > 0
+  const mediaCounts = hasAnyMedia
+    ? {
+        ...(rawMediaCounts.images > 0 ? { images: rawMediaCounts.images } : {}),
+        ...(rawMediaCounts.audio > 0 ? { audio: rawMediaCounts.audio } : {}),
+        ...(rawMediaCounts.files > 0 ? { files: rawMediaCounts.files } : {}),
+      }
+    : undefined
+
   return {
     authors: orderedAuthorNames.slice(0, 2),
     extraAuthorCount: Math.max(0, orderedAuthorNames.length - 2),
     messageCount: fromOthers.length,
-    mediaCounts,
+    ...(mediaCounts !== undefined ? { mediaCounts } : {}),
   }
 }
 

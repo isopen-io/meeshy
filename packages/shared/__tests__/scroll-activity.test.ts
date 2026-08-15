@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import {
   scrollActivityLaw,
   initialState,
@@ -7,6 +10,13 @@ import {
   SCROLL_ACTIVITY_LINGER_MS,
   type ScrollActivityState,
 } from '../utils/scroll-activity'
+
+const LENTILLE_TOKENS_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'design',
+  'lentille-tokens.json',
+)
 
 describe('scrollActivityLaw', () => {
   it('exposes the shared linger constant at 900ms (R15 — single constant for both skins)', () => {
@@ -76,5 +86,38 @@ describe('scrollActivityLaw', () => {
     expect(scrollActivityLaw.initialState).toBe(initialState)
     expect(scrollActivityLaw.reduce).toBe(reduce)
     expect(scrollActivityLaw.isVisible).toBe(isVisible)
+  })
+})
+
+describe('RÉSERVE 3 (REV-1) — parity with packages/shared/design/lentille-tokens.json', () => {
+  // Une loi, deux libellés (workshop amendement A4, voir tête de fichier) :
+  // la pilule du fil (Focal, thread.pill) ET la pilule de la liste (Lentille,
+  // list.pill) doivent lier leur `dismissAfterMs` à CETTE MÊME constante,
+  // jamais une valeur dupliquée en dur dans le JSON de design tokens — un
+  // écart entre les deux serait la preuve qu'une peau a divergé de la loi.
+  const tokens = JSON.parse(readFileSync(LENTILLE_TOKENS_PATH, 'utf-8')) as {
+    readonly list: { readonly pill: { readonly dismissAfterMs: number; readonly fadeOutDelayMs?: number } }
+    readonly thread: { readonly pill: { readonly dismissAfterMs: number; readonly fadeOutDelayMs?: number } }
+  }
+
+  it('lentille-tokens.json list.pill.dismissAfterMs === SCROLL_ACTIVITY_LINGER_MS', () => {
+    expect(tokens.list.pill.dismissAfterMs).toBe(SCROLL_ACTIVITY_LINGER_MS)
+  })
+
+  it('lentille-tokens.json thread.pill.dismissAfterMs === SCROLL_ACTIVITY_LINGER_MS', () => {
+    expect(tokens.thread.pill.dismissAfterMs).toBe(SCROLL_ACTIVITY_LINGER_MS)
+  })
+
+  it('list.pill and thread.pill agree with each other (single constant, two skins — R15)', () => {
+    expect(tokens.list.pill.dismissAfterMs).toBe(tokens.thread.pill.dismissAfterMs)
+  })
+
+  it('if either pill also carries a fadeOutDelayMs alias, it stays in lockstep with dismissAfterMs too', () => {
+    if (tokens.list.pill.fadeOutDelayMs !== undefined) {
+      expect(tokens.list.pill.fadeOutDelayMs).toBe(SCROLL_ACTIVITY_LINGER_MS)
+    }
+    if (tokens.thread.pill.fadeOutDelayMs !== undefined) {
+      expect(tokens.thread.pill.fadeOutDelayMs).toBe(SCROLL_ACTIVITY_LINGER_MS)
+    }
   })
 })

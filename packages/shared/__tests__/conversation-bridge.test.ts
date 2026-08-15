@@ -78,7 +78,6 @@ describe('buildBridgeData', () => {
       authors: ['Alice'],
       extraAuthorCount: 0,
       messageCount: 1,
-      mediaCounts: { images: 0, audio: 0, files: 0 },
     })
   })
 
@@ -145,7 +144,7 @@ describe('buildBridgeData', () => {
     expect(result?.mediaCounts).toEqual({ images: 2, audio: 1, files: 1 })
   })
 
-  it('buckets video and location attachments into files (only three buckets exist)', () => {
+  it('buckets video and location attachments into files (only three buckets exist), images/audio ABSENT since zero (réserve 10)', () => {
     const result = buildBridgeData({
       messages: [
         createMessage({
@@ -155,30 +154,40 @@ describe('buildBridgeData', () => {
       viewerId: VIEWER_ID,
       unreadCount: 1,
     })
-    expect(result?.mediaCounts).toEqual({ images: 0, audio: 0, files: 3 })
+    expect(result?.mediaCounts).toEqual({ files: 3 })
+    expect(result?.mediaCounts).not.toHaveProperty('images')
+    expect(result?.mediaCounts).not.toHaveProperty('audio')
   })
 
-  it('returns zero mediaCounts when no message carries an attachment', () => {
+  it('omits mediaCounts entirely when no message carries an attachment (réserve 10 — absent, not zero)', () => {
     const result = buildBridgeData({
       messages: [createMessage()],
       viewerId: VIEWER_ID,
       unreadCount: 1,
     })
-    expect(result?.mediaCounts).toEqual({ images: 0, audio: 0, files: 0 })
+    expect(result?.mediaCounts).toBeUndefined()
+    expect(result).not.toHaveProperty('mediaCounts')
   })
 
-  it('returns an empty-authors bridge (not null) when unreadCount > 0 but every message is the viewer own', () => {
+  it('BLOCAGE 5 — returns null (not an empty-authors bridge) when unreadCount > 0 but every message is the viewer own', () => {
     const result = buildBridgeData({
       messages: [createMessage({ senderId: VIEWER_ID, senderName: 'Moi' })],
       viewerId: VIEWER_ID,
       unreadCount: 1,
     })
-    expect(result).toEqual<ConversationBridgeData>({
-      authors: [],
-      extraAuthorCount: 0,
-      messageCount: 0,
-      mediaCounts: { images: 0, audio: 0, files: 0 },
+    expect(result).toBeNull()
+  })
+
+  it('BLOCAGE 5 — returns null when fromOthers is empty even with several viewer-only messages', () => {
+    const result = buildBridgeData({
+      messages: [
+        createMessage({ senderId: VIEWER_ID, senderName: 'Moi' }),
+        createMessage({ senderId: VIEWER_ID, senderName: 'Moi' }),
+      ],
+      viewerId: VIEWER_ID,
+      unreadCount: 2,
     })
+    expect(result).toBeNull()
   })
 })
 

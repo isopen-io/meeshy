@@ -32,12 +32,7 @@
         "Alice"
       ],
       "extraAuthorCount": 0,
-      "messageCount": 2,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 2
     }
   },
   {
@@ -61,12 +56,7 @@
         "Bob"
       ],
       "extraAuthorCount": 0,
-      "messageCount": 2,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 2
     }
   },
   {
@@ -98,12 +88,7 @@
         "Bob"
       ],
       "extraAuthorCount": 2,
-      "messageCount": 4,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 4
     }
   },
   {
@@ -130,12 +115,7 @@
         "Alice"
       ],
       "extraAuthorCount": 0,
-      "messageCount": 1,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 1
     }
   },
   {
@@ -202,8 +182,6 @@
       "extraAuthorCount": 0,
       "messageCount": 1,
       "mediaCounts": {
-        "images": 0,
-        "audio": 0,
         "files": 1
       }
     }
@@ -223,16 +201,7 @@
       "viewerId": "viewer",
       "unreadCount": 2
     },
-    "expected": {
-      "authors": [],
-      "extraAuthorCount": 0,
-      "messageCount": 0,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
-    }
+    "expected": null
   },
   {
     "input": {
@@ -259,12 +228,7 @@
         "Alice"
       ],
       "extraAuthorCount": 0,
-      "messageCount": 3,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 3
     }
   },
   {
@@ -288,12 +252,7 @@
         "Alice"
       ],
       "extraAuthorCount": 0,
-      "messageCount": 2,
-      "mediaCounts": {
-        "images": 0,
-        "audio": 0,
-        "files": 0
-      }
+      "messageCount": 2
     }
   }
 ]
