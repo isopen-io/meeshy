@@ -12,6 +12,14 @@ import MeeshyUI
 /// DANS l'en-tête (pas en pied — contrat §WS-4 : « pas en pied »).
 ///
 /// Vue PURE : primitifs uniquement, aucun `@State`.
+///
+/// **`agentStyle` (WS-10, F-089)** : anneau pointillé + étincelle ✦ quand
+/// `.showsDashedRing`/`.showsSpark` (contrat §3.8/§WS-10). Défaut `.human`
+/// — TOUS les sites d'appel existants (avant ce chantier) obtiennent un
+/// rendu bit-à-bit identique sans rien changer. `AgentAuthoredStyle.resolve`
+/// (jamais recalculé ici — cette vue reste une feuille PURE) gate déjà sur
+/// `isAgentGrammarEnabled` ; `.human` est le SEUL descripteur possible tant
+/// que ce drapeau reste OFF (défaut de ce chantier, C3).
 struct FocalIdentityHeader: View, Equatable {
     let isMe: Bool
     let senderDisplayName: String
@@ -25,6 +33,7 @@ struct FocalIdentityHeader: View, Equatable {
     let timeString: String
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
+    var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
 
     static func == (lhs: FocalIdentityHeader, rhs: FocalIdentityHeader) -> Bool {
@@ -40,6 +49,7 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.timeString == rhs.timeString
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.isDark == rhs.isDark
+            && lhs.agentStyle == rhs.agentStyle
     }
 
     /// Nom affiché — clé `focal.row.you` pour « Toi » (contrat §7),
@@ -90,11 +100,16 @@ struct FocalIdentityHeader: View, Equatable {
                     enablePulse: false,
                     isDark: isDark
                 )
+                .agentAuthoredAvatarRing(agentStyle, diameter: FocalMetrics.Avatar.size)
 
                 Text(displayName)
                     .font(FocalMetrics.Name.font)
                     .foregroundColor(nameColor)
                     .lineLimit(1)
+
+                if agentStyle.showsSpark {
+                    AgentSparkGlyph()
+                }
 
                 if isMe, let deliveryStatus {
                     BubbleDeliveryCheck(
@@ -114,6 +129,6 @@ struct FocalIdentityHeader: View, Equatable {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
-        .frame(minHeight: 22)
+        .frame(minHeight: FocalMetrics.Avatar.size)
     }
 }

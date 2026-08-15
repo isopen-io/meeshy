@@ -34,4 +34,42 @@ nonisolated enum MeeshyFeatureFlags {
     ) -> Bool {
         LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: environment)
     }
+
+    // MARK: - `agent_grammar` (WS-10, F-089)
+
+    /// « Allumer la grammaire ✦ démasque rétroactivement l'animateur de
+    /// production, qui poste aujourd'hui SOUS L'IDENTITÉ DE VRAIS
+    /// UTILISATEURS » (contrat §WS-10). Drapeau PROPRE, INDÉPENDANT de
+    /// `isReadingModesEnabled` — OFF par défaut, activation soumise à une
+    /// décision produit ÉCRITE (§WS-10, risque R14). Tant que le chemin de
+    /// production non écrivant (C3, `tasks/lentille-implementation-contract.md`
+    /// §5.2) n'existe pas côté serveur, AUCUN agent ne doit activer ce
+    /// drapeau — le contrat interdit littéralement de le faire depuis ce
+    /// chantier.
+    ///
+    /// Résolution AUTONOME (pas une délégation à `LentilleFeatureFlag`,
+    /// contrairement à `isReadingModesEnabled`) : `Lentille/Core/` est
+    /// GELÉ et interdit d'édition dans ce chantier (fichiers interdits,
+    /// mission F-089) — ajouter un troisième cas à `LentilleFeatureFlag`
+    /// exigerait de l'éditer. Même patron de résolution (`ProcessInfo`
+    /// prime sur `UserDefaults`, défaut OFF), clés dédiées.
+    private static let agentGrammarUserDefaultsKey = "meeshy.flag.agent_grammar"
+    private static let agentGrammarEnvironmentKey = "MEESHY_FLAG_AGENT_GRAMMAR"
+
+    static var isAgentGrammarEnabled: Bool {
+        isAgentGrammarEnabled(defaults: .standard, environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// Variante injectable — voir `isReadingModesEnabled(defaults:environment:)`,
+    /// même règle : jamais `.standard` dans un test.
+    static func isAgentGrammarEnabled(
+        defaults: UserDefaults,
+        environment: [String: String]
+    ) -> Bool {
+        switch environment[agentGrammarEnvironmentKey] {
+        case "1": return true
+        case "0": return false
+        default: return defaults.bool(forKey: agentGrammarUserDefaultsKey)
+        }
+    }
 }

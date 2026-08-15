@@ -87,6 +87,18 @@ struct FocalRow: View {
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
+                    // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
+                    // décision finale (précalculée par le mux qui construit
+                    // `FocalRowInput`, contrat §3.6) — cette rangée ne relit
+                    // JAMAIS `MeeshyFeatureFlags.isAgentGrammarEnabled`
+                    // elle-même (garde « vue pure », même règle que
+                    // `input.density`). `AgentAuthoredStyle.resolve` re-gate
+                    // quand même sur ce booléen : `.human` tant qu'il reste
+                    // `false` (défaut de ce chantier).
+                    agentStyle: AgentAuthoredStyle.resolve(
+                        isAgentAuthored: input.isAgentAuthored,
+                        isAgentGrammarEnabled: input.showsAgentGrammar
+                    ),
                     onOpenProfile: actions.onOpenProfile
                 )
             }
