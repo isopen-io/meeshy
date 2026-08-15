@@ -2,7 +2,7 @@ import { RedisDeliveryQueue } from '../../../services/RedisDeliveryQueue';
 import { RedisCacheStore } from '../../../services/CacheStore';
 import type { CacheStore } from '../../../services/CacheStore';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import { DELIVERY_QUEUE_TTL_SECONDS } from '@meeshy/shared/types/delivery-queue';
+import { DELIVERY_QUEUE_MAX_PER_USER, DELIVERY_QUEUE_TTL_SECONDS } from '@meeshy/shared/types/delivery-queue';
 
 function makePayload(overrides: Partial<QueuedMessagePayload> = {}): QueuedMessagePayload {
   return {
@@ -252,7 +252,8 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       JSON.stringify(entry),
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
-      'new'
+      'new',
+      String(DELIVERY_QUEUE_MAX_PER_USER)
     );
   });
 
@@ -700,6 +701,81 @@ describe('RedisDeliveryQueue (memory capacity limits)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Redis-slice capacity bound.
+//
+// The memory slice above has been capped since it was written; its Redis twin
+// — the one that actually holds every offline backlog — was not. That gap is
+// not just a memory concern: ENQUEUE_DEDUP_LUA reads the WHOLE list and
+// cjson-decodes every entry on EVERY enqueue, inside Redis's single thread, so
+// the cost of queueing one event for an absent participant grew with the number
+// of events already queued for them.
+//
+// No Lua-capable Redis double exists in this repo (`makeMockRedis` stubs
+// `eval`), so the Redis slice is asserted at the two places it IS observable
+// from TypeScript: the arguments the script receives, and the script's own
+// text. Both are real contracts — the cap has to reach the script, and the
+// script has to bound the list with it.
+// ---------------------------------------------------------------------------
+
+describe('RedisDeliveryQueue (Redis capacity bound)', () => {
+  const enqueueScript = (redis: { eval: jest.Mock }): string =>
+    redis.eval.mock.calls[0][0] as string;
+
+  test('enqueue — hands the script the per-user cap', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-bound', makePayload({ messageId: 'bounded' }));
+
+    expect(redis.eval.mock.calls[0]).toContain(String(DELIVERY_QUEUE_MAX_PER_USER));
+  });
+
+  test('enqueue script — trims the list to the cap on every push, keeping the NEWEST arrivals', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-bound', makePayload({ messageId: 'bounded' }));
+
+    const script = enqueueScript(redis);
+    // Negative start + -1 end == "keep the last N", i.e. evict the oldest
+    // arrivals from the head. A positive-range trim would keep the oldest.
+    expect(script).toMatch(/LTRIM'?,?\s*KEYS\[1\],\s*-tonumber\(ARGV\[5\]\),\s*-1/);
+  });
+
+  test('enqueue script — supersede moves the entry to the TAIL instead of rewriting its slot', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(2) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-bound', makePayload({ messageId: 'edited-twice', eventType: 'edited' }));
+
+    const script = enqueueScript(redis);
+    // This is what makes the trim above CORRECT. An in-place LSET left a
+    // superseded entry — which carries the NEWEST enqueuedAt — sitting at its
+    // original, oldest slot, so a slot-ordered trim would evict the freshest
+    // edit/delete/reaction and strand the recipient on stale content. Removing
+    // it and re-pushing keeps slot order == arrival order, which is the
+    // invariant the trim relies on.
+    expect(script).not.toContain('LSET');
+    expect(script).toContain('LREM');
+  });
+
+  test('enqueue script — the dedup scan is bounded by the same cap it enforces', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-bound', makePayload({ messageId: 'bounded' }));
+
+    const script = enqueueScript(redis);
+    // The scan reads the whole list; the trim is what keeps "the whole list"
+    // from being 48 hours of a busy conversation. Both must be present in the
+    // same script for the cost of one enqueue to stay independent of the
+    // backlog already queued for that user.
+    expect(script).toContain('LRANGE');
+    expect(script).toContain('LTRIM');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Branch gap-fill: rangeError throw path + cleanup no-stale + drain null[0]
 // ---------------------------------------------------------------------------
 
@@ -824,6 +900,7 @@ describe('RedisDeliveryQueue (Redis path)', () => {
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
       'new',
+      String(DELIVERY_QUEUE_MAX_PER_USER),
     );
     // memory fallback was NOT used
     expect(await queue.size('user-redis')).toBe(0);
@@ -1373,9 +1450,9 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
     await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'edited' }));
     await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'deleted' }));
 
-    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new');
-    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited');
-    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted');
+    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new', expect.any(String));
+    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited', expect.any(String));
+    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted', expect.any(String));
   });
 
   test('enqueue passes dedupKey (not messageId) as ARGV[2] when the entry sets one', async () => {
@@ -1390,7 +1467,8 @@ describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
 
     expect(redis.eval).toHaveBeenCalledWith(
       expect.any(String), 1, expect.any(String),
-      expect.any(String), 'msg-reacted:participant-a:👍', expect.any(String), 'reaction-added'
+      expect.any(String), 'msg-reacted:participant-a:👍', expect.any(String), 'reaction-added',
+      expect.any(String)
     );
   });
 });
