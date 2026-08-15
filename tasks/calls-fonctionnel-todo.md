@@ -8499,3 +8499,50 @@ relecture linéaire d'un dossier déjà labouré 125 fois.
   sélection réelle de périphérique de sortie audio (`setSinkId`) ; `MAX_CALL_PARTICIPANTS = 9999`
   sans plafond effectif sur le mesh P2P (décision produit) ; mesh iOS/Android mono-PC potentiellement
   affecté du même bug d'étoile-vs-maillage que ce fix web (à auditer avec toolchain disponible).
+
+## Vague 127 — `participantCount` REST comptait aussi les participants ayant déjà quitté (gateway) (2026-08-15)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée
+alignée bit à bit sur `origin/main` (`fcc4e5c1`, contient jusqu'à la Vague 126 — PR mergée), aucune
+PR ouverte de cette routine au démarrage. Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (confirmé à nouveau). Recensement par audit ciblé (agent en lecture seule, liste explicite
+des items déjà traités/reconduits pour ne pas les faire ressurgir), scope gateway + web.
+
+- **Root cause** : `toCallSessionResponse()` (`services/gateway/src/utils/call-session-response.ts`)
+  dérivait `participantCount: participants.length` du tableau Prisma BRUT, sans filtre `leftAt`.
+  `callSessionInclude` (`CallService.ts`) n'a pas de `where: { leftAt: null }` sur `participants` —
+  il renvoie CHAQUE ligne `CallParticipant` jamais attachée à la session. `joinCall` ne réutilise une
+  ligne existante que si `!leftAt` trouvé ; tout départ-puis-retour (coupure réseau, onglet rechargé,
+  un membre qui quitte un appel de groupe pendant que les autres restent) insère une ligne NEUVE et
+  laisse l'ancienne en base pour toujours. `participantCount`, sur ce helper REST partagé par TOUTES
+  les routes `/calls/*`, ne pouvait donc que croître, jamais décroître.
+- **Scénario de défaillance** : conversation de groupe, appel en cours ; quelques personnes
+  rejoignent/quittent, l'une revient après une coupure brève. Un membre pas encore dans l'appel voit
+  le bandeau « Appel en cours — rejoindre ? » (`OngoingCallBanner`, alimenté par
+  `GET /conversations/:id/active-call` via `ConversationHeader.tsx:85`, interrogé toutes les 15 s) :
+  l'effectif affiché ne fait que grimper (ex. « 4 participants » quand une seule personne est encore
+  réellement en ligne) — exactement le signal qu'on regarde avant de décider de rejoindre.
+- **Fix** : `participantCount: participants.filter(p => !p.leftAt).length` — le tableau
+  `participants` lui-même reste inchangé (usages légitimes de l'historique complet). Correctif
+  ponctuel, un seul point de passage corrige tous les consommateurs REST à la fois, même schéma déjà
+  établi côté socket (`VideoCallInterface.tsx`, calcul de `displayParticipant`, Vague 120 /
+  `CallInfoOverlay`) — jamais mirroré sur cet aplatisseur REST jusqu'ici.
+- **Tests** (TDD, RED confirmé) : nouveau cas dans `call-session-response.test.ts` — session avec un
+  participant actif et un participant `leftAt`-horodaté, `participants.length === 2` mais
+  `participantCount` attendu à `1` (2 avant correctif, 1 après). Suite du fichier : 13/13 verts.
+  Sweep `--testPathPatterns="[Cc]all"` : 51 suites / 1193 tests verts, 0 régression. Suite gateway
+  complète (`bun run test:coverage`) : **720 suites / 17650 tests verts**, `call-session-response.ts`
+  à 100 % couverture (stmts/branches/funcs/lines). `npx tsc --noEmit` : 0 erreur.
+- **Non fait volontairement** : mesh iOS/Android mono-PC (I1-I7, potentiellement le même bug
+  étoile-vs-maillage que le fix web de la Vague 126, toujours à vérifier avec toolchain) ; UI de
+  groupe web (grille adaptative, roster mute/vidéo) reste le chantier W6 non achevé.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`) ; `MAX_CALL_PARTICIPANTS = 9999`
+  sans plafond effectif sur le mesh P2P (décision produit) ; mesh iOS/Android mono-PC potentiellement
+  affecté du même bug d'étoile-vs-maillage que le fix web de la Vague 126 (à auditer avec toolchain
+  disponible) ; W6 (grille adaptative, roster mute/vidéo) et W7 (i18n groupe restant) toujours à
+  traiter.
