@@ -340,3 +340,59 @@ jamais lire la ligne écrite, les 3 constats latents dont les blobs TTS qu'aucun
 balayage ne récupère, et la question proposée au cycle 36 : quelles duplications
 mériteraient une garde d'exhaustivité, et laquelle des trois formes convient à
 chacune ?
+
+# Cycle 38 — une variable servait deux identités qui divergent chez l'invité
+
+Piste annoncée en clôture du cycle 37 : les deux usages de `args.userId` dans
+`broadcastReadStatusUpdate` veulent des choses OPPOSÉES, et c'est ce conflit —
+pas le renommage d'un paramètre — qui est le sujet.
+
+## Constat
+
+- [x] Le conflit nommé : `payload.userId` veut le `User.id` de l'acteur
+      (`null` s'il n'en a pas) ; `ROOMS.user(...)` veut la clé de room
+      (`userId ?? Participant.id`). Les deux coïncident pour un acteur AVEC
+      compte, divergent pour un invité de lien
+- [x] Le contrat était déjà tranché aux trois bouts (`packages/shared`, iOS,
+      Android) : `userId` nullable, cas anonyme NOMMÉ
+- [x] Divergence réelle constatée : les 3 émetteurs SOCKET du même événement
+      nommaient déjà l'invité `null` — dont `ConversationHandler._resyncReadStatusToSocket`,
+      qui prend un `registeredUserId` DISTINCT de `participantRowId` ; les 5
+      routes REST le nommaient `Participant.id`
+- [x] Le même invité, même conversation, annoncé de deux façons selon le transport
+- [x] 3 consommateurs iOS + web + Android vérifiés AVANT de nuller le champ :
+      aucun ne change de comportement (2 gardes iOS calculent déjà
+      `userId ?? participantId` ; la 3e ne s'applique pas à une session anonyme ;
+      web et Android ne lisent pas le champ)
+- [x] `routes/messages.ts` écarté et vérifié (`allowAnonymous: false`)
+
+## Correctifs
+
+- [x] Les deux rôles dérivés séparément dans les 5 routes :
+      `actorUserId = isAnonymous ? null : userId` / `personalRoomKey = actorUserId ?? participantId`
+- [x] `userId: string` → `actorUserId: string | null` : le type interdit
+      désormais la recopie de `authContext.userId`
+- [x] Éventail inchangé au bit près — mêmes rooms, mêmes destinataires
+- [x] `services/gateway/CLAUDE.md` : la ligne « user.id or sessionToken » était
+      fausse sur les deux moitiés, remplacée par les deux valeurs + les deux
+      dérivations
+
+## Gates
+
+- [x] 5 RED discriminants vus rouges avant correctif
+- [x] 11 non-régressions vertes d'emblée, dont 2 gardes anti-sur-correction
+      (`user:null` interdit ; l'éventail atteint toujours les deux pairs)
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : voir § Validation
+- [x] CHANGELOG + journal d'audit (cycle38.md) + leçon 272
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle38.md` — le tableau des deux
+rôles, le tableau des 6 émetteurs (3 d'un avis, 3 de l'autre), la vérification
+des consommateurs sur les 3 plateformes, le piège de sur-correction
+(`ROOMS.user(null)` collerait le badge de tous les invités), et la piste du
+cycle 39 : elle porte sur **iOS**, pas sur le gateway — donner au SDK une
+identité d'acteur courant qui couvre la session anonyme
+(`AuthManager.currentUser` reste nil pour un invité), puis aligner les 3 gardes
+dessus.
