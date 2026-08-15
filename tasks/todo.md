@@ -172,3 +172,39 @@ Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 28 — les trois décisi
 tranchées, la matrice des SIX chemins du fil (un seul divergeait, la famille est
 close), et la question neuve proposée au cycle 29 : le MOMENT de la diffusion
 par rapport à la durabilité du fait.
+
+# Cycle 31 — les écrivains ignoraient l'état TERMINAL de leur conteneur
+
+Sonde annoncée en clôture du cycle 30. Le schéma DÉCLARE l'invariant
+(`schema.prisma`, `closedAt` : « Conversation closed for all — no one can
+write, messages stay readable ») ; aucun chemin d'écriture ne l'applique.
+
+## Constat
+
+- [x] Recensement : 0 lecture de `Conversation.isActive`/`closedAt` comme garde
+- [x] Clôture IRRÉVERSIBLE (aucun écrivain ne rallume `isActive`)
+- [x] La clôture ne touche PAS les `Participant` — toutes les gardes d'envoi
+      lisent `Participant.isActive` (collision de noms sur deux modèles)
+
+## Correctifs
+
+- [x] Unité d'admission `conversationWriteAdmission` (sœur de `forwardAdmission`)
+- [x] Câblée au point de convergence `MessagingService.handleMessage`
+- [x] Câblée aux DEUX routes de lien de partage (qui contournent le funnel)
+- [x] Placée APRÈS le dedup précoce (un rejeu ne doit pas être refusé)
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif
+- [x] 2 non-régressions vertes d'emblée, dont le discriminant de PLACEMENT
+- [x] Suite gateway complète : 721 suites / 17 663 tests verts
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 31) + leçon 263
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 31 — le recensement
+(0 garde sur 4 écrivains), la collision de noms `isActive` qui l'a rendu
+invisible, le discriminant de placement (rejeu après clôture), et le constat
+latent nº 1 VÉRIFIÉ proposé au cycle 32 : un canal d'annonces n'est un canal
+d'annonces pour personne.

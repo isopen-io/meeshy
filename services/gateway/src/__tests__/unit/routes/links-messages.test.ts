@@ -429,6 +429,64 @@ describe('POST /links/:id/messages — anonymous: participantShareLink expired',
   });
 });
 
+// Les deux routes de lien de partage CONTOURNENT
+// `MessagingService.handleMessage` — le point de convergence où la règle « une
+// conversation close n'accepte plus d'écriture » est posée pour REST et socket.
+// Elles gardaient déjà l'état terminal du LIEN (`isActive`, `expiresAt`) ;
+// aucune ne regardait celui de la CONVERSATION. Le lien de partage est par
+// ailleurs le seul transport d'envoi d'un invité anonyme : sans cette garde,
+// fermer une conversation ne fermait rien pour l'inconnu qui détient l'URL.
+describe('POST /links/:id/messages — anonymous: conversation close', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>()
+      .mockResolvedValueOnce(mockShareLink)
+      .mockResolvedValueOnce({
+        ...mockParticipantShareLink,
+        conversation: { isActive: false, closedAt: new Date('2026-08-15T10:00:00.000Z') },
+      });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410 and writes nothing when the conversation is closed', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /links/:id/messages/auth — conversation close', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
+      ...mockShareLink,
+      conversation: {
+        ...mockShareLink.conversation,
+        isActive: false,
+        closedAt: new Date('2026-08-15T10:00:00.000Z'),
+      },
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 410 and writes nothing when the conversation is closed', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: allowAnonymousMessages=false', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
