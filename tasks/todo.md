@@ -107,6 +107,8 @@ roster nominatif d'un commentaire sur un post `PRIVATE`, à partir du seul
 
 - [x] `CommentReactionHandler` — room, payload et notification portent
       `thread.postId` (déjà chargé, zéro requête ajoutée), add ET remove
+- [x] `POST /posts/:postId/comments/:commentId/like` — jumeau REST du même
+      défaut : diffusion + typage de notification depuis `thread.postId`
 - [x] `CommentReactionHandler.handleRequestSync` — garde `canUserConsumePost`
 - [x] `PostReactionHandler.handleRequestSync` — garde `resolveConsumptionTarget`
       (audience + redirection repost), refus indistinct
@@ -114,9 +116,9 @@ roster nominatif d'un commentaire sur un post `PRIVATE`, à partir du seul
 
 ## Gates
 
-- [x] 10 RED discriminants vus rouges avant correctif (6 D1 + 4 D2)
+- [x] 12 RED discriminants vus rouges avant correctif (6 D1 + 2 D1 bis + 4 D2)
 - [x] 4 suites de réactions : 140 verts
-- [x] Suite gateway complète : 719 suites / 17608 tests verts
+- [x] Suite gateway complète : 719 suites / 17614 tests verts
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + journal d'audit (§ Cycle 26) + leçon 257
 

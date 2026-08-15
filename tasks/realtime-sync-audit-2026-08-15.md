@@ -830,6 +830,29 @@ avec le vrai module d'ACL, par `src/__tests__/unit/socketio/`.
 **Correctif.** `const postId = thread.postId` sur les deux chemins, utilisé pour
 la room, le payload et la notification. Zéro requête ajoutée.
 
+## D1 bis — le MÊME défaut sur le jumeau REST
+
+`POST /posts/:postId/comments/:commentId/like` (`routes/posts/comments.ts`)
+
+Trouvé en balayant les autres émetteurs de la même famille, après D1. Identique
+trait pour trait, sur l'autre transport : la route résout l'audience depuis le
+commentaire (`loadCommentPostAcl`, et son commentaire dit même « le post est
+résolu depuis le commentaire, **jamais** depuis le `:postId` du chemin »), puis
+diffuse et notifie avec `request.params.postId`.
+
+La garde tenait donc la promesse écrite ; la DIFFUSION ne la tenait pas — et
+comme pour D1, la vérité (`thread.postId`) était déjà en scope, à quinze lignes.
+
+Même correctif : `const commentPostId = thread.postId`, utilisé par
+`broadcastCommentLiked` et par la relecture de `post.type` qui type la
+notification (le discriminant qui décide de la surface ouverte au tap).
+
+**Ce que ça confirme.** La sonde ne devait pas s'arrêter au handler qui l'avait
+déclenchée : un invariant d'adressage se viole partout où le même fait est servi
+par plusieurs transports. Le canal socket et le canal REST du même geste
+produisent tous deux `comment:reaction-*` / `comment:liked` vers
+`ROOMS.post(...)` ; il fallait les corriger tous les deux ou aucun.
+
 ## D2 — la synchronisation des réactions n'avait aucune garde d'audience
 
 `CommentReactionHandler.handleRequestSync`, `PostReactionHandler.handleRequestSync`
@@ -856,9 +879,10 @@ un état qui n'est pas celui que la room diffuse ensuite.
 ## Gates
 
 - [x] RED discriminants vus rouges avant correctif : 6 pour D1 (dont
-      `post:507f…90ff` reçu là où `post:507f…9022` était attendu), 4 pour D2
+      `post:507f…90ff` reçu là où `post:507f…9022` était attendu), 2 pour D1 bis,
+      4 pour D2
 - [x] 4 suites de réactions : 140 verts
-- [x] Suite gateway complète : **719 suites / 17608 tests verts**
+- [x] Suite gateway complète : **719 suites / 17614 tests verts**
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + ce journal
 
