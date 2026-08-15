@@ -473,6 +473,23 @@
   .uf-out { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 13px; color: var(--muted); line-height: 1.55; }
   .uf-out b { display: block; color: var(--accent); font-size: 11.5px; letter-spacing: .1em; margin-bottom: 4px; }
 
+  /* ---------- Carte des features & cas complexes ---------- */
+  .zone-label { font-weight: 700; color: var(--accent); white-space: nowrap; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .cases { display: flex; flex-direction: column; gap: 14px; margin-top: 26px; }
+  .case { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .case h4 {
+    font-family: Charter, "Iowan Old Style", Georgia, serif;
+    font-size: 17.5px; font-weight: 600; margin: 0 0 12px;
+  }
+  .case .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .case .opts { grid-template-columns: 1fr; } }
+  .opt { border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+  .opt b { display: block; color: var(--accent); font-size: 11px; letter-spacing: .1em; margin-bottom: 4px; }
+  .reco { margin-top: 12px; font-size: 13.5px; }
+  .reco b { color: var(--good); }
+  .m-slide { width: 26px; height: 40px; border-radius: 6px; background: #132228; border: 1px solid #1D2C33; flex: none; }
+  .m-slide.on { border-color: #2FB9C6; }
+
   /* ---------- Machine à états du Dock ---------- */
   .dockstates { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 12px; margin-top: 22px; }
   .dstate {
@@ -763,7 +780,106 @@
 </section>
 
 <section>
-  <p class="eyebrow">06 · L'acquis préservé</p>
+  <p class="eyebrow">06 · Intégration des features</p>
+  <h2>Trente-neuf features, cinq destinations</h2>
+  <p class="lede">Inventaire exhaustif des six surfaces de création existantes (StoryComposer, PostComposer, AudioPostComposer, FeedComposerSheet, composer inline, StatusComposer) : 39 features recensées. Chacune reçoit UNE destination dans l'atelier — et les features cassées sont réparées par le passage au contrat, pas répliquées : médias des posts web jamais rattachés (donc <em>aucun réel web n'a jamais existé</em>), chemins iOS inline qui perdent audience et lieu, <code>PostMedia.order</code> jamais écrit, <code>originalLanguage</code> jamais envoyée par le web.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Destination</th><th>Feature existante</th><th>Aujourd'hui → dans l'atelier</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="6" class="zone-label">Barre de publication</td><td>Visibilité 6 niveaux + picker EXCEPT/ONLY</td><td>web complet, iOS ne transmet pas <code>visibilityUserIds</code> → transmis via <code>PublishIntent</code>, parité totale</td></tr>
+        <tr><td>Langue de publication (<code>originalLanguage</code>)</td><td>jamais envoyée web, sélecteur drapeau iOS → champ prérempli par détection, héritée par les objets texte (cas C6)</td></tr>
+        <tr><td>Qualification réel</td><td>règle partagée <code>reel-composition</code> → affichée en direct dans le sélecteur de format ; dégradation serveur inchangée</td></tr>
+        <tr><td>Repost / quote</td><td>route <code>/repost</code> sans audience → <code>repostOfId</code> dans le PublishIntent, audience comprise (cas C4)</td></tr>
+        <tr><td>Lieu métadonnée + découvrabilité</td><td>lieu iOS seulement (fuyant sur 3 chemins), <code>discoverabilityPrecision</code> sans client → panneau lieu + toggle « À proximité » (cas C5)</td></tr>
+        <tr><td>Communauté (<code>communityId</code>)</td><td>serveur seul → option d'audience quand les communautés s'activent</td></tr>
+        <tr><td rowspan="6" class="zone-label">Dock</td><td>Texte du post + compteur 5 000</td><td>compteur web au-delà de 4 500 seulement, iOS sans limite (400 serveur) → compteur partagé, limite depuis shared</td></tr>
+        <tr><td>Mentions @ · hashtags #</td><td>extraction serveur seule, zéro autocomplétion → autocomplétion du champ content, réutilisée des commentaires/messages (cas C1)</td></tr>
+        <tr><td>Médias : galerie, caméra, fichiers, drop/paste</td><td>wire web cassé (<code>MessageAttachment</code>) → TUS partout ; éditeurs image/vidéo atteignables depuis l'Inspecteur (« Retouches avancées »)</td></tr>
+        <tr><td>Audio : micro + fichier + bibliothèque</td><td>3 chemins iOS divergents, web micro seul → les 3 onglets du panneau son (cas C2)</td></tr>
+        <tr><td>Transcription live (Web Speech / SFSpeech)</td><td>vivante → onglet Micro, <code>mobileTranscription</code> conservée, repli Whisper inchangé</td></tr>
+        <tr><td><code>allowSoundExtraction</code></td><td>déclaré, jamais envoyé → toggle « Autoriser la réutilisation du son » dans l'inspecteur vidéo/audio</td></tr>
+        <tr><td rowspan="3" class="zone-label">Canvas</td><td>Slides ↔ carrousel</td><td><code>PostMedia.order</code> jamais écrit (tri de lecture sur une constante) → 1 slide = 1 carte, ordre écrit à la publication (cas C3)</td></tr>
+        <tr><td>Son emprunté (<code>soundId</code>)</td><td><code>createBorrowedSoundPost</code> isolé iOS → élément audio standard du canvas, tous formats</td></tr>
+        <tr><td>Tous les objets story (texte, dessin, stickers, pastille lieu, transitions)</td><td>→ les mêmes éléments servent post et réel, rendus par le CanvasPlayer</td></tr>
+        <tr><td rowspan="3" class="zone-label">Amorce</td><td>Caméra / galerie / texte / dernière capture</td><td>amorces page blanche iOS → état vide du Canvas, zéro navigation</td></tr>
+        <tr><td>Audio express</td><td>AudioPostComposer (modal) → raccourci micro : enregistrer, publier direct (cas C2, option B)</td></tr>
+        <tr><td>Humeur (STATUS)</td><td>StatusComposer → raccourci express distinct, même verbe de publication serveur</td></tr>
+        <tr><td rowspan="3" class="zone-label">Étagère</td><td>Brouillons + outbox durable</td><td>iOS seulement (et reprise de brouillon coincé) → moteur commun, le web en profite enfin</td></tr>
+        <tr><td>Publication hors-ligne</td><td>l'audio iOS n'est pas couvert → tout passe par la file unique, tous formats</td></tr>
+        <tr><td>Édition publiée (texte, langue, type, médias ±, lieu)</td><td>web limité à texte/visibilité, <code>UpdatePost.mediaIds</code> mort des deux côtés → l'intent <code>edit</code> rouvre l'atelier complet (cas C7)</td></tr>
+        <tr><td rowspan="1" class="zone-label">Serveur (auto)</td><td>Extraction mentions/hashtags · liens tracés <code>/l/</code> · Whisper · <code>hasAnyContentCarrier</code> · idempotence · rate limit · dégradation REEL→POST</td><td>inchangés — l'atelier s'appuie dessus, ne les duplique jamais</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:16px;max-width:68ch" class="muted">Inexistantes partout (ni client ni serveur) : sondages, programmation, alt text média, désactivation des commentaires. Hors périmètre — mais l'architecture les accueillera comme un contrôle de Dock ou un champ de <code>PublishIntent</code>, jamais comme une vue nouvelle.</p>
+
+  <h3 style="font-size:22px;margin-top:44px">Les sept cas complexes — deux options chacun</h3>
+
+  <div class="cases">
+    <div class="case">
+      <h4>C1 · Mentions &amp; hashtags</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — champ content seulement</b>Autocomplétion dans le champ texte des modes Post/Réel, en réutilisant le contrôleur des commentaires/messages. Sur le canvas, <code>@</code> reste du texte décoratif ; l'extraction serveur (<code>resolvePostMentions</code>, <code>extractHashtags</code>) fait foi.</div>
+        <div class="opt"><b>Option B — élément « mention » de canvas</b>Un vrai élément à payload <code>{ userId }</code> : tap dans le Reader ouvre le profil, y compris en story. Nécessite une extension du contrat (kind sticker, payload mention) et un rendu interactif.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A en phase 5 (zéro contrat nouveau), B ensuite comme extension du kind <code>sticker</code> — les deux sont compatibles, B n'invalide rien de A.</p>
+    </div>
+    <div class="case">
+      <h4>C2 · L'audio express (vocal rapide)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — tout par le canvas</b>L'audio est toujours un élément audio-first du canvas (cover auto façon <code>ReelAudioBackdrop</code>). Un seul chemin — mais deux taps de plus pour le vocal du quotidien.</div>
+        <div class="opt"><b>Option B — raccourci d'Amorce</b>Bouton micro dans l'Amorce : enregistrer → publier direct. L'atelier fabrique le canvas minimal en coulisse et émet le <em>même</em> <code>PublishIntent</code> — aucun chemin de publication séparé.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B par-dessus A. Le raccourci produit le même objet que le chemin long — les trois chemins de publication audio iOS divergents meurent, la friction du vocal rapide reste nulle.</p>
+    </div>
+    <div class="case">
+      <h4>C3 · Slides story ↔ carrousel post</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — 1 slide = 1 carte</b>En mode Post, le SlideStrip devient le carrousel : l'ordre des slides EST l'ordre des cartes, <code>PostMedia.order</code> est enfin écrit à la publication, le feed pagine le CanvasPlayer avec des points.</div>
+        <div class="opt"><b>Option B — pas de slides en Post</b>Un seul canvas + grille de médias ordonnée manuellement dans le Dock ; le carrousel du feed est une liste de médias nus, sans composition par carte.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A — un seul modèle mental (le même SlideStrip partout), et le comportement de B reste atteignable en n'utilisant qu'une slide. Corrige au passage le tri de lecture qui ment.</p>
+    </div>
+    <div class="case">
+      <h4>C4 · Repost &amp; quote</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — repost = PublishIntent</b><code>repostOfId</code> passe par la Barre de publication : audience, langue et texte de quote au même endroit que tout le reste. La route <code>/repost</code> côté client disparaît — le serveur résout déjà <code>repostOfId</code> au create (<code>PostService.ts:173-190</code>).</div>
+        <div class="opt"><b>Option B — route dédiée conservée</b>Garder <code>/repost</code> et enfin envoyer <code>RepostSchema.visibility</code> (le champ existe, aucun chemin feed ne le remplit). Correctif minimal, unification différée.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A — c'est l'esprit « un seul verbe ». B est le correctif d'attente acceptable si la phase 5 est découpée.</p>
+    </div>
+    <div class="case">
+      <h4>C5 · Le lieu (pastille vs métadonnée)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — deux lieux indépendants</b>La pastille de canvas (élément) et la métadonnée de publication (<code>metadata.location</code>) se posent séparément. Flexible, mais deux vérités possibles pour un même post.</div>
+        <div class="opt"><b>Option B — une source, deux rendus</b>Un seul lieu choisi dans le panneau : métadonnée toujours, pastille optionnelle « Afficher sur le canvas ». La découvrabilité (<code>geoPoint</code>, premier client de <code>discoverabilityPrecision</code>) est un toggle du même panneau.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B — une seule source de vérité, et la fuite iOS (lieu perdu sur les chemins inline) devient structurellement impossible.</p>
+    </div>
+    <div class="case">
+      <h4>C6 · La langue (publication vs objet)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — par objet seulement</b>Comme la story aujourd'hui : chaque texte déclare sa langue, le <code>content</code> prend <code>detectLanguage</code>. Simple, mais le web continue de publier sans langue fiable.</div>
+        <div class="opt"><b>Option B — héritage + surcharge</b>Langue de publication dans la Barre (préremplie par détection, envoyée comme <code>originalLanguage</code> — corrige le web) ; chaque objet texte hérite, surcharge possible via l'onglet Langue (S3c).</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B — le Prisme reçoit enfin une langue fiable sur tous les formats, et le cas multilingue par objet reste entier.</p>
+    </div>
+    <div class="case">
+      <h4>C7 · L'édition d'un post publié</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — l'atelier complet</b>L'intent <code>edit</code> rouvre l'atelier : tout est éditable (médias ±, lieu tri-état, type, langue), <code>UpdatePost.mediaIds</code> devient enfin vivant, le reset d'engagement (<code>contentEditedAt</code>) s'applique.</div>
+        <div class="opt"><b>Option B — édition légère + escalade</b>Un inline rapide (texte, visibilité) dans le feed, et « Ouvrir dans l'atelier » pour le reste. Deux surfaces, mais le correctif rapide reste à un tap.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A comme socle (une porte), B comme raccourci de menu contextuel — même endpoint, pas de logique dupliquée.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">07 · L'acquis préservé</p>
   <h2>La rupture porte sur les vues, jamais sur les fondations</h2>
   <p class="lede">Rompre avec les 85 vues et le <code>passthrough()</code>, oui — mais tout ce que le système fait déjà bien reste en place, tel quel, sous l'atelier. Ce ne sont pas des concessions au legacy : ce sont les acquis qui rendent la refonte possible.</p>
 
@@ -830,8 +946,8 @@
 </section>
 
 <section>
-  <p class="eyebrow">07 · En situation</p>
-  <h2>Quinze moments, toujours les deux mêmes surfaces</h2>
+  <p class="eyebrow">08 · En situation</p>
+  <h2>Dix-huit moments, toujours les deux mêmes surfaces</h2>
   <p class="lede">Photo, vidéo, timeline, texte (typographie, cadre, langue), pinceau, son, voix, aperçu, lecture, engagement — puis post et réel : aucun de ces moments n'ouvre un écran nouveau. Le Canvas reste la scène ; le Dock se reconfigure depuis un descripteur. Les maquettes ci-dessous sont l'application littérale des 5 vues.</p>
 
   <!-- S1 — Photo -->
@@ -1208,10 +1324,78 @@
       <div class="chips"><span class="chip a">1 couche d'engagement · 3 formats</span><span class="chip">commentaires traduits (Prisme)</span><span class="chip">réponse → conversation</span><span class="chip">archive : rien n'est perdu</span></div>
     </div>
   </div>
+
+  <!-- S13 — Métadonnées de publication -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%);aspect-ratio:9/5.5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span></div>
+        <div class="m-el" style="top:40%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35);font-size:10px">Carnet de voyage 🧭</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Publication</span><span>compo qualifie Réel ✓</span></div>
+        <div class="m-seg"><b>Story</b><b class="on">Post</b><b>Réel</b></div>
+        <div class="m-row" style="gap:6px"><span class="m-react on">👁 Amis · sauf 2</span><span class="m-react">🌐 FR ▾</span><span class="m-react">📍 Lisbonne ✓</span></div>
+        <div class="m-row" style="gap:6px"><span class="m-react">◎ À proximité : quartier</span><span style="flex:1"></span><span class="m-btn strong" style="flex:0 0 auto;padding:6px 16px">Publier</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S13 · Métadonnées</span>
+      <h3>L'étage des métadonnées, au moment de publier</h3>
+      <p>Tout ce qui décrit la publication — et non la scène — vit dans la Barre : audience avec EXCEPT/ONLY (enfin transmise par iOS : <code>visibilityUserIds</code> existe dans le struct mais n'est jamais envoyé aujourd'hui), langue de publication (préremplie par détection, <code>originalLanguage</code> enfin envoyée par le web, héritée par les textes — C6-B), lieu-métadonnée avec « Afficher sur le canvas » (C5-B) et découvrabilité « À proximité » — premier client de <code>discoverabilityPrecision</code>. Le sélecteur de format annonce la qualification réel en direct.</p>
+      <div class="chips"><span class="chip a">Barre de publication</span><span class="chip">C5-B · C6-B appliquées</span><span class="chip">corrige 3 fuites iOS/web</span></div>
+    </div>
+  </div>
+
+  <!-- S14 — Mentions & hashtags -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%);aspect-ratio:9/5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span></div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Texte du post → content</span><span>4 812 / 5 000</span></div>
+        <div class="m-txtfield">Trois jours à Lisbonne avec <span style="color:#2FB9C6">@ju</span><span style="opacity:.8">|</span></div>
+        <div class="m-sndrow on"><span class="cav" style="width:18px;height:18px;border-radius:50%;background:linear-gradient(140deg,#2E8371,#2FB9C6);flex:none"></span><span class="t">@jules</span><span class="d">suivi mutuel</span></div>
+        <div class="m-sndrow"><span class="cav" style="width:18px;height:18px;border-radius:50%;background:linear-gradient(140deg,#B4536B,#7A5FB5);flex:none"></span><span class="t">@julien_m</span><span class="d">ami</span></div>
+        <div class="m-row" style="gap:6px"><span class="m-react">#lisbonne</span><span class="m-react">#voyage</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S14 · Mentions</span>
+      <h3>@ et # : l'autocomplétion rejoint enfin le composer</h3>
+      <p>Aujourd'hui l'extraction est serveur-seule (<code>resolvePostMentions</code>, <code>extractHashtags</code>) et aucun composer de post n'autocomplète — alors que les commentaires et messages le font. L'atelier réutilise ce contrôleur existant dans le champ content (C1-A) : suggestions de mentions au fil de la frappe, hashtags proposés. Le compteur 5 000 partagé apparaît (iOS n'a aujourd'hui ni limite ni compteur — un post de 5 001 caractères meurt en 400 serveur). Sur le canvas, <code>@</code> reste décoratif ; l'élément mention tappable est l'extension C1-B.</p>
+      <div class="chips"><span class="chip a">Dock · champ content</span><span class="chip">C1-A · contrôleur réutilisé</span><span class="chip">compteur partagé (fix iOS)</span></div>
+    </div>
+  </div>
+
+  <!-- S15 — Carrousel -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#B4536B 0%,#7A5FB5 60%,#3E2A56 100%);aspect-ratio:9/8">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-pill" style="top:44px;right:12px">carte 2 / 3</div>
+        <div class="m-el" style="bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35);font-size:10px">Alfama, ruelles ⛵</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Carrousel · 3 cartes</span><span>ordre = ordre des slides</span></div>
+        <div class="m-row" style="gap:6px;justify-content:center">
+          <span class="m-slide"></span><span class="m-slide on"></span><span class="m-slide"></span>
+          <span class="m-slide" style="display:flex;align-items:center;justify-content:center;color:#2FB9C6">＋</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S15 · Carrousel</span>
+      <h3>Les slides deviennent le carrousel — et l'ordre cesse de mentir</h3>
+      <p>En mode Post, le SlideStrip est le carrousel : 1 slide = 1 carte composée (C3-A), réordonnables par drag. À la publication, <code>PostMedia.order</code> est écrit à l'index — aujourd'hui il n'est <em>jamais</em> écrit, et le tri de lecture <code>orderBy: order</code> trie une constante 0. Dans le feed, le CanvasPlayer pagine les cartes avec des points ; en plein écran, la navigation par tap est celle du Reader de story.</p>
+      <div class="chips"><span class="chip a">Canvas · SlideStrip = carrousel</span><span class="chip">C3-A · PostMedia.order écrit</span><span class="chip">feed : pagination à points</span></div>
+    </div>
+  </div>
 </section>
 
 <section>
-  <p class="eyebrow">08 · Le contrat partagé</p>
+  <p class="eyebrow">09 · Le contrat partagé</p>
   <h2><span class="mono">canvas v2</span> — une source, tous formats</h2>
   <p class="lede">Le schéma vit dans <code>packages/shared</code>, seul endroit autorisé à le définir. Le gateway le valide en mode strict, le web l'importe, le Swift est généré depuis lui. Story, post ou réel : le canvas est le même objet (stocké dans la colonne <code>Post.storyEffects</code> existante).</p>
 
@@ -1247,7 +1431,7 @@
 </section>
 
 <section>
-  <p class="eyebrow">09 · Impact</p>
+  <p class="eyebrow">10 · Impact</p>
   <h2>Avant / après</h2>
   <div class="tablewrap">
     <table>
@@ -1269,7 +1453,7 @@
 </section>
 
 <section>
-  <p class="eyebrow">10 · Chemin de migration</p>
+  <p class="eyebrow">11 · Chemin de migration</p>
   <h2>Six phases, chacune livrable seule</h2>
   <div class="phases">
     <div class="phase"><div class="dot">1</div><div>

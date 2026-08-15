@@ -232,3 +232,48 @@ jour la doc du schéma Prisma (`schema.prisma:3040-3055`, format obsolète).
 | Régression Prisme (règle 3, rang de langue) | tests jumeaux sur `resolveLastMessagePreview` / `resolvedText` maintenus |
 | Régression gestes reader | seuils 0,45 s / 24 px repris tels quels, tests UI dédiés |
 | Éditions lourdes média (recadrage fin) | `MeeshyImage/VideoEditorView` restent atteignables depuis l'Inspecteur (« Retouches avancées ») tant que le Dock ne couvre pas leurs cas |
+
+---
+
+## Addendum 2026-08-15 — correctifs issus de l'inventaire posts/réels
+
+À intégrer dans les phases existantes (découverts par l'audit des composers
+post/réel ; détail dans le design §11) :
+
+**Phase 1 (contrat & correctifs)** :
+- `PostComposer.tsx` : même bascule TUS que StoryComposer (`uploadcontext: 'post'`)
+  — sans elle, aucun média de post web n'est rattaché et **aucun réel web n'est
+  possible** (dégradation systématique).
+- `PostService.createPost` : écrire `PostMedia.order` à l'index de `mediaIds`
+  lors du claim (le tri de lecture `orderBy: { order: 'asc' }` trie une
+  constante aujourd'hui).
+- Web : envoyer `originalLanguage` sur les posts ordinaires
+  (`PostsFeedScreen.tsx:374-382`, la valeur est déjà disponible).
+- iOS : transmettre `visibilityUserIds` dans `PostService.create`
+  (`PostService.swift:203-205` — le struct le porte déjà).
+- Compteur/limite 5 000 partagés (`packages/shared`) — iOS n'a ni limite ni
+  compteur (400 serveur générique au-delà).
+
+**Phase 4 (étagère & publication)** :
+- La file offline couvre l'audio (trou iOS documenté
+  `FeedView+Attachments.swift:236-237`).
+- L'intent `edit` rend `UpdatePostSchema.mediaIds` vivant (mort des deux côtés).
+
+**Phase 5 (un seul atelier)** :
+- Suppression des deux recettes iOS divergentes (`publishPostWithAttachments`
+  inline + `FeedComposerSheet.publishPost`) — c'est le vecteur de la perte
+  d'audience/lieu ; une seule construction de `PublishIntent`.
+- Repost/quote via `repostOfId` du PublishIntent (C4-A) ; à défaut, correctif
+  d'attente C4-B : envoyer `RepostSchema.visibility`.
+- Mentions/hashtags : autocomplétion du champ content (C1-A), contrôleur des
+  commentaires/messages réutilisé.
+- Lieu : une source, deux rendus (C5-B) + premier client de
+  `discoverabilityPrecision`.
+- Langue : héritage publication → objets (C6-B).
+- Audio express d'Amorce (C2-B) produisant le même PublishIntent.
+- `allowSoundExtraction` exposé (toggle inspecteur vidéo/audio).
+- Slides = carrousel en mode Post (C3-A).
+
+**Phase 6 (démolition)** : + `AudioPostComposerView` / `AudioPostComposer.tsx`
+(absorbés par le panneau son), `UnifiedPostComposer` (~40 % de code mort
+compilé), branches STATUS mortes du composer.
