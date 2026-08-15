@@ -225,7 +225,7 @@ const mockT = (key: string) => {
     'title': 'Conversations',
     'createNewConversation': 'New Conversation',
     'loadingConversations': 'Loading conversations...',
-    'noConversationsFound': 'No conversations found',
+    'conversationSearch.noConversationsFound': 'No conversations found',
     'noConversations': 'No conversations yet',
     'conversationsList.pinned': 'Pinned',
     'conversationsList.uncategorized': 'Uncategorized',

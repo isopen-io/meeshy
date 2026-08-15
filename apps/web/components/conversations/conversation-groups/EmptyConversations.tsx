@@ -16,7 +16,7 @@ export const EmptyConversations = memo(function EmptyConversations({
     <div className="flex flex-col items-center justify-center h-full text-center px-4">
       <MessageSquare className="h-12 w-12 text-muted-foreground/50 mb-3" />
       <p className="text-sm text-muted-foreground">
-        {searchQuery ? t('noConversationsFound') : t('noConversations')}
+        {searchQuery ? t('conversationSearch.noConversationsFound') : t('noConversations')}
       </p>
     </div>
   );
