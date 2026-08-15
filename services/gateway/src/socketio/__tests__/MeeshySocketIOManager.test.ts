@@ -1253,9 +1253,64 @@ describe('MeeshySocketIOManager', () => {
       await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({
         messageId: 'msg-cached',
-        translatedText: 'Bonjour',
-        targetLanguage: 'fr',
       }));
+    });
+
+    /**
+     * Le chemin CACHE répond à une demande EXPLICITE de l'utilisateur
+     * (« traduire ce message »), et c'est le chemin censé être instantané.
+     * Il émettait `{ messageId, translatedText, targetLanguage, confidenceScore }` :
+     *
+     *  · le web ne lit que `data.translation` / `data.translations` et sort en
+     *    silence sinon (`TranslationService.handleTranslationEvent`) ;
+     *  · iOS décode `TranslationEvent`, dont `translations` n'est pas optionnel
+     *    — le décodage échoue et l'événement disparaît.
+     *
+     * Autrement dit : traduire à la demande ne faisait rien tant que la
+     * traduction était déjà en cache, et ne « marchait » que sur cache MISS,
+     * où c'est le retour ZMQ qui répond avec la forme correcte.
+     */
+    it('émet la forme TranslationEvent que les clients savent lire, sur le chemin cache', async () => {
+      const socket = makeSocket('sock-t4c');
+      (manager as any).socketToUser.set('sock-t4c', 'user-t4c');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        messageId: 'msg-contract',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        translatedText: 'Bonjour',
+        translatorModel: 'premium',
+        confidenceScore: 0.95,
+      });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-contract',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4c' });
+      triggerConnection(socket);
+
+      await getTranslationHandler(socket)({ messageId: 'msg-contract', targetLanguage: 'fr' });
+
+      const call = (socket.emit as jest.Mock).mock.calls.find(
+        ([event]) => event === SERVER_EVENTS.MESSAGE_TRANSLATION,
+      );
+      expect(call).toBeDefined();
+      const payload = call![1];
+      expect(payload.messageId).toBe('msg-contract');
+      expect(Array.isArray(payload.translations)).toBe(true);
+      expect(payload.translations).toHaveLength(1);
+      expect(payload.translations[0]).toEqual(expect.objectContaining({
+        messageId: 'msg-contract',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour',
+        cached: true,
+      }));
+      // Le nom qu'aucun client n'a jamais lu.
+      expect(payload).not.toHaveProperty('translatedText');
     });
 
     it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {
@@ -1545,6 +1600,108 @@ describe('MeeshySocketIOManager', () => {
 
       expect(prisma.message.findUnique).not.toHaveBeenCalled();
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+    });
+
+    // `message:translation` reached the live conversation room and NOTHING
+    // else. A participant who was offline when NLLB answered kept the message
+    // in the sender's language forever: the `message:new` replayed to them on
+    // reconnect was queued at SEND time, when `translations` was still empty,
+    // and no client refetches spontaneously. Exact text twin of the gap
+    // `emitAttachmentUpdated` closes for a voice note's transcription.
+    describe('offline replay of the translation', () => {
+      const OFFLINE_PEER = { id: 'p-off', userId: 'user-off' };
+      const ONLINE_PEER = { id: 'p-on', userId: 'user-on' };
+      let queue: { enqueue: jest.Mock };
+
+      const armConversation = (participants: unknown[]) => {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-tr-123456789012', senderId: 'user-author' });
+        prisma.conversation.findUnique.mockResolvedValue(null);
+        prisma.participant.findMany.mockResolvedValue(participants);
+        queue = { enqueue: jest.fn().mockResolvedValue(undefined) };
+        manager.setDeliveryQueue(queue as any);
+      };
+
+      it('queues the translation for a participant who is offline', async () => {
+        armConversation([OFFLINE_PEER]);
+
+        await (manager as any)._handleTextTranslationReady(baseData);
+
+        expect(queue.enqueue).toHaveBeenCalledWith(
+          'user-off',
+          expect.objectContaining({
+            eventType: 'translation',
+            messageId: 'msg-txt-1',
+            conversationId: 'conv-tr-123456789012',
+            payload: expect.objectContaining({ messageId: 'msg-txt-1' }),
+          })
+        );
+      });
+
+      it('skips a participant who is connected — they already got the live emit', async () => {
+        armConversation([ONLINE_PEER]);
+        (manager as any).connectedUsers.set('user-on', {
+          id: 'user-on', socketId: 'sock-on', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
+        });
+
+        await (manager as any)._handleTextTranslationReady(baseData);
+
+        expect(queue.enqueue).not.toHaveBeenCalled();
+      });
+
+      // One message fans out to as many translations as the conversation has
+      // reader languages. The queue's DEFAULT dedup identity is
+      // (messageId, eventType), so without a per-language key the Spanish
+      // translation would supersede the French one in place and the offline
+      // reader would converge on exactly one language — whichever landed last.
+      it('scopes the dedup key to the target language so languages do not collapse', async () => {
+        armConversation([OFFLINE_PEER]);
+
+        await (manager as any)._handleTextTranslationReady(baseData);
+        await (manager as any)._handleTextTranslationReady({ ...baseData, targetLanguage: 'es' });
+
+        const keys = queue.enqueue.mock.calls.map((call) => (call[1] as { dedupKey?: string }).dedupKey);
+        expect(keys).toEqual(['msg-txt-1:en', 'msg-txt-1:es']);
+      });
+
+      // The queued envelope carries what the live room emit carries — same
+      // TranslationEvent shape — so the drained event is indistinguishable from
+      // the one the reader would have received had they been connected.
+      it('queues the same payload the live room emit carries', async () => {
+        armConversation([OFFLINE_PEER]);
+
+        await (manager as any)._handleTextTranslationReady(baseData);
+
+        const liveEmit = ioState.toEmit.mock.calls.find(([event]) => event === SERVER_EVENTS.MESSAGE_TRANSLATION);
+        expect(liveEmit).toBeDefined();
+        expect(queue.enqueue.mock.calls[0][1].payload).toEqual(liveEmit[1]);
+      });
+
+      it('does not queue anything when the message has no conversation', async () => {
+        prisma.message.findUnique.mockResolvedValue(null);
+        queue = { enqueue: jest.fn().mockResolvedValue(undefined) };
+        manager.setDeliveryQueue(queue as any);
+
+        await (manager as any)._handleTextTranslationReady(baseData);
+
+        expect(queue.enqueue).not.toHaveBeenCalled();
+      });
+
+      // A translation is not a message arriving. Bumping the sender's
+      // sent→delivered checkmark off a drained translation would claim a
+      // delivery the read-status pipeline never tracked.
+      it('never carries a delivery receipt on drain', async () => {
+        const fakeQueue = {
+          drain: jest.fn().mockResolvedValue([
+            { messageId: 'msg-txt-1', conversationId: 'conv-tr', payload: {}, eventType: 'translation' },
+          ]),
+        };
+        manager.setDeliveryQueue(fakeQueue as any);
+        prisma.participant.findMany.mockClear();
+
+        await (manager as any)._drainPendingMessages('user-off', false);
+
+        expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      });
     });
 
     // Cycle 73 — LE défaut. `message:translation` ne porte que la room de
@@ -2406,6 +2563,26 @@ describe('MeeshySocketIOManager', () => {
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-attachments', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, enriched);
+    });
+
+    // Text sibling of the attachment case above. The `message:new` queued at
+    // SEND time carries `translations: []` — NLLB answers over ZMQ a second
+    // later. Without this replay a peer who was offline at that instant keeps
+    // the message in the SENDER's language for as long as their cache lives,
+    // which is precisely the Prisme becoming a function of connectivity.
+    it('routes translation entries: translation → MESSAGE_TRANSLATION', async () => {
+      const translated = {
+        messageId: 'msg-txt',
+        translations: [{ id: 't-1', messageId: 'msg-txt', targetLanguage: 'fr', translatedContent: 'Bonjour' }],
+      };
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: translated, eventType: 'translation', dedupKey: 'msg-txt:fr' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-drain-translations', false);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, translated);
     });
 
     // A share-link message is a CREATION replayed under BOTH wire events, each

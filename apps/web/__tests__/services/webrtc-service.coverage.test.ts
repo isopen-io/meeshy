@@ -207,7 +207,6 @@ const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
   const onTrack = jest.fn();
   const onConnectionStateChange = jest.fn();
   const onIceConnectionStateChange = jest.fn();
-  const onConnectionQualityChange = jest.fn();
   const onError = jest.fn();
 
   const service = new WebRTCService({
@@ -216,7 +215,6 @@ const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
     onTrack,
     onConnectionStateChange,
     onIceConnectionStateChange,
-    onConnectionQualityChange,
     onError,
     ...overrides,
   });
@@ -229,7 +227,6 @@ const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
     onTrack,
     onConnectionStateChange,
     onIceConnectionStateChange,
-    onConnectionQualityChange,
     onError,
   };
 };
@@ -1556,254 +1553,6 @@ describe('state getters', () => {
 });
 
 // ===========================================================================
-// startQualityMonitor
-// ===========================================================================
-
-describe('startQualityMonitor', () => {
-  it('warns and returns when no peer connection', () => {
-    const service = new WebRTCService();
-    expect(() => service.startQualityMonitor()).not.toThrow();
-  });
-
-  it('stops any existing monitor before starting a new one', () => {
-    const { service } = setup();
-    service.startQualityMonitor();
-    const spy = jest.spyOn(service, 'stopQualityMonitor');
-    service.startQualityMonitor();
-    expect(spy).toHaveBeenCalled();
-    service.stopQualityMonitor();
-    spy.mockRestore();
-  });
-
-  it('reports "excellent" quality when loss<1 and rtt<100ms', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 0, bytesReceived: 1000, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.05 }); // 50ms
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('reports "good" quality for moderate loss and rtt', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        // packetLoss ≈ 1.96% (≥1, <3), rtt=150ms (<200)
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 2, bytesReceived: 1000, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.15 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('good');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('reports "fair" quality for higher loss and rtt', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        // packetLoss ≈ 4.76% (≥3, <8), rtt=300ms (<400)
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 5, bytesReceived: 1000, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.3 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('fair');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('reports "poor" quality for high loss and rtt', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        // packetLoss = 20% (≥8), rtt=500ms (≥400)
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 80, packetsLost: 20, bytesReceived: 1000, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.5 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('poor');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('stops monitor when peerConnection becomes null during interval', async () => {
-    jest.useFakeTimers();
-    const { service, pc } = setup();
-
-    let callCount = 0;
-    pc.getStats = jest.fn(async () => {
-      callCount++;
-      return { forEach: jest.fn() };
-    });
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-    expect(callCount).toBe(1);
-
-    // Null the pc so the next interval hits the early-return path
-    (service as unknown as { peerConnection: null }).peerConnection = null;
-    const stopSpy = jest.spyOn(service, 'stopQualityMonitor');
-    await jest.advanceTimersByTimeAsync(3001);
-    expect(stopSpy).toHaveBeenCalled();
-
-    stopSpy.mockRestore();
-    jest.useRealTimers();
-  });
-
-  it('swallows getStats errors without crashing', async () => {
-    jest.useFakeTimers();
-    const { service, pc } = setup();
-    pc.getStats = jest.fn().mockRejectedValue(new Error('stats error'));
-
-    service.startQualityMonitor();
-    await expect(jest.advanceTimersByTimeAsync(3001)).resolves.toBeUndefined();
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('handles candidate-pair without currentRoundTripTime (rtt defaults to 0)', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 0, bytesReceived: 1000, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'succeeded' }); // no currentRoundTripTime
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('handles zero packets (avoids division by zero in packetLoss)', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 0, packetsLost: 0, bytesReceived: 0, timestamp: 5000 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('computes bitrate on second tick using previous timestamp', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    let tick = 0;
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        tick++;
-        const timestamp = tick === 1 ? 1000 : 4000;
-        const bytesReceived = tick === 1 ? 1000 : 5000;
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 0, bytesReceived, timestamp });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001); // first tick
-    await jest.advanceTimersByTimeAsync(3001); // second tick (bitrate calculated)
-    expect(onConnectionQualityChange).toHaveBeenCalledTimes(2);
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('ignores candidate-pair that is not "succeeded"', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 100, packetsLost: 0, bytesReceived: 0, timestamp: 5000 });
-        cb({ type: 'candidate-pair', state: 'failed', currentRoundTripTime: 99 }); // ignored
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-    // rtt=0 (non-succeeded pair ignored), loss=0 → excellent
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-});
-
-// ===========================================================================
-// stopQualityMonitor
-// ===========================================================================
-
-describe('stopQualityMonitor', () => {
-  it('does nothing when no interval is running', () => {
-    const service = new WebRTCService();
-    expect(() => service.stopQualityMonitor()).not.toThrow();
-  });
-
-  it('clears the interval when one is running', () => {
-    jest.useFakeTimers();
-    const { service } = setup();
-    service.startQualityMonitor();
-    service.stopQualityMonitor();
-    // Interval is cleared — no more callbacks
-    // Just verify it doesn't throw and completes cleanly
-    jest.useRealTimers();
-  });
-});
-
-// ===========================================================================
 // close
 // ===========================================================================
 
@@ -1820,17 +1569,6 @@ describe('close', () => {
     expect(pc.close).toHaveBeenCalled();
     expect(service.getPeerConnection()).toBeNull();
     expect(service.getCurrentStream()).toBeNull();
-  });
-
-  it('stops quality monitor during close', () => {
-    jest.useFakeTimers();
-    const { service } = setup();
-    service.startQualityMonitor();
-    const spy = jest.spyOn(service, 'stopQualityMonitor');
-    service.close();
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
-    jest.useRealTimers();
   });
 
   it('clears grace timer during close', async () => {
@@ -2713,53 +2451,5 @@ describe('handleRenegotiationOffer — isSettingRemoteAnswerPending collision av
 
     // Suppress unused variable warning
     void onLocalDescription;
-  });
-});
-
-// ===========================================================================
-// Quality monitor — stats with missing/undefined fields (null-coalescing branches)
-// ===========================================================================
-
-describe('startQualityMonitor — null-coalescing branches', () => {
-  it('handles missing packetsReceived and packetsLost (defaults to 0)', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        // Neither packetsReceived nor packetsLost provided — exercises `?? 0`
-        cb({ type: 'inbound-rtp', kind: 'audio', bytesReceived: 500, timestamp: 3000 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    // totalPackets=0 → packetLoss=0, rtt=0 → excellent
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
-  });
-
-  it('handles missing bytesReceived (defaults to 0)', async () => {
-    jest.useFakeTimers();
-    const onConnectionQualityChange = jest.fn();
-    const { service, pc } = setup({ onConnectionQualityChange });
-
-    const mockStats = {
-      forEach: jest.fn((cb: (report: unknown) => void) => {
-        cb({ type: 'inbound-rtp', kind: 'audio', packetsReceived: 10, packetsLost: 0, timestamp: 3000 });
-      }),
-    };
-    pc.getStats = jest.fn(async () => mockStats);
-
-    service.startQualityMonitor();
-    await jest.advanceTimersByTimeAsync(3001);
-
-    expect(onConnectionQualityChange).toHaveBeenCalledWith('excellent');
-    service.stopQualityMonitor();
-    jest.useRealTimers();
   });
 });

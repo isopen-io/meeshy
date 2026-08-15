@@ -3487,6 +3487,23 @@ export class CallEventsHandler {
           data.callId, userId, endParticipantId, isAnonymous, data.reason,
           { preJoinDecline: Boolean(preJoinDecline) }
         );
+
+        // Group pre-join decline (2026-08-15): CallService.endCall() no-ops
+        // (session returned UNCHANGED, still non-terminal) when a
+        // preJoinDecline lands on a group call — see its doc comment. Detect
+        // that here and stop: no call:ended broadcast, no summary post, no
+        // missed-call notification, no signal/buffer teardown — none of
+        // which are correct for a decline that left the session running for
+        // the other invitees. The decliner still gets a clean ack so their
+        // own UI dismisses the incoming-call sheet.
+        if (preJoinDecline && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
+          ack?.({ success: true });
+          logger.info('Pre-join decline acknowledged — group call continues for other invitees', {
+            callId: data.callId, declinedBy: userId
+          });
+          return;
+        }
+
         this.invalidateSignalSession(data.callId);
 
         // Phase 1 fix P2 — explicit end clears any pending ringing timeout

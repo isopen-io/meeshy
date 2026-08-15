@@ -1486,6 +1486,7 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation({ type: 'direct' }));
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
       mockPrisma.callSession.update.mockResolvedValue(undefined);
       mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
@@ -1497,6 +1498,39 @@ describe('CallService', () => {
       );
 
       expect(result.status).toBe(CallStatus.rejected);
+    });
+
+    it('decline-before-join fix (2026-08-15): a GROUP call decline does NOT end the session for the other still-ringing invitees', async () => {
+      // Three-plus-invitee group call: only the initiator has a row; the
+      // declining callee never joined, mirroring the direct-call test above.
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const unchangedCall = {
+        ...mockCall,
+        initiator: createMockUser(),
+        conversation: createMockConversation({ type: 'group' })
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation({ type: 'group' }));
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(unchangedCall);
+
+      const result = await callService.endCall(
+        'call-123', 'callee-user-999', 'conv-participant-of-callee', false, 'rejected',
+        { preJoinDecline: true }
+      );
+
+      // Session comes back UNCHANGED — still ringing, not terminated —
+      // because a single decline must not cancel the ring for everyone else.
+      expect(result.status).toBe(CallStatus.ringing);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
     });
 
     it('decline-before-join fix: still throws NOT_A_PARTICIPANT with no row when preJoinDecline is NOT set (default authorization unchanged)', async () => {

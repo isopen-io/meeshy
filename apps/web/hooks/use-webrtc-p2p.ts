@@ -511,6 +511,23 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       lastAggregatedConnectionStateRef.current = aggregated;
       setConnectionState(aggregated);
       setIceConnectionState(aggregateIceConnectionState(iceConnectionStatesRef.current));
+
+      // Audit web-calls (2026-08-15) — a peer that stalled
+      // (disconnected/failed) and never recovered before genuinely LEAVING
+      // the call used to leave `stalledPeersRef` holding its id forever:
+      // only a successful ICE reconnect (onIceConnectionStateChange
+      // 'connected'/'completed', above) or a full-call cleanup() ever
+      // cleared an entry. `isReconnecting` — and reconnectAttemptRef, which
+      // keeps counting up across unrelated future stalls — then stayed
+      // stuck for the REST of the call even once every remaining peer was
+      // perfectly healthy. Mirror the recovery branch above: dropping the
+      // departed peer's stall entry can itself drain the set to empty.
+      connectedPeersRef.current.delete(participantId);
+      const wasStalled = stalledPeersRef.current.delete(participantId);
+      if (wasStalled && stalledPeersRef.current.size === 0) {
+        setIsReconnecting(false);
+        reconnectAttemptRef.current = 0;
+      }
     },
     [removePeerConnection]
   );

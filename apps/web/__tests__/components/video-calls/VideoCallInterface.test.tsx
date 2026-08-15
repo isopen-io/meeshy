@@ -337,6 +337,36 @@ describe('VideoCallInterface (container)', () => {
     }
   });
 
+  // Audit web-calls (2026-08-15): the participant pinned to fullscreen
+  // leaving a group call used to blank the main view (fall through to the
+  // "waiting for participant" placeholder) for the REST of the call, even
+  // though other participants were still fully connected — the lookup miss
+  // only fell back to the first remaining stream when `fullscreenParticipantId`
+  // was null, never when the pinned id simply no longer matched anything.
+  it('falls back to another live stream when the fullscreen-pinned participant leaves', () => {
+    storeState.remoteStreams = new Map([
+      ['peer1', {} as MediaStream],
+      ['peer2', {} as MediaStream],
+    ]);
+    try {
+      const { rerender } = render(<VideoCallInterface callId="call1" />);
+
+      // Pin the (currently displayed, default-first) peer1 to fullscreen.
+      fireEvent.click(screen.getByRole('button', { name: 'stream.fullscreen' }));
+
+      // peer1 leaves the call; only peer2 remains live.
+      storeState.remoteStreams = new Map([['peer2', {} as MediaStream]]);
+      rerender(<VideoCallInterface callId="call1" />);
+
+      // Main view must still show a live remote stream, not the
+      // "waiting for participant" placeholder.
+      expect(screen.getByTestId('remote-video-stream')).toBeInTheDocument();
+      expect(screen.queryByText('waiting.forParticipant')).not.toBeInTheDocument();
+    } finally {
+      storeState.remoteStreams = new Map();
+    }
+  });
+
   // Regression guard — the speaker button used to flip a `useState` local to
   // `CallControls` that nothing downstream ever read: clicking it changed the
   // icon but never muted/unmuted a single <video> element, on any surface

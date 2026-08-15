@@ -120,6 +120,27 @@ const SURFACES: Record<string, Classification> = {
  */
 const NESTED_PREVIEW_SURFACES = ['conversations/core.ts', 'conversations/search.ts'];
 
+const SOCKETIO_DIR = join(__dirname, '../../../socketio');
+
+/**
+ * La troisième frontière, et la seule que les deux balayages ci-dessus ne
+ * pouvaient PAS voir : l'aperçu POUSSÉ.
+ *
+ * Les deux autres comptent des LECTURES — « ce que l'API rend quand on la
+ * questionne ». Un émetteur temps réel ne répond à aucune question : il
+ * recalcule le dernier message et le pousse dans la room personnelle de chaque
+ * participant. Il n'est ni sous `src/routes/`, ni sous `src/services/`, si bien
+ * que `GET /conversations` a longtemps résolu le masquage personnel pendant que
+ * le fan-out remettait dans la ligne de liste le message que le lecteur venait
+ * d'en retirer. Les deux moitiés du produit se contredisaient selon le canal.
+ *
+ * Le critère est la forme du défaut, pas le nom du fichier : recalculer un
+ * dernier message (`findFirst` + `orderBy createdAt desc`) ET diffuser
+ * `conversation:updated`. Une recherche par id (le fichier en contient) n'est
+ * pas un recalcul d'aperçu et ne déclenche rien.
+ */
+const PUSHED_PREVIEW_MARKER = /resolvePersonalPreviewOverrides\s*(<[^>]*>)?\s*\(/;
+
 const SERVICES_DIR = join(__dirname, '../../../services');
 
 /**
@@ -294,6 +315,25 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
     });
 
     expect(missing).toEqual([]);
+  });
+
+  it('résout le masquage sur les aperçus POUSSÉS, hors de portée des deux balayages', () => {
+    const scan = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          return entry === '__tests__' ? [] : scan(full);
+        }
+        if (!entry.endsWith('.ts')) return [];
+        const source = readFileSync(full, 'utf8');
+        const recomputesPreview =
+          /message\.findFirst\s*\(/.test(source) && /orderBy:\s*\{\s*createdAt:\s*'desc'\s*\}/.test(source);
+        const pushesConversationUpdated = source.includes('CONVERSATION_UPDATED');
+        if (!recomputesPreview || !pushesConversationUpdated) return [];
+        return PUSHED_PREVIEW_MARKER.test(source) ? [] : [full.slice(SOCKETIO_DIR.length + 1)];
+      });
+
+    expect(scan(SOCKETIO_DIR)).toEqual([]);
   });
 
   it('resolves the nested list previews, which no prisma.message scan can see', () => {

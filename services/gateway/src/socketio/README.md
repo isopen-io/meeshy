@@ -472,6 +472,39 @@ reservi n'est pas « en retard », il est faux definitivement.
 
 ---
 
+## `message:translation` — la traduction doit aussi les lecteurs HORS LIGNE
+
+Meme forme que `message:attachment-updated` ci-dessous, sur le texte. La
+traduction NLLB atterrit une a deux secondes APRES l'envoi, par ZMQ, et
+`_handleTextTranslationReady` la diffusait a la seule room `conversation:<id>`.
+
+| Audience | Canal | Ce qu'elle perdait |
+|---|---|---|
+| lecteurs DANS le fil | room `conversation:<id>` | rien — la seule servie |
+| lecteurs sur la LISTE | `emitConversationPreviewUpdate` sous `PreviewUpdateScope` | borne au DERNIER message et a la ligne de liste (cf. section precedente) |
+| lecteurs HORS LIGNE | file de remise, `eventType: 'translation'` | le `message:new` mis en file a l'ENVOI porte `translations: []` — sans rejeu, la copie rejouee au reconnect reste dans la langue de l'expediteur **pour toujours** : aucun client ne refetch spontanement |
+
+Le defaut etait exactement celui de la piece jointe non enrichie : le Prisme
+devenait fonction de la CONNECTIVITE du lecteur — etre en ligne a l'instant ou
+NLLB a repondu — et non de ses preferences de langue.
+
+Deux points qui ne se devinent pas :
+
+1. **`dedupKey` = `messageId:targetLanguage`**, pas `messageId`. Un message se
+   traduit vers autant de langues que la conversation compte de langues de
+   lecture ; l'identite par defaut `(messageId, eventType)` les ferait
+   superseder l'une apres l'autre et le lecteur hors ligne ne convergerait que
+   sur la derniere arrivee. Par langue, « le dernier payload gagne » est la
+   bonne regle : une retraduction du meme couple (message, langue) remplace le
+   texte precedent.
+2. **Aucun acteur exclu.** NLLB n'est pas une personne, et l'auteur du message
+   est precisement un participant dont la copie ne porte aucune traduction a
+   l'envoi. Le rejeu ne porte jamais d'accuse de reception :
+   `_emitDeliveryForDrainedMessages` filtre deja sur `eventType === 'new'` —
+   une traduction n'est pas un message qui arrive.
+
+---
+
 ## La pastille de non-lus — l'envoi n'est pas le seul instant qui la bouge
 
 `conversation:unread-updated` est le SEUL signal qui deplace une pastille en vif.

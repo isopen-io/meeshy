@@ -1956,6 +1956,34 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not in this call`);
     }
 
+    // Audit gateway-calls (2026-08-15) — `preJoinDecline` (decline-before-join
+    // fix, 2026-08-14) authorizes a callee who never joined this call to end
+    // it, but that callee is only ONE invitee among possibly several in a
+    // GROUP call — the others haven't had a chance to answer yet. Falling
+    // through to the transaction below stamps `leftAt` on EVERY participant
+    // and moves the WHOLE CallSession to a terminal status, so one decline
+    // silently kills the ring for everyone else. `leaveCall()` already makes
+    // this exact direct/group distinction (`isDirectCall`, above) —
+    // `endCall()` never got it because `preJoinDecline` didn't exist until
+    // the call site above did. The decliner never had a CallParticipant row
+    // to update in the first place, so a group decline is a pure no-op for
+    // the CallSession: return it unchanged and let the other invitees keep
+    // ringing. A missing/undeleted conversation resolves the same way as
+    // "not direct" — fail toward NOT destroying a call that may still be
+    // live for others.
+    if (options?.preJoinDecline) {
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: call.conversationId },
+        select: { type: true }
+      });
+      if (conversation?.type !== 'direct') {
+        logger.info('ℹ️ Pre-join decline on a group call — session continues for other invitees', {
+          callId, endedBy
+        });
+        return this.getCallSession(callId);
+      }
+    }
+
     // P2P: ANY active participant can end the call (spec C4 fix)
     // SFU (Phase 2): only initiator/moderator can end for everyone
 

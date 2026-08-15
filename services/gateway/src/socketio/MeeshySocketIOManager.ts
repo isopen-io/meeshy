@@ -33,6 +33,7 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
+import { buildTranslationEvent } from './buildTranslationEvent';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
@@ -95,6 +96,7 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
+  if (eventType === 'translation') return SERVER_EVENTS.MESSAGE_TRANSLATION;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -1363,12 +1365,23 @@ export class MeeshySocketIOManager {
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
 
       if (translation) {
-        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
+        // MÊME constructeur que le retour ZMQ (`_handleTextTranslationReady`).
+        // Cette branche émettait sa propre forme — `{ messageId, translatedText,
+        // targetLanguage, confidenceScore }` — que ni le web (qui exige
+        // `translation`/`translations` et sort en silence sinon) ni iOS (qui
+        // décode `TranslationEvent`, `translations` non optionnel) ne sait lire.
+        // « Traduire ce message » ne faisait donc RIEN dès que la traduction
+        // était en cache, c'est-à-dire sur le chemin instantané ; elle ne
+        // « marchait » que sur cache MISS, servie par l'autre constructeur.
+        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, buildTranslationEvent({
           messageId: data.messageId,
-          translatedText: translation.translatedText,
           targetLanguage: data.targetLanguage,
-          confidenceScore: translation.confidenceScore
-        });
+          translatedText: translation.translatedText,
+          sourceLanguage: translation.sourceLanguage,
+          translationModel: translation.translatorModel || translation.modelType,
+          confidenceScore: translation.confidenceScore,
+          cached: true,
+        }));
 
         this.stats.translations_sent++;
 
@@ -1522,21 +1535,16 @@ export class MeeshySocketIOManager {
       
       // Préparer les données de traduction au format correct pour le frontend
       // FORMAT: TranslationEvent avec un tableau de traductions
-      const translationData: TranslationEvent = {
+      const translationData: TranslationEvent = buildTranslationEvent({
         messageId: result.messageId,
-        translations: [{
-          id: data.translationId || data.id || `${result.messageId}_${targetLanguage}_${Date.now()}`,
-          messageId: result.messageId,
-          sourceLanguage: result.sourceLanguage || 'auto',
-          targetLanguage: targetLanguage,
-          translatedContent: result.translatedText,
-          translationModel: result.translationModel || result.modelType || 'medium',
-          cacheKey: `${result.messageId}_${result.sourceLanguage || 'auto'}_${targetLanguage}`,
-          cached: false,
-          confidenceScore: result.confidenceScore || 0.85,
-          createdAt: new Date()
-        }]
-      };
+        targetLanguage,
+        translatedText: result.translatedText,
+        sourceLanguage: result.sourceLanguage,
+        translationModel: result.translationModel || result.modelType,
+        confidenceScore: result.confidenceScore,
+        cached: false,
+        translationId: data.translationId || data.id,
+      });
       
       
       // Diffuser dans la room de conversation (méthode principale et UNIQUE)
@@ -1550,6 +1558,42 @@ export class MeeshySocketIOManager {
         
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
+
+        // Troisième audience, la seule que rien ne servait : les participants
+        // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des
+        // sockets connectées, et le `message:new` mis en file à l'ENVOI porte
+        // `translations: []` — la traduction atterrit une seconde plus tard, par
+        // ZMQ. Sans cette entrée, le message rejoué au reconnect reste
+        // définitivement dans la langue de l'expéditeur : aucun client ne
+        // refetch spontanément. Le Prisme devenait fonction de la CONNECTIVITÉ
+        // du lecteur — exactement le défaut que `emitAttachmentUpdated` ferme
+        // pour la transcription d'une note vocale, ici pour le texte.
+        //
+        // Aucun acteur à exclure : NLLB n'est pas une personne, et l'auteur du
+        // message est précisément un participant dont la copie ne porte aucune
+        // traduction à l'envoi.
+        //
+        // `dedupKey` scopé à la LANGUE CIBLE : un message se traduit vers autant
+        // de langues que la conversation compte de langues de lecture, et
+        // l'identité de dédup par défaut (messageId, eventType) les écraserait
+        // l'une après l'autre — le lecteur hors ligne ne convergerait que sur la
+        // dernière arrivée.
+        // Borné aux lecteurs dont le Prisme porte CETTE langue — la même règle
+        // que `emitConversationPreviewUpdate` applique juste en dessous avec
+        // `onlyIfPreviewCarriesLanguage`. Sans ce bornage, un message d'une
+        // conversation à L langues déposait L entrées chez CHAQUE absent, dont
+        // L−1 dans des langues qu'il ne peut pas afficher : la file qui porte
+        // les vrais messages était diluée d'autant, et le repli mémoire
+        // (plafonné à 50 entrées par utilisateur) évinçait des messages réels
+        // au profit de traductions illisibles.
+        await this._enqueueForOfflineParticipants({
+          conversationId: normalizedId,
+          eventType: 'translation',
+          messageId: result.messageId,
+          payload: translationData as unknown as Record<string, unknown>,
+          dedupKey: `${result.messageId}:${targetLanguage}`,
+          restrictToReadersOfLanguage: targetLanguage,
+        });
 
         // `message:translation` ne porte QUE la room de conversation. Un lecteur
         // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu

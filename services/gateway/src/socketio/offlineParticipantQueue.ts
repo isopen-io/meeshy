@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
+import {
+  resolveParticipantLanguage,
+  resolveUserLanguagesOrdered,
+} from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
@@ -13,6 +18,24 @@ export interface OfflineParticipantQueueDeps {
   deliveryQueue: { enqueue(userId: string, entry: QueuedMessagePayload): Promise<void> } | null | undefined;
   prisma: Pick<PrismaClient, 'participant'>;
   connectedUsers: { has(key: string): boolean };
+}
+
+/**
+ * Une ligne de participant telle que ce module la consomme. `language` et
+ * `user` ne sont chargés que par le chemin restreint par langue — la projection
+ * du chemin nominal reste `{ id, userId }`, qui est ce que la fan-out la plus
+ * chaude du service paie aujourd'hui.
+ */
+interface OfflineQueueParticipant {
+  id: string;
+  userId: string | null;
+  language?: string | null;
+  user?: {
+    systemLanguage?: string | null;
+    regionalLanguage?: string | null;
+    customDestinationLanguage?: string | null;
+    deviceLocale?: string | null;
+  } | null;
 }
 
 export interface OfflineParticipantQueueParams {
@@ -45,6 +68,63 @@ export interface OfflineParticipantQueueParams {
    * own inline copy of the fan-out is how the previous five copies happened.
    */
   participants?: { id: string; userId: string | null }[];
+  /**
+   * Restreint le fan-out aux participants hors ligne dont le Prisme
+   * Linguistique porte CETTE langue.
+   *
+   * Une traduction n'est pas un message : elle ne concerne que les lecteurs qui
+   * la liront. Le chemin VIVANT l'a toujours su — `emitConversationPreviewUpdate`
+   * borne déjà sa diffusion par `onlyIfPreviewCarriesLanguage`. La file hors
+   * ligne, elle, adressait chaque langue à TOUS les absents : un message d'une
+   * conversation à L langues de lecture y déposait L entrées par absent, dont
+   * L−1 dans des langues que le destinataire ne peut afficher (règle du Prisme :
+   * seules les langues de son prisme sont servies).
+   *
+   * Le prédicat est l'APPARTENANCE au prisme, jamais « la langue de tête » : un
+   * lecteur de prisme `['de','en']` doit garder l'entrée `en`, qui est son
+   * repli de rang 2 le jour où la traduction allemande échoue. Filtrer sur la
+   * tête échangerait une économie de bande passante contre une régression du
+   * Prisme.
+   *
+   * Ne s'applique QU'aux familles d'événements par-langue (`translation`
+   * aujourd'hui). Un `new`/`edited`/`deleted` n'a pas de langue et n'est jamais
+   * restreint.
+   */
+  restrictToReadersOfLanguage?: string;
+}
+
+/**
+ * Les langues qu'un participant peut effectivement AFFICHER, dans l'ordre du
+ * Prisme.
+ *
+ * Compose les deux autorités du dépôt sans réimplémenter leur échelle
+ * (règle CLAUDE.md) : `resolveUserLanguagesOrdered` rend le prisme in-app
+ * ordonné (systemLanguage → regionalLanguage → customDestinationLanguage →
+ * deviceLocale) ; `resolveParticipantLanguage` fournit le repli métier
+ * `Participant.language` — le seul signal qu'un invité de lien partagé
+ * possède, faute de ligne `User`.
+ *
+ * Rend `[]` quand aucune langue n'est résoluble : l'appelant traite ce cas en
+ * ÉCHEC OUVERT (il met en file), parce qu'un prisme inconnu n'est pas un prisme
+ * vide — perdre une traduction est un défaut visible, une entrée de trop ne
+ * l'est pas.
+ */
+function readableLanguagesFor(participant: OfflineQueueParticipant): string[] {
+  const prism = participant.user
+    ? resolveUserLanguagesOrdered(participant.user, {
+        deviceLocale: participant.user.deviceLocale ?? undefined,
+      })
+    : [];
+  if (prism.length > 0) return prism;
+
+  if (!participant.language) return [];
+  return [
+    resolveParticipantLanguage({
+      type: participant.userId ? 'user' : 'anonymous',
+      language: participant.language,
+      user: participant.user ?? null,
+    }),
+  ];
 }
 
 /**
@@ -80,13 +160,43 @@ export async function enqueueForOfflineParticipants(
   if (!deliveryQueue) return;
 
   const { conversationId, actorParticipantId, actorUserId, eventType, messageId, payload, dedupKey } = params;
+  // Normalisée une fois, du MÊME côté que le prisme : `resolveUserLanguagesOrdered`
+  // et `resolveParticipantLanguage` rendent des codes réduits et minusculés
+  // ('PT-BR' → 'pt'). Comparer une langue cible brute à un prisme normalisé
+  // raterait le lecteur qu'on cherche précisément à servir.
+  const restrictToLanguage = params.restrictToReadersOfLanguage
+    ? normalizeLanguageCode(params.restrictToReadersOfLanguage) ??
+      params.restrictToReadersOfLanguage.toLowerCase()
+    : null;
   try {
-    const participants =
-      params.participants ??
-      (await prisma.participant.findMany({
-        where: { conversationId, isActive: true },
-        select: { id: true, userId: true },
-      }));
+    // La restriction par langue exige les préférences du lecteur, que la
+    // projection nominale ne porte pas — et qu'aucun appelant restreint ne
+    // fournit via `params.participants`. On requête donc nous-mêmes dans ce cas,
+    // en élargissant le `select` pour ce seul chemin : le chemin chaud
+    // (`broadcastNewMessage`, jamais restreint) garde sa liste pré-chargée et
+    // sa projection à deux colonnes.
+    const participants: OfflineQueueParticipant[] = restrictToLanguage
+      ? await prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: {
+            id: true,
+            userId: true,
+            language: true,
+            user: {
+              select: {
+                systemLanguage: true,
+                regionalLanguage: true,
+                customDestinationLanguage: true,
+                deviceLocale: true,
+              },
+            },
+          },
+        })
+      : params.participants ??
+        (await prisma.participant.findMany({
+          where: { conversationId, isActive: true },
+          select: { id: true, userId: true },
+        }));
     for (const p of participants) {
       // Queue key mirrors the presence-key convention: userId for registered
       // users, participant id for anonymous. `connectedUsers` and `ROOMS.user`
@@ -96,6 +206,13 @@ export async function enqueueForOfflineParticipants(
         (actorParticipantId != null && p.id === actorParticipantId) ||
         (actorUserId != null && p.userId === actorUserId);
       if (isActor || connectedUsers.has(queueKey)) continue;
+      if (restrictToLanguage !== null) {
+        // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est
+        // résoluble reçoit l'entrée, exactement comme avant ce filtre. Le pire
+        // cas reste une entrée inutile en file, jamais une traduction perdue.
+        const readable = readableLanguagesFor(p);
+        if (readable.length > 0 && !readable.includes(restrictToLanguage)) continue;
+      }
       deliveryQueue
         .enqueue(queueKey, {
           messageId,
