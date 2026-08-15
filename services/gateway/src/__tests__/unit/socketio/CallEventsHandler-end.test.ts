@@ -742,6 +742,33 @@ describe('CallEventsHandler — call:end handler', () => {
       );
     });
 
+    it('group call (2026-08-15): does NOT broadcast call:ended or post a summary when endCall no-ops for a group decline', async () => {
+      // CallService.endCall() no-ops for a preJoinDecline landing on a group
+      // call and returns the session UNCHANGED — still non-terminal
+      // ('ringing'), not one of CALL_TERMINAL_STATUSES. The handler must
+      // detect that and skip every side effect that assumes the call
+      // actually ended, so the other invitees keep ringing undisturbed.
+      mockGetCallSession.mockResolvedValue({
+        answeredAt: null,
+        participants: [{ participantId: 'other-participant', leftAt: null, participant: { userId: 'other-user' } }],
+      });
+      mockEndCall.mockResolvedValue(makeCallSession({ status: 'ringing' }));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](REJECT_DATA, ack);
+
+      expect(roomEmit).not.toHaveBeenCalled();
+      expect(mockCreateCallSummaryMessage).not.toHaveBeenCalled();
+      expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+      expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+
     it('does not affect the non-decline non-participant path (reason != rejected stays rejected outright)', async () => {
       // Same "never joined, but IS a conversation member" shape as the
       // authorized case above, but with the default reason ('hangup') — the
