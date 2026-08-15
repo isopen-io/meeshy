@@ -1011,6 +1011,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
               cleanupManager.getIO(), callId, conversationId, endedEvent
             )
         );
+        // Sibling of the callEndedBroadcaster wiring above — the REST
+        // leave/kick route (`DELETE /calls/:id/participants/:pid`) never
+        // broadcast `call:participant-left` at all (only the socket
+        // `call:leave` handler did), leaving a departed/kicked group-call
+        // member visible in every other participant's roster/video grid
+        // until the ~120s GC sweep.
+        cleanupManager.getCallService().setParticipantLeftBroadcaster(
+          (_callId, event) =>
+            callEventsHandler.broadcastParticipantLeftForRest(cleanupManager.getIO(), event)
+        );
         // Bug fix (2026-08-01) — initiateCall's own GC sweeps (phantom stale
         // participations, zombie active call) write `CallParticipant.leftAt`
         // exactly like every path above, but had no bridge to

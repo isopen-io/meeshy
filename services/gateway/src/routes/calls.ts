@@ -921,6 +921,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
         leaveParticipantId = targetParticipant.id;
       }
 
+      // Snapshot the leaving/kicked participant's OWN CallParticipant row id
+      // BEFORE leaveCall() runs — this is what CallManager's store keys
+      // removal on client-side (event.participantId), distinct from
+      // `leaveParticipantId` above (the conversation Participant.id leaveCall
+      // itself expects). Read from the pre-leave `call` snapshot, matching
+      // the socket `call:leave` handler's own `callBefore` lookup.
+      const leavingCallParticipant = call.participants.find(
+        (p) => p.participantId === leaveParticipantId && !p.leftAt
+      );
+
       const callSession = await callService.leaveCall({
         callId,
         userId: participantId,
@@ -938,6 +948,20 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // Parité socket call:leave — diffuse `call:ended` au pair UNIQUEMENT si le
       // leave a rendu l'appel terminal (broadcastCallEndedIfTerminal auto-gardé).
       callService.broadcastCallEndedIfTerminal(callSession, participantId);
+      // Bug fix — cette route (self-leave ET kick modérateur) ne diffusait
+      // JAMAIS `call:participant-left`, contrairement au handler socket
+      // `call:leave` : les autres pairs d'un appel de groupe qui continue
+      // gardaient le partant/l'exclu dans leur grille vidéo/roster et leur
+      // RTCPeerConnection ouverte jusqu'au GC (~120s). Inconditionnel comme le
+      // handler socket (pas seulement quand l'appel devient terminal).
+      if (leavingCallParticipant) {
+        callService.broadcastParticipantLeft(
+          callId,
+          leavingCallParticipant.id,
+          participantId,
+          callSession.mode
+        );
+      }
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
