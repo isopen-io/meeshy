@@ -1438,9 +1438,7 @@ extension StoryComposerView {
     }
 
     var safeAreaBottomInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.bottom ?? 0
+        WindowMetrics.safeAreaInsets.bottom
     }
 
     func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {

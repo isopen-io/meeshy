@@ -208,3 +208,135 @@ Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 31 — le recensement
 invisible, le discriminant de placement (rejeu après clôture), et le constat
 latent nº 1 VÉRIFIÉ proposé au cycle 32 : un canal d'annonces n'est un canal
 d'annonces pour personne.
+
+# Cycle 33 — le fait était dans le chiffré, la route lisait le drapeau
+
+Sonde annoncée en clôture du cycle 32 : quelles disjonctions de validateur
+n'ont pas d'implémentation derrière chaque branche ? Balayage par schéma sur
+`services/gateway` + `packages/shared`.
+
+## Constat
+
+- [x] 3 candidats écartés, vérifiés jusqu'au site d'écriture (`anonymous.ts`,
+      `translation.ts`, `posts/sounds.ts` — toutes branches servies)
+- [x] Défaut : 4e branche du `.refine()` d'envoi (`encryptedContent` seul)
+      consommée sous condition d'un booléen SÉPARÉ (`isEncrypted`)
+- [x] Les DEUX ordres perdaient : chiffré jeté (400 « contenu vide »), ou
+      message déclaré chiffré écrit EN CLAIR
+- [x] 3e défaut sur le même champ : `encryptionMode` rejetait la casse que le
+      client iOS émet (`"E2EE"`), et l'OpenAPI publiait `e2e` (refusé) en
+      taisant `hybrid` (accepté)
+- [x] Chemin socket vérifié JUSTE (lit la présence, pas un booléen) — REST seul
+      divergeait
+
+## Correctifs
+
+- [x] La route gate sur la présence du chiffré ; le `!` disparaît
+- [x] `mode` par défaut `e2ee` quand un chiffré arrive sans mode
+- [x] Le schéma REFUSE `isEncrypted` sans chiffré (jamais de rétrogradation)
+- [x] Casse normalisée à la frontière, jeu de valeurs FERMÉ
+- [x] Description OpenAPI réalignée sur ce qui est appliqué
+
+## Gates
+
+- [x] 8 RED discriminants vus rouges avant correctif (5 route + 3 schéma)
+- [x] 5 non-régressions vertes d'emblée
+- [x] Suite gateway complète : **722 suites / 17 682 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 33) + leçon 267
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 33 — le tableau des
+candidats écartés, la contrainte d'ORDRE des correctifs (normaliser la casse
+seule aurait converti un 400 en corruption silencieuse), les deux
+contournements clients qui étaient des rapports de bug non déposés, et la
+question proposée au cycle 34 : quels faits ce dépôt lit-il à travers un
+drapeau plutôt qu'à travers la donnée qui les porte ?
+
+# Cycle 34 — les octets partaient, le fait qui les décrit restait
+
+Sonde annoncée en clôture du cycle 33 : quels faits ce dépôt lit-il à travers un
+drapeau plutôt qu'à travers la donnée qui les porte ?
+
+## Constat
+
+- [x] 5 candidats écartés, vérifiés jusqu'au site d'écriture (`isEdited`+`editedAt`
+      écrits ensemble par les 4 transports ; `UpdateMessageBodySchema.isEdited`
+      inerte ; `isForwarded` rattrapé ; view-once/blur d'attachment sans écrivain ;
+      scan/moderation sans lecteur)
+- [x] Défaut : `copyForwardedAttachments` partage `filePath` (le MÊME blob) et
+      laisse derrière les 11 champs qui disent que ce blob est du chiffré
+- [x] Le gateway ne déchiffre pas — le client déchiffre d'après ce que la ligne
+      DÉCLARE : la copie annonçait « clair » en pointant du chiffré
+- [x] Le chiffré était donc rendu TEL QUEL comme s'il était le média
+- [x] `thumbHash` / `imageVariants` perdus aussi (écrivain réel : `UploadProcessor`)
+
+## Correctifs
+
+- [x] La copie emporte les 11 champs qui décrivent ses propres octets
+- [x] `thumbHash` / `imageVariants` suivent le média dont ils dérivent
+- [x] Une pièce en clair reste en clair — l'absence du fait copiée aussi fidèlement
+
+## Gates
+
+- [x] 5 RED discriminants vus rouges avant correctif
+- [x] 2 non-régressions vertes d'emblée, dont le discriminant anti-sur-correction
+- [x] Suite gateway complète : 722 suites / 17 689 tests verts
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 34) + leçon 268
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 34 — le tableau des 5
+candidats écartés, pourquoi le garde du cycle 93 ne couvrait pas ce cas (il lit
+`Message`, jamais les pièces jointes), les 3 constats latents dont la
+distribution de clés e2ee, et la question proposée au cycle 35 : où ce dépôt
+duplique-t-il une ligne en la réénumérant à la main, et qu'a cessé d'emporter
+chacune de ces projections ?
+
+# Cycle 35 — la copie partait sans ce qui décrit ses propres pixels
+
+Sonde annoncée en clôture du cycle 34 : où ce dépôt duplique-t-il une ligne en la
+réénumérant à la main, et qu'a cessé d'emporter chacune de ces projections ?
+
+## Constat
+
+- [x] 6 candidats écartés, vérifiés jusqu'au site d'écriture (`SoundCaptureService`
+      compose un modèle différent ; `buildPostReplyTo` est un aperçu NOMMÉ et
+      jumelé à son select ; branche non éphémère de `repostPost` sans copie par
+      conception ; `tus-handler` crée du neuf ; `reproduceEditedSubjectNotifications`
+      déjà gardé par un test qui diffe la ligne)
+- [x] Défaut : `repostPost`, branche éphémère — les OCTETS sont dupliqués, la
+      ligne `PostMedia` écrite par-dessus n'énumérait que 8 champs sur 17
+- [x] `width`/`height` perdues ⇒ `aspectRatio` nil, le repost SAUTE au chargement
+- [x] `thumbHash` perdu ⇒ plus de placeholder instantané (le champ même que le
+      cycle 34 venait de rétablir sur la famille message)
+- [x] `alt`/`caption` perdus ⇒ **le média reposté devient muet à VoiceOver**
+- [x] `language`/`transcription` perdues ⇒ **le Prisme n'a plus rien à résoudre**
+- [x] `uploaderId` jamais posé ; `Post.audioDuration` laissé derrière `audioUrl`
+
+## Correctifs
+
+- [x] La copie emporte les 8 faits que ses pixels portent déjà + `uploaderId`
+- [x] `audioDuration` suit `audioUrl` sur la ligne `Post`
+- [x] `variantOf` et `translations` VOLONTAIREMENT hors de la copie — un pointeur
+      et des URL de blobs non dupliqués ne sont pas des faits sur ces octets
+- [x] L'absence copiée aussi fidèlement que la présence
+
+## Gates
+
+- [x] 7 RED discriminants vus rouges avant correctif
+- [x] 4 non-régressions vertes d'emblée
+- [x] Suite gateway complète : **723 suites / 17 700 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 35) + leçon 269
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 35 — le tableau des 6
+candidats écartés, le tableau des 3 tests verts qui comptaient les appels sans
+jamais lire la ligne écrite, les 3 constats latents dont les blobs TTS qu'aucun
+balayage ne récupère, et la question proposée au cycle 36 : quelles duplications
+mériteraient une garde d'exhaustivité, et laquelle des trois formes convient à
+chacune ?

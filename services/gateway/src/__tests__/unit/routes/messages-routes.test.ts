@@ -3413,6 +3413,107 @@ describe('POST /conversations/:id/messages — extra branch coverage', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// JONCTION schéma ↔ chemin d'écriture — le chiffrement
+//
+// Le `.refine()` de `SendMessageBodySchema` compte `encryptedContent` parmi les
+// porteurs de contenu : un corps qui n'apporte QUE du chiffré est un message
+// valide. La route, elle, ne consommait ce chiffré que si `isEncrypted` — un
+// booléen SÉPARÉ, que le schéma n'a jamais lié au chiffré. Les deux ordres
+// perdaient :
+//   • chiffré sans le drapeau  ⇒ le chiffré est jeté ;
+//   • drapeau sans le chiffré  ⇒ `ciphertext: encryptedContent!` ment, et le
+//     message est écrit EN CLAIR avec `isEncrypted: false`.
+//
+// Ces suites emploient le VRAI schéma (la route parse elle-même `request.body`)
+// et affirment l'invariante de jonction : tout corps admis par le schéma est
+// servi en portant ce qu'il déclare — aucune branche silencieusement jetée.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('POST /conversations/:id/messages — jonction chiffrement', () => {
+  const getHandler = () => fastify._routes['POST']['/conversations/:id/messages'];
+
+  beforeEach(() => {
+    mockHandleMessage.mockResolvedValue({ success: true, data: { id: MSG_ID, conversationId: CONV_ID } });
+  });
+
+  it('le chiffré SEUL (branche 4 du refine, sans isEncrypted) est transmis, pas jeté', async () => {
+    const reply = makeReply();
+    await getHandler()(makeRequest({ body: { encryptedContent: 'ct-b64', encryptionMetadata: { keyId: 'k1' } } }), reply);
+
+    expect(mockSendBadRequest).not.toHaveBeenCalled();
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: expect.objectContaining({ ciphertext: 'ct-b64' }) }),
+      expect.any(String),
+    );
+  });
+
+  it('un chiffré accompagné de contenu n\'est jamais jeté au profit du clair', async () => {
+    const reply = makeReply();
+    await getHandler()(makeRequest({ body: { content: '[Encrypted]', encryptedContent: 'ct-b64' } }), reply);
+
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: expect.objectContaining({ ciphertext: 'ct-b64' }) }),
+      expect.any(String),
+    );
+  });
+
+  it('le mode par défaut est e2ee quand le chiffré arrive sans encryptionMode', async () => {
+    await getHandler()(makeRequest({ body: { encryptedContent: 'ct-b64' } }), makeReply());
+
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: expect.objectContaining({ mode: 'e2ee' }) }),
+      expect.any(String),
+    );
+  });
+
+  it('isEncrypted sans chiffré est REFUSÉ — jamais rétrogradé en clair', async () => {
+    const reply = makeReply();
+    await getHandler()(makeRequest({ body: { content: 'Y2lwaGVy', isEncrypted: true, encryptionMode: 'e2ee' } }), reply);
+
+    expect(mockHandleMessage).not.toHaveBeenCalled();
+    expect(mockSendBadRequest).toHaveBeenCalled();
+  });
+
+  it('le mode que le client iOS émet ("E2EE") est servi, normalisé en e2ee', async () => {
+    await getHandler()(makeRequest({ body: { encryptedContent: 'ct-b64', encryptionMode: 'E2EE' } }), makeReply());
+
+    expect(mockSendBadRequest).not.toHaveBeenCalled();
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: expect.objectContaining({ mode: 'e2ee' }) }),
+      expect.any(String),
+    );
+  });
+
+  it('NON-RÉGRESSION — la forme du contrat (drapeau + chiffré + mode) passe toujours', async () => {
+    await getHandler()(makeRequest({
+      body: { content: '', isEncrypted: true, encryptedContent: 'enc-b64', encryptionMode: 'e2ee', encryptionMetadata: { sessionId: 's1' } },
+    }), makeReply());
+
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: expect.objectContaining({ ciphertext: 'enc-b64', mode: 'e2ee' }) }),
+      expect.any(String),
+    );
+  });
+
+  it('NON-RÉGRESSION — un message en clair ne se voit poser aucun encryptedPayload', async () => {
+    await getHandler()(makeRequest({ body: { content: 'bonjour' } }), makeReply());
+
+    expect(mockHandleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ encryptedPayload: undefined }),
+      expect.any(String),
+    );
+  });
+
+  it('NON-RÉGRESSION — un corps entièrement vide reste refusé', async () => {
+    const reply = makeReply();
+    await getHandler()(makeRequest({ body: {} }), reply);
+
+    expect(mockHandleMessage).not.toHaveBeenCalled();
+    expect(mockSendBadRequest).toHaveBeenCalled();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Branch coverage: DELETE unpin, GET pinned-messages
 // ═══════════════════════════════════════════════════════════════════════════════
 
