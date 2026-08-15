@@ -56,7 +56,7 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { setSharedNotificationService } from '../services/notifications/notification-service-registry';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
-import { getBlockedUserIdsAmong } from '../utils/blocking';
+import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -2063,10 +2063,22 @@ export class MeeshySocketIOManager {
             // (PresenceVisibilityService). Un socket.id est aussi une room
             // Socket.IO (auto-join), donc .except(socketId) l'exclut du
             // broadcast même s'il est par ailleurs membre de `rooms`.
-            const onlineOtherUserIds = [...this.connectedUsers.keys()].filter(id => id !== user.id);
-            const blockedUserIds = onlineOtherUserIds.length > 0
-              ? await getBlockedUserIdsAmong(this.prisma, user.id, onlineOtherUserIds)
-              : new Set<string>();
+            //
+            // La relation de blocage est résolue SANS liste de candidats. La
+            // version précédente passait `connectedUsers.keys()` — toute la
+            // population connectée de la gateway — en candidats, si bien qu'une
+            // seule transition de présence portait un `$in` dimensionné par le
+            // serveur entier. Or ce chemin s'exécute à CHAQUE connexion, chaque
+            // déconnexion, et pour chaque user que le balayage de maintenance
+            // passe hors ligne d'un coup : le coût d'une connexion croissait
+            // avec le nombre de personnes déjà connectées.
+            //
+            // Le résultat est le MÊME : un id en relation de blocage qui n'a
+            // aucun socket vivant n'apporte rien à `.except()`, exactement ce
+            // que le pré-filtre par `connectedUsers` retirait. `userSockets` est
+            // vidé à la déconnexion (`AuthHandler.handleDisconnection`), donc
+            // l'intersection se fait ici, en mémoire, au lieu d'en base.
+            const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
             const blockedSocketIds = [...blockedUserIds].flatMap(
               id => [...(this.userSockets.get(id) ?? [])],
             );

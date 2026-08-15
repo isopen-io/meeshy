@@ -2082,6 +2082,73 @@ describe('MeeshySocketIOManager', () => {
       }));
     });
 
+    it('resolves the blocked viewers WITHOUT enumerating the connected population', async () => {
+      // The privacy filter must cost what the BLOCK RELATION costs, never what
+      // the server population costs. `_broadcastUserStatus` fires on every
+      // presence transition — each connect, each disconnect, and every user the
+      // maintenance sweep marks offline at once. Passing `connectedUsers.keys()`
+      // as the candidate list made one presence transition carry an `$in` sized
+      // by the whole gateway, so the cost of a single connect grew with the
+      // number of people already connected.
+      //
+      // The typing channel next door already got this right
+      // (`StatusHandler._getBlockedSocketIdsInRoom` bounds its candidates to the
+      // conversation's participants); this witness is what keeps the presence
+      // channel from drifting back.
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-crowded',
+        username: 'crowded',
+        displayName: 'Crowded',
+        firstName: 'C',
+        lastName: 'R',
+        lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
+      for (let i = 0; i < 50; i++) {
+        (manager as any).connectedUsers.set(`bystander-${i}`, {
+          id: `bystander-${i}`, socketId: `sock-${i}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
+        });
+      }
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await (manager as any)._broadcastUserStatus('user-crowded', true, false);
+
+      const blockQueryArgs = prisma.user.findMany.mock.calls.map((c: unknown[]) => c[0]) as Array<{
+        where?: { id?: unknown };
+      }>;
+      expect(blockQueryArgs.length).toBeGreaterThan(0);
+      for (const args of blockQueryArgs) {
+        expect(args.where?.id).toBeUndefined();
+      }
+    });
+
+    it('still excludes a blocked viewer who is connected, now resolved from the block relation', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-reg-9',
+        username: 'nine',
+        displayName: 'Nine',
+        firstName: 'N',
+        lastName: 'I',
+        lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
+      (manager as any).userSockets.set('user-blocker-9', new Set(['sock-blocker-9']));
+      // Someone who blocked the broadcaster but is NOT connected: they own no
+      // socket, so they contribute nothing to the exclusion list — the reason
+      // dropping the `connectedUsers` pre-filter is behaviour-preserving.
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker-9' }, { id: 'user-offline-blocker' }]);
+
+      await (manager as any)._broadcastUserStatus('user-reg-9', true, false);
+
+      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker-9']);
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+        userId: 'user-reg-9',
+        isOnline: true,
+      }));
+    });
+
     it('does not call except() when no online user is blocked with the broadcaster', async () => {
       mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
       prisma.user.findUnique.mockResolvedValue({

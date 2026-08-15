@@ -180,7 +180,8 @@ scripts/migrations/mongodb/
 ├── 007_migrate_snake_case_to_camel_case.js              # Migrate snake_case to CamelCase collections
 ├── 008_add_email_verification_code.js                   # Add email verification code fields
 ├── 009_partial_index_post_originalRepostOfId.js         # Partial-filter index on reposts
-└── 010_notification_expiry_index.js                     # Notification [userId, isRead, expiresAt]
+├── 010_notification_expiry_index.js                     # Notification [userId, isRead, expiresAt]
+└── 011_user_blocked_user_ids_index.js                   # User.blockedUserIds multikey
 ```
 
 ### 010_notification_expiry_index.js
@@ -193,6 +194,20 @@ notification must not outlive the ephemeral message it announces. Without
 `expiresAt` in the index that filter forces a document fetch per candidate on
 `emitCountsUpdate`, which runs once per recipient of every message; with it,
 the counts stay index-only. Idempotent, and a no-op on a database created by
+`prisma db push` from the current schema.
+
+### 011_user_blocked_user_ids_index.js
+
+Adds the multikey index `User[blockedUserIds]`.
+
+The presence broadcast answers "who blocked this person?" on every presence
+transition. It used to do so by handing the entire connected population to
+`getBlockedUserIdsAmong` as candidates, so one connect carried an `$in` sized
+by the whole gateway. `getBlockRelatedUserIds` asks the question directly
+(`{ blockedUserIds: <userId> }`), which without this index would be a COLLSCAN
+over every user — the cost moved rather than removed. As a multikey index the
+lookup is bounded by how many people actually blocked that account. Additive
+(nothing is dropped), idempotent, and a no-op on a database created by
 `prisma db push` from the current schema.
 
 ## Expected Results After Migration
