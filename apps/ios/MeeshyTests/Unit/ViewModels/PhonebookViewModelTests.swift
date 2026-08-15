@@ -123,7 +123,11 @@ final class PhonebookViewModelTests: XCTestCase {
     func test_visibleContacts_searchMatchesAddressBookName() async {
         let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Awa Diallo"),
-            makeContact(id: "2", displayName: "Bob Marley", username: "bob"),
+            // Email/téléphone explicitement distincts du défaut de la factory
+            // (qui vaut "awa@test.com" / "+221771234567") : sans ça, "Bob
+            // Marley" matcherait quand même la requête "awa" par son email
+            // hérité, et le test ne discriminerait plus rien.
+            makeContact(id: "2", displayName: "Bob Marley", phoneNumbers: ["+33612345678"], emails: ["bob@test.com"], username: "bob"),
         ])
         await sut.load(forceNetwork: true)
 
@@ -135,7 +139,10 @@ final class PhonebookViewModelTests: XCTestCase {
     func test_visibleContacts_searchMatchesMeeshyUsername() async {
         let (sut, _, _, _, _) = makeSUT(contacts: [
             makeContact(id: "1", displayName: "Le voisin", username: "awa"),
-            makeContact(id: "2", displayName: "Bob", username: "bob"),
+            // Idem : "Bob" doit rester hors des résultats sur ses seuls nom et
+            // pseudo, pas grâce à un email/téléphone par défaut qui contient
+            // accidentellement "awa".
+            makeContact(id: "2", displayName: "Bob", phoneNumbers: ["+33612345678"], emails: ["bob@test.com"], username: "bob"),
         ])
         await sut.load(forceNetwork: true)
 
