@@ -16,7 +16,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.StoryApi
-import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a stories revalidation fails; carries the API error message. */
@@ -51,14 +51,43 @@ internal class StoryCacheSource(
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
+    /**
+     * Pages through the feed up to [MAX_PAGES] (`MAX_PAGES * STORIES_PAGE_SIZE` = 300
+     * stories, the same tray budget as iOS), following `pagination.nextCursor` while
+     * `hasMore` holds. [persist] only prunes rows absent from the fetched set when the
+     * window is PROVEN complete — the server said `hasMore = false` — never merely
+     * because the budget ran out: an unproven partial window may upsert what it saw,
+     * but must never be trusted to know what to delete. A response with no
+     * `pagination` block at all (`null`) is treated as a complete single page, matching
+     * the API's pre-pagination shape. Any page failing (including the first) throws
+     * without persisting anything — Room already holds a complete prior tray, and
+     * replacing it with an unproven partial one is worse than serving the stale one
+     * a beat longer.
+     */
     override suspend fun revalidate() {
-        when (val result = apiCall { storyApi.list(null, STORIES_PAGE_SIZE) }) {
-            is NetworkResult.Success -> persist(result.data)
-            is NetworkResult.Failure -> throw StorySyncException(result.error.message)
+        val collected = mutableListOf<ApiPost>()
+        var cursor: String? = null
+        var isComplete = false
+
+        for (page in 0 until MAX_PAGES) {
+            when (val result = pagedApiCall { storyApi.list(cursor, STORIES_PAGE_SIZE) }) {
+                is NetworkResult.Success -> {
+                    collected += result.data.data
+                    val hasMore = result.data.pagination?.hasMore ?: false
+                    if (!hasMore) {
+                        isComplete = true
+                        break
+                    }
+                    cursor = result.data.pagination?.nextCursor ?: break
+                }
+                is NetworkResult.Failure -> throw StorySyncException(result.error.message)
+            }
         }
+
+        persist(collected, prune = isComplete)
     }
 
-    private suspend fun persist(stories: List<ApiPost>) {
+    private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
         val now = clock.nowMillis()
         val rows = stories.map { story ->
             StoryEntity(
@@ -70,7 +99,7 @@ internal class StoryCacheSource(
         }
         database.withTransaction {
             storyDao.upsertAll(rows)
-            storyDao.deleteNotIn(rows.map { it.id })
+            if (prune) storyDao.deleteNotIn(rows.map { it.id })
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now))
         }
     }
@@ -78,5 +107,6 @@ internal class StoryCacheSource(
     internal companion object {
         const val RESOURCE_KEY: String = "stories"
         private const val STORIES_PAGE_SIZE = 50
+        private const val MAX_PAGES = 6
     }
 }

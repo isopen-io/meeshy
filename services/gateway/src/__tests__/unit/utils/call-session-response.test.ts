@@ -106,6 +106,24 @@ describe('toCallSessionResponse', () => {
     expect(out.participantCount).toBe(1);
   });
 
+  it('participantCount exclut les participants ayant quitté (leftAt non-null)', () => {
+    const departedParticipant = {
+      ...prismaParticipant,
+      id: 'cp-2',
+      leftAt: new Date('2026-07-12T03:05:00.000Z'),
+      participant: { ...prismaParticipant.participant, userId: 'user-carol' },
+    };
+    const sessionWithChurn = {
+      ...prismaSession,
+      participants: [prismaParticipant, departedParticipant],
+    };
+
+    const out = toCallSessionResponse(sessionWithChurn);
+
+    expect(out.participants).toHaveLength(2);
+    expect(out.participantCount).toBe(1);
+  });
+
   it('préserve les champs de session (id, mode, status, metadata)', () => {
     const out = toCallSessionResponse(prismaSession);
     expect(out).toMatchObject({ id: 'call-1', mode: 'p2p', status: 'active', metadata: { type: 'video' } });
