@@ -58,8 +58,16 @@ jest.mock('../../../services/posts/postVisibility', () => ({
   loadPostAcl: jest.fn<() => Promise<unknown>>().mockResolvedValue({
     authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
   }),
+  // `postId` DOIT valoir `POST_ID` : c'est le post auquel `COMMENT_ID`
+  // appartient, et le handler adresse désormais sa diffusion depuis CETTE
+  // valeur — plus depuis le `postId` du payload. Un doublon divergent (l'ancien
+  // `'post-1'`) décrivait un monde impossible où le commentaire vit sur un post
+  // et l'événement part vers un autre ; c'est exactement l'écart que le défaut
+  // exploitait, et le fait qu'aucune assertion ne le relevait est la raison
+  // pour laquelle il a survécu. Le cas où les deux ids DIVERGENT est couvert,
+  // avec le vrai module d'ACL, par `src/__tests__/unit/socketio/`.
   loadCommentPostAcl: jest.fn<() => Promise<unknown>>().mockResolvedValue({
-    postId: 'post-1',
+    postId: '507f191e810c19729de860eb',
     post: { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] },
   }),
 }));

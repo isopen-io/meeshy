@@ -638,6 +638,43 @@ describe('PostReactionHandler', () => {
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'timeout' }));
     });
+
+    // Synchroniser = LIRE l'état social du post. Même audience que `post:join`,
+    // qui laisse entrer dans la room où ce même état est ensuite diffusé —
+    // sinon la garde de la room ne borne rien : il suffit de demander l'état
+    // directement au lieu de s'abonner. Les frères `handleAddReaction` /
+    // `handleRemoveReaction` passent déjà par `resolveInteractionTarget`.
+    it('denies sync when the post is not consumable by the viewer', async () => {
+      const { handler, postReactionService } = buildHandler();
+      const callback = jest.fn<any>();
+
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce(null);
+
+      await handler.handleRequestSync(makeSocket(), { postId: POST_ID }, callback);
+
+      expect(postReactionService.getPostReactions).not.toHaveBeenCalled();
+      // Refus indistinct — jamais de 403 qui confirmerait l'existence du post.
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Post not found' }));
+    });
+
+    // La redirection des reposts simples vaut ici comme partout ailleurs : la
+    // vie sociale d'un repost simple est celle de sa RACINE, donc son état de
+    // réactions aussi. Sans elle, ouvrir un repost rendait un état vide alors
+    // que la racine porte les réactions — et le room-join, lui, redirigeait
+    // déjà. Les deux doivent désigner le même post.
+    it('syncs the resolved target (root) for a simple repost, not the raw id', async () => {
+      const ROOT_ID = '507f191e810c19729de860cc';
+      const { handler, postReactionService } = buildHandler();
+      const callback = jest.fn<any>();
+
+      (resolveConsumptionTarget as jest.Mock<any>).mockResolvedValueOnce({ id: ROOT_ID });
+
+      await handler.handleRequestSync(makeSocket(), { postId: POST_ID }, callback);
+
+      expect(postReactionService.getPostReactions).toHaveBeenCalledWith(
+        expect.objectContaining({ postId: ROOT_ID }),
+      );
+    });
   });
 
   // ── handleJoinPost ───────────────────────────────────────────────────────
