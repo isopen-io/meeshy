@@ -79,12 +79,31 @@ name: iOS Tests
 # repo's cache limit and evict the SPM cache); if the cross-mode reuse turns out
 # to be nil, the cost is a cold compile on dev, never a wrong result.
 #
-# One job, one set of steps: `COMPILE_ONLY`
-# gates steps 10 and 12 (already separate since forever), so there is no second
-# copy of the toolchain to drift. Guarded by
-# `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`, which runs on every
-# PR — the 2026-07-27 removal went unnoticed for weeks precisely because nothing
-# watched it.
+# TESTS SUR DEMANDE (2026-08-15). Le défaut s'inverse : la COMPILATION tourne
+# partout — PR comme poussée — et l'EXÉCUTION des tests ne tourne que si on la
+# demande. La demande s'écrit dans le SUJET du commit de tête : « smoke test »,
+# « run test » ou « to test », insensible à la casse ; `workflow_dispatch` la
+# force aussi, un lancement manuel étant déjà explicite.
+#
+# Motif : la règle précédente liait la bascule à l'ÉVÉNEMENT (`COMPILE_ONLY =
+# event == 'pull_request'`), donc chaque poussée sur `dev` payait les deux postes
+# chers — 7 min de runtime iOS 18.2 + 8 min de suite — que la PR, elle, évitait
+# soigneusement. Le coût était simplement déplacé, pas supprimé.
+#
+# Le job `scope` résout la portée sur ubuntu avant d'engager la moindre minute
+# macOS : lire une ligne de `git log` n'a pas à consommer la ressource rare. Il
+# lit le sujet sur `pull_request.head.sha`, jamais sur `github.sha` — sur un
+# event `pull_request` ce dernier désigne le commit de merge synthétique, dont le
+# sujet est « Merge … into … » et ne porterait jamais le mot-clé.
+#
+# Deux jobs, un seul jeu d'étapes macOS : `COMPILE_ONLY` gate les étapes 10 et 12
+# (séparées depuis toujours), il n'y a donc pas de seconde copie de la chaîne
+# d'outils qui puisse dériver. Gardé par
+# `packages/shared/__tests__/ci/ios-pr-compile-gate.test.ts`, qui tourne sur
+# chaque PR — le retrait du 2026-07-27 est passé inaperçu des semaines durant
+# précisément parce que rien ne le surveillait. La garde couvre aussi les trois
+# mots-clés : les perdre ne rendrait rien rouge, ça rendrait seulement les tests
+# indemandables, et la CI resterait verte en ne vérifiant plus rien.
 on:
   push:
     branches:
@@ -114,17 +133,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Résout la PORTÉE du run avant d'engager la moindre minute macOS.
+  #
+  # La compilation est le défaut : elle attrape ce qui casse vraiment (types,
+  # signatures, fichiers absents du projet) pour ~10 min. L'exécution des tests,
+  # elle, coûte le téléchargement du runtime iOS 18.2 (7 min) plus la suite
+  # elle-même (8 min) — un prix qu'on ne paie que sur demande explicite.
+  #
+  # La demande s'écrit dans le SUJET DU COMMIT : « smoke test », « run test » ou
+  # « to test », insensible à la casse. Le sujet est lu sur le commit de TÊTE de
+  # la branche (jamais sur le commit de merge synthétique que GitHub fabrique
+  # pour un event `pull_request`, dont le sujet est toujours « Merge … into … »
+  # et ne contiendrait donc jamais le mot-clé).
+  #
+  # `workflow_dispatch` force les tests : lancer la suite à la main depuis
+  # l'onglet Actions est déjà un acte explicite, exiger en plus un mot-clé dans
+  # un commit déjà poussé n'aurait aucun sens.
+  #
+  # Ce job tourne sur ubuntu — le pool macOS est la ressource rare, on ne
+  # l'engage pas pour lire une ligne de log git.
+  scope:
+    name: Portée du run
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_tests: ${{ steps.resolve.outputs.run_tests }}
+      subject: ${{ steps.resolve.outputs.subject }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - id: resolve
+        name: Lire le sujet du commit de tête
+        run: |
+          set -euo pipefail
+          subject="$(git log -1 --pretty=%s)"
+          echo "subject=${subject}" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Suite complète — déclenchement manuel."
+            exit 0
+          fi
+
+          # `grep -i -E` sur le sujet seul : un mot-clé enfoui dans le CORPS du
+          # message ne compte pas. Le corps sert à expliquer, le sujet à décider.
+          if printf '%s' "$subject" | grep -qiE 'smoke test|run test|to test'; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Suite complète — mot-clé trouvé dans le sujet du commit."
+          else
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Compilation seule. Pour exécuter la suite, mettre « smoke test », « run test » ou « to test » dans le SUJET du commit."
+          fi
+
   ios-tests:
-    # The check name says which half ran, so a green tick on a PR is never
-    # mistaken for "the suite passed".
-    name: ${{ github.event_name == 'pull_request' && 'iOS compile (PR gate)' || 'iOS tests (full suite)' }}
+    needs: scope
+    # The check name says which half ran, so a green tick is never mistaken for
+    # "the suite passed".
+    name: ${{ needs.scope.outputs.run_tests == 'true' && 'iOS tests (full suite)' || 'iOS compile' }}
     # A draft PR is work in progress; its compile is the author's business, not
     # the shared macOS pool's. `ready_for_review` above brings the gate back.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: macos-15
     env:
-      # 'true' on a PR run: compile the app AND the test targets, run nothing.
-      COMPILE_ONLY: ${{ github.event_name == 'pull_request' }}
+      # Compilation seule par défaut — cf. le job `scope` ci-dessus. Les tests
+      # ne s'exécutent que sur demande explicite (mot-clé au sujet du commit,
+      # ou lancement manuel).
+      COMPILE_ONLY: ${{ needs.scope.outputs.run_tests != 'true' }}
     # STOPGAP cap, sized to the measured worst case — NOT a healthy target.
     # This suite on the standard 3 vCPU / 7 GB runner is dominated by
     # high-variance steps no cache removes: iOS 18.2 runtime download 8-14 min
@@ -168,7 +246,7 @@ jobs:
     # observed cost — deliberately loose, because the two variable posts it
     # keeps (SPM resolve, compile) are network- and contention-sensitive. A
     # compile that overruns 30 min is hung, not slow.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 30 || 50 }}
+    timeout-minutes: ${{ needs.scope.outputs.run_tests == 'true' && 50 || 30 }}
     steps:
       - uses: actions/checkout@v7
 

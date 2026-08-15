@@ -97,8 +97,21 @@ describe('gate iOS de compilation au temps de la PR', () => {
     expect(pullRequestTrigger()).toContain('ready_for_review');
   });
 
-  it('nomme la bascule compile-seule sur le seul événement pull_request', () => {
-    expect(WORKFLOW).toMatch(/COMPILE_ONLY:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/);
+  /**
+   * La bascule ne se lit plus sur l'événement mais sur la PORTÉE résolue par le
+   * job `scope` (2026-08-15). L'ancienne règle — « compile seule si et seulement
+   * si l'événement est `pull_request` » — laissait la suite complète s'exécuter
+   * sur CHAQUE poussée de `dev`, soit les deux postes chers payés en continu.
+   * La nouvelle inverse le défaut : compilation partout, tests sur demande.
+   */
+  it('dérive la bascule compile-seule de la portée résolue, non de l’événement', () => {
+    expect(WORKFLOW).toMatch(
+      /COMPILE_ONLY:\s*\$\{\{\s*needs\.scope\.outputs\.run_tests\s*!=\s*'true'\s*\}\}/,
+    );
+  });
+
+  it('fait dépendre le job macOS de la résolution de portée', () => {
+    expect(WORKFLOW).toMatch(/^ {4}needs: scope$/m);
   });
 
   it('ne provisionne aucun runtime de simulateur sur une PR (~7 min, réseau)', () => {
@@ -134,8 +147,58 @@ describe('gate iOS de compilation au temps de la PR', () => {
     expect(stepNamed(BUILD_STEP).body).toContain('ARCHS=arm64');
   });
 
-  it('laisse la suite complète intacte sur les poussées de dev', () => {
+  it('laisse la suite complète intacte, exécutable quand la portée la demande', () => {
     expect(stepNamed(TEST_STEP).body).toContain('test-without-building');
     expect(WORKFLOW).toMatch(/^ {2}push:$/m);
+  });
+});
+
+/**
+ * La demande d'exécution s'écrit dans le SUJET DU COMMIT. Trois mots-clés, et
+ * ils sont la seule porte : un mot-clé perdu (renommé, mal orthographié dans le
+ * YAML) ne rendrait rien rouge — les tests cesseraient simplement de pouvoir
+ * être demandés, et la CI resterait verte en ne vérifiant plus rien. C'est la
+ * forme exacte du défaut de juillet, appliquée cette fois à l'opt-in.
+ */
+describe('opt-in des tests iOS par le sujet du commit', () => {
+  const scopeJob = (): string => {
+    const start = WORKFLOW.search(/^ {2}scope:$/m);
+    if (start < 0) return '';
+    const rest = WORKFLOW.slice(start).split('\n').slice(1);
+    const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+    return (end < 0 ? rest : rest.slice(0, end)).join('\n');
+  };
+
+  it('déclare le job de résolution de portée', () => {
+    expect(scopeJob()).not.toBe('');
+  });
+
+  it('reconnaît les trois mots-clés convenus', () => {
+    const job = scopeJob();
+    for (const keyword of ['smoke test', 'run test', 'to test']) {
+      expect(job).toContain(keyword);
+    }
+  });
+
+  it('compare sans tenir compte de la casse', () => {
+    expect(scopeJob()).toMatch(/grep -qiE/);
+  });
+
+  /**
+   * Sur un événement `pull_request`, `github.sha` désigne le commit de MERGE
+   * synthétique, dont le sujet est « Merge <sha> into <sha> » — il ne contiendra
+   * jamais le mot-clé. Lire la tête de la branche est donc la condition pour que
+   * l'opt-in fonctionne du tout sur une PR.
+   */
+  it('lit le sujet sur le commit de tête de la branche, pas sur le commit de merge', () => {
+    expect(scopeJob()).toContain('github.event.pull_request.head.sha || github.sha');
+  });
+
+  it('force la suite complète sur un déclenchement manuel', () => {
+    expect(scopeJob()).toMatch(/workflow_dispatch.*\n[\s\S]*?run_tests=true/);
+  });
+
+  it('tourne hors du pool macOS — la ressource rare ne lit pas un log git', () => {
+    expect(scopeJob()).toContain('runs-on: ubuntu-latest');
   });
 });
