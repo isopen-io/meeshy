@@ -1588,7 +1588,7 @@ FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|G
 # deleted 2026-07-21 — dead code with no UI-testing target to host it; its
 # stale project.yml exclude-list entry is left for the i18n lane, which owns
 # that file, to clear on its next pass.)
-NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests"
+NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests FocalScrollPassPerfTests"
 
 discover_test_classes() {
     grep -rhoE "class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[[:space:]]*XCTestCase" MeeshyTests --include="*.swift" \
