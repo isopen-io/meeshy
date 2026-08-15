@@ -347,14 +347,24 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
+    /// Le corps de `transcriptSegmentRow(_:)`, borné à son accolade fermante
+    /// (indentation 4) au lieu d'une fenêtre de 2000 caractères. Le spec
+    /// 2026-08-13 a allongé la ligne de journal (nom + heure + badge de
+    /// langue) et le corps dépasse désormais cette fenêtre : les gardes
+    /// mesuraient une portée qui n'était plus celle de la fonction.
+    private func transcriptSegmentRowBody(_ view: String) -> String? {
+        guard let decl = view.range(of: "func transcriptSegmentRow(") else { return nil }
+        let end = view.range(of: "\n    }", range: decl.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
+        return String(view[decl.lowerBound ..< end])
+    }
+
     func test_transcriptSegmentRow_usesPrimarySecondaryColorsPerSpeaker() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("MeeshyColors.indigo400"),
             "transcriptSegmentRow must color the local speaker (\"Moi\") with MeeshyColors.indigo400 " +
@@ -367,18 +377,31 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
+    /// Le nom du locuteur reste du TEXTE VISIBLE, pas seulement une pastille
+    /// colorée (demande utilisateur 2026-07-11) ni seulement un label
+    /// VoiceOver. Le spec 2026-08-13 a fusionné nom et heure dans une seule
+    /// ligne de journal `displayName (heure)` : `Text(speakerName)` est devenu
+    /// `Text("\(speakerName) (\(timeLabel))")`. La garantie tient toujours,
+    /// l'expression a changé — le garde suit l'expression nouvelle.
     func test_transcriptSegmentRow_showsSpeakerNameAsVisibleText() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("Text(speakerName)"),
-            "transcriptSegmentRow must render the speaker's name as its own visible Text, " +
+            body.contains("Text(\"\\(speakerName)"),
+            "transcriptSegmentRow must render the speaker's name inside a visible Text, " +
             "not just a colored dot — user-requested 2026-07-11."
+        )
+        // Discriminant : `speakerName` est aussi interpolé dans
+        // `.accessibilityLabel`. Sans cette assertion, un rendu qui
+        // n'exposerait le nom qu'à VoiceOver satisferait le garde ci-dessus si
+        // l'ordre des deux occurrences venait à changer.
+        XCTAssertTrue(
+            body.contains(".accessibilityLabel(\"\\(speakerName)"),
+            "the combined row must ALSO announce the speaker to VoiceOver — visible text and " +
+            "accessibility label are two distinct requirements, neither substitutes for the other."
         )
     }
 
