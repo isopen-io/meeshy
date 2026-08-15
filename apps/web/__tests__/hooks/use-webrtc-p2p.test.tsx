@@ -1133,6 +1133,20 @@ describe('useWebRTCP2P', () => {
       expect(result.current.isReconnecting).toBe(false);
     });
 
+    // Audit web-calls (2026-08-15): a stalled peer that never recovers and
+    // genuinely LEAVES the call (group-call departure) must not leave
+    // isReconnecting stuck true for the rest of the call.
+    it('isReconnecting se réinitialise quand un pair en stall quitte définitivement l’appel', async () => {
+      const result = await driveIce(['connected', 'disconnected']);
+      expect(result.current.isReconnecting).toBe(true);
+
+      act(() => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
     it('chaque cycle de stall porte une tentative incrémentée', async () => {
       await driveIce(['connected', 'disconnected', 'connected', 'failed']);
 

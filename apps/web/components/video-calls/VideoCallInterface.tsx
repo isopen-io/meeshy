@@ -675,10 +675,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     setFullscreenParticipantId((current) => (current === participantId ? null : participantId));
   };
 
-  // Get the participant to display in fullscreen (or first remote participant by default)
-  const displayParticipant = fullscreenParticipantId
+  // Get the participant to display in fullscreen (or first remote participant by default).
+  // Audit web-calls (2026-08-15): the pinned participant leaving the call
+  // used to blank the main view for the rest of the call — `remoteStreams`
+  // correctly drops their entry, but the ternary below only fell back to
+  // the first remaining participant when `fullscreenParticipantId` was
+  // falsy, never when the pinned id simply has no match anymore. `??`
+  // covers both: a stale pin now falls back exactly like no pin at all.
+  const displayParticipant = (fullscreenParticipantId
     ? Array.from(remoteStreams.entries()).find(([id]) => id === fullscreenParticipantId)
-    : Array.from(remoteStreams.entries())[0];
+    : undefined
+  ) ?? Array.from(remoteStreams.entries())[0];
 
   // IMPORTANT: Early return AFTER all hooks to comply with React Rules of Hooks
   if (!user || !user.id) {
