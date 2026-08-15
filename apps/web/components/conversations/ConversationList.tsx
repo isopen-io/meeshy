@@ -78,7 +78,8 @@ export const ConversationList = memo(function ConversationList({
     conversations,
     searchQuery: deferredSearchQuery,
     selectedFilter,
-    preferencesMap
+    preferencesMap,
+    currentUser
   });
 
   const groupedConversations = useConversationSorting({
