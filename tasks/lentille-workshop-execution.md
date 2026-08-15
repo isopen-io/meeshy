@@ -325,7 +325,7 @@ Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
 |---|---|---|---|
 | V0 | ✅ livrée (S-001→S-005, S-006 = cette table) | 42d3d9a2e | vert local |
 | V1 + P0 | ✅ livrée — 22 tâches, PR P0 = #3030 ; C-031 sur branche (dépend de la loi partagée, suivra en P1) | (courant) | bun vert local, macOS en cours |
-| V2 | REV-1 en cours (gel S1) | — | — |
+| V2 | **GEL S1 PRONONCÉ** (REV-1bis, 2 itérations, 7+2 blocages fermés) — miroirs M-040..044 + providers M-047/048 lancés ; M-045/046/049 livrés | — | en cours |
 | V3 | bloquée par V2 | — | — |
 | V4 | bloquée par PORTE V1 | — | — |
 | V5 | bloquée par PORTE V2 | — | — |
