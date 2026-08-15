@@ -29,7 +29,8 @@ const createFrenchT = (): BridgeTranslate => (key, params) => {
     'lentille.bridge.authorsOne': `${params?.name}`,
     'lentille.bridge.authorsTwo': `${params?.a} et ${params?.b}`,
     'lentille.bridge.authorsMore': `${params?.a}, ${params?.b} +${params?.count}`,
-    'lentille.bridge.messages': `${params?.count} messages`,
+    'lentille.bridge.messagesOne': `${params?.count} message`,
+    'lentille.bridge.messagesOther': `${params?.count} messages`,
     'lentille.bridge.media.images': `${params?.count} images`,
     'lentille.bridge.media.audio': `${params?.count} vocaux`,
     'lentille.bridge.media.files': `${params?.count} fichiers`,
@@ -44,7 +45,8 @@ const createEnglishT = (): BridgeTranslate => (key, params) => {
     'lentille.bridge.authorsOne': `${params?.name}`,
     'lentille.bridge.authorsTwo': `${params?.a} and ${params?.b}`,
     'lentille.bridge.authorsMore': `${params?.a}, ${params?.b} +${params?.count}`,
-    'lentille.bridge.messages': `${params?.count} messages`,
+    'lentille.bridge.messagesOne': `${params?.count} message`,
+    'lentille.bridge.messagesOther': `${params?.count} messages`,
     'lentille.bridge.media.images': `${params?.count} images`,
     'lentille.bridge.media.audio': `${params?.count} voice notes`,
     'lentille.bridge.media.files': `${params?.count} files`,
@@ -238,7 +240,7 @@ describe('formatBridge', () => {
       extraAuthorCount: 0,
       messageCount: 1,
     }
-    expect(formatBridge(data, createFrenchT())).toBe('Alice · 1 messages')
+    expect(formatBridge(data, createFrenchT())).toBe('Alice · 1 message')
   })
 
   it('E7 — the same data formatted through two different-language t renders two different sentences', () => {

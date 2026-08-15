@@ -18,13 +18,13 @@ import MeeshyUI
 ///   (`Font.Weight.extrabold` n'existe pas en SwiftUI).
 /// - **point de non-lu 8px** → diamètre de design sans token existant
 ///   ailleurs ; vit ci-dessous, centralisé.
-public enum LentilleMetrics {
+nonisolated public enum LentilleMetrics {
 
     // MARK: - Rang
 
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
-    public enum Row {
+    nonisolated public enum Row {
         public static let height: CGFloat = 64
         public static let paddingVertical: CGFloat = 10
         public static let paddingHorizontal: CGFloat = 16
@@ -40,7 +40,7 @@ public enum LentilleMetrics {
     // MARK: - Avatar
 
     /// `list.avatar` — taille `44`, anneau `1.5` à l'accent (55 % d'opacité).
-    public enum Avatar {
+    nonisolated public enum Avatar {
         /// §0 — inutile de créer un `.custom(44)` : ce contexte vaut déjà
         /// 44pt (`MeeshyAvatar.swift`). Le rang Lentille RÉUTILISE ce
         /// contexte ; `.conversationList` (52pt) reste au rang historique.
@@ -54,7 +54,7 @@ public enum LentilleMetrics {
 
     /// `list.presenceDot` — `11`, bordure `2.5` couleur de fond. Aucun dot
     /// hors ligne (règle produit 1/3/5, cf. CLAUDE.md racine — pas une cote).
-    public enum PresenceDot {
+    nonisolated public enum PresenceDot {
         public static let size: CGFloat = 11
         public static let borderSize: CGFloat = 2.5
     }
@@ -64,21 +64,21 @@ public enum LentilleMetrics {
     /// `list.name` — `15` poids `800` CSS. `Font.Weight.extrabold` n'existe
     /// pas en SwiftUI (§0) : `800` rend `.heavy` sur l'échelle SwiftUI
     /// (100=ultraLight … 700=bold, 800=heavy, 900=black).
-    public enum Name {
+    nonisolated public enum Name {
         public static var size: CGFloat { MeeshyFont.bodySize }
         public static let weight: Font.Weight = .heavy
         public static var font: Font { MeeshyFont.relative(size, weight: weight) }
     }
 
     /// `list.time` — `12`, poids `700` CSS → `.bold`.
-    public enum Time {
+    nonisolated public enum Time {
         public static let size: CGFloat = 12
         public static let weight: Font.Weight = .bold
         public static var font: Font { MeeshyFont.relative(size, weight: weight) }
     }
 
     /// `list.line2` — `13`, poids régulier (non spécifié par la maquette).
-    public enum Line2 {
+    nonisolated public enum Line2 {
         public static var size: CGFloat { MeeshyFont.subheadSize }
         public static let weight: Font.Weight = .regular
         public static var font: Font { MeeshyFont.relative(size, weight: weight) }
@@ -88,14 +88,14 @@ public enum LentilleMetrics {
 
     /// `list.unreadDot` — `8`, couleur accent. §0 : diamètre de design, pas
     /// un token repris d'ailleurs — sa seule maison est ici.
-    public enum UnreadDot {
+    nonisolated public enum UnreadDot {
         public static let size: CGFloat = 8
     }
 
     // MARK: - Carte de focus
 
     /// `list.focusCard` — fond `bg2` + ring INTERNE `1.5` accent, radius `16`.
-    public enum FocusCard {
+    nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
     }
@@ -104,7 +104,7 @@ public enum LentilleMetrics {
 
     /// `list.modeNotch` — `9.5` poids `900` CSS → `.black`, ancrée
     /// `top -9`, `right 14`.
-    public enum ModeNotch {
+    nonisolated public enum ModeNotch {
         public static let size: CGFloat = 9.5
         public static let weight: Font.Weight = .black
         public static let top: CGFloat = -9
@@ -115,7 +115,7 @@ public enum LentilleMetrics {
 
     /// `list.sticker` — `10.5` poids `800` CSS → `.heavy`, letter-spacing
     /// `.1em`, majuscules, padding `4/13`, sticky.
-    public enum Sticker {
+    nonisolated public enum Sticker {
         public static let size: CGFloat = 10.5
         public static let weight: Font.Weight = .heavy
         public static let letterSpacingEm: CGFloat = 0.1
@@ -126,7 +126,7 @@ public enum LentilleMetrics {
     // MARK: - Pilule de défilement
 
     /// `list.pill` — ancrée `top 64`, fondu `250 ms`.
-    public enum Pill {
+    nonisolated public enum Pill {
         public static let top: CGFloat = 64
         public static let fadeDurationMs: Double = 250
         // `dismissAfterMs` (900 ms dans le JSON) n'est délibérément PAS
@@ -143,7 +143,7 @@ public enum LentilleMetrics {
     // MARK: - Rail vivants & stories
 
     /// `list.rail` — pastille `48`, anneau `3.5` (pulsé si live), `≤ 6` entrées.
-    public enum Rail {
+    nonisolated public enum Rail {
         public static let size: CGFloat = 48
         public static let ringWidth: CGFloat = 3.5
         public static let maxEntries: Int = 6
@@ -152,7 +152,7 @@ public enum LentilleMetrics {
     // MARK: - Tags / favori
 
     /// `list.tags` — pastilles `6` (`≤ 3`), émoji favori `11`.
-    public enum Tags {
+    nonisolated public enum Tags {
         public static let size: CGFloat = 6
         public static let maxCount: Int = 3
         public static let emojiSize: CGFloat = 11
@@ -161,14 +161,14 @@ public enum LentilleMetrics {
     // MARK: - Sourdine
 
     /// `list.muted` — rang à `0.55` d'opacité.
-    public enum Muted {
+    nonisolated public enum Muted {
         public static let opacity: Double = 0.55
     }
 
     // MARK: - Agent ✦
 
     /// `list.agent` — avatar en pointillé `1.5` (trait plein = humain).
-    public enum Agent {
+    nonisolated public enum Agent {
         public static let avatarRingWidth: CGFloat = 1.5
     }
 }

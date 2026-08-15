@@ -141,7 +141,8 @@ export type BridgeTranslate = (key: string, params?: Record<string, string | num
 const AUTHORS_ONE_KEY = 'lentille.bridge.authorsOne'
 const AUTHORS_TWO_KEY = 'lentille.bridge.authorsTwo'
 const AUTHORS_MORE_KEY = 'lentille.bridge.authorsMore'
-const MESSAGES_KEY = 'lentille.bridge.messages'
+const MESSAGES_ONE_KEY = 'lentille.bridge.messagesOne'
+const MESSAGES_OTHER_KEY = 'lentille.bridge.messagesOther'
 const MEDIA_KEY_BY_KIND = {
   images: 'lentille.bridge.media.images',
   audio: 'lentille.bridge.media.audio',
@@ -164,7 +165,9 @@ function formatAuthorsSegment(data: ConversationBridgeData, t: BridgeTranslate):
 }
 
 function formatMessagesSegment(data: ConversationBridgeData, t: BridgeTranslate): string | null {
-  return data.messageCount > 0 ? t(MESSAGES_KEY, { count: data.messageCount }) : null
+  if (data.messageCount <= 0) return null
+  const key = data.messageCount === 1 ? MESSAGES_ONE_KEY : MESSAGES_OTHER_KEY
+  return t(key, { count: data.messageCount })
 }
 
 function formatMediaSegment(data: ConversationBridgeData, t: BridgeTranslate): string | null {

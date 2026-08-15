@@ -16,7 +16,7 @@ import Foundation
 /// Résolution, par drapeau : `ProcessInfo.processInfo.environment` (surcharge
 /// process — tests UI, TestFlight) PRIME sur `UserDefaults` (bascule cachée
 /// des réglages, lot séparé) ; défaut OFF dans les deux cas.
-enum LentilleFeatureFlag {
+nonisolated enum LentilleFeatureFlag {
     case lentilleList
     case readingModes
 
