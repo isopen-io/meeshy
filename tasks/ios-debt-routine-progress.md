@@ -230,22 +230,28 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    c'est la dernière pièce du groupe "candidats View confirmés" du run précédent, scope différent
    des swaps `WindowMetrics` (nécessite `@Environment`, pas une simple substitution).
 
-**[NOUVEAU FINDING, 2026-08-12, PAS CORRIGÉ CE RUN]** `StoryComposerView+Canvas.swift:1440`
-(`safeAreaBottomInset`) partage le même défaut que corrigeait `composerScreenHeight` avant ce
-run — la scène est choisie par `.compactMap { $0 as? UIWindowScene }.first`, PAS par
-`activationState == .foregroundActive`, donc potentiellement une scène en arrière-plan sous
-multi-fenêtre. Ce n'est PAS un usage `UIScreen.main` (donc hors scope de l'item 7 tel que titré) —
-c'est la MÊME classe de bug que celle que `DeviceLayout`/`WindowMetrics` résolvent, mais sur
-`safeAreaInsets.bottom` plutôt que `windowSize`. `WindowMetrics` (nouvellement créé) n'expose pour
-l'instant que `windowSize` — lui ajouter `safeAreaBottom` réglerait ce site en un remplacement
-mécanique, mais aussi `MeeshyImageEditorView.swift:118-120` et `MeeshyVideoEditorView.swift:45-47`
-qui dupliquent le même pattern hors contexte `.first` non ordonné pour `safeAreaInsets`. Candidat
-pour un futur item 8 dédié (extension de `WindowMetrics`), pas un mécanique à enchaîner dans ce
-run.
+8. **[FAIT — 2026-08-15, PR #3041, `d123fe444`]** `StoryComposerView+Canvas.swift:1440`
+   (`safeAreaBottomInset`), `MeeshyImageEditorView.swift:118-120` et
+   `MeeshyVideoEditorView.swift:45-47` (`deviceSafeAreaInsets`) parcouraient chacun
+   `UIApplication.shared.connectedScenes` à la main (`.compactMap { $0 as? UIWindowScene }.first`,
+   PAS `activationState == .foregroundActive`) — même classe de bug que `windowSize` avant PR
+   #2868, appliquée à `safeAreaInsets` au lieu de `bounds.size`. Nouveau
+   `WindowMetrics.safeAreaInsets: UIEdgeInsets` (une seule propriété struct complète, pas des
+   accesseurs `top`/`bottom` séparés — `MeeshyImageEditorView`/`MeeshyVideoEditorView` lisent les
+   deux) remplace les 3 parcours. Les commentaires des deux éditeurs (« VRAIS safe-area insets de
+   la fenêtre, JAMAIS ceux de l'environnement SwiftUI ») décrivent un problème différent, toujours
+   valide, non touché par ce fix — seule la résolution de LA SCÈNE change. Garde de source dédiée
+   (`test_meeshyUI_confinesConnectedScenesWalksToWindowMetrics`, égalité exacte), mutation-prouvée.
+   Vérifié : suite `MeeshyUITests` 3252/3266 (1 flake pré-existant sans rapport,
+   `StoryExporterStaticOnlyTests/test_syntheticTransparentAsset_cached`, reconfirmé vert en
+   isolation), `./apps/ios/meeshy.sh build` vert, CI 17 checks verts (dont un nouveau
+   « Build app (app + cibles de test) » observé pour la première fois, issu de l'infra Lentille
+   récemment mergée — aucune action requise, juste un check supplémentaire).
 
 Le backlog sera réapprovisionné (grep `print(`, `DispatchQueue.main.async`, `#file\b`,
 `.system(size:` restants + dernières entrées de `tasks/lessons.md`) quand les items ouverts
-restants (3, 4, 5, 7) auront été soit décomposés en sous-slices exécutables, soit clos.
+restants (3, 4, 5, 7 — `BubbleStandardLayout+Media.swift:548` différé) auront été soit décomposés
+en sous-slices exécutables, soit clos.
 
 ## Journal d'itération
 
@@ -905,3 +911,52 @@ pattern pour `safeAreaInsets` — candidat pour un futur item 8 (extension de `W
   (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main` — même commit que
   cette mise à jour et la correction de `tasks/android-parity-ios-debt-agent-prompt.md`, les trois
   fichiers vivant hors `apps/android/`/`apps/ios/`).
+
+### 2026-08-15 — Run #8 (item 8 : extension WindowMetrics.safeAreaInsets)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=IOS_DETTE android_streak=0
+last_run=guest-join-web-deep-link` — bascule déjà effectuée par la lane ANDROID au run précédent
+(streak atteint 5). Scan de reprise : aucune PR ouverte matchant la routine. Piste explorée avant
+de choisir cet item : le même défaut « générateur de lien sans récepteur » trouvé 2× côté Android
+ce même jour (profil, invitation conversation) pourrait exister côté iOS — vérifié et écarté :
+`DeepLinkRouter.swift` gère déjà `case "u", "users"` et `case "join"` à 4 endroits distincts (scheme
+custom, universal link, widget, shortcut) — iOS est la référence que le port Android imitait
+(`ProfileShareLink.kt` documente explicitement « mirrors the iOS DeepLinkParser contract »), pas un
+second exemplaire du même bug.
+
+**Repris exactement le finding déposé au run précédent** (item 8, ci-dessus dans le Backlog) :
+RE-PROUVÉ les 3 sites contre le code réel avant de coder — `StoryComposerView+Canvas.swift:1440`,
+`MeeshyImageEditorView.swift:118-120`, `MeeshyVideoEditorView.swift:45-47` portaient tous encore
+exactement le parcours `connectedScenes.compactMap{...}.first` non gated par `activationState`.
+Vérifié aussi que les commentaires des deux éditeurs (« VRAIS safe-area insets... JAMAIS ceux de
+l'environnement SwiftUI ») documentent un problème DIFFÉRENT (SwiftUI reporte 0 dans un
+`fullScreenCover` imbriqué) — confirmé que corriger la résolution de scène ne contredit pas cette
+intention.
+
+**Design** : un seul nouveau `WindowMetrics.safeAreaInsets: UIEdgeInsets` (pas des accesseurs
+`top`/`bottom` séparés) — vérifié via grep des call sites que `MeeshyImageEditorView` lit `.top` ET
+`.bottom` depuis la même variable, donc une struct complète est le bon niveau de grain, pas deux
+propriétés `CGFloat`.
+
+**TDD** : garde de source étendue (`WindowMetricsSourceGuardTests.swift`) — nouveau
+`test_meeshyUI_confinesConnectedScenesWalksToWindowMetrics` (égalité exacte, miroir du test
+`UIScreen.main.bounds` existant et du test app-side
+`test_sceneWalks_areConfinedToTheResolverAndTheAllScenesQuery`), écrit et vérifié rouge avant les 3
+substitutions. Mutation-proof : un site remis à un parcours manuel → exactement ce test échoue, les
+4 autres restent verts.
+
+**Incident, résolu, sans rapport** : la suite `MeeshyUITests` complète a montré 1 échec sur 3266
+tests (`StoryExporterStaticOnlyTests/test_syntheticTransparentAsset_cached` — comparaison de mtime
+de fichier cache). RE-PROUVÉ avant de l'ignorer : zéro référence à `WindowMetrics`/`safeArea` dans
+ce fichier de test, le test lui-même documente le risque de course qu'il a rencontré (« so a
+parallel test run can't reuse a pre-existing cache entry »), et relancé en isolation → passe en
+0.057s. Flake pré-existant confirmé, pas une régression de ce diff.
+
+**Vérifié** : `./apps/ios/meeshy.sh build` vert (106s, avec régénération bénigne de
+`project.pbxproj` — enregistrement de fichiers « Lentille » déjà mergés sur `main` par une session
+tierce, pas du churn de ce diff). PR #3041, squash-mergée (`d123fe444`). CI : 17 checks verts,
+dont un nouveau « Build app (app + cibles de test) » et « Portée du run » observés pour la première
+fois (infra CI ajoutée par le chantier « Lentille » récemment mergé — aucune action requise).
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-windowmetrics-safearea`
+  (commit séparé, poussé directement sur `main`).

@@ -4,7 +4,9 @@ import XCTest
 /// LAYOUT contre `UIScreen.main.bounds`, l'écran physique déprécié depuis
 /// iOS 16 — sous iPad Split View, Slide Over ou Stage Manager, l'app ne
 /// possède qu'une fraction de cet écran, donc un ratio pris contre l'écran
-/// est un ratio d'espace que l'app n'a pas.
+/// est un ratio d'espace que l'app n'a pas. Ni parcourir `connectedScenes` à
+/// la main hors de `WindowMetrics` — un `Set` non ordonné dont `.first` peut
+/// rendre une scène en arrière-plan.
 ///
 /// Miroir SDK-local de la convergence app-side déjà faite dans
 /// `WindowMetricsSSOTTests`/`BubbleWindowMetricsTests` (`apps/ios/`) — le SDK
@@ -44,6 +46,27 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
             "Nouvelle mesure écran-dérivée (ou exception délibérée retirée sans mise à jour de " +
             "cette garde). Le layout doit lire WindowMetrics.windowSize ; seul un budget de " +
             "décodage d'image peut encore lire l'écran physique."
+        )
+    }
+
+    /// Même principe que la garde `UIScreen.main.bounds` ci-dessus, pour l'autre
+    /// défaut que `WindowMetrics` résout : un hand-rolled walk de
+    /// `connectedScenes` (`.compactMap { $0 as? UIWindowScene }.first`) choisit
+    /// une scène arbitraire dans un `Set` non ordonné — potentiellement une
+    /// scène en arrière-plan sous multi-fenêtre. `StoryComposerView+Canvas.swift`
+    /// (`safeAreaBottomInset`), `MeeshyImageEditorView.swift` et
+    /// `MeeshyVideoEditorView.swift` (`deviceSafeAreaInsets`) portaient ce
+    /// défaut avant leur convergence vers `WindowMetrics.safeAreaInsets`.
+    func test_meeshyUI_confinesConnectedScenesWalksToWindowMetrics() throws {
+        let found = try Self.allMeeshyUISources()
+            .filter { $0.code.contains("connectedScenes") }
+            .map { ($0.path as NSString).lastPathComponent }
+
+        XCTAssertEqual(
+            Set(found), ["WindowMetrics.swift"],
+            "Nouveau parcours manuel de connectedScenes hors WindowMetrics — connectedScenes est " +
+            "un Set non ordonné, .first n'est pas la scène au premier plan. Utiliser " +
+            "WindowMetrics.windowSize / .safeAreaInsets."
         )
     }
 
@@ -90,6 +113,10 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
         XCTAssertTrue(
             code.contains("static var windowSize: CGSize"),
             "windowSize doit rester le point d'entrée public unique de ce type."
+        )
+        XCTAssertTrue(
+            code.contains("static var safeAreaInsets: UIEdgeInsets"),
+            "safeAreaInsets doit rester le point d'entrée public unique de ce type."
         )
     }
 

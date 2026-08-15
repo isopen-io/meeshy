@@ -1,5 +1,15 @@
 # @meeshy/gateway
 
+## 1.26.1
+
+### Patch Changes
+
+- 2838397: Le chemin REST d'envoi ne gate plus le chiffrement sur un booléen posé à côté du chiffré.
+
+  **Le fait, c'est le chiffré — pas le drapeau.** `SendMessageBodySchema` compte `encryptedContent` parmi les porteurs de contenu : son `.refine()` admet, en quatrième branche, un corps qui n'apporte QUE du chiffré. La route, elle, ne consommait ce chiffré que sous condition d'`isEncrypted` — un booléen SÉPARÉ, optionnel, que le schéma n'a jamais lié au chiffré. Les deux ordres perdaient. Chiffré sans le drapeau : `encryptedPayload` restait `undefined`, le chiffré était jeté, et le corps que le schéma venait d'approuver ressortait en 400 « Message content cannot be empty » — la branche validée ne menait à aucune écriture. Drapeau sans le chiffré : `ciphertext: encryptedContent!` mentait, la charge partait avec un `ciphertext: undefined` que `MessageProcessor` refusait à son tour (`data.encryptedContent && data.encryptionMetadata`), et le message était écrit EN CLAIR avec `isEncrypted: false` — puis traduit, scanné pour ses liens et poussé en notification. Un message que le client avait déclaré chiffré, rétrogradé sans un mot. La route sert désormais la présence du chiffré, comme le chemin socket le faisait déjà ; le schéma refuse explicitement la promesse sans porteur plutôt que de la rétrograder.
+
+  **Le mode n'est plus rejeté sur sa casse.** `encryptionMode` était un enum strictement minuscule là où le client iOS émet `"E2EE"` et où la description OpenAPI de la route annonçait `e2e` — deux valeurs que la validation retournait en 400 sur un champ dont le jeu est pourtant connu et fermé. La casse est normalisée à la frontière d'écriture, comme le code de langue l'est déjà ; le jeu de valeurs reste fermé (`e2e` reste refusé), et il vaut désormais `e2ee` par défaut quand un chiffré arrive sans mode. La description publiée est réalignée sur ce qui est réellement appliqué : elle annonçait un jeu de valeurs que le serveur n'acceptait pas, et taisait `hybrid` qu'il acceptait.
+
 ## 1.26.0
 
 ### Minor Changes

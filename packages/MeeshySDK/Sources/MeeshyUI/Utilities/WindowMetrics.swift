@@ -35,4 +35,12 @@ enum WindowMetrics {
     static var windowSize: CGSize {
         activeWindow?.bounds.size ?? UIScreen.main.bounds.size
     }
+
+    /// Safe-area insets of the window the app is actually rendered in. `.zero`
+    /// is the correct last resort rather than a screen-derived guess: it is
+    /// the honest value on a device with no home indicator/notch, and when no
+    /// foreground scene exists nothing is being laid out anyway.
+    static var safeAreaInsets: UIEdgeInsets {
+        activeWindow?.safeAreaInsets ?? .zero
+    }
 }
