@@ -7,7 +7,8 @@
 > · Lentille (liste) — `la-lentille.html`, https://claude.ai/code/artifact/d068fe38-e4ab-4b11-aa9c-f9c0585aef33
 > · Focal (fil, avec la densité Script) — `focal-grandeur-nature.html`, https://claude.ai/code/artifact/83621c34-e472-4b2e-be75-0a06dbebc2ad
 > Les deux maquettes ont été relevées et **confirment** toutes les constantes de ce contrat. Là où une maquette et un document HTML divergent, la maquette gagne sur la **cote**, le document gagne sur la **règle**.
-> **Portée** : `packages/shared`, `packages/MeeshySDK`, `services/gateway`, `apps/ios`, `apps/web`, `apps/android`.
+> **Portée — phase 1** : `packages/shared`, `packages/MeeshySDK`, `services/gateway`, `apps/ios`, `apps/web`.
+> **Portée — phase 2** : `apps/android`. **`apps/android/**` reste fermé tant que la phase 1 n'est pas close** (workshop §4, S4). LWS-12 est le seul workstream de phase 2 ; il ne démarre pas avant.
 > **Public** : agents TDD travaillant en parallèle. Chaque fichier a **un seul propriétaire**. Deux workstreams ne modifient jamais le même fichier.
 
 ---
@@ -33,6 +34,7 @@ La reconnaissance révèle néanmoins **treize écarts** qui, laissés tels quel
 | **E11** | §6.3 : « tri liste sur `lastMessage.createdAt` alors que le serveur trie sur `lastMessageAt` » | Confirmé : `useConversationSorting.ts:43-44` | Corrigé par la loi de tri partagée (LWS-1), pas par un patch local |
 | **E12** | §6.2 : la peau web s'insère dans `ConversationGroup` / `ConversationItem` | Le web a **deux** arbres : `components/conversations/*` (vivant, routé par `app/conversations/[[...id]]/page.tsx`) et `components/v2/*` (`SplitViewLayout` **routé nulle part**) | La peau cible l'arbre vivant. `apps/web/components/v2/**` est **interdit** — y porter la Lentille produit du code invisible |
 | **E13** | §5.3 : « `renderFingerprint` étendu : + `bridge` » | `renderFingerprint` est défini dans le **SDK** (`CoreModels.swift:281`), consommé par les deux portillons `.equatable()` (`ThemedConversationRow.swift:673`, `ConversationListView+Rows.swift:383`) | L'extension touche un **package**, pas l'app. Propriétaire : LWS-2. Sans elle, le portillon **gèlerait** le pont sur sa première valeur — exactement la régression B1 déjà documentée dans ce fichier pour les traductions tardives |
+| **E15** | #3010 écart #10, repris tel quel par la v1 de ce contrat : « surfaces agent **stubées derrière un protocole**, provider nul par défaut, zéro donnée » — et écart #11 : « l'agent exclut les conversations `direct` ⇒ `/analysis` renvoie `summary: null` **pour toujours** en 1:1 » | **Le service `services/agent` fait déjà l'essentiel du travail.** Il porte un graphe LangGraph `observer → strategist → generator → quality-gate`, une fabrique LLM (Anthropic/OpenAI, routeur, repli, retry), un ordonnanceur, un gestionnaire réactif et une file de livraison. **L'observer produit déjà un résumé de conversation** (`observer.ts:8` — « resume concis de la conversation (max 200 mots) »), persisté avec ton, profils, `healthScore`, `engagementLevel`. **`GET /conversations/:id/analysis` existe** (`core.ts:1702`, « summary, tone, participant profiles ») et le SDK le consomme déjà (`ConversationAnalysisService.swift:11`). Un agent est déjà **attachable à une conversation** : `AgentConfig` est un modèle Prisma porté **par `conversationId`** (`schema.prisma:3592`), `enabled` à `true` par défaut, avec `agentType` ∈ {support, faq, personal, animator}. Le transport gateway↔agent existe en HTTP **et** en ZMQ (`AgentHttpClient`, `ZmqAgentClient`, `AgentAdminRelay`). Enfin, l'exclusion des `direct` n'est **pas** structurelle : c'est une valeur par défaut (`mongo-persistence.ts:421` → `['group','channel','public','global']`), surchargeable par `globalConfig.eligibleConversationTypes` (`conversation-scanner.ts:209`) | **Le provider nul cesse d'être l'horizon.** L'étage déterministe reste le **plancher permanent** (il n'a besoin de personne et couvre l'UX à lui seul) ; l'étage agent devient un **chemin réel et atteignable**, dont le reste à faire est court et énumérable (§5.1). Les deux garanties de #3010 sont **conservées et renforcées** : rien n'est fabriqué, et le pont **n'écrit jamais dans le fil** — ce qui impose un chemin de production **non écrivant**, distinct de l'animateur (§5.1, contrainte C3) |
 | **E14** | §6.3 : « clé i18n `noConversationsFound` **absente** de `locales/fr/conversations.json` » | La clé **existe** — en `fr`, `en`, `es`, `pt` — mais au chemin `conversations.conversationSearch.noConversationsFound`, alors que `EmptyConversations.tsx:19` interroge le nom **plat** `t('noConversationsFound')` avec un `t` injecté depuis `ConversationList` puis `ConversationLayout` | Le défaut est un **désaccord de chemin**, pas une clé manquante. Le correctif est d'aligner l'appel sur le chemin réel (ou de remonter la clé), **après** avoir confirmé la portée effective de `t` à l'exécution — pas d'ajouter un doublon. La branche recherche-vide est la seule concernée ; `noConversations` (`conversations.noConversations`) suit le même chemin et se vérifie en même temps |
 
 **Trois écarts de design, actés hors code.**
@@ -153,7 +155,9 @@ LWS-0 ── LWS-1 ── LWS-2 ── LWS-2bis ─┬─ LWS-5 ─ LWS-6 ─ LW
                                                                                 │
                                         LWS-3 ── LWS-4  ◂── GATEWAY, EN DERNIER ┘
                                                     │
-                                        LWS-12 (android) ── LWS-13 (recette + activation)
+                                        LWS-13 (recette iOS+web + activation) ─▸ CLÔTURE PH.1
+                                                                                    │
+                                        LWS-12 (android) ◂─── PHASE 2 ─────────────┘
 ```
 
 > **L'ordre des lots gateway a changé.** LWS-3 et LWS-4 étaient initialement placés tôt ; ils passent **après les portes V1 et V2**, conformément à l'exigence produit « les features qui nécessitent une retouche backend se font en dernier, mockées en attendant ». Le substitut est LWS-2bis. Voir workshop §4.2 et §5.
@@ -492,7 +496,7 @@ LWS-0 ── LWS-1 ── LWS-2 ── LWS-2bis ─┬─ LWS-5 ─ LWS-6 ─ LW
 
 ---
 
-### LWS-12 — Android
+### LWS-12 — Android — *PHASE 2, après clôture de la phase 1*
 
 **But.** La même Lentille, sur des lois déjà vertes.
 
@@ -503,7 +507,9 @@ LWS-0 ── LWS-1 ── LWS-2 ── LWS-2bis ─┬─ LWS-5 ─ LWS-6 ─ LW
 - **Miroir Kotlin manquant du résolveur d'aperçu du Prisme** (F8) : `ConversationPreviewMessages.kt` documente la règle en commentaire et la ré-applique localement. Il consomme désormais le miroir.
 - Peau Compose : rang plat, stickers `stickyHeader`, perspective par `graphicsLayer` (alpha + scale uniquement), pilule, menu de mode.
 
-**Critères d'acceptation.** Les sept fichiers de vecteurs verts en JUnit ; la grille R1 → R13 (§7) rejouée sur Android ; drapeau éteint ⇒ rendu identique.
+**Critères d'acceptation.** Les sept fichiers de vecteurs verts en JUnit — la **troisième** suite rejoint les deux de la phase 1, sur le même commit de `fixtures/` ; `LentilleDimens` == `lentille-tokens.json` ; les 44 `id` de `behaviour-matrix.json` couverts ; la grille R1 → R20 (§5) rejouée sur Android ; drapeau éteint ⇒ rendu identique.
+
+> **Aucune décision à prendre ici.** Tout ce que ce workstream implémente a déjà été tranché, écrit et prouvé deux fois. S'il rencontre une question ouverte, c'est le signe d'un trou dans le noyau — il **s'arrête** et le remonte à L0, il ne tranche pas localement.
 
 ---
 
@@ -566,6 +572,41 @@ export type ConversationBridge = {
   originalLanguage?: string;
 };
 ```
+
+### 5.1 L'étage agent — ce qui existe, ce qui manque
+
+Le service `services/agent` n'est pas à construire : il est à **brancher sur un nouveau débouché**. Voici l'inventaire exact (E15).
+
+| Brique | État | Reste à faire |
+|---|---|---|
+| Graphe de décision `observer → strategist → generator → quality-gate` | **existe** | rien |
+| Fabrique LLM (Anthropic/OpenAI, routeur, repli, retry, estimation de coût) | **existe** | rien |
+| **Résumé de conversation** produit par l'observer (≤ 200 mots, + ton, profils, `healthScore`) | **existe**, persisté | rien pour le résumé lui-même |
+| Attachement **par conversation** (`AgentConfig.conversationId`, `enabled`, `agentType`) | **existe** | rien — c'est déjà « un agent attaché à une conversation » |
+| Transport gateway ↔ agent (HTTP + ZMQ + relais admin) | **existe** | rien |
+| Endpoint de lecture `GET /conversations/:id/analysis` | **existe**, consommé par le SDK | rien |
+| **Portée du résumé** : global à la conversation, pas « ce que TU as manqué » | partiel | **produire un résumé borné à une plage de messages**, que la gateway intersecte avec la fenêtre non lue du lecteur |
+| **Format** : 200 mots | partiel | **une ligne** — une contrainte de génération, pas une brique nouvelle |
+| **Conversations directes** | exclues **par défaut**, pas par construction | **élargir `eligibleConversationTypes`** — une valeur de configuration (`mongo-persistence.ts:421`, `conversation-scanner.ts:209`) |
+| **Chemin non écrivant** | **absent** — aujourd'hui l'agent produit pour **poster**, sous l'identité d'utilisateurs réels | **le seul vrai manque structurel** : un mode qui produit sans jamais livrer dans le fil (contrainte C3) |
+
+### 5.2 La cascade d'assistance — un protocole, trois rangs, un seul actif aujourd'hui
+
+L'assistance se résout par rangs (workshop §4.4) : **agent local** (moyen terme, non construit ici) → **`services/agent`** (ce chantier, après V2) → **pont déterministe** (dès la phase 1, plancher permanent).
+
+Ce qui est livré **maintenant** :
+
+- `resolveAssistTier({ deviceCapability, encryptionMode, userConsent, conversationType })` — **loi partagée**, vectorisée (LWS-0). Sans elle, trois frontends inventeraient trois politiques de confidentialité.
+- `AssistCapabilityProbing` — l'interface, avec une implémentation qui renvoie `false` partout. Une ligne aujourd'hui, un point d'insertion propre à moyen terme.
+- **Garde d'interdiction `e2ee`** : `encryptionMode === 'e2ee'` ⇒ le rang serveur est **exclu** de la cascade, quel que soit l'état de la sonde. Un appareil incapable retombe au rang 3, jamais au rang 2. Ce n'est pas une préférence de confidentialité, c'est la promesse de bout en bout : le serveur ne détient pas le clair (`schema.prisma:413-416`, `signal_v3`), et l'y faire résumer la romprait.
+
+**Critère d'acceptation à écrire dès LWS-0** : pour toute entrée `encryptionMode === 'e2ee'` et `deviceCapability === false`, `resolveAssistTier` rend `deterministic` — jamais `serverAgent`. Un vecteur dédié le fige, sur les trois plateformes. C'est le genre de trou qui ne se voit pas en recette, parce que tout **fonctionne**.
+
+**Trois contraintes dures sur l'étage agent.**
+
+- **C1 — l'étage déterministe reste le plancher, définitivement.** L'agent *enrichit*, il ne devient jamais le seul fournisseur. Agent indisponible, en erreur, hors budget, ou conversation inéligible ⇒ le pont déterministe s'affiche, et l'écran n'est jamais vide. C'est ce qui permet de livrer la Lentille **sans attendre** cet étage.
+- **C2 — zéro donnée fabriquée.** Un résumé agent qui ne couvre pas la fenêtre non lue du lecteur n'est **pas** servi comme s'il la couvrait : la gateway retombe sur le déterministe. Un résumé partiel se déclare partiel, exactement comme `DeterministicConversationDigest.isComplete` de #3010 WS-8.
+- **C3 — le pont n'écrit jamais dans le fil, et l'allumer ne doit jamais allumer l'impersonation.** C'est la contrainte la plus importante, et elle est **renforcée** par rapport à #3010, pas relâchée. Le service produit aujourd'hui pour **livrer** — l'animateur poste sous l'identité de vrais utilisateurs dans les conversations `group/channel/public/global`. Le pont doit emprunter un chemin de production **non écrivant**, sans file de livraison, sans identité d'emprunt. Concrètement : la génération du pont ne passe **pas** par `generator` + `delivery`, mais par un débouché de lecture adossé à l'observer. Tant que cette séparation n'est pas en place, `agent_grammar` reste **OFF** et son activation requiert la décision produit écrite déjà exigée par #3010 WS-10.
 
 **Conséquences, à respecter partout.**
 1. L'étage `fallback` n'est **jamais** traduit — il n'a pas de langue. Un changement de langue du lecteur le reformate instantanément, sans aller-retour serveur.
@@ -697,7 +738,7 @@ L'ordre suit les portes du workshop §6.1 : **iOS entier, puis web entier, puis 
 | | ▸ **PORTE V2** — recette web intégrale + parité web↔iOS | P5 | — |
 | **P6** | LWS-3 + LWS-4 — **gateway** : préférence de mode + pont ✦ réel | V2 | oui (champ optionnel, clients anciens l'ignorent) |
 | **P7** | Bascule d'injection : les substituts cèdent la place | P6 | oui — **aucun snapshot de vue ne bouge** |
-| **P8** | LWS-12 — Android | P1, V1 | oui, drapeau OFF |
+| **P8** | LWS-12 — **Android, phase 2** | **clôture de phase 1 (P9)** | oui, drapeau OFF |
 | **P9** | LWS-13 — recette croisée finale, puis **activation** progressive | toutes | non — c'est la fermeture |
 
 **P0 part la première et n'attend rien** : elle corrige des défauts réels du web aujourd'hui (tri sur le mauvais champ, recherche sur le contenu original, ligne dupliquée en frontière de page, chemin i18n désaccordé), sans drapeau et sans décision de design.

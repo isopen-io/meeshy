@@ -4,7 +4,8 @@
 > **Branche** : `claude/lentille-conversations-view-8silmf`.
 > **Sources normatives** : `docs/design/2026-08-14-conversation-views-brainstorm.html` (vol. 1), `2026-08-15-conversation-modes-use-cases.html` (vol. 2), `2026-08-15-conversation-modes-verdict.html` (vol. 3), `2026-08-15-focal-spec-integration.html` (vol. 4), `2026-08-15-conversation-list-lentille.html` (vol. 5).
 > **Maquettes de référence** (font foi sur les **cotes** ; les documents font foi sur les **règles**) : `la-lentille.html` — https://claude.ai/code/artifact/d068fe38-e4ab-4b11-aa9c-f9c0585aef33 · `focal-grandeur-nature.html` — https://claude.ai/code/artifact/83621c34-e472-4b2e-be75-0a06dbebc2ad. Relevées et confirmées : les constantes des deux écrans (§2.2) sont exactement celles de leur CSS. Cotes détaillées en §4.3 du contrat Lentille.
-> **Portée** : les **deux** écrans (liste des conversations + fil de messages), les **trois** frontends (iOS, web, Android), plus gateway et `packages/shared`.
+> **Portée** : les **deux** écrans (liste des conversations + fil de messages), plus gateway et `packages/shared`.
+> **Priorité produit** : **iOS d'abord, web ensuite, et rien d'autre avant.** Android est une **phase 2**, ouverte seulement quand la phase 1 est close (§5). Le noyau partagé est conçu pour trois frontends — il n'en sert que deux tant que la phase 1 dure.
 
 ---
 
@@ -47,7 +48,9 @@ Ce n'est pas une nouveauté d'architecture : `CLAUDE.md` l'impose déjà pour la
 
 ### 2.2 Les lois, leur domicile et leurs miroirs
 
-| Loi | Domicile (nouveau sauf mention) | Miroir Swift | Miroir Kotlin | Consommée par |
+> **Les miroirs Kotlin ne sont pas écrits en phase 1.** Le domicile TypeScript et le miroir Swift suffisent à servir web et iOS. Écrire le miroir Kotlin maintenant reviendrait à le maintenir à travers chaque ajustement d'un cœur que deux frontends n'ont pas encore éprouvé — un coût récurrent pour une plateforme qui n'en tire rien avant des semaines. La colonne « Miroir Kotlin » ci-dessous est donc la **cible de la phase 2**, pas une livraison de la phase 1.
+
+| Loi | Domicile (nouveau sauf mention) | Miroir Swift — **phase 1** | Miroir Kotlin — **phase 2** | Consommée par |
 |---|---|---|---|---|
 | `resolveOrchestratorDecision` — seuils ≤ 25 / > 25 / absence > 24 h ∧ ≥ 10 / choix collant | `packages/shared/utils/reading-modes.ts` | `ReadingModeOrchestrator` | `ReadingModeOrchestrator.kt` | **Liste** (chip, encoche) + **fil** (ouverture) |
 | `resolveReadingModeAvailability` — catalogue, capacités invité/inscrit, éligibilité Rivière (≥ 5 actifs, jamais en DM) | idem | `ReadingModeCatalog`, `ConversationCapabilitySet` | idem | Menu de mode (3 points d'entrée) + feuille Lentille |
@@ -78,11 +81,13 @@ packages/shared/fixtures/reading-modes/
 
 **Un fichier, trois lecteurs.** Chaque plateforme lit le **même** JSON dans **sa** suite de tests :
 
-| Plateforme | Suite | Accès au fichier |
-|---|---|---|
-| shared / web | Jest — `packages/shared/__tests__/vectors/*.test.ts` | import direct |
-| iOS | XCTest — `apps/ios/MeeshyTests/Unit/Vectors/*.swift` | ressource de bundle copiée par XcodeGen depuis `packages/shared/fixtures/` |
-| Android | JUnit — `apps/android/sdk-core/src/test/.../vectors/` | ressource de test symlinkée par Gradle |
+| Plateforme | Suite | Accès au fichier | Phase |
+|---|---|---|---|
+| shared / web | Jest — `packages/shared/__tests__/vectors/*.test.ts` | import direct | **1** |
+| iOS | XCTest — `apps/ios/MeeshyTests/Unit/Vectors/*.swift` | ressource de bundle copiée par XcodeGen depuis `packages/shared/fixtures/` | **1** |
+| Android | JUnit — `apps/android/sdk-core/src/test/.../vectors/` | ressource de test symlinkée par Gradle | **2** |
+
+En phase 1, « les vecteurs sont verts » signifie **deux** suites, pas trois. La troisième rejoint en phase 2 — et c'est précisément ce que les vecteurs rendent possible sans douleur : Android arrivera sur un cœur figé, prouvé, et sa conformité se vérifiera en exécutant des fichiers qui existent déjà.
 
 **Trois règles dures sur les vecteurs.**
 
@@ -133,7 +138,7 @@ Le contrat `tasks/focal-implementation-contract.md` reste la référence d'exéc
 | **A5** | `ReadingModePreferenceStore` persiste le mode en `UserDefaults` local, clé `(scope, conversationId)` | La préférence devient **serveur et multi-appareils**, portée par `UserConversationPreferences` (le canal versionné de pin/mute). Le store local devient un **cache optimiste** devant ce canal, pas la source de vérité | Vol. 5 §4 exige la synchronisation multi-appareils ; sans elle, l'encoche ment sur le second appareil |
 | **A6** | WS-7 : l'orchestrateur décide dans `ConversationView.init` | Inchangé **pour le fil**. S'y **ajoute** une décision côté liste, alimentée par `bridge.suggestedMode` — précalculée serveur, jamais recalculée à l'affichage du rang | La liste doit annoncer la décision **avant** le tap (vol. 5 §4) ; recalculer par rang à chaque frame de défilement est hors budget |
 | **A7** | §1.2 : tableau des propriétaires, uniquement des fichiers de `apps/ios/` | Le tableau accueille un **propriétaire SDK** et un **propriétaire shared**. `CoreModels.swift` (`renderFingerprint`) est possédé par le lot L0 | F10 : le portillon de re-render vit dans un package, pas dans l'app |
-| **A8** | WS-10 : surfaces agent stubées, `assist:*` inexistant | Inchangé côté fil. Le **pont ✦ de la liste** ne dépend pas de `assist:*` : son étage déterministe est calculé par la **gateway** (lot L1) et livré à tous les clients. L'enrichissement agent reste derrière le même protocole nul | Le pont est le cœur du vol. 5 ; le suspendre à une API inexistante viderait la Lentille de sa raison d'être |
+| **A8** | WS-10 : surfaces agent stubées, `assist:*` inexistant, provider **nul** par défaut | Inchangé côté fil. Le **pont ✦ de la liste** ne dépend pas de `assist:*` : son étage déterministe est calculé par la **gateway** (lot L1) et livré à tous les clients. **Le provider nul cesse d'être l'horizon** : `services/agent` fournit déjà le résumé, l'attachement par conversation et le transport (§4.3) — l'étage agent est un chemin **réel**, au reste-à-faire court et énumérable | Le pont est le cœur du vol. 5 ; le suspendre à une API inexistante l'aurait vidé de sa raison d'être. Mais l'inventaire réel montre que l'API « inexistante » était surtout un **nom d'événement** absent, pas une capacité absente |
 
 > Les amendements **ne réécrivent pas** les onze écarts du §0 de #3010 (géométrie inversée, anchorPoint, `UICellConfigurationState`, `ConversationViewModel` intouchable, `MessageDayStickyOverlay` intouchable, …). Ces écarts sont des faits sur le code iOS ; ils restent valides mot pour mot.
 
@@ -142,34 +147,43 @@ Le contrat `tasks/focal-implementation-contract.md` reste la référence d'exéc
 ## 4. La carte du chantier — les lots
 
 ```
-L0  NOYAU PARTAGÉ ······ packages/shared + miroirs Swift/Kotlin + vecteurs + tokens
-     │                    (lois, types, accent TS, renderFingerprint étendu)
-     ▼
-LM  COUCHE DE SUBSTITUTION ··· providers mockés (pont ✦, préférence, appel live)
-     │                          — MÊME protocole que le futur backend
-     ├──────────────┬──────────────┐
-     ▼              ▼              ▼
-L2  iOS          L3  WEB        L4  ANDROID
-    Lentille       Lentille       Lentille + Focal
-    + Focal        + Focal        (après validation iOS)
-     │              │              │
-     └──────────────┴──────────────┘
-                    ▼
-           L1  GATEWAY  ← EN DERNIER (exigence produit)
-               pont ✦ réel, readingMode serveur, payload d'appel
-                    ▼
-           L5  RECETTE CROISÉE puis activation
+╔═ PHASE 1 ═══════════════════════════════════════════════════════════╗
+║                                                                     ║
+║ L0  NOYAU PARTAGÉ ····· packages/shared + miroir SWIFT + vecteurs   ║
+║      │                  + tokens (PAS de Kotlin — cf. §2.2)         ║
+║      ▼                                                              ║
+║ LM  SUBSTITUTION ······ providers mockés (pont ✦, préférence, appel) ║
+║      │                  — MÊME protocole que le futur backend       ║
+║      ▼                                                              ║
+║ L2  iOS ··············· Lentille + Focal                            ║
+║      ▼                  ▸ PORTE V1 — recette iOS INTÉGRALE          ║
+║ L3  WEB ··············· Lentille + Focal, dormant sur main          ║
+║      ▼                  ▸ PORTE V2 — recette web + parité ↔ iOS     ║
+║ L1  GATEWAY+AGENT ····· pont déterministe, readingMode, appel,      ║
+║      ▼                  puis étage agent NON ÉCRIVANT (§4.3)        ║
+║      ▼                                                              ║
+║ L5  RECETTE CROISÉE iOS+web, puis ACTIVATION                        ║
+║                                                                     ║
+╚═════════════════════════ clôture de phase 1 ════════════════════════╝
+                                  ▼
+╔═ PHASE 2 ═══════════════════════════════════════════════════════════╗
+║ L0b  miroirs KOTLIN + vecteurs JUnit   →   L4  ANDROID              ║
+║      (sur un cœur figé et déjà prouvé par deux frontends)           ║
+╚═════════════════════════════════════════════════════════════════════╝
 ```
 
-| Lot | Périmètre | Contrat d'exécution | Peut démarrer quand |
-|---|---|---|---|
-| **L0** | Lois TS + vecteurs + **tokens de cotes** + miroirs Swift/Kotlin + `conversation-colors.ts` + extension `renderFingerprint` | `lentille-implementation-contract.md` §2, LWS-0 → LWS-2 | immédiatement |
-| **LM** | Providers de substitution derrière le protocole définitif (§4.2) | idem, LWS-2bis | dès que les **types** de L0 sont figés |
-| **L2** | iOS : peau Lentille (liste) + Focal (fil), derrière deux drapeaux distincts | `lentille-…` LWS-5 → LWS-8 **et** `focal-…` WS-1 → WS-11 amendés | dès que le miroir Swift de L0 est mergé |
-| **L3** | Web : peau Lentille + Focal, derrière un drapeau, **déployable dormant sur `main`** (§6.2) | `lentille-…` LWS-9 → LWS-11 | dès que L0 est mergé (le web consomme le domicile **directement**, sans miroir) |
-| **L4** | Android : peau Lentille + Focal | `lentille-…` LWS-12 | après validation iOS — Android suit iOS par convention de parité (`tasks/android-parity-ios-debt-agent-prompt.md`) |
-| **L1** | **Gateway, en dernier** : champ `bridge` réel, `readingMode` serveur, payload d'appel live | idem, LWS-3 → LWS-4 | après validation iOS **et** web sur les mocks |
-| **L5** | Recette croisée puis activation progressive | `lentille-…` §7 + `focal-…` WS-11 | en continu ; **bloquant** pour l'activation |
+| Lot | Ph. | Périmètre | Contrat d'exécution | Peut démarrer quand |
+|---|---|---|---|---|
+| **L0** | 1 | Lois TS + vecteurs + **tokens de cotes** + miroir **Swift seul** + `conversation-colors.ts` + extension `renderFingerprint` | `lentille-implementation-contract.md` §2, LWS-0 → LWS-2 | immédiatement |
+| **LM** | 1 | Providers de substitution derrière le protocole définitif (§4.2) | idem, LWS-2bis | dès que les **types** de L0 sont figés |
+| **L2** | 1 | **iOS** : peau Lentille (liste) + Focal (fil), derrière deux drapeaux distincts | `lentille-…` LWS-5 → LWS-8 **et** `focal-…` WS-1 → WS-11 amendés | dès que le miroir Swift de L0 est mergé |
+| **L3** | 1 | **Web** : peau Lentille + Focal, derrière un drapeau, **déployable dormant sur `main`** (§6.2) | `lentille-…` LWS-9 → LWS-11 | **après la porte V1** — le web ne démarre pas avant qu'iOS soit intégralement vert |
+| **L1** | 1 | **Gateway + agent** : champ `bridge` réel, `readingMode` serveur, payload d'appel live, puis l'étage agent du pont (§4.3) | idem, LWS-3 → LWS-4 | après la porte V2 |
+| **L5** | 1 | Recette croisée iOS + web, puis activation progressive | `lentille-…` §7 + `focal-…` WS-11 | **bloquant** pour l'activation et pour la clôture de phase 1 |
+| **L0b** | **2** | Miroirs **Kotlin** + suite de vecteurs JUnit + `LentilleDimens` | `lentille-…` LWS-12 | **après clôture de la phase 1** |
+| **L4** | **2** | **Android** : peau Lentille + Focal | idem | après L0b — sur un cœur figé, prouvé par deux frontends et servi par un vrai backend |
+
+> **Android n'est pas un lot parallèle qu'on retarde — c'est une phase distincte.** Aucun agent n'ouvre `apps/android/**` tant que la phase 1 n'est pas close. Un lot Android mené en parallèle paierait chaque ajustement du noyau trois fois au lieu de deux, et diluerait l'attention sur les deux frontends qui, eux, sont sur le chemin critique. Quand la phase 2 s'ouvre, elle démarre dans les meilleures conditions possibles : lois figées, vecteurs écrits, tokens arrêtés, backend réel, et deux implémentations de référence à imiter. La convention de parité du dépôt (`tasks/android-parity-ios-debt-agent-prompt.md`) s'applique alors normalement.
 
 ### 4.2 Inventaire du backend — ce qui en a besoin, et son substitut
 
@@ -182,6 +196,50 @@ Trois surfaces seulement demandent la gateway. Elles sont isolées ici pour que 
 | **Pont ✦** (ligne 2 des rangs non lus) | `bridge` dans le mapping de `GET /conversations` et dans `conversation:unread-updated` — **LWS-4** | `LocalBridgeProvider` : le client exécute `buildBridgeData` (la **même** loi partagée, LWS-1) sur les messages qu'il a déjà en cache | **Oui** — c'est la même loi sur moins de données. Le provider marque `isComplete: false` quand sa fenêtre ne couvre pas tout l'intervalle non lu, et l'UI dit alors « sur les N derniers messages ». Aucun chiffre extrapolé, aucune phrase fabriquée — la contrainte d'honnêteté de #3010 WS-8, appliquée telle quelle |
 | **Préférence de mode** (encoche actionnable, multi-appareils) | `readingMode` sur `UserConversationPreferences` + route + broadcast — **LWS-3** | Le store local de #3010 WS-1 (`UserDefaults` iOS / store web), clé `(scope, conversationId)` | **Oui, avec une limite affichée** — le mode est mémorisé **par appareil**, pas encore synchronisé. C'est exactement l'amendement A5 en deux temps : le store local n'est pas du travail jeté, il **devient** le cache optimiste devant le canal serveur quand L1 atterrit |
 | **Appel en cours sur le rang** (● pulsant, « n voix · depuis X », Rejoindre) | Payload `ConversationLiveCall` — aucun champ d'appel n'existe aujourd'hui sur le modèle de conversation (vérifié : `CoreModels.swift` n'a ni `activeCall`, ni `callState`) | `LocalLiveCallProvider` : dérivé de l'état d'appel que le client connaît **déjà** pour la conversation ouverte ; **absent** pour les autres | **Oui** — un appel non connu est un appel **non affiché**, jamais un appel inventé. La section EN DIRECT reste vide plutôt que fausse |
+
+### 4.3 Le service agent — une quatrième surface, déjà largement bâtie
+
+`services/agent` n'est pas une API à inventer : c'est un service en production qu'il faut **brancher sur un nouveau débouché**. L'inventaire (contrat Lentille E15 et §5.1) :
+
+| Déjà là | À faire |
+|---|---|
+| Graphe LangGraph `observer → strategist → generator → quality-gate` | **Portée du résumé** : le borner à une plage de messages, que la gateway intersecte avec la fenêtre non lue du lecteur |
+| Fabrique LLM (Anthropic/OpenAI, routeur, repli, retry, coût) | **Format** : une ligne au lieu de 200 mots — une contrainte de génération |
+| **Résumé de conversation** déjà produit et persisté par l'observer, avec ton et profils | **Conversations directes** : élargir `eligibleConversationTypes` — une valeur de configuration, pas une limite structurelle |
+| **Attachement par conversation** : `AgentConfig.conversationId`, `enabled`, `agentType` | **Chemin non écrivant** — le seul vrai manque structurel |
+| Transport gateway ↔ agent (HTTP + ZMQ + relais admin) | |
+| `GET /conversations/:id/analysis`, déjà consommé par le SDK | |
+
+**Ce que cela change au plan — et ce que cela ne change pas.**
+
+- **L'ordre ne bouge pas.** C'est du backend : il se fait **en dernier**, après les portes V1 et V2, avec le lot L1. Le pont déterministe couvre l'UX entière d'ici là.
+- **Le plancher ne bouge pas.** L'étage déterministe reste permanent, pas transitoire. L'agent enrichit ; il ne devient jamais le seul fournisseur, sans quoi une panne LLM viderait la liste.
+- **Une contrainte se durcit.** Le service produit aujourd'hui pour **livrer**, et l'animateur poste **sous l'identité d'utilisateurs réels**. Le pont, lui, ne doit **jamais** écrire dans le fil. Il faut donc un chemin de production **non écrivant**, adossé à l'observer, sans file de livraison ni identité d'emprunt — pour qu'allumer les ponts n'allume jamais l'impersonation. Tant que cette séparation n'est pas faite, `agent_grammar` reste OFF, et son activation garde la décision produit écrite qu'exigeait déjà #3010 WS-10.
+
+### 4.4 Assistance **locale d'abord**, service en repli — et une exception non négociable
+
+> **Exigence produit** : par défaut le système utilise `services/agent` **si l'appareil local ne permet pas** de faire tourner un agent local capable d'analyser, de résumer et de conseiller des réponses.
+> **Horizon** : l'agent **local** est une vision de **moyen terme**. Elle n'est pas construite dans ce chantier — mais la **couture** qui permettra de l'insérer sans rien casser, elle, se pose maintenant.
+
+C'est donc une **cascade de capacité**, pas un choix binaire. Elle se pose exactement là où le contrat de providers l'attend déjà (§4.2) : un protocole, plusieurs implémentations, l'UI ignorante de laquelle sert.
+
+| Rang | Fournisseur | Quand | Confidentialité | **Horizon** |
+|---|---|---|---|---|
+| 1 | **Agent local** (modèle sur l'appareil) | dès que l'appareil en est capable | le contenu ne quitte **jamais** l'appareil | **moyen terme** — non construit ici |
+| 2 | **`services/agent`** (§4.3) | appareil incapable **et** politique le permettant | contenu traité côté serveur | **ce chantier**, lot L1, après V2 |
+| 3 | **Pont déterministe** | toujours, et **seul recours** quand 1 et 2 sont exclus | aucune analyse, que du comptage | **ce chantier**, dès la phase 1 |
+
+**Ce qui se construit maintenant : les rangs 3 puis 2, et la place du rang 1.** Aujourd'hui, la sonde de capacité locale répond simplement « incapable » — une implémentation d'une ligne. Ce qui compte est que `resolveAssistTier` et `AssistCapabilityProbing` **existent** et soient consultés dès maintenant : le jour où le rang 1 arrive, on remplace une sonde, pas une architecture. Une cascade ajoutée après coup se paie en refonte de tous les appelants ; une cascade posée d'emblée avec un seul rang actif ne coûte rien.
+
+**L'exception non négociable — les conversations `e2ee`.** Le schéma distingue trois modes (`encryptionMode` : `null`, `"server"`, `"e2ee"` en `signal_v3`). Dans une conversation **`e2ee`**, le serveur ne détient pas le clair : lui faire produire un résumé exigerait de rompre la promesse de bout en bout. Le repli du rang 1 vers le rang 2 y est donc **interdit**, pas seulement déconseillé — un appareil incapable retombe directement au **rang 3**.
+
+Autrement dit : la cascade est gouvernée par **deux** conditions, la capacité *et* la politique. Formuler « si l'appareil ne peut pas, alors le serveur » sans la seconde ferait du chiffrement de bout en bout une promesse à trous — et c'est le genre de trou qui ne se voit pas en recette, parce que tout **fonctionne**.
+
+**Le choix du rang est une loi partagée**, `resolveAssistTier({ deviceCapability, encryptionMode, userConsent, conversationType })`, vectorisée comme les autres (§2.3). Sans quoi trois frontends inventeraient trois politiques de confidentialité différentes — la pire chose à laisser diverger.
+
+**La capacité locale se sonde, elle ne se suppose pas.** `AssistCapabilityProbing` est défini maintenant et renvoie `false` partout ; à moyen terme, chaque plateforme le remplace par une vraie sonde (résultat mis en cache, réévalué au changement d'OS ou de réglages). Le dépôt a déjà un précédent d'analyse sur l'appareil — `TextAnalyzer`, `LanguageDetection`, l'onglet sentiment — donc le chemin local sera une montée en puissance, pas une nouveauté d'architecture.
+
+**Ce que cela ne change pas au séquencement.** Rien. Le rang 3 couvre l'UX entière dès la phase 1 ; le rang 2 est un enrichissement livré après les portes V1 et V2 ; le rang 1 viendra à son horizon. Un agent local qui n'existe pas encore n'a jamais pour conséquence un écran vide — c'est précisément ce que le plancher déterministe garantit.
 
 **Trois règles qui font que ce détour ne coûte rien.**
 
@@ -215,31 +273,39 @@ Trois surfaces seulement demandent la gateway. Elles sont isolées ici pour que 
 ## 5. Séquencement — l'ordre qui évite d'écrire deux fois
 
 ```
+PHASE 1 — iOS puis WEB, et rien d'autre
+
 Étape 1 ── L0.a  lois TS + vecteurs (orchestrateur, courbe, pilule, sections, tri)
-           L0.b  tokens de cotes + conversation-colors.ts (débloquent la fidélité et L3)
+           L0.b  tokens de cotes + conversation-colors.ts (débloquent la fidélité)
            L0.c  les TROIS protocoles (pont, préférence, appel live) — figés ici
 
-Étape 2 ── L0.d  miroirs Swift + suite de vecteurs iOS + test de parité des tokens
+Étape 2 ── L0.d  miroir SWIFT + suite de vecteurs iOS + test de parité des tokens
            LM    providers de substitution (§4.2), testés sur les MÊMES vecteurs
 
 Étape 3 ── L2.a  iOS — peau Lentille (LWS-5 → LWS-8)
            L2.b  iOS — Focal (WS-1 → WS-6 de #3010, amendés)
                   └─ disjoints en fichiers : ConversationListView* vs MessageListView*
            L2.c  iOS — coquille : encoche, menu de mode, aperçu (WS-7)
-           ▸ PORTE V1 — recette iOS INTÉGRALE sur mocks (§6.1)
+           ▸▸ PORTE V1 — recette iOS INTÉGRALE sur mocks (§6.1)
 
 Étape 4 ── L3.a  web — peau Lentille, déployée DORMANTE sur main (§6.2)
            L3.b  web — Focal (fil)
            L3.c  web — menu de mode + aperçu
-           ▸ PORTE V2 — recette web INTÉGRALE + parité web↔iOS (§6.1)
+           ▸▸ PORTE V2 — recette web INTÉGRALE + parité web↔iOS (§6.1)
 
-Étape 5 ── L1    GATEWAY — pont ✦ réel, readingMode serveur, payload d'appel
+Étape 5 ── L1.a  GATEWAY — pont ✦ déterministe réel, readingMode serveur, appel live
            ▸ bascule d'injection : les mocks cèdent la place, les vues ne bougent pas
+           L1.b  AGENT — débouché non écrivant + résumé borné 1 ligne (§4.3)
+           ▸ enrichissement seul : le plancher déterministe reste sous lui
 
-Étape 6 ── L0.e  miroirs Kotlin + vecteurs Android
-           L4    Android — les deux peaux, sur des lois déjà vertes et un backend réel
+Étape 6 ── L5    recette croisée iOS + web, perf, a11y, ACTIVATION progressive
+           ▸▸▸ CLÔTURE DE PHASE 1 (§9)
 
-Étape 7 ── L5    recette croisée finale, perf, a11y, ACTIVATION progressive
+──────────────────────────────────────────────────────────────────────
+PHASE 2 — Android, seulement maintenant
+
+Étape 7 ── L0b   miroirs Kotlin + vecteurs JUnit + LentilleDimens
+           L4    Android — les deux peaux, sur un cœur figé et un backend réel
 ```
 
 **Pourquoi la gateway est en dernier.** Elle ne bloque personne : les trois surfaces qui la demandent ont un substitut honnête derrière le protocole définitif (§4.2). L'y placer tôt aurait figé un contrat de données **avant** que trois interfaces l'aient éprouvé — le meilleur moyen de livrer un champ dont la forme ne convient à personne. En la plaçant après V2, elle implémente un protocole déjà validé par deux frontends en usage réel.
@@ -249,6 +315,7 @@ Trois surfaces seulement demandent la gateway. Elles sont isolées ici pour que 
 - **S1 — après l'étape 1** : lois, vecteurs, tokens et **protocoles** sont figés. Tout lot qui code une constante ou invente une signature après S1 est en violation de contrat. Un seuil qui doit bouger repasse par L0, et toutes les plateformes rougissent ensemble.
 - **S2 — porte V1** : rien ne commence sur le web tant que la recette iOS n'est pas intégralement verte. C'est l'exigence produit, et c'est aussi ce qui rend la parité web↔iOS mesurable : on compare à une référence figée, pas à deux cibles mouvantes.
 - **S3 — porte V2** : la gateway ne démarre qu'une fois les deux frontends validés. Le contrat de données qu'elle implémente est alors éprouvé, pas supposé.
+- **S4 — clôture de phase 1** : `apps/android/**` reste fermé jusqu'ici. C'est la priorité produit, et c'est aussi l'économie la plus simple du chantier — chaque ajustement du noyau se paie deux fois au lieu de trois.
 
 **Ce qui peut se paralléliser sans risque** : L2.a ⊥ L2.b (fichiers disjoints : `ConversationListView*` vs `MessageListView*`), L3 ⊥ L2 (langages disjoints), L1 ⊥ tout (service disjoint). **Ce qui ne le peut pas** : deux agents sur `ConversationListView.swift`, deux agents sur `packages/shared/utils/`.
 
@@ -343,8 +410,8 @@ Cette planche devient l'**instrument de recette partagé** : le même jeu de 25 
 | Gateway | `cd services/gateway && bun run test:coverage` (249 suites, lignes ~62,9 % sous bun) | L1 |
 | Web | `cd apps/web && bun test` + `bun run build` | L3 |
 | iOS | `./apps/ios/meeshy.sh test` — **fait foi en CI macOS** ; `xcodebuild` n'existe pas sous Linux | L2 |
-| Android | `./gradlew test` | L4 |
-| Parité des miroirs | les trois suites de vecteurs vertes sur le **même** commit de `fixtures/` | fermeture |
+| Android *(phase 2)* | `./gradlew test` | L4 |
+| Parité des miroirs | phase 1 : **deux** suites de vecteurs (Jest, XCTest) vertes sur le **même** commit de `fixtures/` — phase 2 : les trois | clôture de chaque phase |
 
 > **Prérequis de parité locale bun** (`CLAUDE.md`) : `cd packages/shared && npx prisma generate --generator client` puis `bun run build`, sans quoi ~17 suites gateway échouent pour des raisons sans rapport avec ce chantier.
 
@@ -372,17 +439,31 @@ Les drapeaux sont **indépendants** : la Lentille sans Focal est un état livrab
 
 ## 9. La définition de « fini »
 
-Le chantier ferme quand, et seulement quand :
+### 9.1 Clôture de la **phase 1** — iOS et web
 
-1. Les sept fichiers de vecteurs sont verts dans **trois** suites (Jest, XCTest, JUnit), sur le même commit de `packages/shared/fixtures/`.
-2. Les treize critères de recette du vol. 5 (§7, R1 → R13) passent sur iOS **et** web — Android suit sur son propre calendrier, avec la même grille.
+C'est la seule clôture qui compte pour livrer. Elle est atteinte quand, et seulement quand :
+
+1. Les sept fichiers de vecteurs sont verts dans **deux** suites (Jest, XCTest), sur le même commit de `packages/shared/fixtures/`.
+2. Les treize critères de recette du vol. 5 (§7, R1 → R13) passent sur iOS **et** web.
 3. La matrice de couverture §5.3 du vol. 5 (28 lignes : typing, brouillons, kinds, pièces jointes, localisation, épingle, mute, verrou, outbox, mood, sélection iPad, long press, appel, ticker, VoiceOver, pagination, branches vides…) se comporte **à l'identique** de l'existant, drapeau on.
 4. La matrice §5 du vol. 4 (16 lignes temps réel du fil) idem, en Focal **et** en Script.
-5. Drapeaux éteints ⇒ les trois apps sont **bit-à-bit identiques** à aujourd'hui (test de snapshot par plateforme).
+5. Drapeaux éteints ⇒ les **deux** apps sont **bit-à-bit identiques** à aujourd'hui (test de snapshot par plateforme).
 6. Budget de défilement tenu sur les deux écrans : < 1 ms/frame, zéro allocation dans la passe, aucune invalidation de layout — **mesuré** aux Instruments et au profiler navigateur, pas déduit.
-7. **Fidélité prouvée, pas affirmée** : cotes rendues == `lentille-tokens.json` sur les trois plateformes (§2.5 ①②), et les 44 `id` de `behaviour-matrix.json` couverts partout, le web comparé à iOS `id` par `id` (§2.5 ③).
+7. **Fidélité prouvée, pas affirmée** : cotes rendues == `lentille-tokens.json` sur iOS **et** web (§2.5 ①②), et les 44 `id` de `behaviour-matrix.json` couverts sur les deux, le web comparé à iOS `id` par `id` (§2.5 ③).
 8. **Les portes ont été franchies dans l'ordre** : recette iOS intégrale (V1) avant tout travail web, recette web intégrale et parité (V2) avant tout travail gateway.
 9. **La bascule des substituts est neutre** : quand la gateway remplace les mocks, aucun snapshot de vue ne bouge à données égales — la preuve que le protocole était le bon et que l'UI n'a jamais dépendu de la provenance.
 10. **`main` n'a jamais été mis en danger** : à chaque étape, drapeaux éteints, l'app est identique ; la peau dégrade vers le rendu historique si elle lève ; le bundle n'est pas servi à qui ne l'a pas demandé.
 
-Une régression silencieuse vaut mieux qu'un joli effet : si un des dix points est rouge, le chantier n'est pas fini, quel que soit l'état visuel.
+Une régression silencieuse vaut mieux qu'un joli effet : si un des dix points est rouge, la phase 1 n'est pas close, quel que soit l'état visuel.
+
+### 9.2 Clôture de la **phase 2** — Android
+
+Ouverte seulement après 9.1. Même grille, sans rien de neuf à décider :
+
+1. Les miroirs Kotlin passent les **mêmes** sept fichiers de vecteurs — la troisième suite rejoint les deux autres sur le même commit de `fixtures/`.
+2. `LentilleDimens` == `lentille-tokens.json` (test de parité, modèle `MeeshyTokenParityTest`).
+3. Les 44 `id` de `behaviour-matrix.json` sont couverts en JUnit, et Android se compare à iOS `id` par `id`.
+4. La grille R1 → R20 est rejouée sur Android ; drapeau éteint ⇒ rendu identique.
+5. Les deux divergences Android relevées à la reconnaissance sont fermées : le sectionnement `PINNED/CATEGORY/ALL` (F7) cède la place à la loi partagée, et le miroir manquant du résolveur d'aperçu du Prisme (F8) est créé.
+
+Android n'a aucune décision à prendre en phase 2 : tout ce qu'il implémente a déjà été tranché, écrit et prouvé deux fois.
