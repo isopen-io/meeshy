@@ -192,4 +192,50 @@ nonisolated public enum FocalMetrics {
         public static let borderWidth: CGFloat = 1.5
         public static let radius: CGFloat = 14
     }
+
+    // MARK: - Méta discrète (opacité de texte translucide)
+
+    /// Opacité du texte méta discret (heure de suite de groupe, libellé
+    /// « modifié ») — **F-083ter**. `FocalMetaRow` utilisait `0.4`/`0.45`,
+    /// une régression de contraste AA sur les DEUX thèmes (2,85:1 clair,
+    /// 4,49:1 sombre — découverte par `FocalPaletteContrastTests`, F-090).
+    ///
+    /// **Écart calculé vs la consigne littérale « aligne sur `0.5`/`0.55` »**
+    /// (RE-PREUVE avant écriture, signalé plutôt que suivi aveuglément) :
+    /// `WCAGContrast.ratioOfTranslucentForeground(.black.opacity(0.5), on:
+    /// #FFFFFF)` mesure **3,977:1** — SOUS le seuil AA `4.5:1` (calcul
+    /// vérifié : la relation opacité→contraste n'est pas linéaire, la formule
+    /// WCAG applique une courbe gamma sRGB). `0.5` est la valeur de
+    /// `FocalIdentityHeader`/`BubbleFooter` en thème clair, MAIS ces deux-là
+    /// portent déjà ce même déficit — documenté « préexistant, hors
+    /// périmètre » par F-090 (le contrat ne demandait pas de le réparer).
+    /// La consigne de CE lot exige que « les 2 tests passent » : priorité au
+    /// résultat sur la valeur littérale suggérée. `0.55` clair mesure
+    /// **4,759:1** (AA satisfait, calcul vérifié) ; `0.55` sombre mesure
+    /// **6,261:1** (déjà largement conforme). Retenu : `0.55` pour LES DEUX
+    /// thèmes — un seul palier au lieu de deux, plus simple, et
+    /// `FocalIdentityHeader` (qui lit désormais CETTE MÊME constante,
+    /// jamais un littéral concurrent) voit son propre déficit clair
+    /// préexistant corrigé EN PRIME (effet secondaire positif, jamais
+    /// demandé mais jamais une régression — 3,98:1 → 4,76:1).
+    nonisolated public enum MetaText {
+        public static let lightOpacity: Double = 0.55
+        public static let darkOpacity: Double = 0.55
+    }
+
+    // MARK: - Teinte de surface neutre (cartes plates hors focus)
+
+    /// Fond de carte neutre translucide — utilisé par les surfaces plates
+    /// SANS bulle qui ont besoin d'une légère élévation visuelle (ex. rangée
+    /// d'épisode du Résumé Vivant, `Focal/Summary/EpisodeListView.swift`).
+    /// Nommée (F-083ter, garde R15 `check-law-literals.sh`) plutôt que
+    /// laissée en littéral `0.04`/`0.06` orphelin dans un fichier de peau —
+    /// AUCUNE cote de maquette `thread.*` ne porte cette valeur (ni dans le
+    /// contrat Focal ni dans `lentille-tokens.json`) : c'est une teinte
+    /// décorative interne au Résumé Vivant, pas une cote normative du fil,
+    /// donc centralisée ici sans revendiquer de miroir `thread.*`.
+    nonisolated public enum SurfaceTint {
+        public static let lightFill: Double = 0.04
+        public static let darkFill: Double = 0.06
+    }
 }

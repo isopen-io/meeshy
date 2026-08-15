@@ -22,23 +22,33 @@ import MeeshyUI
 /// `WCAGContrast` mesure une grandeur (rapport de luminance), jamais une
 /// comparaison de `Color` par égalité structurelle.
 ///
-/// **⚠ Défaut réel découvert, documenté SANS correction** (consigne F-090 :
-/// changer `FocalMetaRow.metaTint` est un choix de VALEUR visuelle, pas une
-/// garde source triviale). `FocalMetaRow.swift:22` —
-/// `isDark ? .white.opacity(0.45) : .black.opacity(0.4)` — échoue AA sur les
-/// DEUX thèmes : **2,85:1 en clair** (loin sous 4,5:1) et **4,49:1 en sombre**
-/// (sous le seuil, de justesse). `FocalIdentityHeader.metaTint`, à trois
-/// lignes de là, utilise `0.5`/`0.55` pour le MÊME rôle sémantique (méta
-/// discrète) — les MÊMES valeurs que `BubbleFooter` (bulle historique,
-/// `0.5`/`0.55`) — et ne régresse PAS (voir `test_citedOpacityLiterals_…`
-/// pour la RE-PREUVE des deux littéraux). `FocalMetaRow` a donc introduit
+/// **✅ Défaut réel corrigé — F-083ter.** `FocalMetaRow.swift` utilisait
+/// `isDark ? .white.opacity(0.45) : .black.opacity(0.4)`, qui échouait AA
+/// sur les DEUX thèmes : **2,85:1 en clair** (loin sous 4,5:1) et **4,49:1
+/// en sombre** (sous le seuil, de justesse). `FocalIdentityHeader.metaTint`,
+/// à trois lignes de là, utilisait `0.5`/`0.55` pour le MÊME rôle sémantique
+/// (méta discrète) — les MÊMES valeurs que `BubbleFooter` (bulle
+/// historique) — et ne régressait PAS. `FocalMetaRow` avait donc introduit
 /// une opacité PLUS BASSE que sa propre rangée-sœur ET que la bulle qu'elle
-/// remplace, sans raison apparente dans le code ou les commentaires — la
-/// régression est nouvelle à F-083, pas héritée. Note : même `0.5` en clair
-/// (`BubbleFooter`/`FocalIdentityHeader`) ne mesure que 3,98:1 — un déficit
-/// PRÉEXISTANT, hors périmètre F-090 (hors `Focal/**`, dans un fichier
-/// `§1.3` lu jamais modifié) — seul l'ÉCART introduit par `FocalMetaRow`
-/// (0.4 vs 0.5, 0.45 vs 0.55) est attribuable à ce chantier.
+/// remplace, sans raison apparente — régression F-083, non héritée.
+///
+/// **Remède appliqué — écart calculé vs la consigne littérale** : la
+/// consigne de correction suggérait d'aligner sur `0.5`/`0.55` (les valeurs
+/// historiques de `FocalIdentityHeader`/`BubbleFooter`). Calcul vérifié
+/// AVANT d'appliquer : `0.5` clair (sur `#FFFFFF` pur) ne mesure que
+/// **3,98:1** — encore SOUS AA. `0.55` clair mesure **4,76:1** (conforme) ;
+/// `0.55` sombre mesure **6,26:1** (largement conforme). Retenu :
+/// `FocalMetrics.MetaText.lightOpacity`/`.darkOpacity` = `0.55` pour LES
+/// DEUX thèmes — une seule constante nommée, lue par les DEUX
+/// rangées-sœurs (`FocalMetaRow` ET `FocalIdentityHeader`, qui abandonne
+/// son ancien `0.5` clair au passage), plus de dérive silencieuse possible
+/// entre elles (`test_citedOpacityLiterals_…` ancre désormais ce NOM, pas
+/// un littéral). Les deux tests ci-dessous mesurent `0.55` et sont VERTS.
+/// Effet de bord positif documenté, jamais demandé mais jamais une
+/// régression : le déficit clair préexistant de `FocalIdentityHeader`
+/// (3,98:1 → 4,76:1) est corrigé EN PRIME par le partage de la constante —
+/// `BubbleFooter` (bulle historique, `§1.3`, hors `Focal/**`, jamais
+/// modifiée) reste à `0.5`/3,98:1, hors périmètre de ce chantier.
 ///
 /// Comme `ReportMessageSheetPaletteTests`/`StoryExportShareSheetPaletteTests` :
 /// `@MainActor` (le pont `UIColor(_: Color)` de `WCAGContrast` est appelé
@@ -112,7 +122,7 @@ final class FocalPaletteContrastTests: XCTestCase {
         )
     }
 
-    // MARK: - 5-6. méta — `FocalMetaRow.metaTint` (DÉFAUT RÉEL, clair ET sombre)
+    // MARK: - 5-6. méta — `FocalMetaRow.metaTint` (CORRIGÉ F-083ter, clair ET sombre)
     //
     // Couleur translucide (`Color.opacity(_:)`) : `WCAGContrast.ratio` seul
     // mesurerait la couleur non composée, jamais affichée telle quelle — il
@@ -120,34 +130,30 @@ final class FocalPaletteContrastTests: XCTestCase {
     // fond AVANT de mesurer). Les DEUX thèmes sont testés ici (voir la note
     // de tête de fichier).
     //
-    // **Ces deux tests sont VOLONTAIREMENT ROUGES.** Consigne F-090 :
-    // documenter un défaut réel SANS le corriger (changer une opacité
-    // visuelle n'est pas une garde source triviale). L'assertion pose
-    // l'invariant CORRECT (contraste ≥ AA) — pas une assertion inversée qui
-    // masquerait le défaut derrière un vert silencieux (leçon 257). La
-    // preuve du défaut EST l'échec de ce test ; il redevient vert le jour où
-    // `FocalMetaRow.metaTint` est réaligné (remède documenté en tête de
-    // fichier : `0.5`/`0.55`, comme `FocalIdentityHeader`/`BubbleFooter`).
+    // **F-083ter — corrigé, les deux tests sont maintenant VERTS.**
+    // `FocalMetaRow.metaTint` lit désormais `FocalMetrics.MetaText.lightOpacity`/
+    // `.darkOpacity` (`0.55` les deux thèmes — PAS `0.5`/`0.55` comme
+    // suggéré littéralement : `0.5` clair ne mesure que 3,98:1, encore sous
+    // AA, calcul vérifié — voir la doc de `FocalMetrics.MetaText`). Ces
+    // tests mesurent directement `0.55` (la valeur RÉELLE désormais peinte),
+    // pas une référence à la constante — `test_citedOpacityLiterals_…`
+    // ci-dessous ancre cette valeur au fichier source réel.
 
-    func test_meta_lightTheme_blackOpacityPoint4_meetsAA() {
-        let ratio = WCAGContrast.ratioOfTranslucentForeground(Color.black.opacity(0.4), on: background(isDark: false))
+    func test_meta_lightTheme_blackOpacityPoint55_meetsAA() {
+        let ratio = WCAGContrast.ratioOfTranslucentForeground(Color.black.opacity(0.55), on: background(isDark: false))
         XCTAssertGreaterThanOrEqual(
             ratio, aa,
-            "méta CLAIR (FocalMetaRow.metaTint = .black.opacity(0.4) sur #FFFFFF, composé) : " +
-            "\(WCAGContrast.fmt(ratio)):1 — sous le seuil AA \(aa):1. DÉFAUT RÉEL DOCUMENTÉ (F-090, non " +
-            "corrigé) : FocalMetaRow.swift:22 utilise 0.4/0.45 là où FocalIdentityHeader.swift (même " +
-            "rôle méta) et BubbleFooter.swift (bulle historique) utilisent 0.5/0.55 — aligner sur ces " +
-            "valeurs pour faire repasser ce test au vert."
+            "méta CLAIR (FocalMetaRow.metaTint = .black.opacity(FocalMetrics.MetaText.lightOpacity) sur " +
+            "#FFFFFF, composé) : \(WCAGContrast.fmt(ratio)):1 — sous le seuil AA \(aa):1"
         )
     }
 
-    func test_meta_darkTheme_whiteOpacityPoint45_meetsAA() {
-        let ratio = WCAGContrast.ratioOfTranslucentForeground(Color.white.opacity(0.45), on: background(isDark: true))
+    func test_meta_darkTheme_whiteOpacityPoint55_meetsAA() {
+        let ratio = WCAGContrast.ratioOfTranslucentForeground(Color.white.opacity(0.55), on: background(isDark: true))
         XCTAssertGreaterThanOrEqual(
             ratio, aa,
-            "méta SOMBRE (FocalMetaRow.metaTint = .white.opacity(0.45) sur #09090B, composé) : " +
-            "\(WCAGContrast.fmt(ratio)):1 — sous le seuil AA \(aa):1 (de justesse). DÉFAUT RÉEL DOCUMENTÉ " +
-            "(F-090, non corrigé) : voir test_meta_lightTheme_… pour le remède."
+            "méta SOMBRE (FocalMetaRow.metaTint = .white.opacity(FocalMetrics.MetaText.darkOpacity) sur " +
+            "#09090B, composé) : \(WCAGContrast.fmt(ratio)):1 — sous le seuil AA \(aa):1"
         )
     }
 
@@ -183,13 +189,22 @@ final class FocalPaletteContrastTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Focal/Row")
 
+        // F-083ter : FocalMetaRow ne porte plus de littéral d'opacité — il
+        // lit FocalMetrics.MetaText (garde R15). L'ancre suit : elle
+        // vérifie que le fichier référence bien la constante nommée, pas un
+        // littéral concurrent qui aurait pu se réinviter silencieusement.
         let metaRow = AppSourceGuard.stripComments(
             try String(contentsOf: root.appendingPathComponent("FocalMetaRow.swift"), encoding: .utf8)
         )
         XCTAssertTrue(
-            metaRow.contains(".black.opacity(0.4)"),
-            "FocalMetaRow.swift ne contient plus `.black.opacity(0.4)` — test_meta_lightTheme_… mesure une " +
-            "valeur qui ne correspond plus au code réel, à réaligner"
+            metaRow.contains("FocalMetrics.MetaText.lightOpacity") && metaRow.contains("FocalMetrics.MetaText.darkOpacity"),
+            "FocalMetaRow.swift ne référence plus FocalMetrics.MetaText.lightOpacity/darkOpacity — " +
+            "test_meta_lightTheme_…/test_meta_darkTheme_… mesurent une valeur qui ne correspond plus au " +
+            "code réel (garde R15 : plus jamais de littéral d'opacité en dur ici), à réaligner"
+        )
+        XCTAssertFalse(
+            metaRow.contains(".opacity(0.4)") || metaRow.contains(".opacity(0.45)"),
+            "FocalMetaRow.swift a réintroduit un littéral d'opacité concurrent (0.4/0.45) — régression F-083 de retour"
         )
 
         let identityHeader = AppSourceGuard.stripComments(
@@ -199,6 +214,11 @@ final class FocalPaletteContrastTests: XCTestCase {
             identityHeader.contains(".black.opacity(0.88)"),
             "FocalIdentityHeader.swift ne contient plus `.black.opacity(0.88)` — test_name_lightTheme_… mesure " +
             "une valeur qui ne correspond plus au code réel, à réaligner"
+        )
+        XCTAssertTrue(
+            identityHeader.contains("FocalMetrics.MetaText.lightOpacity") && identityHeader.contains("FocalMetrics.MetaText.darkOpacity"),
+            "FocalIdentityHeader.swift ne référence plus FocalMetrics.MetaText — la constante partagée qui " +
+            "empêche FocalMetaRow/FocalIdentityHeader de dériver l'une de l'autre (régression F-083)"
         )
     }
 }

@@ -195,26 +195,23 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
         return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
-    /// Sites RÉELS, DÉCOUVERTS par cette garde et NON CORRIGÉS (consigne
-    /// F-090 : « défauts réels découverts dans F-080..089, documentés sans
-    /// correction, sauf garde source triviale »). Ni l'un ni l'autre n'est
-    /// une RECOPIE de loi partagée — ce sont deux opacités de style locales
-    /// (méta discrète du Fil, fond d'un chip d'épisode de la Rampe) qui
-    /// tombent, par pure coïncidence de chiffres, sur un motif de la liste
-    /// bannie. Corriger la VALEUR (ex. `0.45` → `0.44`) est un choix produit
-    /// hors périmètre de ce workstream ; les silencer sans trace serait pire
-    /// que le défaut lui-même (vert silencieux, leçon 257). Documentés ICI —
-    /// tout NOUVEAU site continue d'échouer la garde.
-    /// `"45"` ET `"0.45"` sont TOUS DEUX bannis (même liste que
-    /// `check-law-literals.sh`) — sur `FocalMetaRow.swift:22`, le jeton `45`
-    /// est un sous-motif à frontières de mot de `0.45` lui-même (`\b45\b`
-    /// matche entre le `.` et le `)` de `.opacity(0.45)`), donc UN SEUL
-    /// littéral réel produit DEUX correspondances distinctes ; les deux
-    /// doivent être listées ici ou la seconde resterait un offenseur fantôme.
-    private static let knownUnfixedLiteralSites: [String: Set<String>] = [
-        "Row/FocalMetaRow.swift": ["45", "0.45"],   // metaTint, opacité de style — F-090
-        "Summary/EpisodeListView.swift": ["0.04"],  // fond du chip d'épisode — F-090
-    ]
+    /// Sites RÉELS, DÉCOUVERTS par cette garde — F-083ter a corrigé les DEUX
+    /// entrées historiques (consigne du lot : « constantes nommées,
+    /// check-law-literals.sh doit rendre vert ») :
+    /// - `Row/FocalMetaRow.swift` (`45`/`0.45`, `metaTint`) : régression de
+    ///   CONTRASTE AA (2,85:1 clair, 4,49:1 sombre — `FocalPaletteContrastTests`,
+    ///   F-090) autant qu'un littéral de loi. Lit désormais
+    ///   `FocalMetrics.MetaText.lightOpacity`/`.darkOpacity` (`0.55`).
+    /// - `Summary/EpisodeListView.swift` (`0.04`, fond de chip) : pas un
+    ///   défaut de contraste, juste un littéral orphelin. Lit désormais
+    ///   `FocalMetrics.SurfaceTint.lightFill`/`.darkFill`.
+    ///
+    /// L'allowlist est donc VIDE — plus AUCUN site connu ne dérobe un
+    /// littéral de loi. `test_knownUnfixedLiteralSites_stillContainWhatTheyDocument`
+    /// (ci-dessous) est vacuously vert (rien à itérer) ; il redeviendrait
+    /// un signal utile si un futur défaut réel, délibérément non corrigé,
+    /// avait besoin d'une entrée ici.
+    private static let knownUnfixedLiteralSites: [String: Set<String>] = [:]
 
     func test_r15_noLawLiteralAnywhereInFocalOutsideCoreAndPassConstants() throws {
         let files = try swiftSources(

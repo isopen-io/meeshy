@@ -35,6 +35,10 @@ struct FocalIdentityHeader: View, Equatable {
     let isDark: Bool
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    /// F-083ter (F10) — voir `editedIndicator`.
+    var editedAt: Date? = nil
+    var isEditSaving: Bool = false
+    var hasEditHistory: Bool = false
 
     static func == (lhs: FocalIdentityHeader, rhs: FocalIdentityHeader) -> Bool {
         lhs.isMe == rhs.isMe
@@ -50,6 +54,9 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.isDark == rhs.isDark
             && lhs.agentStyle == rhs.agentStyle
+            && lhs.editedAt == rhs.editedAt
+            && lhs.isEditSaving == rhs.isEditSaving
+            && lhs.hasEditHistory == rhs.hasEditHistory
     }
 
     /// Nom affiché — clé `focal.row.you` pour « Toi » (contrat §7),
@@ -73,8 +80,17 @@ struct FocalIdentityHeader: View, Equatable {
         isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
     }
 
+    /// F-083ter : lit désormais `FocalMetrics.MetaText` — une seule source
+    /// avec `FocalMetaRow`, jamais deux littéraux qui peuvent dériver
+    /// (c'est cette dérive qui a produit la régression de contraste F-083,
+    /// cf. doc de `FocalMetaRow`). Effet de bord POSITIF documenté : le
+    /// littéral clair passe de `0.5` à `0.55` (`FocalMetrics.MetaText`,
+    /// calcul vérifié — `0.5` clair ne mesurait que 3,98:1, sous AA) —
+    /// répare au passage le déficit de contraste clair préexistant de CETTE
+    /// rangée, jusqu'ici « hors périmètre F-090 » faute de la constante
+    /// partagée qui permet de le faire sans dupliquer un littéral.
     private var metaTint: Color {
-        isDark ? .white.opacity(0.55) : .black.opacity(0.5)
+        isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
     }
 
     var body: some View {
@@ -122,6 +138,8 @@ struct FocalIdentityHeader: View, Equatable {
 
                 Spacer(minLength: 0)
 
+                editedIndicator
+
                 Text(timeString)
                     .font(FocalMetrics.Time.font)
                     .foregroundColor(metaTint)
@@ -130,5 +148,17 @@ struct FocalIdentityHeader: View, Equatable {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .frame(minHeight: FocalMetrics.Avatar.size)
+    }
+
+    /// F-083ter (F10) — « un message édité affiche « modifié » en 10.5 en
+    /// méta » : jusqu'ici seul le libellé VoiceOver l'annonçait
+    /// (`MessageAccessibilityLabelComposer`, F-080) — l'œil ne voyait rien.
+    /// Réutilise `BubbleEditedIndicator` (§1.3, `internal`, vérifié non
+    /// `fileprivate`) TEL QUEL.
+    @ViewBuilder
+    private var editedIndicator: some View {
+        if editedAt != nil || isEditSaving {
+            BubbleEditedIndicator(isMe: isMe, isSaving: isEditSaving, hasEditHistory: hasEditHistory, isDark: isDark)
+        }
     }
 }

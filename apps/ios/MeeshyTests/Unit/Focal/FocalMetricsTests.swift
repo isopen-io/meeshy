@@ -238,4 +238,20 @@ final class FocalMetricsTests: XCTestCase {
         XCTAssertEqual(Double(FocalMetrics.Agent.borderWidth), try tokenNumber("agent", "row", "borderSize"))
         XCTAssertEqual(Double(FocalMetrics.Agent.radius), try tokenNumber("agent", "row", "radius"))
     }
+
+    // MARK: - F-083ter — MetaText / SurfaceTint (PAS des miroirs thread.* — sanity de valeur)
+
+    /// `0.55`, PAS `0.5` — calcul vérifié (`FocalPaletteContrastTests`) :
+    /// `0.5` clair ne mesure que 3,98:1, sous AA `4.5:1`. Sanity contre une
+    /// dérive de valeur silencieuse, pas une parité token (aucun
+    /// `thread.*.metaOpacity` n'existe).
+    func test_metaText_opacities_meetAA_bothThemes() {
+        XCTAssertEqual(FocalMetrics.MetaText.lightOpacity, 0.55)
+        XCTAssertEqual(FocalMetrics.MetaText.darkOpacity, 0.55)
+    }
+
+    func test_surfaceTint_values() {
+        XCTAssertEqual(FocalMetrics.SurfaceTint.lightFill, 0.04)
+        XCTAssertEqual(FocalMetrics.SurfaceTint.darkFill, 0.06)
+    }
 }

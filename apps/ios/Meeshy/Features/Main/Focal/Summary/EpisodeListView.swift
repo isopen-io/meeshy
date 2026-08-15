@@ -59,7 +59,9 @@ private struct EpisodeRow: View {
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    // F-083ter : littéral 0.04 nommé (garde R15,
+                    // check-law-literals.sh) — FocalMetrics.SurfaceTint.
+                    .fill(isDark ? Color.white.opacity(FocalMetrics.SurfaceTint.darkFill) : Color.black.opacity(FocalMetrics.SurfaceTint.lightFill))
             )
             .contentShape(Rectangle())
         }
