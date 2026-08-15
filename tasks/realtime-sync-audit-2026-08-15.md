@@ -2339,3 +2339,109 @@ balayage se fait en cherchant les champs booléens optionnels d'entrée dont un
 AUTRE champ porte déjà le fait, et en demandant pour chacun lequel des deux le
 site d'écriture consulte. Quand les deux existent, ils divergent un jour — et
 c'est le porteur, jamais le drapeau, qui dit la vérité.
+
+# Cycle 34 — les octets partaient, le fait qui les décrit restait
+
+Sonde annoncée en clôture du cycle 33 : **quels FAITS ce dépôt lit-il à travers
+un drapeau plutôt qu'à travers la donnée qui les porte ?** Balayage des champs
+booléens dont un AUTRE champ porte déjà le fait, en demandant pour chacun lequel
+des deux le site d'écriture consulte.
+
+## Candidats écartés — vérifiés jusqu'au site d'écriture
+
+| candidat | pourquoi écarté |
+|---|---|
+| `Message.isEdited` + `editedAt` | la paire interdite par CLAUDE.md, mais les QUATRE transports d'édition écrivent les deux ensemble (`messages.ts`, `messages-advanced.ts` ×2, `MessageHandler`) — jamais l'un sans l'autre |
+| `UpdateMessageBodySchema.isEdited` | champ d'entrée accepté du client et consommé par PERSONNE : la route ne déstructure que `content` et force `isEdited: true`. Inerte, pas vivant — famille « export de confort » du cycle 32 |
+| `attachment.isForwarded` + `forwardedFromAttachmentId` | `AttachmentTranslateService:337` lit la disjonction des deux, mais le résolveur de chaîne ne remonte que par `forwardedFromAttachmentId` : la branche `isForwarded` seule est rattrapée par `attachment.id !== originalAttachmentId`. Sans victime |
+| `attachment.isViewOnce` / `isBlurred` / `effectFlags` / `maxViewOnceCount` | AUCUN écrivain sur le modèle `MessageAttachment` (tous les sites trouvés portent sur `Message`). Latents |
+| `attachment.scanStatus` / `moderationStatus` | AUCUN lecteur dans tout le gateway. Pas de contournement de modération à revendiquer |
+
+## Constat
+
+- [x] Défaut : `copyForwardedAttachments` (`MessageProcessor.ts`) reprend
+      `filePath`/`fileUrl` À L'IDENTIQUE — copie et original désignent le MÊME
+      blob — et laisse derrière les ONZE champs qui disent que ce blob est du
+      chiffré. La copie naît sur le défaut Prisma `isEncrypted: false`
+- [x] Le gateway ne déchiffre RIEN : `routes/attachments/download.ts` sert les
+      octets bruts, le CLIENT déchiffre d'après ce que la ligne déclare
+      (`attachmentIncludes` publie `isEncrypted`/`encryptionMode`/`encryptionIv`/
+      `encryptionAuthTag` exactement pour ça)
+- [x] Conséquence : le chiffré est rendu TEL QUEL comme s'il était le média,
+      sous le `mimeType` et le nom d'origine. `isAttachmentEncrypted()` répond
+      `false` sur la copie — rien ne signale l'anomalie
+- [x] `fileSize` porte la taille CHIFFRÉE (`UploadProcessor`) et il EST copié,
+      sans `originalFileSize` ni `originalFileHash` à côté
+- [x] `thumbHash` / `imageVariants` (écrivain réel : `UploadProcessor`) perdus
+      aussi — la copie retombe au téléchargement pleine taille pour un média
+      DÉJÀ dérivé
+- [x] Le garde du cycle 93 (`admitMessageForward`) ne couvrait pas ce cas : il
+      lit `Message.isViewOnce`/`effectFlags`/`expiresAt`, jamais l'état des
+      pièces jointes
+
+Et la suite était verte, exactement comme aux cycles 32 et 33 :
+
+| test | ce qu'il affirmait | ce qu'il ne demandait jamais |
+|---|---|---|
+| `MessageProcessor.test.ts` « copies attachments » | `attCreate` appelé 1 fois | ce que la copie CONTIENT |
+| « updates message type to image » | le `messageType` dérivé du MIME | idem |
+
+Le compte d'appels et le type dérivé, jamais le contenu de la ligne écrite.
+
+## Correctifs
+
+- [x] La copie emporte les onze champs qui décrivent SES octets : `isEncrypted`,
+      `encryptionMode`, `encryptionIv`, `encryptionAuthTag`, `encryptionHmac`,
+      `originalFileHash`, `encryptedFileHash`, `originalFileSize`, `serverKeyId`,
+      `thumbnailEncryptionIv`, `thumbnailEncryptionAuthTag`
+- [x] `thumbHash` et `imageVariants` suivent le média dont ils sont dérivés
+- [x] Une pièce en clair reste en clair — l'ABSENCE du fait est copiée aussi
+      fidèlement que sa présence (discriminant anti-sur-correction)
+
+## Gates
+
+- [x] 5 RED discriminants vus rouges avant correctif
+- [x] 2 non-régressions vertes d'emblée (clair→clair, lignage+propriété)
+- [x] Suite gateway complète : **722 suites / 17 689 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG (changeset) + ce journal + leçon 268
+
+## Constats latents — relevés, NON livrés
+
+1. **La distribution de clés d'un transfert e2ee reste ouverte.** La copie dit
+   désormais la VÉRITÉ sur ses octets, ce qui est strictement mieux dans tous
+   les modes et indispensable en `server`/`hybrid` (le serveur détient la clé via
+   `serverKeyId`). Mais en `e2ee` pur, les destinataires de la conversation
+   d'arrivée n'ont pas la clé : ils verront un échec de déchiffrement explicite
+   là où ils voyaient du charabia silencieux. Reste à trancher — propager la clé,
+   re-chiffrer à l'envoi, ou REFUSER le transfert comme le cycle 93 l'a fait pour
+   la vue unique. C'est une décision produit, pas un correctif de défaut.
+2. **`attachment.isViewOnce` / `isBlurred` sont publiés aux clients et écrits par
+   personne.** Le schéma d'upload (`validation.ts` § `upload`) les accepte,
+   `UploadProcessor.create` ne les range pas. Soit les câbler, soit les retirer.
+3. **`attachment.scanStatus` / `moderationStatus` n'ont aucun lecteur** dans tout
+   le gateway — colonnes écrites nulle part, lues nulle part.
+
+## Reste ouvert (inchangé depuis le cycle 33)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30).
+- **Cluster `admin-permissions.middleware.ts`** (9 exports morts, cycle 32).
+- **Casse du mode NON normalisée sur le chemin socket** (cycle 33, nº 1).
+- **iOS ne sait pas parler la forme du contrat de chiffrement** (cycle 33, nº 2).
+
+## Candidat pour le cycle suivant
+
+Ce défaut n'est pas né d'un drapeau mal lu mais d'une COPIE PARTIELLE : une
+projection champ-par-champ, écrite à la main, qui a cessé d'être exhaustive dès
+que le modèle a gagné des colonnes. `copyForwardedAttachments` énumérait 25
+champs sur les 40 et rien ne l'a signalé — ni le typage (tout est optionnel à la
+création), ni les tests (qui comptaient les appels). La question qui prolonge :
+**où ce dépôt DUPLIQUE-t-il une ligne en la réénumérant à la main, et que
+chacune de ces projections a-t-elle cessé d'emporter ?** Le balayage se fait en
+cherchant les `create` dont les données proviennent d'une ligne LUE du même
+modèle, puis en diffant l'ensemble des champs écrits contre les champs du modèle.
+Une copie partielle ne se trahit jamais à la compilation — seulement le jour où
+l'on demande à la copie ce que l'original savait.
