@@ -167,6 +167,30 @@ struct ConversationListView: View {
     @State private var scrollOffsetRelay = ScrollOffsetRelay()
     @State private var lastScrollDirectionChange: Date = .distantPast
 
+    // MARK: - Pilule de section (LWS-6, drapeau Lentille)
+    //
+    // AUCUN observateur de défilement nouveau ici — c'est la contrainte dure
+    // du contrat (« un seul détecteur, trois consommateurs »). Le détecteur
+    // reste l'unique `onScrollOffsetChange` de `MeeshyRefreshableScroll` ; il
+    // alimente déjà `isScrollingDown`, que consomment la barre du bas et les
+    // boutons flottants (RootView). La pilule est le TROISIÈME consommateur du
+    // MÊME signal : chaque bascule d'`isScrollingDown` est injectée comme un
+    // `.scrolled` dans la loi partagée, et c'est la LOI qui décide de la
+    // visibilité — jamais un timing réécrit ici.
+
+    /// État de `ScrollTimePillLaw` (miroir Focal/Core, GELÉ S1 — partagé avec
+    /// la pilule du fil, amendement A4). Invisible à l'ouverture par
+    /// construction : `initialState()` n'a jamais vu de défilement.
+    @State private var scrollActivity: ScrollActivityState = ScrollTimePillLaw.initialState()
+    /// Visibilité RENDUE, recopiée depuis la loi (`isVisible`) et jamais
+    /// décidée ici.
+    @State private var isSectionPillVisible = false
+    /// Section dont la pilule porte le nom. Alimentée par l'`onAppear` des
+    /// rangs — le hook qui existe DÉJÀ (`triggerLoadMoreIfNeeded`) — et non par
+    /// une sonde de géométrie, qui serait l'observateur que le contrat
+    /// interdit.
+    @State private var visibleSectionId: String? = nil
+
     // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
     // brand-coherent qui combine `.refreshable` natif iOS + animation
     // Meeshy custom : logo dashes, degrade indigo, haptic au seuil et au
@@ -364,9 +388,19 @@ struct ConversationListView: View {
         // any filtered/sectioned view whose visible rows don't line up with
         // the full-account top-20 by recency (fix 2026-07-21).
         let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
+        // Drapeau lu UNE fois par passe de body, jamais par rang : l'`onAppear`
+        // d'un rang est un chemin chaud, et `LentilleFeatureFlag` interroge
+        // `ProcessInfo.environment` à chaque appel. Le booléen descend ensuite
+        // sous la forme d'un `sectionId` optionnel — `nil` = suivi éteint, donc
+        // sous drapeau OFF l'`onAppear` ne gagne pas une seule instruction utile.
+        let tracksVisibleSection = LentilleFeatureFlag.isLentilleListEnabled
         LazyVStack(spacing: 8, pinnedViews: pinnedSectionHeaders) {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
-                sectionView(for: group, orderedConversationIds: orderedConversationIds)
+                sectionView(
+                    for: group,
+                    orderedConversationIds: orderedConversationIds,
+                    trackedSectionId: tracksVisibleSection ? group.section.id : nil
+                )
             }
         }
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
@@ -442,10 +476,11 @@ struct ConversationListView: View {
     /// une catégorie repliée conserve son sticker.
     private func sectionView(
         for group: (section: ConversationSection, conversations: [Conversation]),
-        orderedConversationIds: [String]
+        orderedConversationIds: [String],
+        trackedSectionId: String?
     ) -> some View {
         Section {
-            sectionContent(for: group, orderedConversationIds: orderedConversationIds)
+            sectionContent(for: group, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
         } header: {
             sectionHeader(for: group)
         }
@@ -454,11 +489,12 @@ struct ConversationListView: View {
     @ViewBuilder
     private func sectionContent(
         for group: (section: ConversationSection, conversations: [Conversation]),
-        orderedConversationIds: [String]
+        orderedConversationIds: [String],
+        trackedSectionId: String?
     ) -> some View {
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSectionContentVisible(group.section.id) {
-            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds)
+            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
                 .padding(.horizontal, 16)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
@@ -558,8 +594,87 @@ struct ConversationListView: View {
         sectionFrameRegistry.frames[sectionId] = frame
     }
 
+    // MARK: - Pilule de section — TROISIÈME consommateur du signal existant
+
+    /// Libellé de la pilule : la section dont les rangs viennent d'entrer à
+    /// l'écran, à défaut la première section rendue. Fonction PURE (aucune
+    /// dépendance SwiftUI/MainActor), donc directement testable — même
+    /// convention que `emptyBranch` / `shouldAutoLoadPreview`. La MAJUSCULE
+    /// vient de `LentilleSticker.displayTitle` : pilule et sticker crient le
+    /// même mot, par la même fonction, jamais par deux transformations
+    /// parallèles qui dériveraient.
+    nonisolated static func sectionPillTitle(
+        visibleSectionId: String?,
+        sections: [ConversationSection]
+    ) -> String? {
+        guard let fallback = sections.first else { return nil }
+        let match = sections.first(where: { $0.id == visibleSectionId }) ?? fallback
+        return LentilleSticker.displayTitle(match.name)
+    }
+
+    /// Horodatage injecté dans la loi, en millisecondes — la loi ne lit JAMAIS
+    /// l'horloge murale elle-même (`ScrollTimePillLaw` : « les peaux sont
+    /// seules responsables de l'horloge »).
+    nonisolated static func scrollActivityTimestamp(_ date: Date = Date()) -> Double {
+        date.timeIntervalSince1970 * 1000
+    }
+
+    /// Délai de re-sondage, en nanosecondes pour `Task.sleep`. La FENÊTRE vient
+    /// de la loi partagée (`ScrollTimePillLaw.lingerMs`, miroir de
+    /// `SCROLL_ACTIVITY_LINGER_MS`) : cette peau n'écrit ni ne recopie sa
+    /// valeur, elle convertit une unité (garde R15).
+    nonisolated static var pillProbeDelayNanoseconds: UInt64 {
+        UInt64(ScrollTimePillLaw.lingerMs * 1_000_000)
+    }
+
+    /// Le signal existant a basculé ⇒ un `.scrolled` pour la loi. C'est le
+    /// SEUL point d'entrée de la pilule : aucune sonde, aucun timer permanent,
+    /// aucun `ScrollViewReader`.
+    private func handleScrollActivitySignal() {
+        guard LentilleFeatureFlag.isLentilleListEnabled else { return }
+        let instant = Self.scrollActivityTimestamp()
+        scrollActivity = ScrollTimePillLaw.reduce(state: scrollActivity, event: .scrolled(at: instant))
+        applyScrollActivity(at: instant)
+        scheduleScrollActivityProbe()
+    }
+
+    /// Re-sondage unique, une fenêtre après ce défilement-ci. `Task.sleep`
+    /// plutôt qu'un timer qui tourne : la liste ne paie rien tant que personne
+    /// ne défile, et chaque défilement porte SON propre re-sondage — le dernier
+    /// arrivé décide, ce qui reproduit exactement le réarmement de la loi sans
+    /// le réimplémenter. La sonde n'envoie qu'un `.tick` : elle ne réarme
+    /// jamais l'état, elle ne fait que redemander à la loi si l'on est encore
+    /// visible.
+    private func scheduleScrollActivityProbe() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: Self.pillProbeDelayNanoseconds)
+            let instant = Self.scrollActivityTimestamp()
+            scrollActivity = ScrollTimePillLaw.reduce(state: scrollActivity, event: .tick(at: instant))
+            applyScrollActivity(at: instant)
+        }
+    }
+
+    /// La LOI décide, la vue recopie. Écriture gardée par l'inégalité : sans
+    /// elle, chaque sonde invaliderait le body de la liste pour rien.
+    private func applyScrollActivity(at instant: Double) {
+        let visible = ScrollTimePillLaw.isVisible(state: scrollActivity, at: instant)
+        if visible != isSectionPillVisible { isSectionPillVisible = visible }
+    }
+
+    /// `nil` ⇒ suivi éteint (drapeau OFF). Écriture gardée par l'inégalité :
+    /// l'`onAppear` des rangs est un chemin chaud, et seule une FRONTIÈRE de
+    /// section doit re-évaluer le body.
+    private func noteVisibleSection(_ sectionId: String?) {
+        guard let sectionId, visibleSectionId != sectionId else { return }
+        visibleSectionId = sectionId
+    }
+
     @ViewBuilder
-    private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
+    private func sectionConversations(
+        _ conversations: [Conversation],
+        orderedConversationIds: [String],
+        trackedSectionId: String? = nil
+    ) -> some View {
         // rowWidth derives from the actual containing column width (iPad
         // left column is much narrower than the window) minus
         // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
@@ -586,6 +701,10 @@ struct ConversationListView: View {
                         // is safe to call this on every onAppear past
                         // the threshold.
                         triggerLoadMoreIfNeeded(conversation: conversation)
+                        // Libellé de la pilule de section — porté par le hook
+                        // qui existe DÉJÀ sur ce rang, jamais par une sonde
+                        // neuve. `nil` sous drapeau OFF : rien ne s'exécute.
+                        noteVisibleSection(trackedSectionId)
                     }
             }
         }
@@ -901,6 +1020,11 @@ struct ConversationListView: View {
         mainContentZStack
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
+                // TROISIÈME consommateur du même signal (barre du bas, boutons
+                // flottants, pilule) — greffé sur l'observateur EXISTANT plutôt
+                // qu'à côté : deux `adaptiveOnChange` de la même valeur, ce
+                // serait déjà deux détecteurs à tenir d'accord.
+                handleScrollActivitySignal()
             }
             .onAppear {
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
@@ -1024,6 +1148,76 @@ struct ConversationListView: View {
             }
     }
 
+    // MARK: - Rail vivants & stories (LWS-6, drapeau Lentille)
+
+    /// Mux de tête de liste. Drapeau OFF : `StoryTrayView`, à l'identique.
+    ///
+    /// ÉCART SIGNALÉ (pas un oubli) : `StoryTrayView` héberge, en plus du
+    /// carrousel, la bulle « ma story » et ses chemins (composer, « Mes
+    /// stories », ajout de statut, sheet de profil). `StoriesVivantsRail`
+    /// (I-061, vue pure) ne porte que les pastilles des AUTRES : sous drapeau
+    /// ON, ces affordances personnelles disparaissent donc de la tête de liste.
+    /// Le contrat décrit le rail comme la « fusion `StoryTrayView` + vivants »,
+    /// ce qui appelle bien un remplacement — mais la moitié « ma story » de la
+    /// fusion n'a pas encore de vue. À trancher par Fable : soit le rail
+    /// reprend l'entrée « moi », soit la peau garde les deux.
+    @ViewBuilder
+    private var lentilleRailOrStoryTray: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            StoriesVivantsRail(
+                entries: lentilleRailEntries,
+                onSelect: { userId in onStoryViewRequest?(userId, true) }
+            )
+        } else {
+            StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
+                onStoryViewRequest?(userId, true)
+            }, onAddStatus: {
+                showStatusComposer = true
+            })
+        }
+    }
+
+    /// Entrées du rail. Même filtrage que le tray (`storyScrollView`) : ni
+    /// moi-même, ni un groupe entièrement expiré — un groupe expiré ouvrirait
+    /// puis refermerait le viewer (tap-puis-flash déjà documenté côté tray).
+    /// La troncature `≤ 6` et le masquage si vide appartiennent au rail
+    /// (`LentilleRailPolicy`), pas à cet appelant.
+    ///
+    /// ÉCART SIGNALÉ : la moitié « vivants » de la fusion reste vide —
+    /// `isLive` est toujours `false`, faute de modèle d'appel en cours sur
+    /// `Conversation` (contrat §0/E13, même constat que la greffe I-060 qui
+    /// passe `liveCall: nil`). Le rail est donc, aujourd'hui, un rail de
+    /// stories ; la pastille pulsée s'allumera sans changer cette vue le jour
+    /// où la donnée existera.
+    private var lentilleRailEntries: [LentilleRailEntry] {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        return storyViewModel.storyGroups
+            .filter { $0.id != currentUserId && !$0.isFullyExpired() }
+            .map { group in
+                LentilleRailEntry(
+                    id: group.id,
+                    displayName: group.username,
+                    avatarURL: group.avatarURL,
+                    isLive: false
+                )
+            }
+    }
+
+    /// Drapeau OFF ⇒ AUCUNE pilule (rendu identique à aujourd'hui). Sous ON, la
+    /// pilule est montée dès qu'il existe une section à nommer et reste dans
+    /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
+    /// rien à animer (une vue démontée n'a pas d'état d'où partir).
+    @ViewBuilder
+    private var sectionScrollPillOverlay: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled,
+           let title = Self.sectionPillTitle(
+                visibleSectionId: visibleSectionId,
+                sections: conversationViewModel.groupedConversations.map(\.section)
+           ) {
+            SectionScrollPill(isVisible: isSectionPillVisible, text: title)
+        }
+    }
+
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
             // Layer 1: Full-screen scroll content
@@ -1059,12 +1253,12 @@ struct ConversationListView: View {
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
                 VStack(spacing: 0) {
-                    // Story carousel
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        onStoryViewRequest?(userId, true)
-                    }, onAddStatus: {
-                        showStatusComposer = true
-                    })
+                    // Story carousel — sous drapeau Lentille, le rail « vivants
+                    // & stories » (contrat LWS-6 travail 5 : fusion du tray et
+                    // des vivants, ≤ 6 entrées, masqué si vide) prend sa place.
+                    // Le ROUTAGE du tap est le même des deux côtés :
+                    // `onStoryViewRequest?(userId, true)`.
+                    lentilleRailOrStoryTray
 
                     // Sectioned conversation list (skeleton -> content -> empty/error).
                     // Skeleton ONLY when cold-start with no cached groups —
@@ -1213,6 +1407,15 @@ struct ConversationListView: View {
                     )
                 }
             )
+        }
+        // Layer 4 : pilule de section (drapeau Lentille). Posée APRÈS le header
+        // pour passer au-dessus de lui — son ancrage `top 64` la place juste
+        // sous la barre déployée (`LentilleMetrics.Pill.top`, §4.3). Elle ne
+        // capte aucun geste (`allowsHitTesting(false)` dans la vue) et
+        // n'observe rien : `isSectionPillVisible` est décidé par la loi
+        // partagée, `visibleSectionId` par l'`onAppear` des rangs.
+        .overlay(alignment: .top) {
+            sectionScrollPillOverlay
         }
         .sheet(isPresented: $showShareLinkSheet) {
             ShareLinkPickerSheet(

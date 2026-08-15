@@ -52,18 +52,26 @@ nonisolated public enum LentilleRailPolicy {
 /// « Liste ») — pastille `48`, anneau `3.5`, `≤ 6` entrées, masquée si vide.
 ///
 /// Vue PURE : `entries` est injecté par l'appelant, aucun `@State` de
-/// défilement, aucun observateur — `PinnedStoryTrailBand` et le routage tap
-/// story restent, comme le veut le contrat, du ressort du montage
-/// (LWS-6/I-063), jamais de cette vue.
+/// défilement, aucun observateur — `PinnedStoryTrailBand` reste, comme le veut
+/// le contrat, du ressort du montage (LWS-6/I-063), jamais de cette vue.
+///
+/// `onSelect` (LWS-6/I-063) : le rail ne DÉCIDE rien du routage, il le
+/// délègue. Le montage lui passe exactement le chemin d'aujourd'hui
+/// (`onStoryViewRequest?(userId, true)`, le même que `StoryTrayView`) — « le
+/// routage tap story : inchangé ». `Button(.plain)` + `.contentShape`, jamais
+/// `.onTapGesture` (règle dure du workshop : le tap serait avalé par le long
+/// press du conteneur).
 ///
 /// Toutes les cotes viennent de `LentilleMetrics.Rail` — aucun littéral de
 /// loi en dur ici (garde R15).
 public struct StoriesVivantsRail: View {
 
     public let entries: [LentilleRailEntry]
+    public var onSelect: ((String) -> Void)?
 
-    public init(entries: [LentilleRailEntry]) {
+    public init(entries: [LentilleRailEntry], onSelect: ((String) -> Void)? = nil) {
         self.entries = entries
+        self.onSelect = onSelect
     }
 
     @ViewBuilder
@@ -75,7 +83,7 @@ public struct StoriesVivantsRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.sm) {
                     ForEach(visible) { entry in
-                        LentilleRailEntryView(entry: entry)
+                        LentilleRailEntryView(entry: entry, onSelect: onSelect)
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
@@ -87,11 +95,24 @@ public struct StoriesVivantsRail: View {
 /// Rendu d'une entrée du rail — sous-vue privée, jamais montée seule.
 private struct LentilleRailEntryView: View {
     let entry: LentilleRailEntry
+    var onSelect: ((String) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
+    @ViewBuilder
     var body: some View {
+        if let onSelect {
+            Button { onSelect(entry.id) } label: { pastille }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .accessibilityLabel(entry.displayName)
+        } else {
+            pastille
+        }
+    }
+
+    private var pastille: some View {
         VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 Circle()

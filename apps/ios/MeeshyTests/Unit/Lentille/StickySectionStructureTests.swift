@@ -93,8 +93,8 @@ final class StickySectionStructureTests: XCTestCase {
 
         XCTAssertTrue(
             code.contains(
-                "Section { sectionContent(for: group, orderedConversationIds: orderedConversationIds) } " +
-                "header: { sectionHeader(for: group) }"
+                "Section { sectionContent(for: group, orderedConversationIds: orderedConversationIds, " +
+                "trackedSectionId: trackedSectionId) } header: { sectionHeader(for: group) }"
             ),
             "Chaque groupe doit être une `Section` dont les RANGS sont le contenu et le " +
             "header le slot `header:` — la seule forme que `pinnedViews: [.sectionHeaders]` " +
@@ -108,7 +108,7 @@ final class StickySectionStructureTests: XCTestCase {
 
         // Le pliage garde le CONTENU (`sectionContent`), jamais le header.
         XCTAssertTrue(
-            code.contains("private func sectionContent( for group: (section: ConversationSection, conversations: [Conversation]), orderedConversationIds: [String] ) -> some View { if isSectionContentVisible(group.section.id) {"),
+            code.contains("private func sectionContent( for group: (section: ConversationSection, conversations: [Conversation]), orderedConversationIds: [String], trackedSectionId: String? ) -> some View { if isSectionContentVisible(group.section.id) {"),
             "La condition de pliage doit garder le CONTENU de la section et lui seul : " +
             "`sectionContent` commence par `if isSectionContentVisible(...)`. Critère LWS-6 : " +
             "« replier une catégorie masque ses rangs et CONSERVE son sticker »."
