@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`StoryCacheSource.revalidate()` no longer deletes stories past page 1**
+> (slice `story-cache-pagination-truncation`, PR #3034, merged `52aec5b0e`) — the candidate
+> `docs(android/routine)` deposited on 2026-08-12 (`d10c751ad`, from the iOS/gateway routine's
+> PR #2870) and parked ever since for exactly the missing toolchain the CI-gate run above just
+> fixed. **RE-PROUVÉ before starting**: read `StoryCacheSource.kt` fresh — `revalidate()` still
+> fetched one `STORIES_PAGE_SIZE=50` page (`storyApi.list(null, 50)`) and read neither
+> `pagination.hasMore` nor `pagination.nextCursor`; `persist()` still called
+> `storyDao.deleteNotIn(rows.map { it.id })` against that single page — beyond 50 stories the
+> truncation didn't omit rows, it deleted them from Room. Also confirmed `StoryRepository.list()`
+> (the OTHER API surface losing pagination) is called only from `StoryViewerViewModel`'s on-demand
+> fetch, not feeding a `deleteNotIn` — genuinely a separate, non-destructive concern, left out of
+> scope as the deposited note suggested.
+>
+> **No local Android toolchain in this container** (`sdkmanager`/`adb` not found, no
+> `ANDROID_HOME` — and this time no JRE at all: `./gradlew` itself failed with "Unable to locate a
+> Java Runtime"), so every line was written against static verification only: cross-checked the
+> `null`+`any()` MockK matcher pattern against `PostRepositoryTest.kt`'s existing precedent before
+> trusting it in new tests, and the `pagination?.hasMore ?: false` idiom against `PostRepository`'s
+> own established usage, rather than inventing an unverified shape. The `Android` CI check (added
+> by the run above) was the actual compiler — first PR to really exercise it since its own
+> bootstrap run.
+>
+> **Design, decided fresh for Android rather than copied from iOS's PR #2867**: pages up to 6
+> requests (300 stories, same tray budget as iOS) following `nextCursor` while `hasMore` holds; a
+> response with no `pagination` block at all is treated as one complete page (preserves every
+> existing single-page test unmodified — confirmed by tracing `pagination?.hasMore ?: false`
+> against a `null` pagination before writing any new test). `persist()` only prunes when the window
+> is PROVEN complete (`hasMore = false`) — reaching the 6-page budget while the server still claims
+> more remains upserts what was fetched but never authorizes a delete: an unproven partial window
+> may add, never subtract. Any page failing (including the first) throws without persisting
+> anything — the INVERSE of iOS's choice, and for a reason specific to Android: Room already holds
+> a complete prior tray here, so replacing it with an unproven partial one on a later-page failure
+> is strictly worse than serving the stale one a beat longer. New `pagedApiCall` (`ApiCall.kt`)
+> mirrors `apiCall` but preserves the envelope's `pagination` block, which `apiCall` discards by
+> design — a sibling, not a modification, so every other `apiCall` caller is untouched.
+>
+> **Verified**: 3 new TDD tests in `StoryRepositoryTest.kt` (multi-page follow + prune-on-complete,
+> never-prune-on-budget-exhaustion, throw-and-leave-cache-untouched-on-later-page-failure) plus all
+> pre-existing single-page tests, unmodified. CI: `Android (assemble + unit tests)` green (10m56s),
+> full `ci.yml` matrix also triggered on this `apps/android`-only diff (confirms finding #3 of the
+> CI-gate run again) and all 16 checks passed.
+>
+> **Deliberately deferred**: `StoryRepository.list(cursor, limit)` still drops `pagination` too —
+> a second, separate call site of the same underlying API, non-destructive, used only by the story
+> viewer's on-demand fetch. Worth inventorying alongside its web/iOS siblings some day, not urgent.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=story-cache-pagination-truncation`
+> (commit séparé, poussé directement sur `main`, cf. `ROUTINE.md` §Choix de la lane — même commit
+> que cette mise à jour de `PROGRESS.md`/`NOTES.md`, précédent établi par `9b59bd06c`).
+
 > On 2026-08-12 **`apps/android` got its first CI gate ever** (run `android-ci-workflow`,
 > PR #2905). This is the follow-up `ROUTINE.md` §"CI reality" had been tracking explicitly as
 > needing its own run because it touches `.github/` rather than `apps/android`. **RE-PROVEN before

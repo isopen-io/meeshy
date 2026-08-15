@@ -469,3 +469,20 @@ Append-only log of gotchas and decisions that save time next run.
   unreadable and its cause was never established (it did not recur). CI logs for agent consumption
   should print the failing test names and messages *inline* — parsed from the JUnit XML — because
   "see the report at `<html>`" is unactionable to a run that has no way to open it.
+- **A `null`-plus-`any()` MockK matcher isn't a leap of faith once it has a live precedent in the
+  same codebase.** With zero JVM available to trial-run `coEvery { api.list(null, any()) }`
+  (`story-cache-pagination-truncation`, 2026-08-15 — this container had no Java Runtime at all,
+  one rung below the earlier `dl.google.com` denial), the fix was grepping for the exact shape
+  elsewhere first: `PostRepositoryTest.kt` already stubs `coEvery { api.getFeed(null, any()) }`
+  and passes in CI. A pattern this codebase already runs green is stronger evidence than reasoning
+  about MockK's matcher-auto-wrapping rules from first principles — and it is *checkable* without a
+  compiler, which pure reasoning about a mocking library's internals is not.
+- **A destructive default (`deleteNotIn`) earns a stricter failure mode than its non-destructive
+  siblings, and the two platforms disagreeing is a feature, not an inconsistency to paper over.**
+  iOS's PR #2867 persists a partial window on a later-page failure (a fresh cache, nothing to lose
+  by trying). Android's `StoryCacheSource` had a complete prior tray in Room already, so the
+  matching move was to throw and leave it untouched — replacing a *known-complete* cache with an
+  *unproven-partial* one on error is strictly worse than serving the stale one a beat longer. Don't
+  port a cross-platform fix's decision tree wholesale; port the *invariant* (never prune off an
+  unproven window) and re-decide the parts that depend on what state already exists on this
+  platform.
