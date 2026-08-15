@@ -132,7 +132,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
   // Envoyer un message via un lien partagé (sessionToken uniquement)
   fastify.post('/links/:identifier/messages', {
     schema: {
-      description: 'Send a message as an anonymous user via share link. Requires x-session-token header. The share link must be active, not expired, and allow anonymous messages. The anonymous participant must have message sending permissions. Message content or attachments are required. Automatically processes and tracks links in message content.',
+      description: 'Send a message as an anonymous user via share link. Requires x-session-token header. The share link must be active, not expired, and allow anonymous messages. The anonymous participant must have message sending permissions. Message content is required — these routes do not serve attachments. Automatically processes and tracks links in message content.',
       tags: ['links', 'messages'],
       summary: 'Send message (anonymous)',
       params: {

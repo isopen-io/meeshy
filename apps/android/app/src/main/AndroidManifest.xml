@@ -90,6 +90,18 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/u/" />
             </intent-filter>
+            <!-- App Link : le lien d'invitation a une conversation
+                 (https://meeshy.me/join/{identifier}, CreatedShareLink.joinUrl /
+                 MyShareLink.joinUrl) ouvre l'app directement. meeshy://join/{identifier}
+                 est deja couvert par le filtre scheme-only plus haut. Meme verification
+                 assetlinks.json que le magic link ci-dessus —
+                 apps/android/docs/magic-link-app-links.md. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/join/" />
+            </intent-filter>
         </activity>
 
         <!-- FCM Push -->

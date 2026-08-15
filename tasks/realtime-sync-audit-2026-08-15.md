@@ -2044,3 +2044,144 @@ qu'en TypeScript. Une règle sans appelant est indistinguable d'une règle
 appliquée pour quiconque la lit — c'est la classe de défaut la moins visible du
 dépôt, et la seule qu'un audit par le NOM du champ ne trouvera jamais.
 
+
+
+# Cycle 32 (2026-08-15) — la règle écrite sans appelant, et la promesse écrite sans implémentation
+
+Sonde annoncée en clôture du cycle 31 : **quelles règles de ce dépôt sont
+écrites sans être appelées ?** Un balayage par symbole exporté, en écartant les
+points d'entrée — la classe de défaut la moins visible du dépôt, et la seule
+qu'un audit par le NOM du champ ne trouvera jamais.
+
+## Le balayage — ce qu'il a rendu
+
+Critère : symbole exporté de `services/gateway/src` dont l'UNIQUE référence de
+production dans le monorepo est sa propre déclaration.
+
+- **223** symboles sans appelant externe ; **78** sans aucun appelant du tout.
+- Triés, ils se répartissent en trois familles, et **une seule contenait un
+  défaut vivant** :
+  1. *Exports de confort jamais consommés* (constantes de config, fabriques
+     `createXxxService`, erreurs typées déclarées en bloc). Hygiène pure.
+  2. *Jumeaux morts d'un module vivant.* `middleware/admin-permissions.middleware.ts`
+     (9 exports morts) est doublé par `middleware/admin-user-auth.middleware.ts`,
+     qui est celui que les routes emploient réellement ; `registerRateLimiting`
+     est doublé par `registerGlobalRateLimiter` ; `sanitizeUserInput` /
+     `sanitizeNotificationContent` sont doublés par la classe `SecuritySanitizer`,
+     importée par 16 modules. **Vérification faite route par route : les 62
+     routes `/admin` portent toutes `onRequest: [authenticate, <garde>]`** — la
+     seule sans garde de permission est `POST /reports`, ouverte à tout
+     utilisateur authentifié par dessein (c'est le signalement de contenu). Donc
+     pas de trou d'autorisation : des orphelins, pas des victimes.
+  3. *Règles vides par construction.* `canTranslateMessage` (seuil 10 000) et
+     `shouldConvertToTextAttachment` (seuil 4 000) ne sont pas seulement sans
+     appelant : leurs seuils sont ≥ `MAX_MESSAGE_LENGTH` (4 000), qui est appliqué
+     en amont. Câblées, elles ne changeraient aucune réponse.
+
+**La sonde du cycle 31 est donc close, et sa réponse est négative** : aucune
+garde manquante ne se cachait derrière un symbole mort. C'est un résultat, pas
+un échec — la question méritait d'être posée une fois, et elle n'a plus à
+l'être sous cette forme.
+
+## Le défaut, trouvé par la question VOISINE
+
+Le balayage a livré autre chose que ce qu'il cherchait. En vérifiant que les
+deux routes de lien de partage (celles que le cycle 31 avait dû rapiécer pour
+l'admission) n'esquivaient pas d'AUTRES règles du funnel, une promesse est
+apparue à l'envers de la sonde : non pas une règle sans appelant, mais **une
+règle sans implémentation derrière elle**.
+
+`sendMessageSchema` (`routes/links/types.ts`) admettait :
+
+```ts
+(data.content && data.content.trim().length > 0) || (data.attachments && data.attachments.length > 0)
+```
+
+et la description OpenAPI des deux routes répétait « Message content or
+attachments are required ».
+
+- **Aucune des deux routes n'a jamais lu `body.attachments`** — ni
+  `prisma.message.create`, ni la diffusion, ni la notification. Validé, puis
+  abandonné.
+- La branche ouverte par le `refine` ne menait donc à aucune fonctionnalité :
+  elle menait à `trackingLinkService.processMessageLinks`, dont le paramètre est
+  typé `content: string` et qui fait `content.match(urlRegex)` sans garde dès sa
+  quatrième ligne.
+- Corps `{ clientMessageId, attachments: ['x'] }` ⇒ validation traversée ⇒
+  `TypeError` ⇒ **500**, sur les DEUX chemins.
+- Le chemin anonyme est le plus exposé : le lien de partage est le seul
+  transport d'envoi d'un invité. Déclenchable par quiconque détient l'URL, sans
+  authentification, sans requête forgée.
+
+## Pourquoi ça a survécu à toutes les relectures
+
+`strict: false` côté gateway : un `string | undefined` entrant dans un paramètre
+`string` ne produit aucun diagnostic.
+
+Mais la vraie raison est la couverture. **Les deux moitiés étaient testées, et
+vertes :**
+
+| suite | ce qu'elle affirmait | ce qu'elle ne demandait jamais |
+|---|---|---|
+| `links/types.test.ts` | `accepts attachments without content` | ce que la route en fait |
+| les 4 suites de route | le comportement en aval | ce que le VRAI `refine` laisse entrer (toutes simulent `parse`) |
+
+Chaque suite était juste de son côté. Le défaut vivait dans l'espace entre les
+deux, et aucune ne regardait cet espace.
+
+## Correctifs
+
+- [x] Le `refine` exige le contenu **sans dispense** — la disjonction disparaît
+- [x] Le champ `attachments` reste TOLÉRÉ à côté d'un contenu (aucun client
+      refusé), mais ne dispense plus de rien
+- [x] Les descriptions OpenAPI cessent d'annoncer des pièces jointes non servies
+- [x] Nouvelle suite de jonction employant le VRAI schéma et un double de
+      `processMessageLinks` FIDÈLE à sa signature (`content.match()`), là où un
+      double permissif avalait `undefined` et cachait le défaut
+- [x] Les deux témoins du schéma qui encodaient l'ancienne promesse sont
+      réalignés — ils décrivaient le `refine`, pas un usage servi
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif (le 500 puis le 400 attendu,
+      sur chacune des deux routes)
+- [x] 4 non-régressions vertes d'emblée, dont le corps entièrement vide (400) et
+      le corps avec contenu (201)
+- [x] Suite gateway complète : **722 suites / 17 667 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 264
+
+## Constats latents — relevés, NON livrés
+
+1. **Les routes de lien ne servent aucune pièce jointe**, alors que le modèle de
+   permission en prévoit (`allowAnonymousFiles`, `allowAnonymousImages`,
+   `permissions.canSendFiles`). Ce cycle a retiré la PROMESSE, pas construit la
+   fonctionnalité — la livrer est une passe à elle seule, avec son chemin
+   d'écriture et ses gardes.
+2. **Le cluster `admin-permissions.middleware.ts` (9 exports morts) mérite sa
+   suppression**, comme `checkPermissions` au cycle 31 : un garde orphelin à côté
+   d'un garde réel fait croire la règle appliquée. Non livré ici pour ne pas
+   mêler une passe d'hygiène de 200 lignes à un correctif de défaut vivant.
+3. **`middleware/rate-limit.ts` et `middleware/rate-limiter.ts` cohabitent**, le
+   premier n'exportant qu'une fonction d'enregistrement morte et une table de
+   constantes vivante. Même famille.
+
+## Reste ouvert (inchangé)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+- **`presence:user:<id>` / `presence:anon:<id>` écrits et jamais lus** (cycle 30).
+- **`leave.ts` ferme sans écrire `closedAt`** (cycle 30, sans victime vérifiée).
+
+## Candidat pour le cycle suivant
+
+La question qui a réellement rendu ce défaut, retournée et généralisée :
+**quelles disjonctions de validateur n'ont pas d'implémentation derrière chaque
+branche ?** Un `refine`, un `oneOf`, un `.optional()` compensé par un autre champ
+— chacun AFFIRME que le code sait servir les deux cas. Le balayage se fait par
+schéma, en demandant pour chaque branche admise quel site d'écriture la
+consomme. Le corollaire vaut comme règle de conception : une dispense doit
+arriver AVEC son implémentation, jamais avant, sans quoi elle n'ouvre pas une
+permission mais une porte vers du code qui suppose l'autre branche.

@@ -2709,6 +2709,23 @@ final class CallManager: ObservableObject {
             if self.transcriptionService.permission != .authorized {
                 _ = await self.transcriptionService.requestPermission()
             }
+            // Audit gateway-calls (2026-08-15) — re-valider APRÈS l'await.
+            // `requestPermission()` suspend sur l'alerte système de
+            // reconnaissance vocale, que l'utilisateur peut laisser ouverte
+            // aussi longtemps qu'il veut : l'appel peut se terminer (ou être
+            // remplacé par un rappel) entre-temps. `endCallInternal` a alors
+            // déjà passé `resetForCallEnd`, et démarrer ici installerait un
+            // tap micro + un moteur on-device que PLUS RIEN n'arrête du reste
+            // de la session (ni appel, ni CallView, ni appelant de
+            // `stopTranscribing`), en estampillant `call:transcription-active`
+            // et chaque segment du callId d'un appel mort. Même garde
+            // d'identité que tous les autres chemins post-await de ce fichier
+            // (handleRemoteAnswer, answerCallReady, scheduleICERestart) et que
+            // `applyRecognitionResult` côté réception.
+            guard self.currentCallId == callId, self.callState.isActive else {
+                Logger.calls.info("toggleTranscription abandonné — appel plus actif après le prompt de permission (callId=\(callId))")
+                return
+            }
             self.transcriptionService.startTranscribing(
                 callId: callId,
                 localLanguage: localLang,

@@ -1,5 +1,38 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **conversation invite links (`https://meeshy.me/join/{identifier}`) now actually
+> open the app** (slice `guest-join-web-deep-link`, PR #3039, merged `7c9293002`) — the SAME
+> defect class as `profile-share-link-receiver` (just above), found by deliberately checking
+> whether other link generators shared the pattern instead of assuming that one instance was
+> isolated. `CreatedShareLink.joinUrl(webOrigin)` / `MyShareLink.joinUrl(webOrigin)` (`core:model`)
+> build `{webOrigin}/join/{identifier}` — the URL shown on the create-link success sheet and the
+> "my share links" list, meant to be pasted into SMS/WhatsApp/email for someone who does **not**
+> have the app open. Only `meeshy://join/{identifier}` had a `navDeepLink`; the plain web URL these
+> two helpers actually produce opened a browser instead. **Arguably higher-impact than the profile
+> fix**: invite links are the primary mechanism for bringing a new person into a conversation,
+> where the profile-share link is a secondary, opt-in feature.
+>
+> Same shape as the previous slice: `meeshy://join/{identifier}` needed no manifest change (already
+> covered by the scheme-only, no-host `<data android:scheme="meeshy" />` filter); only the
+> `https://meeshy.me/join/{identifier}` App Link was missing, added alongside the existing
+> `GUEST_JOIN` route/`navDeepLink` with no new resolution logic (`GuestJoinViewModel` already reads
+> the same `{identifier}` `SavedStateHandle` argument regardless of which pattern matched). New
+> `GuestJoinShareDeepLinkTest` asserts the web pattern with `{identifier}` substituted equals what
+> `CreatedShareLink.joinUrl` actually generates — same contract-test shape as
+> `ProfileShareDeepLinkTest`.
+>
+> **Verified**: CI `Android` green, full `ci.yml` matrix (17 checks) green.
+>
+> **Genuinely still open, not touched this run**: whether ANY other `core:model` share-link/URL
+> generator carries the same defect — this run checked exactly the two known generators
+> (`ProfileShareLink`, `CreatedShareLink`/`MyShareLink`'s `joinUrl`); a systematic grep for every
+> `https://meeshy.me/` string literal across `core:model` would be the way to close this out
+> completely, not attempted here (scope discipline: one slice, not an open-ended sweep).
+>
+> `tasks/lane-cursor.md` → `lane=IOS_DETTE android_streak=0 last_run=guest-join-web-deep-link`
+> (streak 4→5, alternation rule triggered — bascule to IOS_DETTE next run). Commit séparé, poussé
+> directement sur `main`, précédent établi par `9b59bd06c`/`475b869b8`/`e0f10c4a1`/`396b7c608`.
+
 > On 2026-08-15 **profile share links (`meeshy://u/{username}`, `https://meeshy.me/u/{username}`)
 > now actually open the app** (slice `profile-share-link-receiver`, PR #3036, merged `5e11449de`).
 > `ProfileShareLink` (`core:model`) has generated both shapes since the `profile-share` slice
