@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=2 last_run=story-cache-pagination-truncation
+lane=ANDROID android_streak=3 last_run=feature-parity-stale-checkbox-sweep

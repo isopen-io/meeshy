@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`feature-parity.md`'s Phase 5 "Pending" bullets were stale — no code
+> shipped this run, checklist corrected instead.** Scan of reprise clean (`gh pr list` empty).
+> Re-fetched `origin/main` (only 6 commits behind, unrelated gateway work — the 742-commit gap
+> from the run before this one was a one-off worktree-reconciliation campaign, already closed).
+>
+> Picking a slice from the 134 unchecked `feature-parity.md` boxes, RE-PROUVÉ four of the
+> Phase 5 section's overlapping/duplicated "Pending: ..." bullets against the real tree before
+> touching anything — every single item they listed already exists and is wired:
+> - **Calls slice**: `apps/android/feature/calls/` has 24 files including `WebRtcCallCoordinator`,
+>   `TelecomCallReporter`, `IncomingCallViewModel`, `CallScreen` — not just history, a full live
+>   calling stack — wired into `MeeshyApp.kt` navigation and FCM push (`MeeshyFcmService`,
+>   `DeclineCallReceiver`).
+> - **Feed new-posts banner / post detail**: `NewPostsBanner` (`FeedScreen.kt`),
+>   `PostDetailViewModel` (+ test) both exist.
+> - **Stories composer/publish**: `StoryComposerScreen` wired at `MeeshyApp.kt:799`,
+>   outbox-backed (`StoryRepository.enqueuePublish`, `StoryPublishFailures`).
+> - **Stories count-dots / prefetch média / reactions**: `StoryCountDots`, `StoryPrefetchPlanner`,
+>   `StoryReactionState` all exist with tests, all wired into `StoryViewerScreen`/
+>   `StoryViewerViewModel`.
+>
+> These bullets were leftover bookkeeping from earlier incremental passes — one (line 237-238 in
+> the pre-edit file) was even malformed, an orphaned continuation line duplicating unrelated text
+> from the bullet above it. `:feature:feed` and `:feature:stories` upgraded from `[~]` to `[x]`;
+> `:feature:calls` added as its own `[x]` line (it never had one — only ever mentioned inside
+> other bullets' "Pending" lists). Three duplicate stale bullets removed outright.
+>
+> **Why this counts as the run's slice rather than a skip**: the routine's own RE-PROUVER
+> discipline treats a verified stale-checklist finding as real, delivered work — same precedent
+> as the iOS-debt lane's "Ad-hoc blocking text translation already shipped" run. No code changed;
+> nothing to verify against a compiler. `tasks/lane-cursor.md` still advances (this is a genuine
+> ANDROID-lane run, not a skip), and the streak counts toward the IOS_DETTE bascule same as any
+> other.
+>
+> **Genuinely still open** (not touched, not claimed done): everything else under the 134
+> unchecked boxes — Phase 6 integration items (`Navigation graph + deep links`, adaptive
+> tablet/foldable layouts, live integration test vs gateway, final diff audit), the earlier
+> architectural items (`build-logic/` convention plugins, E2EE, SQLCipher). None RE-PROUVÉ this
+> run; the next run picking one of these should re-verify fresh rather than trust this note.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=feature-parity-stale-checkbox-sweep`
+> (commit séparé, poussé directement sur `main`, précédent établi par `9b59bd06c`/`475b869b8` —
+> même commit que cette mise à jour de `PROGRESS.md`/`NOTES.md`/`feature-parity.md`, les trois
+> fichiers de suivi vivant sous `apps/android/` mais ne modifiant aucun code compilé).
+
 > On 2026-08-15 **`StoryCacheSource.revalidate()` no longer deletes stories past page 1**
 > (slice `story-cache-pagination-truncation`, PR #3034, merged `52aec5b0e`) — the candidate
 > `docs(android/routine)` deposited on 2026-08-12 (`d10c751ad`, from the iOS/gateway routine's
