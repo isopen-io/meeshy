@@ -5550,6 +5550,114 @@ describe('MeeshySocketIOManager', () => {
 
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
+
+    /**
+     * Un message d'invité de lien partagé EST une arrivée, pas une mutation :
+     * `linkMessageEmissions` le rejoue sous `message:new` comme sous
+     * `link:message:new`. Le filtre à `eventType === 'new'` l'écartait pourtant
+     * de l'accusé de remise — donc l'auteur (le plus souvent un invité, dont
+     * l'envoi par lien est le SEUL transport) restait sur un tic « envoyé » que
+     * rien ne pouvait plus faire avancer tant que le destinataire n'ouvrait pas
+     * la conversation, c'est-à-dire exactement l'attente que cette fonction
+     * existe pour supprimer.
+     */
+    it('bumps the delivered receipt for a share-link message — it is an arrival, not a mutation', async () => {
+      const userId = 'user-drain-link-arrival';
+      const convId = '507f1f77bcf86cd799439216';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-link', conversationId: convId, userId },
+        { id: 'part-link-guest', conversationId: convId, userId: null },
+      ]);
+
+      const pending = [
+        {
+          messageId: 'msg-from-guest',
+          conversationId: convId,
+          payload: { message: { id: 'msg-from-guest', conversationId: convId } },
+          enqueuedAt: 1,
+          eventType: 'link-message',
+        },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-link', convId, 'msg-from-guest');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId, userId, type: 'received' })
+      );
+    });
+
+    /**
+     * Le curseur de remise avance JUSQU'À l'id passé : dans une conversation qui
+     * mêle les deux transports, retenir la dernière entrée « nominale » en
+     * ignorant un message de lien plus récent laisserait ce dernier en arrière.
+     */
+    it('advances the cursor to a share-link message that arrived after the last nominal one', async () => {
+      const userId = 'user-drain-link-mixed';
+      const convId = '507f1f77bcf86cd799439217';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-mixed', conversationId: convId, userId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-nominal', conversationId: convId, payload: {}, enqueuedAt: 1 },
+        {
+          messageId: 'msg-link-later',
+          conversationId: convId,
+          payload: { message: { id: 'msg-link-later' } },
+          enqueuedAt: 2,
+          eventType: 'link-message',
+        },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mixed', convId, 'msg-link-later');
+    });
+
+    /**
+     * Le discriminant qui interdit la sur-correction : élargir aux arrivées ne
+     * doit rien élargir d'autre. Les six familles de MUTATION restent muettes.
+     */
+    it('still ignores every mutation family — pins, reactions, attachment enrichment, translations', async () => {
+      const userId = 'user-drain-mutations';
+      const convId = '507f1f77bcf86cd799439218';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-mut', conversationId: convId, userId },
+      ]);
+
+      const pending = [
+        { messageId: 'm1', conversationId: convId, payload: {}, enqueuedAt: 1, eventType: 'pinned' },
+        { messageId: 'm2', conversationId: convId, payload: {}, enqueuedAt: 2, eventType: 'unpinned' },
+        { messageId: 'm3', conversationId: convId, payload: {}, enqueuedAt: 3, eventType: 'reaction-added' },
+        { messageId: 'm4', conversationId: convId, payload: {}, enqueuedAt: 4, eventType: 'reaction-removed' },
+        { messageId: 'm5', conversationId: convId, payload: {}, enqueuedAt: 5, eventType: 'attachment-reaction-added' },
+        { messageId: 'm6', conversationId: convId, payload: {}, enqueuedAt: 6, eventType: 'attachment-reaction-removed' },
+        { messageId: 'm7', conversationId: convId, payload: {}, enqueuedAt: 7, eventType: 'attachment-updated' },
+        { messageId: 'm8', conversationId: convId, payload: {}, enqueuedAt: 8, eventType: 'translation' },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------

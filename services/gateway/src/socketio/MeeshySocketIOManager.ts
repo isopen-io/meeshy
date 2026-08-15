@@ -81,6 +81,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
@@ -607,11 +608,18 @@ export class MeeshySocketIOManager {
     userId: string,
     pending: QueuedMessagePayload[]
   ): Promise<void> {
-    // Delivery receipts only make sense for actual new messages — an edited
-    // or deleted entry replays its own event (see `_drainedEventName`) but
-    // was never awaiting a "delivered" checkmark in the first place.
-    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
-    if (newEntries.length === 0) return;
+    // Delivery receipts only make sense for entries that announce a message
+    // ARRIVING — a mutation entry (edit, delete, reaction, pin, attachment
+    // enrichment, translation) replays its own event (see `_drainedEventName`)
+    // but was never awaiting a "delivered" checkmark in the first place.
+    //
+    // Le prédicat est NOMMÉ et vit avec le vocabulaire (`queuedMessageArrival`)
+    // plutôt qu'écrit ici en égalité littérale : la forme `=== 'new'` disait
+    // moins que le commentaire au-dessus d'elle, et `link-message` — une
+    // création, rejouée sous `message:new` comme la nominale — est tombée dans
+    // l'écart. Cf. la doc du module pour ce que ça coûtait à l'auteur.
+    const arrivals = pending.filter((entry) => announcesMessageArrival(entry.eventType));
+    if (arrivals.length === 0) return;
 
     // Check privacy preference first — single cheap cached call.
     const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
@@ -622,7 +630,7 @@ export class MeeshySocketIOManager {
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
     const convLatest = new Map<string, string>();
-    for (const entry of newEntries) {
+    for (const entry of arrivals) {
       convLatest.set(entry.conversationId, entry.messageId);
     }
 
@@ -706,7 +714,8 @@ export class MeeshySocketIOManager {
    * distinct eventTypes so a pin-then-unpin keeps both entries in enqueue
    * order, while a repeated same-direction toggle supersedes in place. Pin
    * entries never bear a delivery receipt (`_emitDeliveryForDrainedMessages`
-   * already filters to `eventType === 'new'`).
+   * keeps only the entries `announcesMessageArrival` admits, and a pin is a
+   * mutation of a message already arrived).
    */
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
