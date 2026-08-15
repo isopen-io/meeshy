@@ -45,7 +45,7 @@ nonisolated public enum LentilleMetrics {
         /// 44pt (`MeeshyAvatar.swift`). Le rang Lentille RÉUTILISE ce
         /// contexte ; `.conversationList` (52pt) reste au rang historique.
         public static let context: AvatarContext = .conversationHeaderCollapsed
-        public static var size: CGFloat { context.size }
+        @MainActor public static var size: CGFloat { context.size }
         public static let ringWidth: CGFloat = 1.5
         public static let ringOpacity: Double = 0.55
     }
@@ -65,9 +65,9 @@ nonisolated public enum LentilleMetrics {
     /// pas en SwiftUI (§0) : `800` rend `.heavy` sur l'échelle SwiftUI
     /// (100=ultraLight … 700=bold, 800=heavy, 900=black).
     nonisolated public enum Name {
-        public static var size: CGFloat { MeeshyFont.bodySize }
+        @MainActor public static var size: CGFloat { MeeshyFont.bodySize }
         public static let weight: Font.Weight = .heavy
-        public static var font: Font { MeeshyFont.relative(size, weight: weight) }
+        @MainActor public static var font: Font { MeeshyFont.relative(size, weight: weight) }
     }
 
     /// `list.time` — `12`, poids `700` CSS → `.bold`.
@@ -79,9 +79,9 @@ nonisolated public enum LentilleMetrics {
 
     /// `list.line2` — `13`, poids régulier (non spécifié par la maquette).
     nonisolated public enum Line2 {
-        public static var size: CGFloat { MeeshyFont.subheadSize }
+        @MainActor public static var size: CGFloat { MeeshyFont.subheadSize }
         public static let weight: Font.Weight = .regular
-        public static var font: Font { MeeshyFont.relative(size, weight: weight) }
+        @MainActor public static var font: Font { MeeshyFont.relative(size, weight: weight) }
     }
 
     // MARK: - Point de non-lu

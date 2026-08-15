@@ -19,6 +19,7 @@ import MeeshyUI
 /// phase 2 du gate (`meeshy.sh` `FINAL_PHASE_CLASS_PATTERN`, ligne ~1591).
 /// `LentilleMetricsTests`, pas `ConversationLentilleMetricsTests` : le jeton
 /// `Conversation` change de phase.
+@MainActor
 final class LentilleMetricsTests: XCTestCase {
 
     // MARK: - Chargement du domicile de vérité
