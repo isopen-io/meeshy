@@ -1696,11 +1696,25 @@ describe('MeeshySocketIOManager', () => {
           ]),
         };
         manager.setDeliveryQueue(fakeQueue as any);
+        // Toujours membre : la garde d'appartenance du drain lit elle aussi
+        // `participant.findMany`, et c'est la seule des deux lectures qui
+        // demande `bannedAt`. Le témoin porte sur l'AUTRE — celle des accusés,
+        // qui sélectionne `id`/`userId` pour nommer les rooms des expéditeurs.
+        prisma.participant.findMany.mockImplementation(async (args: any) =>
+          args?.select?.bannedAt
+            ? (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+                conversationId,
+                bannedAt: null,
+              }))
+            : []
+        );
         prisma.participant.findMany.mockClear();
 
         await (manager as any)._drainPendingMessages('user-off', false);
 
-        expect(prisma.participant.findMany).not.toHaveBeenCalled();
+        expect(prisma.participant.findMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ select: expect.objectContaining({ id: true }) })
+        );
       });
     });
 
@@ -2544,6 +2558,23 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_drainPendingMessages', () => {
+    /**
+     * Le rejeu est gaté sur l'appartenance VIVANTE (voir le describe dédié plus
+     * bas). Le double par défaut répond « toujours membre de tout ce qui est
+     * drainé » — ce que chacun des témoins de routage ci-dessous supposait
+     * implicitement avant que la garde existe. Il se distingue de l'autre
+     * requête `participant.findMany` du drain (celle des accusés de réception,
+     * qui sélectionne `id`/`userId`) par le `select.bannedAt` que seule la
+     * lecture d'appartenance demande.
+     */
+    beforeEach(() => {
+      prisma.participant.findMany.mockImplementation(async (args: any) => {
+        if (!args?.select?.bannedAt) return [];
+        const ids = args?.where?.conversationId?.in ?? [];
+        return ids.map((conversationId: string) => ({ conversationId, bannedAt: null }));
+      });
+    });
+
     it('returns early when no deliveryQueue is set', async () => {
       await (manager as any)._drainPendingMessages('user-1', false);
       expect(ioState.to).not.toHaveBeenCalled();
@@ -2718,6 +2749,190 @@ describe('MeeshySocketIOManager', () => {
       const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('user-reg', false);
       expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 23a. _drainPendingMessages — l'appartenance est relue À LA LIVRAISON
+  // -------------------------------------------------------------------------
+
+  /**
+   * Les quatre routes qui mettent fin à une appartenance (départ volontaire,
+   * retrait par un admin, bannissement, suppression pour soi) sortent toutes
+   * les sockets de la cible de `conversation:<id>`. Aucune ne touche la file de
+   * rejeu hors ligne, qui garde jusqu'à 48 h d'événements de cette même
+   * conversation et les rejoue INTÉGRALEMENT à la reconnexion suivante.
+   *
+   * L'appartenance lue à la MISE EN FILE ne dit rien de l'appartenance au
+   * moment de la LIVRAISON : entre les deux, il y a précisément l'absence
+   * pendant laquelle on se fait retirer d'un groupe. La garde relit donc
+   * l'autorité au dernier instant possible.
+   */
+  describe('_drainPendingMessages — membership is re-read at delivery time', () => {
+    function queueOf(entries: any[]) {
+      return { drain: jest.fn().mockResolvedValue(entries) };
+    }
+
+    function membership(rows: Array<{ conversationId: string; bannedAt?: Date | null }>) {
+      prisma.participant.findMany.mockImplementation(async (args: any) => {
+        if (!args?.select?.bannedAt) return [];
+        const asked: string[] = args?.where?.conversationId?.in ?? [];
+        return rows
+          .filter((r) => asked.includes(r.conversationId))
+          .map((r) => ({ conversationId: r.conversationId, bannedAt: r.bannedAt ?? null }));
+      });
+    }
+
+    it('replays the conversations still joined and drops the one left behind', async () => {
+      membership([{ conversationId: 'conv-kept' }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-left', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-kept' });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-gone' });
+    });
+
+    // Bannir écrit `isActive: false` (resolveBanWrite), donc la ligne ne
+    // remonte déjà plus. Le témoin porte sur le cas où elle remonte QUAND MÊME
+    // — ligne historique restée active, désynchronisation — parce que c'est la
+    // seule lecture qui ne dépend pas d'un invariant d'écriture voisin.
+    it('drops a conversation the reader is banned from even if the row stayed active', async () => {
+      membership([{ conversationId: 'conv-banned', bannedAt: new Date('2026-08-01T00:00:00Z') }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-banned' }, conversationId: 'conv-banned', messageId: 'msg-banned' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-banned', false);
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    // Toute la famille passe par la même porte : une réaction, une édition ou
+    // une traduction d'une conversation quittée est autant du contenu de cette
+    // conversation qu'un `message:new`.
+    it('drops mutations and translations of a conversation left behind, not just new messages', async () => {
+      membership([]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-e' }, conversationId: 'conv-left', messageId: 'msg-e', eventType: 'edited' },
+        { payload: { messageId: 'msg-r' }, conversationId: 'conv-left', messageId: 'msg-r', eventType: 'reaction-added' },
+        { payload: { messageId: 'msg-t' }, conversationId: 'conv-left', messageId: 'msg-t', eventType: 'translation' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-left-all', false);
+
+      expect(ioState.toEmit).not.toHaveBeenCalled();
+    });
+
+    // Quand il ne reste rien à livrer, il n'y a pas non plus de livraison à
+    // annoncer : un `pending-messages:delivered` à zéro ferait boucler un
+    // client qui s'en sert pour déclencher une réconciliation.
+    it('emits nothing at all — not even PENDING_MESSAGES_DELIVERED — when every entry is dropped', async () => {
+      membership([]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-all-gone', false);
+
+      expect(ioState.to).not.toHaveBeenCalled();
+    });
+
+    it('counts only the replayed entries in PENDING_MESSAGES_DELIVERED', async () => {
+      membership([{ conversationId: 'conv-kept' }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-count', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, {
+        count: 1,
+        conversationIds: ['conv-kept'],
+      });
+    });
+
+    // Un accusé de réception affirme « ce message est arrivé chez son
+    // destinataire ». Il ne doit jamais être affirmé d'un message qu'on vient
+    // justement de refuser de livrer.
+    it('never claims a delivery receipt for a dropped entry', async () => {
+      membership([{ conversationId: 'conv-kept' }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+      ]) as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+
+      await (manager as any)._drainPendingMessages('user-receipts', false);
+
+      expect(receiptsSpy).toHaveBeenCalledWith('user-receipts', [
+        expect.objectContaining({ conversationId: 'conv-kept' }),
+      ]);
+    });
+
+    it('reads the membership of an anonymous identity by participant id', async () => {
+      membership([{ conversationId: 'conv-anon' }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-anon' }, conversationId: 'conv-anon', messageId: 'msg-anon' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('anon-part-9', true);
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'anon-part-9', isActive: true }),
+        })
+      );
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-anon' });
+    });
+
+    it('scopes the membership read to the drained conversations only', async () => {
+      membership([{ conversationId: 'conv-a' }, { conversationId: 'conv-b' }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'm1' }, conversationId: 'conv-a', messageId: 'm1' },
+        { payload: { id: 'm2' }, conversationId: 'conv-a', messageId: 'm2' },
+        { payload: { id: 'm3' }, conversationId: 'conv-b', messageId: 'm3' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-scope', false);
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-scope',
+            isActive: true,
+            conversationId: { in: ['conv-a', 'conv-b'] },
+          }),
+          select: { conversationId: true, bannedAt: true },
+        })
+      );
+    });
+
+    /**
+     * Échec OUVERT sur une PANNE, fermé sur une RÉPONSE. Le drain est
+     * destructif : les entrées ont déjà quitté la file quand la garde
+     * s'exécute. Les jeter parce que la base n'a pas répondu échangerait une
+     * fuite rare (panne ET retrait ET arriéré) contre une perte de données
+     * probable — une tempête de reconnexions est exactement le moment où la
+     * base est sous pression. Une RÉPONSE « non membre », elle, fait autorité.
+     */
+    it('replays everything when the membership read fails, rather than destroying the backlog', async () => {
+      prisma.participant.findMany.mockRejectedValue(new Error('mongo unreachable'));
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-1' }, conversationId: 'conv-x', messageId: 'msg-1' },
+        { payload: { id: 'msg-2' }, conversationId: 'conv-y', messageId: 'msg-2' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-db-down', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-2' });
     });
   });
 
@@ -5056,6 +5271,20 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_drainPendingMessages - pending messages emitted', () => {
+    // Le rejeu est gaté sur l'appartenance vivante : ce double répond
+    // « toujours membre de tout ce qui est drainé », ce que ces témoins de
+    // routage supposaient implicitement avant que la garde existe.
+    beforeEach(() => {
+      prisma.participant.findMany.mockImplementation(async (args: any) =>
+        args?.select?.bannedAt
+          ? (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+              conversationId,
+              bannedAt: null,
+            }))
+          : []
+      );
+    });
+
     it('emits each pending message payload and delivery confirmation to the user room', async () => {
       const mockQueue = {
         drain: jest.fn().mockResolvedValue([

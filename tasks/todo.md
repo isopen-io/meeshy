@@ -128,7 +128,7 @@ Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 26 — la sonde neuve
 (« autorité de l'entrée »), la matrice handlers × adresse, les deux défauts, et
 les quatre surfaces vérifiées correctes à ne pas re-instruire.
 
-# Cycle 27 — l'entrée du client fixait l'AUDIENCE, pas seulement l'adresse
+# Cycle 28 — l'entrée du client fixait l'AUDIENCE, pas seulement l'adresse
 
 Routine « amélioration continue temps réel ». Ce cycle ne cherche pas un
 nouveau site : il **prend le candidat que le cycle 26 avait consigné avec sa
@@ -168,7 +168,7 @@ les lecteurs sont dans `post:<racine>`, l'annonce partait vers `post:<repost>`
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 27 — les trois décisions
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 28 — les trois décisions
 tranchées, la matrice des SIX chemins du fil (un seul divergeait, la famille est
-close), et la question neuve proposée au cycle 28 : le MOMENT de la diffusion
+close), et la question neuve proposée au cycle 29 : le MOMENT de la diffusion
 par rapport à la durabilité du fait.
