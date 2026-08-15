@@ -256,19 +256,35 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_lastError_surfacesAsToast_andClosesTranscriptPanel() throws {
-        // A start failure (permission denied, no on-device recognizer for the
-        // user's language — never falls back to Apple's server-side
-        // recognizer, privacy decision — or an AVAudioEngine failure) used to
-        // leave the transcript panel open and silently empty, with zero user
-        // feedback — user-reported 2026-07-11 "on dirait que la transcription
-        // ne fonctionne pas" (observed on Mac).
+    /// A start failure (permission denied, no on-device recognizer for the
+    /// user's language — never falls back to Apple's server-side recognizer,
+    /// privacy decision — or an AVAudioEngine failure) used to leave the
+    /// transcript panel open and silently empty, with zero user feedback —
+    /// user-reported 2026-07-11 "on dirait que la transcription ne fonctionne
+    /// pas" (observed on Mac). Le toast reste la réponse à ce signalement.
+    ///
+    /// Ce que le spec 2026-08-13 (« Cycle de vie du panneau », itération 2) a
+    /// CHANGÉ : l'échec du moteur LOCAL ne ferme plus le panneau. La réception
+    /// des segments du pair est désormais gâtée sur la visibilité du panneau
+    /// (`isShowingOverlay`, gardes dans `CallManager`) — le fermer ici
+    /// couperait aussi le flux du correspondant, alors que seule MA
+    /// transcription a échoué. Le panneau reste donc ouvert en RÉCEPTION
+    /// SEULE. Ce garde protège maintenant les deux moitiés de cette décision :
+    /// le toast part, le panneau ne se ferme pas — et il reste FERMABLE, via
+    /// la branche dédiée d'`advanceCaptionsMode` (sans elle, le cycle
+    /// .off→.translated relancerait le démarrage en boucle et le panneau
+    /// serait infermable).
+    func test_lastError_surfacesAsToast_andKeepsTranscriptPanelOpenForReceiveOnly() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
         guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
             XCTFail("CallView must observe transcriptionService.lastError")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 500, limitedBy: view.endIndex) ?? view.endIndex
+        // Borné à l'accolade fermante du handler (indentation 8) plutôt qu'à
+        // une fenêtre d'octets : l'assertion négative ci-dessous n'a de sens
+        // que si la découpe s'arrête vraiment à la fin du closure.
+        let end = view.range(of: "\n        }", range: range.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))"),
@@ -276,9 +292,31 @@ final class CallHangupFastPathTests: XCTestCase {
             "(FeedbackToastManager, not NotificationToastManager — this is feedback on a " +
             "user-initiated tap, not a network-originated event)."
         )
+        XCTAssertFalse(
+            body.contains("showTranscript = false") || body.contains("isShowingOverlay = false"),
+            "A failed LOCAL engine must NOT close the transcript panel: reception of the " +
+            "peer's segments is gated on the panel being visible (spec 2026-08-13), so " +
+            "closing it here would also cut the interlocutor's stream — the panel stays " +
+            "open in receive-only mode."
+        )
+
+        // Contrepartie indissociable : le panneau resté ouvert doit rester
+        // fermable. captionsMode est .off (isTranscribing == false) alors que
+        // le panneau est visible — sans cette branche, le cycle repartirait
+        // sur .translated et retenterait le démarrage indéfiniment.
+        guard let cycleRange = view.range(of: "private func advanceCaptionsMode() {") else {
+            XCTFail("CallView must define advanceCaptionsMode()")
+            return
+        }
+        let cycleEnd = view.range(of: "\n    }", range: cycleRange.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
+        let cycleBody = String(view[cycleRange.lowerBound ..< cycleEnd])
         XCTAssertTrue(
-            body.contains("showTranscript = false") && body.contains("transcriptionService.isShowingOverlay = false"),
-            "A failed start must close the transcript panel, not leave it open and empty."
+            cycleBody.contains("if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {"),
+            "advanceCaptionsMode must carry the receive-only escape hatch — panel open while " +
+            "captionsMode is .off after a start failure: the next tap CLOSES it (unsubscribing " +
+            "from reception) instead of re-entering the start loop, which would make the panel " +
+            "impossible to close."
         )
     }
 
