@@ -1,5 +1,44 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`ConversationLock`'s third slice (UI/`ConversationListViewModel` wiring)
+> investigated, deferred — no code shipped this run.** Scan of reprise clean (one unrelated open
+> PR). Checked the iOS reference (`ConversationListView+Rows.swift`) before scoping a Compose
+> equivalent, and found a genuine, non-obvious complexity signal that the two prior storage/logout
+> slices didn't surface:
+>
+> iOS's row `Equatable` conformance carries an explicit, commented workaround —
+> `ConversationLockManager`/`BlockService` are singletons NOT folded into the row's
+> `renderFingerprint`, so a plain state-count comparison would freeze a stale "Unlock"/"Unblock"
+> swipe-action icon behind the equatable gate. The fix compares the swipe actions' rendered ICONS
+> (`lock.fill` ⇄ `lock.open.fill`) rather than a count, and the list itself observes both singletons
+> directly so a lock/unlock re-evaluates every row. This is exactly the class of bug root
+> `CLAUDE.md`'s "Zero Unnecessary Re-render" principle exists to prevent, and Compose's own
+> recomposition-skipping (stable/equals-based, conceptually parallel to SwiftUI's `Equatable`) is
+> susceptible to the identical failure mode if a lock-state read isn't threaded through whatever
+> Compose uses to decide a row is unchanged.
+>
+> **Why not attempted this run**: the full "consumer" slice bundles at least three distinct pieces —
+> (1) exposing per-conversation locked state from `ConversationListViewModel` (507 lines already,
+> reactive `StateFlow`-based), (2) swipe-action UI with the same recomposition-correctness
+> requirement iOS's comment documents, (3) the PIN entry sheet(s) themselves. Only (1) is genuinely
+> foundation-shaped; (2) and (3) are real UI design work this routine's TDD-first, one-increment
+> discipline isn't suited to rushing. Attempting a partial version of just (1) without first
+> designing how Compose will read that state in (2) risks shipping a data shape that has to be
+> reworked once the recomposition-correctness requirement is actually confronted.
+>
+> **For the next run picking this up**: read `ConversationListView+Rows.swift`'s `Equatable`
+> extension in full (not just the excerpt above) before designing the Compose data shape — the
+> exact re-render failure mode should inform whether `isLocked` belongs on each row item directly
+> (letting Compose's structural equality catch it naturally) or needs its own explicit
+> recomposition key, mirroring which of iOS's two mitigations (icon-based comparison vs. direct
+> singleton observation) maps more cleanly onto Compose's model.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=conversation-lock-listview-scoping`
+> — same convention as the `feature-parity-stale-checkbox-sweep`/`tracked-link-resolution-audit`
+> runs: this counts as a real iteration (a genuine investigation with a documented, actionable
+> finding), not a skip. Streak reaches 5 — next run's Étape 0 triggers the IOS_DETTE bascule.
+
+
 > On 2026-08-15 **`ConversationLockStore` wired into the logout-time wipe** (slice
 > `conversation-lock-logout-wiring`, PR #3048, merged `f651681d9`) — the second, small
 > foundation-then-consumer slice off `conversation-lock-store-foundation` (previous run).
