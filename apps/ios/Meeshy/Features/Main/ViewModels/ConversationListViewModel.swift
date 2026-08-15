@@ -624,21 +624,25 @@ class ConversationListViewModel: ObservableObject {
     /// Drapeau ON — classement/tri délégués au miroir `LentilleSectionResolver`
     /// (loi E5/E6 : pinned → live → catégories utilisateur → temporel).
     ///
-    /// Deux écarts assumés et documentés, pas des oublis :
-    /// - `liveCall` est TOUJOURS `nil` : aucune plateforme (contrat §0, E13)
-    ///   ne porte encore de modèle d'appel en direct sur `Conversation` — la
-    ///   section `.live` du résolveur ne peut donc jamais être peuplée ici.
-    /// - Les buckets `.live` et `.temporal` (aujourd'hui/hier/cette
-    ///   semaine/plus ancien — E5, section neuve sur les trois plateformes)
-    ///   n'ont PAS encore de `ConversationSection` (icône/couleur) légitime :
-    ///   cette identité visuelle est le périmètre du conteneur sticky
-    ///   (LWS-6/I-062, restructuration `ConversationListView.swift`), pas de
-    ///   cette greffe. Ils replient donc, pour l'instant, sur `.other` —
-    ///   ordre du résolveur préservé — jusqu'à ce que LWS-6 décide comment
-    ///   les exposer. Aucune conversation n'est perdue : la partition du
-    ///   résolveur est un recouvrement exact de `filtered` (garanti par
-    ///   `LentilleSectionResolver.resolveSections`, vérifié par
-    ///   `SectionResolverVectorTests`).
+    /// Un écart assumé et documenté, pas un oubli : `liveCall` est TOUJOURS
+    /// `nil` — aucune plateforme (contrat §0, E13) ne porte encore de modèle
+    /// d'appel en direct sur `Conversation`, la section `.live` du résolveur
+    /// est donc structurellement vide ici. Elle est néanmoins TRADUITE (et non
+    /// ignorée) : le jour où le modèle d'appel arrive, cette fonction n'a rien
+    /// à apprendre.
+    ///
+    /// **Levée de l'écart I-060** (décision LWS-6/I-062, propriétaire du
+    /// conteneur) : les buckets `.live` et `.temporal` repliaient
+    /// provisoirement sur `.other` faute d'identité `MeeshyConversationSection`
+    /// (SDK gelé S1). Ils ont désormais la leur —
+    /// `LentilleSectionIdentity.live` / `.section(for:)`, construite depuis
+    /// l'initialiseur public du type SDK, sans toucher au paquet gelé — et
+    /// chaque section du résolveur est rendue TELLE QUELLE, dans son ordre
+    /// (`pinned` → `live` → catégories → today → yesterday → thisWeek →
+    /// older). Le repli disparaît : plus aucune conversation temporelle ne se
+    /// déguise en « Mes conversations ». La partition reste un recouvrement
+    /// exact de `filtered` (garanti par `LentilleSectionResolver`, vérifié par
+    /// `SectionResolverVectorTests`).
     nonisolated private static func lentilleGroupConversations(
         _ filtered: [Conversation],
         categories: [ConversationSection]
@@ -668,7 +672,6 @@ class ConversationListViewModel: ObservableObject {
         )
 
         var result: [(section: ConversationSection, conversations: [Conversation])] = []
-        var otherBucket: [Conversation] = []
 
         for section in resolved {
             switch section {
@@ -677,13 +680,11 @@ class ConversationListViewModel: ObservableObject {
             case .category(let categoryId, let conversations):
                 guard let category = categories.first(where: { $0.id == categoryId }) else { continue }
                 result.append((category, conversations.compactMap { byId[$0.id] }))
-            case .live(let conversations), .temporal(_, let conversations):
-                otherBucket.append(contentsOf: conversations.compactMap { byId[$0.id] })
+            case .live(let conversations):
+                result.append((LentilleSectionIdentity.live, conversations.compactMap { byId[$0.id] }))
+            case .temporal(let kind, let conversations):
+                result.append((LentilleSectionIdentity.section(for: kind), conversations.compactMap { byId[$0.id] }))
             }
-        }
-
-        if !otherBucket.isEmpty {
-            result.append((ConversationSection.other, otherBucket))
         }
 
         return result
