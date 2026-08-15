@@ -314,14 +314,30 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   useEffect(() => {
     if (!currentCall || !user) return;
 
-    if (currentCall.initiatorId !== user.id) return;
-
     const activeParticipants = currentCall.participants?.filter(p => !p.leftAt) || [];
+    const isInitiator = currentCall.initiatorId === user.id;
 
     activeParticipants.forEach((participant) => {
       const participantId = participant.userId || participant.participantId;
 
       if (!participantId || participantId === user.id) return;
+
+      // Offer ownership. The initiator always owns every pair it's part of
+      // (unchanged 1:1 behavior). For any OTHER pair — two non-initiator
+      // participants in a group call — nobody owns it by role, so each side
+      // independently resolves the SAME owner via a deterministic id
+      // tie-break (same idea as WebRTCService.setNegotiationRole's
+      // polite/impolite split): the lexicographically smaller user id
+      // creates the offer, the other side waits for it. Before this, the
+      // effect was gated on `currentCall.initiatorId !== user.id` and bailed
+      // out entirely for non-initiators — only the initiator ever created an
+      // offer, so a 3+ person call was a star (everyone connects to the
+      // initiator) rather than a mesh: non-initiator participants never saw
+      // or heard each other at all.
+      const participantIsInitiator = participantId === currentCall.initiatorId;
+      const ownsOffer = isInitiator || (!participantIsInitiator && user.id < participantId);
+
+      if (!ownsOffer) return;
 
       if (offersCreatedFor.current.has(participantId)) return;
 
