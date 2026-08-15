@@ -76,6 +76,11 @@ export const sendMessageSchema = z.object({
     .default('fr')
     .transform((v) => normalizeLanguageCode(v) ?? v),
   messageType: z.string().default('text'),
+  // Accepté puis IGNORÉ, et c'est délibéré : aucune des deux routes d'envoi par
+  // lien ne lit ce champ — ni `message.create`, ni la diffusion, ni la
+  // notification. Il reste déclaré pour qu'un client qui l'envoie à côté d'un
+  // contenu ne soit pas refusé, mais il ne peut plus DISPENSER du contenu
+  // (cf. le `refine` ci-dessous).
   attachments: z.array(z.string()).optional(),
   // Lieu partagé — champ dédié, jamais un `metadata` brut (cf.
   // services/location/sharedPlace.ts). Ce chemin (message via lien de
@@ -84,9 +89,27 @@ export const sendMessageSchema = z.object({
   // ce module (routes/links/messages.ts), pas dans MessageProcessor.
   location: z.unknown().optional()
 }).refine((data) => {
-  return (data.content && data.content.trim().length > 0) || (data.attachments && data.attachments.length > 0);
+  // Le contenu est REQUIS, sans dispense.
+  //
+  // Ce `refine` admettait jusqu'ici « contenu OU pièces jointes ». La disjonction
+  // décrivait une fonctionnalité qui n'existe nulle part : les deux routes qui
+  // emploient ce schéma (`routes/links/messages.ts`, anonyme et authentifiée)
+  // n'ont jamais lu `body.attachments`. La branche ouverte ne menait donc pas à
+  // l'envoi d'une pièce jointe — elle menait à
+  // `trackingLinkService.processMessageLinks`, dont le paramètre est typé
+  // `content: string` et qui appelle `content.match()` sans garde. Un corps
+  // `{ clientMessageId, attachments: [...] }` passait la validation puis
+  // produisait un **500**, déclenchable par un invité ANONYME détenant l'URL de
+  // partage — le gateway compilant en `strict: false`, aucun `string | undefined`
+  // n'a été signalé à la frontière.
+  //
+  // Refuser est la seule réponse honnête tant que les routes ne servent pas les
+  // pièces jointes : accepter puis abandonner le champ ferait croire à l'envoi
+  // d'un fichier qui n'a jamais existé. Le jour où ces routes les serviront, la
+  // dispense reviendra ICI, avec le chemin d'écriture qui la justifie.
+  return Boolean(data.content && data.content.trim().length > 0);
 }, {
-  message: 'Message content cannot be empty (unless attachments are included)'
+  message: 'Message content cannot be empty'
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

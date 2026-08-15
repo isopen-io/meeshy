@@ -219,8 +219,7 @@ describe('sendMessageSchema', () => {
     ).toBe(false);
   });
 
-  it('requires either content or attachments (refine)', () => {
-    // No content, no attachments
+  it('requires content (refine)', () => {
     expect(
       sendMessageSchema.safeParse({
         clientMessageId: 'cid_550e8400-e29b-41d4-a716-446655440000',
@@ -228,28 +227,38 @@ describe('sendMessageSchema', () => {
     ).toBe(false);
   });
 
-  it('accepts attachments without content', () => {
+  it('rejects attachments without content', () => {
+    // Le `refine` admettait ce corps au nom d'une fonctionnalité inexistante :
+    // ni la route anonyme ni son jumeau authentifié ne lisent `attachments`.
+    // La branche ne menait pas à l'envoi d'un fichier mais à
+    // `processMessageLinks(content: string)`, appelé avec `undefined` — un 500
+    // déclenchable par un invité anonyme. Tant que ces routes ne servent pas
+    // les pièces jointes, le champ ne peut pas dispenser du contenu.
     const result = sendMessageSchema.safeParse({
       clientMessageId: 'cid_550e8400-e29b-41d4-a716-446655440000',
       attachments: ['attachment-id-1'],
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
-  it('accepts content as whitespace-only (refine allows empty-ish when attachments present)', () => {
-    // whitespace-only content with no attachments should fail refine
+  it('rejects whitespace-only content', () => {
+    // `trim()` vide ⇒ le refine refuse.
     const result = sendMessageSchema.safeParse({
       clientMessageId: 'cid_550e8400-e29b-41d4-a716-446655440000',
       content: '   ',
     });
-    // trim() returns empty, so refine returns false
     expect(result.success).toBe(false);
+  });
+
+  it('accepts attachments alongside content (le champ reste toléré)', () => {
+    // Un client qui joint le champ à un message avec contenu n'est pas refusé —
+    // il est simplement ignoré en aval.
+    const result = sendMessageSchema.safeParse(makeValidMessage({ attachments: ['a'] }));
+    expect(result.success).toBe(true);
   });
 
   it('accepts attachments as empty array when content is provided', () => {
     const result = sendMessageSchema.safeParse(makeValidMessage({ attachments: [] }));
-    // content is present, but attachments.length === 0 — refine checks content || attachments.length > 0
-    // content is 'Hello' so this passes
     expect(result.success).toBe(true);
   });
 });
