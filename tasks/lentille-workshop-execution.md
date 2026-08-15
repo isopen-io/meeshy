@@ -323,9 +323,9 @@ Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
 
 | Vague | État | Commit de clôture | CI |
 |---|---|---|---|
-| V0 | à lancer | — | — |
-| V1 + P0 | bloquée par V0 | — | — |
-| V2 | bloquée par V1 | — | — |
+| V0 | ✅ livrée (S-001→S-005, S-006 = cette table) | 42d3d9a2e | vert local |
+| V1 + P0 | ✅ livrée — 22 tâches, PR P0 = #3030 ; C-031 sur branche (dépend de la loi partagée, suivra en P1) | (courant) | bun vert local, macOS en cours |
+| V2 | REV-1 en cours (gel S1) | — | — |
 | V3 | bloquée par V2 | — | — |
 | V4 | bloquée par PORTE V1 | — | — |
 | V5 | bloquée par PORTE V2 | — | — |
@@ -349,3 +349,10 @@ Tous les symboles cités par les contrats **existent** — aucun ABSENT. Correct
 | E10/E11 (tri `lastMessage.createdAt`, dupli frontière de page) | **confirmés** — `useConversationSorting.ts:43-44`, commentaires `use-conversations-query.ts` | W9-001/002 fondés |
 | `useFeatureFlags` | lit uniquement `NEXT_PUBLIC_*` — confirmé | WL-100 fondé |
 | `components/v2/SplitViewLayout` | non routé (0 import sous `apps/web/app`) — confirmé | interdit E12 fondé |
+
+### Correction C-027 — le compte réel de la matrice comportementale
+Les matrices normatives comptent **32 lignes** (vol. 5 §5.3 : 17 ; vol. 4 §5 : 15), pas 44
+(28+16) comme l'écrivaient contrat §LWS-2/R18 et workshop §2.5 ③. `behaviour-matrix.json`
+porte les 32 id réels (`L01`..`L17`, `F01`..`F15`) ; partout où R18/porte V1 disent « 44 id »,
+lire « les id de behaviour-matrix.json ». La garde d'ensemble (déclarés == couverts) est
+écrite, désarmée (`describe.skip` documenté), **bloquante à la Porte V1**.

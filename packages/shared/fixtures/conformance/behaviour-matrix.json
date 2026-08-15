@@ -1,0 +1,194 @@
+[
+  {
+    "id": "L01",
+    "surface": "list",
+    "behaviour": "Le typing multi-membres (sélection déterministe, timer 15 s) s'affiche en ligne 2 « X écrit… » teintée accent avec TypingDotsView conservé (reduce-motion-aware), et force le dot de présence au vert.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L02",
+    "surface": "list",
+    "behaviour": "Les brouillons (draftSummaries) gardent leur précédence actuelle typing > brouillon > préview et s'affichent « ✎ Brouillon » en couleur d'erreur avec texte tertiaire.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L03",
+    "surface": "list",
+    "behaviour": "Les kinds du dernier message (expired, hidden, viewOnce, ephemeral) conservent leurs glyphes SF actuels (timer, eye.slash, flame) en tête de ligne 2, en italique.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L04",
+    "surface": "list",
+    "behaviour": "La branche pièces jointes sans texte (icône + méta W×H/durée/nom + « +N ») reste identique avec des glyphes teintés accent ; le Prisme ne s'applique toujours pas à cette branche.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L05",
+    "surface": "list",
+    "behaviour": "Le fallback de localisation (lastMessageLocation) reste identique : mappin + nom du lieu.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L06",
+    "surface": "list",
+    "behaviour": "Le badge rouge 99+ (unreadBadgeBackground) et le timestamp rouge sur non-lu sont supprimés, remplacés par un point accent 8 px et le pont ✦ ; l'heure reste tertiaire au même format (RelativeTimestampText/TimelineView conservé, seul le format change).",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L07",
+    "surface": "list",
+    "behaviour": "Les swipes épingle (section dédiée), mute, verrou, archive et blocage restent intacts ; l'épingle ajoute un glyphe 📌 avant le nom + le sticker ÉPINGLÉES, et la sourdine passe enfin visible (rang à 0.55 + 🔕).",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L08",
+    "surface": "list",
+    "behaviour": "Le badge de type (groupe/canal/bot + memberCount) est absorbé par la focus card (chip) et l'anneau accent ; les tags utilisateur deviennent au plus 3 pastilles de 6 px après le nom.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L09",
+    "surface": "list",
+    "behaviour": "Le glyphe hasPendingSync (outbox) est conservé tel quel : arrow.triangle.2.circlepath en accent à 70 %.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L10",
+    "surface": "list",
+    "behaviour": "La règle mood badge vs dot présence (un seul coin, mood gagne, présence sinon) est conservée, avec des dots de présence aussi pour les groupes (agrégat PresenceManager, « quelqu'un d'actif »).",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L11",
+    "surface": "list",
+    "behaviour": "La sélection iPad (barre accent 3 pt + teinte) devient le style de la focus card persistant sur le rang sélectionné.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L12",
+    "surface": "list",
+    "behaviour": "Les deux chemins de long press (.contextMenu natif iOS 26 avec preview 340, RowPressBounceModifier < 26 avec press scale 0.90 déclenché à 0.4 s et exclusion avatar 70 pt) sont conservés à l'identique, le preview devenant LentillePeekView et le menu gagnant le sous-menu « Mode de lecture » ; le .onDrag reste réservé au chemin natif.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L13",
+    "surface": "list",
+    "behaviour": "L'appel en cours (Scène) affiche un point pulsant accent + « {n} voix · depuis {durée} », un bouton Rejoindre capsule accent en trailing si non rejoint (rien si rejoint), et le tap sur le rang rejoint ou ouvre la Scène.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L14",
+    "surface": "list",
+    "behaviour": "Le timestamp ticker (TimelineView 60 s, hors gate Equatable) est conservé comme seul élément vivant du rang au repos, et sert aussi à la durée d'appel.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L15",
+    "surface": "list",
+    "behaviour": "renderFingerprint est étendu avec le champ bridge (texte du pont, unreadCount, suggestedMode) pour que le portillon .equatable() ne gèle pas les mises à jour du pont.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L16",
+    "surface": "list",
+    "behaviour": "Le label VoiceOver est étendu à « {nom}, {heure}, {n} non lus, {pont ou préview} », ignore la perspective décorative, et lit les stickers comme des en-têtes de section.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "L17",
+    "surface": "list",
+    "behaviour": "Le pull-to-refresh, la pagination (sentinelle + count−5) et les branches vides (skeleton, recherche vide, erreur sync, première conversation) restent inchangés, avec des états vides restylés plats et le résolveur ConversationListEmptyBranch non modifié.",
+    "source": "vol5 §5.3"
+  },
+  {
+    "id": "F01",
+    "surface": "thread",
+    "behaviour": "Un message entrant en temps réel s'insère en bas via le diffable snapshot existant ; si l'utilisateur est au fond, la nouvelle rangée naît dans la bande de focus (fondu + spring) et le focus la suit, sinon la pilule « nouveaux messages » de ConversationScrollControlsView s'incrémente sans changement.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F02",
+    "surface": "thread",
+    "behaviour": "Le typing indicator reste une cellule redessinée à plat (pastille 22 de l'auteur + trois points pulsants accent, mêmes timings 0.5 s/0.18 s), toujours exclue du pass de perspective car elle vit sous la bande de focus.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F03",
+    "surface": "thread",
+    "behaviour": "Le dot de présence s'applique à la pastille 22 de l'identité (ring 1.5 backgroundPrimary) ; la règle 1/3/5 et « offline = pas de dot » sont inchangées, et typing:start force toujours online.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F04",
+    "surface": "thread",
+    "behaviour": "Les accusés ✓/✓✓/lu se déplacent dans l'identité des messages « Toi » (✓ envoyé, ✓✓ délivré textSecondary, ✓✓ lu readReceipt #818CF8), mis à jour en temps réel par reconfiguration de cellule et masqués si la confidentialité l'exige, sans changer la logique par destinataire.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F05",
+    "surface": "thread",
+    "behaviour": "Les réactions live deviennent une pilule plate en méta (11 pt, fond backgroundSecondary, bord inputBorder) avec comptes monospaced conservés, un pop springBouncy à l'arrivée d'une réaction, et le picker/MessageReactionsDetailView inchangés.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F06",
+    "surface": "thread",
+    "behaviour": "La résolution Prisme reste inchangée (overrides manuels > ConversationLanguagePreferences.resolved > original) ; quand la traduction préférée arrive après coup, le texte swap en place (cross-fade 150 ms) avec apparition du chip 🌐 en méta.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F07",
+    "surface": "thread",
+    "behaviour": "AudioPlayerView (waveform, sélecteur de piste par langue) est rendu nu dans la rangée sans conteneur bulle, avec la transcription traduite en italique 12.5 sous le player (V.O. via 🌐), lecture coordonnée et carrousel multi-pistes inchangés.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F08",
+    "surface": "thread",
+    "behaviour": "Les grilles médias 1/2/3/4+ restent conservées (gridMaxWidth 300, spacing 2, radius 16), posées nues dans la rangée, avec DownloadBadgeView et la visionneuse plein écran inchangés.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F09",
+    "surface": "thread",
+    "behaviour": "Les réponses citées gardent un filet 2.5 pt de la couleur de l'auteur cité + une ligne tronquée (11.5) au retrait 29, et le tap saute vers l'original qui prend le focus (scroll animé jusqu'à la bande de focale).",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F10",
+    "surface": "thread",
+    "behaviour": "Le long-press ouvre le menu contextuel existant appliqué à la rangée plate (preview = la rangée, pas une bulle) ; un message édité affiche « modifié » en 10.5 en méta, un message supprimé devient une rangée fantôme italique reprenant BubbleDeletedView sans fond.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F11",
+    "surface": "thread",
+    "behaviour": "Les badges éphémère/épinglé/transféré restent au-dessus de l'identité, le flou s'applique au bloc contenu de la rangée, « vue unique » ouvre plein écran comme aujourd'hui, sans interaction avec la perspective.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F12",
+    "surface": "thread",
+    "behaviour": "La bannière épinglée reste inchangée sous le header ; en recherche, le résultat sélectionné défile jusqu'à la bande de focus (plutôt qu'au centre) avec la surbrillance existante.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F13",
+    "surface": "thread",
+    "behaviour": "La rangée optimiste reste à opacité 0.7 au-dessus du pass de perspective (alpha = min(0.7, alphaPerspective)), confirmée à 1.0, avec la bande orange de retry inchangée et exclue de la perspective.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F14",
+    "surface": "thread",
+    "behaviour": "Le chargement vers le haut reste inchangé (préservation d'offset au prepend par la collection inversée) et l'inset de tête « Début de la conversation » n'apparaît que lorsque MessageStore confirme que la première page est atteinte.",
+    "source": "vol4 §5"
+  },
+  {
+    "id": "F15",
+    "surface": "thread",
+    "behaviour": "Les effets (bitfield) s'appliquent au bloc contenu, mentions et hashtags gardent leurs tokens actuels, et les notices d'appel/système deviennent des rangées centrées plates (BubbleSystemNoticeView sans capsule), la Scène restant hors périmètre de cette spec.",
+    "source": "vol4 §5"
+  }
+]
