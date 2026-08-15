@@ -1,5 +1,149 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **profile share links (`meeshy://u/{username}`, `https://meeshy.me/u/{username}`)
+> now actually open the app** (slice `profile-share-link-receiver`, PR #3036, merged `5e11449de`).
+> `ProfileShareLink` (`core:model`) has generated both shapes since the `profile-share` slice
+> (2026-07-11, "share profile" + QR code) — **nothing received either one**: no
+> `https://meeshy.me/u/*` intent-filter in the manifest, no `navDeepLink` for either shape on the
+> profile route. A shared link or a scanned QR code opened nothing on Android — the browser for
+> the web link, no matching app at all for the custom scheme (well, almost: see below).
+>
+> **RE-PROUVÉ before starting**: this was found while looking for a genuine follow-up to the
+> previous stale-checkbox run — checked whether `feature-parity.md`'s Phase 6 "Navigation graph +
+> deep links (`meeshy://`, `https://meeshy.me`)" bullet was ALSO stale like the last one, the same
+> way. It wasn't uniformly stale: `meeshy://` custom-scheme routing is extensive (conversations,
+> chat, profile, story, magic-link, join, guest — 9+ distinct hosts wired), but `https://meeshy.me`
+> App Links cover exactly ONE path (`/auth/magic-link`) despite `ProfileShareLink`'s doc comment
+> explicitly promising `/u/{username}` as a Universal Link. Grepped `MeeshyApp.kt` for any
+> `meeshy.me`/`"u/`" reference: zero hits — confirmed the gap was real, not assumed.
+>
+> **The custom-scheme half turned out to be a smaller fix than expected**: the manifest already
+> has a scheme-only `<data android:scheme="meeshy" />` filter with **no host restriction**, so
+> `meeshy://u/{username}` was already reaching the app at the OS level — it just had no matching
+> `navDeepLink` to route it to `ProfileScreen` once there (silently swallowed / fell through to
+> whatever the NavHost's default matching produced, functionally the same as "opened nothing
+> useful"). Re-verifying this saved a redundant, wasted manifest edit.
+>
+> **No new resolution logic needed**: `ProfileViewModel.loadProfile(userId)` already calls
+> `userRepository.getProfile(id)` → `UserApi.getProfile(idOrUsername)`, and the gateway endpoint
+> already resolves either shape. The two new `navDeepLink` patterns route straight to the existing
+> `PROFILE_USER` route/`ProfileScreen`, reusing `{userId}` as the argument name for what is, on
+> this path, actually a username value — confirmed safe by tracing `ProfileScreen`'s downstream
+> callbacks (`onReport`/`onViewPosts`): they read from `state.user` (populated from the API
+> response, whose `.id` is always the real canonical id), never from the raw route arg directly, so
+> a username in that slot only affects the initial lookup call.
+>
+> New `Routes.PROFILE_SHARE_APP_DEEP_LINK`/`PROFILE_SHARE_WEB_DEEP_LINK` build their pattern from
+> `ProfileShareLink.APP_SCHEME`/`WEB_HOST`/`USER_SEGMENT` (cross-module `const val` template
+> reference — same established pattern as `CONVERSATION_DRAFT_DEEP_LINK`'s `ChatViewModel.*`
+> references in this same file) rather than re-hardcoding the same strings, so generator and
+> receiver structurally cannot drift apart again.
+>
+> **Verified**: 3 new contract tests (`ProfileShareDeepLinkTest`) assert the nav pattern with
+> `{userId}` substituted exactly equals what `ProfileShareLink.appLink`/`webLink` produce — no
+> Robolectric/`TestNavHostController` precedent exists in this module for exercising Compose
+> Navigation's own URI-matching machinery (checked first; none found), so this tests the invariant
+> that broke rather than re-verifying framework internals. CI: `Android` green, full `ci.yml`
+> matrix (17 checks) also triggered and green — same finding as the last two Android PRs.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=profile-share-link-receiver`
+> (streak 3→4, still under the streak≥5 IOS_DETTE threshold — stays ANDROID next run). Commit
+> séparé, poussé directement sur `main`, précédent établi par `9b59bd06c`/`475b869b8`/`e0f10c4a1`.
+
+> On 2026-08-15 **`feature-parity.md`'s Phase 5 "Pending" bullets were stale — no code
+> shipped this run, checklist corrected instead.** Scan of reprise clean (`gh pr list` empty).
+> Re-fetched `origin/main` (only 6 commits behind, unrelated gateway work — the 742-commit gap
+> from the run before this one was a one-off worktree-reconciliation campaign, already closed).
+>
+> Picking a slice from the 134 unchecked `feature-parity.md` boxes, RE-PROUVÉ four of the
+> Phase 5 section's overlapping/duplicated "Pending: ..." bullets against the real tree before
+> touching anything — every single item they listed already exists and is wired:
+> - **Calls slice**: `apps/android/feature/calls/` has 24 files including `WebRtcCallCoordinator`,
+>   `TelecomCallReporter`, `IncomingCallViewModel`, `CallScreen` — not just history, a full live
+>   calling stack — wired into `MeeshyApp.kt` navigation and FCM push (`MeeshyFcmService`,
+>   `DeclineCallReceiver`).
+> - **Feed new-posts banner / post detail**: `NewPostsBanner` (`FeedScreen.kt`),
+>   `PostDetailViewModel` (+ test) both exist.
+> - **Stories composer/publish**: `StoryComposerScreen` wired at `MeeshyApp.kt:799`,
+>   outbox-backed (`StoryRepository.enqueuePublish`, `StoryPublishFailures`).
+> - **Stories count-dots / prefetch média / reactions**: `StoryCountDots`, `StoryPrefetchPlanner`,
+>   `StoryReactionState` all exist with tests, all wired into `StoryViewerScreen`/
+>   `StoryViewerViewModel`.
+>
+> These bullets were leftover bookkeeping from earlier incremental passes — one (line 237-238 in
+> the pre-edit file) was even malformed, an orphaned continuation line duplicating unrelated text
+> from the bullet above it. `:feature:feed` and `:feature:stories` upgraded from `[~]` to `[x]`;
+> `:feature:calls` added as its own `[x]` line (it never had one — only ever mentioned inside
+> other bullets' "Pending" lists). Three duplicate stale bullets removed outright.
+>
+> **Why this counts as the run's slice rather than a skip**: the routine's own RE-PROUVER
+> discipline treats a verified stale-checklist finding as real, delivered work — same precedent
+> as the iOS-debt lane's "Ad-hoc blocking text translation already shipped" run. No code changed;
+> nothing to verify against a compiler. `tasks/lane-cursor.md` still advances (this is a genuine
+> ANDROID-lane run, not a skip), and the streak counts toward the IOS_DETTE bascule same as any
+> other.
+>
+> **Genuinely still open** (not touched, not claimed done): everything else under the 134
+> unchecked boxes — Phase 6 integration items (`Navigation graph + deep links`, adaptive
+> tablet/foldable layouts, live integration test vs gateway, final diff audit), the earlier
+> architectural items (`build-logic/` convention plugins, E2EE, SQLCipher). None RE-PROUVÉ this
+> run; the next run picking one of these should re-verify fresh rather than trust this note.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=feature-parity-stale-checkbox-sweep`
+> (commit séparé, poussé directement sur `main`, précédent établi par `9b59bd06c`/`475b869b8` —
+> même commit que cette mise à jour de `PROGRESS.md`/`NOTES.md`/`feature-parity.md`, les trois
+> fichiers de suivi vivant sous `apps/android/` mais ne modifiant aucun code compilé).
+
+> On 2026-08-15 **`StoryCacheSource.revalidate()` no longer deletes stories past page 1**
+> (slice `story-cache-pagination-truncation`, PR #3034, merged `52aec5b0e`) — the candidate
+> `docs(android/routine)` deposited on 2026-08-12 (`d10c751ad`, from the iOS/gateway routine's
+> PR #2870) and parked ever since for exactly the missing toolchain the CI-gate run above just
+> fixed. **RE-PROUVÉ before starting**: read `StoryCacheSource.kt` fresh — `revalidate()` still
+> fetched one `STORIES_PAGE_SIZE=50` page (`storyApi.list(null, 50)`) and read neither
+> `pagination.hasMore` nor `pagination.nextCursor`; `persist()` still called
+> `storyDao.deleteNotIn(rows.map { it.id })` against that single page — beyond 50 stories the
+> truncation didn't omit rows, it deleted them from Room. Also confirmed `StoryRepository.list()`
+> (the OTHER API surface losing pagination) is called only from `StoryViewerViewModel`'s on-demand
+> fetch, not feeding a `deleteNotIn` — genuinely a separate, non-destructive concern, left out of
+> scope as the deposited note suggested.
+>
+> **No local Android toolchain in this container** (`sdkmanager`/`adb` not found, no
+> `ANDROID_HOME` — and this time no JRE at all: `./gradlew` itself failed with "Unable to locate a
+> Java Runtime"), so every line was written against static verification only: cross-checked the
+> `null`+`any()` MockK matcher pattern against `PostRepositoryTest.kt`'s existing precedent before
+> trusting it in new tests, and the `pagination?.hasMore ?: false` idiom against `PostRepository`'s
+> own established usage, rather than inventing an unverified shape. The `Android` CI check (added
+> by the run above) was the actual compiler — first PR to really exercise it since its own
+> bootstrap run.
+>
+> **Design, decided fresh for Android rather than copied from iOS's PR #2867**: pages up to 6
+> requests (300 stories, same tray budget as iOS) following `nextCursor` while `hasMore` holds; a
+> response with no `pagination` block at all is treated as one complete page (preserves every
+> existing single-page test unmodified — confirmed by tracing `pagination?.hasMore ?: false`
+> against a `null` pagination before writing any new test). `persist()` only prunes when the window
+> is PROVEN complete (`hasMore = false`) — reaching the 6-page budget while the server still claims
+> more remains upserts what was fetched but never authorizes a delete: an unproven partial window
+> may add, never subtract. Any page failing (including the first) throws without persisting
+> anything — the INVERSE of iOS's choice, and for a reason specific to Android: Room already holds
+> a complete prior tray here, so replacing it with an unproven partial one on a later-page failure
+> is strictly worse than serving the stale one a beat longer. New `pagedApiCall` (`ApiCall.kt`)
+> mirrors `apiCall` but preserves the envelope's `pagination` block, which `apiCall` discards by
+> design — a sibling, not a modification, so every other `apiCall` caller is untouched.
+>
+> **Verified**: 3 new TDD tests in `StoryRepositoryTest.kt` (multi-page follow + prune-on-complete,
+> never-prune-on-budget-exhaustion, throw-and-leave-cache-untouched-on-later-page-failure) plus all
+> pre-existing single-page tests, unmodified. CI: `Android (assemble + unit tests)` green (10m56s),
+> full `ci.yml` matrix also triggered on this `apps/android`-only diff (confirms finding #3 of the
+> CI-gate run again) and all 16 checks passed.
+>
+> **Deliberately deferred**: `StoryRepository.list(cursor, limit)` still drops `pagination` too —
+> a second, separate call site of the same underlying API, non-destructive, used only by the story
+> viewer's on-demand fetch. Worth inventorying alongside its web/iOS siblings some day, not urgent.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=story-cache-pagination-truncation`
+> (commit séparé, poussé directement sur `main`, cf. `ROUTINE.md` §Choix de la lane — même commit
+> que cette mise à jour de `PROGRESS.md`/`NOTES.md`, précédent établi par `9b59bd06c`).
+
 > On 2026-08-12 **`apps/android` got its first CI gate ever** (run `android-ci-workflow`,
 > PR #2905). This is the follow-up `ROUTINE.md` §"CI reality" had been tracking explicitly as
 > needing its own run because it touches `.github/` rather than `apps/android`. **RE-PROVEN before

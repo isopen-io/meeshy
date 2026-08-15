@@ -469,3 +469,48 @@ Append-only log of gotchas and decisions that save time next run.
   unreadable and its cause was never established (it did not recur). CI logs for agent consumption
   should print the failing test names and messages *inline* — parsed from the JUnit XML — because
   "see the report at `<html>`" is unactionable to a run that has no way to open it.
+- **A `null`-plus-`any()` MockK matcher isn't a leap of faith once it has a live precedent in the
+  same codebase.** With zero JVM available to trial-run `coEvery { api.list(null, any()) }`
+  (`story-cache-pagination-truncation`, 2026-08-15 — this container had no Java Runtime at all,
+  one rung below the earlier `dl.google.com` denial), the fix was grepping for the exact shape
+  elsewhere first: `PostRepositoryTest.kt` already stubs `coEvery { api.getFeed(null, any()) }`
+  and passes in CI. A pattern this codebase already runs green is stronger evidence than reasoning
+  about MockK's matcher-auto-wrapping rules from first principles — and it is *checkable* without a
+  compiler, which pure reasoning about a mocking library's internals is not.
+- **A destructive default (`deleteNotIn`) earns a stricter failure mode than its non-destructive
+  siblings, and the two platforms disagreeing is a feature, not an inconsistency to paper over.**
+  iOS's PR #2867 persists a partial window on a later-page failure (a fresh cache, nothing to lose
+  by trying). Android's `StoryCacheSource` had a complete prior tray in Room already, so the
+  matching move was to throw and leave it untouched — replacing a *known-complete* cache with an
+  *unproven-partial* one on error is strictly worse than serving the stale one a beat longer. Don't
+  port a cross-platform fix's decision tree wholesale; port the *invariant* (never prune off an
+  unproven window) and re-decide the parts that depend on what state already exists on this
+  platform.
+- **A "Pending: X, Y, Z" bullet is a claim, not a fact — it decays the moment any of X/Y/Z ships
+  and nobody edits the checklist that day.** `feature-parity.md`'s Phase 5 section carried three
+  overlapping, partly-duplicated "Pending" bullets (`feature-parity-stale-checkbox-sweep`,
+  2026-08-15) naming Calls/composer-publish/count-dots/prefetch/reactions as still missing — every
+  one of them had a dedicated file, and in three cases a dedicated test, already in the tree. The
+  tell wasn't subtle once looked for: one bullet's continuation line was an orphaned duplicate of
+  unrelated text from the bullet above it, a shape that only survives when nobody has re-read the
+  paragraph in a while. **Generalises: when a checklist bullet lists several named things as
+  pending, grep for each name before trusting the list — a stale multi-item bullet is *more* likely
+  than a stale single-item one, because it only takes ONE of the N items shipping unnoticed to make
+  the whole line wrong, and N items shipping over N different runs is the common case, not the rare
+  one.**
+- **A link generator with no receiver fails silently, not loudly — grep both halves of a
+  share-link feature before trusting either.** `ProfileShareLink` (`profile-share-link-receiver`,
+  2026-08-15) built correct, well-tested `meeshy://u/{username}` / `https://meeshy.me/u/{username}`
+  URLs for a month; the QR code rendered, the share sheet worked, `ProfileShareLinkTest` was green.
+  Nothing about USING the generator ever surfaces the fact that tapping its own output does
+  nothing — there's no crash, no error toast, just a browser opening to a 404-shaped page or an
+  inert custom-scheme link. **Generalises: whenever a slice ships something that PRODUCES a
+  URL/token/identifier meant to be consumed later (deep links, share links, invite codes), grep for
+  the CONSUMING side in the same run, not just the producing one — a generator's own tests can
+  never catch a missing receiver, because they never round-trip through the OS.**
+- **A manifest's scheme-only, no-host intent-filter is a wildcard — check it before adding a
+  narrower one that would be redundant.** `<data android:scheme="meeshy" />` (no `android:host`)
+  already routed `meeshy://u/{username}` to the app; only the `https://meeshy.me/u/{username}`
+  half needed a new `<intent-filter>`. Re-verifying this against the actual manifest (not assuming
+  symmetry between the custom-scheme and App Link halves) avoided a redundant, no-op manifest
+  entry.

@@ -7472,7 +7472,138 @@ une pièce vide. Et deux assertions préexistantes épinglaient `data: { isActiv
 false }` à l'exact, figeant la forme INCOMPLÈTE de l'écriture : une assertion
 exacte sur un payload transforme toute omission en spécification.
 
-## Leçon 263 — XcodeGen ignore silencieusement les clés inconnues : `resources:` n'existe pas sur un target
+---
+
+## Leçon 263 — Un champ HOMONYME sur deux modèles rend une garde manquante invisible à la relecture (2026-08-15, routine temps réel, cycle 31)
+
+Le schéma déclarait la règle en toutes lettres — `Conversation.closedAt` :
+« Conversation closed for all — **no one can write**, messages stay readable ».
+Aucun chemin d'écriture ne l'appliquait. Zéro, sur tous les transports.
+
+**Pourquoi une absence aussi totale a tenu.** `isActive` existe sur DEUX
+modèles. Toutes les gardes d'envoi en portent une —
+`where: { conversationId, userId, isActive: true }` — et c'est celle du
+`Participant`. Une relecture qui se demande « l'état actif est-il vérifié ? »
+trouve la réponse partout et s'arrête. Or fermer une conversation ne touche
+AUCUNE ligne `Participant` : les quatre routes de clôture n'écrivent que sur
+`Conversation`.
+
+**La règle.** Quand deux modèles portent un champ de même nom, la présence du
+nom dans une clause ne prouve RIEN sur le modèle qu'on croit garder. Vérifier
+sur quelle TABLE porte le filtre, pas sur quel mot. Et le test décisif ne se
+pose pas au lecteur mais à l'écrivain : *quelles lignes la mutation écrit-elle
+réellement ?* Ici la réponse — « `Conversation` seulement » — dit immédiatement
+qu'aucune garde lisant `Participant` ne peut voir la clôture.
+
+Même famille que les leçons 258 (cycle 26) et 261 (cycle 29) : une garde jumelle
+existe, correcte, ailleurs, et sa présence rassure la relecture qui aurait dû
+poser la question au bon endroit. Trois cycles sur six ont eu cette forme.
+
+**Corollaire — un invariant DÉCLARÉ mais non exécuté est pire qu'un invariant
+absent.** Le commentaire du schéma faisait croire la règle tenue à quiconque
+lisait le modèle ; le cycle 30 l'a même citée dans son CHANGELOG en constatant
+son absence, sans que cela suffise à la faire poser. **Chercher les invariants
+que la documentation affirme et grepper leur exécutant** est une sonde
+autonome, distincte de « chercher les bugs » — et elle rend, ici, quatre défauts
+d'un coup.
+
+**Corollaire de PLACEMENT — une garde d'admission se pose après le dédoublonnage,
+jamais avant.** Un rejeu porte l'id d'un message déjà accepté : il a été admis
+quand le conteneur était encore ouvert. Le refuser sur l'état COURANT ferait
+marquer « échoué » un message pourtant délivré à tous ses destinataires. Le
+témoin qui le prouve est le seul de la suite qu'une garde mal placée fait
+échouer — les quatre témoins de refus, eux, passent des deux côtés. **Quand on
+ajoute une garde à un pipeline idempotent, le test qui vaut n'est pas
+« refuse-t-elle ? » mais « laisse-t-elle encore aboutir le rejeu ? »**
+
+**Corollaire — « inconnu » n'est pas « terminal ».** Une ligne absente ne doit
+pas produire un refus quand une AUTRE garde, juste au-dessus, est l'autorité sur
+l'existence et l'appartenance. Faire arbitrer les deux à la même unité lui donne
+deux raisons de changer, invente un mode d'échec là où le gardien voisin répond
+déjà — et, très concrètement, casse tous les doubles de test qui ne modélisaient
+pas un champ dont la règle n'a pas besoin.
+
+**Corollaire — une garde qui dépend d'une colonne PROJETÉE se teste avec un
+double qui projette.** Rencontré en écrivant ce cycle, sur son propre correctif :
+la route de lien authentifiée résout par DEUX branches jumelles, la garde n'avait
+été posée que sur la seconde, et la première lisait `undefined` — donc admettait.
+**Les deux témoins étaient verts**, parce que le double rendait son objet entier
+quel que soit le `select`. Un tel double prouve que le code sait DÉCIDER, jamais
+qu'il a demandé de quoi décider ; les deux se cassent séparément. Remède double,
+et les deux moitiés sont nécessaires : le double ne rend une colonne que si la
+requête l'a réclamée, ET la projection est NOMMÉE plutôt que recopiée — deux
+`select` jumeaux à quinze lignes d'écart sont une garde à moitié posée qui a
+l'air d'une garde entière.
+
+## Leçon 264 — Une règle complète et juste ne protège rien tant qu'on n'a pas répondu « qui l'appelle ? » (2026-08-15, routine temps réel, cycle 31, seconde passe)
+
+*Jumelle de la leçon 263 : là-bas la garde MANQUAIT, ici elle EXISTE et ne
+protège rien. Le second cas est le plus coûteux des deux, parce qu'il se
+défend tout seul contre l'audit qui le cherche.*
+
+`MessageValidator.checkPermissions` portait la règle d'écriture des
+conversations en ENTIER : hiérarchie `everyone < member < moderator < admin <
+creator`, dispense de la conversation globale, échappatoire du staff plateforme,
+messages d'erreur soignés en français, tests verts. Un `grep` sur tout le
+monorepo rendait **un seul invocateur : son propre fichier de test**. Le canal
+d'annonces — créé par `type: 'broadcast'`, réglable par `PATCH`, refusé aux
+modérateurs, servi aux clients dans la liste, documenté au schéma Prisma —
+acceptait donc les messages de n'importe quel membre, avec le client officiel et
+sans rien contourner.
+
+**La règle.** Une règle métier n'est appliquée que par son SITE D'APPEL. Avant
+de conclure « cette contrainte est respectée » parce qu'on vient d'en lire
+l'implémentation, exécuter la seule requête qui le prouve : **`grep` le nom de
+la fonction et compter les appelants HORS tests.** Zéro appelant ⇒ la règle
+n'existe pas, quelle que soit sa qualité.
+
+**Pourquoi c'est la classe de défaut la moins visible du dépôt.** Un audit
+part naturellement du NOM DU CHAMP (`isAnnouncementChannel`), tombe sur
+l'implémentation, la trouve correcte, et s'arrête. Le champ est écrit, lu,
+sérialisé, documenté — toute la chaîne paraît vivante. Seul le sens de lecture
+INVERSE (du champ vers ses lecteurs, puis de chaque lecteur vers ses appelants)
+distingue une règle appliquée d'une règle simplement écrite. Corollaire
+pratique : **un audit de garde n'est jamais terminé au fichier qui l'implémente ;
+il se termine au chemin de production qui l'atteint.**
+
+**Le corollaire aggravant — l'orphelin DISSUADE la correction.** Une garde
+absente finit par se remarquer ; une garde présente et morte, jamais : le
+prochain lecteur la trouve, conclut « c'est déjà fait », et referme. C'est
+pourquoi le correctif SUPPRIME l'orphelin au lieu de le câbler. Le câbler aurait
+marché ici, mais laisse ouverte la question qui a produit le défaut ; le
+supprimer et republier la règle à l'endroit que l'entonnoir traverse la ferme.
+**Un garde orphelin à côté d'un garde réel est pire qu'aucun garde.**
+
+**Corollaire de placement — un garde d'admission a DEUX bornes, et les deux se
+justifient.** Après le dedup précoce, parce qu'un rejeu porte une ligne déjà
+écrite et diffusée : la refuser transforme un envoi RÉUSSI en erreur rendue au
+client, qui rejouera indéfiniment. Avant la détection de langue, parce qu'un
+refus ne doit pas payer un aller-retour HTTP de 266 ms. Un garde posé « au début
+pour être sûr » aurait cassé l'idempotence ; posé « à la fin près de l'écriture »,
+il aurait payé le translator pour rien.
+
+**Corollaire d'asymétrie — un mode d'échec ne se choisit pas globalement, il se
+choisit par ce qui MANQUE.** Police illisible ⇒ ADMETTRE : le garde AJOUTE une
+restriction, un hoquet de base ne doit pas convertir un envoi ordinaire en
+erreur (et c'est ce qui protège les documents hérités, dont les champs récents
+sont ABSENTS et non `null`). Rang illisible ⇒ REFUSER : la restriction est
+CONNUE, seule l'identité manque, et admettre ouvrirait le canal à tout le monde
+pendant la panne. « Fail open » et « fail closed » ne sont pas des politiques de
+module : ce sont des réponses à *quelle information manque-t-il ?*
+
+**Corollaire de cache — une autorisation se lit fraîche.** La tentation de
+mémoriser la police d'écriture (elle change une fois par an) a été écartée : un
+cache de 30 s laisse une conversation CLÔTURÉE accepter des messages pendant une
+demi-minute, et exige d'invalider à cinq sites. Le dépôt porte déjà la cicatrice
+— `participant-lookup-cache` documente comment `unban` avait manqué à la liste
+et refusait les messages de la personne qu'on venait de réintégrer. Avant de
+mettre une décision de sécurité en cache, énumérer les sites qui doivent
+l'invalider ; si la liste dépasse deux, la lecture fraîche est moins chère que
+la dette.
+
+---
+
+## Leçon 265 — XcodeGen ignore silencieusement les clés inconnues : `resources:` n'existe pas sur un target
 
 Le spec XcodeGen n'a **pas** de clé `resources:` au niveau des targets — les
 ressources de bundle se déclarent comme entrées de `sources:` avec

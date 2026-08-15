@@ -92,6 +92,7 @@ import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.LegalDocumentScreen
 import me.meeshy.app.settings.LicensesScreen
 import me.meeshy.app.settings.MediaCacheScreen
+import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.PrivacySettingsScreen
@@ -182,6 +183,20 @@ object Routes {
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
+
+    /**
+     * The receiving half of [ProfileShareLink] — its generated
+     * `meeshy://u/{username}` / `https://meeshy.me/u/{username}` links had no
+     * matching intent-filter (manifest) or `navDeepLink` (here) until this pair,
+     * so a shared/QR profile link opened nothing on Android. `{userId}` doubles
+     * as the argument name for a username value: `ProfileViewModel.loadProfile`
+     * already forwards it verbatim to `UserApi.getProfile(idOrUsername)`, which
+     * resolves either — no new resolution step needed on this route.
+     */
+    const val PROFILE_SHARE_APP_DEEP_LINK =
+        "${ProfileShareLink.APP_SCHEME}://${ProfileShareLink.USER_SEGMENT}/{userId}"
+    const val PROFILE_SHARE_WEB_DEEP_LINK =
+        "https://${ProfileShareLink.WEB_HOST}/${ProfileShareLink.USER_SEGMENT}/{userId}"
     const val USER_POSTS = "profile/{userId}/posts"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
@@ -753,6 +768,8 @@ fun MeeshyApp(
                 arguments = listOf(navArgument("userId") { type = NavType.StringType }),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.PROFILE_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.PROFILE_SHARE_APP_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.PROFILE_SHARE_WEB_DEEP_LINK },
                 ),
             ) {
                 ProfileScreen(

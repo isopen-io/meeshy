@@ -79,6 +79,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meeshy" android:host="profile" />
             </intent-filter>
+            <!-- App Link : le lien de partage de profil (https://meeshy.me/u/{username},
+                 me.meeshy.sdk.model.ProfileShareLink) ouvre l'app directement. meeshy://u/{username}
+                 n'a pas besoin de son propre filtre : le filtre scheme-only ci-dessus (sans host)
+                 le capture deja. Meme verification assetlinks.json que le magic link ci-dessus —
+                 apps/android/docs/magic-link-app-links.md. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/u/" />
+            </intent-filter>
         </activity>
 
         <!-- FCM Push -->

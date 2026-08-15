@@ -104,9 +104,19 @@ export function toCallSessionResponse<T extends SessionInput | null | undefined>
     ? (session.participants as ParticipantInput[]).map(toCallParticipantResponse)
     : [];
 
+  // Audit (routine calling, 2026-08-15): `participants` keeps every
+  // `CallParticipant` row Prisma ever attached to this session — `joinCall`
+  // only reuses a row while `!leftAt`; any leave-then-rejoin (network blip,
+  // tab reload, a group-call member leaving while others stay on) inserts a
+  // fresh row and leaves the departed one in place forever. `participantCount`
+  // must therefore filter `!leftAt`, mirroring the sibling fix already applied
+  // to the socket-driven store (`VideoCallInterface.tsx`'s `displayParticipant`
+  // computation) — otherwise every REST consumer of this helper (the
+  // `OngoingCallBanner` "join?" prompt via `GET /conversations/:id/active-call`
+  // chief among them) shows a count that only ever grows.
   return {
     ...session,
     participants,
-    participantCount: participants.length,
+    participantCount: participants.filter((p) => !p.leftAt).length,
   } as never;
 }
