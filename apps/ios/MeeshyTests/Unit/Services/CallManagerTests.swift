@@ -4795,11 +4795,29 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Le corps de `rejoinActiveCall`, DÉPOUILLÉ DE SES COMMENTAIRES.
+    ///
+    /// Ces gardes cherchent des symboles (`CXStartCallAction`,
+    /// `configureAudioSession()`, `callUsesCallKit = false`) — sur le texte
+    /// brut, une simple PHRASE D'EXPLICATION qui nomme le symbole les trompe.
+    /// C'est exactement ce qui est arrivé : le fix audio du 2026-08-14 a ajouté
+    /// dans le corps un commentaire disant que la méthode ne fait « ni
+    /// reportNewIncomingCall / CXStartCallAction » et que
+    /// `configureAudioSession()` lit `callUsesCallKit` — ce commentaire a
+    /// simultanément (a) fait croire à un CXStartCallAction dans le corps et
+    /// (b) fourni une occurrence de `configureAudioSession()` AVANT la vraie
+    /// affectation, inversant l'ordre asserté. Le correctif lui-même n'a jamais
+    /// été en cause. Les gardes lisent donc du CODE, comme
+    /// test_captionsCycleButton_actionIsAdvanceCaptionsMode ailleurs dans la
+    /// suite.
     private func rejoinBody(_ source: String) -> String? {
         guard let start = source.range(of: "func rejoinActiveCall(callId: String") else { return nil }
         let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
                 ?? source.endIndex
         return String(source[start.lowerBound..<end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
     }
 
     func test_rejoinActiveCall_isDiscardableResultReturningBool() throws {
@@ -4855,6 +4873,11 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
         // This isn't a new system-level call event (CallKit already knows
         // about this call from whenever it was originally answered) — no
         // reportNewIncomingCall/CXStartCallAction transaction.
+        //
+        // `rejoinBody` renvoie du CODE sans commentaires : la méthode
+        // EXPLIQUE justement, en commentaire, qu'elle n'émet ni
+        // reportNewIncomingCall ni CXStartCallAction — lu brut, ce texte
+        // déclenchait ce garde contre le correctif qui l'a écrit.
         let source = try callManagerSource()
         guard let body = rejoinBody(source) else {
             XCTFail("rejoinActiveCall body not found"); return
@@ -4895,6 +4918,11 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
     /// audio (no mic, no speaker) until an unrelated ~2s stuck-muted fallback
     /// timer force-activated it. Must be set BEFORE configureAudioSession()
     /// runs in the same method.
+    ///
+    /// L'ordre est asserté sur du CODE (`rejoinBody` retire les
+    /// commentaires) : le commentaire explicatif de ce même correctif nomme
+    /// `configureAudioSession()` DIX LIGNES AVANT l'affectation qu'il
+    /// documente, ce qui inversait l'ordre mesuré sur le texte brut.
     func test_rejoinActiveCall_setsCallUsesCallKitFalseBeforeConfiguringAudioSession() throws {
         let source = try callManagerSource()
         guard let body = rejoinBody(source) else {
