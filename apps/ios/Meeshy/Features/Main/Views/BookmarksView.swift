@@ -176,12 +176,39 @@ struct BookmarksView: View {
         Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
     }
 
+    private var bookmarksEmptyTitle: String {
+        String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main)
+    }
+
+    private var bookmarksEmptySubtitle: String {
+        String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts et les réels que vous enregistrez apparaîtront ici", bundle: .main)
+    }
+
+    // Reconstruit localement le rendu de `EmptyStateView` : ce composant
+    // partagé encapsule son icône, ce qui empêche de la masquer
+    // individuellement depuis un site d'appel. Le glyphe (bookmark) est
+    // purement décoratif — le titre et le sous-titre disent déjà tout — donc
+    // `.accessibilityHidden(true)` l'exclut explicitement avant que
+    // `.accessibilityElement(children: .combine)` ne fusionne le reste
+    // (titre + sous-titre) en un seul arrêt VoiceOver ; sans ce masquage, le
+    // nom brut du symbole ("bookmark") s'ajoutait à l'annonce.
     private var emptyState: some View {
-        EmptyStateView(
-            icon: "bookmark",
-            title: String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main),
-            subtitle: String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts et les réels que vous enregistrez apparaîtront ici", bundle: .main)
-        )
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "bookmark")
+                .font(MeeshyFont.relative(52, weight: .light))
+                .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
+                .accessibilityHidden(true)
+
+            Text(bookmarksEmptyTitle)
+                .font(MeeshyFont.relative(18, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+
+            Text(bookmarksEmptySubtitle)
+                .font(MeeshyFont.relative(14))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.xxxl)
+        }
         .padding(.top, 80)
         .accessibilityElement(children: .combine)
     }
