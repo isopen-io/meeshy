@@ -730,5 +730,33 @@
     "retryNow": "Reenviar",
     "dismiss": "Descartar",
     "dismissAll": "Descartar tudo"
+  },
+  "lentille": {
+    "bridge": {
+      "authorsOne": "{name}",
+      "authorsTwo": "{a} e {b}",
+      "authorsMore": "{a}, {b} +{count}",
+      "messages": "{count} mensagens",
+      "media": {
+        "images": "{count} imagens",
+        "audio": "{count} áudios",
+        "files": "{count} arquivos"
+      },
+      "partial": "dos últimos {count} mensagens"
+    },
+    "modes": {
+      "title": "Modo de leitura",
+      "auto": "Auto",
+      "focal": "Focal",
+      "script": "Roteiro",
+      "resume": "Resumo",
+      "riviere": "Rio",
+      "autoBadge": "AUTO · {decision}",
+      "riviereLocked": "abrirá com {threshold} pessoas ativas — {current} hoje",
+      "riviereLockedDirect": "reservado para grupos"
+    },
+    "typing": {
+      "one": "{name} está digitando…"
+    }
   }
 }
