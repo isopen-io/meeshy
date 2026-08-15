@@ -388,6 +388,23 @@ struct MessageListView: UIViewControllerRepresentable {
     /// lisibilité — glissé entre deux callbacks, il force le parent à passer
     /// une config au milieu de ses fermetures.
     var isHeaderExpanded: Bool = false
+    /// Mode de lecture réellement rendu — décision de l'orchestrateur WS-7
+    /// (`ConversationView.init`, F-086, futur). Défaut `.bubbles` : tant que
+    /// rien ne le pose, comportement bit-à-bit identique à aujourd'hui
+    /// (contrat §WS-6, travail 10 — nouvelles props AVANT les closures
+    /// `on…`, contrainte d'ordre de l'init memberwise, `:382-387`).
+    var readingMode: ConversationReadingMode = .bubbles
+    /// `!viewModel.hasOlderMessages` (ou repli §4.5 « piège connu » — une
+    /// conversation courte jamais paginée) : seul signal fiable de
+    /// « première page atteinte », pilote l'inset de tête (§4.5).
+    var hasReachedOldest: Bool = false
+    /// Bascule Reduce Motion IN-APP (`\.meeshyForceReduceMotion`) — le
+    /// PARENT SwiftUI (WS-7, `ConversationView`, futur) lit cet Environment
+    /// et transmet la valeur ici. La source SYSTÈME
+    /// (`UIAccessibility.isReduceMotionEnabled`) est lue directement par le
+    /// contrôleur UIKit, qui combine les DEUX (§4.9). Ce prop ne porte QUE
+    /// l'override applicatif.
+    var isReduceMotionEnabled: Bool = false
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the user approaches the older-messages threshold. Wire to
@@ -493,6 +510,13 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.isHeaderExpanded = isHeaderExpanded
+        // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
+        // ci-dessous — `applyTopInset` recompose `headInset` (§4.5) à partir
+        // de `readingMode`/`hasReachedOldest`, qui doivent donc déjà être à
+        // jour au moment de son premier appel.
+        vc.readingMode = readingMode
+        vc.hasReachedOldest = hasReachedOldest
+        vc.isReduceMotionEnabled = isReduceMotionEnabled
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -556,6 +580,14 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.isHeaderExpanded = isHeaderExpanded
+        // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
+        // ci-dessous — mêmes raisons que `makeUIViewController`. `didSet`
+        // du côté du contrôleur ne rejoue le pass QUE si la valeur change
+        // réellement (garde `oldValue != newValue`) : une réaffectation
+        // identique à chaque tick SwiftUI est un no-op.
+        vc.readingMode = readingMode
+        vc.hasReachedOldest = hasReachedOldest
+        vc.isReduceMotionEnabled = isReduceMotionEnabled
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
