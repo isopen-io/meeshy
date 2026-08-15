@@ -397,10 +397,54 @@ identité d'acteur courant qui couvre la session anonyme
 (`AuthManager.currentUser` reste nil pour un invité), puis aligner les 3 gardes
 dessus.
 
-# Cycle 39 — la règle du masquage personnel avait trois consommateurs et zéro déclencheur
+# Cycle 39 — le doublon, et le bout qu'il a rendu visible
+
+## Constat
+
+- [x] La piste du cycle 37 a été instruite **deux fois en parallèle** par deux
+      sessions de la même routine, sans coordination possible
+- [x] La PR #3052 (session A) a mergé à 21:06 ; ce cycle a ouvert sa PR une heure
+      trop tard, sur un défaut déjà réparé — même diagnostic, mêmes 5 RED, même
+      nom de fichier d'audit
+- [x] Le correctif de ce cycle a donc été **jeté**, pas redéposé
+
+## Le bout resté ouvert (livré)
+
+- [x] En rendant `payload.userId` légitimement `null` pour un invité, #3052 a
+      rendu inapplicable pour cette population le seul contrat qui disait comment
+      revendiquer `lastReadAt`/`unreadCount`
+- [x] L'identité qui convient voyage DÉJÀ dans le payload : `participantId`
+- [x] L'acteur se reconnaît par `userId ?? participantId` — la même règle que
+      celle qui nomme sa room personnelle
+- [x] Contrat partagé + miroir iOS + KDoc Android (absent jusqu'ici) + README
+      socketio § seconde moitié de la règle
+- [x] Zéro changement de code d'exécution, zéro migration client
+
+## Écarté délibérément
+
+- [x] `resolveBroadcastActor` — construit, testé, puis retiré : le type
+      `actorUserId: string | null` de #3052 ferme déjà le trou que l'unité aurait
+      fermé (leçon 273)
+
+## Gates
+
+- [x] Aucun fichier `.ts` d'exécution touché
+- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète sur la base à jour : 724 suites / 17 732 tests verts (inchangé)
+- [x] CHANGELOG + journal d'audit (cycle 39) + leçon 273
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le tableau de la
+collision entre les deux sessions, pourquoi le doublon n'était pas stérile, et
+l'enseignement de coordination : relire `main` sur les FICHIERS visés avant
+d'ouvrir la PR, pas seulement au démarrage.
+# Cycle 40 — la règle du masquage personnel avait trois consommateurs et zéro déclencheur
 
 Routine « amélioration continue temps réel ». Le cycle 38 a fait dire la vérité
-au champ `userId` de `read-status:updated` et a désigné iOS comme suite. Cet
+au champ `userId` de `read-status:updated` et a désigné iOS comme suite ; le
+cycle 39, mené EN PARALLÈLE par une autre session, a tranché le contrat de
+reconnaissance de l'acteur (PR #3056). Cet
 environnement est Linux **sans toolchain Swift** (borne déjà énoncée au cycle
 36) : la piste iOS reste ouverte, ce cycle prend une famille testable ici et
 rapporte les constats iOS mesurés au passage.
@@ -450,7 +494,7 @@ Quatre écrivains concernés : `delete-for-me` (unitaire, lot), `restore-for-me`
 - [x] `tsc --noEmit` gateway : 13 erreurs pré-existantes, identiques avec et
       sans ce diff (mesuré par `git stash`)
 - [x] Suite gateway complète : **724 suites / 17748 tests verts** (321 s)
-- [x] CHANGELOG + journal d'audit (cycle39)
+- [x] CHANGELOG + journal d'audit (cycle40)
 
 ## Limite énoncée
 
@@ -458,10 +502,10 @@ Effectif sur **web** ; **inerte sur iOS**, où `ConversationStore.merging` jette
 tout groupe d'aperçu dont le `lastMessageAt` recule. Ce trou pré-existe ce cycle
 (il vaut déjà pour la suppression POUR TOUS du dernier message) et se corrige
 côté client, avec un discriminant « périmé » vs « recalculé ». Détail et pistes :
-`tasks/realtime-sync-audit-2026-08-15-cycle39.md` § Constats iOS.
+`tasks/realtime-sync-audit-2026-08-15-cycle40.md` § Constats iOS.
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le constat, les quatre
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle40.md` — le constat, les quatre
 écrivains, le correctif en deux pièces, les deux constats iOS mesurés et non
 livrés, et les trois surfaces balayées trouvées correctes à ne pas ré-instruire.
