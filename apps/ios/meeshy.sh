@@ -253,7 +253,10 @@ restore_entitlements() {
 # cette variable vit à DEUX endroits qui doivent rester d'accord :
 #   • project.yml                      → source de vérité XcodeGen
 #   • Meeshy.xcodeproj/project.pbxproj → ce que meeshy.sh compile réellement
-#     (ce script ne lance JAMAIS `xcodegen`, cf. apps/ios/CLAUDE.md)
+#     (ce script ne lance `xcodegen` que sur dérive constatée, cf.
+#      `ensure_project_is_current` ci-dessous — et c'est précisément
+#      `write_build_number`, qui écrit dans les DEUX fichiers, qui rend cette
+#      régénération inoffensive pour le numéro de build)
 #
 # Le 2026-07-25 un `xcodegen generate` a réécrit le pbxproj depuis le
 # placeholder `"1"` de project.yml, et ce reset est parti dans un commit de
@@ -335,6 +338,92 @@ sync_build_number() {
     log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
 }
 
+# ─── Fraîcheur du projet Xcode ───────────────────────────────────────────────
+#
+# `project.yml` est la source de vérité (XcodeGen) ; `project.pbxproj` en est
+# l'ARTEFACT. Les sources y sont globbées récursivement, donc un `.swift` neuf
+# n'entre dans la compilation qu'après un `xcodegen generate`. La CI en lance un
+# avant CHAQUE build ; ce script, non — d'où une divergence à sens unique : le
+# fichier neuf compile en CI et manque ici.
+#
+# Le symptôme accuse le code au lieu du projet. Le 2026-08-15, 8 sources d'app
+# et 22 fichiers de tests avaient dérivé : `device` a compilé 2 min 20 pour
+# rendre 30 « cannot find type 'RootMenuLadderEntry' in scope » sur des types
+# parfaitement présents sur disque. Les 22 suites de tests, elles, ne disaient
+# rien du tout — elles étaient simplement absentes du bundle, vertes par
+# omission (le mode d'échec que `verify_test_classes_are_compiled` attrape,
+# mais seulement APRÈS un build de tests).
+#
+# On régénère donc, comme la CI, mais UNIQUEMENT sur dérive constatée : un
+# `xcodegen generate` inconditionnel réécrirait `project.pbxproj` et
+# `Meeshy.xcscheme` à chaque build, dans un worktree partagé.
+#
+# L'incident du 2026-07-25 (pbxproj réécrit depuis le placeholder « 1 » de
+# project.yml, cf. la section « Build number » ci-dessus) ne peut plus se
+# reproduire : `write_build_number` écrit le numéro dans les DEUX fichiers, et
+# `sync_build_number` s'exécute avant la compilation — donc avant comme après
+# une régénération, project.yml porte la vérité. C'est ce qui rend l'appel à
+# xcodegen sûr ici, et c'est la seule raison pour laquelle il l'est.
+PROJECT_FRESHNESS_CHECKED=false
+
+# Racines globbées récursivement par project.yml (une par target).
+PROJECT_SOURCE_ROOTS=(Meeshy MeeshyTests MeeshyWidgets MeeshyNotificationExtension MeeshyShareExtension)
+
+# Fichiers `.swift` présents sur disque mais absents du pbxproj compilé.
+#
+# La comparaison se fait par NOM DE FICHIER : un homonyme ailleurs dans l'arbre
+# masquerait une dérive (faux NÉGATIF), jamais l'inverse. C'est le bon sens de
+# l'erreur — un faux positif ne coûterait qu'une régénération sans effet,
+# XcodeGen produisant un pbxproj déterministe.
+unreferenced_sources() {
+    local referenced disk root
+    referenced=$(mktemp) && disk=$(mktemp) || return 0
+
+    grep -oE '[A-Za-z0-9_+.-]+\.swift' "$PROJECT/project.pbxproj" 2>/dev/null \
+        | sort -u > "$referenced"
+    for root in "${PROJECT_SOURCE_ROOTS[@]}"; do
+        [ -d "$root" ] && find "$root" -name '*.swift' -type f
+    done | sort > "$disk"
+
+    # Un pbxproj illisible (ou vide) ferait passer TOUT le disque pour dérivé —
+    # on préfère se taire que déclencher une régénération sur une lecture ratée.
+    if [ -s "$referenced" ] && [ -s "$disk" ]; then
+        awk 'NR==FNR { ref[$0]=1; next }
+             { n = split($0, parts, "/"); if (!(parts[n] in ref)) print }' \
+            "$referenced" "$disk"
+    fi
+    rm -f "$referenced" "$disk"
+}
+
+# À appeler avant toute compilation. Idempotent : une seule vérification par
+# invocation du script, quel que soit le nombre de chemins qui l'appellent.
+ensure_project_is_current() {
+    [ "$PROJECT_FRESHNESS_CHECKED" = true ] && return 0
+    PROJECT_FRESHNESS_CHECKED=true
+    [ -f project.yml ] || return 0
+
+    local drifted
+    drifted=$(unreferenced_sources)
+    [ -z "$drifted" ] && return 0
+
+    warn "Fichiers absents de $PROJECT — le pbxproj committé est périmé :"
+    printf '  • %s\n' $drifted
+
+    if ! command -v xcodegen >/dev/null 2>&1; then
+        err "xcodegen introuvable : la compilation échouerait sur « cannot find … in scope »,"
+        err "et les fichiers de tests ci-dessus ne s'exécuteraient pas du tout."
+        err "Installer : brew install xcodegen"
+        return 1
+    fi
+
+    log "Régénération du projet depuis project.yml (comme la CI)..."
+    if ! xcodegen generate --quiet; then
+        err "xcodegen generate a échoué — projet laissé en l'état"
+        return 1
+    fi
+    ok "Projet régénéré — committer les références ajoutées à $PROJECT (fichiers neufs, pas du churn)"
+}
+
 do_device_deploy() {
     detect_physical_device
     do_device_deploy_only
@@ -346,6 +435,9 @@ do_device_deploy_only() {
     # meeshy.sh run can corrupt $DERIVED_DATA's shared module cache while we're
     # building for device, and the device install ships an inconsistent .app.
     wait_for_existing_build
+    # Un `.swift` neuf absent du pbxproj ferait échouer la compilation sur
+    # « cannot find … in scope » APRÈS plusieurs minutes de build.
+    ensure_project_is_current || exit 1
 
     # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
     # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
@@ -651,6 +743,9 @@ build_destination() {
 
 do_build() {
     wait_for_existing_build
+    # Un `.swift` neuf absent du pbxproj ferait échouer la compilation sur
+    # « cannot find … in scope » APRÈS plusieurs minutes de build.
+    ensure_project_is_current || exit 1
 
     if [ "$CLEAN" = true ]; then
         do_clean
@@ -1196,6 +1291,8 @@ verify_embedded_signatures() {
 
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
+    ensure_project_is_current || exit 1
+
     local archive_config="${CONFIGURATION:-Release}"
     [ "$archive_config" = "Debug" ] && archive_config="Release"
 
@@ -1275,6 +1372,8 @@ EOXML
 #   B1: CODE_SIGN_IDENTITY → "Apple Distribution"
 #   B2: aps-environment   → "production"
 do_distribute() {
+    ensure_project_is_current || exit 1
+
     local dist_config="Release"
     local dist_method="${EXPORT_METHOD:-app-store}"
 
@@ -1546,6 +1645,10 @@ xcpretty_or_cat() {
 }
 
 do_test() {
+    # Sans cela, une suite non référencée n'est pas compilée : elle sort du
+    # bundle sans un mot et le gate reste VERT sur des tests morts.
+    ensure_project_is_current || exit 1
+
     local destination="platform=iOS Simulator,id=$DEVICE_ID"
     local coverage_flag
     coverage_flag=$([ "$COVERAGE" = true ] && echo YES || echo NO)
