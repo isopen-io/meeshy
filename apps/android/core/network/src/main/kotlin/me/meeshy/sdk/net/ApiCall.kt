@@ -2,9 +2,13 @@ package me.meeshy.sdk.net
 
 import kotlinx.serialization.SerializationException
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.Pagination
 import retrofit2.HttpException
 import retrofit2.Response
 import java.io.IOException
+
+/** [apiCall]'s payload plus the envelope's `pagination` block, which [apiCall] discards. */
+data class PagedResult<T>(val data: T, val pagination: Pagination?)
 
 /**
  * Run an API call returning the standard [ApiResponse] envelope and fold it into a
@@ -16,6 +20,39 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
         val data = response.data
         if (response.success && data != null) {
             NetworkResult.Success(data)
+        } else {
+            NetworkResult.Failure(
+                ApiError(
+                    message = response.error ?: response.message ?: "Unknown error",
+                    code = response.code,
+                ),
+            )
+        }
+    } catch (e: HttpException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
+        )
+    } catch (e: IOException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+        )
+    } catch (e: SerializationException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Malformed response", code = "PARSE"),
+        )
+    }
+
+/**
+ * Variante de [apiCall] qui préserve `pagination` au lieu de la jeter — pour tout
+ * appelant qui doit savoir s'il reste des pages (`hasMore`/`nextCursor`) plutôt que
+ * de traiter chaque réponse comme un instantané complet.
+ */
+suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult<PagedResult<T>> =
+    try {
+        val response = block()
+        val data = response.data
+        if (response.success && data != null) {
+            NetworkResult.Success(PagedResult(data, response.pagination))
         } else {
             NetworkResult.Failure(
                 ApiError(
