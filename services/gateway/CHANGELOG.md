@@ -1,5 +1,76 @@
 # @meeshy/gateway
 
+## 1.26.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - conversation invite links now open the app that generated them (#3039)
+  - un corps approuvé par le validateur faisait tomber la route en 500 (#3038)
+  - toggleTranscription starts capture for a dead call after the permission prompt (#3037)
+  - profile share links now open the app that generated them (#3036)
+  - REV-2 — le compteur du protocole redevient autoritatif dans LocalBridgeProvider TS — run test
+  - retirer `checkPermissions`, la règle orpheline que personne n'appelait
+  - l'état de la conversation ne gouvernait rien sur le chemin d'envoi
+  - ressources de bundle réellement copiées — run test
+  - StoryCacheSource.revalidate() no longer deletes stories past page 1 (#3034)
+  - providers de substitution Swift — protocoles + implémentations locales [M-048]
+  - Self covariant interdit en argument par défaut — nom de type explicite [M-043/CI]
+  - miroir Swift ReadingModeOrchestrator — clamp, cascade d'assistance, garde e2ee [M-042]
+  - miroir Swift LentilleBridgeFormatter — pont en données, pluriel One/Other [M-041]
+  - miroir Swift LentilleSectionResolver — sections, tri, calendrier lecteur [M-040]
+  - miroir Swift ScrollTimePillLaw — fenêtre semi-ouverte 900 ms, machine pure [M-044]
+  - miroir Swift FocalFocusCurve — courbe .thread/.list, élection, bande 140±45 [M-043]
+  - @MainActor sur les ponts LentilleMetrics vers le SDK (AvatarContext.size, MeeshyFont) [M-045/CI]
+  - formatBridge sélectionne messagesOne/Other ; enums Lentille nonisolated [B1+CI]
+  - participantCount included participants who had already left
+  - cohérence orchestrateur↔capacités↔pont, isComplete jusqu'au rang [C-033]
+  - réserves REV-1 — garde R15 auto-testée, vecteurs frontière+DST, i18n lentille atteignable [C-034]
+  - listTokens en propriété calculée — Swift 6 refuse un static let [String: Any] partagé [M-045]
+  - LentilleMetrics + test de parité avec lentille-tokens.json [M-045]
+  - variables CSS --lentille-\* + test de parité bidirectionnel avec les tokens [M-049]
+  - drapeaux lentille_list et reading_modes — défaut OFF, ProcessInfo prime [M-046]
+  - bridge sur MeeshyConversation + repli dans renderFingerprint — E13 [C-029/C-030]
+  - le tri de la liste délègue à sortConversations — lastMessageAt, jamais lastMessage.createdAt [C-031]
+  - une clôture GLOBALE s'annonçait comme une suppression PERSONNELLE
+  - la recherche matche le préview résolu par le Prisme — E-audit [W9-001]
+  - E14 — l'appel i18n s'aligne sur le chemin réel conversationSearch.noConversationsFound [W9-003]
+  - déduplication par id à la sélection du cache infini — E10 [W9-002]
+  - la suppression d'un commentaire laissait l'appelant choisir son audience
+  - REST leave/kick never broadcast PARTICIPANT_LEFT to the call room
+  - le jumeau REST du like de commentaire diffusait aussi vers le postId de l'URL
+  - le client choisissait l'adresse de diffusion, et la synchro ne gardait aucune audience
+  - group calls formed a star, not a mesh — non-initiators never offered each other
+  - brancher ExplodeOverlay et WaooOverlay, jamais montés
+  - rate-limit call:transcription-active presence signal
+  - a second deferred hang-up/decline silently dropped the first one's server reconciliation
+  - reconnecting indicator stuck true + fullscreen pane blanked after a group-call peer left
+  - a single group-call decline was killing the ring for every other invitee
+  - la garde d'état terminal était inerte sur la branche `mshy_`
+  - une conversation FERMÉE restait pleinement inscriptible
+  - la déconnexion d'un invité anonyme ouvrait une fenêtre de perte sèche
+  - le rejeu hors ligne livrait le contenu des conversations quittées pendant l'absence
+  - la file de rejeu hors ligne n'avait de borne que du côté qui ne sert jamais
+  - une transition de présence coûtait le serveur entier pour savoir qui l'avait bloquée
+  - une traduction hors ligne était mise en file chez des lecteurs qui ne peuvent pas la lire (#3017)
+  - providers de substitution — le mock rejoue les vecteurs du vrai [M-047]
+  - corrections REV-1 — fondu sous-focus fidèle à la maquette, pont jamais vide, exports providers [C-032]
+  - sectionnement et tri — pinned/live/catégories/temporel, calendrier lecteur [C-017/C-018]
+  - orchestrateur, capacités, cascade d'assistance — les lois LWS-0 [C-011/C-012/C-013]
+  - buildBridgeData + formatBridge — le pont ✦ voyage en données, l'i18n compose [C-019/C-020]
+  - portage TS de l'accent conversationnel — miroir exact du Swift [C-021]
+  - protocoles providers figés — pont ✦, préférence de mode, appel live [C-028]
+  - focusCurve paramétrée .thread/.list + electFocusRow à hystérésis [C-014/C-015]
+  - scrollActivityLaw — visible au premier scroll, effacée à 900 ms exactement [C-016]
+  - types gelés des modes de lecture et du pont ✦ — §3.1-3.3, Zod d'abord [C-010]
+  - lentille-tokens.json — domicile des cotes §4.3, trois consommateurs de parité [C-026]
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.11.0
+
 ## 1.25.8
 
 ### Patch Changes
