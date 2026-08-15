@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **DataStore-Flow test timeout flake fixed** (slice `datastore-test-timeout-flake`,
+> PR #3058, merged `88997097c`) — this session's 5th ANDROID slice in a row, closing out the
+> streak before the streak≥5 bascule to IOS_DETTE. Escalated from "flag as systemic" (prior run's
+> wording, after the 4th occurrence) to an actual fix this run, rather than continuing to pay a
+> ~3-minute rerun per affected PR indefinitely.
+>
+> **Root cause, confirmed via git history, not guessed**: `ThemeStoreTest`, `CategorySnapshotStoreTest`,
+> `NotificationPreferencesStoreTest`, `InterfaceLanguageStoreTest` all assert on real
+> DataStore-Flow collection (`runBlocking` — real wall-clock time, not `runTest`'s virtual clock)
+> via `withTimeout(5_000)`. `git log -p` on `MediaDownloadPreferencesStoreTest`/
+> `PrivacyPreferencesStoreTest` (this session's other two flake occurrences) showed they were
+> authored from day one with `withTimeout(15_000)` for the IDENTICAL pattern and have never
+> flaked. The remaining 4 files were written with the tighter `5_000` and have (severally)
+> flaked. Bumped all 19 occurrences across the 4 files to `15_000`, matching the value this exact
+> codebase already validated as sufficient — not an arbitrary guess.
+>
+> **No production code touched, so the usual TDD red→green didn't apply in its normal shape**:
+> no new behavior, no assertion changed — only a safety-net timeout constant. Verification instead
+> consisted of (1) confirming zero remaining `withTimeout(5_000)` occurrences repo-wide (grep), (2)
+> re-running all 4 affected test classes locally post-bump (all green — consistent with the flake
+> being CI-load-specific, never reproduced locally), (3) reasoning that raising a timeout can only
+> give a genuinely-passing-but-slow assertion more time, never mask a truly broken one.
+>
+> **Result, observed live**: CI on this very PR ran the full `android.yml` + `ci.yml` matrix
+> clean on the FIRST attempt — no `Android (assemble + unit tests)` retry needed, unlike every one
+> of the 4 prior PRs this session that touched Android. Not proof the flake is gone forever (CI
+> load is variable), but a strong first signal the fix addresses the actual mechanism.
+>
+> **Verified**: `./apps/android/meeshy.sh check` green locally (970 tasks, `BUILD SUCCESSFUL`); CI
+> green on the first pass (16 checks pass/skip, PR #3058, zero reruns).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=datastore-test-timeout-flake`
+> — per the documented rule (`android-parity-ios-debt-agent-prompt.md`: "run ANDROID effectué →
+> lane=ANDROID, android_streak += 1"), the ANDROID run itself always writes `lane=ANDROID`; the
+> bascule to IOS_DETTE is a decision the NEXT run's Étape 0 makes upon reading `android_streak >= 5`,
+> not something this run writes preemptively. Matches the exact state directly observed at the start
+> of this session's prior bascule (`lane=ANDROID android_streak=5 last_run=conversation-lock-listview-scoping`
+> going into `ios-debt-bubblegrid-displayscale`) — an earlier `PROGRESS.md` entry
+> (`guest-join-web-deep-link`) phrased this differently (`lane=IOS_DETTE android_streak=0` written
+> immediately), which contradicts both the documented rule and the directly-observed precedent;
+> not corrected retroactively (out of scope for this slice), but not repeated here.
+
+
 > On 2026-08-16 **Delete-for-me shipped** (slice `conversation-delete-for-me`, PR #3057, merged
 > `ebabd7bde`) — three quarters of `feature-parity.md`'s "Leave / archive / delete-for-me /
 > delete-for-all conversation" line now wired (archive/leave already shipped). Chosen as the
