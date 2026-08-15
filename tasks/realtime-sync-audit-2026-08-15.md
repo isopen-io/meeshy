@@ -577,3 +577,157 @@ inchangées ; seul le coût de leur calcul l'est.
 - **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
   Toujours non tenté : aucune toolchain Swift sous Linux. À reprendre depuis un
   runner macOS.
+
+---
+
+# Cycle 25 (2026-08-15) — le client choisissait l'ADRESSE de la diffusion
+
+Passe suivante de la routine « amélioration continue temps réel ». Les cycles
+21–22 ont pris `message:translation` par ses deux bouts, le 23 l'AUDIENCE de
+`conversation:updated`, le 24 le COÛT de `user:status`. Ce cycle change encore de
+famille — **les réactions sociales** (`comment:reaction-*`, `post:reaction-*`) —
+et de question : non plus « qui reçoit / quelle forme / combien ça coûte », mais
+**d'où vient l'ADRESSE de la diffusion, et qui a le droit de la choisir**.
+
+**Conclusion : deux défauts réels trouvés, corrigés, testés.** Quatre sondes
+rendues vides sont listées en fin de section pour qu'un prochain cycle ne les
+ré-instruise pas.
+
+## Méthode — la sonde « autorité de l'entrée »
+
+Pour chaque `socket.on(...)` qui diffuse, deux questions DISTINCTES, là où les
+audits précédents n'en posaient qu'une :
+
+1. **Autorisation** — l'acteur a-t-il le droit d'agir sur la ressource nommée ?
+   (balayée au cycle 24 par le contrat d'ACK, verte)
+2. **Adresse** (neuve) — la ressource vers laquelle l'événement PART est-elle
+   dérivée du serveur, ou reprise du payload client ?
+
+La seconde est la bonne question parce que la première peut être verte pendant
+que la seconde est rouge : c'est exactement ce qui s'est produit. Un handler qui
+vérifie *« peux-tu réagir à CE commentaire ? »* puis diffuse vers *« le post que
+tu m'as nommé »* a résolu deux entités différentes en croyant n'en résoudre
+qu'une.
+
+Matrice des handlers × primitive d'autorisation, puis relecture de chaque
+diffusion :
+
+| Handler | Autorisation | Adresse de diffusion |
+|---|---|---|
+| `ReactionHandler` | `resolveParticipantFromMessage` | `message.conversationId` (serveur) ✅ |
+| `AttachmentReactionHandler` | `resolveParticipantFromMessage` + liaison PJ↔message | `service.resolveConversationId` (serveur) ✅ |
+| `PostReactionHandler` add/remove | `resolveInteractionTarget` | `targetPostId` (serveur) ✅ |
+| `PostReactionHandler` sync | **rien** ❌ | — |
+| `CommentReactionHandler` add/remove | `loadCommentPostAcl` ✅ | **`validated.postId` (client)** ❌ |
+| `CommentReactionHandler` sync | **rien** ❌ | — |
+
+## D1 — l'adresse venait du client alors que la vérité était déjà en main
+
+`CommentReactionHandler.handleAddReaction` / `handleRemoveReaction`
+
+`loadCommentPostAcl(prisma, commentId)` rend `{ postId, post }` — le post du
+COMMENTAIRE — et le handler l'appelle déjà, pour son verdict d'audience. Il
+jetait le `postId` et gardait celui du payload pour les trois usages qui
+comptent : la room (`io.to(ROOMS.post(validated.postId))`), le `postId` du
+payload (`createUpdateEvent(..., validated.postId)`), et la notification.
+
+**(a) Volet fonctionnel — les reposts.** Un repost simple n'a pas de vie sociale
+propre : `handleJoinPost` redirige ses lecteurs vers la room de la RACINE
+(`resolveConsumptionTarget`), et `routes/posts/comments.ts` écrit ses
+commentaires sur cette même racine (`targetPostId`). Le client, lui, envoie l'id
+de la carte AFFICHÉE — le repost (`StoryViewer.tsx` → `currentStoryId`,
+`SocialSocketManager.reactToComment(postId:)`). Séquence :
+
+```
+Le fil du repost R (racine P) est ouvert chez Alice et Bob.
+  join    → tous deux entrent dans post:P          (redirection)
+  cache   → commentaires cachés sous la clé R      (id de la carte)
+Alice réagit au commentaire C (C.postId = P).
+  client  → comment:reaction-add { postId: R }
+  gateway → ACL sur C : OK
+          → io.to(post:R).emit(...)                ← room VIDE
+  Bob     → ne reçoit rien, jamais
+  Alice   → ACK success + UI optimiste : tout va bien de son côté
+```
+
+Silencieux des deux côtés : aucune erreur, aucun log, un ACK positif. Le retrait
+est le pire sens des deux — les lecteurs gardent une réaction supprimée.
+
+**(b) Volet intégrité.** `postId` est la CLÉ de cache client
+(`patchCommentInPostCaches` web, `FeedPersistenceActor` iOS). Un `postId`
+arbitraire — le payload n'était comparé à rien — écrivait l'agrégation d'un
+commentaire dans le cache d'un post étranger, et divulguait au passage son
+existence et son décompte à l'audience de ce post.
+
+**Pourquoi ça a survécu.** La règle est implémentée DEUX fois et l'autre copie
+est juste : `PostReactionHandler` porte `targetPostId` dans sa room ET son
+payload depuis la tâche 9 du chantier reposts. Les deux rendent le même résultat
+en nominal — les deux ids coïncident dès que le post n'est pas un repost — et ne
+diffèrent que sur l'entrée que personne ne testait : celle où ils DIVERGENT.
+Récidive exacte de la forme du cycle 24 (deux implémentations d'accord entre
+elles, l'écart sur une propriété qu'aucune assertion ne regardait).
+
+Pire : un **doublon de test figeait le défaut**. Le mock de
+`src/socketio/handlers/__tests__/` déclarait `loadCommentPostAcl → postId:
+'post-1'` pendant que l'assertion attendait `post:${POST_ID}` — soit exactement
+le monde impossible où le commentaire vit sur un post et son événement part vers
+un autre. Le mock a été aligné sur le monde nominal ; la divergence est couverte,
+avec le vrai module d'ACL, par `src/__tests__/unit/socketio/`.
+
+**Correctif.** `const postId = thread.postId` sur les deux chemins, utilisé pour
+la room, le payload et la notification. Zéro requête ajoutée.
+
+## D2 — la synchronisation des réactions n'avait aucune garde d'audience
+
+`CommentReactionHandler.handleRequestSync`, `PostReactionHandler.handleRequestSync`
+
+Les deux appelaient leur service juste après l'authentification et le
+rate-limit. Aucune question d'audience. **La garde de la room ne bornait donc
+rien** : au lieu de s'abonner aux événements, il suffisait d'en demander l'état.
+
+Le versant commentaire est le plus net : `CommentReactionSync` porte les
+`userIds` de chaque réacteur (`CommentReactionService.getCommentReactions`
+agrège `userIds` par emoji). Un `commentId` suffisait à obtenir le **roster
+nominatif** d'un commentaire porté par un post `PRIVATE` hors audience. Le
+versant post ne rend que des décomptes (`getPostReactions` n'agrège pas
+d'identités) — divulgation plus faible, même trou.
+
+**Correctif.** Audience de **CONSOMMATION** (`canUserConsumePost` — amis ∪
+contacts DM), la même que la lecture du fil et que `handleJoinPost`, jamais
+celle d'INTERACTION : un contact DM non-ami lit légitimement le fil, le gater
+sur les amis stricts en ferait un 404 que la lecture REST n'impose pas. Refus
+indistinct (`Comment not found` / `Post not found`), pas de 403-oracle. Le
+versant post hérite de la redirection des reposts simples — sans elle il rendait
+un état qui n'est pas celui que la room diffuse ensuite.
+
+## Gates
+
+- [x] RED discriminants vus rouges avant correctif : 6 pour D1 (dont
+      `post:507f…90ff` reçu là où `post:507f…9022` était attendu), 4 pour D2
+- [x] 4 suites de réactions : 140 verts
+- [x] Suite gateway complète : **719 suites / 17608 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal
+
+## Surfaces vérifiées correctes pendant ce cycle (ne pas re-vérifier)
+
+- **Cycle de vie des rooms de conversation.** Les quatre chemins de sortie
+  (`leave.ts`, `ban.ts`, `participants.ts` DELETE, `delete-for-me.ts`) font
+  quitter `ROOMS.conversation` aux sockets vivants du partant ; les dix chemins
+  d'entrée passent par `joinUserToConversationRoom`. Symétrie complète.
+- **Autorisation des handlers conversationnels.** `ReactionHandler`,
+  `AttachmentReactionHandler`, `LocationHandler`, `MessageHandler`,
+  `StatusHandler` passent tous par `resolveParticipant{,FromMessage}`, qui
+  re-vérifie `isActive` en base — un membre retiré/banni depuis son connect est
+  rejeté. La liaison PJ↔message d'`AttachmentReactionHandler` ferme déjà l'IDOR
+  jumeau du D1 sur son propre périmètre.
+- **`handleJoinPost` / `handleLeavePost`.** Redirection `resolveConsumptionTarget`
+  symétrique à l'entrée et à la sortie, exclusion éphémère comprise.
+- **Adresse de diffusion des handlers de message.** Toutes dérivées du serveur
+  (`message.conversationId`), aucune reprise de payload client.
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Toujours non tenté : aucune toolchain Swift sous Linux. À reprendre depuis un
+  runner macOS.
