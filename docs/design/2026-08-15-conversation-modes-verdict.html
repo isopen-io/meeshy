@@ -1,0 +1,728 @@
+<title>Le Verdict des Modes</title>
+<style>
+  :root {
+    --paper: #F4F5F8; --surface: #FFFFFF; --ink: #1B2233; --muted: #5C6478;
+    --line: #DBDFE8; --soft: #EBEDF3; --ghost: #C9CEDA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+      --line: #2B3140; --soft: #202634; --ghost: #3A4254;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+    --line: #2B3140; --soft: #202634; --ghost: #3A4254;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.55; margin: 0; padding: 0 20px; }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1, h2, h3 { font-family: "Avenir Next", Futura, "Trebuchet MS", "Segoe UI", sans-serif; text-wrap: balance; margin: 0; }
+  .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0; }
+
+  .hero { padding: 60px 0 8px; }
+  .hero h1 { font-size: clamp(36px, 6vw, 54px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 4px; }
+  .hero .lede { max-width: 64ch; font-size: 17px; color: var(--muted); margin: 14px 0 0; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+
+  section { padding: 56px 0 8px; border-top: 1px solid var(--line); margin-top: 52px; }
+  section:first-of-type { border-top: none; margin-top: 12px; }
+  section > h2 { font-size: clamp(24px, 3.4vw, 32px); margin: 8px 0 6px; }
+  section > .intro { font-size: 15.5px; color: var(--muted); max-width: 66ch; margin: 6px 0 0; }
+  section > .intro b { color: var(--ink); }
+
+  .verdict-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-top: 26px; }
+  .vcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+  .vcard.keep { border-top: 3px solid var(--kc); }
+  .vcard h3 { font-size: 18px; display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .vcard h3 i { width: 11px; height: 11px; border-radius: 50%; background: var(--kc); flex: none; }
+  .vcard .tag { font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--kc); border: 1px solid var(--kc); border-radius: 7px; padding: 2px 7px; margin-left: auto; }
+  .vcard p { font-size: 14px; margin: 8px 0 0; }
+  .vcard p.role { color: var(--muted); font-size: 13px; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-top: 26px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: none; font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  td.m { white-space: nowrap; font-weight: 600; }
+  td.m i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--dot); }
+  td .into { color: var(--muted); }
+
+  /* ---------- demo phone ---------- */
+  .demo-zone { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 42px; align-items: start; margin-top: 30px; }
+  @media (max-width: 860px) { .demo-zone { grid-template-columns: 1fr; } }
+  .phone { border: 2px solid var(--line); border-radius: 36px; background: var(--surface); overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.10); }
+  .lens { display: flex; gap: 6px; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+  .lens button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 999px; padding: 8px 6px; font-size: 12.5px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .lens button i { width: 8px; height: 8px; border-radius: 50%; background: var(--tc); flex: none; }
+  .lens button[aria-selected="true"] { border-color: var(--tc); background: var(--soft); }
+  .lens button:focus-visible { outline: 2px solid var(--tc); outline-offset: 2px; }
+  .screen { height: 660px; overflow-y: auto; overscroll-behavior: contain; position: relative; background: var(--surface); }
+  .demo-note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+
+  /* focal */
+  .daysep { display: flex; align-items: center; gap: 12px; margin: 26px 16px 14px; }
+  .daysep::before, .daysep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .daysep span { font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .msg { padding: 5px 18px; will-change: transform, opacity; }
+  .msg .who { display: flex; align-items: center; gap: 8px; margin: 10px 0 3px; }
+  .msg .who i { width: 20px; height: 20px; border-radius: 50%; background: var(--ac); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .msg .who b { font-size: 12.5px; }
+  .msg .who span { font-size: 10px; color: var(--muted); }
+  .msg .txt { font-size: 14.5px; margin-left: 28px; }
+  .msg .quote { margin: 2px 0 4px 28px; padding: 3px 10px; border-left: 2.5px solid var(--ac); font-size: 11.5px; color: var(--muted); background: var(--soft); border-radius: 0 8px 8px 0; max-width: 85%; }
+  .msg .rx { margin-left: 28px; margin-top: 3px; display: inline-block; font-size: 11px; background: var(--soft); border-radius: 999px; padding: 2px 8px; color: var(--muted); }
+  .prism { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 8px; cursor: pointer; user-select: none; }
+  .prism:hover { border-color: var(--muted); }
+  .msg.mine .txt { font-weight: 500; }
+  .pont { margin: 18px 16px 6px; border: 1.5px dashed #3E93CF; border-radius: 14px; padding: 10px 14px; font-size: 12.5px; background: var(--soft); }
+  .pont b { color: #3E93CF; }
+  .media { margin: 6px 0 2px 28px; }
+  .ph { border-radius: 12px; position: relative; overflow: hidden; }
+  .ph span { position: absolute; left: 10px; bottom: 8px; font-size: 10px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.55); }
+  .ph.single { width: 82%; aspect-ratio: 4/3; }
+  .g1 { background: linear-gradient(140deg, #7FB069 0%, #3E6259 55%, #27404E 100%); }
+  .g2 { background: linear-gradient(140deg, #E9C46A 0%, #C77B3F 60%, #7A4A2B 100%); }
+  .g3 { background: linear-gradient(140deg, #6AB8D8 0%, #3E7C9E 55%, #274B63 100%); }
+  .g4 { background: linear-gradient(140deg, #B08BC9 0%, #6D5A9E 60%, #3D3663 100%); }
+  .g5 { background: linear-gradient(150deg, #9BC1BC 0%, #5C8D89 55%, #2F5D62 100%); }
+  .g6 { background: linear-gradient(150deg, #E8A0BF 0%, #B4667E 60%, #6E3A50 100%); }
+  .carousel { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .carousel .ph { min-width: 72%; aspect-ratio: 4/3; scroll-snap-align: center; }
+  .voice { display: flex; align-items: center; gap: 9px; background: var(--soft); border-radius: 14px; padding: 9px 13px; max-width: 88%; }
+  .voice .play { width: 26px; height: 26px; border-radius: 50%; background: var(--ac); flex: none; position: relative; }
+  .voice .play::after { content: ""; position: absolute; left: 10px; top: 7.5px; border-left: 8px solid #fff; border-top: 5.5px solid transparent; border-bottom: 5.5px solid transparent; }
+  .voice .bars { display: flex; align-items: center; gap: 2.5px; flex: 1; }
+  .voice .bars b { width: 3px; border-radius: 2px; background: var(--ac); opacity: 0.75; }
+  .voice small { font-size: 10px; color: var(--muted); }
+  .trans { font-size: 12px; font-style: italic; color: var(--muted); margin: 4px 0 0 28px; max-width: 85%; }
+  .filecard, .linkcard { display: flex; align-items: center; gap: 11px; border: 1px solid var(--line); border-radius: 13px; padding: 10px 13px; max-width: 88%; background: var(--surface); }
+  .filecard .ic { width: 34px; height: 40px; border-radius: 7px; background: #E05252; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; flex: none; }
+  .linkcard .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--soft); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+  .filecard b, .linkcard b { font-size: 12.5px; display: block; }
+  .filecard span, .linkcard span { font-size: 10.5px; color: var(--muted); }
+
+  /* focal v3 : perspective continue au défilement */
+  .msg.cur { background: var(--soft); border-radius: 16px; margin: 4px 8px; padding: 8px 12px; }
+  .msg.cur .txt { font-size: 16.5px; line-height: 1.45; }
+  .agent { margin: 8px 0 4px 28px; border: 1.5px dashed #E05252; border-radius: 14px; padding: 7px 12px; font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); max-width: 88%; }
+  .agent .spark { color: #E05252; font-weight: 700; }
+  .agent button { border: none; background: #E05252; color: #fff; border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .densbtn { flex: none !important; width: 42px; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 999px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .densbtn[aria-pressed="true"] { border-color: #C9962B; color: #C9962B; background: var(--soft); }
+  .screen.script .msg { transform: none !important; opacity: 1 !important; }
+  .screen.script .msg.cur { background: none; margin: 0; padding: 5px 18px; }
+  .screen.script .msg.cur .txt { font-size: 14.5px; }
+  .screen.script .daysep, .screen.script .pont { transform: none !important; opacity: 1 !important; }
+
+  /* zoom sémantique entre lentilles */
+  @media (prefers-reduced-motion: no-preference) {
+    .screen.zoomin { animation: zi 0.3s ease; }
+    .screen.zoomout { animation: zo 0.3s ease; }
+  }
+  @keyframes zi { from { transform: scale(0.93); opacity: 0.35; } }
+  @keyframes zo { from { transform: scale(1.07); opacity: 0.35; } }
+
+  /* bulle in situ de la rivière */
+  .rivsvgwrap { position: relative; }
+  .nbubble { position: absolute; width: 232px; background: var(--surface); border: 1.5px solid var(--bc); border-radius: 14px; padding: 10px 13px; box-shadow: 0 12px 30px rgba(0,0,0,0.18); z-index: 6; }
+  @media (prefers-reduced-motion: no-preference) { .nbubble { animation: pop 0.2s ease; } }
+  @keyframes pop { from { transform: scale(0.35); opacity: 0; } }
+  .nbubble .nb-who { font-size: 11px; font-weight: 700; color: var(--bc); }
+  .nbubble .nb-x { font-size: 12.5px; margin: 4px 0 2px; }
+  .nbubble small { font-size: 10px; color: var(--muted); font-weight: 400; }
+  .nbubble button { border: 1.5px solid var(--bc); color: var(--bc); background: none; border-radius: 999px; padding: 4px 11px; font-size: 11.5px; cursor: pointer; font-family: inherit; margin-top: 5px; }
+  .rivhint { font-size: 11px; color: var(--muted); padding: 10px 18px 16px; text-align: center; }
+
+  /* résumé */
+  .rv { padding: 16px; }
+  .statecard { border: 2px solid #3E93CF; border-radius: 18px; background: var(--soft); padding: 16px 18px; }
+  .statecard h4 { font-size: 14px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+  .statecard .upd { font-size: 10px; color: var(--muted); margin-bottom: 10px; }
+  .strow { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; font-size: 13px; }
+  .strow .k { flex: none; width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-top: 1px; }
+  .strow .k.done { background: #3E93CF; color: #fff; }
+  .strow .k.ask { border: 1.8px solid #3E93CF; color: #3E93CF; border-radius: 50%; }
+  .strow .k.next { color: #3E93CF; }
+  .rampe { margin-top: 18px; }
+  .rampe h5, .rv h5 { font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 18px 0 10px; }
+  .faces { display: flex; gap: 14px; align-items: flex-start; overflow-x: auto; padding: 4px 2px 6px; }
+  .face { border: none; background: none; font-family: inherit; cursor: pointer; text-align: center; flex: none; padding: 0; color: var(--ink); }
+  .face .av { width: 44px; height: 44px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto; position: relative; }
+  .face.hot .av { box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 5px #3E93CF; }
+  .face .badge { position: absolute; top: -4px; right: -6px; background: #3E93CF; color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; min-width: 17px; height: 17px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+  .face figcaption, .face .nm { font-size: 10px; margin-top: 5px; color: var(--muted); }
+  .face.hot .nm { color: var(--ink); font-weight: 700; }
+  .sujets { display: grid; gap: 8px; }
+  .sujet { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 9px 13px; font-size: 12.5px; background: var(--surface); }
+  .sujet i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .sujet b { flex: none; }
+  .sujet span { color: var(--muted); font-size: 11.5px; }
+  .sujet .n { margin-left: auto; font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; color: var(--muted); flex: none; }
+  details.ep { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-bottom: 8px; }
+  details.ep summary { cursor: pointer; padding: 10px 14px; font-size: 12.5px; font-weight: 600; list-style: none; display: flex; gap: 8px; align-items: center; }
+  details.ep summary::before { content: "▸"; color: var(--muted); transition: transform 0.15s; }
+  details.ep[open] summary::before { transform: rotate(90deg); }
+  details.ep summary span { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  details.ep .epbody { border-top: 1px solid var(--line); padding: 4px 0 10px; }
+  details.ep .epbody .msg { padding: 4px 14px; }
+  @media (prefers-reduced-motion: reduce) { details.ep summary::before { transition: none; } }
+
+  /* person panel */
+  .pp { position: absolute; inset: 0; background: var(--surface); z-index: 5; padding: 18px 16px; overflow-y: auto; }
+  .pp .close { position: absolute; top: 14px; right: 14px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 50%; width: 30px; height: 30px; font-size: 14px; cursor: pointer; }
+  .pp h4 { font-size: 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+  .pp h4 i { width: 30px; height: 30px; border-radius: 50%; color: #fff; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .pp .sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .pp .pmsg { background: var(--soft); border-radius: 13px; padding: 10px 14px; margin-bottom: 9px; }
+  .pp .pmsg p { font-size: 13px; margin: 0; }
+  .pp .pmsg span { font-size: 10px; color: var(--muted); }
+  .pp .composer { display: flex; gap: 8px; margin-top: 14px; }
+  .pp .composer input { flex: 1; border: 1.5px solid #3E93CF; background: var(--surface); color: var(--ink); border-radius: 999px; padding: 9px 15px; font-size: 13px; font-family: inherit; }
+  .pp .composer button { border: none; background: #3E93CF; color: #fff; border-radius: 999px; padding: 0 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: var(--paper); font-size: 12px; border-radius: 999px; padding: 8px 16px; z-index: 9; }
+
+  /* rivière */
+  .riv { padding: 14px 10px 0; }
+  .riv .head { font-size: 11.5px; color: var(--muted); text-align: center; margin-bottom: 8px; }
+  .follow { display: flex; gap: 6px; overflow-x: auto; padding: 2px 6px 10px; }
+  .follow button { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-family: inherit; cursor: pointer; }
+  .follow button i { width: 8px; height: 8px; border-radius: 50%; background: var(--fc); }
+  .follow button[aria-pressed="true"] { border-color: var(--fc); background: var(--soft); font-weight: 700; }
+  .rivsvgwrap { padding: 0 4px; }
+  .readout { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 12px 16px 16px; }
+  .readout .from { font-size: 11px; font-weight: 700; }
+  .readout .body { font-size: 13px; margin: 3px 0 8px; }
+  .readout .hint { font-size: 11px; color: var(--muted); }
+  .readout button { border: 1.5px solid #5A6FD6; color: #5A6FD6; background: none; border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; }
+
+  .checklist { display: grid; gap: 12px; margin-top: 24px; }
+  .checklist > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 17px; font-size: 14px; max-width: 76ch; }
+  .checklist b { color: var(--qc); }
+  footer.colophon { padding: 28px 0 54px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); margin-top: 56px; }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Meeshy · Vue conversation · Volume 3 — figer les modes</p>
+  <h1>Le Verdict des Modes</h1>
+  <p class="lede">Non — les dix modes ne survivent pas. Dix modes, c’est neuf occasions de se demander où l’on est. Le verdict&nbsp;: <strong>deux modes de lecture, une couche live, un pari en sursis</strong>. Les six autres ne meurent pas&nbsp;: ils rétrogradent en <strong>composants</strong> au service des modes retenus. Et pour juger sur pièce, ci-dessous&nbsp;: <strong>100 vrais messages</strong> — photos, carrousel, vocaux traduits, PDF — rendus dans chaque lentille retenue, interactifs.</p>
+</header>
+
+<!-- ═══════════ VERDICT ═══════════ -->
+<section id="verdict">
+  <p class="eyebrow">La décision</p>
+  <h2>Garder 3, absorber 6, mettre 1 en sursis</h2>
+  <p class="intro">Le critère est brutal mais sain&nbsp;: un mode ne mérite d’exister que s’il répond à un <b>travail que l’utilisateur reconnaît</b> (« je lis », « je rattrape », « on s’appelle ») et qu’aucun autre mode ne fait. Tout ce qui est une <i>variante d’affichage</i> ou une <i>structure de données</i> devient un composant.</p>
+
+  <div class="verdict-grid">
+    <div class="vcard keep" style="--kc:#E05252">
+      <h3><i></i>Focal <span class="tag">Garder</span></h3>
+      <p class="role">Le travail : « je lis, je vis la conversation ».</p>
+      <p>Mode par défaut, successeur direct du fil. Il absorbe <b>Script</b> (un simple réglage de densité « lecture ») et le geste des <b>Cartes</b> (tout média s’ouvre en visionneuse plein écran, tap pour avancer).</p>
+    </div>
+    <div class="vcard keep" style="--kc:#3E93CF">
+      <h3><i></i>Résumé Vivant <span class="tag">Garder</span></h3>
+      <p class="role">Le travail : « je rattrape, je trie, je trouve quelqu’un ».</p>
+      <p>Il absorbe <b>Perles</b> (ses épisodes repliés — c’est pour ça qu’elles apparaissaient encore dans l’axe de zoom&nbsp;: la structure survit, le mode non), <b>Îlots</b> (ses sections par sujet) et porte la <b>Rampe de visages</b>.</p>
+    </div>
+    <div class="vcard keep" style="--kc:#8A63D2">
+      <h3><i></i>Scène <span class="tag">Garder · couche</span></h3>
+      <p class="role">Le travail : « on se parle en direct ».</p>
+      <p>Couche live au-dessus de tout mode (appel, vidéo, partage, PiP). Elle absorbe la <b>Table Ronde</b>&nbsp;: le cercle devient sa disposition audio (et l’audio spatial en AirPods).</p>
+    </div>
+    <div class="vcard keep" style="--kc:#5A6FD6">
+      <h3><i></i>Rivière <span class="tag">Sursis</span></h3>
+      <p class="role">Le travail : « comprendre qui parle à qui, à 20+ ».</p>
+      <p>Seule vraie inconnue&nbsp;: sa promesse est unique, mais son coût d’apprentissage est réel. Elle est <b>dans le prototype ci-dessous, à 45 nœuds réels</b> — c’est lui qui tranche. Si elle échoue au test, la Rampe reprend son travail et on la coupe sans regret.</p>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Mode du brainstorm</th><th>Devient</th><th>Pourquoi</th></tr></thead>
+      <tbody>
+        <tr><td class="m" style="--dot:#C9962B"><i></i>Le Script</td><td>Réglage « densité lecture » de Focal</td><td class="into">Même travail que Focal (lire) — c’est une typographie, pas un mode.</td></tr>
+        <tr><td class="m" style="--dot:#3F9E63"><i></i>Cartes-Moments</td><td>Visionneuse média + stories, partout</td><td class="into">Son génie est le geste plein écran — il sert dans tous les modes, pas à côté d’eux.</td></tr>
+        <tr><td class="m" style="--dot:#BC55A0"><i></i>Perles de Temps</td><td>Structure d’épisodes (Résumé + scrubber de Focal)</td><td class="into">Un découpage du temps, pas une destination. Les épisodes du Résumé <i>sont</i> les perles.</td></tr>
+        <tr><td class="m" style="--dot:#2E9E96"><i></i>Îlots de Sujets</td><td>Sections « par sujet » du Résumé</td><td class="into">Le clustering est précieux, la carte spatiale est un détour — une liste triée fait le même travail.</td></tr>
+        <tr><td class="m" style="--dot:#E07A33"><i></i>Table Ronde</td><td>Disposition audio de la Scène</td><td class="into">Redondante avec la Scène pour le live, avec Focal pour l’écrit. Le cercle survit en audio spatial.</td></tr>
+        <tr><td class="m" style="--dot:#D95F82"><i></i>Planche BD</td><td>Contenu généré (album, rétrospective) par l’agent</td><td class="into">Merveilleuse en souvenir à relire, pas en interface quotidienne. L’agent la <i>fabrique</i>, on ne l’habite pas.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="intro" style="margin-top:20px;">Conséquence heureuse&nbsp;: le zoom sémantique tombe à <b>deux crans</b> — pincer = Résumé, écarter = Focal. La Rivière, si elle survit, reste la vue latérale de Focal pour les grands groupes. La Lentille n’affiche plus que 2 à 3 choix + l’appel&nbsp;: c’est apprenable par cœur en une journée.</p>
+</section>
+
+<!-- ═══════════ PROTOTYPE ═══════════ -->
+<section id="proto">
+  <p class="eyebrow">Le juge de paix</p>
+  <h2>100 messages réels, trois lentilles</h2>
+  <p class="intro">« Week-end Ardèche 🛶 » — 9 personnes, 5 jours, 100 messages&nbsp;: un lien, un carrousel de photos, un PDF, deux vocaux (dont un en espagnol, traduit), des messages en portugais passés au Prisme, des réponses croisées, deux questions qui vous attendent. <b>Les mêmes données dans chaque lentille</b> — faites défiler, cliquez, jugez.</p>
+
+  <div class="demo-zone">
+    <div>
+      <div class="phone">
+        <div class="lens" role="tablist" aria-label="Choisir la lentille">
+          <button role="tab" id="tab-focal" aria-selected="true" style="--tc:#E05252" onclick="showTab('focal')"><i></i>Focal</button>
+          <button role="tab" id="tab-resume" aria-selected="false" style="--tc:#3E93CF" onclick="showTab('resume')"><i></i>Résumé</button>
+          <button role="tab" id="tab-riviere" aria-selected="false" style="--tc:#5A6FD6" onclick="showTab('riviere')"><i></i>Rivière</button>
+          <button id="densbtn" class="densbtn" aria-pressed="false" title="Densité de lecture — basculer Focal ⇄ Script (dans l’app : pincement horizontal ou appui sur la Lentille)">Aa</button>
+        </div>
+        <div class="screen" id="screen"></div>
+      </div>
+      <p class="demo-note"><b>Focal</b>&nbsp;: faites défiler — la mise au point suit le doigt, les messages <b>grandissent en approchant du présent</b> et rapetissent en s’éloignant&nbsp;; le message net porte la carte. Le bouton <b>Aa</b> bascule vers la liste classique (config « Script » — dans l’app&nbsp;: pincement horizontal ou appui sur la Lentille). · <b>Rivière</b>&nbsp;: aucun texte visible — touchez un nœud, le message s’ouvre <b>sur place</b> en bulle. · <b>Résumé</b>&nbsp;: touchez un visage badgé, répondez&nbsp;: la réponse <b>retombe dans le vrai fil</b>. · Changer de lentille joue le zoom sémantique (fondu d’échelle). · Badge 🌐 = traduit, tap = V.O. · La Scène (couche d’appel) se juge en vocal, voir vol. 2.</p>
+    </div>
+    <div class="notes-side">
+      <h3 style="font-size:19px; margin-bottom:10px;">Ce que chaque lentille doit prouver ici</h3>
+      <div class="checklist" style="margin-top:6px;">
+        <div style="--qc:#E05252"><b>Focal.</b> Le défilement <i>est</i> la mise au point&nbsp;: en remontant, chaque message ancien reprend la pleine taille à son tour, puis rapetisse — on redécouvre le passé sans jamais perdre l’échelle du présent. À juger&nbsp;: l’effet aide-t-il la lecture à 100 messages, et le pont ✦ suffit-il pour sauter 17 non-lus ? La sortie de secours est là&nbsp;: <b>Aa</b> = config Script (liste classique), un geste, réversible.</div>
+        <div style="--qc:#3E93CF"><b>Résumé Vivant.</b> Les 4 lignes d’état doivent être <i>crues</i> — donc vérifiables (les épisodes s’ouvrent sur les vrais messages). La rampe doit permettre de répondre à Sarah en moins de 5 secondes, sans jamais voir les 98 autres messages.</div>
+        <div style="--qc:#5A6FD6"><b>Rivière (le procès).</b> La rivière reste muette — que des nœuds, zéro texte. Le message ne se lit qu’en touchant son nœud&nbsp;: il s’ouvre <b>sur place</b>, en bulle ancrée. À juger sur 53 nœuds&nbsp;: voit-on les deux questions qui vous visent ? « Suivre Mia » raconte-t-il ce que Focal ne dit pas ? Deux non — on coupe, la Rampe hérite.</div>
+      </div>
+      <h3 style="font-size:19px; margin:26px 0 10px;">Après ce prototype</h3>
+      <p style="font-size:14.5px; max-width:58ch; margin:0;">Si le verdict tient&nbsp;: on fige <b>Focal + Résumé Vivant (+ Scène)</b>, on branche les vraies données (mêmes structures&nbsp;: <code>messages</code>, <code>MessageTranslation[]</code>, épisodes/sujets par l’observer), et la Rivière ne rejoint la Lentille que si elle gagne son procès ici. Prochain volume&nbsp;: la spec SwiftUI de Focal (le composant liste + effet de focale + visionneuse Cartes).</p>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="wrap">Meeshy · « Le Verdict des Modes » · 15 août 2026 — volume 3. Vol. 1&nbsp;: les dix propositions · Vol. 2&nbsp;: cas d’usage &amp; orchestrateur.</div>
+</footer>
+</div>
+
+<script>
+const A = {
+  toi:   { n: "Toi",        c: "#3E93CF" },
+  karim: { n: "Karim",      c: "#E28A3C" },
+  mia:   { n: "Mia",        c: "#BC55A0" },
+  nadia: { n: "Nadia",      c: "#2E9E96" },
+  louis: { n: "Louis",      c: "#C9962B" },
+  sarah: { n: "Sarah",      c: "#E05252" },
+  samir: { n: "Samir",      c: "#3F9E63" },
+  rosa:  { n: "Tante Rosa", c: "#8A63D2" },
+  papi:  { n: "Papi",       c: "#5A6FD6" }
+};
+const EPS = [
+  { d: "Lundi",    t: "Choisir le gîte" },
+  { d: "Mardi",    t: "Le budget" },
+  { d: "Mercredi", t: "Canoë ou rando ?" },
+  { d: "Jeudi",    t: "Courses & repas" },
+  { d: "Vendredi", t: "Départ demain !" }
+];
+// fields: a author, e episode, x text, r replyTo(id), lg lang, vo original, m media, men mention-toi, rx reactions
+const M = [
+ {i:1,a:"karim",e:0,x:"Bon, on est tous chauds pour le week-end du 12 ?"},
+ {i:2,a:"sarah",e:0,x:"Ouiii 🙌"},
+ {i:3,a:"samir",e:0,x:"Chaud !"},
+ {i:4,a:"mia",e:0,lg:"🇪🇸",x:"Réservez vite, ça se remplit !",vo:"¡Reservad ya, que se llena!"},
+ {i:5,a:"karim",e:0,x:"Regardez celui-là 👇",m:"link"},
+ {i:6,a:"louis",e:0,x:"Pas mal ! Il y a une piscine ?"},
+ {i:7,a:"karim",e:0,r:6,x:"Oui, et le loueur de canoës est à 10 min"},
+ {i:8,a:"nadia",e:0,x:"Le prix ?"},
+ {i:9,a:"karim",e:0,r:8,x:"620 € les deux nuits"},
+ {i:10,a:"louis",e:0,x:"J’ai trouvé celui-ci aussi, la terrasse est superbe",m:"carousel"},
+ {i:11,a:"sarah",e:0,r:10,x:"La terrasse 😍"},
+ {i:12,a:"nadia",e:0,r:10,x:"Il fait 680 €, un poil plus cher"},
+ {i:13,a:"papi",e:0,x:"Moi je suis, tant qu’il y a un bon lit"},
+ {i:14,a:"rosa",e:0,lg:"🇵🇹",x:"J’apporte les desserts !",vo:"Eu levo as sobremesas!"},
+ {i:15,a:"sarah",e:0,x:"On vote ? Gorges = 👍 · Terrasse = ❤️"},
+ {i:16,a:"karim",e:0,x:"5 × 👍 contre 3 × ❤️ — les Gorges gagnent !",rx:"👍 5"},
+ {i:17,a:"nadia",e:0,x:"Je réserve ce soir alors"},
+ {i:18,a:"toi",e:0,x:"Parfait. Dispo pour la caution si besoin"},
+ {i:19,a:"nadia",e:0,r:18,x:"Top, je te dis ça"},
+ {i:20,a:"nadia",e:0,x:"Réservé ✅ arrhes payées"},
+ {i:21,a:"karim",e:0,x:"🎉",rx:"❤️ 6"},
+ {i:22,a:"mia",e:0,lg:"🇪🇸",x:"Bien joué Nadia !",vo:"¡Bien hecho, Nadia!"},
+ {i:23,a:"nadia",e:1,x:"Voilà le budget détaillé 👇",m:"file"},
+ {i:24,a:"louis",e:1,r:23,x:"Clair et net, merci"},
+ {i:25,a:"nadia",e:1,x:"Ça fait 45 € par personne, tout compris"},
+ {i:26,a:"samir",e:1,x:"Essence incluse ?"},
+ {i:27,a:"nadia",e:1,r:26,x:"Oui, covoiturage compté"},
+ {i:28,a:"sarah",e:1,x:"Qui a déjà payé ?"},
+ {i:29,a:"karim",e:1,x:"Moi ✅"},
+ {i:30,a:"mia",e:1,x:"Moi ✅"},
+ {i:31,a:"papi",e:1,x:"Je paierai en liquide sur place, d’accord ?"},
+ {i:32,a:"nadia",e:1,r:31,x:"Ça marche Papi 😄"},
+ {i:33,a:"sarah",e:1,men:1,x:"@Toi tu peux avancer les 90 € de Rosa et Papi ? Remboursés samedi"},
+ {i:34,a:"toi",e:1,r:33,x:"Oui je gère 👍"},
+ {i:35,a:"sarah",e:1,r:34,x:"Merci !!"},
+ {i:36,a:"louis",e:1,x:"Reste les courses à chiffrer"},
+ {i:37,a:"nadia",e:1,r:36,x:"C’est le chantier de jeudi"},
+ {i:38,a:"rosa",e:1,lg:"🇵🇹",x:"Ça marche !",vo:"Combinado!"},
+ {i:39,a:"samir",e:1,x:"45 € c’est très correct franchement"},
+ {i:40,a:"karim",e:1,x:"Nadia trésorière officielle 🏅",rx:"😂 4"},
+ {i:41,a:"samir",e:2,x:"Question du jour : samedi, canoë ou rando ?"},
+ {i:42,a:"karim",e:2,x:"Canoë !! 🛶"},
+ {i:43,a:"sarah",e:2,x:"Canoë"},
+ {i:44,a:"louis",e:2,x:"Rando le matin et canoë l’aprem ?"},
+ {i:45,a:"samir",e:2,r:44,x:"Trop chargé je pense"},
+ {i:46,a:"mia",e:2,lg:"🇪🇸",m:"voice",x:"Je préfère le canoë, la rivière est magnifique en cette saison",vo:"Yo prefiero la canoa, el río está precioso en esta época"},
+ {i:47,a:"samir",e:2,m:"photo",x:"Le rapide du Charlemagne 😱"},
+ {i:48,a:"papi",e:2,r:47,x:"Vous me mettrez dans le canoë du milieu, hein"},
+ {i:49,a:"sarah",e:2,r:48,x:"Promis Papi 😄",rx:"❤️ 3"},
+ {i:50,a:"nadia",e:2,x:"Le loueur propose un départ à 9 h ou à 14 h"},
+ {i:51,a:"karim",e:2,r:50,x:"9 h, il fera moins chaud"},
+ {i:52,a:"mia",e:2,r:50,lg:"🇪🇸",x:"9 h c’est mieux",vo:"A las 9 mejor"},
+ {i:53,a:"samir",e:2,x:"Ok je compte… 5 canoës pour 9"},
+ {i:54,a:"louis",e:2,x:"Et la rando dimanche matin alors ?"},
+ {i:55,a:"sarah",e:2,r:54,x:"Vendu"},
+ {i:56,a:"mia",e:2,men:1,x:"@Toi tu viens dans mon canoë ? 😊"},
+ {i:57,a:"toi",e:2,r:56,x:"Évidemment 😎"},
+ {i:58,a:"samir",e:2,x:"Réservé : 5 canoës samedi 9 h ✅"},
+ {i:59,a:"karim",e:2,x:"🎉🎉",rx:"🛶 5"},
+ {i:60,a:"rosa",e:2,lg:"🇵🇹",x:"Moi je reste à la piscine avec les desserts",vo:"Eu fico na piscina com as sobremesas"},
+ {i:61,a:"louis",e:2,r:60,x:"Sage décision Rosa 😄"},
+ {i:62,a:"mia",e:3,x:"Bon, les repas ! Je propose grillades samedi soir, pâtes vendredi"},
+ {i:63,a:"karim",e:3,r:62,x:"Validé"},
+ {i:64,a:"sarah",e:3,x:"Végé pour moi 🙏"},
+ {i:65,a:"mia",e:3,r:64,x:"Noté — halloumi pour Sarah"},
+ {i:66,a:"rosa",e:3,lg:"🇵🇹",m:"photo2",x:"Le gâteau est déjà prêt !",vo:"O bolo já está pronto!"},
+ {i:67,a:"sarah",e:3,r:66,x:"ROSA 😍😍",rx:"🤤 7"},
+ {i:68,a:"louis",e:3,x:"Qui fait les courses ?"},
+ {i:69,a:"mia",e:3,r:68,x:"Samir et moi, vendredi midi. Liste ce soir"},
+ {i:70,a:"nadia",e:3,x:"Prenez des glaçons, la glacière partira vide"},
+ {i:71,a:"karim",e:3,men:1,x:"@Toi tu prends ta grande glacière ?"},
+ {i:72,a:"toi",e:3,r:71,x:"Oui, elle est au garage, je la sors"},
+ {i:73,a:"karim",e:3,r:72,x:"Parfait 👌"},
+ {i:74,a:"papi",e:3,x:"Et le pastis ? 😇"},
+ {i:75,a:"nadia",e:3,r:74,x:"Papi 😂",rx:"😂 6"},
+ {i:76,a:"samir",e:3,x:"J’amène l’enceinte et les raquettes"},
+ {i:77,a:"sarah",e:3,x:"Des jeux de société aussi !"},
+ {i:78,a:"louis",e:3,r:77,x:"Le tarot, obligatoire"},
+ {i:79,a:"mia",e:3,x:"La liste est presque finie, je l’envoie ce soir"},
+ {i:80,a:"rosa",e:3,lg:"🇵🇹",x:"Vous voulez autre chose de sucré ?",vo:"Precisam de mais alguma coisa doce?"},
+ {i:81,a:"karim",e:3,r:80,x:"Jamais trop de sucré, Rosa"},
+ {i:82,a:"mia",e:3,x:"Liste envoyée — elle est dans l’étagère 📋"},
+ {i:83,a:"nadia",e:3,r:82,x:"Vue, nickel"},
+ {i:84,a:"karim",e:4,x:"DÉPART DEMAIN 🎉 rdv 8 h chez Nadia"},
+ {i:85,a:"sarah",e:4,x:"8 h ?? 😭"},
+ {i:86,a:"karim",e:4,r:85,x:"8 h. Le canoë n’attend pas"},
+ {i:87,a:"papi",e:4,m:"voice2",x:"Mon sac est prêt depuis mardi, moi"},
+ {i:88,a:"louis",e:4,x:"Météo de samedi : 27° et grand soleil ☀️"},
+ {i:89,a:"mia",e:4,lg:"🇪🇸",x:"Parfait pour la rivière !",vo:"¡Perfecto para el río!"},
+ {i:90,a:"nadia",e:4,x:"La caution ne sera encaissée qu’au retour, tout est ok"},
+ {i:91,a:"samir",e:4,x:"Canoës confirmés, gilets fournis"},
+ {i:92,a:"sarah",e:4,men:1,x:"@Toi n’oublie pas les 90 € 🙏"},
+ {i:93,a:"louis",e:4,x:"Crème solaire indice 50 pour Papi, on est d’accord"},
+ {i:94,a:"karim",e:4,men:1,x:"@Toi la grande glacière est bien dans ta voiture ?"},
+ {i:95,a:"mia",e:4,x:"Je passe prendre Rosa et Papi à 7 h 30"},
+ {i:96,a:"rosa",e:4,r:95,lg:"🇵🇹",x:"Nous serons prêts !",vo:"Estaremos prontos!"},
+ {i:97,a:"nadia",e:4,x:"Qui a une pompe pour les matelas ?"},
+ {i:98,a:"louis",e:4,r:97,x:"Moi !"},
+ {i:99,a:"samir",e:4,x:"Playlist du trajet en préparation 🎶"},
+ {i:100,a:"karim",e:4,x:"À demain 8 h tout le monde 🚗💨",rx:"🔥 8"}
+];
+const PENDING = { 92: true, 94: true };
+const byId = id => M.find(m => m.i === id);
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+function mediaHtml(m, col) {
+  if (m.m === "link") return `<div class="media"><div class="linkcard"><div class="ic">🔗</div><div><b>Gîte des Gorges — 12 couchages, piscine</b><span>gites-ardeche.fr</span></div></div></div>`;
+  if (m.m === "file") return `<div class="media"><div class="filecard"><div class="ic">PDF</div><div><b>budget-weekend.pdf</b><span>2 pages · 84 Ko</span></div></div></div>`;
+  if (m.m === "carousel") return `<div class="media"><div class="carousel">
+      <div class="ph g1"><span>terrasse · 1/4</span></div>
+      <div class="ph g2"><span>salon · 2/4</span></div>
+      <div class="ph g3"><span>rivière · 3/4</span></div>
+      <div class="ph g5"><span>chambres · 4/4</span></div></div></div>`;
+  if (m.m === "photo") return `<div class="media"><div class="ph single g3"><span>le rapide du Charlemagne</span></div></div>`;
+  if (m.m === "photo2") return `<div class="media"><div class="ph single g6"><span>le bolo de Rosa 🍰</span></div></div>`;
+  if (m.m === "voice" || m.m === "voice2") {
+    const bars = [8,14,20,11,17,9,15,19,10,14,7,12].map(h => `<b style="height:${h}px"></b>`).join("");
+    const dur = m.m === "voice" ? "0:12" : "0:08";
+    return `<div class="media"><div class="voice" style="--ac:${A[m.a].c}"><div class="play"></div><div class="bars">${bars}</div><small>${dur}</small></div></div>`;
+  }
+  return "";
+}
+function prismChip(m, id) {
+  if (!m.lg) return "";
+  return ` <span class="prism" data-vo="${id}" title="Voir l’original">🌐 ${m.lg}→🇫🇷</span>`;
+}
+function msgHtml(m, prev, compact) {
+  const a = A[m.a];
+  const showWho = !prev || prev.a !== m.a || prev.e !== m.e;
+  let h = `<div class="msg${m.a === "toi" ? " mine" : ""}" data-mid="${m.i}" style="--ac:${a.c}">`;
+  if (showWho) h += `<div class="who"><i>${a.n[0]}</i><b>${a.n}</b><span>${EPS[m.e].d}</span></div>`;
+  if (m.r) { const o = byId(m.r); if (o) h += `<div class="quote" style="--ac:${A[o.a].c}">${A[o.a].n} — ${esc(o.x).slice(0, 46)}${o.x.length > 46 ? "…" : ""}</div>`; }
+  if (m.m) h += mediaHtml(m);
+  if (!m.m || m.m.startsWith("voice")) {
+    const cls = m.m ? "trans" : "txt";
+    h += `<div class="${cls}" data-txt="${m.i}">${m.m ? "« " + esc(m.x) + " »" : esc(m.x)}${prismChip(m, m.i)}</div>`;
+  } else if (m.x) {
+    h += `<div class="txt" data-txt="${m.i}">${esc(m.x)}${prismChip(m, m.i)}</div>`;
+  }
+  if (m.rx && !compact) h += `<span class="rx">${m.rx}</span>`;
+  h += `</div>`;
+  return h;
+}
+
+/* ---------- FOCAL v3 : le défilement fait la mise au point ---------- */
+let focalDensity = "focal"; // "focal" (perspective) | "script" (liste classique)
+function renderFocal() {
+  let h = "";
+  let prev = null;
+  M.forEach(m => {
+    if (!prev || prev.e !== m.e) {
+      h += `<div class="daysep"><span>${EPS[m.e].d} — ${EPS[m.e].t}</span></div>`;
+      if (m.e === 4) h += `<div class="pont"><b>✦ Pont</b> — pendant ton absence&nbsp;: menus fixés, liste dans l’étagère, météo ☀️. <b>2 questions t’attendent.</b></div>`;
+    }
+    h += msgHtml(m, prev);
+    if (m.men && PENDING[m.i]) {
+      const sugg = m.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !";
+      h += `<div class="agent"><span class="spark">✦</span> suggestion&nbsp;: <button data-agentreply="${m.i}">« ${sugg} »</button></div>`;
+    }
+    prev = m;
+  });
+  h += `<div style="height:30px"></div>`;
+  return h;
+}
+function perspective(scr) {
+  if (focalDensity === "script") return;
+  const rect = scr.getBoundingClientRect();
+  const focusY = rect.bottom - 140;
+  let curEl = null, curDist = Infinity;
+  scr.querySelectorAll(".msg, .daysep, .pont, .agent").forEach(el => {
+    const r = el.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    const d = Math.max(0, focusY - mid);
+    const f = Math.min(1, d / 520);
+    el.style.opacity = String(1 - 0.78 * f);
+    el.style.transform = `scale(${1 - 0.38 * f})`;
+    el.style.transformOrigin = "18% bottom";
+    if (el.classList.contains("msg")) {
+      const dist = Math.abs(mid - focusY);
+      if (mid <= focusY + 90 && dist < curDist) { curDist = dist; curEl = el; }
+    }
+  });
+  scr.querySelectorAll(".msg.cur").forEach(el => { if (el !== curEl) el.classList.remove("cur"); });
+  if (curEl) curEl.classList.add("cur");
+}
+
+/* ---------- RÉSUMÉ ---------- */
+function renderResume() {
+  const faces = ["sarah", "karim", "mia", "nadia", "louis", "samir", "rosa", "papi"];
+  const pend = { sarah: PENDING[92] ? 1 : 0, karim: PENDING[94] ? 1 : 0 };
+  let facesH = faces.map(k => {
+    const p = pend[k] || 0;
+    return `<button class="face${p ? " hot" : ""}" data-face="${k}">
+      <span class="av" style="background:${A[k].c}">${A[k].n[0]}${p ? `<span class="badge">${p}</span>` : ""}</span>
+      <span class="nm">${A[k].n.split(" ")[0]}</span></button>`;
+  }).join("");
+  const sujets = [
+    ["#C9962B", "Le gîte", "réservé ✅ arrhes payées", 22],
+    ["#2E9E96", "Budget", "45 €/pers · 2 paiements en attente", 18],
+    ["#3F9E63", "Activités", "canoë samedi 9 h ✅ · rando dimanche", 21],
+    ["#BC55A0", "Courses", "liste dans l’étagère 📋", 22],
+    ["#E28A3C", "Départ", "rdv demain 8 h chez Nadia", 17]
+  ].map(([c, t, s, n]) => `<div class="sujet"><i style="background:${c}"></i><b>${t}</b><span>${s}</span><span class="n">${n}</span></div>`).join("");
+  const eps = EPS.map((ep, idx) => {
+    const inner = M.filter(m => m.e === idx).map((m, j, arr) => msgHtml(m, j ? arr[j - 1] : null, true)).join("");
+    return `<details class="ep"${idx === 4 ? " open" : ""}><summary>${ep.d} · ${ep.t} <span>· ${M.filter(m => m.e === idx).length} messages</span></summary><div class="epbody">${inner}</div></details>`;
+  }).join("");
+  return `<div class="rv">
+    <div class="statecard">
+      <h4>✦ Ce qu’il faut savoir</h4>
+      <div class="upd">à jour à l’instant · 100 messages lus pour toi</div>
+      <div class="strow"><span class="k done">✓</span><span>Gîte des Gorges réservé · 12–14 sept · 45 €/personne</span></div>
+      <div class="strow"><span class="k done">✓</span><span>Canoë samedi 9 h (5 canoës, gilets fournis) · menus fixés</span></div>
+      <div class="strow"><span class="k ask">?</span><span><b>Sarah</b> : tu avances les 90 € de Rosa &amp; Papi ? · <b>Karim</b> : la glacière est dans ta voiture ?</span></div>
+      <div class="strow"><span class="k next">→</span><span>Départ demain 8 h chez Nadia · Mia passe prendre Rosa &amp; Papi à 7 h 30</span></div>
+    </div>
+    <div class="rampe"><h5>Ils t’attendent d’abord</h5><div class="faces">${facesH}</div></div>
+    <h5>Par sujet</h5><div class="sujets">${sujets}</div>
+    <h5>Les 5 jours, repliés</h5>${eps}
+    <div style="height:16px"></div></div>`;
+}
+function openPerson(k) {
+  const scr = document.getElementById("screen");
+  const qs = M.filter(m => m.a === k && m.men);
+  const pending = qs.filter(m => PENDING[m.i]);
+  const items = qs.map(m => `<div class="pmsg"><p>${esc(m.x)}</p><span>${EPS[m.e].d}${PENDING[m.i] ? " · ✋ sans réponse" : " · répondu ✓"}</span></div>`).join("") || `<div class="pmsg"><p>Rien d’adressé à toi — tout va bien.</p></div>`;
+  const target = pending[0] || qs[qs.length - 1];
+  const panel = document.createElement("div");
+  panel.className = "pp";
+  panel.innerHTML = `<button class="close" aria-label="Fermer">✕</button>
+    <h4><i style="background:${A[k].c}">${A[k].n[0]}</i>${A[k].n}</h4>
+    <div class="sub">ses messages pour toi · le reste du groupe est masqué</div>${items}
+    ${target ? `<div class="composer"><input id="ppin" value="" placeholder="→ ${A[k].n} : ta réponse…" aria-label="Répondre à ${A[k].n}"><button id="ppsend">Envoyer</button></div>
+    <div class="sub" style="margin-top:8px">ta réponse citera son message dans le fil commun</div>` : ""}`;
+  scr.appendChild(panel);
+  panel.querySelector(".close").onclick = () => panel.remove();
+  const send = panel.querySelector("#ppsend");
+  if (send) send.onclick = () => {
+    const val = panel.querySelector("#ppin").value.trim();
+    replyInFlow(target.i, val || null);
+  };
+}
+
+/* ---------- RIVIÈRE ---------- */
+let follow = null, selected = null;
+function riverLayout() {
+  const win = M.filter(m => m.e >= 2);
+  const counts = {};
+  win.forEach(m => counts[m.a] = (counts[m.a] || 0) + 1);
+  const lanes = Object.keys(counts).filter(k => k !== "toi").sort((a, b) => counts[b] - counts[a]).slice(0, 6);
+  if (counts.toi) lanes.push("toi");
+  const laneX = {}; const W = 372;
+  lanes.forEach((k, idx) => laneX[k] = 36 + idx * ((W - 72) / (lanes.length - 1)));
+  const rows = win.filter(m => laneX[m.a] !== undefined);
+  const y0 = 44, dy = 15.5;
+  const H = y0 + rows.length * dy + 16;
+  const yOf = {}; rows.forEach((m, idx) => yOf[m.i] = y0 + idx * dy);
+  return { lanes, laneX, rows, y0, H, yOf, W };
+}
+function renderRiviere() {
+  const { lanes, rows, W, H } = riverLayout();
+  const chips = lanes.map(k => `<button style="--fc:${A[k].c}" aria-pressed="${follow === k}" data-follow="${k}"><i></i>${A[k].n.split(" ")[0]}</button>`).join("");
+  return `<div class="riv">
+      <div class="head">Mercredi → vendredi · ${rows.length} messages · 7 fils ${follow ? `· <b>suivi : ${A[follow].n}</b>` : ""}</div>
+      <div class="follow"><button aria-pressed="${!follow}" data-follow="" style="--fc:var(--muted)"><i></i>Tous</button>${chips}</div>
+      <div class="rivsvgwrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Rivière des messages : un fil vertical par personne, les courbes relient les réponses, les nœuds cerclés vous sont adressés"></svg></div>
+      <div class="rivhint">Aucun texte dans la rivière — touchez un nœud, le message s’ouvre <b>sur place</b> en bulle. Cercle bleu = pour toi · point blanc = média · les courbes sont des réponses.</div>
+    </div>`;
+}
+function closeBubble() { document.querySelectorAll(".nbubble").forEach(b => b.remove()); selected = null; }
+function openBubble(id) {
+  closeBubble();
+  const m = byId(id); if (!m) return;
+  const wrap = document.querySelector(".rivsvgwrap");
+  const svgEl = wrap.querySelector("svg");
+  const { laneX, yOf, W } = riverLayout();
+  if (laneX[m.a] === undefined || yOf[m.i] === undefined) return;
+  const scale = svgEl.getBoundingClientRect().width / W;
+  const px = laneX[m.a] * scale, py = yOf[m.i] * scale;
+  const left = Math.max(6, Math.min(px - 30, wrap.clientWidth - 244));
+  const o = m.r ? byId(m.r) : null;
+  const b = document.createElement("div");
+  b.className = "nbubble";
+  b.style.setProperty("--bc", A[m.a].c);
+  b.style.left = left + "px";
+  b.style.top = (py + 13) + "px";
+  b.style.transformOrigin = (px - left) + "px -10px";
+  b.innerHTML = `<div class="nb-who">${A[m.a].n}${o ? " → " + (o.a === "toi" ? "toi" : A[o.a].n) : m.men ? " → toi" : ""} · <small>${EPS[m.e].d}</small></div>
+    <div class="nb-x">${m.m && m.m.startsWith("voice") ? "🎙 « " + esc(m.x) + " »" : esc(m.x)}${m.lg ? ` <small>🌐 ${m.lg}→🇫🇷</small>` : ""}</div>
+    ${m.men && PENDING[m.i] ? `<button data-rreply="${m.i}">Répondre à ${A[m.a].n.split(" ")[0]} →</button>` : ""}`;
+  wrap.appendChild(b);
+  selected = id;
+}
+
+/* ---------- shell ---------- */
+let current = null;
+function showTab(t) {
+  const prevT = current;
+  current = t;
+  ["focal", "resume", "riviere"].forEach(k => document.getElementById("tab-" + k).setAttribute("aria-selected", String(k === t)));
+  const scr = document.getElementById("screen");
+  scr.classList.remove("zoomin", "zoomout", "script");
+  const dens = document.getElementById("densbtn");
+  if (dens) dens.style.visibility = t === "focal" ? "visible" : "hidden";
+  if (t === "focal") {
+    if (focalDensity === "script") scr.classList.add("script");
+    scr.innerHTML = renderFocal();
+    scr.scrollTop = scr.scrollHeight;
+    perspective(scr);
+  } else if (t === "resume") {
+    scr.innerHTML = renderResume();
+    scr.scrollTop = 0;
+  } else {
+    scr.innerHTML = renderRiviere();
+    scr.querySelector("svg").innerHTML = buildRiverInner();
+    scr.scrollTop = 0;
+  }
+  const rank = { resume: 0, riviere: 1, focal: 2 };
+  if (prevT && prevT !== t) {
+    void scr.offsetWidth;
+    scr.classList.add(rank[t] > rank[prevT] ? "zoomin" : "zoomout");
+  }
+}
+function replyInFlow(targetId, text) {
+  const target = byId(targetId);
+  const val = text || (target.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !");
+  const nid = 200 + M.filter(m => m.i > 200).length + 1;
+  M.push({ i: nid, a: "toi", e: 4, r: targetId, x: val });
+  delete PENDING[targetId];
+  showTab("focal");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = "Répondu dans le fil ✓";
+  document.querySelector(".phone").style.position = "relative";
+  document.querySelector(".phone").appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+function buildRiverInner() {
+  const { lanes, laneX, rows, y0, H, yOf } = riverLayout();
+  const dim = k => follow && k !== follow;
+  let svg = "";
+  lanes.forEach(k => {
+    svg += `<line x1="${laneX[k]}" y1="${y0 - 12}" x2="${laneX[k]}" y2="${H - 8}" stroke="${A[k].c}" stroke-width="${k === "toi" ? 3.5 : 2}" opacity="${dim(k) ? 0.07 : k === "toi" ? 0.45 : 0.16}"/>`;
+  });
+  rows.forEach(m => {
+    if (m.r && yOf[m.r] !== undefined) {
+      const o = byId(m.r);
+      if (o && laneX[o.a] !== undefined && o.a !== m.a) {
+        const x1 = laneX[m.a], y1 = yOf[m.i], x2 = laneX[o.a], y2 = yOf[m.r];
+        const bothDim = dim(m.a) && dim(o.a);
+        svg += `<path d="M ${x1} ${y1} C ${x1} ${y1 - 26}, ${x2} ${y2 + 26}, ${x2} ${y2}" fill="none" stroke="${A[m.a].c}" stroke-width="1.6" opacity="${bothDim ? 0.06 : 0.5}"/>`;
+      }
+    }
+  });
+  rows.forEach(m => {
+    const x = laneX[m.a], y = yOf[m.i];
+    svg += `<g data-node="${m.i}" style="cursor:pointer" opacity="${dim(m.a) ? 0.12 : 1}">`;
+    if (m.men) svg += `<circle cx="${x}" cy="${y}" r="10" fill="none" stroke="${A.toi.c}" stroke-width="2.2"/>`;
+    if (selected === m.i) svg += `<circle cx="${x}" cy="${y}" r="12.5" fill="none" stroke="${A[m.a].c}" stroke-width="1.4" stroke-dasharray="3 2"/>`;
+    svg += `<circle cx="${x}" cy="${y}" r="${m.m ? 7 : 5.2}" fill="${A[m.a].c}"/>`;
+    if (m.m) svg += `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" opacity="0.9"/>`;
+    svg += `</g>`;
+  });
+  lanes.forEach(k => {
+    svg += `<g opacity="${dim(k) ? 0.25 : 1}"><circle cx="${laneX[k]}" cy="${y0 - 24}" r="11" fill="${A[k].c}"/>
+      <text x="${laneX[k]}" y="${y0 - 20}" font-size="10" font-weight="700" fill="#fff" text-anchor="middle" font-family="system-ui">${A[k].n[0]}</text></g>`;
+  });
+  return svg;
+}
+
+document.getElementById("screen").addEventListener("scroll", () => {
+  if (current === "focal") requestAnimationFrame(() => perspective(document.getElementById("screen")));
+}, { passive: true });
+
+document.getElementById("densbtn").addEventListener("click", () => {
+  focalDensity = focalDensity === "focal" ? "script" : "focal";
+  document.getElementById("densbtn").setAttribute("aria-pressed", String(focalDensity === "script"));
+  showTab("focal");
+});
+
+document.getElementById("screen").addEventListener("click", e => {
+  const vo = e.target.closest(".prism");
+  if (vo) {
+    const id = Number(vo.getAttribute("data-vo"));
+    const m = byId(id);
+    const txtEl = document.querySelector(`[data-txt="${id}"]`);
+    if (m && txtEl) {
+      const showingVo = vo.getAttribute("data-showing") === "1";
+      const body = showingVo ? m.x : m.vo;
+      vo.setAttribute("data-showing", showingVo ? "0" : "1");
+      txtEl.childNodes[0].textContent = (m.m ? "« " + body + " »" : body);
+    }
+    return;
+  }
+  const face = e.target.closest("[data-face]");
+  if (face) { openPerson(face.getAttribute("data-face")); return; }
+  const fol = e.target.closest("[data-follow]");
+  if (fol) {
+    follow = fol.getAttribute("data-follow") || null;
+    showTab("riviere");
+    return;
+  }
+  const ar = e.target.closest("[data-agentreply]");
+  if (ar) { replyInFlow(Number(ar.getAttribute("data-agentreply"))); return; }
+  const rr = e.target.closest("[data-rreply]");
+  if (rr) { const id = Number(rr.getAttribute("data-rreply")); closeBubble(); replyInFlow(id); return; }
+  const node = e.target.closest("[data-node]");
+  if (node) { openBubble(Number(node.getAttribute("data-node"))); return; }
+  if (current === "riviere" && !e.target.closest(".nbubble")) closeBubble();
+});
+
+showTab("focal");
+</script>

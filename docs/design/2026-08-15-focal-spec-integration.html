@@ -1,0 +1,741 @@
+<title>Focal Grandeur Nature</title>
+<style>
+  :root {
+    --paper: #F4F5F8; --surface: #FFFFFF; --ink: #1B2233; --muted: #5C6478;
+    --line: #DBDFE8; --soft: #EBEDF3;
+    /* tokens Meeshy réels (ThemeManager.swift / MeeshyColors.swift) — light */
+    --m-bg: #FFFFFF; --m-bg2: #F8F7FF; --m-bg3: #EEF2FF;
+    --m-text: #1E1B4B; --m-text2: rgba(67,56,202,0.60); --m-muted: rgba(99,102,241,0.40);
+    --m-input: #F5F3FF; --m-input-border: #C7D2FE;
+    --m-brand: #6366F1; --m-brand-deep: #4338CA;
+    --m-bubble-alpha: 0.16; --m-stroke-alpha: 0.26;
+    --m-sticker-text: #4338CA; --m-sticker-border: #C7D2FE;
+    --m-success: #34D399;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+      --line: #2B3140; --soft: #202634;
+      --m-bg: #09090B; --m-bg2: #13111C; --m-bg3: #1E1B4B;
+      --m-text: #EEF2FF; --m-text2: #A5B4FC; --m-muted: rgba(129,140,248,0.50);
+      --m-input: #16142A; --m-input-border: rgba(49,46,129,0.60);
+      --m-bubble-alpha: 0.28; --m-stroke-alpha: 0.34;
+      --m-sticker-text: #C7D2FE; --m-sticker-border: #312E81;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+    --line: #2B3140; --soft: #202634;
+    --m-bg: #09090B; --m-bg2: #13111C; --m-bg3: #1E1B4B;
+    --m-text: #EEF2FF; --m-text2: #A5B4FC; --m-muted: rgba(129,140,248,0.50);
+    --m-input: #16142A; --m-input-border: rgba(49,46,129,0.60);
+    --m-bubble-alpha: 0.28; --m-stroke-alpha: 0.34;
+    --m-sticker-text: #C7D2FE; --m-sticker-border: #312E81;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: Nunito, system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; margin: 0; padding: 0 20px; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1, h2, h3 { font-family: "Avenir Next", Futura, "Trebuchet MS", "Segoe UI", sans-serif; text-wrap: balance; margin: 0; }
+  .eyebrow { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; background: var(--soft); border-radius: 6px; padding: 1px 6px; }
+  .hero { padding: 58px 0 8px; }
+  .hero h1 { font-size: clamp(34px, 5.6vw, 52px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 4px; }
+  .hero .lede { max-width: 66ch; font-size: 16.5px; color: var(--muted); margin: 14px 0 0; }
+  .hero .lede strong { color: var(--ink); font-weight: 700; }
+  section { padding: 54px 0 8px; border-top: 1px solid var(--line); margin-top: 50px; }
+  section:first-of-type { border-top: none; margin-top: 8px; }
+  section > h2 { font-size: clamp(23px, 3.2vw, 31px); margin: 8px 0 6px; }
+  section > .intro { font-size: 15px; color: var(--muted); max-width: 68ch; margin: 6px 0 0; }
+  section > .intro b { color: var(--ink); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-top: 22px; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 13px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: none; font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  td.k { white-space: nowrap; font-weight: 700; }
+  td code { white-space: nowrap; }
+  .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid rgba(0,0,0,0.12); }
+  figure.diagram { margin: 24px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; overflow-x: auto; }
+  figure.diagram svg { min-width: 620px; width: 100%; height: auto; display: block; color: var(--ink); }
+  figure.diagram figcaption { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+  .steps { display: grid; gap: 12px; margin-top: 22px; counter-reset: st; }
+  .steps > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 17px 13px 52px; position: relative; font-size: 14px; max-width: 80ch; }
+  .steps > div::before { counter-increment: st; content: "PR" counter(st); position: absolute; left: 13px; top: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 700; color: #6366F1; border: 1.5px solid #6366F1; border-radius: 7px; padding: 2px 5px; }
+  .steps b { font-weight: 700; }
+
+  /* ============ le téléphone Meeshy ============ */
+  .demo-zone { display: grid; grid-template-columns: minmax(320px, 410px) 1fr; gap: 42px; align-items: start; margin-top: 28px; }
+  @media (max-width: 860px) { .demo-zone { grid-template-columns: 1fr; } }
+  .phone { border: 2px solid var(--line); border-radius: 38px; background: var(--m-bg); overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.12); position: relative; font-family: Nunito, system-ui, sans-serif; }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; background: var(--m-bg); border-bottom: 1px solid rgba(99,102,241,0.14); position: relative; z-index: 7; }
+  .chead .back { font-size: 20px; color: var(--m-brand); border: none; background: none; cursor: default; padding: 0 2px; }
+  .chead .cav { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #31B6BB, #4338CA); color: #fff; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; position: relative; flex: none; box-shadow: 0 0 0 2px var(--m-bg), 0 0 0 3.5px #31B6BB; }
+  .chead .cav i { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: var(--m-success); border: 2px solid var(--m-bg); }
+  .chead .ct { min-width: 0; }
+  .chead .ct b { display: block; font-size: 15.5px; color: var(--m-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chead .ct span { font-size: 11px; color: var(--m-text2); }
+  .chead .lens { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .chead .lens .pill { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid #31B6BB; color: var(--m-text); background: none; border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 700; font-family: inherit; }
+  .chead .lens .pill i { width: 7px; height: 7px; border-radius: 50%; background: #E05252; }
+  .chead .lens .aa { width: 38px; height: 30px; border: 1.5px solid var(--m-input-border); background: none; color: var(--m-text2); border-radius: 999px; font-size: 13px; font-weight: 800; font-family: inherit; cursor: pointer; }
+  .chead .lens .aa[aria-pressed="true"] { border-color: var(--m-brand); color: var(--m-brand); background: var(--m-bg3); }
+
+  .screen { height: 620px; overflow-y: auto; overscroll-behavior: contain; position: relative; background: var(--m-bg); padding: 6px 0 12px; }
+
+  /* pilule flottante jour · heure (visible pendant le défilement) */
+  .timepill { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); z-index: 8; background: color-mix(in srgb, var(--m-bg2) 78%, transparent); backdrop-filter: blur(14px); border: 1px solid var(--m-sticker-border); color: var(--m-sticker-text); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 5px 14px; opacity: 0; transition: opacity 0.28s ease; pointer-events: none; white-space: nowrap; }
+  .timepill.on { opacity: 1; }
+
+  /* sticker de date (sticky) — reprend MessageDaySeparator (capsule ultraThinMaterial) */
+  .dsticker { position: sticky; top: 4px; z-index: 5; display: flex; justify-content: center; padding: 6px 0; }
+  .dsticker span { background: color-mix(in srgb, var(--m-bg2) 72%, transparent); backdrop-filter: blur(12px); border: 0.5px solid var(--m-sticker-border); color: var(--m-sticker-text); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 5px 12px; }
+
+  /* densité Script : plate elle aussi — AUCUNE bulle nulle part ; la seule « bulle » qui survit est la carte de focus (en Focal) */
+  .screen.script .frow, .screen.script .dsticker, .screen.script .pont, .screen.script .agent { transform: none !important; opacity: 1 !important; }
+  .startcap { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; color: var(--m-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+
+  /* rangée PLATE — le design Focal proposé : pas de bulle, la seule carte est le focus */
+  .frow { padding: 5px 16px; will-change: transform, opacity; }
+  .frow .fident { display: flex; align-items: center; gap: 7px; margin-bottom: 1px; }
+  .frow .fident .fa { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+  .frow .fident b { font-size: 13px; font-weight: 800; color: var(--m-text); }
+  .frow.me .fident b { color: var(--m-brand); }
+  .frow .fident .dot { color: var(--m-muted); font-weight: 800; }
+  .frow .fident time { font-size: 12px; font-weight: 600; color: var(--m-text2); }
+  .frow .fident .chk { font-size: 10.5px; letter-spacing: -2px; color: #A5B4FC; }
+  .frow .ftxt { font-size: 15px; line-height: 1.42; color: var(--m-text); margin-left: 29px; }
+  .frow .fquote { margin: 1px 0 3px 29px; border-left: 2.5px solid var(--qc); background: color-mix(in srgb, var(--m-bg3) 55%, transparent); border-radius: 0 9px 9px 0; padding: 3px 9px; font-size: 11.5px; color: var(--m-text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88%; }
+  .frow .fmedia { margin: 4px 0 2px 29px; }
+  .frow .fmeta { margin: 2px 0 0 29px; display: flex; gap: 8px; align-items: center; }
+  .frow .fmeta .flags { font-size: 10.5px; color: var(--m-text2); cursor: pointer; user-select: none; }
+  .frow .fmeta .frx { font-size: 11px; background: var(--m-bg2); border: 1px solid var(--m-input-border); border-radius: 999px; padding: 1px 8px; color: var(--m-text2); }
+  .frow.cur { background: var(--m-bg2); border-radius: 16px; margin: 3px 8px; padding: 8px 12px; box-shadow: inset 0 0 0 1.5px #31B6BB; }
+  .frow.cur .ftxt { font-size: 16px; }
+  /* médias (grille radius 16 comme BubbleStandardLayout+Media) */
+  .m-ph { border-radius: 16px; position: relative; overflow: hidden; margin: 2px 0 4px; }
+  .m-ph span { position: absolute; left: 10px; bottom: 8px; font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .m-ph.single { width: 220px; max-width: 100%; aspect-ratio: 4/3; }
+  .g1 { background: linear-gradient(140deg, #7FB069, #3E6259 55%, #27404E); }
+  .g2 { background: linear-gradient(140deg, #E9C46A, #C77B3F 60%, #7A4A2B); }
+  .g3 { background: linear-gradient(140deg, #6AB8D8, #3E7C9E 55%, #274B63); }
+  .g5 { background: linear-gradient(150deg, #9BC1BC, #5C8D89 55%, #2F5D62); }
+  .g6 { background: linear-gradient(150deg, #E8A0BF, #B4667E 60%, #6E3A50); }
+  .m-car { display: flex; gap: 4px; overflow-x: auto; scroll-snap-type: x mandatory; width: 236px; max-width: 100%; padding-bottom: 4px; }
+  .m-car .m-ph { min-width: 82%; aspect-ratio: 4/3; scroll-snap-align: center; margin: 0; }
+  .m-voice { display: flex; align-items: center; gap: 8px; min-width: 190px; padding: 2px 0 4px; }
+  .m-voice .play { width: 28px; height: 28px; border-radius: 50%; background: var(--m-brand); flex: none; position: relative; }
+  .m-voice .play::after { content: ""; position: absolute; left: 11px; top: 8px; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+  .m-voice .bars { display: flex; align-items: center; gap: 2.5px; flex: 1; }
+  .m-voice .bars b { width: 3px; border-radius: 2px; background: var(--m-brand); opacity: 0.8; }
+  .m-voice small { font-size: 10px; color: var(--m-text2); }
+  .m-trans { font-size: 12.5px; font-style: italic; color: var(--m-text2); margin-top: 2px; }
+  .m-file { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+  .m-file .ic { width: 32px; height: 38px; border-radius: 7px; background: #F87171; color: #fff; font-size: 8.5px; font-weight: 800; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; flex: none; }
+  .m-file b { font-size: 12.5px; display: block; }
+  .m-file span { font-size: 10.5px; color: var(--m-text2); }
+  .m-link { display: flex; align-items: center; gap: 9px; border: 1px solid var(--m-input-border); border-radius: 12px; padding: 8px 11px; margin: 2px 0 4px; background: var(--m-bg2); }
+  .m-link .ic { font-size: 15px; }
+  .m-link b { font-size: 12px; display: block; color: var(--m-text); }
+  .m-link span { font-size: 10px; color: var(--m-text2); }
+  /* pont + agent */
+  .pont { margin: 10px 14px 4px; border: 1.5px dashed var(--m-brand); border-radius: 14px; padding: 9px 13px; font-size: 12px; background: var(--m-bg2); color: var(--m-text); }
+  .pont b { color: var(--m-brand); }
+  .agent { margin: 4px 12px 6px 52px; border: 1.5px dashed var(--m-brand); border-radius: 14px; padding: 7px 12px; font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--m-text2); max-width: 75%; }
+  .agent .spark { color: var(--m-brand); font-weight: 800; }
+  .agent button { border: none; background: var(--m-brand); color: #fff; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  /* composer (UniversalComposerBar simplifié) */
+  .composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px 14px; background: var(--m-bg); border-top: 1px solid rgba(99,102,241,0.12); position: relative; z-index: 7; }
+  .composer .field { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--m-input); border: 1px solid var(--m-input-border); border-radius: 20px; padding: 9px 14px; color: var(--m-muted); font-size: 14px; }
+  .composer .field .fl { font-size: 13px; }
+  .composer .send { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366F1, #4338CA); border: none; flex: none; position: relative; cursor: pointer; }
+  .composer .send::after { content: ""; position: absolute; left: 13px; top: 12px; border-left: 12px solid #fff; border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+  .toast { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); background: var(--m-text); color: var(--m-bg); font-size: 12px; border-radius: 999px; padding: 8px 16px; z-index: 9; }
+  .demo-note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+  .side h3 { font-size: 18px; margin: 0 0 10px; }
+  .side .fact { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; font-size: 13.5px; margin-bottom: 12px; max-width: 74ch; }
+  .side .fact b { color: #6366F1; }
+  footer.colophon { padding: 28px 0 54px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); margin-top: 56px; }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Meeshy · Vue conversation · Volume 4 — la spec, ancrée dans le code</p>
+  <h1>Focal Grandeur Nature</h1>
+  <p class="lede">Le principe de ce volume&nbsp;: <strong>le design proposé fait foi</strong> — aplati, sans bulles, une seule carte (le message au point), défilement extra-fluide. Le relevé du code réel (<code>MeeshyColors.swift</code>, <code>ThemeManager.swift</code>, <code>ColorGeneration.swift</code>, <code>MessageNameDate.tsx</code>) ne sert qu’à deux choses&nbsp;: <strong>ne pas créer de choc</strong> (palette indigo, avatars, stickers, composer familiers — et la vue actuelle à bulles toujours à un tap via <strong>Aa</strong>) et <strong>hériter de l’accessibilité</strong> (Dynamic Type, VoiceOver). Avec les nouveautés demandées&nbsp;: identité <strong>Pseudo · heure</strong>, <strong>stickers de date</strong> collants, <strong>pilule jour + heure</strong> visible seulement pendant le défilement, et de vrais messages longs et courts pour juger le focus.</p>
+</header>
+
+<!-- ═════════ 1 · FONDATIONS ═════════ -->
+<section id="fondations">
+  <p class="eyebrow">1 · Fondations — le design proposé, adossé au relevé du code</p>
+  <h2>Ce que le design impose, ce que l’existant apporte</h2>
+  <p class="intro">Règle de lecture du tableau&nbsp;: la colonne « Spec Focal » suit <b>les tailles et l’approche du design proposé</b> (vol.&nbsp;1-3)&nbsp;: plat, sans bulles, une seule carte. L’existant fournit trois choses seulement&nbsp;: des <b>ancres d’habitude</b> (palette, stickers, labels de jour, format d’heure), l’<b>infrastructure</b> (TimeStringCache, collection inversée, accent par conversation) et l’<b>accessibilité</b> (<code>MeeshyFont.relative</code> → Dynamic Type, VoiceOver) — la seule partie où l’on suit l’app à la lettre.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Élément</th><th>iOS aujourd’hui (source)</th><th>Web aujourd’hui (source)</th><th>Spec Focal</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Rangée message</td><td>bulles radius 18, teintées par émetteur, heure en footer <i>(BubbleBackground.swift, BubbleFooter.swift)</i></td><td>bulles <code>rounded-2xl</code> indigo/carte <i>(MessageContent.tsx)</i></td><td><b>Rangée PLATE du design proposé</b>, dans les DEUX densités&nbsp;: Focal (perspective) et Script (uniforme, via Aa). <b>Aucune bulle</b> — la seule « bulle » du système est la carte de focus. La vue bulles historique ne subsiste que hors flag, le temps de la transition</td></tr>
+        <tr><td class="k">Pseudo · heure</td><td>identité en footer de bulle, heure <code>HH:mm</code> via <code>TimeStringCache</code></td><td>déjà « Nom • heure » au-dessus, first-in-group <i>(MessageNameDate.tsx)</i></td><td><b>Design proposé</b>&nbsp;: <code>Pseudo · HH:mm</code> en tête de groupe (nom 13 extrabold — indigo pour « Toi » —, point médian, heure 12) ; format et cache d’heure repris de l’app</td></tr>
+        <tr><td class="k">Sticker de date</td><td>capsule <code>.ultraThinMaterial</code>, caption semibold, bord 0.5 pt indigo, labels « Aujourd’hui / Hier / Lundi 9 mai » <i>(MessageDaySeparator.swift)</i> + variante sticky <i>(MessageDayStickyOverlay.swift)</i></td><td><b>absent</b> (le kit v2 dormant a le pattern <code>MessageTimestamp.tsx</code>)</td><td><b>Repris d’iOS</b>, rendu <i>sticky</i> partout — c’est le « data sticker » de catégorisation</td></tr>
+        <tr><td class="k">Pilule au défilement</td><td>sticky day overlay (jour seul), pas d’auto-hide</td><td><b>absent</b></td><td><b>Nouveau</b>&nbsp;: « Mercredi · 17:42 » (jour + heure du message visible), apparaît au scroll, disparaît ~900 ms après l’arrêt</td></tr>
+        <tr><td class="k">Accent conversation</td><td><code>blend(langue×0.30, type×0.30, thème×0.40)</code>, secondary/accent = hue ±30° <i>(ColorGeneration.swift)</i>. Démo « Ardèche »&nbsp;: fr <span class="sw" style="background:#3498DB"></span> + groupe <span class="sw" style="background:#4ECDC4"></span> + voyage <span class="sw" style="background:#1ABC9C"></span> → <span class="sw" style="background:#31B6BB"></span><code>#31B6BB</code></td><td><b>absent</b> (indigo codé en dur)</td><td>Accent = anneau d’avatar, ring de focus, Lentille. Le web l’adopte via une CSS var <code>--conv-accent</code></td></tr>
+        <tr><td class="k">Tokens de fond</td><td><code>#FFFFFF/#F8F7FF/#EEF2FF</code> · dark <code>#09090B/#13111C/#1E1B4B</code>, texte <code>#1E1B4B</code>/<code>#EEF2FF</code> <i>(ThemeManager.swift)</i></td><td><code>--gp-background #F8FAFC/#0F172A</code>, Nunito <i>(globals.css, fonts.ts)</i></td><td>Le prototype ci-dessous roule sur les tokens iOS (les plus précis)</td></tr>
+        <tr><td class="k">Perspective au scroll</td><td colspan="2" style="text-align:center;color:var(--muted)">n’existe nulle part</td><td><b>Nouveau</b> — le cœur du mode&nbsp;: <code>f = min(1, d/380)</code>, échelle <code>1−0.40f</code>, opacité <code>1−0.82f</code>, message net = carte + ring accent. <b>Transform/opacité uniquement</b> (compositor, zéro relayout) → fluide 60–120 Hz</td></tr>
+        <tr><td class="k">Accessibilité</td><td><code>MeeshyFont.relative</code> → Dynamic Type sur toutes les tailles ; VoiceOver par cellule <i>(Accessibility.swift)</i></td><td>focus visible, aria sur actions <i>(shadcn)</i></td><td><b>Suivi à la lettre</b>&nbsp;: tailles du design mappées Dynamic Type ; VoiceOver lit « Karim, 14 h 32, message » par rangée — la perspective est purement visuelle, <code>reduced motion</code> la désactive (liste plate identique)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════ 2 · PROTOTYPE ═════════ -->
+<section id="proto">
+  <p class="eyebrow">2 · Le rendu final attendu</p>
+  <h2>Prototype fidèle — tokens, bulles et gestes Meeshy</h2>
+  <div class="demo-zone">
+    <div>
+      <div class="phone">
+        <div class="chead">
+          <button class="back" aria-hidden="true">‹</button>
+          <div class="cav">WA<i></i></div>
+          <div class="ct"><b>Week-end Ardèche 🛶</b><span>9 membres · 3 en ligne</span></div>
+          <div class="lens">
+            <span class="pill"><i></i>Focal</span>
+            <button class="aa" id="densbtn" aria-pressed="false" title="Basculer Focal ⇄ Script — même rangée plate, sans perspective. Aucune bulle nulle part.">Aa</button>
+          </div>
+        </div>
+        <div class="timepill" id="timepill">Lundi · 18:02</div>
+        <div class="screen" id="screen"></div>
+        <div class="composer">
+          <div class="field"><span class="fl">🇫🇷</span><span>Message…</span></div>
+          <button class="send" aria-label="Envoyer"></button>
+        </div>
+      </div>
+      <p class="demo-note"><b>À tester</b>&nbsp;: ① défilez vite — fluide (transform/opacité seulement)&nbsp;; la <b>pilule « jour · heure »</b> apparaît et s’efface ~1 s après l’arrêt&nbsp;; les <b>stickers de date</b> restent collés en tête de journée. ② Remontez <b>jusqu’en haut</b>&nbsp;: grâce à l’espaceur de tête (« Début de la conversation »), le <b>tout premier message atteint la focale</b> et se lit plein cadre. ③ <b>Pseudo · heure</b> en tête de chaque groupe — « Toi » en indigo avec ses ✓✓. ④ <b>Aa</b> = densité <b>Script</b>&nbsp;: la même rangée plate, uniforme, sans perspective — <b>aucune bulle nulle part</b>, la seule « bulle » de tout le système est la carte de focus. ⑤ 🌐 = V.O. au tap. ⑥ La suggestion ✦ répond dans le vrai fil.</p>
+    </div>
+    <div class="side">
+      <h3>Décisions de design (et leurs sources)</h3>
+      <div class="fact"><b>Plat, sans bulles — le design proposé fait foi.</b> Pastille 22, identité <code>Pseudo · HH:mm</code> (13/12), texte 15 en colonne au retrait 29, médias nus radius 16. La seule « carte » de l’écran est le message au point (fond <code>#F8F7FF/#13111C</code> + ring accent). Aucune bulle&nbsp;: la hiérarchie vient de la perspective, pas du chrome.</div>
+      <div class="fact"><b>Zéro choc&nbsp;: l’habitude est préservée par les ancres, pas par les bulles.</b> Palette indigo réelle, avatars-initiales, stickers de jour capsule (labels « Aujourd’hui/Hier » de <code>MessageDayLabel</code>), format <code>HH:mm</code> du <code>TimeStringCache</code>, composer et header inchangés. <b>Aa bascule vers la densité Script&nbsp;: la même rangée plate, uniforme, sans perspective</b> — aucune bulle dans aucun des deux modes. La vue bulles historique reste dans l’app derrière le flag pendant la transition, mais elle n’est pas un mode&nbsp;: c’est l’ancien rendu, appelé à s’éteindre.</div>
+      <div class="fact"><b>Extra-fluide, par construction.</b> La perspective n’utilise que <code>transform</code> + <code>opacity</code>&nbsp;: composées sur le GPU, zéro relayout, zéro reflow — 60–120 Hz même sur un fil de 100 messages. iOS&nbsp;: transform + alpha des cellules visibles dans <code>scrollViewDidScroll</code>, la collection inversée et les cellules actuelles restent intactes (POC additive, rien n’est cassé).</div>
+      <div class="fact"><b>Accessibilité&nbsp;: la seule partie copiée sur l’app.</b> Toutes les tailles du design passent par <code>MeeshyFont.relative</code> (Dynamic Type)&nbsp;; VoiceOver lit chaque rangée « Karim, 14 h 32, message » — la perspective est invisible pour lui&nbsp;; <code>prefers-reduced-motion</code> désactive l’effet (le prototype le fait déjà). Le focus ring <code>#31B6BB</code> vient de la vraie formule d’accent (<code>ColorGeneration.swift</code>)&nbsp;: chaque conversation aura le sien.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ 3 · ANATOMIE ═════════ -->
+<section id="anatomie">
+  <p class="eyebrow">3 · Anatomie — vues de composants cotées</p>
+  <h2>Quatre composants à reproduire</h2>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 290" role="img" aria-label="Anatomie cotée de la rangée plate FocalRow : pastille 22 points, identité pseudo point médian heure en 13 et 12 points, texte 15 points au retrait de 29, métadonnées prisme dessous, état focus en carte avec anneau accent">
+      <defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <text x="16" y="26" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui">FocalRow — rangée plate (design proposé), tête de groupe</text>
+      <!-- rangée normale -->
+      <circle cx="52" cy="66" r="11" fill="#E28A3C"/>
+      <text x="52" y="70" font-size="11" font-weight="800" fill="#fff" text-anchor="middle" font-family="system-ui">K</text>
+      <text x="72" y="70" font-size="13" font-weight="800" fill="currentColor" font-family="system-ui">Karim</text>
+      <text x="116" y="70" font-size="13" font-weight="800" fill="currentColor" opacity="0.45" font-family="system-ui">·</text>
+      <text x="126" y="70" font-size="12" font-weight="600" fill="currentColor" opacity="0.6" font-family="system-ui">14:32</text>
+      <path d="M172 66 h96" stroke="currentColor" stroke-width="1" marker-end="url(#d1)"/>
+      <text x="274" y="62" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">pastille 22 · nom 13 extrabold (« Toi » = indigo #6366F1)</text>
+      <text x="274" y="76" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">point médian muted · heure 12 medium (TimeStringCache HH:mm) · ✓✓ #A5B4FC</text>
+      <rect x="70" y="82" width="330" height="11" rx="5.5" fill="currentColor" opacity="0.62"/>
+      <rect x="70" y="100" width="288" height="11" rx="5.5" fill="currentColor" opacity="0.62"/>
+      <path d="M416 82 v29" stroke="currentColor" stroke-width="1" marker-start="url(#d1)" marker-end="url(#d1)"/>
+      <text x="428" y="94" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">texte 15 · interligne 1.42 · pleine largeur</text>
+      <text x="428" y="108" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">retrait 29 (aligné sur le nom) · PAS de bulle</text>
+      <text x="70" y="130" font-size="10.5" fill="currentColor" opacity="0.75" font-family="system-ui">🌐 🇪🇸 🇫🇷   👍 5</text>
+      <path d="M150 126 h60" stroke="currentColor" stroke-width="1" marker-end="url(#d1)"/>
+      <text x="218" y="130" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">méta 10.5 : drapeaux Prisme + réactions en pilule — sous le texte, discrets</text>
+      <!-- focus state -->
+      <text x="16" y="170" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui">État focus — la seule carte de l’écran</text>
+      <rect x="40" y="182" width="380" height="66" rx="16" fill="#31B6BB" opacity="0.10"/>
+      <rect x="40" y="182" width="380" height="66" rx="16" fill="none" stroke="#31B6BB" stroke-width="1.5"/>
+      <circle cx="66" cy="206" r="11" fill="#3F9E63"/>
+      <text x="66" y="210" font-size="11" font-weight="800" fill="#fff" text-anchor="middle" font-family="system-ui">S</text>
+      <text x="86" y="210" font-size="13" font-weight="800" fill="currentColor" font-family="system-ui">Samir · 17:48</text>
+      <rect x="84" y="220" width="310" height="12" rx="6" fill="currentColor" opacity="0.8"/>
+      <path d="M428 182 v66" stroke="currentColor" stroke-width="1" marker-start="url(#d1)" marker-end="url(#d1)"/>
+      <text x="440" y="204" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">fond #F8F7FF / #13111C · radius 16</text>
+      <text x="440" y="218" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">ring 1.5 accent conversation (#31B6BB)</text>
+      <text x="440" y="232" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">texte 15 → 16 · marge 8 · pad 8/12</text>
+      <text x="16" y="274" font-size="11" fill="currentColor" opacity="0.7" font-family="system-ui">Groupé&nbsp;: identité en tête de groupe seulement, lignes suivantes = texte seul au retrait 29. Médias nus (radius 16), citations en filet 2.5 pt couleur de l’auteur cité. Accessibilité&nbsp;: 1 rangée = 1 élément VoiceOver « Karim, 14 h 32, message »&nbsp;; tailles via MeeshyFont.relative.</text>
+    </svg>
+    <figcaption>SwiftUI&nbsp;: <code>FocalRow(record:isFirstInGroup:accent:)</code> — nouveau composant, indépendant de <code>BubbleStandardLayout</code> (qui reste la vue Aa). TSX&nbsp;: <code>FocalRow.tsx</code>, sibling de <code>BubbleMessageNormalView</code>.</figcaption>
+  </figure>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img" aria-label="DateSticker collant et pilule de défilement jour heure : capsule matériau flou, apparition pendant le scroll, disparition 900 millisecondes après l’arrêt">
+      <defs><marker id="d2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <text x="16" y="26" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui">DateSticker (sticky) — le « data sticker » de catégorisation</text>
+      <rect x="60" y="44" width="118" height="28" rx="14" fill="currentColor" opacity="0.07"/>
+      <rect x="60" y="44" width="118" height="28" rx="14" fill="none" stroke="#818CF8" stroke-width="1"/>
+      <text x="119" y="62" font-size="12" font-weight="700" fill="#6366F1" text-anchor="middle" font-family="system-ui">Mercredi</text>
+      <text x="196" y="55" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">capsule .ultraThinMaterial · bord 0.5 pt indigo200/900</text>
+      <text x="196" y="70" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">.caption semibold · pad 12/5 · sticky top 4 · z 5</text>
+      <text x="16" y="108" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui">ScrollTimePill — n’existe que pendant le défilement</text>
+      <rect x="60" y="122" width="150" height="28" rx="14" fill="currentColor" opacity="0.07"/>
+      <rect x="60" y="122" width="150" height="28" rx="14" fill="none" stroke="#818CF8" stroke-width="1"/>
+      <text x="135" y="140" font-size="12" font-weight="700" fill="#6366F1" text-anchor="middle" font-family="system-ui">Mercredi · 17:42</text>
+      <text x="228" y="133" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">jour + heure du message en tête de viewport</text>
+      <text x="228" y="148" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">position&nbsp;: sous le header, centré · fade 280 ms</text>
+      <!-- timeline -->
+      <line x1="60" y1="196" x2="660" y2="196" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="120" cy="196" r="5" fill="#6366F1"/>
+      <text x="120" y="216" font-size="10.5" fill="currentColor" text-anchor="middle" font-family="system-ui">scroll commence → opacité 1</text>
+      <circle cx="380" cy="196" r="5" fill="#6366F1"/>
+      <text x="380" y="216" font-size="10.5" fill="currentColor" text-anchor="middle" font-family="system-ui">le doigt s’arrête</text>
+      <circle cx="520" cy="196" r="5" fill="none" stroke="#6366F1" stroke-width="2"/>
+      <text x="520" y="216" font-size="10.5" fill="currentColor" text-anchor="middle" font-family="system-ui">+900 ms → opacité 0</text>
+      <text x="450" y="188" font-size="10" fill="currentColor" opacity="0.6" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">timer réarmé à chaque scrollViewDidScroll</text>
+    </svg>
+    <figcaption>iOS&nbsp;: étendre <code>MessageDayStickyOverlay</code> (ajouter l’heure, auto-hide sur <code>scrollViewDidEndDecelerating/EndDragging</code>). Web&nbsp;: nouveau <code>ScrollTimePill.tsx</code> + sticker sticky dans <code>MessagesDisplay</code>.</figcaption>
+  </figure>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 260" role="img" aria-label="Courbe du FocalScroller : bande de focus à 150 points du bas, échelle de 1 à 0,6 et opacité de 1 à 0,18 selon la distance, message net avec anneau accent">
+      <defs><marker id="d3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <text x="16" y="26" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui">FocalScroller — la courbe de mise au point</text>
+      <!-- screen sketch -->
+      <rect x="40" y="44" width="200" height="190" rx="14" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="66" y="60" width="90" height="9" rx="4.5" fill="currentColor" opacity="0.16"/>
+      <rect x="60" y="80" width="120" height="10" rx="5" fill="currentColor" opacity="0.28"/>
+      <rect x="56" y="102" width="150" height="12" rx="6" fill="currentColor" opacity="0.45"/>
+      <rect x="52" y="126" width="170" height="14" rx="7" fill="currentColor" opacity="0.7"/>
+      <rect x="48" y="152" width="184" height="34" rx="12" fill="#31B6BB" opacity="0.2"/>
+      <rect x="48" y="152" width="184" height="34" rx="12" fill="none" stroke="#31B6BB" stroke-width="2"/>
+      <line x1="40" y1="196" x2="240" y2="196" stroke="#31B6BB" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="246" y="200" font-size="10.5" fill="#31B6BB" font-family="ui-monospace, Menlo, monospace">focusY = bas − 150</text>
+      <rect x="56" y="206" width="160" height="12" rx="6" fill="currentColor" opacity="0.9"/>
+      <!-- curve -->
+      <line x1="330" y1="220" x2="680" y2="220" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3)"/>
+      <line x1="330" y1="220" x2="330" y2="60" stroke="currentColor" stroke-width="1.5" marker-end="url(#d3)"/>
+      <text x="690" y="224" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">d</text>
+      <text x="330" y="50" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">échelle / opacité</text>
+      <path d="M330 80 L 480 80 C 560 84, 600 140, 680 150" fill="none" stroke="#31B6BB" stroke-width="2.5"/>
+      <path d="M330 92 L 480 92 C 560 100, 600 180, 680 196" fill="none" stroke="#6366F1" stroke-width="2.5" stroke-dasharray="6 4"/>
+      <text x="415" y="72" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace">zone nette (d ≤ 0 sous le focus)</text>
+      <text x="560" y="128" font-size="10.5" fill="#31B6BB" font-family="ui-monospace, Menlo, monospace">échelle = 1 − 0.40·min(1, d/380)</text>
+      <text x="548" y="212" font-size="10.5" fill="#6366F1" font-family="ui-monospace, Menlo, monospace">opacité = 1 − 0.82·min(1, d/380)</text>
+      <text x="330" y="248" font-size="10.5" fill="currentColor" opacity="0.75" font-family="system-ui">Message net (le plus proche du focus)&nbsp;: ring 2 pt accent conversation + texte 15→16. Ancre de transformation&nbsp;: bas, côté de la bulle.</text>
+    </svg>
+    <figcaption>iOS&nbsp;: transformation appliquée aux cellules visibles dans <code>scrollViewDidScroll</code> de <code>MessageListViewController</code> (transform + alpha sur la contentView — la collection inversée existante convient telle quelle). Web&nbsp;: handler rAF sur le conteneur de <code>MessagesDisplay</code> (compatible tanstack-virtual, mesure dynamique déjà en place).</figcaption>
+  </figure>
+</section>
+
+<!-- ═════════ 4 · INTÉGRATION ═════════ -->
+<section id="integration">
+  <p class="eyebrow">4 · Intégration — dans l’ouverture de conversation actuelle</p>
+  <h2>Où ça se branche, fichier par fichier</h2>
+  <p class="intro">Réponse courte&nbsp;: <b>rien ne change dans la navigation</b>. On ouvre une conversation exactement comme aujourd’hui — <code>Route.conversation</code> → <code>ConversationView(conversation:)</code> sur iOS, <code>/conversations/[id]</code> → <code>ConversationLayout</code> sur le web. Le mode de lecture est un <b>état de rendu</b> décidé à l’apparition, pas un écran&nbsp;: la liste actuelle devient la config « Script », le Focal s’installe par-dessus les mêmes cellules.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Séquence d’ouverture : route existante, ConversationView, orchestrateur lit les non-lus, choisit Focal avec pont ou Résumé, la Lentille et Aa permettent de changer, choix persisté par conversation">
+      <defs><marker id="d4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <rect x="12" y="70" width="132" height="52" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="78" y="92" font-size="11.5" font-weight="700" fill="currentColor" text-anchor="middle" font-family="system-ui">Ouverture actuelle</text>
+      <text x="78" y="108" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">Route.conversation</text>
+      <line x1="144" y1="96" x2="186" y2="96" stroke="currentColor" stroke-width="1.5" marker-end="url(#d4)"/>
+      <rect x="190" y="70" width="150" height="52" rx="12" fill="none" stroke="#C9962B" stroke-width="2"/>
+      <text x="265" y="90" font-size="11.5" font-weight="700" fill="currentColor" text-anchor="middle" font-family="system-ui">Orchestrateur (onAppear)</text>
+      <text x="265" y="106" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="ui-monospace, Menlo, monospace">unread ≤ 25 ? · choix collant ?</text>
+      <line x1="340" y1="84" x2="404" y2="60" stroke="#E05252" stroke-width="1.8" marker-end="url(#d4)"/>
+      <rect x="408" y="34" width="140" height="46" rx="12" fill="none" stroke="#E05252" stroke-width="2"/>
+      <text x="478" y="53" font-size="11.5" font-weight="700" fill="currentColor" text-anchor="middle" font-family="system-ui">FOCAL + pont ✦</text>
+      <text x="478" y="69" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="system-ui">mêmes cellules, perspective</text>
+      <line x1="340" y1="110" x2="404" y2="134" stroke="#3E93CF" stroke-width="1.8" marker-end="url(#d4)"/>
+      <rect x="408" y="112" width="140" height="46" rx="12" fill="none" stroke="#3E93CF" stroke-width="2"/>
+      <text x="478" y="131" font-size="11.5" font-weight="700" fill="currentColor" text-anchor="middle" font-family="system-ui">RÉSUMÉ VIVANT</text>
+      <text x="478" y="147" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="system-ui">&gt; 25 non-lus / &gt; 24 h</text>
+      <line x1="548" y1="57" x2="612" y2="57" stroke="currentColor" stroke-width="1.5" marker-end="url(#d4)"/>
+      <line x1="548" y1="135" x2="612" y2="98" stroke="currentColor" stroke-width="1.5" marker-end="url(#d4)"/>
+      <rect x="616" y="46" width="92" height="66" rx="12" fill="none" stroke="#31B6BB" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="662" y="70" font-size="11" font-weight="700" fill="currentColor" text-anchor="middle" font-family="system-ui">Lentille + Aa</text>
+      <text x="662" y="86" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="system-ui">choix persisté</text>
+      <text x="662" y="99" font-size="9.5" fill="currentColor" opacity="0.7" text-anchor="middle" font-family="system-ui">par conversation</text>
+      <text x="12" y="192" font-size="10.5" fill="currentColor" opacity="0.75" font-family="system-ui">Flag OFF&nbsp;: tout ceci est inerte, l’app rend la liste actuelle. Flag ON&nbsp;: Script (= liste actuelle) reste à un tap via Aa — l’adoption est réversible message par message.</text>
+    </svg>
+    <figcaption>L’orchestrateur ne s’exécute qu’à l’apparition — jamais pendant la lecture (règle 1 du vol.&nbsp;3). Le choix manuel est collant et stocké avec les préférences existantes de la conversation.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Chantier</th><th>iOS — fichier réel</th><th>Web — fichier réel</th></tr></thead>
+      <tbody>
+        <tr><td class="k">État du mode</td><td><code>ConversationReadingMode</code> (enum) dans <code>ConversationViewModel.swift</code> ; persistance à côté de « My display » (<code>ConversationPreferencesTab.swift</code>)</td><td>prop <code>readingMode</code> de <code>ConversationLayout.tsx</code> → <code>ConversationView</code> ; persistance <code>header/use-header-preferences.ts</code></td></tr>
+        <tr><td class="k">Orchestrateur</td><td><code>onAppear</code> de <code>ConversationView.swift</code>, lit <code>unreadCount</code> du <code>MessageStore</code> avant le premier rendu</td><td>effet d’init dans <code>ConversationLayout.tsx</code> (les compteurs non-lus existent déjà)</td></tr>
+        <tr><td class="k">Perspective</td><td><code>scrollViewDidScroll</code> dans <code>MessageListViewController.swift</code>&nbsp;: transform + alpha des cellules visibles (collection inversée conservée)</td><td>handler rAF sur le conteneur scroll de <code>MessagesDisplay</code> (<code>messages-display.tsx</code>)</td></tr>
+        <tr><td class="k">Rangée plate + identité</td><td>nouveau <code>FocalRow.swift</code> (cotes du design, §3), servie en Focal ET en Script — <code>BubbleStandardLayout</code> intact hors flag ; heure via <code>TimeStringCache</code>, tailles via <code>MeeshyFont.relative</code></td><td>nouveau <code>FocalRow.tsx</code> sibling de <code>BubbleMessageNormalView</code> ; <code>MessageNameDate.tsx</code> réutilisé tel quel</td></tr>
+        <tr><td class="k">Stickers + pilule</td><td>étendre <code>MessageDayStickyOverlay.swift</code> (heure + auto-hide) ; séparateurs <code>MessageDaySeparator.swift</code> inchangés</td><td>nouveaux <code>DateSticker.tsx</code> + <code>ScrollTimePill.tsx</code> dans <code>ConversationMessages.tsx</code> (s’inspirer du kit v2 <code>MessageTimestamp.tsx</code>)</td></tr>
+        <tr><td class="k">Lentille + Aa</td><td>dans <code>floatingHeaderSection</code> (<code>ConversationView.swift</code> l.1560-1830)</td><td><code>header/HeaderToolbar.tsx</code></td></tr>
+        <tr><td class="k">Accent du focus</td><td><code>conversation.accentColor</code> (<code>CoreModels.swift:199</code>) — déjà câblé dans le header</td><td>introduire <code>--conv-accent</code> (portage de <code>ColorGeneration</code> en TS dans <code>packages/shared</code>)</td></tr>
+        <tr><td class="k">Suggestion ✦</td><td>cellule dédiée sous le message visé (API observer, vol.&nbsp;2)</td><td>slot sous <code>BubbleMessage</code> (le view-mode machine <code>useMessageView</code> l’accueille)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top:44px;">Le plan de PRs — reproductible en autonomie</h2>
+  <div class="steps">
+    <div><b>Composants muets, sans flag.</b> iOS&nbsp;: heure dans la pilule sticky + auto-hide à l’arrêt du scroll (extension <code>MessageDayStickyOverlay</code>) — utile même sans Focal, livrable seul. Web&nbsp;: <code>DateSticker.tsx</code> + <code>ScrollTimePill.tsx</code> + généralisation de <code>MessageNameDate</code>. Tests&nbsp;: apparition/disparition (timer 900 ms), labels de jour (reprendre <code>MessageDayLabel</code>).</div>
+    <div><b><code>FocalRow</code> + FocalScroller derrière le flag <code>reading_modes</code>.</b> La rangée plate (cotes §3) sert les deux densités&nbsp;: Focal (perspective) et Script (uniforme, via Aa) — <code>BubbleStandardLayout</code>/<code>BubbleMessageNormalView</code> ne sont PAS touchés et restent le rendu hors flag. La perspective = un pass transform/alpha sur les cellules visibles (courbe §3), compositor only, plus l’<b>inset de tête</b> qui rend le premier message lisible plein cadre. Flag off = code mort.</div>
+    <div><b>Lentille + orchestrateur + persistance.</b> Le contrôle dans le header (iOS <code>floatingHeaderSection</code>, web <code>HeaderToolbar</code>), les seuils (≤ 25 non-lus → Focal + pont&nbsp;; sinon Résumé quand il existera — d’ici là, Focal ouvre sur le premier non-lu avec le pont ✦ rendu par l’observer). Choix collant stocké par conversation.</div>
+    <div><b>Prisme d’accent web.</b> Portage TS de <code>DynamicColorGenerator</code> dans <code>packages/shared</code> (mêmes maps langue/type/thème, mêmes poids 30/30/40) + CSS var <code>--conv-accent</code> consommée par le ring de focus et la Lentille. Parité visuelle iOS/web à ce stade.</div>
+    <div><b>Résumé Vivant + API observer.</b> Le second cran du zoom (vol.&nbsp;2 et 3)&nbsp;: événements <code>assist:*</code> côté gateway, carte d’état, rampe de visages. Indépendant des PR 1-4, peut glisser sans les bloquer.</div>
+  </div>
+</section>
+
+<!-- ═════════ 5 · SPEC iOS ═════════ -->
+<section id="spec-ios">
+  <p class="eyebrow">5 · Spécification d’implémentation — iOS</p>
+  <h2>Architecture, algorithme, et chaque feature existante</h2>
+  <p class="intro">Contrat&nbsp;: le mode Focal est une <b>couche de rendu</b> posée sur l’infrastructure existante — <code>ConversationViewModel</code>, <code>MessageStore</code> (fenêtré, cache-first GRDB), <code>ConversationSocketHandler</code> et la <code>UICollectionView</code> inversée de <code>MessageListViewController</code> ne changent pas. Seule la <i>cellule</i> et un <i>pass de scroll</i> changent. Toute feature listée ci-dessous doit fonctionner à l’identique — le temps réel en premier.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Brique</th><th>Spécification précise</th></tr></thead>
+      <tbody>
+        <tr><td class="k">État du mode</td><td><code>enum ConversationReadingMode: String, Codable { case focal, script }</code> + <code>bubbleLegacy</code> transitoire hors flag. Propriété <code>@Published var readingMode</code> sur <code>ConversationViewModel</code>, hydratée à l’init depuis les préférences par conversation (même stockage que « My display » — <code>ConversationPreferencesTab</code>), défaut <code>.focal</code> sous flag <code>reading_modes</code>. Le choix manuel (Aa / Lentille) écrit la préférence — collant. L’orchestrateur ne s’exécute qu’à l’<code>onAppear</code>, jamais pendant la lecture.</td></tr>
+        <tr><td class="k">Cellule</td><td><code>FocalRow.swift</code> (SwiftUI, cotes §3) montée via <code>UIHostingConfiguration</code> dans les cellules existantes — même <code>BubbleContentBuilder</code> en amont (donc mêmes <code>preferredTranslation(for:)</code>, mentions, liens). La cellule reste enveloppée par <code>BubbleSwipeContainer</code> (swipe réponse/transfert inchangé) et le <code>.scaleEffect(y:-1)</code> de la collection inversée. En densité Script&nbsp;: la même <code>FocalRow</code>, sans pass de perspective.</td></tr>
+        <tr><td class="k">FocalScroller</td><td>Dans <code>scrollViewDidScroll</code>&nbsp;: pour chaque <code>visibleCell</code>, convertir le centre en coordonnées visuelles (<code>convert(_:to:)</code> + inversion), calculer <code>d = max(0, focusY − midY)</code> avec <code>focusY = bounds.height − 150</code>, puis <code>f = min(1, d/380)</code>&nbsp;; appliquer <code>layer.transform = CATransform3DMakeScale(1−0.40f, 1−0.40f, 1)</code> (anchorPoint fixé une fois à <code>(0.16, 1.0)</code>) et <code>alpha = 1 − 0.82f</code>. Coût O(cellules visibles), aucune invalidation de layout, aucun blur/ombre → 120 Hz ProMotion. La cellule la plus proche du focus (<code>midY ≤ focusY + 95</code>) reçoit <code>isFocused</code> via une clé custom de <code>UICellConfigurationState</code>&nbsp;; <code>FocalRow</code> rend alors la carte (fond <code>backgroundSecondary</code>, radius 16, ring 1.5 <code>conversation.accentColor</code>, texte 15→16 animé <code>springFast</code>).</td></tr>
+        <tr><td class="k">Premier message lisible</td><td><b>Règle</b>&nbsp;: le tout premier message de l’historique doit pouvoir atteindre la bande de focus. Sur la collection inversée, ajouter un <b>inset de tête</b> côté messages anciens&nbsp;: <code>contentInset = bounds.height − focusBand − hauteurPremièreRangée</code> (≈ <code>bounds.height − 190</code>), matérialisé par une vue « Début de la conversation · {date} » (<code>caption</code>, <code>textMuted</code>). Le correctif est visible dans le prototype §2.</td></tr>
+        <tr><td class="k">Stickers &amp; pilule</td><td><code>MessageDaySeparator</code> inchangé pour les capsules inline&nbsp;; <code>MessageDayStickyOverlay</code> étendu&nbsp;: texte « {jour} · {HH:mm} » du premier message visible (labels <code>MessageDayLabel</code>, heure <code>TimeStringCache</code>), opacité 1 sur <code>scrollViewDidScroll</code>, fondu 0 après 900 ms sans événement (timer réarmé), masqué quand le header étendu est ouvert (comportement existant conservé).</td></tr>
+        <tr><td class="k">Lentille + Aa</td><td>Dans <code>floatingHeaderSection</code> (<code>ConversationView.swift</code>)&nbsp;: pastille du mode courant (nom + point accent) ouvrant la feuille des modes, bouton Aa adjacent (44×30, <code>MeeshyRadius.full</code>). Transitions par fondu d’échelle <code>springDefault</code> (zoom sémantique). VoiceOver&nbsp;: « Mode de lecture, Focal, bouton ».</td></tr>
+        <tr><td class="k">Perf &amp; accessibilité</td><td>Budget&nbsp;: pass de scroll &lt; 1 ms/frame (profiler sur iPhone 12)&nbsp;; zéro allocation dans le pass&nbsp;; <code>UIAccessibility.isReduceMotionEnabled</code> → pas de transform (Script visuel, focus par surbrillance seule)&nbsp;; VoiceOver → la perspective n’existe pas&nbsp;: chaque cellule lit « {Pseudo}, {heure}, {contenu} » + traits existants&nbsp;; Dynamic Type via <code>MeeshyFont.relative(13/12/15/16)</code>&nbsp;; emoji-only conserve 90/60/45 pt.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top:44px;">Matrice de couverture — toutes les features de la vue actuelle</h2>
+  <p class="intro">Chaque ligne est un invariant de recette&nbsp;: la feature doit se comporter à l’identique en Focal et en Script. Sources = composants réels du repo.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Feature (source actuelle)</th><th>Comportement en Focal / Script</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Message entrant temps réel<br><span style="font-weight:400;color:var(--muted)">Socket.IO → ConversationSocketHandler → MessageStore</span></td><td>Insertion en bas comme aujourd’hui (diffable snapshot). Si l’utilisateur est au fond&nbsp;: la nouvelle rangée naît <i>dans</i> la bande de focus (fondu + spring existants), le focus la suit. Sinon&nbsp;: la pilule « nouveaux messages » de <code>ConversationScrollControlsView</code> s’incrémente — inchangée.</td></tr>
+        <tr><td class="k">Typing indicator<br><span style="font-weight:400;color:var(--muted)">TypingIndicatorBubble (cellule bas de liste)</span></td><td>Conservé comme cellule, redessiné plat&nbsp;: pastille 22 de l’auteur + trois points pulsants accent (mêmes timings 0.5 s / 0.18 s), sans capsule. Toujours exclu du pass de perspective (il vit sous la bande de focus).</td></tr>
+        <tr><td class="k">Présence<br><span style="font-weight:400;color:var(--muted)">MeeshyAvatar.onlineDot + PresenceState</span></td><td>Le dot de présence s’applique à la pastille 22 de l’identité (ring 1.5 <code>backgroundPrimary</code>)&nbsp;; règle 1/3/5 et « offline = pas de dot » inchangées. <code>typing:start</code> force online (comportement produit existant).</td></tr>
+        <tr><td class="k">Accusés ✓ / ✓✓ / lu<br><span style="font-weight:400;color:var(--muted)">BubbleDeliveryCheck (all-or-nothing)</span></td><td>Déplacés dans l’identité des messages « Toi »&nbsp;: ✓ envoyé, ✓✓ délivré (textSecondary), ✓✓ lu (<code>readReceipt #818CF8</code>). Mise à jour temps réel par reconfiguration de cellule — la logique par destinataire ne bouge pas. Masqués si la préférence de confidentialité l’exige.</td></tr>
+        <tr><td class="k">Réactions live<br><span style="font-weight:400;color:var(--muted)">BubbleReactionsOverlay + EmojiReactionPicker</span></td><td>Pilule plate en méta (11 pt, fond <code>backgroundSecondary</code>, bord <code>inputBorder</code>), comptes <b>monospaced</b> conservés&nbsp;; arrivée d’une réaction = pop <code>springBouncy</code> sur la pilule. Le picker (barre rapide + grille) et <code>MessageReactionsDetailView</code> inchangés.</td></tr>
+        <tr><td class="k">Traductions qui arrivent<br><span style="font-weight:400;color:var(--muted)">preferredTranslation(for:) + push Socket.IO</span></td><td>Résolution Prisme inchangée (overrides manuels &gt; <code>ConversationLanguagePreferences.resolved</code> &gt; original). Quand la traduction préférée arrive après coup&nbsp;: swap du texte en place (cross-fade 150 ms) + apparition du chip 🌐 en méta. Appui sur 🌐 = V.O., appui long = sélecteur de langues existant.</td></tr>
+        <tr><td class="k">Audio + transcription<br><span style="font-weight:400;color:var(--muted)">AudioBubbleRouter, AudioCarouselView, ConversationAudioCoordinator</span></td><td><code>AudioPlayerView</code> (waveform, sélecteur de piste par langue) rendu nu dans la rangée — sans conteneur bulle. Transcription traduite en italique 12.5 sous le player (la V.O. par 🌐). Lecture coordonnée et carrousel multi-pistes inchangés.</td></tr>
+        <tr><td class="k">Médias &amp; téléchargements<br><span style="font-weight:400;color:var(--muted)">BubbleStandardLayout+Media, DownloadBadgeView</span></td><td>Grilles 1/2/3/4+ conservées (gridMaxWidth 300, spacing 2, radius 16), posées nues dans la rangée. États de téléchargement (<code>DownloadBadgeView</code>) et visionneuse plein écran inchangés — la visionneuse EST le geste Cartes (vol. 3).</td></tr>
+        <tr><td class="k">Réponses citées<br><span style="font-weight:400;color:var(--muted)">BubbleQuotedReply</span></td><td>Filet 2.5 pt couleur de l’auteur cité + une ligne tronquée (11.5), au retrait 29. Tap = saut vers l’original — qui prend le focus (scroll animé jusqu’à la bande de focale).</td></tr>
+        <tr><td class="k">Édition / suppression / signalement<br><span style="font-weight:400;color:var(--muted)">BubbleDeletedView, MessageOverlayMenu / contextMenu iOS 26</span></td><td>Long-press = menu contextuel existant, appliqué à la rangée plate (préview = la rangée, pas une bulle). Édité = mention « modifié » 10.5 en méta&nbsp;; supprimé = rangée fantôme italique (reprend <code>BubbleDeletedView</code> sans fond).</td></tr>
+        <tr><td class="k">Éphémère / flou / vue unique<br><span style="font-weight:400;color:var(--muted)">lifecycles existants + badges</span></td><td>Badges au-dessus de l’identité (timer, épinglé, transféré — pile existante). Le flou s’applique au bloc contenu de la rangée&nbsp;; « vue unique » ouvre plein écran comme aujourd’hui. Aucune interaction avec la perspective (le flou de contenu est un état, pas un effet de scroll).</td></tr>
+        <tr><td class="k">Épinglés / bannière / recherche<br><span style="font-weight:400;color:var(--muted)">PinnedMessageBanner, ConversationSearchHandler</span></td><td>Bannière épinglée inchangée sous le header. Recherche&nbsp;: le résultat sélectionné défile jusqu’à la <b>bande de focus</b> (et non plus au centre) + surbrillance existante — le focus devient l’outil de lecture du résultat.</td></tr>
+        <tr><td class="k">Envoi optimiste / échec<br><span style="font-weight:400;color:var(--muted)">optimistic 0.7 + retry band</span></td><td>Rangée optimiste à opacité 0.7 (au-dessus du pass de perspective&nbsp;: <code>alpha = min(0.7, alphaPerspective)</code>), confirmée = 1.0. Bande orange de retry inchangée, exclue de la perspective.</td></tr>
+        <tr><td class="k">Pagination / historique<br><span style="font-weight:400;color:var(--muted)">MessageStore fenêtré + spinner haut</span></td><td>Chargement vers le haut inchangé (préservation d’offset au prepend, déjà gérée par la collection inversée). L’inset de tête « Début de la conversation » n’apparaît que quand <code>MessageStore</code> confirme que la première page est atteinte.</td></tr>
+        <tr><td class="k">Effets, mentions, appels<br><span style="font-weight:400;color:var(--muted)">MessageEffectModifiers, mention/hashtag tokens, BubbleCallNoticeView</span></td><td>Effets (bitfield) appliqués au bloc contenu. Mentions indigo300/600 et hashtags inchangés (mêmes tokens). Notices d’appel et système = rangées centrées plates (reprennent <code>BubbleSystemNoticeView</code> sans capsule) — la Scène (couche live) reste hors périmètre de cette spec.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════ 6 · SPEC WEB ═════════ -->
+<section id="spec-web">
+  <p class="eyebrow">6 · Spécification d’implémentation — Web</p>
+  <h2>Le même contrat, dans la chaîne Next.js existante</h2>
+  <p class="intro">Même principe&nbsp;: <code>ConversationLayout</code> (données + sockets) et <code>MessagesDisplay</code> (virtualisation) ne changent pas de rôle — on fork la <i>rangée</i> et on ajoute un <i>pass de scroll</i>. Le temps réel web passe déjà par les handlers de <code>ConversationLayout</code>&nbsp;: ils restent la seule source d’événements.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Brique</th><th>Spécification précise</th></tr></thead>
+      <tbody>
+        <tr><td class="k">État &amp; plomberie</td><td><code>readingMode: 'focal' | 'script'</code> dans <code>ConversationLayout.tsx</code>, persisté par conversation via <code>header/use-header-preferences.ts</code> (comme pin/mute/archive), défaut <code>focal</code> sous flag. Prop drillée <code>ConversationView → ConversationMessages → MessagesDisplay</code>. Contrôle&nbsp;: pastille de mode + bouton Aa dans <code>header/HeaderToolbar.tsx</code>.</td></tr>
+        <tr><td class="k">Rangée</td><td><code>bubble-message/FocalRow.tsx</code>, sibling de <code>BubbleMessageNormalView</code> — le multiplexeur <code>useMessageView</code> (normal/réaction/langue/édition/suppression) est conservé tel quel&nbsp;: seul le rendu « normal » change. <code>MessageNameDate.tsx</code> (Nom • heure) réutilisé, check ✓✓ (logique <code>DeliveryIndicator</code>) déplacé dans l’identité pour ses propres messages. <code>ExpandableMessageText</code> (512 car.) conservé. Grille Tailwind gauche/droite remplacée par la colonne plate au retrait 29 px.</td></tr>
+        <tr><td class="k">Perspective ⚠ virtualiseur</td><td><code>@tanstack/react-virtual</code> positionne chaque rangée par <code>translateY</code> — <b>ne pas toucher à ce transform</b>. Le pass Focal s’applique à un <b>wrapper interne</b>&nbsp;: <code>&lt;div style="transform:translateY(…)"&gt;&lt;div class="focal-fx"&gt;…&lt;/div&gt;&lt;/div&gt;</code>, où <code>.focal-fx</code> reçoit <code>scale/opacity</code> (compositor). <code>measureElement</code> mesure le wrapper externe → les hauteurs restent exactes. Handler <code>scroll</code> en rAF sur le conteneur de <code>ConversationMessages</code>&nbsp;; mêmes formules (<code>d/380</code>, planchers 0.60/0.18)&nbsp;; rangée focus = classe <code>is-focused</code> (carte + ring <code>var(--conv-accent)</code>).</td></tr>
+        <tr><td class="k">Premier message</td><td><code>paddingStart</code> du virtualiseur = <code>clientHeight − 190</code> quand la première page est chargée (état « all messages loaded » existant), avec la ligne « Début de la conversation » à la place du libellé actuel.</td></tr>
+        <tr><td class="k">Stickers &amp; pilule</td><td><code>DateSticker.tsx</code>&nbsp;: capsule sticky (top 4, backdrop-blur, bord <code>--gp-border</code>, texte 12 bold indigo) injectée entre les jours par <code>MessagesDisplay</code> (reprendre <code>useShowDateSeparator</code> du kit v2). <code>ScrollTimePill.tsx</code>&nbsp;: portal au-dessus de la liste, contenu « {jour} · {HH:mm} » du premier message visible (<code>formatRelativeDate</code> pour le jour), <code>opacity</code> pilotée par le scroll + timeout 900 ms — <code>transition: opacity .28s</code>.</td></tr>
+        <tr><td class="k">Accent conversation</td><td>Portage TS de <code>DynamicColorGenerator</code> dans <code>packages/shared/utils/conversation-colors.ts</code> (mêmes maps langue/type/thème, poids 30/30/40, hueShift ±30°, clamp de luminosité par thème) — testé en snapshot contre les valeurs Swift. Exposé en CSS var <code>--conv-accent</code> sur le conteneur de conversation&nbsp;; consommée par le ring de focus, la Lentille, la pilule.</td></tr>
+        <tr><td class="k">Temps réel (inchangé)</td><td>Tous les handlers restent dans <code>ConversationLayout</code>&nbsp;: <code>message:new</code> (insertion + auto-scroll si au fond, sinon pilule non-lus du bouton de scroll — existante)&nbsp;; arrivée de traduction → <code>getPreferredDisplayLanguage</code> bascule la rangée (cross-fade)&nbsp;; réactions → pilule méta animée&nbsp;; typing → header (<code>TypingIndicator</code>) + rangée plate optionnelle&nbsp;; read receipts → ✓✓ identité&nbsp;; messages optimistes à 0.7&nbsp;; <code>MessageSearch</code> scrolle le résultat dans la bande de focus.</td></tr>
+        <tr><td class="k">Accessibilité</td><td><code>prefers-reduced-motion</code> → pas de pass (Script visuel). Rangée = un groupe aria (« {Nom}, {heure}, message »)&nbsp;; la pilule et les stickers sont <code>aria-hidden</code> (l’info date existe dans le flux)&nbsp;; focus clavier visible sur chaque rangée&nbsp;; nouvelles rangées annoncées par la région live existante.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═════════ 7 · RECETTE ═════════ -->
+<section id="recette">
+  <p class="eyebrow">7 · Recette — critères d’acceptation</p>
+  <h2>La définition de « fini »</h2>
+  <div class="steps" style="counter-reset: none;">
+    <div style="padding-left:17px;"><b>Focale.</b> Le tout premier message de l’historique atteint la bande de focus et se lit plein cadre (inset de tête). Un message long de 6 lignes net occupe l’attention&nbsp;; à 400 px au-dessus, il pèse ≤ 20 % d’opacité. Le focus suit le défilement sans à-coup ni oscillation entre deux rangées (hystérésis 95 px).</div>
+    <div style="padding-left:17px;"><b>Fluidité.</b> 60 fps minimum sur iPhone 12 / mid-range Android (web), 120 Hz sur ProMotion&nbsp;; le pass de scroll n’alloue pas et ne déclenche aucun relayout (Instruments / DevTools Performance à l’appui). Fil de 100+ messages avec carrousel, audio et PDF&nbsp;: aucune chute mesurable vs la liste actuelle.</div>
+    <div style="padding-left:17px;"><b>Temps réel.</b> Chaque ligne de la matrice §5 vérifiée en Focal ET en Script&nbsp;: message entrant (au fond / pas au fond), typing, présence, ✓✓ et lu, réaction live, traduction tardive (swap + 🌐), édition, suppression, optimiste + échec + retry, pagination haut, recherche → focus. Aucune bulle visible dans les deux densités — la seule carte est le focus.</div>
+    <div style="padding-left:17px;"><b>Chrono.</b> Pseudo · HH:mm en tête de groupe uniquement&nbsp;; stickers de jour collants aux libellés <code>MessageDayLabel</code>&nbsp;; pilule « jour · heure » visible pendant le défilement, invisible 900 ms après l’arrêt, jamais affichée à l’ouverture.</div>
+    <div style="padding-left:17px;"><b>Accessibilité.</b> VoiceOver/lecteur d’écran&nbsp;: contenu intégral, ordre chronologique, zéro artefact de perspective. Reduced motion&nbsp;: rendu Script + focus par surbrillance. Dynamic Type XL&nbsp;: la rangée s’étire, la focale reste lisible. Contrastes AA sur les deux thèmes.</div>
+    <div style="padding-left:17px;"><b>Réversibilité.</b> Aa bascule Focal ⇄ Script instantanément, préférence collante par conversation, « revenir en mode auto » disponible. Flag off&nbsp;: l’app est bit-à-bit identique à aujourd’hui.</div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="wrap">Meeshy · « Focal Grandeur Nature » · 15 août 2026 — volume 4. Sources&nbsp;: MeeshyColors.swift, ThemeManager.swift, DesignTokens.swift, BubbleStandardLayout.swift, MessageDaySeparator.swift, ColorGeneration.swift, MessageNameDate.tsx, MessageContent.tsx, globals.css. Vol.&nbsp;1 propositions · vol.&nbsp;2 cas d’usage · vol.&nbsp;3 verdict &amp; prototype.</div>
+</footer>
+</div>
+
+<script>
+const A = {
+  toi:   { n: "Toi",        c: "#6366F1" },
+  karim: { n: "Karim",      c: "#E28A3C" },
+  mia:   { n: "Mia",        c: "#BC55A0" },
+  nadia: { n: "Nadia",      c: "#2E9E96" },
+  louis: { n: "Louis",      c: "#C9962B" },
+  sarah: { n: "Sarah",      c: "#E05252" },
+  samir: { n: "Samir",      c: "#3F9E63" },
+  rosa:  { n: "Tante Rosa", c: "#8A63D2" },
+  papi:  { n: "Papi",       c: "#5A6FD6" }
+};
+const EPS = [
+  { d: "Lundi",    t0: [18, 2],  step: 5 },
+  { d: "Mardi",    t0: [12, 15], step: 3 },
+  { d: "Mercredi", t0: [17, 30], step: 3 },
+  { d: "Jeudi",    t0: [19, 5],  step: 3 },
+  { d: "Vendredi", t0: [7, 45],  step: 16 }
+];
+const M = [
+ {i:1,a:"karim",e:0,x:"Bon, on est tous chauds pour le week-end du 12 ?"},
+ {i:2,a:"sarah",e:0,x:"Ouiii 🙌"},
+ {i:3,a:"samir",e:0,x:"Chaud !"},
+ {i:4,a:"mia",e:0,lg:"🇪🇸",x:"Réservez vite, ça se remplit !",vo:"¡Reservad ya, que se llena!"},
+ {i:5,a:"karim",e:0,x:"Regardez celui-là 👇",m:"link"},
+ {i:6,a:"louis",e:0,x:"Pas mal ! Il y a une piscine ?"},
+ {i:7,a:"karim",e:0,r:6,x:"Oui, et le loueur de canoës est à 10 min"},
+ {i:8,a:"nadia",e:0,x:"Le prix ?"},
+ {i:9,a:"karim",e:0,r:8,x:"620 € les deux nuits"},
+ {i:10,a:"louis",e:0,x:"J’ai trouvé celui-ci aussi, la terrasse est superbe",m:"carousel"},
+ {i:11,a:"sarah",e:0,r:10,x:"La terrasse 😍"},
+ {i:12,a:"nadia",e:0,r:10,x:"Il fait 680 €, un poil plus cher"},
+ {i:13,a:"papi",e:0,x:"Moi je suis, tant qu’il y a un bon lit"},
+ {i:14,a:"rosa",e:0,lg:"🇵🇹",x:"J’apporte les desserts !",vo:"Eu levo as sobremesas!"},
+ {i:15,a:"sarah",e:0,x:"On vote ? Gorges = 👍 · Terrasse = ❤️"},
+ {i:16,a:"karim",e:0,x:"5 × 👍 contre 3 × ❤️ — les Gorges gagnent !",rx:"👍 5"},
+ {i:17,a:"nadia",e:0,x:"Je réserve ce soir alors"},
+ {i:18,a:"toi",e:0,x:"Parfait. Dispo pour la caution si besoin"},
+ {i:19,a:"nadia",e:0,r:18,x:"Top, je te dis ça"},
+ {i:20,a:"nadia",e:0,x:"Réservé ✅ J’ai eu la propriétaire au téléphone : arrivée samedi à partir de 15 h, draps fournis mais pas les serviettes, et elle nous laisse le barbecue et la plancha. Les arrhes sont payées, je vous envoie le récap ce soir."},
+ {i:21,a:"karim",e:0,x:"🎉",rx:"❤️ 6"},
+ {i:22,a:"mia",e:0,lg:"🇪🇸",x:"Bien joué Nadia !",vo:"¡Bien hecho, Nadia!"},
+ {i:23,a:"nadia",e:1,x:"Voilà le budget détaillé 👇",m:"file"},
+ {i:24,a:"louis",e:1,r:23,x:"Clair et net, merci"},
+ {i:25,a:"nadia",e:1,x:"Ça fait 45 € par personne, tout compris"},
+ {i:26,a:"samir",e:1,x:"Essence incluse ?"},
+ {i:27,a:"nadia",e:1,r:26,x:"Oui, covoiturage compté"},
+ {i:28,a:"sarah",e:1,x:"Qui a déjà payé ?"},
+ {i:29,a:"karim",e:1,x:"Moi ✅"},
+ {i:30,a:"mia",e:1,x:"Moi ✅"},
+ {i:31,a:"papi",e:1,x:"Je paierai en liquide sur place, d’accord ?"},
+ {i:32,a:"nadia",e:1,r:31,x:"Ça marche Papi 😄"},
+ {i:33,a:"sarah",e:1,men:1,x:"@Toi tu peux avancer les 90 € de Rosa et Papi ? Remboursés samedi"},
+ {i:34,a:"toi",e:1,r:33,x:"Oui je gère 👍"},
+ {i:35,a:"sarah",e:1,r:34,x:"Merci !!"},
+ {i:36,a:"louis",e:1,x:"Reste les courses à chiffrer"},
+ {i:37,a:"nadia",e:1,r:36,x:"C’est le chantier de jeudi"},
+ {i:38,a:"rosa",e:1,lg:"🇵🇹",x:"Ça marche !",vo:"Combinado!"},
+ {i:39,a:"samir",e:1,x:"45 € c’est très correct franchement"},
+ {i:40,a:"karim",e:1,x:"Nadia trésorière officielle 🏅",rx:"😂 4"},
+ {i:41,a:"samir",e:2,x:"Question du jour : samedi, canoë ou rando ?"},
+ {i:42,a:"karim",e:2,x:"Canoë !! 🛶"},
+ {i:43,a:"sarah",e:2,x:"Canoë"},
+ {i:44,a:"louis",e:2,x:"Rando le matin et canoë l’aprem ?"},
+ {i:45,a:"samir",e:2,r:44,x:"Trop chargé je pense"},
+ {i:46,a:"mia",e:2,lg:"🇪🇸",m:"voice",x:"Je préfère le canoë, la rivière est magnifique en cette saison",vo:"Yo prefiero la canoa, el río está precioso en esta época"},
+ {i:47,a:"samir",e:2,m:"photo",x:"Le rapide du Charlemagne 😱"},
+ {i:48,a:"papi",e:2,r:47,x:"Vous me mettrez dans le canoë du milieu, hein"},
+ {i:49,a:"sarah",e:2,r:48,x:"Promis Papi 😄",rx:"❤️ 3"},
+ {i:50,a:"nadia",e:2,x:"Le loueur propose un départ à 9 h ou à 14 h"},
+ {i:51,a:"karim",e:2,r:50,x:"9 h, il fera moins chaud"},
+ {i:52,a:"mia",e:2,r:50,lg:"🇪🇸",x:"9 h c’est mieux",vo:"A las 9 mejor"},
+ {i:53,a:"samir",e:2,x:"Ok je compte : on est 9, donc 4 canoës doubles + 1 kayak simple pour le courageux. Le parcours fait 8 km, environ 2 h 30 avec la pause baignade au pont d’Arc. Prévoyez des chaussures qui vont dans l’eau !"},
+ {i:54,a:"louis",e:2,x:"Et la rando dimanche matin alors ?"},
+ {i:55,a:"sarah",e:2,r:54,x:"Vendu"},
+ {i:56,a:"mia",e:2,men:1,x:"@Toi tu viens dans mon canoë ? 😊"},
+ {i:57,a:"toi",e:2,r:56,x:"Évidemment 😎"},
+ {i:58,a:"samir",e:2,x:"Réservé : 5 canoës samedi 9 h ✅"},
+ {i:59,a:"karim",e:2,x:"🎉🎉",rx:"🛶 5"},
+ {i:60,a:"rosa",e:2,lg:"🇵🇹",x:"Moi je reste à la piscine avec les desserts",vo:"Eu fico na piscina com as sobremesas"},
+ {i:61,a:"louis",e:2,r:60,x:"Sage décision Rosa 😄"},
+ {i:62,a:"mia",e:3,x:"Bon, les repas ! Je propose : pâtes à l’ail des ours vendredi soir (facile après la route), grillades + salades samedi, et brunch dimanche avec ce qui reste. Dites-moi vos allergies !"},
+ {i:63,a:"karim",e:3,r:62,x:"Validé"},
+ {i:64,a:"sarah",e:3,x:"Végé pour moi 🙏"},
+ {i:65,a:"mia",e:3,r:64,x:"Noté — halloumi pour Sarah"},
+ {i:66,a:"rosa",e:3,lg:"🇵🇹",m:"photo2",x:"Le gâteau est déjà prêt !",vo:"O bolo já está pronto!"},
+ {i:67,a:"sarah",e:3,r:66,x:"ROSA 😍😍",rx:"🤤 7"},
+ {i:68,a:"louis",e:3,x:"Qui fait les courses ?"},
+ {i:69,a:"mia",e:3,r:68,x:"Samir et moi, vendredi midi. Liste ce soir"},
+ {i:70,a:"nadia",e:3,x:"Prenez des glaçons, la glacière partira vide"},
+ {i:71,a:"karim",e:3,men:1,x:"@Toi tu prends ta grande glacière ?"},
+ {i:72,a:"toi",e:3,r:71,x:"Oui, elle est au garage, je la sors"},
+ {i:73,a:"karim",e:3,r:72,x:"Parfait 👌"},
+ {i:74,a:"papi",e:3,x:"Et le pastis ? 😇"},
+ {i:75,a:"nadia",e:3,r:74,x:"Papi 😂",rx:"😂 6"},
+ {i:76,a:"samir",e:3,x:"J’amène l’enceinte et les raquettes"},
+ {i:77,a:"sarah",e:3,x:"Des jeux de société aussi !"},
+ {i:78,a:"louis",e:3,r:77,x:"Le tarot, obligatoire"},
+ {i:79,a:"mia",e:3,x:"La liste est presque finie, je l’envoie ce soir"},
+ {i:80,a:"rosa",e:3,lg:"🇵🇹",x:"Vous voulez autre chose de sucré ?",vo:"Precisam de mais alguma coisa doce?"},
+ {i:81,a:"karim",e:3,r:80,x:"Jamais trop de sucré, Rosa"},
+ {i:82,a:"mia",e:3,x:"Liste envoyée — elle est dans l’étagère 📋"},
+ {i:83,a:"nadia",e:3,r:82,x:"Vue, nickel"},
+ {i:84,a:"karim",e:4,x:"DÉPART DEMAIN 🎉 rdv 8 h chez Nadia"},
+ {i:85,a:"sarah",e:4,x:"8 h ?? 😭"},
+ {i:86,a:"karim",e:4,r:85,x:"8 h. Le canoë n’attend pas"},
+ {i:87,a:"papi",e:4,m:"voice2",x:"Mon sac est prêt depuis mardi, moi"},
+ {i:88,a:"louis",e:4,x:"Météo de samedi : 27° et grand soleil ☀️ Par contre orage possible dimanche en fin d’après-midi — je propose la rando tôt le matin et piscine l’aprem avant de reprendre la route."},
+ {i:89,a:"mia",e:4,lg:"🇪🇸",x:"Parfait pour la rivière !",vo:"¡Perfecto para el río!"},
+ {i:90,a:"nadia",e:4,x:"La caution ne sera encaissée qu’au retour, tout est ok"},
+ {i:91,a:"samir",e:4,x:"Canoës confirmés, gilets fournis"},
+ {i:92,a:"sarah",e:4,men:1,x:"@Toi n’oublie pas les 90 € 🙏"},
+ {i:93,a:"louis",e:4,x:"Crème solaire indice 50 pour Papi, on est d’accord"},
+ {i:94,a:"karim",e:4,men:1,x:"@Toi la grande glacière est bien dans ta voiture ?"},
+ {i:95,a:"mia",e:4,x:"Je passe prendre Rosa et Papi à 7 h 30"},
+ {i:96,a:"rosa",e:4,r:95,lg:"🇵🇹",x:"Nous serons prêts !",vo:"Estaremos prontos!"},
+ {i:97,a:"nadia",e:4,x:"Qui a une pompe pour les matelas ?"},
+ {i:98,a:"louis",e:4,r:97,x:"Moi !"},
+ {i:99,a:"samir",e:4,x:"Playlist du trajet en préparation 🎶"},
+ {i:100,a:"karim",e:4,x:"À demain 8 h tout le monde 🚗💨",rx:"🔥 8"}
+];
+const PENDING = { 92: true, 94: true };
+const byId = id => M.find(m => m.i === id);
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+function timeOf(m) {
+  const ep = EPS[m.e];
+  const idx = M.filter(x => x.e === m.e && x.i < m.i).length;
+  const total = ep.t0[0] * 60 + ep.t0[1] + idx * ep.step;
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+function mediaHtml(m) {
+  if (m.m === "link") return `<div class="m-link"><span class="ic">🔗</span><div><b>Gîte des Gorges — 12 couchages, piscine</b><span>gites-ardeche.fr</span></div></div>`;
+  if (m.m === "file") return `<div class="m-file"><div class="ic">PDF</div><div><b>budget-weekend.pdf</b><span>2 pages · 84 Ko</span></div></div>`;
+  if (m.m === "carousel") return `<div class="m-car"><div class="m-ph g1"><span>terrasse · 1/4</span></div><div class="m-ph g2"><span>salon · 2/4</span></div><div class="m-ph g3"><span>rivière · 3/4</span></div><div class="m-ph g5"><span>chambres · 4/4</span></div></div>`;
+  if (m.m === "photo") return `<div class="m-ph single g3"><span>le rapide du Charlemagne</span></div>`;
+  if (m.m === "photo2") return `<div class="m-ph single g6"><span>o bolo de Rosa 🍰</span></div>`;
+  if (m.m === "voice" || m.m === "voice2") {
+    const bars = [8, 14, 20, 11, 17, 9, 15, 19, 10, 14, 7, 12, 16, 9].map(h => `<b style="height:${h}px"></b>`).join("");
+    return `<div class="m-voice"><div class="play"></div><div class="bars">${bars}</div><small>${m.m === "voice" ? "0:12" : "0:08"}</small></div>`;
+  }
+  return "";
+}
+function frowHtml(m, prev) {
+  const me = m.a === "toi";
+  const first = !prev || prev.a !== m.a || prev.e !== m.e;
+  let h = `<div class="frow${me ? " me" : ""}" data-mid="${m.i}">`;
+  if (first) h += `<div class="fident"><span class="fa" style="background:${A[m.a].c}">${A[m.a].n[0]}</span><b>${me ? "Toi" : A[m.a].n}</b><span class="dot">·</span><time>${timeOf(m)}</time>${me ? `<span class="chk">✓✓</span>` : ""}</div>`;
+  if (m.r) { const o = byId(m.r); if (o) h += `<div class="fquote" style="--qc:${A[o.a].c}">${A[o.a].n} — ${esc(o.x).slice(0, 46)}${o.x.length > 46 ? "…" : ""}</div>`; }
+  if (m.m) h += `<div class="fmedia">${mediaHtml(m)}</div>`;
+  if (m.m && m.m.startsWith("voice")) h += `<div class="ftxt" style="font-style:italic;color:var(--m-text2);font-size:12.5px" data-txt="${m.i}">« ${esc(m.x)} »</div>`;
+  else if (m.x) h += `<div class="ftxt" data-txt="${m.i}">${esc(m.x)}</div>`;
+  const meta = [];
+  if (m.lg) meta.push(`<span class="flags" data-vo="${m.i}" title="Voir l’original">🌐 ${m.lg} <u>🇫🇷</u></span>`);
+  if (m.rx) meta.push(`<span class="frx">${m.rx}</span>`);
+  if (meta.length) h += `<div class="fmeta">${meta.join("")}</div>`;
+  h += `</div>`;
+  return h;
+}
+function renderList(rowFn, withCap) {
+  let h = withCap ? `<div class="startcap" style="height:428px">— Début de la conversation · Lundi 18:02 —</div>` : "";
+  let prev = null;
+  M.forEach(m => {
+    if (!prev || prev.e !== m.e) {
+      h += `<div class="dsticker" data-day="${EPS[m.e].d}"><span>${EPS[m.e].d}</span></div>`;
+      if (m.e === 4) h += `<div class="pont"><b>✦ Pont</b> — pendant ton absence&nbsp;: menus fixés, liste dans l’étagère, météo ☀️. <b>2 questions t’attendent.</b></div>`;
+    }
+    h += rowFn(m, prev);
+    if (m.men && PENDING[m.i]) {
+      const sugg = m.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !";
+      h += `<div class="agent"><span class="spark">✦</span> suggestion&nbsp;: <button data-agentreply="${m.i}">« ${sugg} »</button></div>`;
+    }
+    prev = m;
+  });
+  h += `<div style="height:16px"></div>`;
+  return h;
+}
+let focalDensity = "focal"; // "focal" (perspective) | "script" (même rangée plate, uniforme, sans perspective)
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function perspective(scr) {
+  if (focalDensity !== "focal" || reducedMotion) return;
+  const rect = scr.getBoundingClientRect();
+  const focusY = rect.bottom - 150;
+  let curEl = null, curDist = Infinity;
+  scr.querySelectorAll(".frow, .dsticker, .pont, .agent").forEach(el => {
+    const r = el.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    const d = Math.max(0, focusY - mid);
+    const f = Math.min(1, d / 380);
+    el.style.opacity = String(1 - 0.82 * f);
+    el.style.transform = `scale(${1 - 0.4 * f})`;
+    el.style.transformOrigin = "16% bottom";
+    if (el.classList.contains("frow")) {
+      const dist = Math.abs(mid - focusY);
+      if (mid <= focusY + 95 && dist < curDist) { curDist = dist; curEl = el; }
+    }
+  });
+  scr.querySelectorAll(".frow.cur").forEach(el => { if (el !== curEl) el.classList.remove("cur"); });
+  if (curEl) curEl.classList.add("cur");
+}
+/* pilule jour · heure — visible pendant le défilement seulement */
+let pillTimer = null;
+function updateTimePill(scr) {
+  const pill = document.getElementById("timepill");
+  const rect = scr.getBoundingClientRect();
+  const topY = rect.top + 64;
+  let best = null;
+  for (const el of scr.querySelectorAll("[data-mid]")) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom >= topY) { best = el; break; }
+  }
+  if (best) {
+    const m = byId(Number(best.getAttribute("data-mid")));
+    if (m) pill.textContent = `${EPS[m.e].d} · ${timeOf(m)}`;
+  }
+  pill.classList.add("on");
+  clearTimeout(pillTimer);
+  pillTimer = setTimeout(() => pill.classList.remove("on"), 900);
+}
+function render() {
+  const scr = document.getElementById("screen");
+  scr.classList.toggle("script", focalDensity === "script");
+  scr.innerHTML = renderList(frowHtml, focalDensity === "focal" && !reducedMotion);
+  scr.scrollTop = scr.scrollHeight;
+  perspective(scr);
+}
+function replyInFlow(targetId, text) {
+  const target = byId(targetId);
+  const val = text || (target.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !");
+  const nid = 200 + M.filter(m => m.i > 200).length + 1;
+  M.push({ i: nid, a: "toi", e: 4, r: targetId, x: val });
+  delete PENDING[targetId];
+  render();
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = "Répondu dans le fil ✓";
+  document.querySelector(".phone").appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+const screenEl = document.getElementById("screen");
+screenEl.addEventListener("scroll", () => requestAnimationFrame(() => {
+  perspective(screenEl);
+  updateTimePill(screenEl);
+}), { passive: true });
+screenEl.addEventListener("click", e => {
+  const vo = e.target.closest("[data-vo]");
+  if (vo) {
+    const id = Number(vo.getAttribute("data-vo"));
+    const m = byId(id);
+    const txtEl = document.querySelector(`[data-txt="${id}"]`);
+    if (m && txtEl) {
+      const showing = vo.getAttribute("data-showing") === "1";
+      const body = showing ? m.x : m.vo;
+      vo.setAttribute("data-showing", showing ? "0" : "1");
+      txtEl.textContent = (m.m && m.m.startsWith("voice")) ? "« " + body + " »" : body;
+    }
+    return;
+  }
+  const ar = e.target.closest("[data-agentreply]");
+  if (ar) replyInFlow(Number(ar.getAttribute("data-agentreply")));
+});
+document.getElementById("densbtn").addEventListener("click", () => {
+  focalDensity = focalDensity === "focal" ? "script" : "focal";
+  document.getElementById("densbtn").setAttribute("aria-pressed", String(focalDensity === "script"));
+  render();
+});
+render();
+</script>
