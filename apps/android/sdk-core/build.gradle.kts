@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.datastore.preferences)
     implementation(libs.room.ktx)
+    implementation(libs.security.crypto)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.work.runtime)
