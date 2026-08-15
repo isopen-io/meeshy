@@ -1,0 +1,285 @@
+import Foundation
+import CoreGraphics
+import MeeshySDK
+import MeeshyUI
+
+/// Valeur figée décrivant tout ce dont `FocalRow` a besoin (contrat Focal
+/// §3.6). Construite par WS-6 dans `messageRegistration` à partir des `let`
+/// déjà snapés — aucun calcul nouveau. `Equatable` : c'est le gate de
+/// re-render (`EquatableFocalRow(row:).equatable()`, WS-4).
+///
+/// **RE-PREUVE (§0 avant écriture)** : ce fichier N'EXISTAIT PAS. L'esquisse
+/// d'arborescence du contrat §1.1 le place sous `Focal/Core/` (propriété
+/// WS-0), mais le Core gelé S1 livré (M-042/043/044) ne porte QUE
+/// `ReadingModeOrchestrator`/`FocalFocusCurve`/`ScrollTimePillLaw` — WS-0 ne
+/// l'a jamais livré (même constat que `FocalMetrics`, tâche 0). `Focal/Core/`
+/// n'est pas gelé dans son ensemble : ce fichier est un AJOUT, jamais une
+/// édition d'un fichier gelé. Créé ici (WS-4/F-083, qui en est le premier
+/// et seul consommateur) plutôt que sous `Focal/Row/` pour rester fidèle au
+/// domicile canonique du contrat — un futur WS-0 qui livrerait ce fichier
+/// devrait le trouver là où il l'attend.
+///
+/// **Aucun type rival créé** — patron F-080 (`ConversationReadingMode`
+/// typealias sur `ReadingModeOrchestrator.ConversationReadingMode`) :
+/// `Density` reste un enum NOUVEAU, nested (2 cas `focal`/`script`), qui ne
+/// duplique PAS `ReadingModeOrchestrator.ConversationReadingMode` (5 cas,
+/// portée plus large — Résumé/Rivière/bulles n'ont pas de rangée plate à
+/// densité). Ce n'est pas un rival : c'est une projection stricte, scoped à
+/// `FocalRowInput`, exactement comme le contrat la nomme (§3.6).
+///
+/// **Corrections de types vs le texte littéral du contrat (RE-PREUVE)** :
+/// - `allAudioItems: [AudioItem]` → `[ConversationViewModel.AudioItem]`.
+///   `AudioMediaView`/`AudioCarouselView` (réutilisés par WS-3,
+///   `Focal/Row/FocalAudioBlock.swift`) typent LEUR PROPRE paramètre
+///   `allAudioItems` en `[ConversationViewModel.AudioItem]`
+///   (`ConversationMediaViews.swift:541`, `AudioCarouselView.swift:47`) — le
+///   type nested de la god view, PAS le `struct AudioItem` top-level de
+///   `ConversationStateStore.swift` (qui existe aussi, homonyme, mais n'est
+///   consommé par aucun composant réutilisé ici). Utiliser le mauvais des
+///   deux romprait la compilation au premier appel de WS-3.
+/// - `onOpenProfile: ((ProfileUser) -> Void)?` → `((ProfileSheetUser) -> Void)?`.
+///   `ProfileUser` N'EXISTE NULLE PART dans le dépôt (`rg` vide,
+///   `packages/MeeshySDK` + `apps/ios`). Le type réel utilisé par
+///   `ThemedMessageBubble.onOpenProfile` (`:138`) est
+///   `ProfileSheetUser` (`MeeshySDK/Sources/MeeshyUI/Profile/ProfileSheetUser.swift`,
+///   `public`).
+///
+/// **NON Sendable** (contrat §3.6) : embarque `BubbleContent`, qui embarque
+/// des modèles applicatifs `@MainActor`-implicites (cible `Meeshy`,
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`).
+public struct FocalRowInput: Equatable {
+    /// Les deux densités de la rangée plate (contrat Focal §3.1 :
+    /// `ConversationReadingMode.usesFlatRow`). `.summary`/`.river`/`.bubbles`
+    /// n'ont pas de rangée plate — jamais représentés ici.
+    public enum Density: String, Equatable {
+        case focal
+        case script
+    }
+
+    public let localId: String
+    public let serverId: String?
+    /// Réutilisé VERBATIM (contrat §3.6) — aucune seconde résolution de
+    /// langue : `content.translation` porte déjà `preferredContent`/
+    /// `activeLangCode` résolus en amont par `BubbleContentBuilder`.
+    public let content: BubbleContent
+    public let density: Density
+
+    // MARK: - Identité de tête de groupe
+
+    public let isFirstInGroup: Bool
+    public let senderId: String
+    public let senderDisplayName: String
+    public let senderUsername: String?
+    public let senderAvatarURL: String?
+    public let senderThumbHash: String?
+    public let senderColorHex: String
+    public let senderPresence: PresenceState
+    public let senderStoryRing: StoryRingState
+    public let senderMoodEmoji: String?
+
+    // MARK: - Contexte visuel (primitifs uniquement — règle « leaf views »)
+
+    public let accentHex: String
+    public let isDark: Bool
+    public let isDirect: Bool
+    public let isRightToLeft: Bool
+
+    // MARK: - États
+
+    public let isOptimistic: Bool
+    public let isAgentAuthored: Bool
+    public let showsAgentGrammar: Bool
+    public let highlightSearchTerm: String?
+    public let mentionDisplayNames: [String: String]
+    public let userLanguages: (regional: String?, custom: String?)
+    public let activeDisplayLangCode: String?
+    public let secondaryLangCode: String?
+    public let voiceConsentMissing: Bool
+
+    // MARK: - Enrichissements audio (mêmes dictionnaires que la bulle)
+
+    public let transcription: String?
+    public let translatedAudios: [MessageTranslatedAudio]
+    /// CORRIGÉ vs le texte littéral du contrat — voir doc de tête.
+    public let allAudioItems: [ConversationViewModel.AudioItem]
+    public let conversationName: String
+
+    public init(
+        localId: String,
+        serverId: String?,
+        content: BubbleContent,
+        density: Density,
+        isFirstInGroup: Bool,
+        senderId: String,
+        senderDisplayName: String,
+        senderUsername: String?,
+        senderAvatarURL: String?,
+        senderThumbHash: String?,
+        senderColorHex: String,
+        senderPresence: PresenceState,
+        senderStoryRing: StoryRingState,
+        senderMoodEmoji: String?,
+        accentHex: String,
+        isDark: Bool,
+        isDirect: Bool,
+        isRightToLeft: Bool,
+        isOptimistic: Bool,
+        isAgentAuthored: Bool,
+        showsAgentGrammar: Bool,
+        highlightSearchTerm: String?,
+        mentionDisplayNames: [String: String],
+        userLanguages: (regional: String?, custom: String?),
+        activeDisplayLangCode: String?,
+        secondaryLangCode: String?,
+        voiceConsentMissing: Bool,
+        transcription: String?,
+        translatedAudios: [MessageTranslatedAudio],
+        allAudioItems: [ConversationViewModel.AudioItem],
+        conversationName: String
+    ) {
+        self.localId = localId
+        self.serverId = serverId
+        self.content = content
+        self.density = density
+        self.isFirstInGroup = isFirstInGroup
+        self.senderId = senderId
+        self.senderDisplayName = senderDisplayName
+        self.senderUsername = senderUsername
+        self.senderAvatarURL = senderAvatarURL
+        self.senderThumbHash = senderThumbHash
+        self.senderColorHex = senderColorHex
+        self.senderPresence = senderPresence
+        self.senderStoryRing = senderStoryRing
+        self.senderMoodEmoji = senderMoodEmoji
+        self.accentHex = accentHex
+        self.isDark = isDark
+        self.isDirect = isDirect
+        self.isRightToLeft = isRightToLeft
+        self.isOptimistic = isOptimistic
+        self.isAgentAuthored = isAgentAuthored
+        self.showsAgentGrammar = showsAgentGrammar
+        self.highlightSearchTerm = highlightSearchTerm
+        self.mentionDisplayNames = mentionDisplayNames
+        self.userLanguages = userLanguages
+        self.activeDisplayLangCode = activeDisplayLangCode
+        self.secondaryLangCode = secondaryLangCode
+        self.voiceConsentMissing = voiceConsentMissing
+        self.transcription = transcription
+        self.translatedAudios = translatedAudios
+        self.allAudioItems = allAudioItems
+        self.conversationName = conversationName
+    }
+
+    /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
+    /// tuples ne conforment à aucun protocole nominal, `Equatable` ne peut
+    /// donc pas être auto-synthétisé sur un type qui en porte un en
+    /// propriété stockée (même raison documentée par le contrat, qui déclare
+    /// cette signature explicitement plutôt que de laisser `Equatable`
+    /// implicite). `allAudioItems`/`content` comparés par identité/valeur
+    /// (`ConversationViewModel.AudioItem` n'est PAS `Equatable` — comparé
+    /// par `id` seul, comme tout gate de re-render dans ce dépôt qui touche
+    /// des collections issues du ViewModel, ex. `BubbleContent.Attachments`).
+    public static func == (lhs: FocalRowInput, rhs: FocalRowInput) -> Bool {
+        lhs.localId == rhs.localId
+            && lhs.serverId == rhs.serverId
+            && lhs.content == rhs.content
+            && lhs.density == rhs.density
+            && lhs.isFirstInGroup == rhs.isFirstInGroup
+            && lhs.senderId == rhs.senderId
+            && lhs.senderDisplayName == rhs.senderDisplayName
+            && lhs.senderUsername == rhs.senderUsername
+            && lhs.senderAvatarURL == rhs.senderAvatarURL
+            && lhs.senderThumbHash == rhs.senderThumbHash
+            && lhs.senderColorHex == rhs.senderColorHex
+            && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderStoryRing == rhs.senderStoryRing
+            && lhs.senderMoodEmoji == rhs.senderMoodEmoji
+            && lhs.accentHex == rhs.accentHex
+            && lhs.isDark == rhs.isDark
+            && lhs.isDirect == rhs.isDirect
+            && lhs.isRightToLeft == rhs.isRightToLeft
+            && lhs.isOptimistic == rhs.isOptimistic
+            && lhs.isAgentAuthored == rhs.isAgentAuthored
+            && lhs.showsAgentGrammar == rhs.showsAgentGrammar
+            && lhs.highlightSearchTerm == rhs.highlightSearchTerm
+            && lhs.mentionDisplayNames == rhs.mentionDisplayNames
+            && lhs.userLanguages == rhs.userLanguages
+            && lhs.activeDisplayLangCode == rhs.activeDisplayLangCode
+            && lhs.secondaryLangCode == rhs.secondaryLangCode
+            && lhs.voiceConsentMissing == rhs.voiceConsentMissing
+            && lhs.transcription == rhs.transcription
+            && lhs.translatedAudios == rhs.translatedAudios
+            && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
+            && lhs.conversationName == rhs.conversationName
+    }
+}
+
+/// Sac de callbacks — EXCLU de l'`Equatable` (patron `BubbleFooterActions`).
+public struct FocalRowActions {
+    public var onToggleReaction: ((String) -> Void)?
+    public var onAddReaction: ((String) -> Void)?
+    public var onOpenReactPicker: ((String) -> Void)?
+    public var onShowReactions: ((String) -> Void)?
+    public var onShowReadStatus: ((String) -> Void)?
+    public var onRetry: ((String) -> Void)?
+    public var onReplyTap: ((String) -> Void)?
+    public var onStoryReplyTap: ((String) -> Void)?
+    public var onMediaTap: ((MessageAttachment) -> Void)?
+    public var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    public var onReactToAttachment: ((String, String) -> Void)?
+    public var onRequestTranslation: ((String, String) -> Void)?
+    public var onShowTranslationDetail: ((String) -> Void)?
+    public var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
+    public var onSetSecondaryLanguage: ((String, String?) -> Void)?
+    public var onPlayAudio: ((String) -> Void)?
+    /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
+    /// dans le dépôt) — voir doc de tête de fichier.
+    public var onOpenProfile: ((ProfileSheetUser) -> Void)?
+    public var onViewStory: ((String) -> Void)?
+    public var onCallBack: ((String) -> Void)?
+    public var onLongPressCallDetail: ((String) -> Void)?
+
+    public init(
+        onToggleReaction: ((String) -> Void)? = nil,
+        onAddReaction: ((String) -> Void)? = nil,
+        onOpenReactPicker: ((String) -> Void)? = nil,
+        onShowReactions: ((String) -> Void)? = nil,
+        onShowReadStatus: ((String) -> Void)? = nil,
+        onRetry: ((String) -> Void)? = nil,
+        onReplyTap: ((String) -> Void)? = nil,
+        onStoryReplyTap: ((String) -> Void)? = nil,
+        onMediaTap: ((MessageAttachment) -> Void)? = nil,
+        onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
+        onReactToAttachment: ((String, String) -> Void)? = nil,
+        onRequestTranslation: ((String, String) -> Void)? = nil,
+        onShowTranslationDetail: ((String) -> Void)? = nil,
+        onSetActiveDisplayLanguage: ((String, String?) -> Void)? = nil,
+        onSetSecondaryLanguage: ((String, String?) -> Void)? = nil,
+        onPlayAudio: ((String) -> Void)? = nil,
+        onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
+        onViewStory: ((String) -> Void)? = nil,
+        onCallBack: ((String) -> Void)? = nil,
+        onLongPressCallDetail: ((String) -> Void)? = nil
+    ) {
+        self.onToggleReaction = onToggleReaction
+        self.onAddReaction = onAddReaction
+        self.onOpenReactPicker = onOpenReactPicker
+        self.onShowReactions = onShowReactions
+        self.onShowReadStatus = onShowReadStatus
+        self.onRetry = onRetry
+        self.onReplyTap = onReplyTap
+        self.onStoryReplyTap = onStoryReplyTap
+        self.onMediaTap = onMediaTap
+        self.onConsumeViewOnce = onConsumeViewOnce
+        self.onReactToAttachment = onReactToAttachment
+        self.onRequestTranslation = onRequestTranslation
+        self.onShowTranslationDetail = onShowTranslationDetail
+        self.onSetActiveDisplayLanguage = onSetActiveDisplayLanguage
+        self.onSetSecondaryLanguage = onSetSecondaryLanguage
+        self.onPlayAudio = onPlayAudio
+        self.onOpenProfile = onOpenProfile
+        self.onViewStory = onViewStory
+        self.onCallBack = onCallBack
+        self.onLongPressCallDetail = onLongPressCallDetail
+    }
+}
