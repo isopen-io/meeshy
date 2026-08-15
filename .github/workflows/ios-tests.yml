@@ -79,11 +79,31 @@ name: iOS Tests
 # repo's cache limit and evict the SPM cache); if the cross-mode reuse turns out
 # to be nil, the cost is a cold compile on dev, never a wrong result.
 #
-# TESTS SUR DEMANDE (2026-08-15). Le défaut s'inverse : la COMPILATION tourne
-# partout — PR comme poussée — et l'EXÉCUTION des tests ne tourne que si on la
-# demande. La demande s'écrit dans le SUJET du commit de tête : « smoke test »,
-# « run test » ou « to test », insensible à la casse ; `workflow_dispatch` la
-# force aussi, un lancement manuel étant déjà explicite.
+# TESTS SUR DEMANDE — SAUF SUR `main` (2026-08-15). Le défaut s'inverse sur les
+# branches et les PR : la COMPILATION y tourne partout, l'EXÉCUTION des tests ne
+# tourne que si on la demande. La demande s'écrit dans le SUJET du commit de
+# tête : « smoke test », « run test » ou « to test », insensible à la casse.
+#
+# Trois portées, dans cet ordre de priorité :
+#   1. `workflow_dispatch`        → suite complète (un lancement manuel est déjà explicite)
+#   2. poussée sur `main`         → suite complète, SANS opt-in
+#   3. tout le reste (PR, `dev`)  → compilation, sauf mot-clé au sujet du commit
+#
+# La règle 2 tient à ce que `main` n'est pas une branche de travail : c'est ce
+# qui part en production, et rien n'y est jamais « sur demande ». Le reste du
+# dépôt suit déjà cette logique — `ci.yml` bâtit gateway, web, shared, agent,
+# translator, Prisma et l'image sur chaque poussée `main` sans condition. Le
+# Swift était le seul arbre à ne pas y passer.
+#
+# Une PR VERS `main` reste sous le régime de l'opt-in : sur un event
+# `pull_request`, `github.ref` vaut `refs/pull/N/merge` et jamais
+# `refs/heads/main`, donc la règle 2 ne peut pas l'attraper par accident.
+#
+# Ce que ce réglage a immédiatement révélé (run 31874465536, PR #3010) : la
+# suite complète portait 17 échecs hérités de `main` — appels, répertoire,
+# catalogue de localisation — invisibles depuis des semaines parce que les PR
+# étaient compile-seule et que la suite ne tournait que sur `dev`. C'est
+# exactement le trou que la règle 2 ferme.
 #
 # Motif : la règle précédente liait la bascule à l'ÉVÉNEMENT (`COMPILE_ONLY =
 # event == 'pull_request'`), donc chaque poussée sur `dev` payait les deux postes
@@ -107,6 +127,7 @@ name: iOS Tests
 on:
   push:
     branches:
+      - main
       - dev
     paths:
       - 'apps/ios/**'
@@ -188,6 +209,21 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run_tests=true" >> "$GITHUB_OUTPUT"
             echo "::notice title=Portée::Suite complète — déclenchement manuel."
+            exit 0
+          fi
+
+          # `main` n'est pas une branche de travail : c'est ce qui part en
+          # production. Rien n'y est jamais « sur demande ». L'opt-in par
+          # mot-clé gouverne les branches et les PR ; la ligne principale
+          # exécute tout, systématiquement.
+          #
+          # Une PR VERS main garde le régime de l'opt-in : sur un event
+          # `pull_request`, `github.ref` vaut `refs/pull/N/merge`, jamais
+          # `refs/heads/main` — la condition ci-dessous ne s'applique donc
+          # qu'à une poussée réelle sur la ligne principale.
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Suite complète — poussée sur main, aucun opt-in requis."
             exit 0
           fi
 

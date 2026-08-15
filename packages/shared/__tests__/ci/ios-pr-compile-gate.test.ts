@@ -198,6 +198,30 @@ describe('opt-in des tests iOS par le sujet du commit', () => {
     expect(scopeJob()).toMatch(/workflow_dispatch.*\n[\s\S]*?run_tests=true/);
   });
 
+  /**
+   * `main` n'est pas une branche de travail : c'est ce qui part en production,
+   * et rien n'y est « sur demande ». Le reste du dépôt suit déjà cette logique
+   * (`ci.yml` bâtit tout sur chaque poussée `main` sans condition) ; le Swift
+   * était le seul arbre à y échapper. C'est ce trou qui a laissé 17 échecs
+   * hérités survivre des semaines — cf. run 31874465536.
+   */
+  it('force la suite complète sur une poussée vers main, sans opt-in', () => {
+    expect(scopeJob()).toMatch(
+      /event_name \}\}" = "push"[\s\S]*?refs\/heads\/main[\s\S]*?run_tests=true/,
+    );
+  });
+
+  it('déclenche bien sur les poussées vers main — sans quoi la règle serait morte', () => {
+    const pushTrigger = (): string => {
+      const start = WORKFLOW.search(/^ {2}push:$/m);
+      if (start < 0) return '';
+      const rest = WORKFLOW.slice(start).split('\n').slice(1);
+      const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+      return (end < 0 ? rest : rest.slice(0, end)).join('\n');
+    };
+    expect(pushTrigger()).toMatch(/^\s*- main$/m);
+  });
+
   it('tourne hors du pool macOS — la ressource rare ne lit pas un log git', () => {
     expect(scopeJob()).toContain('runs-on: ubuntu-latest');
   });
