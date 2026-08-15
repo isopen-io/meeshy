@@ -1541,6 +1541,16 @@ final class CallManager: ObservableObject {
     /// ENTRANT encore en sonnerie au callId EXACT est terminé — un cancel
     /// tardif/rejoué ne touche jamais un appel décroché ni un ring sortant.
     func endRingingFromCancellation(callId: String) {
+        // Audit gateway-calls (2026-08-15) — mirror every socket-based
+        // terminal listener (call:ended/missed/already-answered/forced-leave,
+        // see their `clearPendingIncomingCall(ifMatching:)` calls above):
+        // this push is the socketless counterpart of the SAME event family,
+        // and `shouldEndRingingOnCancellation` only ever matches the PRIMARY
+        // ringing call. Without this, a cancel for the WAITING/call-waiting-
+        // banner call (not the primary one) no-ops below and the banner
+        // lingers offering "Answer/Reject" for a call already cancelled,
+        // until its own 15s auto-dismiss.
+        clearPendingIncomingCall(ifMatching: callId)
         guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
             pushCallId: callId,
             currentCallId: currentCallId,
@@ -1562,6 +1572,10 @@ final class CallManager: ObservableObject {
     /// seule la raison CallKit diffère — `.answeredElsewhere` pour que
     /// Recents affiche « répondu sur un autre appareil » et non « manqué ».
     func endRingingAnsweredElsewhere(callId: String) {
+        // Same rationale as endRingingFromCancellation() above — this is the
+        // socketless counterpart of call:already-answered, which also clears
+        // the waiting banner FIRST (see its clearPendingIncomingCall call).
+        clearPendingIncomingCall(ifMatching: callId)
         guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
             pushCallId: callId,
             currentCallId: currentCallId,
@@ -2146,15 +2160,29 @@ final class CallManager: ObservableObject {
     /// Deferred here + replayed by the connectionState observer when the
     /// hang-up happens during a signaling outage; the gateway end handler is
     /// idempotent and resolves pre-answer ends to `missed` (C3/C4).
-    private var pendingEndReconciliationCallId: String?
-    /// `"rejected"` quand l'end différé est un REFUS — le replay doit préserver
-    /// la raison, sinon il ressuscite le mislabel `missed` (arc reject 2026-07-12).
-    private var pendingEndReconciliationReason: String?
+    /// Deferred call-teardown reconciliations — one entry per call whose
+    /// `call:end`/`call:reject` needs replaying once the socket reconnects.
+    /// An ARRAY, not a single scalar slot: `pendingIncomingCall` had the
+    /// exact same class of bug — a single slot silently overwritten by a
+    /// second caller — fixed at `rejectSupersededPendingCall` (Vague 87, see
+    /// its doc comment below). This slot never got the equivalent fix: a
+    /// user on call A who ALSO hangs up/declines a second call B while the
+    /// socket is down needs BOTH replayed on reconnect, not just the last
+    /// write's callId (audit gateway-calls 2026-08-15).
+    /// `reason == "rejected"` marks a DECLINE — the replay must preserve it,
+    /// or it resurrects the `missed` mislabel (arc reject 2026-07-12).
+    private var pendingEndReconciliations: [(callId: String, reason: String?)] = []
+
+    /// Records (or refreshes) `callId`'s pending reconciliation without
+    /// dropping any OTHER call's still-pending entry.
+    private func armPendingEndReconciliation(callId: String, reason: String?) {
+        pendingEndReconciliations.removeAll { $0.callId == callId }
+        pendingEndReconciliations.append((callId: callId, reason: reason))
+    }
 
     private func emitCallEndReliably(callId: String) {
         guard MessageSocketManager.shared.isConnected else {
-            pendingEndReconciliationCallId = callId
-            pendingEndReconciliationReason = nil
+            armPendingEndReconciliation(callId: callId, reason: nil)
             Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
@@ -2168,8 +2196,7 @@ final class CallManager: ObservableObject {
                 // failed/91s via GC instead of missed). Remember it and replay
                 // on the next connect — the gateway end handler is idempotent,
                 // a duplicate is a logged no-op.
-                self?.pendingEndReconciliationCallId = callId
-                self?.pendingEndReconciliationReason = nil
+                self?.armPendingEndReconciliation(callId: callId, reason: nil)
                 Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
             }
         }
@@ -4276,20 +4303,24 @@ final class CallManager: ObservableObject {
                     callEstablished: self.callState == .connected,
                     socketConnected: state == .connected
                 )
-                // Reconciliation — a hang-up that happened while the socket was
-                // down is replayed as soon as the transport returns, even if no
-                // call is active anymore (the gateway end handler is idempotent).
-                if state == .connected, let pending = self.pendingEndReconciliationCallId {
-                    self.pendingEndReconciliationCallId = nil
-                    let wasReject = self.pendingEndReconciliationReason == "rejected"
-                    self.pendingEndReconciliationReason = nil
-                    Logger.calls.info("Reconciling deferred call:end after reconnect (callId=\(pending), rejected=\(wasReject))")
-                    if wasReject {
-                        // Rejouer un refus en end plat ressusciterait le mislabel
-                        // `missed` — la raison voyage avec la réconciliation.
-                        self.emitCallReject(callId: pending)
-                    } else {
-                        self.emitCallEndReliably(callId: pending)
+                // Reconciliation — every hang-up/decline that happened while
+                // the socket was down is replayed as soon as the transport
+                // returns, even if no call is active anymore (the gateway end
+                // handler is idempotent). ALL pending entries replay, not just
+                // one — see pendingEndReconciliations' doc comment.
+                if state == .connected, !self.pendingEndReconciliations.isEmpty {
+                    let pending = self.pendingEndReconciliations
+                    self.pendingEndReconciliations.removeAll()
+                    for entry in pending {
+                        let wasReject = entry.reason == "rejected"
+                        Logger.calls.info("Reconciling deferred call:end after reconnect (callId=\(entry.callId), rejected=\(wasReject))")
+                        if wasReject {
+                            // Rejouer un refus en end plat ressusciterait le mislabel
+                            // `missed` — la raison voyage avec la réconciliation.
+                            self.emitCallReject(callId: entry.callId)
+                        } else {
+                            self.emitCallEndReliably(callId: entry.callId)
+                        }
                     }
                 }
             }
@@ -4966,8 +4997,7 @@ final class CallManager: ObservableObject {
         // typique : push VoIP à froid, l'utilisateur refuse avant la fin du
         // handshake socket. Différé + rejoué avec sa raison au reconnect.
         guard MessageSocketManager.shared.isConnected else {
-            pendingEndReconciliationCallId = callId
-            pendingEndReconciliationReason = "rejected"
+            armPendingEndReconciliation(callId: callId, reason: "rejected")
             Logger.calls.warning("call:end (rejected) deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
@@ -4984,8 +5014,7 @@ final class CallManager: ObservableObject {
             let acked = await MessageSocketManager.shared.emitCallRejectWithAck(callId: callId)
             if !acked {
                 MessageSocketManager.shared.emitCallReject(callId: callId)
-                self?.pendingEndReconciliationCallId = callId
-                self?.pendingEndReconciliationReason = "rejected"
+                self?.armPendingEndReconciliation(callId: callId, reason: "rejected")
                 Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
             }
         }
