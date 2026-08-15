@@ -105,6 +105,17 @@ class ConversationRepository @Inject constructor(
         apiCall { conversationApi.updateSettings(id, request) }
 
     /**
+     * Leaves [id] (destructive, confirmed by the caller UI before invoking this).
+     * No local cache mutation here: the gateway broadcasts `conversation:participant-left`
+     * back to every one of the leaver's own devices, and [ConversationPurge]
+     * ([me.meeshy.app.conversations]) already drops the row from the visible list
+     * once that event round-trips — the same path already used when another
+     * device of this same user leaves.
+     */
+    suspend fun leave(id: String): NetworkResult<Unit> =
+        apiCall { conversationApi.leave(id) }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or

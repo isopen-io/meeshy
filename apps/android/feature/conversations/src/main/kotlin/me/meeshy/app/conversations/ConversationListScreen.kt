@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -55,6 +56,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
@@ -203,6 +205,7 @@ fun ConversationListScreen(
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
+                                onLeaveConversation = { viewModel.leaveConversation(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -365,6 +368,7 @@ private fun ConversationRow(
     onToggleMute: () -> Unit,
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
+    onLeaveConversation: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -418,6 +422,7 @@ private fun ConversationRow(
             onToggleMute = onToggleMute,
             onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
+            onLeaveConversation = onLeaveConversation,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -468,6 +473,7 @@ private fun ConversationRowContent(
     onToggleMute: () -> Unit,
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
+    onLeaveConversation: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -611,6 +617,7 @@ private fun ConversationRowContent(
             onToggleMute = onToggleMute,
             onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
+            onLeaveConversation = onLeaveConversation,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -642,12 +649,14 @@ private fun ConversationContextMenu(
     onToggleMute: () -> Unit,
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
+    onLeaveConversation: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
 ) {
+    var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
@@ -795,6 +804,38 @@ private fun ConversationContextMenu(
                 onClick = { onAssignCategory(category.id); onDismiss() },
             )
         }
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.conversations_action_leave)) },
+            leadingIcon = {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            },
+            onClick = { showLeaveConfirm = true },
+        )
+    }
+
+    if (showLeaveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLeaveConfirm = false },
+            title = { Text(stringResource(R.string.conversations_leave_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_leave_confirm_message, title)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLeaveConfirm = false
+                        onLeaveConversation()
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_leave_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveConfirm = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
     }
 }
 
