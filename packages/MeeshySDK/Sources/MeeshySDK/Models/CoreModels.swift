@@ -87,6 +87,131 @@ public struct RecentMessagePreview: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+// MARK: - Bridge ✦ (Lentille)
+
+/// Comptage des médias de la fenêtre non lue, porté par l'étage `fallback`
+/// du pont. Chaque compteur est ABSENT — pas zéro — quand la catégorie n'a
+/// rien à annoncer.
+///
+/// Miroir Swift de `mediaCounts` dans
+/// `packages/shared/types/conversation-bridge.ts`.
+public struct ConversationBridgeMediaCounts: Codable, Equatable, Sendable {
+    public let images: Int?
+    public let audio: Int?
+    public let files: Int?
+
+    public init(images: Int? = nil, audio: Int? = nil, files: Int? = nil) {
+        self.images = images
+        self.audio = audio
+        self.files = files
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case images, audio, files
+    }
+}
+
+/// Les DONNÉES de l'étage `fallback` — jamais une phrase.
+///
+/// Le client les formate avec sa propre i18n : la phrase naît déjà dans la
+/// langue du lecteur, donc il n'y a rien à traduire et un changement de
+/// langue la reformate sans aller-retour serveur.
+///
+/// Miroir Swift de `ConversationBridgeData`
+/// (`packages/shared/types/conversation-bridge.ts`). `authors` est plafonné
+/// à 2 côté serveur (`.max(2)` dans le schéma Zod) et le surplus voyage
+/// dans `extraAuthorCount` — le « +N » de la ligne.
+public struct ConversationBridgeData: Codable, Equatable, Sendable {
+    public let authors: [String]
+    public let extraAuthorCount: Int
+    public let messageCount: Int
+    public let mediaCounts: ConversationBridgeMediaCounts?
+
+    public init(authors: [String] = [], extraAuthorCount: Int = 0,
+                messageCount: Int = 0, mediaCounts: ConversationBridgeMediaCounts? = nil) {
+        self.authors = authors
+        self.extraAuthorCount = extraAuthorCount
+        self.messageCount = messageCount
+        self.mediaCounts = mediaCounts
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case authors, extraAuthorCount, messageCount, mediaCounts
+    }
+}
+
+/// Le pont ✦ — ce que le lecteur a manqué, sous une forme qui survit au
+/// Prisme Linguistique.
+///
+/// Miroir Swift de `ConversationBridge`
+/// (`packages/shared/types/conversation-bridge.ts`, contrat §3.2). Deux
+/// étages, un seul champ :
+/// - `kind == .fallback` — des DONNÉES (`data`), formatées par l'i18n du
+///   client. Cet étage n'a pas de langue : rien à traduire.
+/// - `kind == .agent` — une vraie phrase (`text`), donc soumise au Prisme.
+///   Elle voyage avec la MÊME paire que `lastMessagePreview`
+///   (`translations` + `originalLanguage`) précisément pour que le lecteur
+///   puisse la RE-résoudre : une chaîne unique « déjà dans la bonne langue »
+///   serait un instantané, figé dès qu'une traduction atterrit tardivement
+///   ou que le lecteur change de langue principale.
+///
+/// **Aucun résolveur ici, volontairement.** L'étage agent se résout
+/// EXCLUSIVEMENT par le résolveur existant (`resolvedLastMessagePreview` /
+/// `resolveLastMessagePreview()`) : le chantier Lentille n'écrit pas une
+/// seconde loi de langue (contrat §5.2, conséquence 2).
+///
+/// Le champ est **absent** — pas vide — quand `unreadCount == 0` : un
+/// client ancien l'ignore, et la Lentille n'affiche rien. Zéro rupture de
+/// compatibilité dans les deux sens (voir le décodage tolérant de
+/// `MeeshyConversation.bridge`).
+public struct ConversationBridge: Codable, Equatable, Sendable {
+    /// Nichée dans `ConversationBridge` plutôt que déclarée au premier
+    /// niveau : le miroir Swift complet de `ConversationReadingMode`
+    /// (`packages/shared/types/reading-modes.ts`, 4 modes) appartient à un
+    /// autre fichier du chantier, et deux types voisins nommés `…Mode` au
+    /// premier niveau se disputeraient l'espace de noms du module.
+    public enum Kind: String, Codable, Sendable {
+        case agent, fallback
+    }
+
+    /// Décision d'orchestrateur PRÉCALCULÉE — un sous-ensemble strict des
+    /// modes de lecture, les deux seuls qu'un pont peut suggérer.
+    public enum SuggestedMode: String, Codable, Sendable {
+        case focal, resume
+    }
+
+    public let kind: Kind
+    /// Le chiffre vit ICI, plus dans un badge.
+    public let unreadCount: Int
+    public let suggestedMode: SuggestedMode
+
+    /// `kind == .fallback`.
+    public let data: ConversationBridgeData?
+
+    /// `kind == .agent` — la phrase et sa paire de résolution.
+    public let text: String?
+    public let translations: [String: String]?
+    public let originalLanguage: String?
+
+    public init(kind: Kind, unreadCount: Int, suggestedMode: SuggestedMode,
+                data: ConversationBridgeData? = nil,
+                text: String? = nil,
+                translations: [String: String]? = nil,
+                originalLanguage: String? = nil) {
+        self.kind = kind
+        self.unreadCount = unreadCount
+        self.suggestedMode = suggestedMode
+        self.data = data
+        self.text = text
+        self.translations = translations
+        self.originalLanguage = originalLanguage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, unreadCount, suggestedMode, data, text, translations, originalLanguage
+    }
+}
+
 // MARK: - Conversation Model
 
 public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
@@ -166,6 +291,15 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// is the wire-format `String[]` from `UserConversationPreferences`).
     /// Phase 6/7 will reconcile these into a single source.
     public var tags: [MeeshyConversationTag] = []
+
+    /// Le pont ✦ de la Lentille — ce que le lecteur a manqué (contrat §3.2).
+    ///
+    /// `nil` est l'état NORMAL et le défaut : le gateway omet le champ quand
+    /// `unreadCount == 0`, et rien ne l'émet tant que la Lentille n'est pas
+    /// allumée. Absent du `init` pour la même raison que
+    /// `lastMessageTranslations` : c'est une facette expédiée par le
+    /// transport, pas un paramètre de construction.
+    public var bridge: ConversationBridge? = nil
 
     public var isAnnouncementChannel: Bool = false
     public var defaultWriteRole: String? = nil
@@ -335,6 +469,47 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(userState.isLocked)
         h.combine(userState.hasDraft)
         h.combine(userState.hasPendingSync)
+        // Lentille (E13) — le pont ✦ est AFFICHÉ par la ligne, il doit donc
+        // replier ici. Sans ce repli, le portillon `.equatable()` gèlerait le
+        // pont sur sa première valeur : régression JUMELLE de B1 ci-dessus,
+        // avec le même mécanisme exact — un pont ré-émis garde le même
+        // `lastMessageId`, le même `lastMessagePreview`, le même
+        // `lastMessageAt`, et seule la phrase du pont change.
+        //
+        // Le repli est ENTIÈREMENT sous `if let` : pont `nil` ⇒ pas un seul
+        // `combine` de plus ⇒ le fingerprint est bit pour bit celui d'avant
+        // ce lot. Drapeau éteint ⇒ zéro invalidation nouvelle. Un
+        // `h.combine(bridge)` inconditionnel aurait replié `Optional.none` et
+        // décalé le hash de TOUTES les lignes, y compris celles qui n'ont
+        // jamais vu de pont.
+        if let bridge {
+            h.combine(bridge.kind)
+            h.combine(bridge.unreadCount)
+            h.combine(bridge.suggestedMode)
+            h.combine(bridge.text)
+            h.combine(bridge.originalLanguage)
+            // Même patron que les traductions de l'aperçu ci-dessus, et pour
+            // la même raison : c'est la VALEUR que la ligne affiche, une
+            // retraduction ne change QUE elle, `Dictionary` n'a pas d'ordre
+            // d'itération stable, et coller clé+valeur confondrait
+            // `["a": "bc"]` avec `["ab": "c"]`.
+            if let translations = bridge.translations {
+                for key in translations.keys.sorted() {
+                    h.combine(key)
+                    h.combine(translations[key])
+                }
+            }
+            if let data = bridge.data {
+                // `Array.hash(into:)` replie le nombre d'éléments avant les
+                // éléments : ["a", "b"] et ["ab"] restent distincts.
+                h.combine(data.authors)
+                h.combine(data.extraAuthorCount)
+                h.combine(data.messageCount)
+                h.combine(data.mediaCounts?.images)
+                h.combine(data.mediaCounts?.audio)
+                h.combine(data.mediaCounts?.files)
+            }
+        }
         return h.finalize()
     }
 
@@ -442,6 +617,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
         case recentMessages, tags
+        case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
         case participantUserId, participantUsername, participantAvatarURL, participantBanner, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
@@ -493,6 +669,13 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageLocation = try c.decodeIfPresent(SharedPlace.self, forKey: .lastMessageLocation)
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
+        // Tolérance dans les DEUX sens, même patron que `callSummary` /
+        // `location` plus bas : un client ancien ignore le champ (absent ⇒
+        // `nil`), et un pont malformé — ou d'une forme future, `kind` inconnu
+        // par exemple — rend `nil` au lieu de faire échouer le décodage de la
+        // conversation ENTIÈRE. Une ligne sans pont reste une ligne ; une
+        // ligne perdue est un trou dans la liste.
+        self.bridge = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge)
 
         self.isAnnouncementChannel = try c.decodeIfPresent(Bool.self, forKey: .isAnnouncementChannel) ?? false
         self.defaultWriteRole = try c.decodeIfPresent(String.self, forKey: .defaultWriteRole)
@@ -580,6 +763,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(lastMessageLocation, forKey: .lastMessageLocation)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
+        try c.encodeIfPresent(bridge, forKey: .bridge)
 
         try c.encode(isAnnouncementChannel, forKey: .isAnnouncementChannel)
         try c.encodeIfPresent(defaultWriteRole, forKey: .defaultWriteRole)
