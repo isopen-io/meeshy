@@ -577,3 +577,165 @@ inchangées ; seul le coût de leur calcul l'est.
 - **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
   Toujours non tenté : aucune toolchain Swift sous Linux. À reprendre depuis un
   runner macOS.
+
+---
+
+# Cycle 25 (2026-08-15) — la file de rejeu hors ligne n'avait de borne que du côté qui ne sert jamais
+
+Routine « amélioration continue temps réel ». Les cycles 21–23 avaient pris la
+FORME et l'AUDIENCE des événements (`message:translation`,
+`conversation:updated`) ; le cycle 24 a changé de question pour **en fonction de
+quoi le coût d'une diffusion grandit**, et l'a trouvée dans la présence. Ce
+cycle garde la question du coût mais change de FAMILLE : non plus la diffusion
+vivante, mais son complément — la **file de rejeu hors ligne**, c'est-à-dire ce
+qui se passe pour quelqu'un que la diffusion n'a pas pu atteindre.
+
+## Méthode — quatre balayages, dont deux neufs
+
+1. **`SERVER_EVENTS` × écouteurs clients** (neuf ; le cycle 24 avait fait le
+   sens inverse, `CLIENT_EVENTS` × écouteurs gateway). Les 125 événements
+   serveur croisés contre iOS (`socket.on("…")`), web (`SERVER_EVENTS.…` et
+   littéraux) et la gateway. Résultat : rien à prendre, mais la carte est
+   maintenant écrite (voir « Surfaces vérifiées »).
+2. **Multi-appareil des préférences par-utilisateur** (pin/mute/archive/
+   catégories/réorganisation). Déjà juste : `conversationPreferencesSync.ts` est
+   un écrivain UNIQUE qui tient ensemble les trois obligations (persister,
+   incrémenter `version`, diffuser).
+3. **Couverture d'enfilement des 11 `eventType`** de `_drainedEventName` :
+   chacun a bien au moins un appelant qui l'enfile (revérifié, inchangé depuis
+   le cycle 24).
+4. **Le coût d'une mise en FILE** — c'est là qu'était le défaut. Le cycle 24
+   avait posé la question au chemin vivant ; personne ne l'avait posée au
+   chemin hors ligne.
+
+## Le défaut — une tranche plafonnée, sa jumelle sans borne, dans le même fichier
+
+`RedisDeliveryQueue` a deux tranches :
+
+- la **mémoire**, repli d'urgence quand Redis est injoignable, plafonnée depuis
+  qu'elle existe : `MEMORY_QUEUE_MAX_USERS = 1000`,
+  `MEMORY_QUEUE_MAX_PER_USER = 50`, avec une éviction qui prend soin de trancher
+  par `enqueuedAt` et non par emplacement de tableau ;
+- **Redis**, celle qui porte en réalité tous les arriérés, **sans aucune
+  borne** : un `RPUSH` par événement, aucun `LTRIM`, pour seule limite le TTL de
+  48 h.
+
+Trois coûts grandissaient donc librement avec l'arriéré d'un seul absent, et le
+premier n'est pas celui du stockage :
+
+**1. Le coût d'une mise en file.** `ENQUEUE_DEDUP_LUA` lit la liste ENTIÈRE
+(`LRANGE 0 -1`) et `cjson.decode` **chaque** entrée à **chaque** appel, pour
+trouver l'entrée `(identité de dédup, eventType)` qu'il devra éventuellement
+remplacer. Un script Lua s'exécute **atomiquement dans le thread unique de
+Redis** : le coût de mettre en file un événement pour un absent était payé par
+tous les autres clients de ce Redis, et il grandissait avec ce qui était déjà en
+file pour cet absent. Remplir une file de N coûte O(N²) décodages de Redis
+bloqué. Même forme que le défaut du cycle 24 — le coût d'une opération
+dimensionné par l'état accumulé — mais sur une ressource pire, parce qu'elle est
+mono-thread et partagée par toute la passerelle.
+
+**2. La rafale de rejeu.** `_drainPendingMessages` émet chaque entrée drainée,
+une par une : la reconnexion d'un absent de longue date devenait une boucle
+d'émissions sans borne vers un téléphone qui vient tout juste de revenir.
+
+**3. La mémoire Redis**, retenue 48 h.
+
+**Pourquoi ça a survécu.** Les deux tranches sont deux moitiés du **même
+fichier**, décrites par des commentaires voisins et longs. Une lecture qui les
+compare voit deux stratégies de dédup cohérentes, deux évictions qui parlent
+toutes deux d'`enqueuedAt`, deux replis symétriques. La seule propriété qui les
+distinguait — **l'existence d'une borne** — n'était énoncée nulle part, ni dans
+un commentaire ni dans un test.
+
+## Le correctif
+
+`DELIVERY_QUEUE_MAX_PER_USER = 500` (`packages/shared/types/delivery-queue.ts`),
+appliqué par `LTRIM KEYS[1], -tonumber(ARGV[5]), -1` après chaque `RPUSH` :
+la borne conserve les N arrivées les plus RÉCENTES. Elle borne les trois coûts
+d'un seul geste — le balayage ne peut plus rien lire au-delà du plafond, le
+rejeu ne peut plus le dépasser, l'arriéré stocké non plus.
+
+Deuxième changement, et il **ne se déduit pas du premier** : le remplacement
+d'une entrée mutable (`edited` / `deleted` / `reaction-*` / `translation`…) ne se
+fait plus par `LSET` à son ancien emplacement, mais par `LREM` + `RPUSH` **en
+queue**.
+
+> Une entrée remplacée sur place porte l'horodatage le plus RÉCENT tout en
+> occupant l'emplacement le plus ANCIEN. Un `LTRIM`, qui tranche par
+> emplacement, aurait donc évincé précisément l'édition la plus fraîche et figé
+> le destinataire sur un contenu périmé.
+
+C'est exactement la divergence emplacement/`enqueuedAt` que la tranche mémoire
+énonce déjà à sa propre éviction — la forme « en queue » la supprime à la source
+en réalignant l'ordre des emplacements sur l'ordre d'arrivée. Les deux formes
+sont **équivalentes pour le drain**, qui retrie par `enqueuedAt` de toute façon,
+et l'unicité de la valeur par `(identité de dédup, eventType)` — l'invariant que
+ce script maintient et sur lequel `PRUNE_STALE_LUA` s'appuie déjà — garantit que
+`LREM … 1 entry` retire bien l'entrée visée. Le chemin de remplacement n'a pas
+besoin de `LTRIM` : il retire une entrée et en pousse une, la longueur ne bouge
+pas.
+
+Les deux plafonds restent volontairement de tailles différentes, et le fichier le
+dit maintenant : celui de la mémoire borne le **tas de la passerelle** sur 1000
+users à la fois pendant une panne Redis ; celui de Redis borne le **CPU Redis**,
+sa mémoire et la rafale de reconnexion.
+
+**Aucun changement client.** La forme des événements rejoués et leur ordre sont
+inchangés.
+
+## Limite de vérification, énoncée
+
+Le dépôt n'a **aucun double Redis capable d'exécuter du Lua** (`makeMockRedis`
+bouchonne `eval`), donc le comportement de la tranche Redis n'est pas
+observable depuis TypeScript. Les témoins portent sur les deux surfaces qui le
+sont — les arguments que le script reçoit, et le texte du script lui-même — et
+c'est dit explicitement en tête du `describe`. Ce sont de vrais contrats (le
+plafond doit atteindre le script ; le script doit borner la liste avec), mais
+ce ne sont pas des témoins de comportement. La tranche mémoire, elle, garde ses
+témoins comportementaux d'origine.
+
+## Gates
+
+- [x] 3 RED discriminants vus rouges avant correctif — les témoins de contrat du
+      script échouent contre le Lua d'origine (vérifié en restaurant
+      `LSET` + absence de `LTRIM`, puis restauré)
+- [x] `RedisDeliveryQueue.test.ts` : 90 verts (86 pré-existants + 4 témoins)
+- [x] Suite gateway complète : 719 suites / 17601 tests verts
+- [x] Suite `packages/shared` : 54 fichiers / 1542 tests verts
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 25)
+
+## Surfaces vérifiées correctes pendant ce cycle (ne pas re-vérifier)
+
+- **`SERVER_EVENTS` (125) × écouteurs clients.** Aucun événement émis par la
+  gateway n'est orphelin des DEUX clients, à une exception documentée et
+  volontaire : `message:read-status-updated`, dual-émis depuis le 2026-07-05 en
+  parallèle du legacy `read-status:updated` que web (`presence.service.ts`) et
+  iOS (`MessageSocketManager`) écoutent tous deux — période de coexistence de
+  ~3 mois non écoulée (`tasks/socketio-events-cleanup.md` §3). Trois
+  déclarations sans émetteur NI écouteur : `call:translation-requested`,
+  `call:translation-enabled`, `call:transcription-result`. Asymétries connues et
+  hors périmètre gateway : `attachment:reaction-*` et `location:live-*` (iOS
+  seulement), `friend-request:*`, `message:hidden-for-me` /
+  `message:restored-for-me` (web seulement).
+- **Le `_seq` du SyncEngine est en lockstep.** La gateway n'estampille QUE
+  `notification:new` (deux sites, tous deux dans `NotificationService`), et les
+  deux clients n'observent `_seq` que sur cet événement (iOS
+  `SyncSeqTracker.observe`, web `observeSyncSeq`). Le sous-ensemble observé
+  égale l'ensemble estampillé, donc aucun faux trou.
+- **Préférences par-conversation multi-appareil.** `conversationPreferencesSync.ts`
+  est l'écrivain unique : il persiste, incrémente `version` et diffuse
+  `USER_PREFERENCES_UPDATED` dans la même fonction. Les routes PUT/DELETE/
+  reorder et les trois routes de `user-deletions.ts` passent toutes par lui.
+- **Les 11 `eventType` de `_drainedEventName`** ont chacun au moins un appelant
+  qui les enfile (revérifié par balayage de `eventType: '…'`).
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Toujours non tenté : aucune toolchain Swift sous Linux. À reprendre depuis un
+  runner macOS.
+- **Aucun double Redis Lua-capable.** Tant qu'il n'y en a pas, toute évolution
+  de `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` / `PRUNE_STALE_LUA` reste vérifiable
+  seulement par contrat. Un `ioredis-mock` avec support `eval`, ou un service
+  Redis en CI, rendrait ces trois scripts testables comportementalement.
