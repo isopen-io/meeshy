@@ -1254,9 +1254,122 @@ avant que son écriture ne soit committée laisse les clients tenir un fait que 
 serveur peut encore nier, et rien ne le rétracte. Recenser les émetteurs qui
 diffusent depuis l'intérieur d'une transaction, ou avant le `await` qui persiste.
 
+> Cette sonde a été portée par le **cycle 30**, pas 29 : une session parallèle a
+> pris le numéro 29 entre-temps (PR #3029).
+
+
+# Cycle 29 (2026-08-15) — la déconnexion d'un invité anonyme ouvrait une fenêtre de perte sèche
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 27 (mergé,
+PR #3024 ; le numéro 28 a été pris entre-temps par une session parallèle, PR #3027). Ce cycle **encaisse un constat latent du précédent** plutôt que d'en
+ouvrir un nouveau : le cycle 27 avait relevé cette fenêtre au § « Constats
+latents » et l'avait explicitement NON livrée, pour ne pas mêler une
+réorganisation de la séquence de déconnexion d'appel à un correctif
+d'autorisation. Ce motif de report ayant disparu avec le merge, la dette est
+prise ici.
+
+## Le défaut — la garde jumelle existait, sur l'autre chemin
+
+Le chemin de CONNEXION porte déjà la garde, écrite noir sur blanc dans
+`_authenticateJWTUser` : joindre les rooms **avant** d'inscrire le socket dans
+`connectedUsers`, parce que la livraison est gatée uniquement sur
+`connectedUsers.has(clé)`. Un destinataire qui « paraît en ligne » sans être
+dans la room perd l'événement des DEUX côtés à la fois :
+
+- écarté de la file hors ligne, puisqu'il a l'air joignable ;
+- absent de la diffusion de room, puisqu'il ne l'est pas.
+
+À la déconnexion, l'ordre doit être inverse — **désinscrire d'abord** — et il ne
+l'était pas.
+
+`handleDisconnection` est branché sur `disconnect`, que Socket.IO émet **après**
+avoir vidé les rooms du socket. Le manager l'énonce lui-même, à trois lignes de
+là, sur son écouteur `disconnecting` voisin : « la diffusion vise les rooms de la
+conversation, et `disconnect` s'exécute après en être sorti. » Tout `await` placé
+entre cette sortie et le `connectedUsers.delete` est donc une fenêtre de perte
+sèche — pas un retard, une perte : rien ne rejoue ce qui n'a été ni diffusé ni
+mis en file.
+
+| chemin | `await` avant la désinscription | fenêtre |
+|---|---|---|
+| inscrit (JWT) | aucun | nulle — **sûr par accident** |
+| anonyme | ≥ 1 à CHAQUE déconnexion | réelle |
+
+Le chemin anonyme traverse au moins un `await` à **chaque** déconnexion
+d'invité : la recherche des participations d'appel actives s'exécute
+inconditionnellement dans le bloc `if (isAnonymous)`, **pas seulement quand un
+appel est en cours**, et la boucle de `leaveCall` qui la suit peut en ajouter
+plusieurs.
+
+**La fenêtre s'élargit sous charge.** Sa durée est celle d'un aller-retour
+Prisma, donc elle croît avec la profondeur de la file d'attente de la base —
+c'est-à-dire au moment exact où une rafale de déconnexions (redémarrage de
+passerelle, coupure réseau) rend la perte à la fois la plus probable et la plus
+massive. Même forme que les cycles 24 et 25 : un coût dimensionné par l'état
+accumulé, qui se paie quand tout va déjà mal.
+
+## Le correctif
+
+`this.connectedUsers.delete(userIdOrToken)` remonte avant le bloc de nettoyage
+d'appel — synchrone, aligné sur ce que le chemin inscrit obtenait déjà sans le
+dire.
+
+La garde anti-clobber qui suit (« une reconnexion a-t-elle atterri pendant le
+nettoyage ? ») **garde tout son sens et en gagne en exactitude** : elle ne
+gouverne plus que l'écriture « hors ligne » en base et sa diffusion. Et comme la
+désinscription a désormais lieu AVANT le nettoyage, une reconnexion qui atterrit
+entre les deux s'est réinscrite elle-même — il n'y a plus de suppression
+séquencée après l'écriture plus fraîche de quelqu'un d'autre, ce que l'ordre
+précédent rendait structurellement possible.
+
+Vérifié avant de déplacer : `CallEventsHandler` ne lit `connectedUsers` nulle
+part, donc rien dans le bloc awaité ne dépend de l'inscription qu'on retire.
+
+**Aucun changement client.**
+
+## Pourquoi ça a survécu
+
+Parce que la garde jumelle EXISTE et qu'elle est documentée — sur le chemin
+qu'on relit naturellement, celui de l'entrée. Une lecture qui cherche « cette
+garde est-elle présente ? » la trouve, et s'arrête. Personne n'avait posé au
+chemin de SORTIE la question que le chemin d'ENTRÉE avait déjà résolue.
+
+## Gates
+
+- [x] 1 RED discriminant vu rouge avant correctif — un témoin qui observe
+      `connectedUsers` **depuis l'intérieur** du nettoyage awaité (la seule
+      position d'où la fenêtre est visible ; l'observer après coup ne montre
+      rien, l'état final étant correct des deux côtés)
+- [x] 1 témoin de non-régression sur la garde anti-clobber (vert des deux
+      côtés) — il interdit que la remontée la coûte
+- [x] `AuthHandler.test.ts` (les deux suites) : 75/75 verts
+- [x] Suite gateway complète : **719 suites / 17625 tests verts** avant le merge
+      de main (cycle 27 : 719 / 17623 — +2) ; **720 suites / 17643 tests verts**
+      après le merge manuel de `origin/main` (le cycle 28 d'une session
+      parallèle, PR #3027, ajoute une suite et ses témoins)
+- [x] `tsc --noEmit` gateway : 0 erreur
+- [x] CHANGELOG + journal d'audit (§ Cycle 29) + `lessons.md` (Leçon 261)
+
+## Constats latents — report du cycle 27, toujours non livrés
+
+1. **`conversation:any`** — chaque socket JWT rejoint cette room ; balayage
+   repo-wide (gateway + web + iOS + Android, toutes extensions) : **deux
+   occurrences en tout, le `join` et son log d'échec.** Aucun émetteur. Retrait
+   trivial, gardé pour un cycle qui touchera déjà `AuthHandler`.
+2. **Dilution de la file par des entrées mortes** — inchangé depuis le cycle 27 ;
+   le TTL de 48 h la borne déjà.
+3. **`next/font/google` résout au BUILD** — chaque build CI dépend de
+   l'accessibilité de `fonts.gstatic.com`. Observé rouge une fois sur la PR
+   #3024, vert au rejeu. Fragilité réelle de la CI, hors du domaine temps réel.
 ---
 
-# Cycle 29 — le MOMENT de la diffusion par rapport à la durabilité du fait
+# Cycle 30 (2026-08-15) — le MOMENT de la diffusion par rapport à la durabilité du fait
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 28 (mergé,
+PR #3027). Numéroté 30 et non 29 : une session parallèle a pris le 29 pendant
+cette passe (PR #3029, la fenêtre de perte sèche de l'invité anonyme) — les deux
+passes coexistent sans conflit résiduel, seuls trois fichiers de journal se
+touchaient et les deux contributions y sont conservées.
 
 Sonde annoncée en clôture du cycle 28 : **un événement émis avant que son
 écriture ne soit committée laisse les clients tenir un fait que le serveur peut
@@ -1440,7 +1553,7 @@ non supposée : le canal existait, seul l'émetteur manquait.
 
 ## Candidat pour le cycle suivant
 
-Le constat latent #2 généralisé, et jamais posé par les cycles 21–29 : **quels
+Le constat latent #2 généralisé, et jamais posé par les cycles 21–30 : **quels
 chemins d'écriture ignorent l'état TERMINAL de leur conteneur ?** Une
 conversation `isActive: false`, un post supprimé, un appel `ended`, une
 communauté archivée — chacun a des routes qui écrivent dedans. Recenser, pour

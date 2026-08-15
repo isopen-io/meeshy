@@ -300,6 +300,83 @@ describe('AuthHandler', () => {
       expect(connectedUsers.get('user-123')?.socketId).toBe('socket-456');
     });
 
+    /**
+     * Miroir exact de la garde que le chemin de CONNEXION documente déjà : il
+     * joint les rooms AVANT d'inscrire au registre, parce que la file hors
+     * ligne est gatée sur `connectedUsers.has(clé)` et qu'un destinataire qui
+     * « paraît en ligne » sans être dans la room perd l'événement des DEUX
+     * côtés — ni room, ni file.
+     *
+     * À la déconnexion l'ordre doit être inverse : désinscrire d'abord. Le
+     * handler est branché sur `disconnect`, que Socket.IO émet APRÈS avoir vidé
+     * les rooms du socket (le manager le dit à son propre écouteur
+     * `disconnecting`). Tout `await` placé entre ce moment et la
+     * désinscription est donc une fenêtre de perte sèche.
+     *
+     * Le chemin INSCRIT est sûr par accident — il n'a aucun `await` avant la
+     * désinscription. Le chemin ANONYME en a au moins un : la recherche des
+     * participations d'appel actives, exécutée à CHAQUE déconnexion d'invité,
+     * pas seulement quand un appel est en cours. Et cette fenêtre s'élargit
+     * précisément sous charge, quand la file d'attente Prisma s'allonge —
+     * c'est-à-dire quand une rafale de déconnexions rend la perte la plus
+     * probable.
+     */
+    it('unregisters an anonymous guest BEFORE awaiting the call cleanup', async () => {
+      let stillRegisteredDuringCleanup: boolean | null = null;
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockImplementation(async () => {
+        stillRegisteredDuringCleanup = connectedUsers.has('anon-participant-1');
+        return [];
+      });
+
+      socketToUser.set('socket-anon', 'anon-participant-1');
+      connectedUsers.set('anon-participant-1', {
+        id: 'anon-participant-1',
+        socketId: 'socket-anon',
+        isAnonymous: true,
+        language: 'fr'
+      });
+      userSockets.set('anon-participant-1', new Set(['socket-anon']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-anon' }));
+
+      expect(stillRegisteredDuringCleanup).toBe(false);
+      expect(connectedUsers.has('anon-participant-1')).toBe(false);
+    });
+
+    /**
+     * La désinscription anticipée ne doit pas coûter la garde anti-clobber que
+     * ce handler porte déjà : une reconnexion qui atterrit PENDANT le nettoyage
+     * a réinscrit l'identité et rediffusé `isOnline: true`. Écrire « hors
+     * ligne » derrière elle serait un dernier-écrivain-gagne sur un état plus
+     * frais que le nôtre.
+     */
+    it('leaves a reconnect that lands mid-cleanup registered, and skips the offline write', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockImplementation(async () => {
+        connectedUsers.set('anon-participant-1', {
+          id: 'anon-participant-1',
+          socketId: 'socket-anon-new',
+          isAnonymous: true,
+          language: 'fr'
+        });
+        userSockets.set('anon-participant-1', new Set(['socket-anon-new']));
+        return [];
+      });
+
+      socketToUser.set('socket-anon-old', 'anon-participant-1');
+      connectedUsers.set('anon-participant-1', {
+        id: 'anon-participant-1',
+        socketId: 'socket-anon-old',
+        isAnonymous: true,
+        language: 'fr'
+      });
+      userSockets.set('anon-participant-1', new Set(['socket-anon-old']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-anon-old' }));
+
+      expect(connectedUsers.get('anon-participant-1')?.socketId).toBe('socket-anon-new');
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).not.toHaveBeenCalled();
+    });
+
     it('should return early without mutating maps when socketId is unknown', async () => {
       // Simulate race: socket not in socketToUser (already cleaned up or never registered)
       const mockSocket = createMockSocket({ id: 'unknown-socket' });

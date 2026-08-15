@@ -390,6 +390,33 @@ export class AuthHandler {
     this.userSockets.delete(userIdOrToken);
     this.statusService.markDisconnected(userIdOrToken, isAnonymous);
 
+    // Unregister BEFORE any await — the exact mirror of the connect path, which
+    // joins the rooms before registering (see `_authenticateJWTUser`) for the
+    // symmetric reason.
+    //
+    // This handler runs on `disconnect`, which Socket.IO emits AFTER the socket
+    // has left every room (the manager says so on its own `disconnecting`
+    // listener). Delivery is gated purely on `connectedUsers.has(key)`: while
+    // this map still holds a socket that is already out of its rooms, an event
+    // for that recipient is skipped from the offline queue (they look online)
+    // AND reaches no room broadcast — lost outright, with nothing to replay on
+    // reconnect. Every `await` between the room exit and this delete is that
+    // window.
+    //
+    // The registered path was safe only by accident: it has no await before
+    // here. The anonymous path has one on EVERY guest disconnect — the active
+    // call-participation lookup below runs unconditionally, not just when a
+    // call is in progress — and it widens exactly under load, when the Prisma
+    // queue lengthens, i.e. when a burst of disconnects makes the loss most
+    // likely.
+    //
+    // The reconnect-during-cleanup guard further down keeps its purpose: it now
+    // governs the offline DB write and its broadcast alone. Deleting HERE is
+    // what makes it correct rather than racy — a reconnect landing during the
+    // cleanup re-registers itself afterwards, so there is no longer a delete
+    // sequenced after someone else's fresher write.
+    this.connectedUsers.delete(userIdOrToken);
+
     // CALL-RESILIENCE — call lifecycle on disconnect is owned by
     // CallEventsHandler's per-socket disconnect handler (reconnect grace for
     // answered calls, immediate leave pre-answer, shutdown guard). Leaving
@@ -478,11 +505,14 @@ export class AuthHandler {
     // isOnline:true and repopulated userSockets/connectedUsers — broadcasting
     // isOnline:false below would be a stale last-write-wins clobber of both
     // the room presence event and the DB flag. Bail out entirely in that case.
+    //
+    // Governs the offline write and its broadcast ONLY: the registry delete now
+    // happens above, before the cleanup, so a reconnect that lands here has
+    // already re-registered itself and there is nothing left to un-do.
     const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
     if (stillHasSockets) {
       return;
     }
-    this.connectedUsers.delete(userIdOrToken);
 
     try {
       if (isAnonymous) {
