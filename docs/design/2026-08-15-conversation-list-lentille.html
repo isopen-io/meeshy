@@ -136,7 +136,30 @@
   /* focus card — la seule carte de l'écran */
   .crow.cur{background:var(--m-bg2); box-shadow:inset 0 0 0 1.5px var(--ac)}
   .crow.cur .modechip{display:flex}
-  .modechip{display:none; position:absolute; right:14px; top:-9px; background:var(--m-bg); border:1px solid color-mix(in srgb, var(--ac) 45%, transparent); color:var(--ac); font-size:9.5px; font-weight:900; letter-spacing:.05em; padding:2px 9px; border-radius:99px; align-items:center; gap:4px}
+  .modechip{display:none; position:absolute; right:14px; top:-9px; background:var(--m-bg); border:1px solid color-mix(in srgb, var(--ac) 45%, transparent); color:var(--ac); font-size:9.5px; font-weight:900; letter-spacing:.05em; padding:2px 9px; border-radius:99px; align-items:center; gap:4px; cursor:pointer; z-index:6}
+  .modechip:hover{background:color-mix(in srgb, var(--ac) 12%, var(--m-bg))}
+  .modechip::after{content:"▾"; font-size:8px; opacity:.7}
+  .joinbtn{flex:none; margin-left:8px; background:var(--ac); color:#fff; border:none; font-family:inherit; font-size:11.5px; font-weight:900; padding:6px 13px; border-radius:99px; cursor:pointer}
+  .modemenu{position:absolute; z-index:60; background:var(--m-bg); border:1px solid var(--m-hair); border-radius:14px; box-shadow:0 18px 44px -18px rgba(30,27,75,.4); padding:6px; min-width:210px; display:none}
+  .modemenu.on{display:block}
+  .modemenu .mi{display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:9px; font-size:12.5px; font-weight:700; color:var(--m-text); cursor:pointer}
+  .modemenu .mi:hover{background:var(--m-bg2)}
+  .modemenu .mi .chk{width:14px; color:var(--m-brand); font-weight:900}
+  .modemenu .mi small{margin-left:auto; font-size:10px; color:var(--ink3); font-weight:700}
+  .modemenu .mi.dis{opacity:.4; pointer-events:none}
+  .modemenu .msep{height:1px; background:var(--m-hair); margin:4px 8px}
+  .peekback{position:absolute; inset:0; z-index:55; background:color-mix(in srgb, var(--m-text) 30%, transparent); backdrop-filter:blur(3px); display:none}
+  .peekback.on{display:block}
+  .peek{position:absolute; left:14px; right:14px; bottom:90px; z-index:56; background:var(--m-bg); border:1px solid var(--m-hair); border-radius:20px; padding:16px; box-shadow:0 24px 60px -20px rgba(30,27,75,.5)}
+  .peek .ph1{display:flex; align-items:center; gap:11px; margin-bottom:9px}
+  .peek .pava{width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:14px}
+  .peek .pnm{font-size:15px; font-weight:800}
+  .peek .pmeta{font-size:11px; color:var(--ink3); font-weight:700}
+  .peek .ptxt{font-size:13.5px; color:var(--ink2); line-height:1.5; margin:4px 0 12px}
+  .peek .ptxt .pont{font-weight:700}
+  .peek .pacts{display:flex; gap:8px; flex-wrap:wrap}
+  .peek .pacts button{flex:1; min-width:70px; background:var(--m-bg2); border:1px solid var(--m-hair); border-radius:11px; font-family:inherit; font-size:11.5px; font-weight:800; color:var(--m-text); padding:9px 6px; cursor:pointer}
+  .peek .pacts button:hover{border-color:var(--m-brand); color:var(--m-brand)}
 
   .fab{position:absolute; right:20px; bottom:24px; width:54px; height:54px; border-radius:18px; background:linear-gradient(135deg,#6366F1,#4338CA); color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; z-index:35; box-shadow:0 10px 26px -8px rgba(67,56,202,.55); cursor:pointer}
   .toast{position:absolute; left:50%; bottom:92px; transform:translateX(-50%) translateY(8px); z-index:50; background:color-mix(in srgb, var(--m-text) 90%, transparent); color:var(--m-bg); font-size:12px; font-weight:700; padding:9px 16px; border-radius:14px; opacity:0; transition:.3s; pointer-events:none; max-width:330px; text-align:center}
@@ -160,7 +183,7 @@
 <tr><td>Tout lu</td><td>Dernier message, résolu par le Prisme (<code>resolveLastMessagePreview</code>), texte tertiaire</td><td>aucun</td></tr>
 <tr><td>Non lu</td><td><b>Pont ✦</b> : synthèse 1 ligne (agent) ou fallback déterministe « Nadia, Samir +2 · 12 messages · 3 photos »</td><td>point accent 8 px à droite — <b>jamais de badge chiffré rouge</b></td></tr>
 <tr><td>Quelqu'un écrit</td><td>« Karim écrit… » en accent + points animés</td><td>dot présence forcé vert (typing = preuve d'activité)</td></tr>
-<tr><td>Scène en direct</td><td>« En direct · 4 voix · traduction FR active »</td><td>rang remonté en section « En direct », anneau accent pulsé</td></tr>
+<tr><td>Appel en cours (Scène)</td><td><b>● pulsant + « 4 voix · depuis 12 min »</b> — rien de plus. Non rejoint : bouton <b>Rejoindre</b> à droite, seule information nécessaire. Rejoint : pas de bouton (on y est, la Scène vit dans la conversation)</td><td>rang remonté en section « En direct », anneau accent pulsé</td></tr>
 <tr><td>Agent (membre ✦)</td><td>Préview en indigo, avatar en <b>pointillé</b> (trait plein = humain)</td><td>grammaire ✦ imposée</td></tr>
 <tr><td>Sourdine</td><td>Rang à 55 % d'opacité, pont grisé</td><td>🔕 après le nom</td></tr>
 </table></div>
@@ -180,6 +203,8 @@
     <div class="lscroll" id="lsc"></div>
     <div class="fbfloat fbl" title="Feed (glisser-déposer libre)">📰</div>
     <div class="fbfloat fbr" title="Menu / profil">SY</div>
+    <div class="peekback" id="peekback" onclick="closePeek()"></div>
+    <div class="modemenu" id="modemenu"></div>
     <div class="toast" id="toast"></div>
   </div>
   <div class="simbar">
@@ -277,6 +302,17 @@
 <tr><td>Scène active</td><td>Section EN DIRECT + « ● En direct · 4 voix »</td><td>Rejoint la Scène (couche live), Focal dessous</td></tr>
 <tr><td>Choix manuel mémorisé</td><td>Chip du mode choisi</td><td>Le mode mémorisé, toujours (sticky par conversation)</td></tr>
 </table></div>
+<h3>L'encoche de mode est actionnable</h3>
+<p>L'encoche de la focus card (« AUTO · FOCAL », « AUTO · RÉSUMÉ VIVANT », « FORCÉ · SCRIPT »…) n'est pas un simple label : <b>un tap l'ouvre en menu de mode</b>. Cinq choix, mémorisés PAR CONVERSATION et synchronisés multi-appareils :</p>
+<div class="tablewrap"><table>
+<tr><th>Choix</th><th>Comportement à l'ouverture</th><th>Encoche affichée</th></tr>
+<tr><td>🪄 Auto (défaut)</td><td>L'orchestrateur calcule le meilleur mode à chaque ouverture (règles ci-dessus)</td><td>« AUTO · » + décision courante — l'utilisateur voit ce qui VA se passer</td></tr>
+<tr><td>Focal</td><td>Toujours Focal, pont ✦ en tête si non-lus</td><td>« FORCÉ · FOCAL »</td></tr>
+<tr><td>Script</td><td>Toujours la densité liste plate — accès DIRECT, sans passer par Focal puis Aa</td><td>« FORCÉ · SCRIPT »</td></tr>
+<tr><td>Résumé Vivant</td><td>Toujours les épisodes, zoom sémantique vers Focal disponible</td><td>« FORCÉ · RÉSUMÉ »</td></tr>
+<tr><td>Rivière</td><td>Toujours Rivière — proposé uniquement si éligible (≥ 5 participants actifs, jamais en DM : entrée grisée sinon)</td><td>« FORCÉ · RIVIÈRE »</td></tr>
+</table></div>
+<p>Le même menu est accessible depuis l'<b>aperçu long press</b> (bouton « Mode ▾ ») et depuis le menu contextuel du rang — trois chemins, une seule préférence. Un mode forcé débraye l'orchestrateur pour cette conversation (le toast d'ouverture le dit explicitement) ; revenir sur 🪄 Auto le réengage. C'est la formalisation du « choix manuel mémorisé » du Vol.3 : la mémoire n'est plus implicite (dernier mode utilisé), elle est <b>pilotable et visible</b> dans l'encoche.</p>
 <div class="note"><b>Le pont ✦ est un contenu d'assistance</b> : généré par l'agent observer (<code>assist:summary-patch</code>) quand il est branché, sinon fallback déterministe côté gateway (« auteurs + volume + types de médias »). Il respecte la grammaire ✦ et n'écrit jamais dans le thread. Confidentialité : le pont est calculé par conversation côté serveur avec les mêmes droits de lecture que l'utilisateur — rien de nouveau n'est exposé.</div>
 
 <h2 id="ios-spec">5 · Spécification d'implémentation — iOS</h2>
@@ -303,6 +339,8 @@
 <tr><td><code>LentillePerspective.swift</code></td><td>Perspective douce par <code>.visualEffect { content, proxy in }</code> (pur, compositor, aucun état) : f = min(1, d/520) au-dessus de la bande de focus, opacité 1−0.45f, scale 1−0.04f, anchor (0.16, 0.5) ; fondu court d/160 dessous. Élection de la focus card : <code>onScrollGeometryChange</code> (iOS 18) publie l'offset → id du rang dont midY ∈ bande (bottom−140 ± 45) ; fallback iOS 17 : PreferenceKey throttlée à 60 Hz. La focus card = fond backgroundSecondary + ring 1.5 accent + chip du mode mémorisé, hauteur inchangée</td></tr>
 <tr><td><code>SectionScrollPill.swift</code></td><td>Pilule de section pendant le défilement — branchée sur le signal de scroll existant (celui qui masque déjà <code>ConversationListBottomBar</code>), minuterie 900 ms</td></tr>
 <tr><td><code>LentilleSkeletonRow.swift</code></td><td>Squelette à la géométrie EXACTE du rang Lentille (avatar 44, deux barres) — corrige l'écart actuel 48 pt/radius 18/padding 14 vs rang réel 52/14/12 (transition non pixel-stable relevée à l'audit)</td></tr>
+<tr><td><code>LentilleModeMenu.swift</code></td><td>Le menu Auto / Focal / Script / Résumé / Rivière (Rivière <code>.disabled</code> si &lt; 5 participants ou DM). Trois points d'entrée, une préférence : (1) tap sur l'encoche de la focus card (<code>Button</code> dans le chip) ; (2) sous-menu « Mode d'affichage » ajouté à <code>nativeContextMenuView(for:)</code> — donc présent dans les DEUX chemins long press ; (3) l'aperçu. Écriture : <code>ConversationStore.apply(.setReadingMode)</code> — optimiste + rollback + outbox, propagée par <code>user-preferences:updated</code> (multi-appareils) comme pin/mute aujourd'hui</td></tr>
+<tr><td><code>LentillePeekView.swift</code></td><td>L'aperçu long press : remplace <code>ConversationPreviewView</code> (le preview 340 pt du menu natif) quand le flag est actif — avatar + nom + méta (participants · encoche), <b>le pont ✦ en grand</b> (ou le préview résolu), actions rapides Épingler / Sourdine / Lu / Mode ▾. Branché sur les deux chemins existants : <code>preview:</code> du <code>.contextMenu</code> natif (iOS 26+) et le morph de <code>RowPressBounceModifier</code> (&lt; 26) — timings, spring 0.55/0.25 et zone d'exclusion avatar (70 pt) conservés tels quels</td></tr>
 </table></div>
 <div class="note"><b>Tailles designées Vol.5, accessibilité de l'app.</b> Les valeurs (44, 15, 13, 12, 64) sont celles du design, pas celles du rang actuel — mais toutes passent par <code>MeeshyFont.relative()</code> donc suivent Dynamic Type (15 → .subheadline, 13 → .footnote, 12 → .caption). Au passage la hiérarchie typographique actuelle (titre ET préview en .footnote 13, différenciés à la graisse seule) est corrigée : le nom monte d'un cran.</div>
 
@@ -320,7 +358,9 @@
 <tr><td>Glyphe <code>hasPendingSync</code> (outbox)</td><td>Conservé tel quel (arrow.triangle.2.circlepath accent 70 %)</td></tr>
 <tr><td>Mood badge vs dot présence (un seul coin)</td><td>Règle conservée : mood gagne le coin, présence sinon — dots aussi pour les groupes (« quelqu'un d'actif ») via l'agrégat <code>PresenceManager</code></td></tr>
 <tr><td>Sélection iPad (barre accent 3 pt + teinte)</td><td>= style focus card persistant sur le rang sélectionné</td></tr>
-<tr><td>Timestamp ticker (TimelineView 60 s, hors gate Equatable)</td><td>Conservé — seul élément vivant du rang au repos</td></tr>
+<tr><td>Long press (2 chemins : <code>.contextMenu</code> natif iOS 26 avec preview 340, <code>RowPressBounceModifier</code> &lt; 26 — press scale 0.90, déclenchement 0.4 s, exclusion avatar 70 pt)</td><td>Conservés à l'identique ; le preview devient <code>LentillePeekView</code> (pont ✦ + actions rapides), le menu gagne le sous-menu « Mode d'affichage ». Le <code>.onDrag</code> (catégories) reste sur le chemin natif uniquement, comme aujourd'hui</td></tr>
+<tr><td>Appel en cours (Scène)</td><td>● pulsant (accent) + « {n} voix · depuis {durée} » — durée par le <code>TimelineView</code> 60 s déjà présent pour l'heure. Non rejoint : bouton <b>Rejoindre</b> capsule accent en trailing (remplace toute autre info à droite). Rejoint : pas de bouton. Tap rang = rejoindre/ouvrir la Scène</td></tr>
+<tr><td>Timestamp ticker (TimelineView 60 s, hors gate Equatable)</td><td>Conservé — seul élément vivant du rang au repos ; sert aussi la durée d'appel</td></tr>
 <tr><td><code>renderFingerprint</code> (contrat de re-render, valeurs de traductions incluses)</td><td>Étendu : + <code>bridge</code> (texte du pont, unreadCount, suggestedMode) — sinon le gate gèlerait les mises à jour du pont</td></tr>
 <tr><td>VoiceOver</td><td>Label étendu : « {nom}, {heure}, {n} non lus, {pont ou préview} » ; perspective ignorée ; stickers lus comme en-têtes de section</td></tr>
 <tr><td>Pull-to-refresh, pagination (sentinelle + count−5), branches vides (skeleton / recherche vide / erreur sync / première conversation)</td><td>Inchangés ; états vides restylés plats, résolveur <code>ConversationListEmptyBranch</code> non modifié</td></tr>
@@ -350,6 +390,8 @@
 <tr><td><code>SectionScrollPill.tsx</code></td><td>idem</td><td>Pilule flottante : nom de section courante, visible pendant le scroll, cachée 900 ms après le dernier événement (même minuterie que <code>ScrollTimePill</code> du Focal — factoriser le hook <code>useScrollActivity</code>)</td></tr>
 <tr><td><code>LivesRail.tsx</code></td><td>idem</td><td>Rail horizontal ≤ 6 pastilles (live / typing / salve) ; masqué si vide</td></tr>
 <tr><td><code>useLentillePerspective.ts</code></td><td>idem</td><td>rAF unique sur le conteneur scroll : opacité/scale par rang (courbe §3) + élection de la focus card. Inline style sur un wrapper interne — ne touche pas au layout ni aux mesures</td></tr>
+<tr><td><code>ReadingModeMenu.tsx</code></td><td>idem</td><td>Menu Auto / Focal / Script / Résumé / Rivière (Rivière désactivée si &lt; 5 participants ou DM). Trois entrées, une préférence : tap sur l'encoche de la focus card ; item « Mode d'affichage » ajouté au dropdown ⋮ existant (<code>ConversationItemActions</code>) ; l'aperçu. Écriture via <code>conversation-preferences-store</code> (optimiste versionnée, comme pin/mute) → propagée par <code>onPreferencesUpdated</code> multi-onglets/appareils</td></tr>
+<tr><td><code>LentillePeek.tsx</code></td><td>idem</td><td>Aperçu : clic droit (<code>onContextMenu</code>) et appui long tactile (pointer 420 ms, annulé par scroll/move) — pont ✦ en grand + actions Épingler / Sourdine / Lu / Mode ▾. Desktop : le ⋮ au survol reste ; l'aperçu s'y ajoute, il ne le remplace pas</td></tr>
 </table></div>
 
 <h3>6.3 · Corrections d'écarts révélées par l'audit (incluses dans la PR)</h3>
@@ -379,7 +421,22 @@ type ConversationBridge = {
 //   auteurs distincts (2 max + "+N") · nombre de messages · types de médias
 // Agent observer branché : assist:summary-patch scope "bridge" remplace le fallback.
 // Champ optionnel : bridge?: ConversationBridge sur ConversationListItem —
-// un client ancien l'ignore, la Lentille l'affiche. Zéro breaking change.</code></pre>
+// un client ancien l'ignore, la Lentille l'affiche. Zéro breaking change.
+
+// Préférence de mode (encoche actionnable) — par utilisateur ET par conversation,
+// dans le même canal que pin/mute (UserConversationPreferences) :
+type ReadingModePreference = "auto" | "focal" | "script" | "resume" | "riviere";
+// défaut "auto" : l'orchestrateur décide (bridge.suggestedMode).
+// forcé : le client ouvre directement le mode choisi, orchestrateur débrayé.
+// Sync : PATCH /conversations/:id/preferences + événement user-preferences:updated
+// (chemin existant, versionné — aucun événement nouveau).
+
+// Appel en cours (Scène) sur le rang — payload live minimal :
+type ConversationLiveCall = {
+  voices: number;        // participants qui parlent/écoutent
+  startedAt: string;     // ISO — le client calcule « depuis 12 min » (ticker 60 s)
+  joined: boolean;       // false → bouton Rejoindre ; true → rien de plus
+};</code></pre>
 
 <h3>6.5 · Accessibilité (suit l'app, pas le design)</h3>
 <p>Rang = <code>role="button"</code> + Enter/Espace (conservés de <code>ConversationItem</code>) ; aria-label « {nom}, {heure}, {n} non lus, {pont} » ; la perspective est purement décorative — <code>prefers-reduced-motion</code> la désactive (opacités à 1, focus card = fond seul) ; la pilule et les stickers sont <code>aria-hidden</code> (l'information de section existe dans l'ordre du DOM) ; contrastes AA vérifiés sur le pont teinté accent (mélange <code>color-mix(accent 80 %, texte)</code> jamais en dessous de 4.5:1 sur bg).</p>
@@ -397,6 +454,9 @@ type ConversationBridge = {
 <tr><td>R8</td><td>Réversibilité : flag off → rendu bit-à-bit identique à l'actuel (iOS : <code>ThemedConversationRow</code> ; web : <code>ConversationItem</code>)</td><td>Snapshot tests flag off</td></tr>
 <tr><td>R9</td><td>Gestes : swipes, menus contextuels (2 chemins OS), drag & drop, pull-to-refresh, pagination — inchangés flag on</td><td>Passe manuelle + tests existants</td></tr>
 <tr><td>R10</td><td>Écarts d'audit corrigés : mute visible, typing en liste (web), tri <code>lastMessageAt</code> (web), recherche sur préview résolu (web), squelettes pixel-stables, clé i18n manquante</td><td>Revue de code + tests ciblés</td></tr>
+<tr><td>R11</td><td>Encoche & modes : tap sur l'encoche = menu (Auto/Focal/Script/Résumé/Rivière, Rivière grisée si inéligible) ; mode forcé mémorisé par conversation, synchronisé multi-appareils via le canal préférences existant, orchestrateur réengagé au retour sur Auto ; le même menu accessible par long press et menu contextuel</td><td>Test 2 appareils + test unitaire de la préférence versionnée</td></tr>
+<tr><td>R12</td><td>Long press : aperçu avec pont ✦ + actions rapides sur les DEUX chemins iOS (natif 26 / RowPressBounceModifier), clic droit + appui long tactile sur web ; tap court jamais intercepté ; zone d'exclusion avatar conservée</td><td>Passe manuelle sur les deux OS + test UI web</td></tr>
+<tr><td>R13</td><td>Appel en cours : ● pulsant + « n voix · depuis X » (ticker 60 s existant), bouton Rejoindre uniquement si non rejoint, rien d'autre ; tap = rejoindre</td><td>Test manuel Scène + snapshot des deux états</td></tr>
 </table></div>
 
 <h3>Découpage de la PR 1 (cette branche)</h3>
@@ -414,8 +474,8 @@ const CONVS = [
   prev:"On se voit dimanche alors ! 😊", dot:"on", pin:true, story:true,
   cs:"épinglé · lu · anneau story non vue"},
  {id:"produit", nm:"Équipe Produit", ini:"EP", ac:"#6366F1", grp:14, sec:"live", tm:"14:41", unread:0, mode:"SCÈNE",
-  live:"En direct · 4 voix · traduction FR active", dot:"on",
-  cs:"Scène live · section EN DIRECT"},
+  live:"4 voix · depuis 12 min", joined:false, dot:"on",
+  cs:"appel en cours non rejoint → ● + voix + durée + Rejoindre"},
  {id:"lena", nm:"Léna", ini:"L", ac:"#C25B9E", grp:0, sec:"today", tm:"13:58", unread:0, mode:"FOCAL",
   draft:"il faut qu'on parle du budget avant samedi…", prev:"Vu, je te rappelle", dot:"on",
   cs:"brouillon (flotte en tête, préfixe erreur)"},
@@ -530,7 +590,8 @@ function rowHtml(c){
   else if(c.kindtxt) l2 = `<span class="kind ${c.kind}">${c.kindtxt}</span>`;
   else if(c.glb) l2 = `<span class="glb">🌐</span> ${c.prev.replace('🌐 ','')}`;
   else l2 = c.prev;
-  const udot = (c.unread && !c.live) ? `<span class="udot"></span>` : "";
+  const udot = c.live ? (c.joined ? "" : `<button class="joinbtn" onclick="event.stopPropagation(); showToast('Rejoint la Scène de « ${c.nm} » — plancher vocal automatique, traduction live selon ton prisme')">Rejoindre</button>`)
+    : (c.unread ? `<span class="udot"></span>` : "");
   const pin = c.pin ? `<span class="pin">📌</span> ` : "";
   const lock = c.lock ? `<span class="pin">🔒</span> ` : "";
   const fav = c.fav ? `<span class="fav">${c.fav}</span>` : "";
@@ -544,8 +605,13 @@ function rowHtml(c){
       <div class="l1">${pin}${lock}<span class="nm">${c.nm}</span>${fav}${tags}${mut}<span class="mid">·</span><span class="tm">${c.tm}</span>${sync}</div>
       <div class="l2">${l2}</div>
     </div>${udot}
-    <div class="modechip">${c.mode}</div>${caselbl}
+    <div class="modechip" role="button" onclick="event.stopPropagation(); openModeMenu('${c.id}', this)">${chipLabel(c)}</div>${caselbl}
   </div>`.replace('class="crow"', `class="${cls.join(' ')}"`);
+}
+
+function chipLabel(c){
+  if(!c.modePref || c.modePref === "auto") return "AUTO · " + c.mode;
+  return "FORCÉ · " + c.modePref.toUpperCase();
 }
 
 function renderList(){
@@ -614,7 +680,9 @@ function showToast(msg){
 function openConv(id){
   const c = CONVS.find(x=>x.id===id);
   let dec;
-  if(c.live) dec = "rejoint la <b>Scène</b> (couche live, Focal dessous)";
+  if(c.modePref && c.modePref !== "auto")
+    dec = "ouvre en <b>" + c.modePref.charAt(0).toUpperCase()+c.modePref.slice(1) + "</b> (forcé par l'encoche — orchestrateur débrayé)";
+  else if(c.live) dec = "rejoint la <b>Scène</b> (couche live, Focal dessous)";
   else if(c.unread > 25) dec = "ouvre en <b>Résumé Vivant</b> (" + c.unread + " non lus &gt; 25)";
   else if(c.unread > 0) dec = "ouvre en <b>Focal</b> + pont ✦ (" + c.unread + " non lus ≤ 25)";
   else if(c.mode === "RIVIÈRE") dec = "ouvre en <b>Rivière</b> (choix mémorisé)";
@@ -677,6 +745,83 @@ function simTrad(){
   }
   showToast("<b>Traduction tardive</b> → cross-fade du préview en place, glyphe 🌐 — résolution Prisme inchangée");
 }
+/* ===================== MODE (encoche actionnable) ===================== */
+const MODES = [
+  {k:"auto", lbl:"🪄 Auto — l'orchestrateur décide", hint:"défaut"},
+  {k:"focal", lbl:"Focal", hint:"lecture"},
+  {k:"script", lbl:"Script", hint:"densité liste"},
+  {k:"resume", lbl:"Résumé Vivant", hint:"rattrapage"},
+  {k:"riviere", lbl:"Rivière", hint:"≥ 5 actifs"}
+];
+function openModeMenu(id, anchor){
+  const c = CONVS.find(x=>x.id===id);
+  const mm = document.getElementById('modemenu');
+  const cur = c.modePref || "auto";
+  mm.innerHTML = MODES.map(m=>{
+    const dis = (m.k==="riviere" && c.grp < 5) ? " dis" : "";
+    return `<div class="mi${dis}" onclick="setMode('${id}','${m.k}')"><span class="chk">${cur===m.k?"✓":""}</span>${m.lbl}<small>${m.hint}</small></div>`;
+  }).join('') + `<div class="msep"></div><div class="mi" style="font-size:11px; color:var(--ink3)" onclick="closePeek()">Mémorisé pour cette conversation · synchronisé</div>`;
+  const ph = document.getElementById('ph').getBoundingClientRect();
+  const a = anchor.getBoundingClientRect();
+  mm.style.right = Math.max(10, ph.right - a.right) + "px";
+  mm.style.left = "auto";
+  const topInPhone = a.bottom - ph.top + 6;
+  if(topInPhone > 520){ mm.style.top = "auto"; mm.style.bottom = (ph.bottom - a.top + 6) + "px"; }
+  else { mm.style.bottom = "auto"; mm.style.top = topInPhone + "px"; }
+  mm.classList.add('on');
+  document.getElementById('peekback').classList.add('on');
+  document.getElementById('peekback').dataset.menuonly = "1";
+}
+function setMode(id, k){
+  const c = CONVS.find(x=>x.id===id);
+  c.modePref = k;
+  closePeek(); renderList();
+  showToast(k === "auto"
+    ? "« " + c.nm + " » → <b>Auto</b> : l'orchestrateur recalcule le meilleur mode à chaque ouverture"
+    : "« " + c.nm + " » → ouverture <b>forcée en " + k.charAt(0).toUpperCase()+k.slice(1) + "</b> (mémorisé, synchronisé multi-appareils)");
+}
+
+/* ===================== LONG PRESS → APERÇU ===================== */
+let lpTimer = null, lpFired = false;
+lsc.addEventListener('pointerdown', e=>{
+  const row = e.target.closest('.crow');
+  if(!row || e.target.closest('.modechip') || e.target.closest('.joinbtn')) return;
+  lpFired = false;
+  lpTimer = setTimeout(()=>{ lpFired = true; openPeek(row.id.replace('row-','')); }, 420);
+});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>lsc.addEventListener(ev, ()=>clearTimeout(lpTimer)));
+lsc.addEventListener('scroll', ()=>clearTimeout(lpTimer));
+lsc.addEventListener('click', e=>{ if(lpFired){ e.stopPropagation(); e.preventDefault(); lpFired = false; } }, true);
+
+function openPeek(id){
+  const c = CONVS.find(x=>x.id===id);
+  const back = document.getElementById('peekback');
+  back.classList.add('on'); back.dataset.menuonly = "";
+  const meta = (c.grp ? c.grp + " participants" : "conversation directe")
+    + " · " + chipLabel(c).toLowerCase();
+  const txt = c.pont ? `<span class="pont" style="color:${c.ac}">✦ ${c.pont}</span>` : (c.kindtxt || c.prev || "");
+  back.innerHTML = `<div class="peek" onclick="event.stopPropagation()">
+    <div class="ph1"><div class="pava" style="background:${c.ac}">${c.ini}</div>
+      <div><div class="pnm">${c.nm}</div><div class="pmeta">${meta}</div></div></div>
+    <div class="ptxt">${txt}</div>
+    <div class="pacts">
+      <button onclick="showToast('${c.pin?"Désépinglé":"Épinglé"} (optimiste + rollback)'); closePeek()">${c.pin?"Désépingler":"📌 Épingler"}</button>
+      <button onclick="showToast('${c.muted?"Sourdine levée":"Sourdine"} — synchronisé'); closePeek()">${c.muted?"🔔 Réactiver":"🔕 Sourdine"}</button>
+      <button onclick="simReadRow('${c.id}')">✓ Lu</button>
+      <button onclick="closePeek(); openModeMenu('${c.id}', document.getElementById('row-${c.id}') || document.getElementById('lhead'))">Mode ▾</button>
+    </div></div>`;
+}
+function simReadRow(id){
+  const c = CONVS.find(x=>x.id===id);
+  c.unread = 0; closePeek(); renderList();
+  showToast("Marqué lu — le pont ✦ s'éteint");
+}
+function closePeek(){
+  const back = document.getElementById('peekback');
+  back.classList.remove('on'); back.innerHTML = "";
+  document.getElementById('modemenu').classList.remove('on');
+}
+
 function toggleAnnot(){
   const ph = document.getElementById('ph');
   ph.classList.toggle('annot');
@@ -692,9 +837,9 @@ function simSkeleton(){
 function simLive(){
   flipMove('course', ()=>{
     const c = CONVS.find(x=>x.id==='course');
-    c.sec = 'live'; c.live = "En direct · 2 voix · rejoindre"; c.tm = "14:45";
+    c.sec = 'live'; c.live = "2 voix · depuis 1 min"; c.joined = false; c.tm = "14:45";
   });
-  showToast("<b>Scène démarre</b> → le rang rejoint la section EN DIRECT, anneau accent pulsé");
+  showToast("<b>Appel démarre</b> → section EN DIRECT : ● pulsant + voix + durée + bouton Rejoindre");
 }
 
 renderList();
