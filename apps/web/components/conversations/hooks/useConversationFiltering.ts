@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
-import type { Conversation } from '@meeshy/shared/types';
+import type { Conversation, SocketIOUser } from '@meeshy/shared/types';
 import type { UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
+import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import type { CommunityFilter } from '../CommunityCarousel';
 
 interface UseConversationFilteringParams {
@@ -8,6 +10,7 @@ interface UseConversationFilteringParams {
   searchQuery: string;
   selectedFilter: CommunityFilter;
   preferencesMap: Map<string, UserConversationPreferences>;
+  currentUser: SocketIOUser;
 }
 
 /**
@@ -20,8 +23,24 @@ export function useConversationFiltering({
   conversations,
   searchQuery,
   selectedFilter,
-  preferencesMap
+  preferencesMap,
+  currentUser
 }: UseConversationFilteringParams): Conversation[] {
+  // Prisme Linguistique (contrat Lentille LWS-9) : la recherche doit matcher ce
+  // que le lecteur VOIT (le préview résolu), pas le contenu original du dernier
+  // message. Même point d'entrée que ConversationItem — `getUserLanguagePreferences`
+  // délègue à `resolveUserLanguagesOrdered` (@meeshy/shared) et injecte la
+  // `deviceLocale` en 4e priorité (cf. apps/web/CLAUDE.md).
+  const preferredLanguages = useMemo(
+    () => getUserLanguagePreferences(currentUser),
+    [
+      currentUser.systemLanguage,
+      currentUser.regionalLanguage,
+      currentUser.customDestinationLanguage,
+      currentUser.deviceLocale
+    ]
+  );
+
   return useMemo(() => {
     // Dédupliquer les conversations par id
     const seenIds = new Set<string>();
@@ -55,11 +74,16 @@ export function useConversationFiltering({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(conv => {
         const title = conv.title || '';
-        const lastMessage = conv.lastMessage?.content || '';
-        return title.toLowerCase().includes(query) || lastMessage.toLowerCase().includes(query);
+        const resolvedPreview = resolveLastMessagePreview({
+          preview: conv.lastMessage?.content,
+          translations: conv.lastMessageTranslations,
+          originalLanguage: conv.lastMessageOriginalLanguage,
+          preferredLanguages
+        }) ?? '';
+        return title.toLowerCase().includes(query) || resolvedPreview.toLowerCase().includes(query);
       });
     }
 
     return filtered;
-  }, [conversations, searchQuery, selectedFilter, preferencesMap]);
+  }, [conversations, searchQuery, selectedFilter, preferencesMap, preferredLanguages]);
 }
