@@ -129,6 +129,18 @@ object Routes {
     const val MAGIC_LINK_VALIDATE = "auth/magic-link?token={token}"
     const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
+
+    /**
+     * The receiving half of `CreatedShareLink.joinUrl(webOrigin)` /
+     * `MyShareLink.joinUrl(webOrigin)` (`core:model`), which build
+     * `{webOrigin}/join/{identifier}` — `https://meeshy.me/join/{identifier}` in
+     * production. Only `meeshy://join/{identifier}` had a `navDeepLink` until this
+     * one: a conversation invite link shared as the plain web URL these two
+     * `joinUrl` helpers produce opened a browser instead of the app, on the
+     * feature whose entire purpose is inviting someone who does not have the app
+     * open yet.
+     */
+    const val GUEST_JOIN_WEB_DEEP_LINK = "https://meeshy.me/$GUEST_JOIN"
     fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
@@ -477,6 +489,7 @@ fun MeeshyApp(
                 route = Routes.GUEST_JOIN,
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.GUEST_JOIN_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.GUEST_JOIN_WEB_DEEP_LINK },
                 ),
             ) {
                 GuestJoinScreen(
