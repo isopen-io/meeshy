@@ -332,6 +332,52 @@ Tests : `CallNotification.groupCall.test.tsx` (5 cas) +
 `CallWaitingBanner.test.tsx` (2 cas) +
 `CallEventsHandler-initiate-conversation-context.test.ts` (4 cas, gateway).
 
+## Mise à jour 2026-08-15 — bug racine sous W6 corrigé : REST leave/kick ne diffusait jamais PARTICIPANT_LEFT
+
+En creusant W6 (« `onRemove` purement local, pas branché sur le kick REST »),
+la vraie cause était en amont, côté gateway : `DELETE
+/calls/:callId/participants/:participantId` (self-leave ET kick modérateur —
+l'endpoint existe et son autorisation admin/moderator était déjà correcte)
+appelait `leaveCall()` puis renvoyait, **sans jamais diffuser
+`CALL_EVENTS.PARTICIPANT_LEFT`**. Seul le handler socket `call:leave`
+l'émettait. Câbler un bouton « exclure » côté web sur cet endpoint sans ce
+correctif aurait produit une exclusion qui ne notifie NI l'exclu NI les
+autres pairs — ils restent dans la grille vidéo/roster de chacun, avec une
+`RTCPeerConnection` toujours ouverte, jusqu'au GC (~120s).
+
+Root cause confirmé en lisant `CallManager.handleParticipantLeft` (retire du
+store via `event.participantId`) et `VideoCallInterface`'s propre listener
+(tear-down WebRTC via `event.userId`, no-op silencieux si absent) : les DEUX
+dépendent entièrement de cet event, qui n'était jamais émis sur le chemin
+REST.
+
+**Fix** — même pattern « parité socket » déjà établi pour `call:ended`
+(`broadcastCallEndedIfTerminal` / `callEndedBroadcaster`, commentaires
+« Bug (parité socket) » déjà présents dans `CallService.ts`) : nouveau
+`CallService.participantLeftBroadcaster` + `broadcastParticipantLeft()`
+(inconditionnel, PAS gardé sur le statut terminal — contrairement à
+`broadcastCallEndedIfTerminal`, car PARTICIPANT_LEFT pilote un teardown par
+pair qui doit arriver que l'appel continue ou se termine), wrapper
+`CallEventsHandler.broadcastParticipantLeftForRest(io, event)`, câblage dans
+`server.ts` à côté de `setCallEndedBroadcaster`. La route résout la ligne
+`CallParticipant` du partant/exclu depuis le snapshot pré-leave
+(`callService.getCallSession`) pour distinguer son `id` propre (ce sur quoi
+le store client indexe) de `leaveParticipantId` (le `Participant.id`
+conversation attendu par `leaveCall()`) — les deux avaient déjà été confondus
+une fois par le passé sur ce même fichier (cf. commentaire kick
+modérateur/mauvais côté qui « meurt » silencieusement).
+
+Ceci ne construit PAS le bouton kick UI web (toujours à faire, W6) — c'est le
+prérequis serveur qui le rend correct une fois construit. `onRemove` reste
+local à ce stade.
+
+Tests : `CallService.test.ts` (6 cas, `broadcastParticipantLeft`) +
+`calls-routes.test.ts` (5 cas, diffusion REST — row id vs `leaveParticipantId`,
+kick modérateur avec le bon userId cible, appel de groupe non-terminal,
+no-op défensif si aucune ligne pré-leave ne matche, ligne déjà partie
+ignorée) + `CallEventsHandler-participant-left-rest.test.ts` (2 cas,
+nouveau). Suite gateway complète : 720 suites / 17626 tests verts.
+
 ## Récapitulatif
 
 | Capacité demandée | État |
