@@ -227,7 +227,31 @@ export class SocketIOOrchestrator {
   }
 
   /**
-   * Process pending messages queue after socket is connected
+   * Vide la file d'attente d'envoi une fois le socket connecté.
+   *
+   * La liaison est réévaluée à CHAQUE tour, et un message n'est retiré de la
+   * file qu'une fois la liaison constatée vivante. Une seule évaluation en
+   * tête de fonction — ce qu'elle faisait — suffisait tant que le lien tenait
+   * jusqu'au bout ; mais la file n'existe QUE parce qu'il a déjà lâché une
+   * fois, et un lien qui vient de revenir est précisément celui qui peut
+   * relâcher au milieu du vidage. Le tour suivant appelait alors
+   * `messagingService.sendMessage` avec un socket mort, lequel rend
+   * `{ success: false }` sans rien émettre : le reste de la file — déjà
+   * `shift()`é, minuterie d'expiration déjà annulée — s'effondrait d'un bloc
+   * en une rafale d'échecs, sans qu'aucune de ces tentatives ait quitté
+   * l'onglet. Chaque message y perdait le solde de son budget de deux
+   * minutes, et l'utilisateur voyait tout son envoi virer au rouge d'un coup
+   * pour une coupure d'une seconde.
+   *
+   * Sortir en laissant le reliquat EN FILE est le seul comportement correct :
+   * ces messages n'ont pas échoué, ils n'ont pas encore été tentés. Leur
+   * minuterie reste armée (rien ne les a retirés), et la prochaine
+   * authentification de socket relance ce vidage.
+   *
+   * Une tentative RÉELLE reste terminale, elle : un ack en erreur ou une
+   * coupure survenue PENDANT l'attente résout le message en échec et le sort
+   * de la file, comme avant. Le remettre en file ferait tourner la boucle sur
+   * un lien pourtant vivant.
    */
   private async processPendingMessages(): Promise<void> {
     if (this.isProcessingQueue || this.pendingMessages.length === 0) {
@@ -237,54 +261,55 @@ export class SocketIOOrchestrator {
     this.isProcessingQueue = true;
     logger.debug('[SocketIOOrchestrator]', `Processing ${this.pendingMessages.length} pending messages`);
 
-    const socket = this.connectionService.getSocket();
-    if (!socket || !socket.connected) {
-      this.isProcessingQueue = false;
-      return;
-    }
-
-    // Process all pending messages
-    while (this.pendingMessages.length > 0) {
-      const pending = this.pendingMessages.shift();
-      if (!pending) continue;
-
-      // Annuler le timeout individuel puisqu'on traite maintenant le message
-      this.clearPendingTimeout(pending.clientMessageId);
-
-      // Check if message has expired
-      if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
-        logger.warn('[SocketIOOrchestrator]', 'Pending message expired, discarding');
-        pending.resolve({ success: false });
-        continue;
-      }
-
-      try {
-        const options: MessageSendOptions = {
-          conversationId: pending.conversationId,
-          content: pending.content,
-          clientMessageId: pending.clientMessageId,
-          originalLanguage: pending.originalLanguage,
-          replyToId: pending.replyToId,
-          forwardedFromId: pending.forwardedFromId,
-          forwardedFromConversationId: pending.forwardedFromConversationId,
-          mentionedUserIds: pending.mentionedUserIds,
-          attachmentIds: pending.attachmentIds,
-          attachmentMimeTypes: pending.attachmentMimeTypes,
-        };
-
-        const result = await this.messagingService.sendMessage(socket, options);
-        pending.resolve(result);
-
-        if (result.success) {
-          logger.debug('[SocketIOOrchestrator]', 'Pending message sent successfully');
+    try {
+      while (this.pendingMessages.length > 0) {
+        const socket = this.connectionService.getSocket();
+        if (!socket || !socket.connected) {
+          return;
         }
-      } catch (error) {
-        logger.error('[SocketIOOrchestrator]', 'Error sending pending message', { error });
-        pending.resolve({ success: false });
-      }
-    }
 
-    this.isProcessingQueue = false;
+        const pending = this.pendingMessages.shift();
+        /* istanbul ignore next -- length > 0 guarantees a shift */
+        if (!pending) continue;
+
+        // Annuler le timeout individuel puisqu'on traite maintenant le message
+        this.clearPendingTimeout(pending.clientMessageId);
+
+        // Check if message has expired
+        if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
+          logger.warn('[SocketIOOrchestrator]', 'Pending message expired, discarding');
+          pending.resolve({ success: false });
+          continue;
+        }
+
+        try {
+          const options: MessageSendOptions = {
+            conversationId: pending.conversationId,
+            content: pending.content,
+            clientMessageId: pending.clientMessageId,
+            originalLanguage: pending.originalLanguage,
+            replyToId: pending.replyToId,
+            forwardedFromId: pending.forwardedFromId,
+            forwardedFromConversationId: pending.forwardedFromConversationId,
+            mentionedUserIds: pending.mentionedUserIds,
+            attachmentIds: pending.attachmentIds,
+            attachmentMimeTypes: pending.attachmentMimeTypes,
+          };
+
+          const result = await this.messagingService.sendMessage(socket, options);
+          pending.resolve(result);
+
+          if (result.success) {
+            logger.debug('[SocketIOOrchestrator]', 'Pending message sent successfully');
+          }
+        } catch (error) {
+          logger.error('[SocketIOOrchestrator]', 'Error sending pending message', { error });
+          pending.resolve({ success: false });
+        }
+      }
+    } finally {
+      this.isProcessingQueue = false;
+    }
   }
 
   /**
@@ -452,10 +477,28 @@ export class SocketIOOrchestrator {
     const resolvedClientMessageId = clientMessageId ?? generateClientMessageId();
 
     const socket = this.connectionService.getSocket();
+    const linkIsDown = !socket || !socket.connected;
 
-    // If socket not ready, queue the message for later
-    if (!socket || !socket.connected) {
-      logger.debug('[SocketIOOrchestrator]', 'Socket not ready, queueing message');
+    // Une file d'attente qu'on peut doubler n'est pas une file d'attente.
+    //
+    // Le chemin direct ne regardait que la liaison, jamais le reliquat : un
+    // message tapé pendant le vidage — ou dans l'intervalle entre la
+    // reconnexion du socket et son authentification, qui est ce qui DÉCLENCHE
+    // le vidage — partait immédiatement, pendant que des messages plus anciens
+    // attendaient encore leur tour. Le destinataire les recevait à l'envers de
+    // l'ordre dans lequel ils ont été écrits, et l'horodatage serveur, seul
+    // ordre que porte le fil, entérinait l'inversion : aucune relecture ne la
+    // corrige.
+    //
+    // La règle est donc celle de toute boîte d'envoi : tant qu'elle contient
+    // quelque chose, on entre par la queue. La liaison n'y change rien — elle
+    // décide seulement s'il faut attendre une reconnexion (lien mort) ou
+    // relancer le vidage sur-le-champ (lien vivant, ci-dessous).
+    if (linkIsDown || this.pendingMessages.length > 0) {
+      logger.debug(
+        '[SocketIOOrchestrator]',
+        linkIsDown ? 'Socket not ready, queueing message' : 'Outbox not empty, queueing message behind it'
+      );
 
       // Check queue size limit
       if (this.pendingMessages.length >= this.MAX_QUEUE_SIZE) {
@@ -498,6 +541,18 @@ export class SocketIOOrchestrator {
 
         this.pendingMessages.push(pending);
         logger.debug('[SocketIOOrchestrator]', `Message queued (${this.pendingMessages.length} in queue)`);
+
+        // Mis en file pour l'ORDRE seul, sur un lien vivant : rien d'autre ne
+        // viendrait le chercher. `onAuthenticated` est le seul autre appelant
+        // du vidage, et il a déjà eu lieu — sans cette relance, le message
+        // resterait à quai jusqu'à la prochaine reconnexion, c'est-à-dire
+        // qu'on aurait échangé une inversion d'ordre contre un blocage. Le
+        // vidage déjà en cours, lui, relit la longueur de la file à chaque
+        // tour et prendra celui-ci sans qu'on l'appelle : l'appel sort alors
+        // immédiatement sur sa garde `isProcessingQueue`.
+        if (!linkIsDown) {
+          void this.processPendingMessages();
+        }
       });
     }
 

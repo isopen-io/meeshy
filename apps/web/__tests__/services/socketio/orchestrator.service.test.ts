@@ -891,6 +891,167 @@ describe('SocketIOOrchestrator', () => {
     });
   });
 
+  // ─── L'outbox est une FILE, pas un tampon jetable ──────────────────────────
+
+  describe('outbox FIFO durability', () => {
+    /**
+     * Câble un socket dont `connected` bascule à `false` après la Nième
+     * livraison — la coupure en plein vidage, exactement la condition réseau
+     * qui avait rempli la file au départ.
+     */
+    function makeSocketDroppingAfter(sends: number) {
+      const socket = { connected: true, id: 'socket-flaky' } as any;
+      let delivered = 0;
+      mockMsgSendMessage.mockImplementation(async () => {
+        delivered += 1;
+        if (delivered >= sends) socket.connected = false;
+        return { success: true };
+      });
+      return socket;
+    }
+
+    function captureOnAuth(orchestrator: any): () => void {
+      let capturedOnAuth: (() => void) | null = null;
+      mockConnSetupConnectionListeners.mockImplementation((onAuth: () => void) => {
+        capturedOnAuth = onAuth;
+      });
+      orchestrator.initializeConnection();
+      return () => capturedOnAuth?.();
+    }
+
+    async function settle() {
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    }
+
+    it('leaves the untried remainder queued when the link dies mid-drain', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockMsgHasEncryptionHandlers.mockReturnValue(true);
+      // Des cid DISTINCTS : `pendingMessageTimeouts` est indexé par cid, donc
+      // trois messages partageant le cid par défaut du harnais partageraient
+      // une seule entrée de minuterie — un artefact de test qui masquerait ce
+      // que ce cas mesure.
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `drop-cid-${n++}`);
+
+      mockConnGetSocket.mockReturnValue(null);
+      const p1 = orchestrator.sendMessage('conv-1', 'msg-1');
+      const p2 = orchestrator.sendMessage('conv-1', 'msg-2');
+      const p3 = orchestrator.sendMessage('conv-1', 'msg-3');
+      expect(orchestrator.getPendingMessagesCount()).toBe(3);
+
+      mockConnGetSocket.mockReturnValue(makeSocketDroppingAfter(1));
+      captureOnAuth(orchestrator)();
+      await settle();
+
+      expect(mockMsgSendMessage).toHaveBeenCalledTimes(1);
+      expect(orchestrator.getPendingMessagesCount()).toBe(2);
+
+      await p1;
+      jest.advanceTimersByTime(130000);
+      await Promise.all([p2, p3]);
+    });
+
+    it('keeps the armed expiry timer of every message it did not try', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockMsgHasEncryptionHandlers.mockReturnValue(true);
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `fifo-cid-${n++}`);
+
+      mockConnGetSocket.mockReturnValue(null);
+      const p1 = orchestrator.sendMessage('conv-1', 'msg-1');
+      const p2 = orchestrator.sendMessage('conv-1', 'msg-2');
+      const p3 = orchestrator.sendMessage('conv-1', 'msg-3');
+
+      mockConnGetSocket.mockReturnValue(makeSocketDroppingAfter(1));
+      captureOnAuth(orchestrator)();
+      await settle();
+
+      const timeouts: Map<string, unknown> = (orchestrator as any).pendingMessageTimeouts;
+      expect(timeouts.has('fifo-cid-0')).toBe(false);
+      expect(timeouts.has('fifo-cid-1')).toBe(true);
+      expect(timeouts.has('fifo-cid-2')).toBe(true);
+
+      await p1;
+      jest.advanceTimersByTime(130000);
+      await Promise.all([p2, p3]);
+    });
+
+    it('sends the survivors on the next reconnect instead of failing them', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockMsgHasEncryptionHandlers.mockReturnValue(true);
+
+      mockConnGetSocket.mockReturnValue(null);
+      const p1 = orchestrator.sendMessage('conv-1', 'msg-1');
+      const p2 = orchestrator.sendMessage('conv-1', 'msg-2');
+      const p3 = orchestrator.sendMessage('conv-1', 'msg-3');
+
+      const flaky = makeSocketDroppingAfter(1);
+      mockConnGetSocket.mockReturnValue(flaky);
+      const fireAuth = captureOnAuth(orchestrator);
+      fireAuth();
+      await settle();
+
+      expect(mockMsgSendMessage.mock.calls.map((c: any[]) => c[1].content)).toEqual(['msg-1']);
+
+      flaky.connected = true;
+      mockMsgSendMessage.mockResolvedValue({ success: true });
+      fireAuth();
+      await settle();
+
+      expect(orchestrator.getPendingMessagesCount()).toBe(0);
+      expect(mockMsgSendMessage.mock.calls.map((c: any[]) => c[1].content)).toEqual([
+        'msg-1',
+        'msg-2',
+        'msg-3',
+      ]);
+      await expect(p2).resolves.toEqual({ success: true });
+      await expect(p3).resolves.toEqual({ success: true });
+      await p1;
+    });
+
+    it('does not let a freshly typed message overtake the outbox', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockMsgHasEncryptionHandlers.mockReturnValue(true);
+      mockMsgSendMessage.mockResolvedValue({ success: true });
+
+      mockConnGetSocket.mockReturnValue(null);
+      const queued = orchestrator.sendMessage('conv-1', 'older-message');
+      expect(orchestrator.getPendingMessagesCount()).toBe(1);
+
+      mockConnGetSocket.mockReturnValue(makeConnectedSocket());
+      const fresh = orchestrator.sendMessage('conv-1', 'newer-message');
+      await settle();
+
+      expect(mockMsgSendMessage.mock.calls.map((c: any[]) => c[1].content)).toEqual([
+        'older-message',
+        'newer-message',
+      ]);
+      await expect(queued).resolves.toEqual({ success: true });
+      await expect(fresh).resolves.toEqual({ success: true });
+      expect(orchestrator.getPendingMessagesCount()).toBe(0);
+    });
+
+    it('drains a message queued for order alone without waiting for a reconnect', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockMsgHasEncryptionHandlers.mockReturnValue(true);
+      mockMsgSendMessage.mockResolvedValue({ success: true });
+
+      mockConnGetSocket.mockReturnValue(null);
+      const queued = orchestrator.sendMessage('conv-1', 'older-message');
+
+      mockConnGetSocket.mockReturnValue(makeConnectedSocket());
+      const fresh = orchestrator.sendMessage('conv-1', 'newer-message');
+      await settle();
+
+      // No `onAuthenticated` was ever fired here: the enqueue itself has to
+      // start the drain, otherwise a message queued purely to preserve order
+      // would sit on a healthy link until the next reconnect.
+      expect(mockConnSetupConnectionListeners).not.toHaveBeenCalled();
+      await expect(queued).resolves.toEqual({ success: true });
+      await expect(fresh).resolves.toEqual({ success: true });
+    });
+  });
+
   // ─── setCurrentUser ────────────────────────────────────────────────────────
 
   describe('setCurrentUser', () => {
