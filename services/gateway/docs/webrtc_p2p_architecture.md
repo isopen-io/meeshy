@@ -225,16 +225,17 @@ DTLS-SRTP (Datagram Transport Layer Security - Secure Real-time Transport Protoc
 
 ---
 
-## ⚠️ LIMITATIONS ACTUELLES (Phase 1A)
+## ⚠️ LIMITATIONS ACTUELLES
 
-❌ **Ne fonctionne pas derrière certains NAT restrictifs**
-   - Solution : TURN server (Phase 1B)
+✅ **NAT restrictifs / échec P2P** : couvert — `TURNCredentialService` émet des
+   identifiants TURN éphémères (HMAC-SHA1, TTL 24h) à chaque `call:initiate`,
+   `call:join`, etc. (voir `CallEventsHandler.ts`), donné en secours ICE. Ce
+   document listait encore ceci comme non résolu ("Phase 1B") alors que
+   l'implémentation est en production — corrigé 2026-08-15 pour ne pas
+   induire en erreur un audit sécurité qui chercherait le relais TURN ici.
 
 ❌ **Maximum 2 participants** (P2P pur)
    - Solution : SFU (Selective Forwarding Unit) pour groupe (Phase 1C)
-
-❌ **Pas de secours si P2P échoue**
-   - Solution : Fallback vers TURN relay (Phase 1B)
 
 ---
 
