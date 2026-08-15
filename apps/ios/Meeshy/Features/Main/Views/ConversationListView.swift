@@ -167,6 +167,18 @@ struct ConversationListView: View {
     @State private var scrollOffsetRelay = ScrollOffsetRelay()
     @State private var lastScrollDirectionChange: Date = .distantPast
 
+    // MARK: - Focus card (LWS-8, drapeau Lentille)
+    //
+    // Deux références retenues sans abonnement — même famille que
+    // `scrollOffsetRelay` et `sectionFrameRegistry`, et pour la même raison :
+    // ce body ne doit RIEN apprendre du défilement. Le registre est une boîte
+    // inerte que les `GeometryReader` des rangs remplissent à chaque layout ;
+    // le magasin d'élu est écrit par `LentilleFocusElectionHost`, l'hôte dédié,
+    // et sera lu par la focus card (I-071). L'élection elle-même n'existe nulle
+    // part dans ce fichier : la liste monte un hôte, c'est tout.
+    @State private var focusCandidateRegistry = LentilleFocusCandidateRegistry()
+    @State private var focusElection = LentilleFocusElection()
+
     // MARK: - Pilule de section (LWS-6, drapeau Lentille)
     //
     // AUCUN observateur de défilement nouveau — contrainte dure du contrat. Le
@@ -655,6 +667,10 @@ struct ConversationListView: View {
                     // courbe `.list` du miroir gelé. Posée AU-DESSUS du portillon
                     // `.equatable()` du rang — elle ne rediffuse rien, elle repeint.
                     .lentillePerspective(isEnabled: perspectiveEnabled)
+                    // Candidature à la focus card : le rang publie son milieu dans
+                    // une boîte INERTE. Écrire n'élit rien — seul un tick de
+                    // défilement déclenche l'élection (§4.2).
+                    .lentilleFocusCandidate(id: conversation.id, registry: focusCandidateRegistry, isEnabled: perspectiveEnabled)
                     .onAppear {
                         // Cursor-based infinite scroll: trigger `loadMore`
                         // 5 rows before the loaded tail. The ViewModel
@@ -1234,6 +1250,22 @@ struct ConversationListView: View {
         CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset
     }
 
+    /// Drapeau OFF ⇒ AUCUN hôte d'élection : ni mesure, ni carte (LWS-8/I-070).
+    /// Sous ON, l'hôte est posé sur le CONTENEUR de défilement, jamais dans son
+    /// contenu — c'est la seule position d'où le bas de la région visible se
+    /// mesure, et il ne défile pas avec les rangs. Purement observationnel : il
+    /// ne rend rien de visible et n'intercepte aucun geste.
+    @ViewBuilder
+    private var lentilleFocusElectionOverlay: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            LentilleFocusElectionHost(
+                relay: scrollOffsetRelay,
+                registry: focusCandidateRegistry,
+                election: focusElection
+            )
+        }
+    }
+
     /// Drapeau OFF ⇒ AUCUNE pilule (rendu identique à aujourd'hui). Sous ON, la
     /// pilule est montée dès qu'il existe une section à nommer et reste dans
     /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
@@ -1429,6 +1461,12 @@ struct ConversationListView: View {
                 Color.clear.frame(height: stickyHeaderInset)
             }
             .scrollDismissesKeyboard(.interactively)
+            // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
+            // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du
+            // défilement, la seule ancre de la bande de focus (§4.2). Il ne rend
+            // rien, n'intercepte rien, et n'ajoute AUCUN observateur — il s'abonne
+            // au relais d'offset qui publiait déjà, comme le header et la pilule.
+            .overlay { lentilleFocusElectionOverlay }
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
             ConversationListBottomBar(
