@@ -11,16 +11,35 @@ public enum CollapsibleHeaderMetrics {
     /// Marge horizontale de la rangée de la barre.
     nonisolated public static var barHorizontalPadding: CGFloat { 12 }
 
+    /// Gouttière des chromes RONDS, partagée avec les boutons flottants
+    /// (`FreeFloatingButtonsContainer.minEdgePadding`). Un disque n'occupe pas
+    /// son carré : sa marge optique se mesure au point le plus proche du bord,
+    /// pas à un cadre. À la marge de texte (16 pt) il affleure — c'est la
+    /// gouttière du chrome flottant, jamais signalée, qui fait foi.
+    nonisolated public static var roundChromeEdgeGutter: CGFloat { 20 }
+
     /// Marge SUPPLÉMENTAIRE réservée aux boutons d'action, à droite. S'ajoute
-    /// à `barHorizontalPadding` pour atteindre les 16 pt de marge standard
-    /// iOS : à 12 pt, un cercle de verre de 40 pt affleurait le bord de
-    /// l'écran (retour user 2026-08-14 sur (+) de la liste et (map) du feed).
+    /// à `barHorizontalPadding` pour atteindre `roundChromeEdgeGutter` : à
+    /// 12 pt puis à 16 pt, un cercle de verre de 40 pt affleurait encore le
+    /// bord de l'écran (retours user 2026-08-14 puis 2026-08-15 sur (+) de la
+    /// liste et (map) du feed).
     ///
     /// Vit ICI et pas dans chaque écran : posée par call site, elle dérive —
     /// le feed iPad portait son propre `.padding(.trailing, 12)`, la liste de
     /// conversations rien du tout, et c'est cette dérive qui a laissé deux
     /// boutons au bord.
-    nonisolated public static var trailingActionsInset: CGFloat { 4 }
+    nonisolated public static var trailingActionsInset: CGFloat {
+        roundChromeEdgeGutter - barHorizontalPadding
+    }
+
+    /// Écart entre la fente du titre (ou la trail qui l'occupe) et la grappe
+    /// d'actions. Porté par les ACTIONS, JAMAIS par un `Spacer` frère : la
+    /// fente réclame `maxWidth: .infinity` avec `layoutPriority(1)` et se sert
+    /// avant les priorités 0, à qui il ne reste alors rien à proposer — or un
+    /// `Spacer` à qui l'on propose 0 rend quand même son `minLength`, et la
+    /// rangée dépasse d'autant la largeur proposée. Réservé avec les actions
+    /// (priorité 2), cet écart ne peut rien faire déborder.
+    nonisolated public static var titleActionsGap: CGFloat { 8 }
 
     /// Reveal curve [0, 1] for a pinned accessory that takes over the TITLE's
     /// slot inside the header bar (e.g. a compact story trail that replaces
@@ -289,7 +308,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                         .opacity(max(0, (progress - 0.7) / 0.3))
                 }
 
-                Spacer(minLength: 8)
+                // `minLength: 0` — l'écart titre ↔ actions est porté par les
+                // actions (`titleActionsGap`). Ce `Spacer` ne sert plus qu'à
+                // pousser les actions à droite quand la fente hugge son texte
+                // (écrans sans trail) ; toute longueur minimale ici ferait
+                // déborder la rangée dès que la fente est élastique.
+                Spacer(minLength: 0)
 
                 // Chrome de taille FIXE, servi avant la fente du titre : celle-ci
                 // réclame `maxWidth: .infinity` avec `layoutPriority(1)` dès
@@ -301,6 +325,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 trailing()
                     .frame(minWidth: 44, minHeight: 44)
                     .layoutPriority(2)
+                    // L'écart avec le titre (ou la trail qui l'occupe) appartient
+                    // aux ACTIONS, pas au `Spacer` : réservé avec elles au titre
+                    // de la priorité 2, il ne peut pas élargir la rangée — et il
+                    // ne se glisse pas entre le titre et son sous-titre replié,
+                    // ce qu'un padding porté par la fente aurait fait.
+                    .padding(.leading, CollapsibleHeaderMetrics.titleActionsGap)
                     .padding(.trailing, CollapsibleHeaderMetrics.trailingActionsInset)
             }
             .padding(.horizontal, CollapsibleHeaderMetrics.barHorizontalPadding)
