@@ -476,27 +476,47 @@ final class CallHangupFastPathTests: XCTestCase {
         _ = range
     }
 
-    func test_transcriptSegmentRow_showsElapsedTimeSinceCallStart() throws {
-        // User-requested 2026-07-11: each line carries a small "since call
-        // start" timestamp, derived from capturedAt (wall clock) against
-        // callManager.callStartDate — never from startTime/endTime (those are
-        // ASR-buffer-relative, see TranscriptionSegment.capturedAt).
+    /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
+    /// — JAMAIS de `startTime`/`endTime`, qui sont relatifs au buffer ASR
+    /// (voir le doc comment de `TranscriptionSegment.capturedAt`). C'est la
+    /// moitié portante de la demande utilisateur 2026-07-11 et elle est
+    /// intacte.
+    ///
+    /// Ce qui a changé : l'heure affichée n'est plus l'ÉCOULÉ depuis le début
+    /// de l'appel (`capturedAt.timeIntervalSince(callManager.callStartDate)`
+    /// mis en forme par `CallManager.formatDuration`) mais l'HORLOGE MURALE de
+    /// capture — spec 2026-08-13, tableau « Composants modifiés » : « ligne
+    /// `displayName (heure)` (horloge murale, plus l'écoulé) », objectif §1
+    /// « ordonnées par l'horloge murale de CAPTURE », décision §3
+    /// « `capturedAtMs` est la clé d'ordre du journal ». Un écoulé n'a plus de
+    /// sens dans un journal fusionné entre appareils : `callStartDate` est
+    /// local à CE device (il est même nil avant l'établissement média), alors
+    /// que `capturedAt` est estampillé par le device du LOCUTEUR et transporté
+    /// par le wire — c'est la seule référence commune aux deux côtés de
+    /// l'appel.
+    func test_transcriptSegmentRow_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("segment.capturedAt.timeIntervalSince(callManager.callStartDate"),
-            "transcriptSegmentRow must compute elapsed time from segment.capturedAt against " +
-            "callManager.callStartDate, not from the ASR-relative startTime/endTime."
+            body.contains("let timeLabel = segment.capturedAt.formatted("),
+            "transcriptSegmentRow must derive its timestamp from segment.capturedAt — the wall " +
+            "clock stamped by the SPEAKER's device and carried over the wire, the only reference " +
+            "both sides of the call share (callStartDate is local to this device, and nil before " +
+            "media is established)."
         )
         XCTAssertTrue(
-            body.contains("CallManager.formatDuration"),
-            "transcriptSegmentRow must reuse CallManager.formatDuration for the elapsed-time label " +
-            "instead of a new formatter."
+            body.contains("(\\(timeLabel))"),
+            "the resolved timeLabel must actually reach the rendered journal line — computing it " +
+            "and not displaying it would satisfy the assertion above while showing nothing."
+        )
+        XCTAssertFalse(
+            body.contains("segment.startTime") || body.contains("segment.endTime"),
+            "transcriptSegmentRow must NEVER timestamp a line from startTime/endTime: those are " +
+            "ASR-buffer-relative (see TranscriptionSegment.capturedAt's own doc comment), so they " +
+            "drift with every recognizer restart and mean nothing to the peer."
         )
     }
 
