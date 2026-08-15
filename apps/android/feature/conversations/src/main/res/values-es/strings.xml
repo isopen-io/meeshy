@@ -41,6 +41,8 @@
     <string name="conversations_action_unpin">Dejar de fijar</string>
     <string name="conversations_action_mute">Silenciar</string>
     <string name="conversations_action_unmute">Activar sonido</string>
+    <string name="conversations_action_mentions_only">Solo menciones</string>
+    <string name="conversations_action_all_notifications">Todas las notificaciones</string>
     <string name="conversations_action_archive">Archivar</string>
     <string name="conversations_action_unarchive">Desarchivar</string>
     <string name="conversations_action_mark_read">Marcar como leído</string>
