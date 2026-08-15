@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Leave conversation shipped** (slice `conversation-leave`, PR #3055, merged
+> `32475f49f`) — one quarter of `feature-parity.md`'s "Leave / archive / delete-for-me /
+> delete-for-all conversation" line (archive already existed; delete-for-me/delete-for-all remain
+> open, separate scope — each likely needs its own endpoint and confirmation UX, not assumed to be
+> a quick follow-up without checking first).
+>
+> **Chose this over completing `mentionsOnly`'s siblings** (customName/reaction/tags, flagged open
+> at the end of the previous run): investigated all three first and found a genuine, confirmed
+> blocker for customName/reaction — the shared network `Json` (`MeeshyApi.json`) sets
+> `explicitNulls = false`, so a Kotlin `null` in `ConversationPreferencesUpdate.customName`/
+> `.reaction` is OMITTED from the request body, indistinguishable from "field never touched." The
+> gateway's patch logic (`conversation-preferences.ts`) treats a field as "leave alone" via
+> `data.customName !== undefined` — meaning an explicit "clear my custom name" (a real iOS
+> affordance: `setCustomName` maps an empty text field to `nil`) could **never reach the server**
+> through the existing coalesced-snapshot outbox path (`ConversationPrefsPayload` →
+> `ConversationPreferencesUpdate`, the same mechanism `conversation-mentions-only-preference` used
+> successfully — booleans don't have this ambiguity, nullable strings do). `tags` is additionally
+> not even present anywhere in the Kotlin model chain yet (unlike mentionsOnly, which only needed
+> wiring — the field already existed everywhere). All three left open with this finding recorded,
+> rather than risking a "looks-optimistic, silently-never-persists" clear path.
+>
+> **Chose `leave` instead** after confirming (gateway `routes/conversations/leave.ts` +
+> `MessageSocketManager`/`ConversationPurge`) that the removal mechanism was **already fully built
+> for the opposite direction**: `ConversationPurge.onParticipantLeft` already drops a conversation
+> from the local list when `conversation:participant-left` names the CURRENT user — a path already
+> exercised whenever another of this account's own devices leaves. The gateway's leave route
+> broadcasts that exact event back to the leaver's own devices too (`audience = [...remaining,
+> {id: participant.id, userId}]`), so the Android slice needed **zero new purge logic** — just the
+> REST call. `ConversationApi.leave` (`POST conversations/{id}/leave`) + `ConversationRepository
+> .leave` (direct `NetworkResult<Unit>` pass-through, mirrors `updateSettings`'s shape exactly, no
+> outbox — a destructive action shouldn't silently retry offline) +
+> `ConversationListViewModel.leaveConversation` (surfaces failure via `errorMessage`). UI: the
+> context menu gains a "Leave" item behind an `AlertDialog` confirmation (title + message naming
+> the conversation + Leave/Cancel), reusing the `Icons.AutoMirrored.Filled.Logout` icon that was
+> imported but dead in this file before this slice.
+>
+> **TDD**: RED confirmed via compile failure (`leave` unresolved on both the interface and the
+> repository) before either existed. GREEN: 2 new `ConversationRepositoryTest` cases (forwards the
+> id + Success; folds an unsuccessful envelope into Failure) + 2 new
+> `ConversationListViewModelTest` cases (calls the repository and clears any prior error; surfaces
+> the error on failure).
+>
+> **Verified**: `./apps/android/meeshy.sh check` green (970 tasks, `BUILD SUCCESSFUL`); CI green
+> independently (16 checks pass/skip, PR #3055).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=conversation-leave`.
+
+
 > On 2026-08-15 **Mentions-only per-conversation notification preference shipped** (slice
 > `conversation-mentions-only-preference`, PR #3054, merged `b38764af0`). Picked instead of
 > resuming `ConversationLock`'s swipe-action UI: investigated that UI mechanism first and found a

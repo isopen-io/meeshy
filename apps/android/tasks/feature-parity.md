@@ -2710,6 +2710,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
       flow itself. Box stays unchecked until those land.
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
+      — leave and archive are wired (`conversation-leave`, 2026-08-16, PR #3055: context-menu
+      item behind a confirmation dialog, reuses the existing `ConversationPurge` socket-driven
+      removal path). delete-for-me and delete-for-all still unwired — separate endpoints/UX, not
+      assumed to be quick follow-ups. Box stays unchecked until those land.
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
 - [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
 - [ ] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown
