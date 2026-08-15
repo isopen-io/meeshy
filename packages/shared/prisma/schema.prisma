@@ -309,6 +309,7 @@ model User {
   addressBookMatches UserContact[] @relation("AddressBookMatchedUser")
 
   @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
+  @@index([blockedUserIds]) // Multikey: "qui m'a bloqué ?" (getBlockRelatedUserIds) — sinon COLLSCAN à chaque transition de présence
   @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
   @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
