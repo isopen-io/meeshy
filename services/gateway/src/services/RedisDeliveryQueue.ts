@@ -1,7 +1,11 @@
 import type Redis from 'ioredis';
 import type { CacheStore } from './CacheStore';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
-import { DELIVERY_QUEUE_PREFIX, DELIVERY_QUEUE_TTL_SECONDS } from '@meeshy/shared/types/delivery-queue';
+import {
+  DELIVERY_QUEUE_MAX_PER_USER,
+  DELIVERY_QUEUE_PREFIX,
+  DELIVERY_QUEUE_TTL_SECONDS,
+} from '@meeshy/shared/types/delivery-queue';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
@@ -30,15 +34,35 @@ return entries
 // MUTABLE: the LATEST payload must win. A message edited twice while a
 // recipient is offline enqueues two 'edited' entries under the same dedup
 // identity; keeping the first would replay stale intermediate content on
-// drain. So a matching mutable entry is SUPERSEDED in place (LSET at its FIFO
-// slot, return 2) rather than dropped — preserving the one-entry-per-(dedup
-// identity, eventType) invariant the drain/prune paths rely on while carrying
-// the newest content and enqueuedAt.
+// drain. So a matching mutable entry is SUPERSEDED (return 2) rather than
+// dropped — preserving the one-entry-per-(dedup identity, eventType) invariant
+// the drain/prune paths rely on while carrying the newest content and
+// enqueuedAt.
+//
+// The superseded entry is REMOVED from its old slot and re-pushed at the TAIL,
+// rather than overwritten in place. The two are equivalent for the drain, which
+// re-sorts by `enqueuedAt` — but only the tail form keeps slot order equal to
+// arrival order, and that equality is what makes the bound below correct: an
+// entry superseded in place carries the NEWEST enqueuedAt while sitting at the
+// OLDEST slot, so a slot-ordered trim would evict the freshest edit/delete/
+// reaction and strand the recipient on stale content. (Exactly the array-slot-
+// vs-enqueuedAt divergence the memory path documents at its own eviction.)
+// The value is unique per (dedup identity, eventType) — the invariant this
+// script maintains and PRUNE_STALE_LUA already relies on — so `LREM … 1 entry`
+// removes precisely the entry being superseded.
+//
+// LTRIM bounds the list to DELIVERY_QUEUE_MAX_PER_USER after every push, from
+// the HEAD (`-N .. -1` keeps the newest N arrivals). It is what stops the
+// LRANGE scan above from growing with the backlog: the scan can never read more
+// than the cap, so the cost of one enqueue no longer depends on how much is
+// already queued for that user. See DELIVERY_QUEUE_MAX_PER_USER for the three
+// costs this bounds. The supersede path needs no trim — it removes one entry
+// and pushes one, leaving the length unchanged.
 //
 // Returns 1 when pushed as a new entry, 0 when an identical 'new' was deduped,
-// 2 when a mutable entry was superseded in place.
+// 2 when a mutable entry was superseded.
 // KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = dedup id,
-// ARGV[3] = TTL, ARGV[4] = normalized eventType
+// ARGV[3] = TTL, ARGV[4] = normalized eventType, ARGV[5] = max entries per user
 const ENQUEUE_DEDUP_LUA = `
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
 for i, entry in ipairs(entries) do
@@ -51,7 +75,8 @@ for i, entry in ipairs(entries) do
         if ARGV[4] == 'new' then
           return 0
         end
-        redis.call('LSET', KEYS[1], i - 1, ARGV[1])
+        redis.call('LREM', KEYS[1], 1, entry)
+        redis.call('RPUSH', KEYS[1], ARGV[1])
         redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
         return 2
       end
@@ -59,6 +84,7 @@ for i, entry in ipairs(entries) do
   end
 end
 redis.call('RPUSH', KEYS[1], ARGV[1])
+redis.call('LTRIM', KEYS[1], -tonumber(ARGV[5]), -1)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
 return 1
 `.trim();
@@ -151,6 +177,11 @@ function collapseCrossSliceDuplicates(sorted: QueuedMessagePayload[]): QueuedMes
   return kept.reverse();
 }
 
+// Bounds for the in-process fallback slice only. It holds what could not reach
+// Redis during a transient outage, so it bounds GATEWAY HEAP across every user
+// at once — a different resource from the durable slice's
+// `DELIVERY_QUEUE_MAX_PER_USER`, which bounds Redis CPU, Redis memory and the
+// reconnect replay burst. The two caps are deliberately different sizes.
 const MEMORY_QUEUE_MAX_USERS = 1000;
 const MEMORY_QUEUE_MAX_PER_USER = 50;
 
@@ -173,12 +204,13 @@ export class RedisDeliveryQueue {
         const key = queueKey(userId);
         const pushed = await redis.eval(
           ENQUEUE_DEDUP_LUA, 1, key,
-          serialized, dedupId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry)
+          serialized, dedupId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry),
+          String(DELIVERY_QUEUE_MAX_PER_USER)
         );
         if (pushed === 0) {
           logger.debug('Delivery queue dedup: dedup id already queued', { userId, dedupId, messageId: entry.messageId });
         } else if (pushed === 2) {
-          logger.debug('Delivery queue supersede: mutable event replaced in place', { userId, dedupId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
+          logger.debug('Delivery queue supersede: mutable event re-pushed at tail', { userId, dedupId, messageId: entry.messageId, eventType: normalizedEventType(entry) });
         }
         return;
       } catch (error) {
@@ -203,7 +235,9 @@ export class RedisDeliveryQueue {
         return;
       }
       // Mutable event (edited/deleted/reaction-*): supersede in place with the
-      // newest payload, mirroring ENQUEUE_DEDUP_LUA's LSET path.
+      // newest payload. The Redis twin re-pushes at the tail instead, because
+      // its bound trims by slot; this slice evicts by `enqueuedAt` below, so
+      // keeping the slot costs nothing here.
       this.memoryQueue.set(userId, existing.map((e, i) => (i === dupIndex ? entry : e)));
       logger.debug('Delivery queue supersede (memory): mutable event replaced in place', { userId, dedupId, eventType: normalizedEventType(entry) });
       return;
@@ -279,12 +313,13 @@ export class RedisDeliveryQueue {
 
         // Fast path: no memory-fallback entries, so the Redis slice IS the whole
         // queue. Full-read (0, -1) and sort by enqueuedAt exactly like drain()
-        // BEFORE applying the limit: ENQUEUE_DEDUP_LUA supersedes a mutable event
-        // in place, keeping its original FIFO slot while stamping a NEWER
-        // enqueuedAt, so raw list (slot) order can disagree with chronological
-        // order. A bounded lrange(0, limit-1) would slice in slot order and could
-        // drop the chronologically-earliest entry, reporting a replay order
-        // drain() never produces.
+        // BEFORE applying the limit. Slot order now tracks ARRIVAL order at
+        // Redis (ENQUEUE_DEDUP_LUA re-pushes a superseded entry at the tail
+        // rather than rewriting its slot), but arrival order and `enqueuedAt`
+        // are still two different clocks — entries are stamped by whichever
+        // gateway instance enqueued them. drain() orders by `enqueuedAt`, so
+        // peek() must too, or it would preview a replay order drain() never
+        // produces. A bounded lrange(0, limit-1) would slice before that sort.
         if (memoryEntries.length === 0) {
           const rawEntries = await redis.lrange(key, 0, -1);
           const sorted = parseRawEntries(rawEntries, userId, 'peek').sort(byEnqueuedAt);
