@@ -208,3 +208,48 @@ Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 31 — le recensement
 invisible, le discriminant de placement (rejeu après clôture), et le constat
 latent nº 1 VÉRIFIÉ proposé au cycle 32 : un canal d'annonces n'est un canal
 d'annonces pour personne.
+
+# Cycle 33 — le fait était dans le chiffré, la route lisait le drapeau
+
+Sonde annoncée en clôture du cycle 32 : quelles disjonctions de validateur
+n'ont pas d'implémentation derrière chaque branche ? Balayage par schéma sur
+`services/gateway` + `packages/shared`.
+
+## Constat
+
+- [x] 3 candidats écartés, vérifiés jusqu'au site d'écriture (`anonymous.ts`,
+      `translation.ts`, `posts/sounds.ts` — toutes branches servies)
+- [x] Défaut : 4e branche du `.refine()` d'envoi (`encryptedContent` seul)
+      consommée sous condition d'un booléen SÉPARÉ (`isEncrypted`)
+- [x] Les DEUX ordres perdaient : chiffré jeté (400 « contenu vide »), ou
+      message déclaré chiffré écrit EN CLAIR
+- [x] 3e défaut sur le même champ : `encryptionMode` rejetait la casse que le
+      client iOS émet (`"E2EE"`), et l'OpenAPI publiait `e2e` (refusé) en
+      taisant `hybrid` (accepté)
+- [x] Chemin socket vérifié JUSTE (lit la présence, pas un booléen) — REST seul
+      divergeait
+
+## Correctifs
+
+- [x] La route gate sur la présence du chiffré ; le `!` disparaît
+- [x] `mode` par défaut `e2ee` quand un chiffré arrive sans mode
+- [x] Le schéma REFUSE `isEncrypted` sans chiffré (jamais de rétrogradation)
+- [x] Casse normalisée à la frontière, jeu de valeurs FERMÉ
+- [x] Description OpenAPI réalignée sur ce qui est appliqué
+
+## Gates
+
+- [x] 8 RED discriminants vus rouges avant correctif (5 route + 3 schéma)
+- [x] 5 non-régressions vertes d'emblée
+- [x] Suite gateway complète : **722 suites / 17 682 tests verts**
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 33) + leçon 267
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 33 — le tableau des
+candidats écartés, la contrainte d'ORDRE des correctifs (normaliser la casse
+seule aurait converti un 400 en corruption silencieuse), les deux
+contournements clients qui étaient des rapports de bug non déposés, et la
+question proposée au cycle 34 : quels faits ce dépôt lit-il à travers un
+drapeau plutôt qu'à travers la donnée qui les porte ?
