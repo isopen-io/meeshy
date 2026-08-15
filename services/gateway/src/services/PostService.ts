@@ -2042,6 +2042,33 @@ export class PostService {
     const isEphemeralSourceRepost =
       original.type === PostType.STORY || original.type === PostType.STATUS;
 
+    // ── Ce que la copie doit dire de SES PROPRES PIXELS ────────────────────
+    //
+    // Les octets sont dupliqués (`trackedDuplicate`), mais la LIGNE qui les
+    // décrit était réénumérée à la main sur huit champs quand `mediaSelect`
+    // en avait chargé dix-sept. Tout le reste naissait sur le défaut Prisma :
+    //   - `width`/`height` : sans elles le lecteur ne peut réserver le cadre,
+    //     et le repost saute au chargement (`FeedMedia.aspectRatio` rend nil) ;
+    //   - `thumbHash` : le placeholder instantané est DÉRIVÉ de ces pixels-là,
+    //     le laisser derrière condamne la copie à l'attente pleine taille ;
+    //   - `duration` : un lecteur audio/vidéo sans durée ne sait pas dessiner
+    //     sa barre avant d'avoir téléchargé le média ;
+    //   - `alt`/`caption` : le texte alternatif EST l'accessibilité du média.
+    //     Un repost qui le perd rend le contenu muet à VoiceOver ;
+    //   - `language`/`transcription` : le Prisme Linguistique s'applique à TOUT
+    //     le contenu, transcriptions comprises. Une story repostée perdait sa
+    //     transcription — donc ses sous-titres et toute traduction ultérieure.
+    //
+    // Deux champs sont volontairement ABSENTS de cette liste, et ce n'est pas
+    // un oubli :
+    //   - `variantOf` pointe vers une AUTRE ligne PostMedia. Un pointeur n'est
+    //     pas un fait sur ces octets : recopié tel quel il désignerait la ligne
+    //     source, que le hard-delete de l'éphémère va effacer. Même raisonnement
+    //     que le remap d'ids de `storyEffects` plus bas.
+    //   - `translations` porte les URL des variantes TTS. Ces blobs-là n'ont PAS
+    //     été dupliqués : les recopier promettrait au lecteur des pistes audio
+    //     qui disparaîtront avec la source. Dupliquer les TTS (ou les
+    //     régénérer) est une décision produit, consignée en constat latent.
     type SnapshotMediaCreate = {
       fileName: string;
       originalName: string;
@@ -2051,10 +2078,20 @@ export class PostService {
       fileUrl: string;
       thumbnailUrl?: string;
       order: number;
+      width?: number;
+      height?: number;
+      thumbHash?: string;
+      duration?: number;
+      caption?: string;
+      alt?: string;
+      language?: string;
+      transcription?: Prisma.InputJsonValue;
+      uploaderId?: string;
     };
 
     let snapshotMedia: SnapshotMediaCreate[] | undefined;
     let snapshotAudioUrl: string | undefined;
+    let snapshotAudioDuration: number | undefined;
     let snapshotStoryEffects: Prisma.InputJsonValue | undefined;
 
     if (isEphemeralSourceRepost) {
@@ -2088,6 +2125,14 @@ export class PostService {
           mimeType: string;
           thumbnailUrl?: string | null;
           order?: number;
+          width?: number | null;
+          height?: number | null;
+          thumbHash?: string | null;
+          duration?: number | null;
+          caption?: string | null;
+          alt?: string | null;
+          language?: string | null;
+          transcription?: Prisma.JsonValue | null;
         }>;
 
         for (const [idx, m] of originalMedia.entries()) {
@@ -2106,6 +2151,22 @@ export class PostService {
             fileUrl: dup.fileUrl,
             thumbnailUrl: dupThumbUrl,
             order: idx,
+            // Les faits que ces octets portent déjà. `?? undefined` et non
+            // `?? null` : copier l'ABSENCE aussi fidèlement que la présence,
+            // sans jamais inventer une dimension ou une légende à un média
+            // qui n'en avait pas.
+            width: m.width ?? undefined,
+            height: m.height ?? undefined,
+            thumbHash: m.thumbHash ?? undefined,
+            duration: m.duration ?? undefined,
+            caption: m.caption ?? undefined,
+            alt: m.alt ?? undefined,
+            language: m.language ?? undefined,
+            transcription: (m.transcription ?? undefined) as Prisma.InputJsonValue | undefined,
+            // Le reposteur possède la copie : c'est LUI qui vient d'en écrire
+            // les octets. Le schéma ne tolère `uploaderId` nul que pour les
+            // lignes antérieures au champ, le temps du rattrapage.
+            uploaderId: userId,
           });
         }
 
@@ -2114,6 +2175,10 @@ export class PostService {
           const dupAudio = await trackedDuplicate(audioUrl);
           duplicatedAudioUrl = dupAudio.fileUrl;
           snapshotAudioUrl = dupAudio.fileUrl;
+          // `audioDuration` décrit CES octets-là : la copie dure exactement
+          // aussi longtemps que la source. Sans elle le lecteur de note vocale
+          // affiche 0:00 jusqu'à ce que le fichier entier soit téléchargé.
+          snapshotAudioDuration = (original.audioDuration as number | null | undefined) ?? undefined;
         }
 
         snapshotMedia = duplicatedMedia;
@@ -2144,6 +2209,7 @@ export class PostService {
             ...(sourceMoodEmoji !== undefined ? { moodEmoji: sourceMoodEmoji } : {}),
             ...(expiresAt !== undefined ? { expiresAt } : {}),
             ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
+            ...(snapshotAudioDuration !== undefined ? { audioDuration: snapshotAudioDuration } : {}),
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
             ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
           },
