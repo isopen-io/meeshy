@@ -61,6 +61,36 @@ final class SectionDropTargetTests: XCTestCase {
         )
     }
 
+    /// Referme la boucle entre la garde de STRUCTURE ci-dessus (un seul
+    /// `.onDrop`) et la garde de COMPORTEMENT plus bas (`ChipDropResolver`
+    /// range dans la bonne section) : rien ne prouve encore que le
+    /// `sectionId` qui ENTRE dans la décision est bien celui de la section
+    /// AFFICHÉE. Le décalage le plus coûteux du contrat (« la cible de drop
+    /// se décale d'une section ») est exactement un site où `handleDrop`
+    /// serait appelé avec un id différent de `group.section.id` — un défaut
+    /// qu'aucun des deux tests ci-dessus, pris séparément, ne peut voir.
+    func test_onDrop_passesTheDisplayedSectionId_throughToTheResolver() throws {
+        let code = normalizedCode(try listViewSource())
+
+        XCTAssertTrue(
+            code.contains("onDrop: { handleDrop(to: group.section.id, providers: $0) }"),
+            "Le closure `onDrop` du `SectionDropDelegate` doit transmettre `group.section.id` " +
+            "— l'id de LA section affichée par ce header — à `handleDrop`, jamais une variable " +
+            "capturée d'un autre site ni une constante."
+        )
+        XCTAssertTrue(
+            code.contains("private func handleDrop(to sectionId: String, providers: [NSItemProvider]) -> Bool {"),
+            "`handleDrop` doit recevoir cet id sous le nom `sectionId` — le paramètre qui " +
+            "alimente `ChipDropResolver.action(droppedOn:)` juste en dessous."
+        )
+        XCTAssertTrue(
+            code.contains("switch ChipDropResolver.action( droppedOn: sectionId,"),
+            "…et `handleDrop` doit décider avec CE `sectionId`, pas un autre : c'est la ligne " +
+            "qui referme la chaîne header affiché → id capturé → décision de rangement testée " +
+            "ci-dessous (`test_dropOnSectionN_landsInSectionN_forFourTargets`)."
+        )
+    }
+
     func test_sectionFrameRegistry_hasASingleWriter() throws {
         let code = normalizedCode(try listViewSource())
 
@@ -126,6 +156,68 @@ final class SectionDropTargetTests: XCTestCase {
         }
     }
 
+    /// Témoin négatif littéral, indépendant de `LentilleSectionIdentity` :
+    /// les CINQ sections Lentille-only nommées par le contrat I-064, en toutes
+    /// lettres — pas via `allSections`, pour que ce test rougisse aussi si
+    /// `LentilleSectionIdentity` elle-même orthographiait mal l'un de ses
+    /// ids (le test au-dessus serait alors juste sur un mauvais id).
+    func test_lentilleOnlySectionIds_areNeverDropTargets_byLiteralId() {
+        let lentilleOnlyIds = [
+            "lentille.live",
+            "lentille.today",
+            "lentille.yesterday",
+            "lentille.thisWeek",
+            "lentille.older",
+        ]
+
+        for id in lentilleOnlyIds {
+            XCTAssertFalse(
+                ConversationListView.acceptsSectionDrop(sectionId: id),
+                "« \(id) » ne doit JAMAIS accepter de drop : c'est une borne CALCULÉE " +
+                "(temps ou présence d'appel), pas une catégorie assignable."
+            )
+        }
+
+        // Cohérence avec l'identité déclarée : les cinq ids ci-dessus sont
+        // EXACTEMENT ceux que `LentilleSectionIdentity` émet — ni un id
+        // oublié côté test, ni un sixième bucket ajouté côté production sans
+        // que ce témoin négatif le couvre (leçon 257, égalité d'ensembles).
+        XCTAssertEqual(
+            Set(lentilleOnlyIds),
+            Set(LentilleSectionIdentity.allSections.map(\.id)),
+            "La liste littérale du contrat I-064 (5 ids) doit rester en ÉGALITÉ D'ENSEMBLES " +
+            "avec `LentilleSectionIdentity.allSections` — sinon ce témoin négatif oublierait " +
+            "silencieusement un bucket ajouté demain, ou vérifierait un id qui n'existe plus."
+        )
+    }
+
+    /// Second volet du témoin négatif : « non inscrites au registre ». Le
+    /// registre (`sectionFrameRegistry.frames`) est ce que `handleChipDrop`
+    /// (+Overlays, LWS-8) hit-teste au relâchement de la chip — une section
+    /// qui y figurerait serait « touchée » même en refusant `.onDrop`.
+    /// `registerSectionFrame` est `private` (aucun hook de test direct), donc
+    /// la garde porte sur la RÈGLE qui protège l'écriture — `acceptsSectionDrop`,
+    /// déjà prouvée fausse pour les cinq ids ci-dessus — ET sur le fait que
+    /// `registerSectionFrame` la consulte AVANT d'écrire (texte exact du
+    /// `guard`, vérifié par `test_sectionFrameRegistry_hasASingleWriter`
+    /// au-dessus). Les deux témoins réunis ferment la boucle : aucun chemin
+    /// n'existe plus pour inscrire une section Lentille-only au registre.
+    func test_lentilleOnlySections_guardTextPrecedesTheRegistryWrite() throws {
+        let code = normalizedCode(try listViewSource())
+
+        XCTAssertTrue(
+            code.contains(
+                "private func registerSectionFrame(_ sectionId: String, _ frame: CGRect) { " +
+                "guard Self.acceptsSectionDrop(sectionId: sectionId) else { return } " +
+                "sectionFrameRegistry.frames[sectionId] = frame }"
+            ),
+            "`registerSectionFrame` doit REFUSER (retourner sans écrire) avant même " +
+            "d'atteindre `sectionFrameRegistry.frames[sectionId] = frame` — le `guard` " +
+            "précède l'écriture, il ne la suit pas. Un id Lentille-only qui franchirait ce " +
+            "`guard` entrerait au registre et deviendrait une cible réelle du drop de chip."
+        )
+    }
+
     // MARK: - Décision de drop : quatre sections, chacune ciblée
 
     /// Critère LWS-6 : « déposer une conversation sur le sticker de la
@@ -140,6 +232,9 @@ final class SectionDropTargetTests: XCTestCase {
         let categoryB = "6512f2a0e1b4c3d2a1908878"
 
         // 1/4 — « Épingles » : le drop épingle (jamais de dés-épinglage).
+        // `behaviour-matrix.json` L07 : « … l'épingle ajoute un glyphe 📌 avant
+        // le nom + le sticker ÉPINGLÉES » — cette cible est celle qui fait
+        // atterrir la conversation SOUS ce sticker précis.
         XCTAssertEqual(
             ChipDropResolver.action(droppedOn: "pinned", isPinned: false, currentSectionId: categoryA),
             .pin,

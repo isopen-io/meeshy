@@ -219,6 +219,66 @@ final class ScrollPillStateTests: XCTestCase {
         )
     }
 
+    /// Précision de borne (contrat I-064 : « tick(t+0.899) visible,
+    /// tick(t+0.901) invisible » — 899/901 ms autour d'une fenêtre de
+    /// 900 ms). Exprimé relativement à `ScrollTimePillLaw.lingerMs`, jamais
+    /// par un nombre recopié : ce test reste vrai si la fenêtre partagée
+    /// change un jour (garde R15 — packages/shared reste le seul domicile de
+    /// `SCROLL_ACTIVITY_LINGER_MS`). R6 (contrat §5) : « 900 ms après
+    /// l'arrêt → invisible » — ce sont les deux tickets les plus proches de
+    /// la borne semi-ouverte que la loi documente elle-même.
+    func test_pillVisibility_isVisibleOneMsBeforeTheBound_andInvisibleOneMsAfter() {
+        let start = ScrollTimePillLaw.initialState()
+        let scrolledAt = 2_000.0
+        let scrolled = ScrollTimePillLaw.reduce(state: start, event: .scrolled(at: scrolledAt))
+
+        let justBeforeBound = scrolledAt + ScrollTimePillLaw.lingerMs - 1
+        let tickedJustBefore = ScrollTimePillLaw.reduce(state: scrolled, event: .tick(at: justBeforeBound))
+        XCTAssertTrue(
+            ScrollTimePillLaw.isVisible(state: tickedJustBefore, at: justBeforeBound),
+            "À `lingerMs - 1` ms après le défilement, la fenêtre n'est pas encore écoulée : " +
+            "un `.tick` de sonde à cet instant doit encore trouver la pilule visible."
+        )
+
+        let justAfterBound = scrolledAt + ScrollTimePillLaw.lingerMs + 1
+        let tickedJustAfter = ScrollTimePillLaw.reduce(state: scrolled, event: .tick(at: justAfterBound))
+        XCTAssertFalse(
+            ScrollTimePillLaw.isVisible(state: tickedJustAfter, at: justAfterBound),
+            "À `lingerMs + 1` ms, la fenêtre est écoulée depuis 1 ms : la pilule est déjà " +
+            "invisible — la borne `[lastScrolledAt, lastScrolledAt + lingerMs)` est bien " +
+            "semi-ouverte, pas arrondie."
+        )
+    }
+
+    /// Réarmement par `.scrolled` intercalé, sur la machine BRUTE de la loi
+    /// (`reduce`/`isVisible`), pas seulement sur `probeDelayMs` (déjà couvert
+    /// par `test_probeDelay_tracksTheEndOfScrolling_notTheFirstEvent`) : un
+    /// défilement survenu AVANT l'échéance d'origine repousse cette échéance,
+    /// et la pilule reste visible à l'instant où elle aurait dû s'effacer.
+    func test_interleavedScroll_rearmsTheWindow_keepingThePillVisibleAtTheOriginalBound() {
+        let start = ScrollTimePillLaw.initialState()
+        let firstScroll = 10_000.0
+        var state = ScrollTimePillLaw.reduce(state: start, event: .scrolled(at: firstScroll))
+
+        let originalBound = firstScroll + ScrollTimePillLaw.lingerMs
+        let interleavedScroll = originalBound - 100   // survient AVANT l'échéance d'origine
+        state = ScrollTimePillLaw.reduce(state: state, event: .scrolled(at: interleavedScroll))
+
+        XCTAssertTrue(
+            ScrollTimePillLaw.isVisible(state: state, at: originalBound),
+            "Un `.scrolled` intercalé avant l'échéance d'origine réarme la fenêtre : à cette " +
+            "échéance-LÀ, un défilement plus récent a eu lieu entre-temps, la pilule doit " +
+            "rester visible."
+        )
+
+        let newBound = interleavedScroll + ScrollTimePillLaw.lingerMs
+        XCTAssertFalse(
+            ScrollTimePillLaw.isVisible(state: state, at: newBound),
+            "Une fenêtre après le SECOND (dernier) défilement — pas le premier — la pilule " +
+            "est enfin invisible : « après l'arrêt », pas « après la première bascule »."
+        )
+    }
+
     func test_timestamp_isInMilliseconds_theUnitTheLawExpects() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         XCTAssertEqual(

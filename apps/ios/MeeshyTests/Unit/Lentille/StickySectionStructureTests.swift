@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Conteneur sticky de la Lentille (contrat LWS-6, travaux 1-3 — écart E4).
@@ -120,10 +121,52 @@ final class StickySectionStructureTests: XCTestCase {
             "interne hérite de la safe area réduite et sa ligne d'épinglage descend d'autant. " +
             "`MeeshyRefreshableScroll` (SDK) n'est pas touché — gel S1."
         )
+        XCTAssertEqual(
+            occurrences(of: "private var stickyHeaderInset: CGFloat {", in: code), 1,
+            "UNE seule définition de `stickyHeaderInset` — un second site concurrent pourrait " +
+            "diverger silencieusement de la formule gardée ci-dessus."
+        )
+        XCTAssertEqual(
+            occurrences(of: "private var scrollContentTopPadding: CGFloat {", in: code), 1,
+            "UNE seule définition de `scrollContentTopPadding` — même risque de divergence."
+        )
+    }
+
+    /// I-064 renforce le témoin ci-dessus. La garde de source PROUVE la FORME
+    /// de la formule (`scrollContentTopPadding = expandedHeight -
+    /// stickyHeaderInset`, `stickyHeaderInset = 0` sous OFF) — étant une
+    /// soustraction suivie de son inverse, la somme retombe TOUJOURS sur
+    /// `expandedHeight`, quelle que soit la valeur de `stickyHeaderInset` :
+    /// ce n'est pas un fait à mesurer, c'est l'algèbre de la formule
+    /// elle-même, déjà garantie par le témoin de forme ci-dessus. Le SEUL
+    /// fait numérique qui reste à vérifier — et qui POURRAIT casser cette
+    /// algèbre en pratique — est que la borne ON (`collapsedHeight`) ne
+    /// dépasse jamais `expandedHeight` : un inset plus grand que la hauteur
+    /// déployée rendrait `scrollContentTopPadding` négatif (le contenu
+    /// remonterait sous son point de départ). Aucun framework d'inspection
+    /// SwiftUI ne permet d'appeler la propriété `private` de la vue depuis ce
+    /// bundle ; cette borne se vérifie donc directement sur
+    /// `CollapsibleHeaderMetrics` (SDK, gelé S1), la source unique des deux
+    /// hauteurs.
+    func test_stickyHeaderInset_collapsedHeightNeverExceedsExpandedHeight() {
+        XCTAssertLessThanOrEqual(
+            CollapsibleHeaderMetrics.collapsedHeight,
+            CollapsibleHeaderMetrics.expandedHeight,
+            "`CollapsibleHeaderMetrics.collapsedHeight` (l'inset sous drapeau ON) ne doit " +
+            "jamais dépasser `expandedHeight` (la somme visée par `scrollContentTopPadding = " +
+            "expandedHeight - stickyHeaderInset`) : sinon la liste démarrerait avec un padding " +
+            "négatif, remontant son contenu sous la position de repos d'aujourd'hui."
+        )
     }
 
     // MARK: - Travail 1-2 — rangs en contenu, sticker en header
 
+    /// `behaviour-matrix.json` L16 : « … et lit les stickers comme des
+    /// en-têtes de section » (VoiceOver). Cette lecture n'est correcte QUE si
+    /// le sticker occupe réellement le slot `header:` d'une `Section` — la
+    /// forme que ce test garde. Le libellé VoiceOver lui-même (extension du
+    /// label du RANG) appartient à LWS-7 ; ici on garde la condition
+    /// structurelle qui le rend vrai.
     func test_eachGroup_rendersASectionWithRowsAsContentAndHeaderInHeaderSlot() throws {
         let code = normalizedCode(try listViewSource())
 
