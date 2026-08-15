@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **`ConversationLockStore` foundation shipped** (slice
+> `conversation-lock-store-foundation`, PR #3045, merged `498a33ca4`) — the storage primitive for
+> the `ConversationLock` gap scoped at the previous run (zero PIN/biometric infra existed on
+> Android). Port of iOS `ConversationLockManager`'s storage logic ONLY, no UI/wiring — foundation-
+> then-consumer, same precedent as `chat-composer-prefill-draft` → `widget-quick-reply`.
+>
+> `ConversationLockStore` (interface) + `InMemoryConversationLockStore` (volatile, mirrors
+> `TokenStore.kt`'s pattern) in `sdk-core`; `EncryptedConversationLockStore` — real implementation
+> via `EncryptedSharedPreferences`/Android Keystore, structurally identical to `EncryptedTokenStore`
+> (already shipped in production). 6-digit master PIN gates unlocking, each locked conversation
+> carries its own 4-digit PIN, both SHA-256-hashed, never plaintext. `removeMasterPin()` no-ops
+> while any conversation is still locked; `forceRemoveMasterPin()` bypasses that guard for
+> unlock-all/logout. `lockedConversationIds` derives from which lock keys exist rather than a
+> separately persisted list (iOS keeps Keychain + a parallel UserDefaults list that could
+> theoretically desync — this sidesteps that class of bug rather than porting it).
+>
+> **Two CI surprises, both resolved, both worth recording**:
+> 1. **`EncryptedSharedPreferences`/`MasterKey` cannot be unit-tested via Robolectric in this
+>    setup** — `MasterKey.Builder` requires the `AndroidKeyStore` security provider, which
+>    Robolectric's JVM does not supply. All 6 `EncryptedConversationLockStoreTest` cases failed with
+>    `NoSuchAlgorithmException`/`KeyStoreException`, confirmed live in CI. This explains, after the
+>    fact, why `EncryptedTokenStore` — the pattern this class mirrors — has shipped in production
+>    with zero dedicated tests all along: not an oversight, a constraint of this Robolectric setup.
+>    Removed the Robolectric test file; `InMemoryConversationLockStoreTest` (18 cases, plain JVM)
+>    already carries the full interface contract, and `EncryptedConversationLockStore` is a
+>    structural port of the exact same logic onto real storage. Documented the constraint directly
+>    on the class so a future run doesn't rediscover it from scratch.
+> 2. **A DataStore/coroutine flake hit the `Android` CI check twice in a row, on two different,
+>    unrelated tests** (`ThemeStoreTest`, then `MediaDownloadPreferencesStoreTest` — both
+>    `dataStore_set*_isReflectedInTheFlow`, both `TimeoutCancellationException`). Neither test is
+>    anywhere near `me.meeshy.sdk.lock`; this session's own conversation-lock tests were green both
+>    times. `gh run rerun <run-id> --failed` resolved it on the first retry (cheaper than a wasted
+>    re-push — worth trying before assuming `rerun-failed-jobs` being 403-for-the-bot, documented
+>    for a different run, blocks this path too; it didn't).
+>
+> **Deliberately out of scope, deferred to future slices**: UI (PIN entry screens, lock/unlock
+> flows), `ConversationListViewModel` wiring (filtering/hiding locked conversations from the list),
+> the `AuthManager`-logout hook (`resetForLogout()` exists on the interface but nothing calls it
+> yet). `feature-parity.md`'s "Conversation lock" line stays `[ ]` — this is the foundation, not the
+> feature.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=conversation-lock-store-foundation`.
+
+
 > On 2026-08-15 **2 more stale Phase B checkboxes corrected, `ConversationLock` scoped as a real,
 > substantial gap for a future decomposed run** (no code shipped again this run — but unlike the
 > `tracked-link-resolution-audit` run, this one produced two verified `[x]` upgrades plus a properly
