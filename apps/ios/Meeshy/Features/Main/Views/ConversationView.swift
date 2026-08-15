@@ -286,6 +286,18 @@ struct ConversationView: View {
     /// `ReadingModeController` (F-080, GELÉ) porte cette résolution, non
     /// dupliquée ici.
     @StateObject var readingModeController: ReadingModeController
+    /// Capacités résolues UNE SEULE FOIS dans `init`, aux côtés de
+    /// `readingModeController` — même `capabilities` locale, aucune seconde
+    /// résolution. Alimente `ReadingModeLensCatalog.rows` (§WS-7 travail 5,
+    /// arbitrage F-086bis) : Rivière TOUJOURS présente au catalogue, grisée
+    /// avec sa VRAIE raison et ses VRAIS seuils quand indisponible — jamais
+    /// retirée de la liste (critère §7 « un mode indisponible n'est jamais
+    /// un écran vide »).
+    let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
+    /// Présentation de la feuille Lentille (§WS-7 travail 5, arbitrage
+    /// F-086bis) — ouverte par `ReadingModeChip`, jamais par le bouton Aa
+    /// (qui bascule Focal⇄Script directement, sans feuille).
+    @State private var isReadingModeLensPresented = false
     /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
@@ -534,6 +546,22 @@ struct ConversationView: View {
             capabilities: capabilities,
             isFlagEnabled: isFlagEnabled
         ))
+        // Même `capabilities` locale que ci-dessus — pas de seconde résolution
+        // (§WS-7 travail 5, arbitrage F-086bis) : le catalogue de la feuille
+        // Lentille lit `readingModeCapabilities`, jamais un recalcul.
+        self.readingModeCapabilities = capabilities
+
+        // Écart #4 (accepté par l'arbitrage F-086bis, documenté dans le
+        // rapport WS-7/F-086bis) : ce chemin drapeau-ON de `init` ne peut pas
+        // être prouvé par construction directe de `ConversationView` en test
+        // — `ConversationViewModel.init` déclenche de vrais GRDB/réseau
+        // (`ConversationDependencies.live`), sans point d'injection. Couvert
+        // indirectement par `ConversationViewReadingModeInitTests` (les 9 cas
+        // purs de `readingModeConversationType`) et
+        // `ConversationViewReadingModeSourceGuardTests` (preuves par lecture
+        // de source : une seule construction de `ReadingModeController`,
+        // `capabilities` résolue une fois, réutilisée par `readingModeCapabilities`).
+        // Risque documenté, accepté tel quel — non re-testé ici.
     }
 
     /// SDK `MeeshyConversation.ConversationType` (8 cas) → miroir GELÉ de la
@@ -784,6 +812,22 @@ struct ConversationView: View {
                     ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
                         .environmentObject(statusViewModel)
                 }
+            }
+            // Feuille Lentille (§WS-7 travail 5, arbitrage F-086bis) —
+            // catalogue construit depuis `readingModeCapabilities`, résolue
+            // UNE SEULE FOIS dans `init` (aucune seconde résolution).
+            // Sélection ET retour-auto passent PAR `readingModeController`
+            // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
+            .sheet(isPresented: $isReadingModeLensPresented) {
+                ReadingModeLensSheet(
+                    rows: ReadingModeLensCatalog.rows(
+                        capabilities: readingModeCapabilities,
+                        currentMode: readingModeController.mode
+                    ),
+                    isDark: isDark,
+                    onSelect: { readingModeController.select($0) },
+                    onResetToAuto: { readingModeController.resetToAuto() }
+                )
             }
     }
 
@@ -1810,8 +1854,48 @@ struct ConversationView: View {
         HStack(spacing: 0) {
             headerCallButtons.layoutPriority(1)
             expandedHeaderSearchButton
+            readingModeAffordanceCluster
         }
         .hiddenWhileScrolling()
+    }
+
+    /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
+    /// insérée APRÈS `expandedHeaderSearchButton`, JAMAIS avant
+    /// `headerCallButtons.layoutPriority(1)` (interdiction absolue du
+    /// contrat). Sous drapeau uniquement : `ReadingModeController` résout
+    /// TOUJOURS `.bubbles` drapeau OFF (§WS-1), donc ce bloc disparaît
+    /// intégralement — bit-à-bit identique à avant ce lot.
+    @ViewBuilder
+    private var readingModeAffordanceCluster: some View {
+        if readingModeController.mode != .bubbles {
+            ReadingModeChip(model: readingModeChipModel) {
+                HapticFeedback.light()
+                isReadingModeLensPresented = true
+            }
+            if readingModeController.mode == .focal || readingModeController.mode == .script {
+                // Bouton Aa — bascule DIRECTE Focal⇄Script, sans passer par la
+                // feuille (critère §7 : « Aa bascule Focal ⇄ Script
+                // instantanément »). `select` écrit la préférence collante ET
+                // publie le mode dans la même boucle (ReadingModeController,
+                // GELÉ F-080).
+                ReadingModeDensityButton(isDark: isDark) {
+                    HapticFeedback.light()
+                    readingModeController.select(readingModeController.mode.toggledDensity)
+                }
+            }
+        }
+    }
+
+    /// Modèle pur du chip — `isAuto` distingue une décision de
+    /// l'orchestrateur (§WS-1 `OrchestratorDecisionReason` ∉ {`.sticky`,
+    /// `.flagDisabled`}) d'un choix manuel figé (préférence collante).
+    private var readingModeChipModel: ReadingModeChipModel {
+        ReadingModeChipModel(
+            label: ReadingModeLensCatalog.title(for: readingModeController.mode),
+            accentHex: accentColor,
+            isAuto: readingModeController.decision.reason != .sticky
+                && readingModeController.decision.reason != .flagDisabled
+        )
     }
 
     /// Title + tags column shown when the composer-options drawer is open.

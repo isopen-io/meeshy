@@ -116,12 +116,26 @@ final class FocalFocusDecoration {
     /// la montée et la descente de l'effet historique n'ont PAS la même durée
     /// (0,18 / 0,22 en normal, 0,15 / 0,25 en fort), qu'un aller-retour
     /// symétrique ne saurait reproduire.
-    func flash(cell: UICollectionViewCell, accentHex: String?, strong: Bool) {
+    ///
+    /// **Extension F-086bis (arbitrage coordinateur, ouverture EXCEPTIONNELLE
+    /// de ce fichier)** : `immediate` supprime le délai INTERNE (`beginTime`)
+    /// — réservé à l'appelant qui a DÉJÀ payé, de son côté, le délai
+    /// d'acquisition de la cellule cible (WS-6, `MessageListViewController
+    /// .flashCell`, §4.7 « écart assumé » du rapport F-085) : additionner un
+    /// délai externe ET ce délai interne doublait le tempo (~0,70 s au lieu
+    /// de ~0,35 s). Défaut `false` : comportement EXACT d'avant cette
+    /// extension — **aucun autre appelant n'est modifié**, aucun paramètre
+    /// existant ne change de sens. L'ordre normal < fort (`strongDelay <
+    /// delay`, `strongPeakOpacity > peakOpacity`) est PRÉSERVÉ dans les deux
+    /// cas — seul `beginTime` change, jamais les autres cadences.
+    func flash(cell: UICollectionViewCell, accentHex: String?, strong: Bool, immediate: Bool = false) {
         let layer = flashLayer(for: cell)
         let rise = strong ? FocalPassConstants.Flash.strongRiseDuration : FocalPassConstants.Flash.riseDuration
         let fall = strong ? FocalPassConstants.Flash.strongFallDuration : FocalPassConstants.Flash.fallDuration
         let peak = strong ? FocalPassConstants.Flash.strongPeakOpacity : FocalPassConstants.Flash.peakOpacity
-        let delay = strong ? FocalPassConstants.Flash.strongDelay : FocalPassConstants.Flash.delay
+        let delay: TimeInterval = immediate
+            ? 0
+            : (strong ? FocalPassConstants.Flash.strongDelay : FocalPassConstants.Flash.delay)
         let accent = accentColor(accentHex)
         let frame = decorationFrame(for: cell)
 

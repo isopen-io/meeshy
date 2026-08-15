@@ -175,4 +175,74 @@ final class FocalFocusDecorationTests: XCTestCase {
             "FocalFocusDecoration.flash doit réutiliser le layer de surbrillance de la cellule"
         )
     }
+
+    // MARK: - F-086bis — `immediate`, extension RÉTRO-COMPATIBLE (arbitrage coordinateur)
+
+    /// Tolérance de comparaison sur `CACurrentMediaTime()` : la mesure prend
+    /// un temps non nul entre l'appel à `flash` et l'assertion — quelques
+    /// millisecondes de marge absorbent cette latence sans affaiblir la
+    /// distinction (les délais réels comparés, 0,25 s/0,35 s, sont un ordre
+    /// de grandeur au-dessus).
+    private static let beginTimeTolerance: CFTimeInterval = 0.05
+
+    private func flashBeginTime(_ testCell: UICollectionViewCell) throws -> CFTimeInterval {
+        let flash = try XCTUnwrap(
+            decoration.flashLayer(attachedTo: testCell),
+            "FocalFocusDecoration.flash doit poser un layer de surbrillance dédié"
+        )
+        let animation = try XCTUnwrap(
+            flash.animation(forKey: "focal.focus.flash.opacity") as? CAKeyframeAnimation
+        )
+        return animation.beginTime
+    }
+
+    /// `immediate: true` supprime le délai INTERNE — `beginTime` doit tomber
+    /// à (quasi) `CACurrentMediaTime()`, PAS `CACurrentMediaTime() + delay`.
+    /// Réservé à l'appelant qui a DÉJÀ payé l'acquisition de cellule côté
+    /// hôte (WS-6, `MessageListViewController.flashCell`, §4.7).
+    func test_flash_immediate_hasNoInternalDelay_normal() throws {
+        let before = CACurrentMediaTime()
+        decoration.flash(cell: cell, accentHex: accent, strong: false, immediate: true)
+        let beginTime = try flashBeginTime(cell)
+
+        XCTAssertEqual(
+            beginTime, before, accuracy: Self.beginTimeTolerance,
+            "flash(immediate: true) doit poser beginTime ≈ CACurrentMediaTime() (aucun délai interne) — sinon le délai externe déjà payé par l'appelant s'additionne (tempo Focal doublé, F-086bis)."
+        )
+    }
+
+    func test_flash_immediate_hasNoInternalDelay_strong() throws {
+        let before = CACurrentMediaTime()
+        decoration.flash(cell: cell, accentHex: accent, strong: true, immediate: true)
+        let beginTime = try flashBeginTime(cell)
+
+        XCTAssertEqual(
+            beginTime, before, accuracy: Self.beginTimeTolerance,
+            "flash(strong: true, immediate: true) doit AUSSI poser beginTime ≈ CACurrentMediaTime() — `immediate` s'applique aux deux cadences (normal ET fort)."
+        )
+    }
+
+    /// Défaut `immediate: false` : comportement EXACT d'avant l'extension —
+    /// AUCUN appelant existant n'est modifié (contrat de l'arbitrage
+    /// F-086bis : « aucun autre appelant modifié »).
+    func test_flash_defaultParameter_stillDelaysInternally() throws {
+        let before = CACurrentMediaTime()
+        decoration.flash(cell: cell, accentHex: accent, strong: false)
+        let beginTime = try flashBeginTime(cell)
+
+        XCTAssertEqual(
+            beginTime, before + FocalPassConstants.Flash.delay, accuracy: Self.beginTimeTolerance,
+            "Sans `immediate` (défaut `false`), flash doit conserver EXACTEMENT son délai interne historique (FocalPassConstants.Flash.delay) — rétro-compatibilité stricte, aucun appelant existant ne doit changer de comportement."
+        )
+    }
+
+    /// L'ordre normal < fort (délai du fort strictement inférieur) reste
+    /// vrai `immediate` ou non — seul `beginTime` change avec `immediate`,
+    /// jamais la relation d'ordre entre les deux cadences.
+    func test_flash_immediate_preservesNormalLessThanStrongOrdering() {
+        XCTAssertLessThan(
+            FocalPassConstants.Flash.strongDelay, FocalPassConstants.Flash.delay,
+            "l'ordre normal < fort doit rester vrai sur les constantes elles-mêmes, quel que soit `immediate` — F-086bis ne touche à aucune cadence, seulement à beginTime."
+        )
+    }
 }

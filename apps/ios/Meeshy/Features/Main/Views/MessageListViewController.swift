@@ -132,6 +132,9 @@ final class MessageListViewController: UIViewController {
         didSet {
             guard isHeaderExpanded != oldValue else { return }
             stickyDayState.isHeaderExpanded = isHeaderExpanded
+            // F-086bis (WS-2) : même règle que la pill de jour — un header
+            // déplié retire aussi la pilule jour·heure.
+            scrollTimePillState.isHeaderExpanded = isHeaderExpanded
         }
     }
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
@@ -243,6 +246,7 @@ final class MessageListViewController: UIViewController {
             guard oldValue != readingMode, isViewLoaded else { return }
             applyReadingModeChange()
             applyTopInsetToViews()
+            updateScrollTimePillMounting()
         }
     }
     /// `!viewModel.hasOlderMessages` (ou repli §4.5 « piège connu » — une
@@ -290,6 +294,16 @@ final class MessageListViewController: UIViewController {
     var focalCollectionViewForTesting: UICollectionView? { collectionView }
     var focalDataSourceForTesting: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>? { dataSource }
 
+    // MARK: - WS-2 (F-086bis) — pilule « jour · heure » du fil, montage
+
+    /// État de la pilule (F-081, GELÉ `Focal/Chrome/ScrollTimePillState.swift`)
+    /// — piloté ICI par le site 1 existant (`scrollViewDidScroll`) et par le
+    /// timer de suivi de lecture déjà en place (`startSeenTracking`), jamais
+    /// par un observateur neuf.
+    let scrollTimePillState = ScrollTimePillState()
+    private var scrollTimePillHost: UIHostingController<AnyView>?
+    private var scrollTimePillTopConstraint: NSLayoutConstraint?
+
     init(
         store: MessageStore,
         currentUserId: String,
@@ -332,6 +346,8 @@ final class MessageListViewController: UIViewController {
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
             stickyDayState.isDark = isDark
+            // F-086bis (WS-2) : la pilule jour·heure suit le même thème.
+            scrollTimePillState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -389,6 +405,8 @@ final class MessageListViewController: UIViewController {
         }
         // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
         stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
+        // F-086bis (WS-2) : ancre de la pilule jour·heure, si montée.
+        scrollTimePillTopConstraint?.constant = topInset + FocalMetrics.Pill.top
         // FocalPassCallSite.contentInsetChange — site 5 (§4.8) : la ligne de
         // focus dépend de `contentInset.top`.
         applyFocalPassIfEnabled()
@@ -539,6 +557,7 @@ final class MessageListViewController: UIViewController {
         if readingMode != .bubbles {
             applyReadingModeChange()
         }
+        updateScrollTimePillMounting()
         applyTopInsetToViews()
         // `onNewMessagesBadge` only fires on an INCREASE or on the two
         // explicit scroll-to-bottom reset paths — never on "nothing changed,
@@ -576,6 +595,98 @@ final class MessageListViewController: UIViewController {
         ])
         stickyDayTopConstraint = stickyTop
         stickyDayHost = host
+    }
+
+    // MARK: - WS-2 (F-086bis) — montage de la pilule « jour · heure »
+
+    /// SOUS DRAPEAU : montée/démontée dynamiquement selon `readingMode` —
+    /// `.bubbles` ⇒ aucun `UIHostingController` enfant supplémentaire
+    /// (contrat §WS-6 « bit-à-bit identique »). Appelée depuis `viewDidLoad`
+    /// et depuis le `didSet` de `readingMode`.
+    private func updateScrollTimePillMounting() {
+        if readingMode != .bubbles {
+            guard scrollTimePillHost == nil else { return }
+            configureScrollTimePillOverlay()
+        } else {
+            teardownScrollTimePillOverlay()
+        }
+    }
+
+    /// Second `UIHostingController` enfant, MÊME topologie que
+    /// `configureStickyDayOverlay` ci-dessus — `ScrollTimePillOverlay` (F-081,
+    /// GELÉ `Focal/Chrome/`) est une vue PURE, aucune modification.
+    /// Ancrage/cotes via `FocalMetrics.Pill` (`top` 72, `fadeDuration` déjà
+    /// consommé PAR l'overlay lui-même) — jamais un littéral ici (garde R15).
+    private func configureScrollTimePillOverlay() {
+        scrollTimePillState.isDark = isDark
+        scrollTimePillState.isHeaderExpanded = isHeaderExpanded
+        let host = UIHostingController(
+            rootView: AnyView(
+                ScrollTimePillOverlay(state: scrollTimePillState)
+                    // Reduce Motion (§4.9, DEUX sources) : « pas d'animation
+                    // de fondu ». `ScrollTimePillOverlay` est GELÉ et anime
+                    // en interne (`.animation(value: isVisible)`, cote
+                    // `FocalMetrics.Pill.fadeDuration`) — désactiver la
+                    // TRANSACTION plutôt qu'éditer ce fichier hors périmètre.
+                    .transaction { [weak self] transaction in
+                        guard let self else { return }
+                        if MeeshyMotion.shouldReduce(
+                            system: UIAccessibility.isReduceMotionEnabled,
+                            userForced: self.isReduceMotionEnabled
+                        ) {
+                            transaction.disablesAnimations = true
+                        }
+                    }
+            )
+        )
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        addChild(host)
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        let pillTop = host.view.topAnchor.constraint(
+            equalTo: view.topAnchor,
+            constant: topInset + FocalMetrics.Pill.top
+        )
+        NSLayoutConstraint.activate([
+            pillTop,
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        scrollTimePillTopConstraint = pillTop
+        scrollTimePillHost = host
+    }
+
+    private func teardownScrollTimePillOverlay() {
+        guard let host = scrollTimePillHost else { return }
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+        scrollTimePillHost = nil
+        scrollTimePillTopConstraint = nil
+    }
+
+    /// Site 1 (§4.8), RÉUTILISÉ — aucun observateur neuf. Label « jour ·
+    /// heure » du message en haut visible, même approche que
+    /// `updateStickyDayLabel` (jour seul) mais `createdAt` complet : la
+    /// pilule a besoin de l'heure en plus du jour.
+    private func noteScrollTimePillActivity() {
+        guard readingMode != .bubbles else { return }
+        let label = topVisibleMessageDate().map {
+            ScrollTimePillLabelFormatter.label(for: $0, now: Date(), calendar: .current, locale: .current)
+        }
+        scrollTimePillState.note(.scrolled(at: Double(Self.nowMs())), label: label)
+    }
+
+    private func topVisibleMessageDate() -> Date? {
+        guard let dataSource,
+              let topIndexPath = collectionView.indexPathsForVisibleItems.max(),
+              let topItem = dataSource.itemIdentifier(for: topIndexPath),
+              case .message(let localId) = topItem,
+              let record = store.message(for: localId)
+        else { return nil }
+        return record.createdAt
     }
 
     /// Recalcule le label de la pill sticky à partir de la cellule la plus
@@ -1708,19 +1819,17 @@ final class MessageListViewController: UIViewController {
     /// HISTORIQUE inchangé, verbatim — aucune perspective à préserver dans
     /// ces modes.
     ///
-    /// ÉCART ASSUMÉ (signalé, arbitrage ouvert) : l'ancien délai externe
-    /// existait pour laisser `UICollectionView` RÉALISER la cellule cible
-    /// après un scroll programmatique distant — `FocalFocusDecoration.flash`
-    /// exige un `UICollectionViewCell` déjà résolu et ne prend aucun
-    /// paramètre de délai (sa propre temporisation vit dans `beginTime`,
-    /// mêmes constantes `FocalPassConstants.Flash`, pour l'effet visuel).
-    /// Conserver le délai externe D'ACQUISITION de cellule EN PLUS du délai
-    /// interne de la décoration additionne les deux temporisations
-    /// (~0,70 s / ~0,50 s au lieu de ~0,35 s / ~0,25 s) — préféré à
-    /// l'alternative (appel synchrone : la cellule cible d'un saut distant
-    /// est très probablement pas encore réalisée, flash silencieusement
-    /// perdu). Écart mineur de tempo, jamais de correction manquée ; à
-    /// arbitrer si le double délai est perceptible en recette device.
+    /// ÉCART CORRIGÉ (F-086bis, arbitrage coordinateur) : le délai externe
+    /// ci-dessous laisse `UICollectionView` RÉALISER la cellule cible après
+    /// un scroll programmatique distant (`cellForItem(at:)` a besoin que
+    /// l'animation ait progressé). `FocalFocusDecoration.flash` porte
+    /// maintenant `immediate: Bool` (extension rétro-compatible,
+    /// EXCEPTIONNELLEMENT ouverte pour ce lot) : `immediate: true` supprime
+    /// SON délai interne (`beginTime`), qui aurait sinon additionné une
+    /// seconde temporisation par-dessus celle-ci — l'ancien écart (« tempo
+    /// doublé, ~0,70 s au lieu de ~0,35 s ») est donc résolu : le tempo
+    /// Focal redevient EXACTEMENT celui de `FocalPassConstants.Flash`
+    /// (normal `délai 0,35 s` / fort `0,25 s`), ordre normal < fort préservé.
     private func flashCell(at indexPath: IndexPath, strong: Bool = false) {
         guard readingMode == .focal else {
             legacyFlashCell(at: indexPath, strong: strong)
@@ -1730,7 +1839,12 @@ final class MessageListViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, let cell = self.collectionView.cellForItem(at: indexPath) else { return }
             self.syncFocalPassTheme()
-            self.focalPass.flash(cell: cell, strong: strong)
+            self.focalPass.decoration.flash(
+                cell: cell,
+                accentHex: self.focalPass.accentHex,
+                strong: strong,
+                immediate: true
+            )
         }
     }
 
@@ -1830,6 +1944,12 @@ extension MessageListViewController {
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                // F-086bis (WS-2) : RÉUTILISE ce timer de suivi de lecture,
+                // déjà en place, pour le `.tick` de la pilule jour·heure —
+                // aucun observateur/timer NEUF introduit pour la pilule.
+                if self.readingMode != .bubbles {
+                    self.scrollTimePillState.note(.tick(at: Double(Self.nowMs())))
+                }
                 if self.wantsImmediateSeenFlush {
                     self.wantsImmediateSeenFlush = false
                     _ = self.drainSeenNow()
@@ -1900,6 +2020,9 @@ extension MessageListViewController: UICollectionViewDelegate {
         // `reconfigureItems` ici — la typographie 15→16 (§4.6) est reportée
         // à l'arrêt (`reconfigureFocusTypographyAtScrollStop`, plus bas).
         applyFocalPassIfEnabled()
+        // F-086bis (WS-2) : pilule « jour · heure », RÉUTILISE ce site — pas
+        // d'observateur neuf. Gardée par readingMode (`.bubbles` ⇒ no-op).
+        noteScrollTimePillActivity()
 
         // Met à jour le label de la pill flottante en fonction du message
         // en haut visible. Léger : un lookup de l'item à l'index max + une

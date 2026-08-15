@@ -36,8 +36,12 @@ final class FocalHostSourceGuardTests: XCTestCase {
     /// Le POINT D'ENTRÉE `flashCell` ne doit lui-même écrire ni
     /// `cell.transform` ni `cell.alpha` — il délègue à `legacyFlashCell`
     /// (Script/bulles, comportement historique CONSERVÉ verbatim, où ces
-    /// écritures restent légitimes) ou à `focalPass.flash` (Focal, décoration
-    /// `CALayer`, §4.7).
+    /// écritures restent légitimes) ou à `focalPass.decoration.flash`
+    /// (Focal, décoration `CALayer`, §4.7). F-086bis : appel `immediate:
+    /// true` — le délai externe (`asyncAfter`, ci-dessus dans le corps) a
+    /// déjà payé l'acquisition de cellule, le délai interne de la
+    /// décoration ne doit pas s'additionner (tempo Focal ~0,35 s / ~0,25 s,
+    /// pas ~0,70 s / ~0,50 s).
     func test_flashCell_entryPoint_writesNeitherCellTransformNorCellAlpha() throws {
         let code = try source("MessageListViewController.swift")
         guard let range = code.range(of: "private func flashCell(at indexPath: IndexPath, strong: Bool = false) {"),
@@ -56,8 +60,8 @@ final class FocalHostSourceGuardTests: XCTestCase {
             "flashCell (point d'entrée) écrit `cell.alpha` — même raison que `cell.transform` ci-dessus (R1)."
         )
         XCTAssertTrue(
-            body.contains("focalPass.flash(cell:"),
-            "flashCell doit déléguer à `focalPass.flash(cell:strong:)` (décoration CALayer, §4.7) pour le chemin `.focal`."
+            body.contains("focalPass.decoration.flash(") && body.contains("immediate: true"),
+            "flashCell doit déléguer à `focalPass.decoration.flash(cell:accentHex:strong:immediate:)` avec `immediate: true` (décoration CALayer, §4.7, F-086bis) pour le chemin `.focal` — sinon le délai externe déjà payé s'additionne au délai interne de la décoration (tempo doublé)."
         )
         XCTAssertTrue(
             body.contains("legacyFlashCell(at: indexPath, strong: strong)"),
