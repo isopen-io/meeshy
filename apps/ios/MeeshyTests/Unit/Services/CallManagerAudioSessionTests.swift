@@ -213,6 +213,50 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Audit gateway-calls (2026-08-15) — `toggleTranscription()`'s START path
+    /// awaits `requestPermission()`, which suspends on the system Speech
+    /// authorization alert for as long as the user leaves it up. The call can
+    /// end (or be replaced by a redial) in that window, and `endCallInternal`
+    /// has already run `resetForCallEnd` by then — resuming without
+    /// re-validating starts an `AVAudioEngine` microphone tap plus an
+    /// on-device recognizer that NOTHING ever stops for the rest of the app
+    /// session (no call, no CallView, and `stopTranscribing` has no remaining
+    /// caller), and stamps `call:transcription-active` plus every emitted
+    /// segment with a dead call's id. Mirrors the owner-callId guard that
+    /// `applyRecognitionResult`/`applyRecognitionError` already carry on the
+    /// RECEIVE side of this same feature.
+    func test_toggleTranscription_revalidatesCallIdentity_afterPermissionAwait() throws {
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "func toggleTranscription()"),
+              let endRange = source[fnRange.upperBound...].range(of: "\n    }") else {
+            XCTFail("toggleTranscription() function not found in CallManager.swift")
+            return
+        }
+        let fnBody = String(source[fnRange.lowerBound ..< endRange.upperBound])
+
+        guard let awaitRange = fnBody.range(of: "await self.transcriptionService.requestPermission()"),
+              let guardRange = fnBody.range(of: "guard self.currentCallId == callId, self.callState.isActive else {"),
+              let startRange = fnBody.range(of: "self.transcriptionService.startTranscribing(") else {
+            XCTFail(
+                "toggleTranscription() must re-validate the call identity between the permission " +
+                "await and startTranscribing — a call that ended (or was redialed) while the " +
+                "system Speech prompt was up would otherwise start a microphone capture that " +
+                "nothing ever stops, under a dead callId."
+            )
+            return
+        }
+        XCTAssertLessThan(
+            awaitRange.upperBound, guardRange.lowerBound,
+            "the identity guard must run AFTER the permission await — placed before it, it only " +
+            "reads the pre-suspension state and guards nothing."
+        )
+        XCTAssertLessThan(
+            guardRange.upperBound, startRange.lowerBound,
+            "startTranscribing must be gated BY the identity guard, not run ahead of it."
+        )
+    }
+
     func test_callManager_preferredCallLanguage_isStaticAndPure() throws {
         // Guard that preferredCallLanguage stays a pure static function — no instance
         // state, no async, safe to call from any actor in tests.
