@@ -93,6 +93,38 @@ La matrice de couverture du vol. 4 §5 exige que « chaque feature de la vue act
 
 ---
 
+## 2 bis. État de la conception bitfield — conforme sur trois axes, incomplète sur le quatrième
+
+Vérification des quatre sites (`message-effect-flags.ts`, `MessageEffects.swift`, `MessageProcessor.ts`, `message-effects.ts`).
+
+**Conforme.** Le bitfield est réel et symétrique : `MessageEffectFlags` (`UInt32`, OptionSet) et `MESSAGE_EFFECT_FLAGS` portent des bits **identiques**, la combinaison est native (`OptionSet` / `mergeEffects` + `hasEffect`), et la classification existe en trois axes masqués — cycle de vie (bits 0-7), apparition one-shot (8-15), persistants (16-23). Le gateway **recompose** le champ depuis les colonnes historiques (`MessageProcessor.ts:348-352`), donc les messages antérieurs héritent de la classification sans migration.
+
+**Incomplet — le 4ᵉ axe « interface » n'existe pas.** Les dix effets visuels sont appliqués à la **vue du message** : `MessageEffectsModifier` (`MessageEffectModifiers.swift:435-465`) empile les modifiers sur le contenu de bulle, et confetti/fireworks passent par un `.overlay` borné aux limites de la bulle. Aucun effet ne s'exerce à l'échelle de l'écran. Les bits 24-31 sont libres.
+
+### 2 bis. 1 — Contrainte d'encodage du futur axe
+
+Le 4ᵉ axe doit tenir sur les **bits 24-30** (sept emplacements), **jamais sur le bit 31** :
+- Prisma stocke `effectFlags` en `Int` signé 32 bits ; `1 << 31` dépasse `Int32.max`.
+- En TypeScript, les opérateurs bit-à-bit travaillent en int32 signé : `1 << 31` vaut **−2147483648**, pas 2147483648. Un drapeau posé là serait négatif côté web et positif côté Swift (`UInt32`) — divergence silencieuse entre les deux sources de vérité jumelles.
+
+### 2 bis. 2 — Défaut : deux systèmes de particules morts
+
+`ExplodeOverlay` (`:256`) et `WaooOverlay` (`:283`) sont déclarés et jamais montés — seul l'`.overlay` de `ConfettiOverlay` / `FireworksOverlay` est branché (`:460-463`). `explode` et `waoo` jouent donc leur transform (`ExplodeEffect`, `WaooEffect`) mais **leurs particules ne s'exécutent jamais**.
+
+**À trancher, pas à deviner** : soit les deux overlays sont branchés (l'effet devient ce qu'il prétend être), soit ils sont supprimés (le transform seul est l'effet assumé). Laisser du code de particules non monté est la troisième option, et c'est la seule qui soit fausse — elle fait croire à une capacité qui n'existe pas.
+
+### 2 bis. 3 — Extension du périmètre de WS-12
+
+S'ajoutent aux critères d'acceptation de §2.3 :
+
+7. **Parité de rendu des dix drapeaux** entre rangée plate et bulle — un test par drapeau, pas un test global. C'est ce qui aurait attrapé les deux overlays morts.
+8. **Décision tracée sur `explode` / `waoo`** : overlays branchés ou supprimés, avec le test correspondant.
+
+**Hors périmètre WS-12, à ouvrir séparément — le 4ᵉ axe `interface` (bits 24-30).** Il n'est pas un simple ajout de bits : un effet plein écran est **imposé par l'expéditeur à l'écran du destinataire**. Trois règles conditionnent son ouverture, et elles relèvent d'une décision produit, pas d'implémentation :
+- le `reduceMotion` du **destinataire** l'emporte toujours sur l'intention de l'expéditeur ;
+- un effet d'interface ne doit jamais masquer le contenu ni bloquer l'interaction ;
+- la règle doit naître **jumelée** (`MessageEffectPlan` Swift ↔ `resolveMessageEffectPlan` TS), sans quoi un message pétillerait sur iPhone et resterait inerte dans le navigateur.
+
 ## 3. Le formatage de texte : non livrable, et pourquoi
 
 §6.4 du contrat décline le formatage sur trois affirmations. **Les trois sont vérifiées et exactes** :
