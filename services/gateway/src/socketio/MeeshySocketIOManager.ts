@@ -95,6 +95,7 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
   if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
   if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
   if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
+  if (eventType === 'translation') return SERVER_EVENTS.MESSAGE_TRANSLATION;
   if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
   if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
   return SERVER_EVENTS.MESSAGE_NEW;
@@ -1550,6 +1551,33 @@ export class MeeshySocketIOManager {
         
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
+
+        // Troisième audience, la seule que rien ne servait : les participants
+        // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des
+        // sockets connectées, et le `message:new` mis en file à l'ENVOI porte
+        // `translations: []` — la traduction atterrit une seconde plus tard, par
+        // ZMQ. Sans cette entrée, le message rejoué au reconnect reste
+        // définitivement dans la langue de l'expéditeur : aucun client ne
+        // refetch spontanément. Le Prisme devenait fonction de la CONNECTIVITÉ
+        // du lecteur — exactement le défaut que `emitAttachmentUpdated` ferme
+        // pour la transcription d'une note vocale, ici pour le texte.
+        //
+        // Aucun acteur à exclure : NLLB n'est pas une personne, et l'auteur du
+        // message est précisément un participant dont la copie ne porte aucune
+        // traduction à l'envoi.
+        //
+        // `dedupKey` scopé à la LANGUE CIBLE : un message se traduit vers autant
+        // de langues que la conversation compte de langues de lecture, et
+        // l'identité de dédup par défaut (messageId, eventType) les écraserait
+        // l'une après l'autre — le lecteur hors ligne ne convergerait que sur la
+        // dernière arrivée.
+        await this._enqueueForOfflineParticipants({
+          conversationId: normalizedId,
+          eventType: 'translation',
+          messageId: result.messageId,
+          payload: translationData as unknown as Record<string, unknown>,
+          dedupKey: `${result.messageId}:${targetLanguage}`,
+        });
 
         // `message:translation` ne porte QUE la room de conversation. Un lecteur
         // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu
