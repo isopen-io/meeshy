@@ -102,6 +102,38 @@
   .filecard b, .linkcard b { font-size: 12.5px; display: block; }
   .filecard span, .linkcard span { font-size: 10.5px; color: var(--muted); }
 
+  /* focal v3 : perspective continue au défilement */
+  .msg.cur { background: var(--soft); border-radius: 16px; margin: 4px 8px; padding: 8px 12px; }
+  .msg.cur .txt { font-size: 16.5px; line-height: 1.45; }
+  .agent { margin: 8px 0 4px 28px; border: 1.5px dashed #E05252; border-radius: 14px; padding: 7px 12px; font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; color: var(--muted); max-width: 88%; }
+  .agent .spark { color: #E05252; font-weight: 700; }
+  .agent button { border: none; background: #E05252; color: #fff; border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .densbtn { flex: none !important; width: 42px; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 999px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .densbtn[aria-pressed="true"] { border-color: #C9962B; color: #C9962B; background: var(--soft); }
+  .screen.script .msg { transform: none !important; opacity: 1 !important; }
+  .screen.script .msg.cur { background: none; margin: 0; padding: 5px 18px; }
+  .screen.script .msg.cur .txt { font-size: 14.5px; }
+  .screen.script .daysep, .screen.script .pont { transform: none !important; opacity: 1 !important; }
+
+  /* zoom sémantique entre lentilles */
+  @media (prefers-reduced-motion: no-preference) {
+    .screen.zoomin { animation: zi 0.3s ease; }
+    .screen.zoomout { animation: zo 0.3s ease; }
+  }
+  @keyframes zi { from { transform: scale(0.93); opacity: 0.35; } }
+  @keyframes zo { from { transform: scale(1.07); opacity: 0.35; } }
+
+  /* bulle in situ de la rivière */
+  .rivsvgwrap { position: relative; }
+  .nbubble { position: absolute; width: 232px; background: var(--surface); border: 1.5px solid var(--bc); border-radius: 14px; padding: 10px 13px; box-shadow: 0 12px 30px rgba(0,0,0,0.18); z-index: 6; }
+  @media (prefers-reduced-motion: no-preference) { .nbubble { animation: pop 0.2s ease; } }
+  @keyframes pop { from { transform: scale(0.35); opacity: 0; } }
+  .nbubble .nb-who { font-size: 11px; font-weight: 700; color: var(--bc); }
+  .nbubble .nb-x { font-size: 12.5px; margin: 4px 0 2px; }
+  .nbubble small { font-size: 10px; color: var(--muted); font-weight: 400; }
+  .nbubble button { border: 1.5px solid var(--bc); color: var(--bc); background: none; border-radius: 999px; padding: 4px 11px; font-size: 11.5px; cursor: pointer; font-family: inherit; margin-top: 5px; }
+  .rivhint { font-size: 11px; color: var(--muted); padding: 10px 18px 16px; text-align: center; }
+
   /* résumé */
   .rv { padding: 16px; }
   .statecard { border: 2px solid #3E93CF; border-radius: 18px; background: var(--soft); padding: 16px 18px; }
@@ -236,17 +268,18 @@
           <button role="tab" id="tab-focal" aria-selected="true" style="--tc:#E05252" onclick="showTab('focal')"><i></i>Focal</button>
           <button role="tab" id="tab-resume" aria-selected="false" style="--tc:#3E93CF" onclick="showTab('resume')"><i></i>Résumé</button>
           <button role="tab" id="tab-riviere" aria-selected="false" style="--tc:#5A6FD6" onclick="showTab('riviere')"><i></i>Rivière</button>
+          <button id="densbtn" class="densbtn" aria-pressed="false" title="Densité de lecture — basculer Focal ⇄ Script (dans l’app : pincement horizontal ou appui sur la Lentille)">Aa</button>
         </div>
         <div class="screen" id="screen"></div>
       </div>
-      <p class="demo-note">La Scène n’est pas dans cette maquette&nbsp;: c’est une couche d’appel, elle se juge en vocal (voir volume 2). · Badge 🌐 = message traduit, cliquer affiche la V.O. · Dans « Résumé », touchez un visage de la rampe puis répondez&nbsp;: votre réponse <b>retombe dans le vrai fil Focal</b>.</p>
+      <p class="demo-note"><b>Focal</b>&nbsp;: faites défiler — la mise au point suit le doigt, les messages <b>grandissent en approchant du présent</b> et rapetissent en s’éloignant&nbsp;; le message net porte la carte. Le bouton <b>Aa</b> bascule vers la liste classique (config « Script » — dans l’app&nbsp;: pincement horizontal ou appui sur la Lentille). · <b>Rivière</b>&nbsp;: aucun texte visible — touchez un nœud, le message s’ouvre <b>sur place</b> en bulle. · <b>Résumé</b>&nbsp;: touchez un visage badgé, répondez&nbsp;: la réponse <b>retombe dans le vrai fil</b>. · Changer de lentille joue le zoom sémantique (fondu d’échelle). · Badge 🌐 = traduit, tap = V.O. · La Scène (couche d’appel) se juge en vocal, voir vol. 2.</p>
     </div>
     <div class="notes-side">
       <h3 style="font-size:19px; margin-bottom:10px;">Ce que chaque lentille doit prouver ici</h3>
       <div class="checklist" style="margin-top:6px;">
-        <div style="--qc:#E05252"><b>Focal.</b> À 100 messages, le fondu du passé doit <i>aider</i> (l’œil tombe toujours sur le présent) sans fatiguer au scroll. Le carrousel, les vocaux et le PDF doivent vivre dans le fil sans le casser. Le pont ✦ doit suffire pour sauter 17 messages sans angoisse.</div>
+        <div style="--qc:#E05252"><b>Focal.</b> Le défilement <i>est</i> la mise au point&nbsp;: en remontant, chaque message ancien reprend la pleine taille à son tour, puis rapetisse — on redécouvre le passé sans jamais perdre l’échelle du présent. À juger&nbsp;: l’effet aide-t-il la lecture à 100 messages, et le pont ✦ suffit-il pour sauter 17 non-lus ? La sortie de secours est là&nbsp;: <b>Aa</b> = config Script (liste classique), un geste, réversible.</div>
         <div style="--qc:#3E93CF"><b>Résumé Vivant.</b> Les 4 lignes d’état doivent être <i>crues</i> — donc vérifiables (les épisodes s’ouvrent sur les vrais messages). La rampe doit permettre de répondre à Sarah en moins de 5 secondes, sans jamais voir les 98 autres messages.</div>
-        <div style="--qc:#5A6FD6"><b>Rivière (le procès).</b> 45 nœuds réels&nbsp;: est-ce qu’on <i>voit</i> les deux questions qui vous visent ? Est-ce que « suivre Mia » raconte quelque chose que Focal ne dit pas ? Si la réponse est non des deux fois — on coupe, et la Rampe hérite du travail.</div>
+        <div style="--qc:#5A6FD6"><b>Rivière (le procès).</b> La rivière reste muette — que des nœuds, zéro texte. Le message ne se lit qu’en touchant son nœud&nbsp;: il s’ouvre <b>sur place</b>, en bulle ancrée. À juger sur 53 nœuds&nbsp;: voit-on les deux questions qui vous visent ? « Suivre Mia » raconte-t-il ce que Focal ne dit pas ? Deux non — on coupe, la Rampe hérite.</div>
       </div>
       <h3 style="font-size:19px; margin:26px 0 10px;">Après ce prototype</h3>
       <p style="font-size:14.5px; max-width:58ch; margin:0;">Si le verdict tient&nbsp;: on fige <b>Focal + Résumé Vivant (+ Scène)</b>, on branche les vraies données (mêmes structures&nbsp;: <code>messages</code>, <code>MessageTranslation[]</code>, épisodes/sujets par l’observer), et la Rivière ne rejoint la Lentille que si elle gagne son procès ici. Prochain volume&nbsp;: la spec SwiftUI de Focal (le composant liste + effet de focale + visionneuse Cartes).</p>
@@ -424,33 +457,46 @@ function msgHtml(m, prev, compact) {
   return h;
 }
 
-/* ---------- FOCAL ---------- */
+/* ---------- FOCAL v3 : le défilement fait la mise au point ---------- */
+let focalDensity = "focal"; // "focal" (perspective) | "script" (liste classique)
 function renderFocal() {
   let h = "";
   let prev = null;
   M.forEach(m => {
     if (!prev || prev.e !== m.e) {
       h += `<div class="daysep"><span>${EPS[m.e].d} — ${EPS[m.e].t}</span></div>`;
-      if (m.e === 4) h += `<div class="pont"><b>✦ Pont</b> — pendant ton absence (17 messages)&nbsp;: menus fixés, liste de courses dans l’étagère, météo ☀️ confirmée. <b>2 questions t’attendent</b> (Sarah, Karim).</div>`;
+      if (m.e === 4) h += `<div class="pont"><b>✦ Pont</b> — pendant ton absence&nbsp;: menus fixés, liste dans l’étagère, météo ☀️. <b>2 questions t’attendent.</b></div>`;
     }
     h += msgHtml(m, prev);
+    if (m.men && PENDING[m.i]) {
+      const sugg = m.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !";
+      h += `<div class="agent"><span class="spark">✦</span> suggestion&nbsp;: <button data-agentreply="${m.i}">« ${sugg} »</button></div>`;
+    }
     prev = m;
   });
-  h += `<div style="height:26px"></div>`;
+  h += `<div style="height:30px"></div>`;
   return h;
 }
-function focalEffect(scr) {
-  const msgs = scr.querySelectorAll(".msg, .daysep, .pont");
+function perspective(scr) {
+  if (focalDensity === "script") return;
   const rect = scr.getBoundingClientRect();
-  const focusY = rect.bottom - 150;
-  msgs.forEach(el => {
+  const focusY = rect.bottom - 140;
+  let curEl = null, curDist = Infinity;
+  scr.querySelectorAll(".msg, .daysep, .pont, .agent").forEach(el => {
     const r = el.getBoundingClientRect();
-    const d = Math.max(0, focusY - (r.top + r.height / 2));
-    const f = Math.min(1, d / 620);
-    el.style.opacity = String(1 - 0.62 * f);
-    el.style.transform = `scale(${1 - 0.1 * f})`;
-    el.style.transformOrigin = "center bottom";
+    const mid = r.top + r.height / 2;
+    const d = Math.max(0, focusY - mid);
+    const f = Math.min(1, d / 520);
+    el.style.opacity = String(1 - 0.78 * f);
+    el.style.transform = `scale(${1 - 0.38 * f})`;
+    el.style.transformOrigin = "18% bottom";
+    if (el.classList.contains("msg")) {
+      const dist = Math.abs(mid - focusY);
+      if (mid <= focusY + 90 && dist < curDist) { curDist = dist; curEl = el; }
+    }
   });
+  scr.querySelectorAll(".msg.cur").forEach(el => { if (el !== curEl) el.classList.remove("cur"); });
+  if (curEl) curEl.classList.add("cur");
 }
 
 /* ---------- RÉSUMÉ ---------- */
@@ -505,16 +551,8 @@ function openPerson(k) {
   panel.querySelector(".close").onclick = () => panel.remove();
   const send = panel.querySelector("#ppsend");
   if (send) send.onclick = () => {
-    const val = panel.querySelector("#ppin").value.trim() || (k === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !");
-    M.push({ i: M.length + 1 + 100, a: "toi", e: 4, r: target.i, x: val });
-    delete PENDING[target.i];
-    showTab("focal");
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.textContent = "Répondu dans le fil ✓";
-    document.querySelector(".phone").style.position = "relative";
-    document.querySelector(".phone").appendChild(toast);
-    setTimeout(() => toast.remove(), 2200);
+    const val = panel.querySelector("#ppin").value.trim();
+    replyInFlow(target.i, val || null);
   };
 }
 
@@ -537,30 +575,53 @@ function riverLayout() {
 function renderRiviere() {
   const { lanes, rows, W, H } = riverLayout();
   const chips = lanes.map(k => `<button style="--fc:${A[k].c}" aria-pressed="${follow === k}" data-follow="${k}"><i></i>${A[k].n.split(" ")[0]}</button>`).join("");
-  const sel = selected ? byId(selected) : null;
-  const selTarget = sel && sel.r ? byId(sel.r) : null;
-  const readout = sel
-    ? `<div class="from" style="color:${A[sel.a].c}">${A[sel.a].n}${selTarget ? " → " + (selTarget.a === "toi" ? "toi" : A[selTarget.a].n) : sel.men ? " → toi" : ""} · ${EPS[sel.e].d}</div>
-       <div class="body">${sel.m && sel.m.startsWith("voice") ? "🎙 « " + esc(sel.x) + " »" : esc(sel.x)}${sel.lg ? ` <span style="font-size:10px;color:var(--muted)">🌐 ${sel.lg}→🇫🇷</span>` : ""}</div>
-       ${sel.men && PENDING[sel.i] ? `<button data-rreply="${sel.i}">Répondre à ${A[sel.a].n.split(" ")[0]} →</button>` : `<div class="hint">réponse pré-adressée dispo sur les nœuds cerclés (= pour toi)</div>`}`
-    : `<div class="hint">Touchez un nœud pour lire son message · cercle bleu = il t’est adressé · point blanc = média · les courbes sont des réponses.</div>`;
   return `<div class="riv">
       <div class="head">Mercredi → vendredi · ${rows.length} messages · 7 fils ${follow ? `· <b>suivi : ${A[follow].n}</b>` : ""}</div>
       <div class="follow"><button aria-pressed="${!follow}" data-follow="" style="--fc:var(--muted)"><i></i>Tous</button>${chips}</div>
       <div class="rivsvgwrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Rivière des messages : un fil vertical par personne, les courbes relient les réponses, les nœuds cerclés vous sont adressés"></svg></div>
-    </div><div class="readout">${readout}</div>`;
+      <div class="rivhint">Aucun texte dans la rivière — touchez un nœud, le message s’ouvre <b>sur place</b> en bulle. Cercle bleu = pour toi · point blanc = média · les courbes sont des réponses.</div>
+    </div>`;
+}
+function closeBubble() { document.querySelectorAll(".nbubble").forEach(b => b.remove()); selected = null; }
+function openBubble(id) {
+  closeBubble();
+  const m = byId(id); if (!m) return;
+  const wrap = document.querySelector(".rivsvgwrap");
+  const svgEl = wrap.querySelector("svg");
+  const { laneX, yOf, W } = riverLayout();
+  if (laneX[m.a] === undefined || yOf[m.i] === undefined) return;
+  const scale = svgEl.getBoundingClientRect().width / W;
+  const px = laneX[m.a] * scale, py = yOf[m.i] * scale;
+  const left = Math.max(6, Math.min(px - 30, wrap.clientWidth - 244));
+  const o = m.r ? byId(m.r) : null;
+  const b = document.createElement("div");
+  b.className = "nbubble";
+  b.style.setProperty("--bc", A[m.a].c);
+  b.style.left = left + "px";
+  b.style.top = (py + 13) + "px";
+  b.style.transformOrigin = (px - left) + "px -10px";
+  b.innerHTML = `<div class="nb-who">${A[m.a].n}${o ? " → " + (o.a === "toi" ? "toi" : A[o.a].n) : m.men ? " → toi" : ""} · <small>${EPS[m.e].d}</small></div>
+    <div class="nb-x">${m.m && m.m.startsWith("voice") ? "🎙 « " + esc(m.x) + " »" : esc(m.x)}${m.lg ? ` <small>🌐 ${m.lg}→🇫🇷</small>` : ""}</div>
+    ${m.men && PENDING[m.i] ? `<button data-rreply="${m.i}">Répondre à ${A[m.a].n.split(" ")[0]} →</button>` : ""}`;
+  wrap.appendChild(b);
+  selected = id;
 }
 
 /* ---------- shell ---------- */
-let current = "focal";
+let current = null;
 function showTab(t) {
+  const prevT = current;
   current = t;
   ["focal", "resume", "riviere"].forEach(k => document.getElementById("tab-" + k).setAttribute("aria-selected", String(k === t)));
   const scr = document.getElementById("screen");
+  scr.classList.remove("zoomin", "zoomout", "script");
+  const dens = document.getElementById("densbtn");
+  if (dens) dens.style.visibility = t === "focal" ? "visible" : "hidden";
   if (t === "focal") {
+    if (focalDensity === "script") scr.classList.add("script");
     scr.innerHTML = renderFocal();
     scr.scrollTop = scr.scrollHeight;
-    focalEffect(scr);
+    perspective(scr);
   } else if (t === "resume") {
     scr.innerHTML = renderResume();
     scr.scrollTop = 0;
@@ -569,6 +630,25 @@ function showTab(t) {
     scr.querySelector("svg").innerHTML = buildRiverInner();
     scr.scrollTop = 0;
   }
+  const rank = { resume: 0, riviere: 1, focal: 2 };
+  if (prevT && prevT !== t) {
+    void scr.offsetWidth;
+    scr.classList.add(rank[t] > rank[prevT] ? "zoomin" : "zoomout");
+  }
+}
+function replyInFlow(targetId, text) {
+  const target = byId(targetId);
+  const val = text || (target.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !");
+  const nid = 200 + M.filter(m => m.i > 200).length + 1;
+  M.push({ i: nid, a: "toi", e: 4, r: targetId, x: val });
+  delete PENDING[targetId];
+  showTab("focal");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = "Répondu dans le fil ✓";
+  document.querySelector(".phone").style.position = "relative";
+  document.querySelector(".phone").appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
 }
 function buildRiverInner() {
   const { lanes, laneX, rows, y0, H, yOf } = riverLayout();
@@ -604,8 +684,14 @@ function buildRiverInner() {
 }
 
 document.getElementById("screen").addEventListener("scroll", () => {
-  if (current === "focal") requestAnimationFrame(() => focalEffect(document.getElementById("screen")));
+  if (current === "focal") requestAnimationFrame(() => perspective(document.getElementById("screen")));
 }, { passive: true });
+
+document.getElementById("densbtn").addEventListener("click", () => {
+  focalDensity = focalDensity === "focal" ? "script" : "focal";
+  document.getElementById("densbtn").setAttribute("aria-pressed", String(focalDensity === "script"));
+  showTab("focal");
+});
 
 document.getElementById("screen").addEventListener("click", e => {
   const vo = e.target.closest(".prism");
@@ -629,22 +715,13 @@ document.getElementById("screen").addEventListener("click", e => {
     showTab("riviere");
     return;
   }
-  const node = e.target.closest("[data-node]");
-  if (node) { selected = Number(node.getAttribute("data-node")); showTab("riviere"); return; }
+  const ar = e.target.closest("[data-agentreply]");
+  if (ar) { replyInFlow(Number(ar.getAttribute("data-agentreply"))); return; }
   const rr = e.target.closest("[data-rreply]");
-  if (rr) {
-    const target = byId(Number(rr.getAttribute("data-rreply")));
-    M.push({ i: M.length + 1 + 100, a: "toi", e: 4, r: target.i, x: target.a === "sarah" ? "Retirés hier, c’est bon 👍" : "Oui, dans le coffre !" });
-    delete PENDING[target.i];
-    selected = null;
-    showTab("focal");
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.textContent = "Répondu dans le fil ✓";
-    document.querySelector(".phone").style.position = "relative";
-    document.querySelector(".phone").appendChild(toast);
-    setTimeout(() => toast.remove(), 2200);
-  }
+  if (rr) { const id = Number(rr.getAttribute("data-rreply")); closeBubble(); replyInFlow(id); return; }
+  const node = e.target.closest("[data-node]");
+  if (node) { openBubble(Number(node.getAttribute("data-node"))); return; }
+  if (current === "riviere" && !e.target.closest(".nbubble")) closeBubble();
 });
 
 showTab("focal");
