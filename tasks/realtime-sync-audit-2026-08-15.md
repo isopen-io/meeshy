@@ -938,3 +938,130 @@ un état qui n'est pas celui que la room diffuse ensuite.
   de `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` / `PRUNE_STALE_LUA` reste vérifiable
   seulement par contrat. Un `ioredis-mock` avec support `eval`, ou un service
   Redis en CI, rendrait ces trois scripts testables comportementalement.
+
+---
+
+# Cycle 27 (2026-08-15) — l'entrée du client ne fixait pas que l'adresse, mais l'AUDIENCE
+
+Passe suivante de la routine « amélioration continue temps réel ». Ce cycle ne
+change pas de question : il **prend délibérément le candidat que le cycle 26
+avait consigné avec sa preuve** plutôt que de le redécouvrir par le symptôme —
+`DELETE /posts/:postId/comments/:commentId`, troisième instance de la classe
+« autorité de l'entrée », laissée de côté parce qu'elle n'était pas gratuite.
+
+**Conclusion : le défaut est réel, corrigé, testé. La famille des commentaires
+est désormais CLOSE** — les six chemins du fil dérivent leur adresse du serveur.
+
+## Ce que le cycle 26 avait laissé à décider
+
+Trois points, tous tranchés ici :
+
+| Question ouverte | Décision |
+|---|---|
+| La vérité n'est pas en scope (`deleteComment` ne rend pas `postId`) | Élargir le RETOUR du service — il tient déjà `comment.postId` pour décrémenter `commentCount`. Zéro requête ajoutée. |
+| Le rejeu idempotent (`onDuplicate → { id }`) n'a aucune ligne vivante à relire | La ligne **survit** au soft-delete : `deletedAt` la marque, ne l'efface pas. `postId` est donc relisible ; le sous-arbre, masqué par `NOT_DELETED`, ne l'est pas. Repli explicite. |
+| Que faire si aucune adresse serveur n'est dérivable | **Ne rien annoncer.** Se taire et diffuser-à-tort laissent tous deux la ligne à l'écran ; seul le second pollue un fil étranger. |
+
+## Le défaut — trois décisions prises par un paramètre d'URL
+
+La route supprime par `commentId` seul (le service vérifie la propriété du
+commentaire — l'autorisation, elle, était juste), puis relisait un post par le
+`:postId` du CHEMIN et s'en servait pour :
+
+1. `postId` du payload — la **clé de cache** client (`patchCommentInPostCaches`
+   web, `FeedPersistenceActor` iOS) ;
+2. `commentCount` — un compteur lu sur un post que la suppression n'a pas
+   décrémenté ;
+3. `authorId` / `visibility` / `visibilityUserIds` — passés à
+   `broadcastCommentDeleted`, donc **la liste de diffusion elle-même**
+   (`getVisibilityFilteredRecipients` + `commentBroadcastRooms`).
+
+**C'est en quoi ce site est PIRE que D1 du cycle 26.** Là-bas, l'entrée client
+nommait une room : l'événement partait au mauvais endroit. Ici la même valeur
+CALCULE l'audience — l'appelant ne choisissait pas seulement *où*, mais *à qui*,
+en nommant un post dont l'ACL lui convenait.
+
+**Volet fonctionnel — les reposts, le cas non-malveillant.** Un repost simple
+n'a pas de fil propre : `resolveInteractionTarget` écrit ses commentaires sur la
+RACINE, et `handleJoinPost` y redirige ses lecteurs. Le client, lui, envoie l'id
+de la carte AFFICHÉE.
+
+```
+Le fil du repost R (racine P) est ouvert chez Alice et Bob.
+  join     → tous deux entrent dans post:P        (redirection)
+Alice supprime son commentaire C (C.postId = P).
+  route    → DELETE /posts/R/comments/C
+           → service : soft-delete C + descendants, P.commentCount--
+           → post lu par R, broadcast vers post:R  ← room VIDE
+  Bob      → garde la ligne supprimée à l'écran, définitivement
+```
+
+Aucun refetch ne l'en débarrasse : `getComments` filtre `parentId: null`, donc
+un sous-arbre supprimé ne revient par aucune lecture. Muet des deux côtés —
+200 OK, UI optimiste correcte chez Alice.
+
+**Volet intégrité.** Le `:postId` n'était comparé à rien : l'audience d'un post
+PUBLIC arbitraire recevait la suppression d'un commentaire vivant sur un post
+`PRIVATE`, avec le `commentCount` du post nommé — soit l'écriture d'un compteur
+faux dans le cache d'un fil étranger.
+
+## Correctif
+
+- `PostCommentService.deleteComment` rend `postId: comment.postId` — la ligne
+  est déjà chargée et sert deux lignes plus haut au décrément. Zéro requête.
+- La route dérive `commentPostId` du RÉSULTAT : lecture d'ACL, payload,
+  `commentCount` et audience du fan-out en découlent tous.
+- `onDuplicate` relit `postComment.findUnique({ id }, select: { postId })` — la
+  ligne soft-supprimée porte encore son post.
+- Adresse absente ⇒ **aucune diffusion** (repli explicite, jamais `undefined`).
+- Le `:postId` du chemin n'est plus lu du tout par ce handler.
+
+## Sondes rendues vides — la famille des commentaires est close
+
+Balayage des SIX chemins du fil, après le correctif (méthode du cycle 26 : ne
+jamais s'arrêter au site qui a déclenché la sonde) :
+
+| Chemin | Adresse / audience | Verdict |
+|---|---|---|
+| `GET /posts/:postId/comments/:commentId/replies` | `loadCommentPostAcl(commentId)` | ✅ (porte même la règle en commentaire) |
+| `POST /posts/:postId/comments` | `resolveInteractionTarget` → `targetPostId` | ✅ |
+| `PATCH …/comments/:commentId` | `comment.postId` (résultat du service) | ✅ — le jumeau CORRECT du défaut |
+| `POST …/comments/:commentId/translate` | `loadCommentPostAcl(commentId)` | ✅ |
+| `POST` / `DELETE …/comments/:commentId/like` | `thread.postId` | ✅ (corrigé au cycle 26, D1 bis) |
+| `DELETE …/comments/:commentId` | `:postId` du chemin | ❌ **ce cycle** |
+
+Un seul des six divergeait. Vérifié aussi, vert : `PostTranslationService`
+diffuse `comment:translation-updated` depuis `comment.postId` (l. 439–450), et
+`admin/agent.ts` est le seul autre couple d'ids d'URL du service — hors famille.
+
+**Corollaire de doublon, récidive exacte du cycle 26.** Le mock de
+`comments.test.ts` déclarait `deleteComment → { postId: 'post-001' }` pendant
+que les assertions attendaient `postId: POST_ID` (`507f…9022`) : le monde
+impossible où le commentaire vit sur un post et son annonce part vers un autre,
+promu au rang de spécification. Doubles réalignés sur un monde possible ; les
+cas où les deux ids DIVERGENT sont désormais déclarés explicitement, un par un.
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges avant correctif (1 contrat de service,
+      3 adresse/audience/compteur, 2 rejeu)
+- [x] Suites voisines : 21 suites / 793 tests verts
+- [x] Suite gateway complète : voir CHANGELOG (`### 🐛 Fixed`)
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 259
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+
+## Candidat pour le cycle suivant
+
+La classe « autorité de l'entrée » est épuisée sur les posts/commentaires. La
+question NEUVE à porter au cycle 28, jamais posée par les cycles 21–27 : **le
+MOMENT de la diffusion par rapport à la durabilité du fait** — un événement émis
+avant que son écriture ne soit committée laisse les clients tenir un fait que le
+serveur peut encore nier, et rien ne le rétracte. Recenser les émetteurs qui
+diffusent depuis l'intérieur d'une transaction, ou avant le `await` qui persiste.

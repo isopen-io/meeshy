@@ -671,11 +671,19 @@ export function registerCommentRoutes(
       }
 
       const { commentId } = request.params;
-      const { postId } = request.params;
+      // Le `:postId` du chemin n'est LU par rien ici : la cible est adressée
+      // par `commentId` seul, et l'annonce l'est par le post que le service
+      // rend. Cf. `GET .../replies`, qui pose la même règle pour la lecture.
+      //
       // Idempotent via clientMutationId. The MutationLog row records
       // the deleted comment id so replays are observably consistent
       // (broadcast side-effect fires exactly once).
-      const result = await withMutationLog({
+      type DeleteOutcome = {
+        readonly postId?: string;
+        readonly deletedCommentIds?: string[];
+        readonly parentId?: string | null;
+      };
+      const result = await withMutationLog<DeleteOutcome>({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -683,9 +691,19 @@ export function registerCommentRoutes(
         op: async () => {
           const res = await commentService.deleteComment(commentId, authContext.registeredUser.id);
           if (!res) throw new Error('COMMENT_NOT_FOUND');
-          return { id: commentId, ...res } as { id: string } & typeof res;
+          return { id: commentId, ...res };
         },
-        onDuplicate: async () => ({ id: commentId }) as any,
+        // Le rejeu n'exécute pas le service : sans cette relecture, l'annonce
+        // n'aurait plus d'adresse dérivée du serveur. Le soft-delete n'efface
+        // pas la ligne — `deletedAt` la marque — donc `postId` reste lisible,
+        // contrairement au sous-arbre que `NOT_DELETED` masque désormais.
+        onDuplicate: async () => {
+          const row = await fastify.prisma?.postComment?.findUnique({
+            where: { id: commentId },
+            select: { postId: true },
+          });
+          return { id: commentId, ...(row?.postId ? { postId: row.postId } : {}) };
+        },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'COMMENT_NOT_FOUND') return null;
         throw err;
@@ -695,10 +713,22 @@ export function registerCommentRoutes(
       }
 
       // Broadcast comment deleted via Socket.IO
+      //
+      // Le post vient du COMMENTAIRE, jamais du chemin. Il ne porte pas que
+      // l'adresse : `authorId`, `visibility` et `visibilityUserIds` sont
+      // l'AUDIENCE du fan-out, et `commentCount` le compteur annoncé. Les tirer
+      // du `:postId` de l'URL laissait l'appelant choisir à qui sa propre
+      // suppression était annoncée — et, sur un repost simple, l'annonçait à
+      // une room où les lecteurs du fil ne sont pas.
+      //
+      // Adresse introuvable (ligne non relisable au rejeu) → aucune annonce.
+      // Se taire laisse la ligne à l'écran ; l'annoncer à une audience nommée
+      // par l'appelant l'y laisse AUSSI, en polluant un fil étranger.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
+      const commentPostId = result.postId;
+      if (socialEvents && commentPostId) {
         const post = await fastify.prisma?.post?.findUnique({
-          where: { id: postId },
+          where: { id: commentPostId },
           select: { authorId: true, commentCount: true, visibility: true, visibilityUserIds: true },
         });
         if (post) {
@@ -710,8 +740,10 @@ export function registerCommentRoutes(
           // supprimé).
           //
           // Repli sur `[commentId]` : le rejeu idempotent (`onDuplicate`) ne
-          // rend qu'un `{ id }` — la suppression a déjà eu lieu et son
-          // sous-arbre n'est plus reconstructible par une lecture vivante. Le
+          // rend que l'id et l'ADRESSE — la suppression a déjà eu lieu et son
+          // sous-arbre n'est plus reconstructible par une lecture vivante,
+          // `NOT_DELETED` le masquant désormais (le `postId`, lui, survit sur
+          // la ligne soft-supprimée : c'est ce qui permet de l'y relire). Le
           // repli reproduit exactement le comportement d'avant ce correctif ;
           // une liste vide, elle, ferait survivre la cible elle-même.
           const deletedCommentIds = result.deletedCommentIds ?? [commentId];
@@ -723,7 +755,7 @@ export function registerCommentRoutes(
           // propre : « la cible était un commentaire racine, rien à
           // décrémenter ».
           socialEvents.broadcastCommentDeleted({
-            postId,
+            postId: commentPostId,
             commentId,
             deletedCommentIds,
             ...(result.parentId !== undefined ? { parentId: result.parentId } : {}),
