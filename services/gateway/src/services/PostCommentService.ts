@@ -544,7 +544,17 @@ export class PostCommentService {
     // ci-dessus ne touche que le parent DIRECT, et l'affordance « N réponses »
     // qui l'affiche ne se voit que fil REPLIÉ — donc précisément quand la
     // cible n'est PAS en cache et ne peut pas livrer son propre parent.
-    return { success: true as const, deletedCommentIds, parentId: comment.parentId ?? null };
+    // `postId` remonte pour ADRESSER l'annonce. C'est le post que le décrément
+    // ci-dessus vient de toucher, et la route n'a aucun autre moyen de le
+    // connaître : le `:postId` de son chemin est choisi par l'appelant, et sur
+    // un repost simple il nomme la carte affichée là où le commentaire vit sur
+    // la RACINE (`resolveInteractionTarget`). Une seule vérité, déjà en main.
+    return {
+      success: true as const,
+      postId: comment.postId,
+      deletedCommentIds,
+      parentId: comment.parentId ?? null,
+    };
   }
 
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {

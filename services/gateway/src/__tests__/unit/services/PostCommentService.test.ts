@@ -672,6 +672,27 @@ describe('PostCommentService.deleteComment — les ids retirés remontent à l\'
 
     expect(result?.deletedCommentIds).toEqual(updateMany.mock.calls[0][0].where.id.in);
   });
+
+  /**
+   * Le post du COMMENTAIRE remonte aussi, pour la même raison que la liste :
+   * c'est la seule chose que l'appelant ne peut pas redériver sans une lecture
+   * supplémentaire — après le soft-delete, `NOT_DELETED` masque la ligne. La
+   * route DELETE n'avait donc, pour adresser son annonce, que le `:postId` du
+   * chemin, que le client choisit. Le service, lui, tient déjà la vérité : il
+   * s'en sert deux lignes plus haut pour décrémenter `commentCount`.
+   */
+  it('rend le post du COMMENTAIRE — la seule adresse possible de son annonce', async () => {
+    const { prisma, postUpdate } = buildPrismaForDelete(
+      { id: 'c1', authorId: 'u1', postId: 'p-racine', parentId: null },
+    );
+    const service = new PostCommentService(prisma);
+
+    const result = await service.deleteComment('c1', 'u1');
+
+    expect(result?.postId).toBe('p-racine');
+    // Le même post que celui dont le compteur bouge : une seule vérité.
+    expect(postUpdate.mock.calls[0][0].where.id).toBe('p-racine');
+  });
 });
 
 describe('PostCommentService.addComment — media', () => {

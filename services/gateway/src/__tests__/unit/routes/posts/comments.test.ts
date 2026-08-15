@@ -16,7 +16,14 @@ const mockGetReplies = jest.fn<any>().mockResolvedValue({ items: [], hasMore: fa
 const mockAddComment = jest.fn<any>().mockResolvedValue({ id: 'comment-001', content: 'Hello', authorId: 'user-001' });
 const mockLikeComment = jest.fn<any>().mockResolvedValue({ authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 } });
 const mockUnlikeComment = jest.fn<any>().mockResolvedValue({ authorId: 'author-1', likeCount: 0, reactionSummary: {} });
-const mockDeleteComment = jest.fn<any>().mockResolvedValue({ postId: 'post-001' });
+// Le retrait rend le post DU COMMENTAIRE. Le défaut déclare donc le monde
+// nominal — celui où ce post est bien celui que l'URL nomme — et non un monde
+// impossible où les deux divergeraient sans que rien ne le dise. Les cas où ils
+// DIVERGENT (repost, id arbitraire) sont déclarés explicitement, un par un.
+const mockDeleteComment = jest.fn<any>().mockResolvedValue({
+  success: true,
+  postId: '507f1f77bcf86cd799439022',
+});
 
 jest.mock('../../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
@@ -143,7 +150,10 @@ function makeDefaultPrisma() {
       }),
     },
     postComment: {
-      findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'Nice comment', authorId: 'author-1' }),
+      // `postId` : une ligne de commentaire en porte TOUJOURS un — y compris
+      // soft-supprimée, ce qui est précisément ce que le rejeu du retrait relit
+      // pour adresser son annonce.
+      findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, postId: POST_ID, content: 'Nice comment', authorId: 'author-1' }),
     },
   });
 }
@@ -1074,9 +1084,8 @@ describe('DELETE /posts/:postId/comments/:commentId — broadcastCommentDeleted 
 // supprimé). Le fil ne se nettoyait qu'au rechargement complet de la page.
 // ────────────────────────────────────────────────────────────────────────────
 
-function buildDeleteApp(broadcastCommentDeleted: any) {
+function buildDeleteApp(broadcastCommentDeleted: any, prisma: any = makeDefaultPrisma()) {
   const delApp = Fastify({ logger: false });
-  const prisma = makeDefaultPrisma();
   delApp.decorate('prisma', prisma);
   delApp.decorate('socialEvents', {
     broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
@@ -1092,6 +1101,7 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
     const broadcast = jest.fn<any>().mockResolvedValue(undefined);
     mockDeleteComment.mockResolvedValueOnce({
       success: true,
+      postId: POST_ID,
       deletedCommentIds: [COMMENT_ID, 'reply-1', 'reply-1a'],
     });
     const app = buildDeleteApp(broadcast);
@@ -1121,7 +1131,7 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
    */
   it('se replie sur la seule cible quand le service ne rend aucune liste (rejeu)', async () => {
     const broadcast = jest.fn<any>().mockResolvedValue(undefined);
-    mockDeleteComment.mockResolvedValueOnce({ id: COMMENT_ID });
+    replayDelete();
     const app = buildDeleteApp(broadcast);
     await app.ready();
 
@@ -1146,6 +1156,7 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
     const broadcast = jest.fn<any>().mockResolvedValue(undefined);
     mockDeleteComment.mockResolvedValueOnce({
       success: true,
+      postId: POST_ID,
       deletedCommentIds: [COMMENT_ID],
       parentId: 'parent-1',
     });
@@ -1171,7 +1182,7 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
    */
   it('omet parentId (jamais null) quand le service ne le rend pas — rejeu', async () => {
     const broadcast = jest.fn<any>().mockResolvedValue(undefined);
-    mockDeleteComment.mockResolvedValueOnce({ id: COMMENT_ID });
+    replayDelete();
     const app = buildDeleteApp(broadcast);
     await app.ready();
 
@@ -1180,6 +1191,151 @@ describe('DELETE /posts/:postId/comments/:commentId — annonce du sous-arbre', 
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(broadcast.mock.calls[0][0]).not.toHaveProperty('parentId');
+    await app.close();
+  });
+});
+
+// ─── L'annonce est adressée par le COMMENTAIRE, pas par le `:postId` du chemin ─
+//
+// La route soft-supprimait par `commentId` — le service vérifie la propriété du
+// commentaire — puis relisait un post par le `:postId` de l'URL et s'en servait
+// pour TROIS choses : l'adresse du broadcast, le `commentCount` annoncé, et
+// surtout l'AUDIENCE du fan-out (`authorId`, `visibility`, `visibilityUserIds`).
+// Rien ne vérifiait que ce post était celui du commentaire.
+//
+// Cas non-malveillant, le repost simple : `resolveInteractionTarget` écrit les
+// commentaires d'un repost sur sa RACINE et `handleJoinPost` y redirige ses
+// lecteurs, tandis que le client envoie l'id de la carte AFFICHÉE. La
+// suppression partait donc vers `post:<repost>` — room vide — pendant que les
+// lecteurs, tous dans `post:<racine>`, gardaient la ligne supprimée à l'écran
+// sans aucun refetch pour l'en débarrasser.
+//
+// Cas malveillant : l'appelant CHOISISSAIT l'audience de sa propre annonce.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROOT_POST_ID = '507f1f77bcf86cd799439044';
+const ROOT_ACL = { authorId: 'root-author', visibility: 'PRIVATE', visibilityUserIds: ['friend-1'] };
+const URL_ACL = { authorId: 'url-author', visibility: 'PUBLIC', visibilityUserIds: [] };
+
+/** Deux posts distincts, deux audiences distinctes : la seule entrée qui les sépare. */
+function makeTwoPostPrisma() {
+  return withPublicAcl({
+    post: {
+      findUnique: jest.fn<any>().mockImplementation(async ({ where }: any) => (
+        where.id === ROOT_POST_ID
+          ? { ...ROOT_ACL, commentCount: 42, type: 'POST' }
+          : { ...URL_ACL, commentCount: 5, type: 'POST' }
+      )),
+    },
+    postComment: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, postId: ROOT_POST_ID }),
+    },
+  });
+}
+
+/** Rejeu idempotent RÉEL : `withMutationLog` court-circuite `op` et relit par id. */
+function replayDelete() {
+  mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(COMMENT_ID));
+}
+
+describe('DELETE /posts/:postId/comments/:commentId — adresse et audience de l\'annonce', () => {
+  it('adresse l\'annonce au post du commentaire, pas à celui de l\'URL', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true, postId: ROOT_POST_ID, deletedCommentIds: [COMMENT_ID], parentId: null,
+    });
+    const prisma = makeTwoPostPrisma();
+    const app = buildDeleteApp(broadcast, prisma);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast.mock.calls[0][0]).toEqual(expect.objectContaining({ postId: ROOT_POST_ID }));
+    expect(prisma.post.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: ROOT_POST_ID } }),
+    );
+    await app.close();
+  });
+
+  it('dérive l\'AUDIENCE du fan-out du post du commentaire', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true, postId: ROOT_POST_ID, deletedCommentIds: [COMMENT_ID], parentId: null,
+    });
+    const app = buildDeleteApp(broadcast, makeTwoPostPrisma());
+    await app.ready();
+
+    await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const [, authorId, visibility, visibilityUserIds] = broadcast.mock.calls[0];
+    expect(authorId).toBe(ROOT_ACL.authorId);
+    expect(visibility).toBe(ROOT_ACL.visibility);
+    expect(visibilityUserIds).toEqual(ROOT_ACL.visibilityUserIds);
+    await app.close();
+  });
+
+  it('annonce le commentCount du post que la suppression a décrémenté', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    mockDeleteComment.mockResolvedValueOnce({
+      success: true, postId: ROOT_POST_ID, deletedCommentIds: [COMMENT_ID], parentId: null,
+    });
+    const app = buildDeleteApp(broadcast, makeTwoPostPrisma());
+    await app.ready();
+
+    await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast.mock.calls[0][0]).toEqual(expect.objectContaining({ commentCount: 42 }));
+    await app.close();
+  });
+
+  /**
+   * Le rejeu n'exécute pas le service : son adresse doit venir d'ailleurs. Le
+   * soft-delete n'EFFACE pas la ligne — `deletedAt` la marque — donc `postId`
+   * reste lisible, contrairement au sous-arbre que `NOT_DELETED` masque.
+   */
+  it('rejeu : récupère l\'adresse sur la ligne soft-supprimée', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    replayDelete();
+    const prisma = makeTwoPostPrisma();
+    const app = buildDeleteApp(broadcast, prisma);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(prisma.postComment.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: COMMENT_ID } }),
+    );
+    expect(broadcast.mock.calls[0][0]).toEqual(expect.objectContaining({ postId: ROOT_POST_ID }));
+    await app.close();
+  });
+
+  /**
+   * Dernier repli : aucune ligne relisable. Se taire est strictement meilleur
+   * que d'annoncer à une audience que l'appelant a nommée — les deux laissent la
+   * ligne à l'écran, la seconde y ajoute la pollution d'un fil étranger.
+   */
+  it('n\'annonce rien quand aucune ligne ne peut adresser l\'annonce', async () => {
+    const broadcast = jest.fn<any>().mockResolvedValue(undefined);
+    replayDelete();
+    const prisma = withPublicAcl({
+      post: { findUnique: jest.fn<any>().mockResolvedValue({ ...URL_ACL, commentCount: 5 }) },
+      postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    });
+    const app = buildDeleteApp(broadcast, prisma);
+    await app.ready();
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(prisma.post.findUnique).not.toHaveBeenCalled();
     await app.close();
   });
 });
