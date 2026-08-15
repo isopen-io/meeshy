@@ -251,6 +251,41 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `setMentionsOnlyOptimistic flips the cached pref and queues a snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setMentionsOnlyOptimistic("c1", true)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.mentionsOnly).isTrue()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+    }
+
+    @Test
+    fun `setMentionsOnlyOptimistic is a no-op when the pref is already in the target state`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setMentionsOnlyOptimistic("c1", false)
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
     fun `setCategoryOptimistic assigns the cached category and queues a snapshot carrying it`() = runTest {
         val repo = repository(
             FakeConversationApi(

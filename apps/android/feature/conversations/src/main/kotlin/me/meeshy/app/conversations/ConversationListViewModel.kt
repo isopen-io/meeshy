@@ -326,6 +326,12 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
     }
 
+    /** Toggles the mentions-only notification state of a conversation (context menu). */
+    fun toggleMentionsOnly(id: String) {
+        val mentionsOnly = prefsOf(id)?.mentionsOnly ?: false
+        runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
+    }
+
     /** Marks a conversation read from the list (swipe action). */
     fun markRead(id: String) {
         runPrefMutation { repository.markReadOptimistic(id) }

@@ -785,6 +785,20 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun toggleMentionsOnly_flips_the_pref_and_calls_the_repository() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setMentionsOnlyOptimistic("c1", true) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.toggleMentionsOnly("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.setMentionsOnlyOptimistic("c1", true) }
+    }
+
+    @Test
     fun a_no_op_mutation_does_not_schedule_a_flush() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)),
