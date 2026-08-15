@@ -120,7 +120,7 @@ roster nominatif d'un commentaire sur un post `PRIVATE`, à partir du seul
 - [x] 4 suites de réactions : 140 verts
 - [x] Suite gateway complète : 719 suites / 17614 tests verts
 - [x] `tsc --noEmit` gateway : 0
-- [x] CHANGELOG + journal d'audit (§ Cycle 26) + leçon 257
+- [x] CHANGELOG + journal d'audit (§ Cycle 26) + leçon 258
 
 ## Revue
 
