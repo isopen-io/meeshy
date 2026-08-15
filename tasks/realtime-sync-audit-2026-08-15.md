@@ -1046,7 +1046,8 @@ cas où les deux ids DIVERGENT sont désormais déclarés explicitement, un par 
 - [x] 6 RED discriminants vus rouges avant correctif (1 contrat de service,
       3 adresse/audience/compteur, 2 rejeu)
 - [x] Suites voisines : 21 suites / 793 tests verts
-- [x] Suite gateway complète : voir CHANGELOG (`### 🐛 Fixed`)
+- [x] Suite gateway complète : **719 suites / 17620 tests verts** (17614 au
+      cycle 26 — exactement les 6 témoins neufs, aucune suite déplacée)
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + ce journal + leçon 259
 
