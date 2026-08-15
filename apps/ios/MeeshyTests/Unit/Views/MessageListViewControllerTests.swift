@@ -33,6 +33,48 @@ final class MessageListViewControllerTests: XCTestCase {
             "viewDidLoad doit forcer une synchronisation à 0, même sans nouveau message — sinon un @State SwiftUI réutilisé garde une pastille périmée")
     }
 
+    // MARK: - WS-6 (F-085) — flag off ⇒ bit-à-bit identique (contrat §WS-6)
+
+    /// `readingMode` n'est JAMAIS touché dans ce test (reste à son défaut
+    /// `.bubbles`) : `scrollToBottom` doit se comporter EXACTEMENT comme
+    /// avant F-085 — aucun crash, `focalPass` reste `.off` de bout en bout.
+    /// Store SEEDÉ (un message) pour dépasser le garde `numberOfItems > 0`
+    /// de `scrollToBottom` et exercer réellement le site 4 (§4.8).
+    func test_scrollToBottom_readingModeUntouched_focalPassStaysOff() async throws {
+        let store = try await makeSeededStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        vc.scrollToBottom(animated: false)
+
+        XCTAssertEqual(
+            vc.focalPass.rendering, .off,
+            "readingMode par défaut (.bubbles) : scrollToBottom() ne doit JAMAIS faire sortir focalPass.rendering de .off — sans quoi le flag OFF ne serait plus bit-à-bit identique à l'existant (contrat §WS-6)."
+        )
+    }
+
+    /// `scrollToMessage`/`scrollToMessageFast` conservent `.centeredVertically`
+    /// quand `readingMode != .focal` (défaut `.bubbles` ici) — pas de crash
+    /// sur une cible absente du snapshot (chemin déjà existant, non touché).
+    func test_scrollToMessage_readingModeBubbles_doesNotCrash_targetAbsent() throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        vc.scrollToMessage(localId: "does-not-exist")
+
+        XCTAssertEqual(
+            vc.focalPass.rendering, .off,
+            "readingMode par défaut (.bubbles) : scrollToMessage() ne doit jamais engager le pass (garde « flag off ⇒ zéro appel »)."
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeEmptyStore() throws -> MessageStore {
@@ -40,6 +82,53 @@ final class MessageListViewControllerTests: XCTestCase {
         try MessageDatabaseMigrations.runAll(on: pool)
         let persistence = MessagePersistenceActor(dbWriter: pool)
         return MessageStore(conversationId: "c1", persistence: persistence)
+    }
+
+    /// Un message unique, confirmé (`state: .sent`) — assez pour dépasser le
+    /// garde `collectionView.numberOfItems(inSection: 0) > 0` de
+    /// `scrollToBottom`/`scrollToMessage` (WS-6, F-085) sans le poids d'un
+    /// corpus complet. Mêmes champs que `PerfMessageRecordFactory.make`
+    /// (`MessageListPerformanceTests.swift`, `private` à son fichier — non
+    /// réutilisable ici).
+    private func makeSeededStore() async throws -> MessageStore {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        try pool.write { db in
+            let record = MessageRecord(
+                localId: "m1", serverId: "server_m1",
+                conversationId: "c1", senderId: "user_other",
+                content: "Bonjour", originalLanguage: "fr",
+                messageType: "text", messageSource: "user", contentType: "text",
+                state: .sent, retryCount: 0, lastError: nil,
+                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+                replyToId: nil, storyReplyToId: nil,
+                forwardedFromId: nil, forwardedFromConversationId: nil,
+                replyToJson: nil, forwardedFromJson: nil,
+                expiresAt: nil, effectFlags: 0,
+                maxViewOnceCount: nil, viewOnceCount: 0,
+                isEdited: false, editedAt: nil, deletedAt: nil,
+                pinnedAt: nil, pinnedBy: nil,
+                senderName: nil, senderUsername: nil,
+                senderColor: nil, senderAvatarURL: nil,
+                deliveredCount: 1, readCount: 0,
+                deliveredToAllAt: nil, readByAllAt: nil,
+                createdAt: Date(), sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: Date(),
+                attachmentsJson: nil, reactionsJson: nil,
+                reactionCount: 0, currentUserReactionsJson: nil,
+                mentionedUsersJson: nil,
+                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+                cachedLastLineWidth: nil, cachedLineCount: nil,
+                cachedTimestampInline: nil,
+                layoutVersion: 0, layoutMaxWidth: nil,
+                changeVersion: 0
+            )
+            try record.insert(db)
+        }
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let store = MessageStore(conversationId: "c1", persistence: persistence)
+        await store.loadInitial()
+        return store
     }
 
     private func makeSUT(store: MessageStore) -> MessageListViewController {
