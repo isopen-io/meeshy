@@ -1,0 +1,567 @@
+[
+  {
+    "_label": "flag-off",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": false,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "bubbles",
+      "reason": "flag-disabled"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-focal",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "focal",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "sticky"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-script",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "script",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "script",
+      "reason": "sticky"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-resume",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "resume",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "sticky"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "sticky-riviere-hors-catalogue-clampe",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "riviere",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "clamped-unavailable"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-focal-unread30-absent",
+    "input": {
+      "unreadCount": 30,
+      "lastOpenedAt": 999910000000,
+      "now": 1000000000000,
+      "stickyChoice": "focal",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "sticky"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread0-present",
+    "input": {
+      "unreadCount": 0,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "default"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread25-present-limit",
+    "input": {
+      "unreadCount": 25,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "default"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread26-present",
+    "input": {
+      "unreadCount": 26,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "unread-over-cap"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "auto-unread10-absent-24h+1ms",
+    "input": {
+      "unreadCount": 10,
+      "lastOpenedAt": 999913599999,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "stale-absence"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "auto-unread9-absent-25h",
+    "input": {
+      "unreadCount": 9,
+      "lastOpenedAt": 999910000000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "default"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread10-absent-exactly24h",
+    "input": {
+      "unreadCount": 10,
+      "lastOpenedAt": 999913600000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "default"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread10-lastOpenedAt-null",
+    "input": {
+      "unreadCount": 10,
+      "lastOpenedAt": null,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "stale-absence"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "auto-unread9-lastOpenedAt-null",
+    "input": {
+      "unreadCount": 9,
+      "lastOpenedAt": null,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "default"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread10-absent-25h",
+    "input": {
+      "unreadCount": 10,
+      "lastOpenedAt": 999910000000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "stale-absence"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "auto-unread26-invite-summary-hors-catalogue-clampe",
+    "input": {
+      "unreadCount": 26,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 2
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "clamped-unavailable"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread10-invite-absent-25h-clampe",
+    "input": {
+      "unreadCount": 10,
+      "lastOpenedAt": 999910000000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 2
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "clamped-unavailable"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-resume-invite-clampe",
+    "input": {
+      "unreadCount": 3,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "resume",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 2
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "clamped-unavailable"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "sticky-riviere-river-au-catalogue",
+    "input": {
+      "unreadCount": 2,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "riviere",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary",
+          "river"
+        ],
+        "riverEligible": true,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 8
+        }
+      }
+    },
+    "expected": {
+      "mode": "river",
+      "reason": "sticky"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
+    "_label": "auto-unread26-river-au-catalogue-summary-non-clampe",
+    "input": {
+      "unreadCount": 26,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "auto",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary",
+          "river"
+        ],
+        "riverEligible": true,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 8
+        }
+      }
+    },
+    "expected": {
+      "mode": "summary",
+      "reason": "unread-over-cap"
+    },
+    "expectedBridgeSuggestedMode": "resume"
+  },
+  {
+    "_label": "flag-off-catalogue-invite-bubbles-non-clampe",
+    "input": {
+      "unreadCount": 99,
+      "lastOpenedAt": null,
+      "now": 1000000000000,
+      "stickyChoice": "resume",
+      "isFlagEnabled": false,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 2
+        }
+      }
+    },
+    "expected": {
+      "mode": "bubbles",
+      "reason": "flag-disabled"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  }
+]

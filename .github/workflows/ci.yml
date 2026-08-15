@@ -127,6 +127,9 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check
         continue-on-error: true
 
+      - name: Law literals guard
+        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
+
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%

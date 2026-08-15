@@ -1,0 +1,102 @@
+[
+  {
+    "_label": "capable-e2ee-noconsent",
+    "input": {
+      "deviceCapability": true,
+      "encryptionMode": "e2ee",
+      "userConsent": false,
+      "conversationType": "direct"
+    },
+    "expected": "localAgent"
+  },
+  {
+    "_label": "capable-server-consent",
+    "input": {
+      "deviceCapability": true,
+      "encryptionMode": "server",
+      "userConsent": true,
+      "conversationType": "direct"
+    },
+    "expected": "localAgent"
+  },
+  {
+    "_label": "incapable-e2ee-consent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": "e2ee",
+      "userConsent": true,
+      "conversationType": "direct"
+    },
+    "expected": "deterministic"
+  },
+  {
+    "_label": "incapable-e2ee-noconsent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": "e2ee",
+      "userConsent": false,
+      "conversationType": "direct"
+    },
+    "expected": "deterministic"
+  },
+  {
+    "_label": "incapable-server-consent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": "server",
+      "userConsent": true,
+      "conversationType": "direct"
+    },
+    "expected": "serverAgent"
+  },
+  {
+    "_label": "incapable-server-noconsent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": "server",
+      "userConsent": false,
+      "conversationType": "direct"
+    },
+    "expected": "deterministic"
+  },
+  {
+    "_label": "incapable-hybrid-consent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": "hybrid",
+      "userConsent": true,
+      "conversationType": "direct"
+    },
+    "expected": "serverAgent"
+  },
+  {
+    "_label": "incapable-null-consent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": null,
+      "userConsent": true,
+      "conversationType": "direct"
+    },
+    "expected": "serverAgent"
+  },
+  {
+    "_label": "incapable-null-noconsent",
+    "input": {
+      "deviceCapability": false,
+      "encryptionMode": null,
+      "userConsent": false,
+      "conversationType": "direct"
+    },
+    "expected": "deterministic"
+  },
+  {
+    "_label": "capable-null-noconsent",
+    "input": {
+      "deviceCapability": true,
+      "encryptionMode": null,
+      "userConsent": false,
+      "conversationType": "direct"
+    },
+    "expected": "localAgent"
+  }
+]

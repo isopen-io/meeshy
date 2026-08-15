@@ -1,0 +1,160 @@
+{
+  "$source": "tasks/lentille-implementation-contract.md §4.3 (Cotes relevées sur les maquettes) — toutes les valeurs sont lues dans les maquettes interactives (Lentille et Focal) et dans les métriques LWS-5",
+  "list": {
+    "row": {
+      "height": 64,
+      "padding": {
+        "vertical": 10,
+        "horizontal": 16
+      },
+      "marginHorizontal": 8,
+      "radius": 16,
+      "transformOriginX": "16%",
+      "transformOriginY": "50%"
+    },
+    "avatar": {
+      "size": 44,
+      "ring": {
+        "size": 1.5,
+        "opacity": 0.55,
+        "colorAccent": true
+      }
+    },
+    "presenceDot": {
+      "size": 11,
+      "borderSize": 2.5,
+      "offlineHidden": true
+    },
+    "name": {
+      "size": 15,
+      "weight": 800,
+      "weightDescription": "extrabold/heavy"
+    },
+    "time": {
+      "size": 12,
+      "weight": 700
+    },
+    "line2": {
+      "size": 13
+    },
+    "unreadDot": {
+      "size": 8,
+      "colorAccent": true
+    },
+    "focusCard": {
+      "ringSize": 1.5,
+      "ringType": "internal",
+      "radius": 16,
+      "colorAccent": true
+    },
+    "modeNotch": {
+      "size": 9.5,
+      "weight": 900,
+      "top": -9,
+      "right": 14
+    },
+    "sticker": {
+      "size": 10.5,
+      "weight": 800,
+      "letterSpacingEm": 0.1,
+      "padding": {
+        "vertical": 4,
+        "horizontal": 13
+      },
+      "sticky": true,
+      "textTransform": "uppercase"
+    },
+    "pill": {
+      "top": 64,
+      "fadeDurationMs": 250,
+      "dismissAfterMs": 900
+    },
+    "rail": {
+      "size": 48,
+      "ring": 3.5,
+      "maxEntries": 6,
+      "ringPulsedWhenLive": true
+    },
+    "tags": {
+      "size": 6,
+      "maxCount": 3,
+      "emojiSize": 11
+    },
+    "muted": {
+      "opacity": 0.55,
+      "muteIconPresent": true
+    },
+    "agent": {
+      "avatarRing": {
+        "style": "dashed",
+        "size": 1.5,
+        "solidMeansHuman": true
+      }
+    }
+  },
+  "thread": {
+    "row": {
+      "padding": {
+        "vertical": 5,
+        "horizontal": 16
+      }
+    },
+    "avatar": {
+      "size": 22,
+      "description": "pastille"
+    },
+    "name": {
+      "size": 13,
+      "weight": 800,
+      "weightDescription": "extrabold"
+    },
+    "time": {
+      "size": 12,
+      "weight": 600
+    },
+    "line2": {
+      "size": 15,
+      "lineHeight": 1.42,
+      "indentPx": 29
+    },
+    "focusCard": {
+      "ringSize": 1.5,
+      "ringType": "internal",
+      "radius": 16,
+      "margin": {
+        "horizontal": 3,
+        "vertical": 8
+      },
+      "padding": {
+        "horizontal": 8,
+        "vertical": 12
+      }
+    },
+    "quote": {
+      "borderSize": 2.5,
+      "colorFromAuthor": true
+    },
+    "media": {
+      "radius": 16
+    },
+    "hiddenChrome": {
+      "translateY": 94,
+      "opacityEnd": 0,
+      "easeOut": 0.25,
+      "affectsSearchBarAndFloatingButtons": true,
+      "singleSignalOnly": true
+    },
+    "pill": {
+      "top": 72,
+      "fadeDurationMs": 280,
+      "dismissAfterMs": 900
+    },
+    "agent": {
+      "row": {
+        "borderStyle": "dashed",
+        "borderSize": 1.5,
+        "radius": 14
+      }
+    }
+  }
+}

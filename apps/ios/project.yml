@@ -316,6 +316,28 @@ targets:
       - path: MeeshyShareExtension/ShareSession.swift
       - path: MeeshyShareExtension/ShareConversationStore.swift
       - path: MeeshyShareExtension/ShareSender.swift
+      # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
+      # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
+      # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),
+      # copié comme ressource de bundle de test. `type: folder` crée une
+      # folder reference qui préserve l'arborescence (reading-modes/,
+      # conformance/, …) dans le bundle ; `buildPhase: resources` la place
+      # dans la phase Copy Bundle Resources. ATTENTION : ces entrées vivent
+      # sous `sources:` — les targets XcodeGen n'ont PAS de clé `resources:`
+      # (une telle clé est ignorée SILENCIEUSEMENT, vécu run 31886323298 :
+      # bundle sans fixtures/ ni design/, 60+ tests Lentille rouges).
+      - path: ../../packages/shared/fixtures
+        type: folder
+        buildPhase: resources
+      # Domicile des cotes Lentille (contrat LWS-5, §0/§4.3) : le JSON vit
+      # sous packages/shared/design/, PAS sous fixtures/ — un dossier distinct
+      # au même titre, câblé par la même mécanique pour que
+      # LentilleMetricsTests le retrouve dans le bundle de tests sous
+      # `design/lentille-tokens.json`. Propriété de ce fichier, ligne unique
+      # additionnelle : LWS-5 (M-045).
+      - path: ../../packages/shared/design
+        type: folder
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic

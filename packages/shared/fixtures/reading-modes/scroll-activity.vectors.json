@@ -1,0 +1,137 @@
+[
+  {
+    "_label": "ouverture-no-events",
+    "input": {
+      "events": [],
+      "probeAt": 0
+    },
+    "expected": {
+      "visible": false
+    }
+  },
+  {
+    "_label": "premier-scroll",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 1000
+        }
+      ],
+      "probeAt": 1000
+    },
+    "expected": {
+      "visible": true
+    }
+  },
+  {
+    "_label": "t+899",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 1000
+        }
+      ],
+      "probeAt": 1899
+    },
+    "expected": {
+      "visible": true
+    }
+  },
+  {
+    "_label": "t+900",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 1000
+        }
+      ],
+      "probeAt": 1900
+    },
+    "expected": {
+      "visible": false
+    }
+  },
+  {
+    "_label": "t+901",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 1000
+        }
+      ],
+      "probeAt": 1901
+    },
+    "expected": {
+      "visible": false
+    }
+  },
+  {
+    "_label": "rearmement",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 1000
+        },
+        {
+          "type": "scrolled",
+          "at": 1800
+        }
+      ],
+      "probeAt": 2000
+    },
+    "expected": {
+      "visible": true
+    }
+  },
+  {
+    "_label": "tick-does-not-rearm",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 0
+        },
+        {
+          "type": "tick",
+          "at": 500
+        },
+        {
+          "type": "tick",
+          "at": 1000
+        }
+      ],
+      "probeAt": 1000
+    },
+    "expected": {
+      "visible": false
+    }
+  },
+  {
+    "_label": "last-scroll-wins",
+    "input": {
+      "events": [
+        {
+          "type": "scrolled",
+          "at": 0
+        },
+        {
+          "type": "scrolled",
+          "at": 100
+        },
+        {
+          "type": "scrolled",
+          "at": 200
+        }
+      ],
+      "probeAt": 1200
+    },
+    "expected": {
+      "visible": false
+    }
+  }
+]

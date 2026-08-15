@@ -712,7 +712,36 @@
       "file": "Archivo",
       "document": "Documento"
     },
-    "newMessagesWhileAway": "mensajes nuevos"
+    "newMessagesWhileAway": "mensajes nuevos",
+    "lentille": {
+      "bridge": {
+        "authorsOne": "{name}",
+        "authorsTwo": "{a} y {b}",
+        "authorsMore": "{a}, {b} +{count}",
+        "messagesOne": "{count} mensaje",
+        "messagesOther": "{count} mensajes",
+        "media": {
+          "images": "{count} imágenes",
+          "audio": "{count} audios",
+          "files": "{count} archivos"
+        },
+        "partial": "de los últimos {count} mensajes"
+      },
+      "modes": {
+        "title": "Modo de lectura",
+        "auto": "Auto",
+        "focal": "Focal",
+        "script": "Guion",
+        "resume": "Resumen",
+        "riviere": "Río",
+        "autoBadge": "AUTO · {decision}",
+        "riviereLocked": "se abrirá a {threshold} personas activas — {current} hoy",
+        "riviereLockedDirect": "reservado para grupos"
+      },
+      "typing": {
+        "one": "{name} está escribiendo…"
+      }
+    }
   },
   "bubbleStream": {
     "messageSentSuccessfully": "Mensaje enviado correctamente",

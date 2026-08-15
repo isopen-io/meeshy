@@ -42,6 +42,15 @@
       "require": "./dist/utils/*.js",
       "default": "./dist/utils/*.js"
     },
+    "./providers/*": {
+      "types": "./dist/providers/*.d.ts",
+      "import": "./dist/providers/*.js",
+      "require": "./dist/providers/*.js",
+      "default": "./dist/providers/*.js"
+    },
+    "./design/*": {
+      "default": "./design/*"
+    },
     "./encryption": {
       "types": "./dist/encryption/index.d.ts",
       "import": "./dist/encryption/index.js",
@@ -75,6 +84,8 @@
     "prisma",
     "types",
     "utils",
+    "providers",
+    "design",
     "encryption",
     "agent"
   ],

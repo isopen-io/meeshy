@@ -1,0 +1,271 @@
+[
+  {
+    "input": {
+      "conversations": []
+    },
+    "expected": [],
+    "_label": "entrée vide — aucune conversation"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "not-pinned-recent",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "pinned-old",
+          "isPinned": true,
+          "updatedAt": "2026-08-01T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "pinned-old",
+      "not-pinned-recent"
+    ],
+    "_label": "épinglée prime sur les récentes non épinglées"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "plain",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "live",
+          "isPinned": false,
+          "liveCall": {
+            "voices": 1,
+            "startedAt": "2026-08-15T09:00:00Z",
+            "joined": true
+          },
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "pinned",
+          "isPinned": true,
+          "updatedAt": "2026-07-01T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "pinned",
+      "live",
+      "plain"
+    ],
+    "_label": "ordre total : pinned > live > plain"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "order-2",
+          "isPinned": false,
+          "categoryId": "work",
+          "orderInCategory": 2,
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "order-0",
+          "isPinned": false,
+          "categoryId": "work",
+          "orderInCategory": 0,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "order-1",
+          "isPinned": false,
+          "categoryId": "work",
+          "orderInCategory": 1,
+          "updatedAt": "2026-08-10T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "order-0",
+      "order-1",
+      "order-2"
+    ],
+    "_label": "orderInCategory pilote le tri au sein d'une même catégorie"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "older",
+          "isPinned": false,
+          "lastMessageAt": "2026-08-01T10:00:00Z",
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "newer",
+          "isPinned": false,
+          "lastMessageAt": "2026-08-15T10:00:00Z",
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "middle",
+          "isPinned": false,
+          "lastMessageAt": "2026-08-10T10:00:00Z",
+          "updatedAt": "2026-08-10T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "newer",
+      "middle",
+      "older"
+    ],
+    "_label": "lastMessageAt desc départage les conversations non épinglées/live/catégorisées"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "no-lastmsg-old",
+          "isPinned": false,
+          "lastMessageAt": null,
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "no-lastmsg-new",
+          "isPinned": false,
+          "lastMessageAt": null,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "no-lastmsg-new",
+      "no-lastmsg-old"
+    ],
+    "_label": "lastMessageAt null retombe sur updatedAt pour le tri"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "b-id",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "a-id",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "a-id",
+      "b-id"
+    ],
+    "_label": "id ordinal départage à égalité stricte de updatedAt"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "stale-lastmessage-but-recently-touched",
+          "isPinned": false,
+          "lastMessageAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-08-15T11:59:00Z"
+        },
+        {
+          "id": "fresh-lastmessage",
+          "isPinned": false,
+          "lastMessageAt": "2026-08-15T10:00:00Z",
+          "updatedAt": "2026-08-15T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "fresh-lastmessage",
+      "stale-lastmessage-but-recently-touched"
+    ],
+    "_label": "lastMessageAt frais prime sur un lastMessageAt périmé malgré un updatedAt plus ancien"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "plain-old",
+          "isPinned": false,
+          "updatedAt": "2026-07-01T10:00:00Z"
+        },
+        {
+          "id": "cat-b-order1",
+          "isPinned": false,
+          "categoryId": "b",
+          "orderInCategory": 1,
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "live-1",
+          "isPinned": false,
+          "liveCall": {
+            "voices": 1,
+            "startedAt": "2026-08-15T09:00:00Z",
+            "joined": true
+          },
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "pinned-1",
+          "isPinned": true,
+          "updatedAt": "2026-06-01T10:00:00Z"
+        },
+        {
+          "id": "cat-a-order0",
+          "isPinned": false,
+          "categoryId": "a",
+          "orderInCategory": 0,
+          "updatedAt": "2026-08-01T10:00:00Z"
+        },
+        {
+          "id": "plain-new",
+          "isPinned": false,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "pinned-1",
+      "live-1",
+      "cat-a-order0",
+      "cat-b-order1",
+      "plain-new",
+      "plain-old"
+    ],
+    "_label": "ordre total combiné : pinned, live, catégorie (orderInCategory), lastMessageAt desc"
+  },
+  {
+    "input": {
+      "conversations": [
+        {
+          "id": "z-tie",
+          "isPinned": false,
+          "categoryId": "work",
+          "orderInCategory": 5,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        },
+        {
+          "id": "a-tie",
+          "isPinned": false,
+          "categoryId": "work",
+          "orderInCategory": 5,
+          "updatedAt": "2026-08-15T10:00:00Z"
+        }
+      ]
+    },
+    "expected": [
+      "a-tie",
+      "z-tie"
+    ],
+    "_label": "orderInCategory égal — id départage (a-tie avant z-tie)"
+  }
+]
