@@ -14,7 +14,6 @@ import { describe, it, expect, vi } from 'vitest'
 import type {
   ConversationBridgeProviding,
   ConversationBridgeInput,
-  ConversationBridgeResult,
 } from '../../providers/ConversationBridgeProviding.js'
 import type {
   ReadingModePreferenceStoring,
@@ -27,13 +26,14 @@ import type { ReadingModePreference } from '../../types/reading-modes.js'
 /**
  * Double minimal de `ConversationBridgeProviding`. Se comporte comme un
  * substitut honnête : rend `null` quand rien n'est enregistré pour la
- * conversation, sinon le pont enregistré avec `isComplete: false` — jamais
- * un pont fabriqué.
+ * conversation, sinon le pont enregistré — jamais un pont fabriqué. La
+ * partialité de la fenêtre voyage SUR le pont (`bridge.isComplete`), plus
+ * dans une enveloppe de retour (REV-1, blocage 6).
  */
 class TestBridgeProvider implements ConversationBridgeProviding {
-  constructor(private readonly byConversation: Map<string, ConversationBridgeResult>) {}
+  constructor(private readonly byConversation: Map<string, ConversationBridge>) {}
 
-  async bridgeFor(input: ConversationBridgeInput): Promise<ConversationBridgeResult | null> {
+  async bridgeFor(input: ConversationBridgeInput): Promise<ConversationBridge | null> {
     return this.byConversation.get(input.conversationId) ?? null
   }
 }
@@ -131,17 +131,9 @@ describe('ConversationBridgeProviding', () => {
     expect(result).toBeNull()
   })
 
-  it("porte isComplete: false quand la fenêtre ne couvre pas tout l'intervalle non lu", async () => {
+  it("porte isComplete: false SUR le pont quand la fenêtre ne couvre pas tout l'intervalle non lu", async () => {
     const provider = new TestBridgeProvider(
-      new Map([
-        [
-          'conv-1',
-          {
-            bridge: makeBridge({ unreadCount: 12 }),
-            isComplete: false,
-          },
-        ],
-      ]),
+      new Map([['conv-1', makeBridge({ unreadCount: 12, isComplete: false })]]),
     )
     const result = await provider.bridgeFor({
       conversationId: 'conv-1',
@@ -150,7 +142,17 @@ describe('ConversationBridgeProviding', () => {
     })
     expect(result).not.toBeNull()
     expect(result?.isComplete).toBe(false)
-    expect(result?.bridge.unreadCount).toBe(12)
+    expect(result?.unreadCount).toBe(12)
+  })
+
+  it('laisse isComplete absent quand la fenêtre couvre tout (absent = complet)', async () => {
+    const provider = new TestBridgeProvider(new Map([['conv-1', makeBridge({ unreadCount: 4 })]]))
+    const result = await provider.bridgeFor({
+      conversationId: 'conv-1',
+      viewerId: 'user-1',
+      unreadCount: 4,
+    })
+    expect(result?.isComplete).toBeUndefined()
   })
 })
 
@@ -181,7 +183,10 @@ describe('ReadingModePreferenceStoring', () => {
     unsubscribe()
     unsubscribe() // idempotent : un second appel ne lève pas
 
-    await store.set({ conversationId: 'conv-1' }, 'summary')
+    // `'resume'` — le mot du MENU (`ReadingModePreference`), pas `'summary'`,
+    // qui est le mode RENDU (`ConversationReadingMode`). Le store mémorise un
+    // choix d'utilisateur, jamais une décision d'orchestrateur.
+    await store.set({ conversationId: 'conv-1' }, 'resume')
     expect(listener).toHaveBeenCalledTimes(1)
   })
 })

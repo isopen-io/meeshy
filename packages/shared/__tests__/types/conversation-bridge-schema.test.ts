@@ -113,6 +113,28 @@ describe('ConversationBridgeSchema', () => {
   it('rejects a kind outside the enumeration', () => {
     expect(() => ConversationBridgeSchema.parse(makeFallbackBridge({ kind: 'deterministic' }))).toThrow()
   })
+
+  // BLOCAGE 6 — la partialité voyage SUR le pont, jusqu'au rang.
+  describe('isComplete — la fenêtre de calcul du producteur', () => {
+    it('est optionnel : un pont sans le champ reste valide et le champ reste absent', () => {
+      const parsed = ConversationBridgeSchema.parse(makeFallbackBridge())
+      expect(parsed.isComplete).toBeUndefined()
+    })
+
+    it('round-trips isComplete: false (fenêtre partielle — « sur les N derniers messages »)', () => {
+      const input = makeFallbackBridge({ isComplete: false })
+      expect(ConversationBridgeSchema.parse(input)).toEqual(input)
+    })
+
+    it('round-trips isComplete: true sur un pont agent', () => {
+      const input = makeAgentBridge({ isComplete: true })
+      expect(ConversationBridgeSchema.parse(input)).toEqual(input)
+    })
+
+    it('rejects a non-boolean isComplete', () => {
+      expect(() => ConversationBridgeSchema.parse(makeFallbackBridge({ isComplete: 'partial' }))).toThrow()
+    })
+  })
 })
 
 describe('ConversationLiveCallSchema', () => {

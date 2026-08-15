@@ -51,6 +51,7 @@ final class BridgeFingerprintTests: XCTestCase {
     private func makeAgentBridge(
         unreadCount: Int = 4,
         suggestedMode: ConversationBridge.SuggestedMode = .resume,
+        isComplete: Bool? = nil,
         text: String? = "Marie shared the plan",
         translations: [String: String]? = ["fr": "Marie a partagé le plan"],
         originalLanguage: String? = "en"
@@ -59,6 +60,7 @@ final class BridgeFingerprintTests: XCTestCase {
             kind: .agent,
             unreadCount: unreadCount,
             suggestedMode: suggestedMode,
+            isComplete: isComplete,
             text: text,
             translations: translations,
             originalLanguage: originalLanguage
@@ -69,6 +71,7 @@ final class BridgeFingerprintTests: XCTestCase {
     private func makeFallbackBridge(
         unreadCount: Int = 4,
         suggestedMode: ConversationBridge.SuggestedMode = .focal,
+        isComplete: Bool? = nil,
         authors: [String] = ["Marie", "Ali"],
         extraAuthorCount: Int = 2,
         messageCount: Int = 12,
@@ -78,6 +81,7 @@ final class BridgeFingerprintTests: XCTestCase {
             kind: .fallback,
             unreadCount: unreadCount,
             suggestedMode: suggestedMode,
+            isComplete: isComplete,
             data: ConversationBridgeData(
                 authors: authors,
                 extraAuthorCount: extraAuthorCount,
@@ -270,6 +274,100 @@ final class BridgeFingerprintTests: XCTestCase {
         let before = makeConversation(bridge: makeAgentBridge(suggestedMode: .resume))
         let after = makeConversation(bridge: makeAgentBridge(suggestedMode: .focal))
         XCTAssertNotEqual(before.renderFingerprint, after.renderFingerprint)
+    }
+
+    // MARK: - Partialité de la fenêtre (`isComplete`)
+
+    /// Le critère du blocage 6 : à DONNÉES ÉGALES — mêmes auteurs, mêmes
+    /// compteurs, même `unreadCount` — un pont qui passe d'incomplet à complet
+    /// est un autre rendu. La ligne retire la mention « sur les N derniers
+    /// messages » ; sans repli, le portillon `.equatable()` la laisserait
+    /// affichée sur un pont désormais total.
+    func test_renderFingerprint_bridgeIncompleteBecomesComplete_changes() {
+        let partial = makeConversation(bridge: makeFallbackBridge(isComplete: false))
+        let complete = makeConversation(bridge: makeFallbackBridge(isComplete: true))
+        XCTAssertNotEqual(
+            partial.renderFingerprint, complete.renderFingerprint,
+            "la mention de partialité est AFFICHÉE — sa disparition doit rouvrir le portillon"
+        )
+    }
+
+    /// La bascule inverse, sur l'étage agent : un substitut borné (`false`)
+    /// remplacé par le pont du gateway, qui n'annonce rien (`nil` = complet).
+    func test_renderFingerprint_bridgeIsCompleteAppears_changes() {
+        let absent = makeConversation(bridge: makeAgentBridge(isComplete: nil))
+        let partial = makeConversation(bridge: makeAgentBridge(isComplete: false))
+        XCTAssertNotEqual(absent.renderFingerprint, partial.renderFingerprint)
+    }
+
+    /// Le pendant NON discriminant : le champ absent ne change rien. Un pont
+    /// bâti sans `isComplete` rend le fingerprint qu'il rendait avant
+    /// l'existence du champ — les deux instances ci-dessous ne diffèrent par
+    /// AUCUN champ, et le témoin verrouille que la fabrique par défaut
+    /// (`isComplete: nil`) reste bien le cas de référence.
+    func test_renderFingerprint_bridgeWithoutIsComplete_isStable() {
+        XCTAssertEqual(
+            makeConversation(bridge: makeAgentBridge()).renderFingerprint,
+            makeConversation(bridge: makeAgentBridge(isComplete: nil)).renderFingerprint
+        )
+    }
+
+    /// Le témoin de compatibilité de fil : une charge utile SANS la clé
+    /// `isComplete` — tout ce que le gateway émet aujourd'hui — décode en
+    /// `nil` et rend EXACTEMENT le fingerprint d'un pont bâti sans le champ.
+    /// L'arrivée du champ n'invalide aucun rang existant.
+    func test_renderFingerprint_payloadWithoutIsCompleteKey_matchesFieldlessBridge() throws {
+        let payload = """
+        {
+          "kind": "agent",
+          "unreadCount": 4,
+          "suggestedMode": "resume",
+          "text": "Marie shared the plan",
+          "translations": { "fr": "Marie a partagé le plan" },
+          "originalLanguage": "en"
+        }
+        """
+        let decoded = try decodeConversation(from: conversationJSON(bridge: payload))
+
+        XCTAssertNil(decoded.bridge?.isComplete)
+        XCTAssertEqual(
+            decoded.renderFingerprint,
+            makeConversation(bridge: makeAgentBridge()).renderFingerprint
+        )
+    }
+
+    /// Décodage tolérant du champ lui-même : présent et `false`, il traverse
+    /// le fil sans perte — sans quoi la ligne perdrait la partialité entre le
+    /// producteur et le rang, exactement le défaut que le blocage 6 corrige.
+    func test_decode_bridgeIsCompleteFalse_populatesField() throws {
+        let payload = """
+        {
+          "kind": "fallback",
+          "unreadCount": 12,
+          "suggestedMode": "focal",
+          "isComplete": false,
+          "data": { "authors": ["Marie"], "extraAuthorCount": 0, "messageCount": 6 }
+        }
+        """
+        let decoded = try decodeConversation(from: conversationJSON(bridge: payload))
+        let bridge = try XCTUnwrap(decoded.bridge)
+
+        XCTAssertEqual(bridge.isComplete, false)
+        XCTAssertEqual(bridge.data?.messageCount, 6)
+    }
+
+    /// Aller-retour de cache : un pont partiel encodé puis relu reste partiel.
+    /// `isComplete` étant optionnel, un encodage qui l'omettrait ferait
+    /// silencieusement passer un pont partiel pour complet au premier
+    /// redémarrage à froid.
+    func test_partialBridge_roundTrip_keepsIsComplete() throws {
+        let original = makeConversation(bridge: makeFallbackBridge(isComplete: false))
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let restored = try decodeConversation(from: encoder.encode(original))
+
+        XCTAssertEqual(restored.bridge?.isComplete, false)
+        XCTAssertEqual(original.renderFingerprint, restored.renderFingerprint)
     }
 
     /// La bascule d'étage — agent indisponible, hors budget, conversation

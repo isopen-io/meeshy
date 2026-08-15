@@ -24,6 +24,7 @@ export type OrchestratorDecisionReason =
   | 'sticky'
   | 'unread-over-cap'
   | 'stale-absence'
+  | 'clamped-unavailable'
   | 'default';
 
 export type OrchestratorDecision = {
@@ -60,11 +61,12 @@ export type OrchestratorDecisionInput = {
   readonly now: Date | string | number;
   readonly stickyChoice: ReadingModePreference;
   /**
-   * Réservé — figé par la signature du contrat (LWS-0, `lentille-implementation-contract.md`
-   * §2 « Lois à extraire »). Aucun des quatre critères d'acceptation ne gate la décision par
-   * le catalogue de capacités : le clamp éventuel d'un mode indisponible (ex. `summary` pour
-   * un invité) est un raffinement de couche UI/produit pour un lot ultérieur (LWS-1/LWS-5),
-   * pas une loi de l'orchestrateur. La loi ne lit donc pas ce champ aujourd'hui.
+   * Le catalogue BORNE la décision, drapeau on : la loi ne rend jamais un mode
+   * que l'écran ne saurait pas ouvrir (REV-1, blocage 3). Un invité poussé en
+   * Résumé Vivant s'ouvrirait sur un 403 de `/conversations/:id/analysis`
+   * (`focal-implementation-contract.md` §5.2) ; un choix collant `riviere`
+   * mémorisé avant l'extinction du drapeau Rivière rendrait un mode que
+   * personne ne sait dessiner. Voir `resolveOrchestratorDecision`.
    */
   readonly capabilities: ReadingModeCapabilities;
   readonly isFlagEnabled: boolean;
@@ -87,30 +89,66 @@ const isReaderAbsent = (lastOpenedAt: Date | string | number | null, nowMs: numb
 };
 
 /**
+ * Repli du clamp : `'focal'` est le PLANCHER de la loi, présent dans tous les
+ * catalogues drapeau-on (`REGISTERED_AVAILABLE_MODES`,
+ * `ANONYMOUS_AVAILABLE_MODES`). C'est aussi pourquoi la branche par défaut
+ * n'est pas clampée : elle rend déjà le repli, et se clamper soi-même serait
+ * circulaire.
+ */
+const CLAMP_FALLBACK_MODE: ConversationReadingMode = 'focal';
+
+/**
+ * Borne une décision naturelle au catalogue du lecteur. Hors catalogue ⇒
+ * repli `'focal'` avec sa raison dédiée, pour que l'encoche « AUTO · … » dise
+ * la vérité : le mode n'a pas été choisi, il a été rabattu.
+ */
+const clampToCapabilities = (
+  decision: OrchestratorDecision,
+  capabilities: ReadingModeCapabilities,
+): OrchestratorDecision =>
+  capabilities.availableModes.includes(decision.mode)
+    ? decision
+    : { mode: CLAMP_FALLBACK_MODE, reason: 'clamped-unavailable' };
+
+/**
  * Orchestrateur des modes de lecture. Priorité stricte, dans cet ordre :
  *
  * 1. `isFlagEnabled === false` → `'bubbles'` (mode historique — c'est le
  *    SEUL cas qui produit `'bubbles'` ; le choix collant appartient au
- *    système drapeau-on et ne s'applique pas ici).
+ *    système drapeau-on et ne s'applique pas ici). **Cette branche n'est PAS
+ *    clampée** : `'bubbles'` est hors catalogue par définition — drapeau
+ *    éteint, `resolveCapabilities` rend `['bubbles']` et rien d'autre, et le
+ *    catalogue drapeau-on ne le contient jamais. Le clamper reviendrait à
+ *    rendre `'focal'` à un client qui n'a pas la Lentille.
  * 2. `stickyChoice !== 'auto'` → il gagne TOUJOURS, sur les trois branches
- *    numériques qui suivent, y compris `unreadCount > 25`.
- * 3. `unreadCount > 25` → `'summary'` (Résumé Vivant).
+ *    numériques qui suivent, y compris `unreadCount > 25` — mais il est
+ *    CLAMPÉ (un `riviere` mémorisé ne ressuscite pas un mode retiré du
+ *    catalogue).
+ * 3. `unreadCount > 25` → `'summary'` (Résumé Vivant), clampé.
  * 4. absence (> 24 h depuis `lastOpenedAt`, ou jamais ouverte) ET
- *    `unreadCount >= 10` → `'summary'`.
+ *    `unreadCount >= 10` → `'summary'`, clampé.
  * 5. défaut (`unreadCount <= 25`, lecteur présent ou peu de non-lus) →
  *    `'focal'` + pont ✦.
+ *
+ * INVARIANT (REV-1, blocage 3) : drapeau on, le mode rendu appartient
+ * TOUJOURS à `capabilities.availableModes`. Un invité à 26 non-lus reçoit
+ * `focal`/`'clamped-unavailable'`, jamais un Résumé Vivant qui s'ouvrirait
+ * sur un 403.
  */
 export function resolveOrchestratorDecision(input: OrchestratorDecisionInput): OrchestratorDecision {
   if (!input.isFlagEnabled) {
     return { mode: 'bubbles', reason: 'flag-disabled' };
   }
 
+  const clamp = (decision: OrchestratorDecision): OrchestratorDecision =>
+    clampToCapabilities(decision, input.capabilities);
+
   if (input.stickyChoice !== 'auto') {
-    return { mode: STICKY_MODE_BY_PREFERENCE[input.stickyChoice], reason: 'sticky' };
+    return clamp({ mode: STICKY_MODE_BY_PREFERENCE[input.stickyChoice], reason: 'sticky' });
   }
 
   if (input.unreadCount > ORCHESTRATOR_UNREAD_CAP) {
-    return { mode: 'summary', reason: 'unread-over-cap' };
+    return clamp({ mode: 'summary', reason: 'unread-over-cap' });
   }
 
   const nowMs = toEpochMs(input.now);
@@ -118,10 +156,27 @@ export function resolveOrchestratorDecision(input: OrchestratorDecisionInput): O
     input.unreadCount >= ORCHESTRATOR_ABSENCE_UNREAD_FLOOR &&
     isReaderAbsent(input.lastOpenedAt, nowMs)
   ) {
-    return { mode: 'summary', reason: 'stale-absence' };
+    return clamp({ mode: 'summary', reason: 'stale-absence' });
   }
 
-  return { mode: 'focal', reason: 'default' };
+  return { mode: CLAMP_FALLBACK_MODE, reason: 'default' };
+}
+
+/**
+ * Projection de la décision d'orchestrateur vers `ConversationBridge.suggestedMode`
+ * (`packages/shared/types/conversation-bridge.ts`, contrat §3.2), qui ne connaît
+ * que deux images : `'focal'` et `'resume'`.
+ *
+ * Fonction TOTALE, et c'est tout son intérêt (REV-1, blocage 2) : sans elle,
+ * chaque producteur de pont — gateway, substitut client, miroirs Swift/Kotlin —
+ * réinventerait sa propre correspondance, et le rang suggérerait un mode que
+ * l'orchestrateur n'a pas décidé. Seul `'summary'` (le Résumé Vivant) se
+ * projette en `'resume'` ; `'focal'`, `'script'`, `'river'` et `'bubbles'`
+ * ouvrent tous le fil, donc `'focal'`. La `reason` n'entre pas dans la
+ * projection : le pont annonce une destination, pas un motif.
+ */
+export function toBridgeSuggestedMode(decision: OrchestratorDecision): 'focal' | 'resume' {
+  return decision.mode === 'summary' ? 'resume' : 'focal';
 }
 
 // =============================================================================
@@ -159,18 +214,26 @@ export type ReadingModeCapabilities = {
 export type ResolveCapabilitiesInput = {
   readonly identity: ReadingModeIdentity;
   readonly isFlagEnabled: boolean;
+  /**
+   * Drapeau PROPRE à la Rivière (`riviere_mode`, défaut OFF — amendement R,
+   * `tasks/lentille-workshop-execution.md` §7). Distinct de `isFlagEnabled`
+   * (la Lentille) : la Rivière s'allume APRÈS, sur son propre calendrier.
+   * Absent ⇒ `false` : un appelant qui ignore l'amendement obtient
+   * exactement le catalogue d'avant.
+   */
+  readonly isRiverFlagEnabled?: boolean;
   readonly conversationType: ConversationType;
   readonly activeParticipantCount: number;
 };
 
 /**
- * Catalogues de modes sélectionnables par identité, drapeau on. `'river'`
- * n'apparaît JAMAIS ici : le mode est « en sursis » (présent au catalogue
- * produit, jamais sélectionnable) indépendamment de `riverEligible`, qui ne
- * sert que le libellé grisé. `'summary'` (Résumé Vivant) est masqué pour un
- * invité : `GET /conversations/:id/stats` et `/analysis` sont `requiredAuth`
- * → 403 pour une session anonyme (focal-implementation-contract.md §5.2).
- * `'bubbles'` n'apparaît que drapeau éteint (branche dédiée ci-dessous).
+ * Catalogues de modes sélectionnables par identité, drapeau on. `'summary'`
+ * (Résumé Vivant) est masqué pour un invité : `GET /conversations/:id/stats`
+ * et `/analysis` sont `requiredAuth` → 403 pour une session anonyme
+ * (focal-implementation-contract.md §5.2). `'bubbles'` n'apparaît que drapeau
+ * éteint (branche dédiée ci-dessous). `'river'` s'AJOUTE à ces catalogues
+ * quand son propre drapeau est on ET la conversation éligible — voir
+ * `resolveCapabilities`.
  */
 const REGISTERED_AVAILABLE_MODES: readonly ConversationReadingMode[] = ['focal', 'script', 'summary'];
 const ANONYMOUS_AVAILABLE_MODES: readonly ConversationReadingMode[] = ['focal', 'script'];
@@ -180,6 +243,25 @@ const FLAG_DISABLED_AVAILABLE_MODES: readonly ConversationReadingMode[] = ['bubb
  * Capacités de mode de lecture pour une conversation donnée : catalogue de
  * modes sélectionnables + éligibilité Rivière (≥ 5 participants actifs,
  * jamais en `direct`), avec sa raison structurée pour le libellé grisé.
+ *
+ * AMENDEMENT R (workshop §7, décision produit du 2026-08-15) : la Rivière a
+ * gagné son procès. Elle n'est plus « en sursis » — elle entre au catalogue
+ * dès que `isRiverFlagEnabled && riverEligible`.
+ *
+ * DÉCISION CONTRACTUELLE — la Rivière est ACCORDÉE aux invités éligibles.
+ * Le catalogue invité est amputé du seul `'summary'`, et pour une raison
+ * précise : le Résumé Vivant lit `/conversations/:id/analysis` et
+ * `/conversations/:id/stats`, tous deux `requiredAuth`, donc 403 pour une
+ * session anonyme. La Rivière ne consomme AUCUN de ces deux endpoints : elle
+ * dessine des couloirs à partir des messages déjà rendus par le fil, que
+ * l'invité reçoit déjà. Lui refuser la Rivière serait un branchement
+ * invité/inscrit sans cause technique — exactement ce que `ReadingModeIdentity`
+ * interdit de multiplier. L'éligibilité (≥ 5 actifs, jamais en `direct`) reste
+ * l'unique porte.
+ *
+ * `riverEligibilityReason` est servie dans TOUS les cas — y compris drapeau
+ * éteint et conversation inéligible : c'est elle qui alimente le libellé grisé
+ * (« s'ouvrira à 5 personnes actives — N aujourd'hui »).
  */
 export function resolveCapabilities(input: ResolveCapabilitiesInput): ReadingModeCapabilities {
   const riverEligibilityReason: RiverEligibilityReason = {
@@ -194,10 +276,13 @@ export function resolveCapabilities(input: ResolveCapabilitiesInput): ReadingMod
     return { availableModes: FLAG_DISABLED_AVAILABLE_MODES, riverEligible, riverEligibilityReason };
   }
 
+  const baseModes = input.identity.isAnonymous
+    ? ANONYMOUS_AVAILABLE_MODES
+    : REGISTERED_AVAILABLE_MODES;
+  const riverSelectable = input.isRiverFlagEnabled === true && riverEligible;
+
   return {
-    availableModes: input.identity.isAnonymous
-      ? ANONYMOUS_AVAILABLE_MODES
-      : REGISTERED_AVAILABLE_MODES,
+    availableModes: riverSelectable ? [...baseModes, 'river'] : baseModes,
     riverEligible,
     riverEligibilityReason,
   };

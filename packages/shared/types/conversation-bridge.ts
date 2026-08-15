@@ -45,11 +45,30 @@ export type ConversationBridgeData = z.infer<typeof ConversationBridgeDataSchema
  *   translations?: Record<string, string>;
  *   originalLanguage?: string;
  * };
+ *
+ * Un champ s'ajoute au contrat gelé (REV-1, blocage 6) :
+ *
+ *   isComplete?: boolean;   // absent = complet
+ *
+ * La partialité doit voyager JUSQU'AU RANG, avec le pont qu'elle qualifie.
+ * `LocalBridgeProvider` (le substitut, borné aux messages déjà en cache) rend
+ * un pont dont la fenêtre de calcul ne couvre pas forcément tout l'intervalle
+ * non lu ; le rang porte alors la mention « sur les N derniers messages »,
+ * jamais un chiffre extrapolé. Portée par une enveloppe de retour du provider,
+ * cette qualification se serait perdue dès la première mise en cache du pont,
+ * dès son passage par le socket, dès son entrée dans un modèle de liste — le
+ * rang aurait affiché un décompte partiel comme un décompte total.
+ *
+ * ABSENT = COMPLET, et non `false` : le gateway (`GatewayBridgeProvider`,
+ * G-124) calcule sur toute la fenêtre non lue et n'a rien à annoncer ; un
+ * client ancien qui ignore le champ lit donc la vérité par défaut, et aucun
+ * pont déjà en circulation n'a besoin d'être réécrit.
  */
 const BaseConversationBridgeSchema = z.object({
   kind: z.enum(['agent', 'fallback']),
   unreadCount: z.number().int().nonnegative(),
   suggestedMode: z.enum(['focal', 'resume']),
+  isComplete: z.boolean().optional(),
   data: ConversationBridgeDataSchema.optional(),
   text: z.string().optional(),
   translations: z.record(z.string(), z.string()).optional(),

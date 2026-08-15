@@ -185,6 +185,20 @@ public struct ConversationBridge: Codable, Equatable, Sendable {
     public let unreadCount: Int
     public let suggestedMode: SuggestedMode
 
+    /// La fenêtre de calcul du producteur couvre-t-elle TOUT l'intervalle non
+    /// lu ? **`nil` = complet** — c'est le cas du gateway, qui calcule sur la
+    /// fenêtre entière et n'a donc rien à annoncer, et c'est aussi ce que lit
+    /// un client qui ignore le champ.
+    ///
+    /// `false` vient d'un producteur borné (le substitut client, limité aux
+    /// messages déjà en cache) : la ligne porte alors « sur les N derniers
+    /// messages », jamais un chiffre extrapolé au-delà de ce qui a réellement
+    /// été vu. La qualification voyage SUR le pont, et pas dans une enveloppe
+    /// de retour de provider, précisément pour survivre au cache, au socket et
+    /// au modèle de liste jusqu'au rang (miroir de
+    /// `ConversationBridgeSchema.isComplete`, REV-1 blocage 6).
+    public let isComplete: Bool?
+
     /// `kind == .fallback`.
     public let data: ConversationBridgeData?
 
@@ -194,6 +208,7 @@ public struct ConversationBridge: Codable, Equatable, Sendable {
     public let originalLanguage: String?
 
     public init(kind: Kind, unreadCount: Int, suggestedMode: SuggestedMode,
+                isComplete: Bool? = nil,
                 data: ConversationBridgeData? = nil,
                 text: String? = nil,
                 translations: [String: String]? = nil,
@@ -201,6 +216,7 @@ public struct ConversationBridge: Codable, Equatable, Sendable {
         self.kind = kind
         self.unreadCount = unreadCount
         self.suggestedMode = suggestedMode
+        self.isComplete = isComplete
         self.data = data
         self.text = text
         self.translations = translations
@@ -208,7 +224,7 @@ public struct ConversationBridge: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, unreadCount, suggestedMode, data, text, translations, originalLanguage
+        case kind, unreadCount, suggestedMode, isComplete, data, text, translations, originalLanguage
     }
 }
 
@@ -486,6 +502,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             h.combine(bridge.kind)
             h.combine(bridge.unreadCount)
             h.combine(bridge.suggestedMode)
+            // La partialité est AFFICHÉE (« sur les N derniers messages ») :
+            // un pont qui passe d'incomplet à complet à données égales est un
+            // autre rendu, et doit rouvrir le portillon. Le repli reste sous
+            // `if let bridge` — pont absent ⇒ pas un `combine` de plus.
+            h.combine(bridge.isComplete)
             h.combine(bridge.text)
             h.combine(bridge.originalLanguage)
             // Même patron que les traductions de l'aperçu ci-dessus, et pour

@@ -3,12 +3,14 @@ import {
   resolveOrchestratorDecision,
   resolveCapabilities,
   resolveAssistTier,
+  toBridgeSuggestedMode,
   neverCapableProbe,
   RIVER_ELIGIBILITY_THRESHOLD,
   ORCHESTRATOR_UNREAD_CAP,
   ORCHESTRATOR_ABSENCE_UNREAD_FLOOR,
   type ReadingModeCapabilities,
 } from '../utils/reading-modes';
+import { ConversationReadingModeSchema } from '../types/reading-modes';
 
 // -----------------------------------------------------------------------------
 // Fixtures partagées
@@ -21,6 +23,19 @@ const baseCapabilities: ReadingModeCapabilities = {
   availableModes: ['focal', 'script', 'summary'],
   riverEligible: false,
   riverEligibilityReason: { threshold: RIVER_ELIGIBILITY_THRESHOLD, current: 1 },
+};
+
+/** Le catalogue d'un invité : le Résumé Vivant y est absent (403 sur `/analysis`). */
+const anonymousCapabilities: ReadingModeCapabilities = {
+  ...baseCapabilities,
+  availableModes: ['focal', 'script'],
+};
+
+/** Catalogue d'un inscrit dont la Rivière a gagné son procès (amendement R). */
+const riverCapabilities: ReadingModeCapabilities = {
+  availableModes: ['focal', 'script', 'summary', 'river'],
+  riverEligible: true,
+  riverEligibilityReason: { threshold: RIVER_ELIGIBILITY_THRESHOLD, current: 8 },
 };
 
 // =============================================================================
@@ -108,7 +123,52 @@ describe('resolveOrchestratorDecision — choix collant PRIME toujours (drapeau 
     ).toEqual({ mode: 'script', reason: 'sticky' });
   });
 
-  it("stickyChoice='riviere' se mappe sur le mode 'river' (la loi honore le choix ; le grisage est une affaire d'UI/capacités)", () => {
+  it("stickyChoice='riviere' se mappe sur le mode 'river' quand la Rivière est AU catalogue (amendement R)", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 2,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'riviere',
+        capabilities: riverCapabilities,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'river', reason: 'sticky' });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// BLOCAGE 3 — la décision est CLAMPÉE sur le catalogue de capacités
+// -----------------------------------------------------------------------------
+
+describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)', () => {
+  it("invité à 26 non-lus : summary hors catalogue ⇒ focal/'clamped-unavailable' (jamais un Résumé qui s'ouvrirait sur un 403)", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: ORCHESTRATOR_UNREAD_CAP + 1,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'auto',
+        capabilities: anonymousCapabilities,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+  });
+
+  it("invité absent > 24h avec >= 10 non-lus : la branche d'absence est clampée elle aussi", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: ORCHESTRATOR_ABSENCE_UNREAD_FLOOR,
+        lastOpenedAt: hoursAgo(48),
+        now: NOW,
+        stickyChoice: 'auto',
+        capabilities: anonymousCapabilities,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+  });
+
+  it("stickyChoice='riviere' avec river HORS catalogue ⇒ focal/'clamped-unavailable'", () => {
     expect(
       resolveOrchestratorDecision({
         unreadCount: 2,
@@ -117,8 +177,104 @@ describe('resolveOrchestratorDecision — choix collant PRIME toujours (drapeau 
         stickyChoice: 'riviere',
         capabilities: baseCapabilities,
         isFlagEnabled: true,
-      }).mode,
-    ).toBe('river');
+      }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+  });
+
+  it("stickyChoice='resume' pour un invité ⇒ focal/'clamped-unavailable' (le choix collant ne force pas un mode interdit)", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 3,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'resume',
+        capabilities: anonymousCapabilities,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+  });
+
+  it("un mode collant PRÉSENT au catalogue n'est jamais clampé", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 3,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'script',
+        capabilities: anonymousCapabilities,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'script', reason: 'sticky' });
+  });
+
+  it('la décision rendue appartient TOUJOURS au catalogue, drapeau on', () => {
+    const catalogues: ReadingModeCapabilities[] = [
+      baseCapabilities,
+      anonymousCapabilities,
+      riverCapabilities,
+    ];
+    const stickyChoices = ['auto', 'focal', 'script', 'resume', 'riviere'] as const;
+    const unreadCounts = [0, 10, 26];
+
+    catalogues.forEach((capabilities) => {
+      stickyChoices.forEach((stickyChoice) => {
+        unreadCounts.forEach((unreadCount) => {
+          const decision = resolveOrchestratorDecision({
+            unreadCount,
+            lastOpenedAt: hoursAgo(48),
+            now: NOW,
+            stickyChoice,
+            capabilities,
+            isFlagEnabled: true,
+          });
+          expect(capabilities.availableModes).toContain(decision.mode);
+        });
+      });
+    });
+  });
+
+  it("drapeau ÉTEINT : 'bubbles' reste prioritaire et N'EST PAS clampé (mode historique, hors catalogue par définition)", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 99,
+        lastOpenedAt: null,
+        now: NOW,
+        stickyChoice: 'resume',
+        capabilities: anonymousCapabilities,
+        isFlagEnabled: false,
+      }),
+    ).toEqual({ mode: 'bubbles', reason: 'flag-disabled' });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// BLOCAGE 2 — projection de la décision vers le pont ✦
+// -----------------------------------------------------------------------------
+
+describe("toBridgeSuggestedMode — décision d'orchestrateur → suggestion du pont", () => {
+  it("'summary' est le SEUL mode qui se projette en 'resume'", () => {
+    expect(toBridgeSuggestedMode({ mode: 'summary', reason: 'unread-over-cap' })).toBe('resume');
+  });
+
+  it("tous les autres modes se projettent en 'focal'", () => {
+    expect(toBridgeSuggestedMode({ mode: 'focal', reason: 'default' })).toBe('focal');
+    expect(toBridgeSuggestedMode({ mode: 'script', reason: 'sticky' })).toBe('focal');
+    expect(toBridgeSuggestedMode({ mode: 'river', reason: 'sticky' })).toBe('focal');
+    expect(toBridgeSuggestedMode({ mode: 'bubbles', reason: 'flag-disabled' })).toBe('focal');
+  });
+
+  it('fonction TOTALE : chaque mode du catalogue a une image dans {focal, resume}', () => {
+    ConversationReadingModeSchema.options.forEach((mode) => {
+      expect(['focal', 'resume']).toContain(
+        toBridgeSuggestedMode({ mode, reason: 'default' }),
+      );
+    });
+  });
+
+  it("la raison n'entre pas dans la projection — seul le mode compte", () => {
+    expect(toBridgeSuggestedMode({ mode: 'summary', reason: 'sticky' })).toBe('resume');
+    expect(toBridgeSuggestedMode({ mode: 'summary', reason: 'stale-absence' })).toBe('resume');
+    expect(toBridgeSuggestedMode({ mode: 'focal', reason: 'clamped-unavailable' })).toBe('focal');
   });
 });
 
@@ -306,7 +462,7 @@ describe("resolveCapabilities — l'UNIQUE point de branchement invité/inscrit"
     expect(capabilities.availableModes).not.toContain('summary');
   });
 
-  it("'river' n'est JAMAIS dans availableModes en phase 1, même éligible et inscrit (en sursis)", () => {
+  it("'river' reste hors catalogue tant que son drapeau est éteint, même éligible et inscrit", () => {
     const capabilities = resolveCapabilities({
       identity: { isAnonymous: false },
       isFlagEnabled: true,
@@ -315,6 +471,89 @@ describe("resolveCapabilities — l'UNIQUE point de branchement invité/inscrit"
     });
     expect(capabilities.availableModes).not.toContain('river');
     expect(capabilities.riverEligible).toBe(true);
+  });
+});
+
+describe('resolveCapabilities — amendement R : la Rivière devient sélectionnable', () => {
+  it('drapeau Rivière ON + éligible + inscrit → river AU catalogue', () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 10,
+    });
+    expect(capabilities.availableModes).toContain('river');
+    expect(capabilities.riverEligible).toBe(true);
+  });
+
+  it("drapeau Rivière ON + éligible + INVITÉ → river AU catalogue (la Rivière ne dépend pas de /analysis)", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: true },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 10,
+    });
+    expect(capabilities.availableModes).toEqual(['focal', 'script', 'river']);
+    expect(capabilities.availableModes).not.toContain('summary');
+  });
+
+  it('drapeau Rivière ON mais INÉLIGIBLE (4 actifs) → river hors catalogue, raison grisée servie', () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 4,
+    });
+    expect(capabilities.availableModes).not.toContain('river');
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 4 });
+  });
+
+  it("drapeau Rivière ON en 'direct' → river hors catalogue (jamais en 1:1), raison servie", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'direct',
+      activeParticipantCount: 12,
+    });
+    expect(capabilities.availableModes).not.toContain('river');
+    expect(capabilities.riverEligible).toBe(false);
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 12 });
+  });
+
+  it("drapeau Lentille ÉTEINT : river n'entre pas au catalogue même avec son propre drapeau ON", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: false,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 10,
+    });
+    expect(capabilities.availableModes).toEqual(['bubbles']);
+    expect(capabilities.riverEligible).toBe(true);
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 10 });
+  });
+
+  it('isRiverFlagEnabled est OPTIONNEL et vaut false par défaut', () => {
+    expect(
+      resolveCapabilities({
+        identity: { isAnonymous: false },
+        isFlagEnabled: true,
+        conversationType: 'group',
+        activeParticipantCount: 10,
+      }).availableModes,
+    ).toEqual(
+      resolveCapabilities({
+        identity: { isAnonymous: false },
+        isFlagEnabled: true,
+        isRiverFlagEnabled: false,
+        conversationType: 'group',
+        activeParticipantCount: 10,
+      }).availableModes,
+    );
   });
 });
 
