@@ -76,4 +76,9 @@ interface ConversationApi {
         @Path("id") id: String,
         @Body body: UpdateConversationSettingsRequest,
     ): ApiResponse<UpdateConversationResponse>
+
+    /** Leaves the conversation (gateway `routes/conversations/leave.ts`) — irreversible for the
+     *  caller; the row drops from their own list once `conversation:participant-left` round-trips. */
+    @POST("conversations/{id}/leave")
+    suspend fun leave(@Path("id") id: String): ApiResponse<Unit>
 }

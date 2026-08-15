@@ -332,6 +332,21 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
     }
 
+    /**
+     * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
+     * No optimistic local removal: the socket-driven purge path
+     * (`ConversationPurge.onParticipantLeft`) drops the row once the server
+     * confirms and broadcasts the event back to this device.
+     */
+    fun leaveConversation(id: String) {
+        viewModelScope.launch {
+            when (val result = repository.leave(id)) {
+                is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
     /** Marks a conversation read from the list (swipe action). */
     fun markRead(id: String) {
         runPrefMutation { repository.markReadOptimistic(id) }

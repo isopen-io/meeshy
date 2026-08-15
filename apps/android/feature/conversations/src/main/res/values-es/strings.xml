@@ -51,6 +51,11 @@
     <string name="conversations_category_search_hint">Buscar o crear una categoría…</string>
     <string name="conversations_action_create_category">Crear «%1$s»</string>
     <string name="conversations_action_discard_draft">Descartar borrador</string>
+    <string name="conversations_action_leave">Abandonar conversación</string>
+    <string name="conversations_leave_confirm_title">¿Abandonar la conversación?</string>
+    <string name="conversations_leave_confirm_message">Vas a abandonar «%1$s». Ya no recibirás nuevos mensajes de esta conversación.</string>
+    <string name="conversations_leave_confirm_button">Abandonar</string>
+    <string name="conversations_leave_cancel_button">Cancelar</string>
     <string name="conversations_action_more">Más acciones</string>
     <string name="conversations_badge_pinned">Fijada</string>
     <string name="conversations_badge_muted">Silenciada</string>

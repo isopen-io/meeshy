@@ -51,6 +51,11 @@
     <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
     <string name="conversations_action_create_category">Créer « %1$s »</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
+    <string name="conversations_action_leave">Quitter la conversation</string>
+    <string name="conversations_leave_confirm_title">Quitter la conversation ?</string>
+    <string name="conversations_leave_confirm_message">Vous allez quitter « %1$s ». Vous ne recevrez plus de nouveaux messages de cette conversation.</string>
+    <string name="conversations_leave_confirm_button">Quitter</string>
+    <string name="conversations_leave_cancel_button">Annuler</string>
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_badge_pinned">Épinglée</string>
     <string name="conversations_badge_muted">Muette</string>
