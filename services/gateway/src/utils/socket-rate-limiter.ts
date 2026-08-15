@@ -165,6 +165,19 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:presence:app-state'
   },
+  // Calling-stack audit routine 2026-08-15 — `transcription-active` was the
+  // last call:* lifecycle signal left unrate-limited (every sibling —
+  // BACKGROUNDED/FOREGROUNDED/CHECK_ACTIVE/RECONNECTING — already checks).
+  // It runs resolveActiveCallParticipantId() (a nested Prisma call-session
+  // lookup) plus a second unconditional prisma.callSession.findUnique per
+  // event, so a flooding client could still amplify DB load even though
+  // authorization was already enforced. Mirrors CALL_BACKGROUNDED's budget —
+  // one UI-transition notification per toggle, generous buffer for retries.
+  CALL_TRANSCRIPTION_ACTIVE: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:call:transcription-active'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods
