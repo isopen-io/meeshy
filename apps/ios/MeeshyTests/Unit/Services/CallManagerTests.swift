@@ -4169,8 +4169,9 @@ final class EndCallLockScreenDeclineTests: XCTestCase {
 /// declines within seconds — before the socket handshake lands) must NOT be
 /// dropped: the caller would keep ringing the full 60 s window and the server
 /// would resolve `missed`. Android defers via DeclinedCallStore and drains on
-/// connect; iOS already defers plain hang-ups via pendingEndReconciliationCallId
-/// — the reject path must ride the same mechanism, reason included.
+/// connect; iOS already defers plain hang-ups via pendingEndReconciliations
+/// (armPendingEndReconciliation) — the reject path must ride the same
+/// mechanism, reason included.
 final class RejectDeferredReconciliationTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
@@ -4206,9 +4207,9 @@ final class RejectDeferredReconciliationTests: XCTestCase {
             "the caller ringing 60 s and the server resolving `missed`."
         )
         XCTAssertTrue(
-            body.contains("pendingEndReconciliationCallId = callId"),
-            "the deferred reject must be remembered in pendingEndReconciliationCallId " +
-            "so the connectionState observer replays it on reconnect."
+            body.contains("armPendingEndReconciliation(callId: callId, reason: \"rejected\")"),
+            "the deferred reject must be remembered (with reason: \"rejected\") via " +
+            "armPendingEndReconciliation so the connectionState observer replays it on reconnect."
         )
     }
 
@@ -4241,10 +4242,10 @@ final class RejectDeferredReconciliationTests: XCTestCase {
             "on ACK failure, emitCallReject must still emit the fire-and-forget fallback — " +
             "the gateway's end handler is idempotent, a duplicate is a no-op."
         )
-        let rejectedReasonCount = body.components(separatedBy: "pendingEndReconciliationReason = \"rejected\"").count - 1
+        let rejectedReasonCount = body.components(separatedBy: "armPendingEndReconciliation(callId: callId, reason: \"rejected\")").count - 1
         XCTAssertEqual(
             rejectedReasonCount, 2,
-            "emitCallReject must arm pendingEndReconciliationReason = \"rejected\" on BOTH the " +
+            "emitCallReject must arm the reconciliation with reason: \"rejected\" on BOTH the " +
             "socket-down guard AND the ACK-failure fallback — an unacked-but-emitted reject needs " +
             "replay too, or the caller keeps ringing until the gateway's own timeout mislabels it `missed`."
         )
@@ -4256,9 +4257,27 @@ final class RejectDeferredReconciliationTests: XCTestCase {
         // reject arc eliminated.
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("emitCallReject(callId: pending)"),
+            source.contains("self.emitCallReject(callId: entry.callId)"),
             "the connectionState reconciliation must route a deferred reject through " +
             "emitCallReject(callId:) — a plain replay loses reason=rejected."
+        )
+    }
+
+    func test_reconnectReplay_replaysEveryPendingEntry_notJustOne() throws {
+        // Audit gateway-calls (2026-08-15): pendingEndReconciliations is an
+        // ARRAY precisely so a second deferred hang-up/decline does not
+        // silently overwrite a first one still awaiting replay — mirrors the
+        // pendingIncomingCall single-slot bug fixed at
+        // rejectSupersededPendingCall (Vague 87).
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var pendingEndReconciliations: [(callId: String, reason: String?)] = []"),
+            "the pending reconciliation store must be an array, not a single scalar slot — " +
+            "a second deferred call must not silently drop a first one still awaiting replay."
+        )
+        XCTAssertTrue(
+            source.contains("for entry in pending"),
+            "the reconnect observer must iterate and replay EVERY pending entry, not just one."
         )
     }
 
@@ -5943,7 +5962,7 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            body.contains("pendingEndReconciliationCallId = callId"),
+            body.contains("armPendingEndReconciliation(callId: callId, reason: nil)"),
             "when the socket is down, the callId must be remembered for reconciliation"
         )
         XCTAssertTrue(
@@ -5951,7 +5970,7 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
             "when the socket is up, the ACK-first path must be used"
         )
         XCTAssertTrue(
-            source.contains("let pending = self.pendingEndReconciliationCallId"),
+            source.contains("let pending = self.pendingEndReconciliations"),
             "the socket connectionState observer must replay the deferred call:end on reconnect"
         )
     }
@@ -6013,7 +6032,7 @@ final class AckFailureReconciliationTests: XCTestCase {
             XCTFail("emitCallEndReliably not found"); return
         }
         let body = String(source[fnRange.lowerBound...].prefix(1600))
-        let occurrences = body.components(separatedBy: "pendingEndReconciliationCallId = callId").count - 1
+        let occurrences = body.components(separatedBy: "armPendingEndReconciliation(callId: callId, reason: nil)").count - 1
         XCTAssertGreaterThanOrEqual(
             occurrences, 2,
             "emitCallEndReliably must arm the reconciliation in BOTH branches: socket known down " +
@@ -6080,7 +6099,7 @@ final class CallCancellationPolicyTests: XCTestCase {
         guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
             XCTFail("CallManager.endRingingFromCancellation not found"); return
         }
-        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        let body = String(manager[fnRange.lowerBound...].prefix(2000))
         XCTAssertTrue(
             body.contains("shouldEndRingingOnCancellation"),
             "endRingingFromCancellation must gate on CallReliabilityPolicy.shouldEndRingingOnCancellation"
@@ -6088,6 +6107,41 @@ final class CallCancellationPolicyTests: XCTestCase {
         XCTAssertTrue(
             body.contains(".remoteEnded"),
             "endRingingFromCancellation must report the CallKit end with reason .remoteEnded"
+        )
+    }
+
+    // Audit gateway-calls (2026-08-15): every SOCKET-based terminal listener
+    // (call:ended/missed/already-answered/forced-leave) clears the waiting
+    // banner FIRST via clearPendingIncomingCall(ifMatching:) — this push is
+    // the socketless counterpart of the same event family and must do the
+    // same, or a cancel for the WAITING call (not the primary ring) leaves
+    // the banner offering "Answer/Reject" for an already-cancelled call.
+    func test_endRingingFromCancellation_clearsPendingIncomingCallBanner() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
+            XCTFail("CallManager.endRingingFromCancellation not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(2000))
+        XCTAssertTrue(
+            body.contains("clearPendingIncomingCall(ifMatching: callId)"),
+            "endRingingFromCancellation must clear a matching pending (waiting-banner) call — " +
+            "shouldEndRingingOnCancellation only ever matches the PRIMARY ring, so a cancel for a " +
+            "call sitting in the waiting banner would otherwise never dismiss it."
+        )
+        guard let clearRange = body.range(of: "clearPendingIncomingCall(ifMatching: callId)"),
+              let guardRange = body.range(of: "guard CallReliabilityPolicy.shouldEndRingingOnCancellation") else {
+            XCTFail("expected both the banner clear and the policy guard in endRingingFromCancellation"); return
+        }
+        XCTAssertLessThan(
+            clearRange.lowerBound, guardRange.lowerBound,
+            "the banner clear must run BEFORE the policy guard — mirrors every socket-based " +
+            "terminal listener, which clears unconditionally rather than gating it on the guard."
         )
     }
 }
@@ -6119,7 +6173,7 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
         guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
             XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
         }
-        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        let body = String(manager[fnRange.lowerBound...].prefix(2000))
         XCTAssertTrue(
             body.contains("shouldEndRingingOnCancellation"),
             "endRingingAnsweredElsewhere must gate on the same pure policy as call_cancel (exact callId + incoming ring only)"
@@ -6127,6 +6181,39 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
         XCTAssertTrue(
             body.contains(".answeredElsewhere"),
             "endRingingAnsweredElsewhere must report the CallKit end with reason .answeredElsewhere (Recents parity with the socket path)"
+        )
+    }
+
+    // Audit gateway-calls (2026-08-15): same rationale as
+    // endRingingFromCancellation's equivalent test — the socket path
+    // (call:already-answered) clears the waiting banner first.
+    func test_endRingingAnsweredElsewhere_clearsPendingIncomingCallBanner() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
+            XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(2000))
+        XCTAssertTrue(
+            body.contains("clearPendingIncomingCall(ifMatching: callId)"),
+            "endRingingAnsweredElsewhere must clear a matching pending (waiting-banner) call — " +
+            "shouldEndRingingOnCancellation only ever matches the PRIMARY ring, so an " +
+            "answered-elsewhere push for a call sitting in the waiting banner would otherwise " +
+            "never dismiss it."
+        )
+        guard let clearRange = body.range(of: "clearPendingIncomingCall(ifMatching: callId)"),
+              let guardRange = body.range(of: "guard CallReliabilityPolicy.shouldEndRingingOnCancellation") else {
+            XCTFail("expected both the banner clear and the policy guard in endRingingAnsweredElsewhere"); return
+        }
+        XCTAssertLessThan(
+            clearRange.lowerBound, guardRange.lowerBound,
+            "the banner clear must run BEFORE the policy guard — mirrors every socket-based " +
+            "terminal listener, which clears unconditionally rather than gating it on the guard."
         )
     }
 }
