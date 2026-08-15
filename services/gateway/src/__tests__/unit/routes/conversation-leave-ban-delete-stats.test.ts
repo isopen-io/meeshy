@@ -682,8 +682,13 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
       .mockResolvedValueOnce(null); // no other member
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
+    // La clôture s'ENREGISTRE comme telle. `loadConversationTombstones`
+    // interroge `closedAt > since` : une fermeture qui n'écrit que
+    // `isActive: false` n'est portée par aucun delta de rattrapage.
     expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { isActive: false } })
+      expect.objectContaining({
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: VALID_USER_ID },
+      })
     );
     expect(mockedSendSuccess).toHaveBeenCalled();
   });

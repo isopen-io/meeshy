@@ -7322,3 +7322,152 @@ Ce prédicat cesse de prouver quoi que ce soit dès qu'un second appelant partag
 ce mock. Un témoin qui asserte sur un mock PARTAGÉ doit nommer l'appel qu'il
 vise (ici : la seule des deux lectures qui demande `select.bannedAt`), sinon il
 se transforme en faux rouge — ou, plus tard et bien pire, en faux vert.
+## Leçon 260 — Une entrée choisie par l'appelant ne fixe pas que l'ADRESSE : elle peut fixer l'AUDIENCE (2026-08-15, routine temps réel, cycle 28)
+
+Suite directe de la leçon 258. `DELETE /posts/:postId/comments/:commentId`
+supprimait par `commentId` — la propriété du commentaire est vérifiée, la garde
+est juste — puis relisait un post par le `:postId` du CHEMIN et s'en servait
+pour trois choses : l'adresse du broadcast, le `commentCount` annoncé, et
+`authorId` / `visibility` / `visibilityUserIds`, c'est-à-dire **la liste de
+diffusion elle-même**.
+
+**Ce que la leçon 258 ne disait pas encore.** Elle traitait l'adresse comme un
+nom de room : au pire, l'événement part au mauvais endroit. Ici la même valeur
+sert à CALCULER l'audience — l'appelant ne choisissait pas seulement où son
+annonce partait, mais **à qui**, en nommant un post dont il aimait l'ACL.
+Quand un id client alimente une lecture d'ACL, il ne faut pas se demander « la
+room est-elle la bonne ? » mais « **quelles décisions cette valeur prend-elle
+en aval ?** » — et les recenser toutes.
+
+**Quand la vérité n'est pas en scope, on élargit la SOURCE — on ne fait pas
+confiance à l'appelant.** `PostCommentService.deleteComment` tenait déjà
+`comment.postId` (il s'en sert pour décrémenter `commentCount`) et le jetait.
+Le rendre coûte zéro requête. Le réflexe inverse — « la vérité n'est pas là,
+prenons le paramètre » — est exactement ce qui produit ce défaut ; le réflexe
+juste est de remonter d'un cran vers l'endroit qui la tient déjà.
+
+**Chaque chemin qui produit la MÊME annonce doit dériver la vérité, ou se
+taire.** Le rejeu idempotent (`onDuplicate`) ne rejoue pas le service : sans
+relecture propre, il n'avait plus d'adresse serveur du tout. Le soft-delete
+garde la ligne — `deletedAt` la marque, il ne l'efface pas — donc `postId` reste
+lisible là où le sous-arbre, masqué par `NOT_DELETED`, ne l'est plus. Quand
+même ce repli est impossible, **ne rien annoncer** bat annoncer à une audience
+choisie par l'appelant : les deux laissent la ligne à l'écran, la seconde y
+ajoute la pollution d'un fil étranger. Un `undefined` qui adresse une diffusion
+n'est jamais un repli acceptable.
+
+**Le voisin correct est le meilleur oracle.** Dans le même fichier, `PATCH`
+(`comment.postId`), `POST` (`resolveInteractionTarget` → `targetPostId`),
+`GET .../replies` et `POST .../translate` (`loadCommentPostAcl`) dérivent tous
+du serveur — `GET .../replies` porte même la règle en commentaire. Un seul des
+six chemins divergeait. Quand une famille de routes partage un préfixe d'URL,
+lire d'abord celles qui sont justes donne la forme attendue et rend l'outlier
+visible en une lecture.
+
+
+## Leçon 261 — Une garde d'ordonnancement écrite sur le chemin d'ENTRÉE doit être posée en question au chemin de SORTIE (2026-08-15, routine temps réel, cycle 29)
+
+`_authenticateJWTUser` joint les rooms AVANT d'inscrire le socket dans
+`connectedUsers`, et le dit : la livraison étant gatée sur
+`connectedUsers.has(clé)`, un destinataire qui « paraît en ligne » sans être dans
+la room perd l'événement des deux côtés — écarté de la file hors ligne parce
+qu'il a l'air joignable, absent de la diffusion parce qu'il ne l'est pas.
+
+`handleDisconnection` devait faire l'inverse — désinscrire d'abord — et ne le
+faisait pas. Il tourne sur `disconnect`, que Socket.IO émet APRÈS avoir vidé les
+rooms : chaque `await` avant le `delete` était une fenêtre de perte sèche.
+
+**La règle.** Une garde d'ORDRE entre deux registres (ici : appartenance aux
+rooms et registre de présence) n'est jamais une propriété d'un seul chemin. Elle
+énonce un invariant — « ces deux états ne divergent jamais dans le sens qui fait
+perdre » — et un invariant se vérifie à CHAQUE transition, entrée comme sortie,
+avec l'ordre inversé de part et d'autre. Trouver la garde à l'entrée ne dit rien
+de la sortie ; ce sont deux sites, pas deux lectures du même site.
+
+**Pourquoi c'est resté invisible — la garde jumelle a servi d'alibi.** Le défaut
+n'a pas survécu à un oubli discret mais à son contraire : la garde EXISTE, elle
+est documentée, longuement, et elle porte sur le chemin qu'on relit
+naturellement. Une lecture qui cherche « cette protection est-elle en place ? »
+la trouve et s'arrête satisfaite. **Une garde présente sur le chemin voisin est
+le plus efficace des camouflages** — c'est la même forme que la Leçon 259 (quatre
+routes qui font toutes visiblement le bon geste sur le canal vivant, aucune sur
+le différé). Le prédicat utile n'est pas « la garde existe-t-elle ? » mais
+« combien de chemins traversent cet invariant, et je les ai tous ouverts ? ».
+
+**Corollaire — « sûr par accident » n'est pas sûr.** Le chemin inscrit
+respectait l'ordre sans le vouloir : il ne traverse simplement aucun `await`
+avant la désinscription. Rien ne l'y oblige, aucun test ne le fige, et le
+premier `await` ajouté demain (un cache, une métrique, un appel réseau) rouvre
+la fenêtre en silence. Un invariant tenu par l'absence fortuite d'une
+instruction est une dette qui ne s'annonce pas.
+
+**Corollaire de test — une fenêtre ne s'observe que de l'intérieur.** L'état
+FINAL était correct des deux côtés du correctif : observer `connectedUsers`
+après le `await` ne montre rien. Le seul témoin discriminant lit le registre
+DEPUIS l'intérieur du travail awaité (ici, en instrumentant le mock Prisma que
+le nettoyage attend). Quand le défaut est un ORDRE et non un résultat, le point
+d'observation doit être placé dans l'intervalle, pas à ses bornes.
+
+**Corollaire de charge.** La fenêtre dure un aller-retour de base : elle croît
+donc avec la profondeur de file de cette base, c'est-à-dire pendant les rafales
+de déconnexion (redémarrage, coupure réseau) — quand la perte est à la fois la
+plus probable et la plus massive. Troisième récidive de la famille des cycles 24
+et 25 : **un coût dimensionné par l'état accumulé se paie toujours au pire
+moment**, et c'est ce qui le rend introuvable en test nominal.
+## Leçon 262 — Un événement dont le CONTRAT décrit une portée est une assertion sur l'écriture, pas une étiquette (2026-08-15, routine temps réel, cycle 30)
+
+`DELETE /conversations/:id/delete-for-me` émettait `conversation:deleted`, dont
+le contrat écrit dans `socketio-events.ts` dit : « the conversation **stays
+active for every other participant** ». Deux de ses branches faisaient
+exactement le contraire — `Conversation.isActive = false`, la clôture GLOBALE,
+celle que `conversation:closed` existe pour annoncer. La route disait « pour
+moi » en faisant « pour tout le monde ».
+
+**La règle.** Quand deux événements voisins se distinguent par leur PORTÉE
+(`:deleted` personnel vs `:closed` global, `hidden-for-me` vs `deleted`,
+`leave` vs `ban`), leur documentation n'est pas descriptive : c'est une
+**assertion vérifiable sur l'écriture qui les précède**. Avant d'émettre l'un
+des deux, relire la phrase qu'il promet et la confronter au `data:` du `update`
+qu'on vient de faire. Ici la confrontation tient en une ligne — « stays active
+for every other participant » contre `{ isActive: false }` — et elle échoue à
+la lecture, sans instrumentation, sans reproduction.
+
+**Le corollaire de branchement, qui est le vrai piège.** La route ÉTAIT correcte
+sur son chemin nominal : un membre ordinaire, ou un créateur qui transfère,
+supprime bien pour lui seul. Le mauvais événement n'apparaît que sur deux
+branches minoritaires du même handler, qui changent la portée de l'opération
+**sans changer l'annonce**. Un handler qui se ramifie vers des portées
+différentes doit ramifier son vocabulaire d'événements avec elles ; sinon la
+branche rare hérite du mot de la branche fréquente. Le prédicat d'audit :
+**« ce handler a-t-il un chemin où il écrit plus large que ce qu'il annonce ? »**
+
+**Corollaire de durabilité — un champ peut être le CANAL, pas une décoration.**
+La clôture n'écrivait que `isActive: false`, jamais `closedAt`. Or
+`loadConversationTombstones` reconstitue les disparitions par `closedAt > since`
+— une clôture sans horodatage n'est portée par AUCUN delta, à aucune date. Le
+membre restant ne l'apprenait donc ni en direct (aucune émission ne le visait),
+ni plus tard (aucun tombstone) : les deux canaux muets pour la même omission.
+**Avant de conclure « le client rattrapera à la prochaine synchro », ouvrir la
+requête de rattrapage et vérifier sur quel CHAMP elle porte.** Un champ nullable
+qu'on n'écrit pas ne dégrade pas la précision d'un stream : il l'éteint. Ici le
+schéma le disait déjà — le commentaire de `@@index([closedAt])` nomme ce stream
+et son unicité — et personne ne l'avait relié au site d'écriture.
+
+**Corollaire d'audience — la ramener PAR l'écriture, pas par une requête de
+plus.** `core.ts` le justifiait déjà par la fraîcheur (« une seconde requête …
+pourrait tomber sur un état déjà modifié ») ; ce cycle en ajoute une seconde
+raison, découverte par un test rouge. La première version du correctif lisait
+l'audience via un `findMany` APRÈS les écritures : un double de test sans ce
+mock a rendu `500` sur une opération dont TOUTES les écritures avaient été
+committées. Une requête ajoutée après le point de non-retour n'est pas neutre —
+elle transforme un succès durable en erreur rendue à l'appelant. Le `include`
+sur l'`update` supprime la requête ET le mode d'échec.
+
+**Corollaire de test (suite des leçons 258/260).** Le scénario « DM vide » de la
+suite n'instanciait AUCUN autre participant. Aucune assertion ne pouvait donc
+distinguer « annonce correcte » de « aucune annonce » : la suite était verte
+parce qu'elle ne construisait pas le monde où la propriété existe. Un témoin
+d'audience exige qu'il Y AIT quelqu'un d'autre — sinon on teste le silence dans
+une pièce vide. Et deux assertions préexistantes épinglaient `data: { isActive:
+false }` à l'exact, figeant la forme INCOMPLÈTE de l'écriture : une assertion
+exacte sur un payload transforme toute omission en spécification.

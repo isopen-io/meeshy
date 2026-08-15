@@ -1124,3 +1124,452 @@ discriminante — la lecture d'appartenance est la seule des deux à demander
 `select.bannedAt`. C'est le pendant du corollaire de la Leçon 255 : un test qui
 prouve « rien ne s'est passé » par l'absence d'appel à un mock partagé cesse de
 prouver quoi que ce soit dès qu'un second appelant partage ce mock.
+---
+
+# Cycle 28 (2026-08-15) — l'entrée du client ne fixait pas que l'adresse, mais l'AUDIENCE
+
+Passe suivante de la routine « amélioration continue temps réel ». Ce cycle ne
+change pas de question : il **prend délibérément le candidat que le cycle 26
+avait consigné avec sa preuve** plutôt que de le redécouvrir par le symptôme —
+`DELETE /posts/:postId/comments/:commentId`, troisième instance de la classe
+« autorité de l'entrée », laissée de côté parce qu'elle n'était pas gratuite.
+
+**Conclusion : le défaut est réel, corrigé, testé. La famille des commentaires
+est désormais CLOSE** — les six chemins du fil dérivent leur adresse du serveur.
+
+## Ce que le cycle 26 avait laissé à décider
+
+Trois points, tous tranchés ici :
+
+| Question ouverte | Décision |
+|---|---|
+| La vérité n'est pas en scope (`deleteComment` ne rend pas `postId`) | Élargir le RETOUR du service — il tient déjà `comment.postId` pour décrémenter `commentCount`. Zéro requête ajoutée. |
+| Le rejeu idempotent (`onDuplicate → { id }`) n'a aucune ligne vivante à relire | La ligne **survit** au soft-delete : `deletedAt` la marque, ne l'efface pas. `postId` est donc relisible ; le sous-arbre, masqué par `NOT_DELETED`, ne l'est pas. Repli explicite. |
+| Que faire si aucune adresse serveur n'est dérivable | **Ne rien annoncer.** Se taire et diffuser-à-tort laissent tous deux la ligne à l'écran ; seul le second pollue un fil étranger. |
+
+## Le défaut — trois décisions prises par un paramètre d'URL
+
+La route supprime par `commentId` seul (le service vérifie la propriété du
+commentaire — l'autorisation, elle, était juste), puis relisait un post par le
+`:postId` du CHEMIN et s'en servait pour :
+
+1. `postId` du payload — la **clé de cache** client (`patchCommentInPostCaches`
+   web, `FeedPersistenceActor` iOS) ;
+2. `commentCount` — un compteur lu sur un post que la suppression n'a pas
+   décrémenté ;
+3. `authorId` / `visibility` / `visibilityUserIds` — passés à
+   `broadcastCommentDeleted`, donc **la liste de diffusion elle-même**
+   (`getVisibilityFilteredRecipients` + `commentBroadcastRooms`).
+
+**C'est en quoi ce site est PIRE que D1 du cycle 26.** Là-bas, l'entrée client
+nommait une room : l'événement partait au mauvais endroit. Ici la même valeur
+CALCULE l'audience — l'appelant ne choisissait pas seulement *où*, mais *à qui*,
+en nommant un post dont l'ACL lui convenait.
+
+**Volet fonctionnel — les reposts, le cas non-malveillant.** Un repost simple
+n'a pas de fil propre : `resolveInteractionTarget` écrit ses commentaires sur la
+RACINE, et `handleJoinPost` y redirige ses lecteurs. Le client, lui, envoie l'id
+de la carte AFFICHÉE.
+
+```
+Le fil du repost R (racine P) est ouvert chez Alice et Bob.
+  join     → tous deux entrent dans post:P        (redirection)
+Alice supprime son commentaire C (C.postId = P).
+  route    → DELETE /posts/R/comments/C
+           → service : soft-delete C + descendants, P.commentCount--
+           → post lu par R, broadcast vers post:R  ← room VIDE
+  Bob      → garde la ligne supprimée à l'écran, définitivement
+```
+
+Aucun refetch ne l'en débarrasse : `getComments` filtre `parentId: null`, donc
+un sous-arbre supprimé ne revient par aucune lecture. Muet des deux côtés —
+200 OK, UI optimiste correcte chez Alice.
+
+**Volet intégrité.** Le `:postId` n'était comparé à rien : l'audience d'un post
+PUBLIC arbitraire recevait la suppression d'un commentaire vivant sur un post
+`PRIVATE`, avec le `commentCount` du post nommé — soit l'écriture d'un compteur
+faux dans le cache d'un fil étranger.
+
+## Correctif
+
+- `PostCommentService.deleteComment` rend `postId: comment.postId` — la ligne
+  est déjà chargée et sert deux lignes plus haut au décrément. Zéro requête.
+- La route dérive `commentPostId` du RÉSULTAT : lecture d'ACL, payload,
+  `commentCount` et audience du fan-out en découlent tous.
+- `onDuplicate` relit `postComment.findUnique({ id }, select: { postId })` — la
+  ligne soft-supprimée porte encore son post.
+- Adresse absente ⇒ **aucune diffusion** (repli explicite, jamais `undefined`).
+- Le `:postId` du chemin n'est plus lu du tout par ce handler.
+
+## Sondes rendues vides — la famille des commentaires est close
+
+Balayage des SIX chemins du fil, après le correctif (méthode du cycle 26 : ne
+jamais s'arrêter au site qui a déclenché la sonde) :
+
+| Chemin | Adresse / audience | Verdict |
+|---|---|---|
+| `GET /posts/:postId/comments/:commentId/replies` | `loadCommentPostAcl(commentId)` | ✅ (porte même la règle en commentaire) |
+| `POST /posts/:postId/comments` | `resolveInteractionTarget` → `targetPostId` | ✅ |
+| `PATCH …/comments/:commentId` | `comment.postId` (résultat du service) | ✅ — le jumeau CORRECT du défaut |
+| `POST …/comments/:commentId/translate` | `loadCommentPostAcl(commentId)` | ✅ |
+| `POST` / `DELETE …/comments/:commentId/like` | `thread.postId` | ✅ (corrigé au cycle 26, D1 bis) |
+| `DELETE …/comments/:commentId` | `:postId` du chemin | ❌ **ce cycle** |
+
+Un seul des six divergeait. Vérifié aussi, vert : `PostTranslationService`
+diffuse `comment:translation-updated` depuis `comment.postId` (l. 439–450), et
+`admin/agent.ts` est le seul autre couple d'ids d'URL du service — hors famille.
+
+**Corollaire de doublon, récidive exacte du cycle 26.** Le mock de
+`comments.test.ts` déclarait `deleteComment → { postId: 'post-001' }` pendant
+que les assertions attendaient `postId: POST_ID` (`507f…9022`) : le monde
+impossible où le commentaire vit sur un post et son annonce part vers un autre,
+promu au rang de spécification. Doubles réalignés sur un monde possible ; les
+cas où les deux ids DIVERGENT sont désormais déclarés explicitement, un par un.
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges avant correctif (1 contrat de service,
+      3 adresse/audience/compteur, 2 rejeu)
+- [x] Suites voisines : 21 suites / 793 tests verts
+- [x] Suite gateway complète : **719 suites / 17620 tests verts** (17614 au
+      cycle 26 — exactement les 6 témoins neufs, aucune suite déplacée) ;
+      **17629 après merge manuel de `main`**, le cycle 27 parallèle en ayant
+      apporté 9 de plus
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + ce journal + leçon 259
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+
+## Candidat pour le cycle suivant
+
+La classe « autorité de l'entrée » est épuisée sur les posts/commentaires. La
+question NEUVE à porter au cycle 29, jamais posée par les cycles 21–28 : **le
+MOMENT de la diffusion par rapport à la durabilité du fait** — un événement émis
+avant que son écriture ne soit committée laisse les clients tenir un fait que le
+serveur peut encore nier, et rien ne le rétracte. Recenser les émetteurs qui
+diffusent depuis l'intérieur d'une transaction, ou avant le `await` qui persiste.
+
+> Cette sonde a été portée par le **cycle 30**, pas 29 : une session parallèle a
+> pris le numéro 29 entre-temps (PR #3029).
+
+
+# Cycle 29 (2026-08-15) — la déconnexion d'un invité anonyme ouvrait une fenêtre de perte sèche
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 27 (mergé,
+PR #3024 ; le numéro 28 a été pris entre-temps par une session parallèle, PR #3027). Ce cycle **encaisse un constat latent du précédent** plutôt que d'en
+ouvrir un nouveau : le cycle 27 avait relevé cette fenêtre au § « Constats
+latents » et l'avait explicitement NON livrée, pour ne pas mêler une
+réorganisation de la séquence de déconnexion d'appel à un correctif
+d'autorisation. Ce motif de report ayant disparu avec le merge, la dette est
+prise ici.
+
+## Le défaut — la garde jumelle existait, sur l'autre chemin
+
+Le chemin de CONNEXION porte déjà la garde, écrite noir sur blanc dans
+`_authenticateJWTUser` : joindre les rooms **avant** d'inscrire le socket dans
+`connectedUsers`, parce que la livraison est gatée uniquement sur
+`connectedUsers.has(clé)`. Un destinataire qui « paraît en ligne » sans être
+dans la room perd l'événement des DEUX côtés à la fois :
+
+- écarté de la file hors ligne, puisqu'il a l'air joignable ;
+- absent de la diffusion de room, puisqu'il ne l'est pas.
+
+À la déconnexion, l'ordre doit être inverse — **désinscrire d'abord** — et il ne
+l'était pas.
+
+`handleDisconnection` est branché sur `disconnect`, que Socket.IO émet **après**
+avoir vidé les rooms du socket. Le manager l'énonce lui-même, à trois lignes de
+là, sur son écouteur `disconnecting` voisin : « la diffusion vise les rooms de la
+conversation, et `disconnect` s'exécute après en être sorti. » Tout `await` placé
+entre cette sortie et le `connectedUsers.delete` est donc une fenêtre de perte
+sèche — pas un retard, une perte : rien ne rejoue ce qui n'a été ni diffusé ni
+mis en file.
+
+| chemin | `await` avant la désinscription | fenêtre |
+|---|---|---|
+| inscrit (JWT) | aucun | nulle — **sûr par accident** |
+| anonyme | ≥ 1 à CHAQUE déconnexion | réelle |
+
+Le chemin anonyme traverse au moins un `await` à **chaque** déconnexion
+d'invité : la recherche des participations d'appel actives s'exécute
+inconditionnellement dans le bloc `if (isAnonymous)`, **pas seulement quand un
+appel est en cours**, et la boucle de `leaveCall` qui la suit peut en ajouter
+plusieurs.
+
+**La fenêtre s'élargit sous charge.** Sa durée est celle d'un aller-retour
+Prisma, donc elle croît avec la profondeur de la file d'attente de la base —
+c'est-à-dire au moment exact où une rafale de déconnexions (redémarrage de
+passerelle, coupure réseau) rend la perte à la fois la plus probable et la plus
+massive. Même forme que les cycles 24 et 25 : un coût dimensionné par l'état
+accumulé, qui se paie quand tout va déjà mal.
+
+## Le correctif
+
+`this.connectedUsers.delete(userIdOrToken)` remonte avant le bloc de nettoyage
+d'appel — synchrone, aligné sur ce que le chemin inscrit obtenait déjà sans le
+dire.
+
+La garde anti-clobber qui suit (« une reconnexion a-t-elle atterri pendant le
+nettoyage ? ») **garde tout son sens et en gagne en exactitude** : elle ne
+gouverne plus que l'écriture « hors ligne » en base et sa diffusion. Et comme la
+désinscription a désormais lieu AVANT le nettoyage, une reconnexion qui atterrit
+entre les deux s'est réinscrite elle-même — il n'y a plus de suppression
+séquencée après l'écriture plus fraîche de quelqu'un d'autre, ce que l'ordre
+précédent rendait structurellement possible.
+
+Vérifié avant de déplacer : `CallEventsHandler` ne lit `connectedUsers` nulle
+part, donc rien dans le bloc awaité ne dépend de l'inscription qu'on retire.
+
+**Aucun changement client.**
+
+## Pourquoi ça a survécu
+
+Parce que la garde jumelle EXISTE et qu'elle est documentée — sur le chemin
+qu'on relit naturellement, celui de l'entrée. Une lecture qui cherche « cette
+garde est-elle présente ? » la trouve, et s'arrête. Personne n'avait posé au
+chemin de SORTIE la question que le chemin d'ENTRÉE avait déjà résolue.
+
+## Gates
+
+- [x] 1 RED discriminant vu rouge avant correctif — un témoin qui observe
+      `connectedUsers` **depuis l'intérieur** du nettoyage awaité (la seule
+      position d'où la fenêtre est visible ; l'observer après coup ne montre
+      rien, l'état final étant correct des deux côtés)
+- [x] 1 témoin de non-régression sur la garde anti-clobber (vert des deux
+      côtés) — il interdit que la remontée la coûte
+- [x] `AuthHandler.test.ts` (les deux suites) : 75/75 verts
+- [x] Suite gateway complète : **719 suites / 17625 tests verts** avant le merge
+      de main (cycle 27 : 719 / 17623 — +2) ; **720 suites / 17643 tests verts**
+      après le merge manuel de `origin/main` (le cycle 28 d'une session
+      parallèle, PR #3027, ajoute une suite et ses témoins)
+- [x] `tsc --noEmit` gateway : 0 erreur
+- [x] CHANGELOG + journal d'audit (§ Cycle 29) + `lessons.md` (Leçon 261)
+
+## Constats latents — report du cycle 27, toujours non livrés
+
+1. **`conversation:any`** — chaque socket JWT rejoint cette room ; balayage
+   repo-wide (gateway + web + iOS + Android, toutes extensions) : **deux
+   occurrences en tout, le `join` et son log d'échec.** Aucun émetteur. Retrait
+   trivial, gardé pour un cycle qui touchera déjà `AuthHandler`.
+2. **Dilution de la file par des entrées mortes** — inchangé depuis le cycle 27 ;
+   le TTL de 48 h la borne déjà.
+3. **`next/font/google` résout au BUILD** — chaque build CI dépend de
+   l'accessibilité de `fonts.gstatic.com`. Observé rouge une fois sur la PR
+   #3024, vert au rejeu. Fragilité réelle de la CI, hors du domaine temps réel.
+---
+
+# Cycle 30 (2026-08-15) — le MOMENT de la diffusion par rapport à la durabilité du fait
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 28 (mergé,
+PR #3027). Numéroté 30 et non 29 : une session parallèle a pris le 29 pendant
+cette passe (PR #3029, la fenêtre de perte sèche de l'invité anonyme) — les deux
+passes coexistent sans conflit résiduel, seuls trois fichiers de journal se
+touchaient et les deux contributions y sont conservées.
+
+Sonde annoncée en clôture du cycle 28 : **un événement émis avant que son
+écriture ne soit committée laisse les clients tenir un fait que le serveur peut
+encore nier, et rien ne le rétracte.** Recenser les émetteurs qui diffusent
+depuis l'intérieur d'une transaction, ou avant l'`await` qui persiste.
+
+## Sondes rendues vides — la classe « annoncer avant d'écrire » est propre
+
+| Sous-classe | Méthode | Verdict |
+|---|---|---|
+| Émission DANS un callback `$transaction` | balayage par appariement d'accolades des 35 blocs `$transaction` de la gateway, prédicat `emit\|broadcast\|to(ROOMS\|notify\|publish` | **0 site** |
+| Émission AVANT l'`await` qui persiste | balayage de tout `src/`, tout `.emit(` suivi d'une écriture Prisma dans les 25 lignes | 1 candidat, **faux positif** (`NotificationService.markAsRead` : l'écriture repérée appartient à `markAllAsRead`, la voisine) |
+| Écriture Prisma détachée (`void` / sans `await`) sous une émission | balayage des écritures non attendues | 12 sites, **tous** dans `StatusService` / caches — aucun ne porte d'annonce conditionnée |
+
+Le domaine APPEL est la **référence** de la classe, pas son défaut : `call:end`
+diffuse volontairement AVANT l'écriture autoritaire (`fast-path broadcast`) et
+compense l'échec par `forceEndOrphanedCallSession` +
+`forceEndOrphanedCallAfterOptimisticBroadcast` — annonce optimiste ET
+rétractation. `buildRingingTimeoutHandler` fait l'inverse et le fait aussi bien :
+`updateMany` conditionnel gagnant d'abord, émissions ensuite.
+
+L'oracle utile n'était donc pas « qui annonce trop tôt ? » mais **« qui annonce
+un fait DIFFÉRENT de celui qu'il a écrit ? »** — et là, un site diverge.
+
+## Défaut corrigé — une clôture GLOBALE annoncée comme une suppression PERSONNELLE
+
+`DELETE /conversations/:id/delete-for-me` (`routes/conversations/delete-for-me.ts`)
+
+Les deux événements de la famille portent leur contrat dans
+`socketio-events.ts`, et ils s'opposent terme à terme :
+
+| Événement | Contrat déclaré |
+|---|---|
+| `CONVERSATION_CLOSED` | « `Conversation.isActive` is set to `false` … disappears from **every member's list**. Broadcast to the **conversation room** so all members react » |
+| `CONVERSATION_DELETED` | « removes the conversation from the **caller's own** device list only — the conversation **stays active for every other participant** » |
+
+La route n'émettait que le SECOND. Or deux de ses branches exécutent le PREMIER :
+
+```
+if (participant.role === 'creator') {
+  if (isEmptyDirect)      → conversation.update({ isActive: false })   ← clôture GLOBALE
+  else if (!successor)    → conversation.update({ isActive: false })   ← clôture GLOBALE
+}
+→ io.to(ROOMS.user(caller)).emit(CONVERSATION_DELETED)   ← « stays active for every other participant »
+```
+
+La branche `isEmptyDirect` **nomme elle-même** le cas qui fait mal, dans son
+propre commentaire : « fermer plutôt que transférer, **même s'il reste un autre
+participant actif** ». Ce participant-là :
+
+1. **n'apprend rien en direct** — aucune émission ne le vise. `CONVERSATION_DELETED`
+   part vers `ROOMS.user(<appelant>)` ;
+2. **n'apprend rien plus tard** — et c'est le point non évident.
+   `loadConversationTombstones` (`utils/delta-tombstones.ts`) reconstitue les
+   disparitions à partir de TROIS sources : `closedAt > since`,
+   `Participant.deletedForMe > since`, `Participant.leftAt|bannedAt > since`.
+   La route n'écrivait **aucune des trois** pour lui : `deletedForMe` est celle
+   de l'appelant, il n'a ni quitté ni été banni, et la clôture n'écrivait que
+   `isActive: false` — **jamais `closedAt`**. Aucun delta ne pouvait donc porter
+   la fermeture, à aucune date.
+
+Le `@@index([closedAt])` du schéma dit d'ailleurs la même chose en clair :
+« `closedAt > since` est le SEUL des trois streams … qui ne parte pas d'un
+`userId` indexé ». Le champ n'est pas décoratif, **il EST le canal de rattrapage**.
+
+Reste au participant orphelin : `GET /conversations` filtre bien `isActive: true`
+à la racine du `whereClause`, donc une réconciliation COMPLÈTE finit par retirer
+la ligne. Entre-temps — et les deux clients PERSISTENT (cache disque iOS,
+`staleTime: Infinity` web) — il garde à l'écran une conversation que le serveur a
+fermée, et **aucune garde `Conversation.isActive` n'existe sur le chemin d'envoi** :
+il peut y écrire des messages que l'appelant (participant `isActive: false`,
+`deletedForMe` posé) ne recevra jamais.
+
+### Le jumeau correct, à quelques fichiers de là
+
+`DELETE /conversations/:id` (`core.ts`) fait exactement les deux gestes qui
+manquaient, et son commentaire décrit **le même bug déjà corrigé une fois** :
+« Adressée à la seule room de conversation, la clôture n'atteignait que les
+membres ayant le fil OUVERT ». Le correctif le recopie plutôt que de l'inventer :
+
+- **écriture** : `{ isActive: false, closedAt: now, closedBy: userId }` sur les
+  DEUX branches. La branche « aucun successeur » n'a aucun AUTRE membre à
+  prévenir (c'est sa condition même) mais doit rester ENREGISTRÉE comme
+  clôture : une ligne `isActive: false` sans `closedAt` est une conversation
+  fermée dont la base ignore qu'elle l'a été ;
+- **diffusion** : `emitToConversationParticipants(CONVERSATION_CLOSED)` — les
+  rooms PERSONNELLES, pas la seule room de conversation, parce qu'un client posé
+  sur la LISTE a quitté `conversation:<id>` et n'est joignable que là ;
+- **audience ramenée PAR l'écriture** (`include: { participants: … }`), jamais
+  par une requête de plus. Raison de `core.ts` mot pour mot — « une seconde
+  requête … pourrait tomber sur un état déjà modifié » — plus une raison propre
+  à cette sonde : une requête supplémentaire APRÈS des écritures committées est
+  un mode d'échec gratuit, qui rendrait `500` une opération intégralement réussie ;
+- **émission après la DERNIÈRE écriture** — une annonce ne précède jamais la
+  durabilité du fait qu'elle annonce, ce que cette sonde même exige. L'appelant
+  figure dans l'audience (capturée à l'écriture, où il est encore actif) et
+  reçoit donc les deux événements : c'est exact — les deux faits sont vrais pour
+  lui — et c'est la sémantique de `core.ts`, où l'auteur de la clôture reçoit
+  aussi son annonce.
+
+**Tests** — 6 témoins neufs dans
+`__tests__/unit/routes/conversations/delete-for-me.test.ts` (4 rouges avant
+correctif, 2 verts d'emblée : les non-régressions). La suite ne mesurait PAS la
+propriété en cause — le scénario « DM vide » n'instanciait aucun autre
+participant, donc aucune assertion ne pouvait distinguer « annonce correcte » de
+« aucune annonce ». Deux assertions préexistantes épinglaient `data: { isActive:
+false }` à l'exact : elles figeaient la forme INCOMPLÈTE de l'écriture, réalignées.
+
+### Les deux clients consomment déjà l'événement — vérifié, aucun changement requis
+
+La correction ne vaut que si `conversation:closed` est écouté. Il l'est, des
+deux côtés, et avec exactement le payload que le nouvel émetteur produit :
+
+- **web** — `presence.service.ts` s'abonne à `SERVER_EVENTS.CONVERSATION_CLOSED`
+  et `use-socket-cache-sync.ts` (l. 795) retire la conversation du cache
+  infini + purge sa `detail` query ;
+- **iOS/SDK** — `SocialSocketManager` fanne le payload dans le publisher
+  `conversationDeleted` (témoin B6, `SocialSocketAdditionalTests`), dont le
+  commentaire dit s'aligner sur « the live `conversation:closed` payload from
+  `core.ts` » — la forme `{ conversationId, closedBy, closedAt }` que ce
+  correctif émet à l'identique.
+
+C'est ce qui rend l'entrée CHANGELOG « aucun changement client » vérifiée et
+non supposée : le canal existait, seul l'émetteur manquait.
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif (2 adresse/audience, 2 durabilité)
+- [x] 2 non-régressions vertes d'emblée (membre ordinaire, transfert d'ownership :
+      une garde qui émettrait TOUJOURS passerait les 4 premiers)
+- [x] Suites voisines : 62 suites / 720 tests verts
+- [x] Suite gateway complète : **720 suites / 17 647 tests verts** ; **17 649
+      après merge manuel de `main`**, le cycle 29 parallèle en apportant 2
+      (aucune suite déplacée, aucun test perdu au passage)
+- [x] `tsc --noEmit` gateway : 0, avant ET après le merge
+- [x] CHANGELOG + ce journal + leçon 262
+
+## Constats latents — relevés, NON livrés
+
+1. **`presence:user:<id>` et `presence:anon:<id>` sont ÉCRITS et jamais LUS.**
+   `StatusService` renouvelle ces deux clés Redis à chaque tick d'activité
+   (throttle 5 s) ; un `grep` sur tout le monorepo — gateway, web, translator,
+   iOS — ne rend aucun lecteur. Deux `SET` réseau par tick pour une valeur que
+   personne ne consulte. Non livré ce cycle : c'est de l'hygiène, pas un défaut
+   de synchronisation, et le retrait mérite sa propre passe (vérifier qu'aucun
+   outil d'exploitation ne les lit hors dépôt).
+2. **`leave.ts` est le 4e écrivain de `isActive: false` et n'écrit pas non plus
+   `closedAt` — mais sans victime.** Balayage complet de la famille (méthode du
+   cycle 26 : ne jamais s'arrêter au site qui a déclenché la sonde) :
+
+   | Écrivain | `closedAt` | Diffusion | Verdict |
+   |---|---|---|---|
+   | `core.ts` `DELETE /conversations/:id` | ✅ | `CONVERSATION_CLOSED` | ✅ le jumeau modèle |
+   | `delete-for-me.ts` — DM vide | ❌ → ✅ | aucune → `CONVERSATION_CLOSED` | ❌ **ce cycle** |
+   | `delete-for-me.ts` — sans successeur | ❌ → ✅ | aucune (personne d'autre) | ❌ **ce cycle** |
+   | `leave.ts` — créateur dernier membre | ❌ | aucune | ⚠️ latent |
+
+   `leave.ts` ne ferme que si `otherActiveCount === 0` : par construction il n'y
+   a personne à prévenir, donc l'absence de diffusion est correcte. Reste le
+   `closedAt` manquant — et il n'a pas de victime non plus, vérifié plutôt que
+   supposé : le partant reçoit un tombstone `leftAt` (posé par la même route),
+   et tout participant devenu inactif en tient un aussi (`participants.ts`
+   estampille `leftAt` au retrait, `ban.ts` `bannedAt`, `delete-for-me`
+   `deletedForMe`) — les trois sources du stream sont couvertes. C'est donc une
+   incohérence de champ, pas un trou de synchronisation : une conversation
+   fermée dont la base ignore qu'elle l'a été. **Non livré** pour tenir le diff
+   sur le défaut réel ; à reprendre avec la sonde ci-dessous, dont il relève.
+
+3. **L'`include` de l'audience charge TOUS les participants, actifs ou non** —
+   filtrés ensuite en JS. Sur la branche « aucun successeur » d'un grand groupe
+   dont tout le monde est déjà parti, c'est N lignes chargées pour en garder
+   une. Prisma sait pourtant filtrer dans l'`include`
+   (`participants: { where: { isActive: true } }`). **Non livré, et surtout pas
+   ici seulement** : `core.ts` a exactement la même forme, et ne corriger qu'un
+   des deux jumeaux recréerait la dérive que ce cycle vient de refermer. Le coût
+   est par ailleurs payé une fois par clôture — une opération terminale et rare.
+   À traiter comme une passe unique sur les deux sites.
+
+4. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
+   encore actif d'une conversation FERMÉE peut y écrire ; le message est
+   persisté et diffusé normalement. Le correctif ci-dessus retire la cause
+   principale (l'orphelin apprend maintenant la clôture), mais la garde
+   elle-même reste absente — un client qui ignore l'événement, ou une clôture
+   concurrente d'un envoi en vol, retombent dessus. À traiter comme sa propre
+   sonde : « quels chemins d'écriture ignorent l'état terminal de leur conteneur ? »
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Aucune toolchain Swift sous Linux. À reprendre depuis un runner macOS.
+  S'y ajoute maintenant : vérifier que les clients traitent `conversation:closed`
+  reçu hors du fil ouvert (le correctif l'y adresse désormais).
+- **Aucun double Redis Lua-capable** pour `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` /
+  `PRUNE_STALE_LUA`.
+
+## Candidat pour le cycle suivant
+
+Le constat latent #2 généralisé, et jamais posé par les cycles 21–30 : **quels
+chemins d'écriture ignorent l'état TERMINAL de leur conteneur ?** Une
+conversation `isActive: false`, un post supprimé, un appel `ended`, une
+communauté archivée — chacun a des routes qui écrivent dedans. Recenser, pour
+chaque conteneur porteur d'un état terminal, les écrivains qui ne le vérifient
+pas.
