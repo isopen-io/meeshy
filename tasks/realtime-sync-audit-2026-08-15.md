@@ -1340,8 +1340,10 @@ chemin de SORTIE la question que le chemin d'ENTRÉE avait déjà résolue.
 - [x] 1 témoin de non-régression sur la garde anti-clobber (vert des deux
       côtés) — il interdit que la remontée la coûte
 - [x] `AuthHandler.test.ts` (les deux suites) : 75/75 verts
-- [x] Suite gateway complète : **719 suites / 17625 tests verts**
-      (cycle 27 : 719 / 17623 — +2)
+- [x] Suite gateway complète : **719 suites / 17625 tests verts** avant le merge
+      de main (cycle 27 : 719 / 17623 — +2) ; **720 suites / 17643 tests verts**
+      après le merge manuel de `origin/main` (le cycle 28 d'une session
+      parallèle, PR #3027, ajoute une suite et ses témoins)
 - [x] `tsc --noEmit` gateway : 0 erreur
 - [x] CHANGELOG + journal d'audit (§ Cycle 29) + `lessons.md` (Leçon 261)
 
