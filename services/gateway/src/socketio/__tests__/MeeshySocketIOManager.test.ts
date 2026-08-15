@@ -2724,19 +2724,37 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
 
-    it('drains an anonymous identity (participant-id key) without emitting delivery receipts', async () => {
+    /**
+     * L'accusé de remise ne dépend pas de la NATURE du lecteur, mais du fait
+     * qu'un message soit ARRIVÉ chez lui. Le drain sautait l'accusé dès que la
+     * clé de file était un `Participant.id`, sur la justification « participant
+     * lookup is keyed on Participant.userId, null for anonymous » — vraie de la
+     * REQUÊTE d'alors, jamais du droit de l'auteur à sa double coche.
+     *
+     * Ce que ça coûtait est asymétrique et tombe toujours du même côté : dans
+     * une conversation ouverte par lien de partage, l'anonyme est la population
+     * DOMINANTE. Un auteur inscrit qui écrit à des invités de lien absents
+     * restait sur un tic unique jusqu'à ce que l'un d'eux OUVRE la
+     * conversation — exactement l'attente que cette unité existe pour
+     * supprimer.
+     */
+    it('emits delivery receipts for an anonymous identity (participant-id key)', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { id: 'msg-anon' }, conversationId: 'conv-1', messageId: 'msg-anon' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
-      const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages');
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('anon-part-1', true);
       expect(fakeQueue.drain).toHaveBeenCalledWith('anon-part-1');
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('anon-part-1'));
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-anon' });
-      expect(receiptsSpy).not.toHaveBeenCalled();
+      // La nature du lecteur voyage AVEC la clé : c'est elle qui dit sous quelle
+      // colonne la retrouver, et l'accusé ne peut pas la redécouvrir seul.
+      expect(receiptsSpy).toHaveBeenCalledWith('anon-part-1', expect.any(Array), true);
     });
 
     it('still emits delivery receipts for a registered identity', async () => {
@@ -2748,7 +2766,7 @@ describe('MeeshySocketIOManager', () => {
       manager.setDeliveryQueue(fakeQueue as any);
       const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('user-reg', false);
-      expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array));
+      expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array), false);
     });
   });
 
@@ -2873,7 +2891,7 @@ describe('MeeshySocketIOManager', () => {
 
       expect(receiptsSpy).toHaveBeenCalledWith('user-receipts', [
         expect.objectContaining({ conversationId: 'conv-kept' }),
-      ]);
+      ], false);
     });
 
     it('reads the membership of an anonymous identity by participant id', async () => {
@@ -5345,7 +5363,7 @@ describe('MeeshySocketIOManager', () => {
         { messageId: 'msg-1', conversationId: '507f1f77bcf86cd799439201', payload: {}, enqueuedAt: 1 },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
@@ -5365,7 +5383,7 @@ describe('MeeshySocketIOManager', () => {
       try {
         await (manager as any)._emitDeliveryForDrainedMessages(userId, [
           { messageId: 'msg-a', conversationId: convId, payload: {}, enqueuedAt: 1 },
-        ]);
+        ], false);
       } finally {
         sent.restore();
       }
@@ -5373,6 +5391,137 @@ describe('MeeshySocketIOManager', () => {
       // The accountless peer may well be the message AUTHOR waiting on the
       // sent→delivered tick; its personal room is `user:<Participant.id>`.
       expect(sent.roomsFor(SERVER_EVENTS.READ_STATUS_UPDATED)).toContain(ROOMS.user('part-anonymous'));
+    });
+
+    /**
+     * ─── Le LECTEUR sans compte ────────────────────────────────────────────
+     *
+     * Les trois témoins ci-dessous couvrent le pendant du précédent : là, le
+     * pair sans compte était le DESTINATAIRE de l'accusé ; ici, il est celui
+     * qui vient de recevoir, et dont la réception fait avancer la coche de
+     * l'auteur. La clé de file est alors son `Participant.id` — la convention
+     * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
+     * (`p.userId ?? p.id`) et que `_dropEndedMemberships` lit déjà.
+     */
+    it('resolves an anonymous reader OWN row by participant id, not by userId', async () => {
+      const participantId = 'part-anon-reader';
+      const convId = '507f1f77bcf86cd799439214';
+      const readStatusSvc = makeReadStatusSvc();
+      (manager as any).privacyPreferencesService = makePrivacySvc(participantId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: participantId, conversationId: convId, userId: null },
+        { id: 'part-author', conversationId: convId, userId: 'user-author' },
+      ]);
+
+      await (manager as any)._emitDeliveryForDrainedMessages(
+        participantId,
+        [{ messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 }],
+        true
+      );
+
+      // `row.userId === key` ne matche AUCUNE ligne pour ce lecteur : sans le
+      // branchement, la boucle sortait sur zéro conversation et personne
+      // n'apprenait rien.
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith(participantId, convId, 'msg-anon');
+    });
+
+    /**
+     * `userId` porte le `User.id` de l'ACTEUR, `null` quand il n'en a pas — le
+     * type l'énonce déjà (`ReadStatusUpdatedEventData.userId: string | null`),
+     * les décodeurs iOS (`String?`) et Android (`String? = null`) l'acceptent
+     * déjà, et le jumeau en ligne (`autoDeliverToOnlineRecipients`) émet déjà
+     * `firstAcker.userId` possiblement nul. Émettre ici la CLÉ de file
+     * remplirait le champ d'un `Participant.id`, qu'un consommateur comparant
+     * à sa propre identité pour synchroniser son curseur lirait comme un
+     * `User.id` — la seule forme qui puisse mentir.
+     */
+    it('carries userId=null for an anonymous reader, never the queue key', async () => {
+      const participantId = 'part-anon-payload';
+      const convId = '507f1f77bcf86cd799439215';
+      (manager as any).privacyPreferencesService = makePrivacySvc(participantId, true);
+      (manager as any).readStatusService = makeReadStatusSvc();
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: participantId, conversationId: convId, userId: null },
+      ]);
+
+      await (manager as any)._emitDeliveryForDrainedMessages(
+        participantId,
+        [{ messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 }],
+        true
+      );
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({
+          conversationId: convId,
+          participantId,
+          userId: null,
+          type: 'received',
+        })
+      );
+    });
+
+    /**
+     * Les préférences se lisent sous la MÊME clé que la file, avec la nature du
+     * lecteur — même idiome qu'`autoDeliverToOnlineRecipients`. Déclarer
+     * inscrit un lecteur sans compte enverrait un `Participant.id` à
+     * `fetchManyFromDatabase` comme s'il s'agissait d'un `User.id` : une
+     * requête payée pour rien, dont le résultat VIDE serait mis en cache sous
+     * un id qui n'est pas un utilisateur — et dont l'absence de
+     * `showReadReceipts` re-supprimerait l'accusé qu'on vient de rétablir.
+     */
+    it('reads an anonymous reader preferences under isAnonymous, served by the defaults', async () => {
+      const participantId = 'part-anon-prefs';
+      const convId = '507f1f77bcf86cd799439216';
+      const privacySvc = makePrivacySvc(participantId, true);
+      (manager as any).privacyPreferencesService = privacySvc;
+      (manager as any).readStatusService = makeReadStatusSvc();
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: participantId, conversationId: convId, userId: null },
+      ]);
+
+      await (manager as any)._emitDeliveryForDrainedMessages(
+        participantId,
+        [{ messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 }],
+        true
+      );
+
+      expect(privacySvc.getPreferencesForUsers).toHaveBeenCalledWith([
+        { id: participantId, isAnonymous: true },
+      ]);
+    });
+
+    /**
+     * Anti-sur-correction. Le branchement doit rester STRICT : un lecteur
+     * inscrit se reconnaît par `Participant.userId`, jamais par
+     * `Participant.id`. Un `row.id === key || row.userId === key` passerait ce
+     * fichier et adopterait, pour un inscrit, la ligne d'un participant SANS
+     * COMPTE dont l'id coïncide — accusant réception au nom d'un tiers.
+     */
+    it('never adopts an accountless row for a registered reader on id collision', async () => {
+      const userId = 'user-collide';
+      const convId = '507f1f77bcf86cd799439217';
+      const readStatusSvc = makeReadStatusSvc();
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: userId, conversationId: convId, userId: null },
+        { id: 'part-mine', conversationId: convId, userId },
+      ]);
+
+      await (manager as any)._emitDeliveryForDrainedMessages(
+        userId,
+        [{ messageId: 'msg-c', conversationId: convId, payload: {}, enqueuedAt: 1 }],
+        false
+      );
+
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mine', convId, 'msg-c');
     });
 
     it('marks received and emits READ_STATUS_UPDATED per conversation when showReadReceipts is true', async () => {
@@ -5394,7 +5543,7 @@ describe('MeeshySocketIOManager', () => {
         { messageId: 'msg-b', conversationId: convId2, payload: {}, enqueuedAt: 2 },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(2);
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-1', convId1, 'msg-a');
@@ -5440,7 +5589,7 @@ describe('MeeshySocketIOManager', () => {
 
       ioState.to.mockClear();
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       // Receipt marked on the reconnecting recipient's participant row.
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-recipient', convId, 'msg-away');
@@ -5476,7 +5625,7 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._emitDeliveryForDrainedMessages(userId, [
         { messageId: 'msg-anon', conversationId: convId, payload: {}, enqueuedAt: 1 },
-      ]);
+      ], false);
 
       expect(ioState.to).toHaveBeenCalledWith('user:part-anon-sender');
       expect(ioState.to).toHaveBeenCalledWith(`user:${userId}`);
@@ -5501,7 +5650,7 @@ describe('MeeshySocketIOManager', () => {
         { messageId: 'msg-latest', conversationId: convId, payload: {}, enqueuedAt: 3 },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-dedup', convId, 'msg-latest');
@@ -5525,7 +5674,7 @@ describe('MeeshySocketIOManager', () => {
       ];
 
       await expect(
-        (manager as any)._emitDeliveryForDrainedMessages(userId, pending)
+        (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false)
       ).resolves.not.toThrow();
     });
 
@@ -5546,7 +5695,7 @@ describe('MeeshySocketIOManager', () => {
         { messageId: 'msg-deleted', conversationId: convId, payload: {}, enqueuedAt: 2, eventType: 'deleted' },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
@@ -5584,7 +5733,7 @@ describe('MeeshySocketIOManager', () => {
         },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-link', convId, 'msg-from-guest');
       expect(ioState.toEmit).toHaveBeenCalledWith(
@@ -5621,7 +5770,7 @@ describe('MeeshySocketIOManager', () => {
         },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
       expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-mixed', convId, 'msg-link-later');
@@ -5654,7 +5803,7 @@ describe('MeeshySocketIOManager', () => {
         { messageId: 'm8', conversationId: convId, payload: {}, enqueuedAt: 8, eventType: 'translation' },
       ];
 
-      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
       expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
