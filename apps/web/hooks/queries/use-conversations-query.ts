@@ -39,6 +39,31 @@ export function useInfiniteConversationsQuery(options: UseInfiniteConversationsO
       if (!lastPage.pagination.hasMore) return undefined;
       return lastPage.pagination.offset + lastPage.pagination.limit;
     },
+    // Dédup par `id` à la SÉLECTION (E10 — LWS-9) : la pagination OFFSET sur un
+    // tri serveur `lastMessageAt` décroissant duplique une conversation en
+    // frontière de page quand un message arrive entre le fetch de deux pages
+    // (elle remonte en tête de la page suivante alors qu'elle était déjà dans
+    // la précédente). `select` ne touche PAS le cache brut — `old.pages` reste
+    // intact pour les écritures socket (`use-socket-cache-sync.ts`,
+    // `use-conversations-delta-sync.ts`) — il ne filtre que la vue lue par les
+    // consommateurs (`useConversationsPaginationRQ`, `use-conversations-v2.ts`).
+    // On garde la PREMIÈRE occurrence rencontrée (page la plus ancienne =
+    // rang le plus haut au tri desc) : jamais `translations.first`-style
+    // dernier-gagne, qui afficherait la ligne à sa frontière la plus basse.
+    select: (data) => {
+      const seenIds = new Set<string>();
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({
+          ...page,
+          conversations: page.conversations.filter((conversation) => {
+            if (seenIds.has(conversation.id)) return false;
+            seenIds.add(conversation.id);
+            return true;
+          }),
+        })),
+      };
+    },
     enabled,
     // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
     // et cette liste est PERSISTÉE en IndexedDB (24 h). Le socket ne pousse
