@@ -739,3 +739,187 @@ témoins comportementaux d'origine.
   de `ENQUEUE_DEDUP_LUA` / `DRAIN_LUA` / `PRUNE_STALE_LUA` reste vérifiable
   seulement par contrat. Un `ioredis-mock` avec support `eval`, ou un service
   Redis en CI, rendrait ces trois scripts testables comportementalement.
+
+# Cycle 26 (2026-08-15) — le rejeu hors ligne livrait le contenu des conversations quittées pendant l'absence
+
+Routine « amélioration continue temps réel », enchaînée sur le cycle 25 (mergé).
+Les cycles 21–23 avaient pris la FORME et l'AUDIENCE des événements, les cycles
+24–25 leur COÛT (diffusion vivante, puis file de rejeu). Ce cycle garde la file
+de rejeu comme terrain mais change de question : non plus « combien ça coûte »
+mais **« contre quelle autorité, et à quel INSTANT, l'audience de la file est-elle
+décidée ? »**.
+
+## Méthode — quatre balayages, un seul productif
+
+1. **Fenêtre connexion/déconnexion autour de `connectedUsers`** (neuf). Le
+   prédicat d'enfilement est `connectedUsers.has(key)` ; il répond « connecté »,
+   alors que la question utile est « le room emit vivant l'atteindra-t-il ? ».
+   Les deux divergent dans la fenêtre entre l'inscription au registre et la
+   jonction aux rooms. **Déjà juste, et documenté** : les deux chemins d'auth
+   (`_authenticateJWTUser`, `_authenticateAnonymousUser`) joignent les rooms
+   AVANT `_registerUser`, avec le commentaire qui nomme exactement ce risque.
+   Côté déconnexion, le chemin inscrit atteint `connectedUsers.delete` sans
+   aucun `await` intermédiaire ; seul le chemin ANONYME en-appel traverse des
+   `await` Prisma avant la suppression — fenêtre réelle mais étroite, notée, non
+   livrée (voir « Constats latents »).
+2. **Adhésion tardive à une room** (`joinUserToConversationRoom`). 10 sites
+   d'appel couvrent l'ajout de membre, l'invitation, le lien partagé, le
+   débannissement, l'amitié, les devices. Rien à prendre.
+3. **Contrôle d'appartenance de `conversation:join`.** Le chemin inscrit
+   vérifie `bannedAt`, `leftAt` ET `isActive === false` ; le chemin anonyme
+   vérifie `isActive: true`, ce qui suffit puisque `resolveBanWrite` écrit
+   toujours `isActive: false`. Rien à prendre (seul l'intitulé de la raison
+   renvoyée diffère : `not_a_member` au lieu de `banned`).
+4. **Le canal DIFFÉRÉ face aux fins d'appartenance** — c'est là qu'était le
+   défaut. Les trois balayages précédents avaient tous porté sur le canal
+   VIVANT ; personne n'avait posé la même question à son complément.
+
+## Le défaut — quatre routes ferment le canal vivant, aucune n'atteint le différé
+
+Quatre routes mettent fin à une appartenance, et toutes les quatre font
+visiblement, avec commentaire, le geste d'éviction :
+
+| route | transition | éviction de `conversation:<id>` |
+|---|---|---|
+| `leave.ts` | départ volontaire | ✅ |
+| `participants.ts` | retrait par un admin | ✅ |
+| `ban.ts` | bannissement | ✅ |
+| `delete-for-me.ts` | suppression pour soi | ✅ |
+
+Aucune ne touche `RedisDeliveryQueue`, qui garde jusqu'à 48 h d'événements de
+cette même conversation — messages, éditions, réactions, traductions — et les
+rejouait INTÉGRALEMENT à la reconnexion suivante. La classe n'a d'ailleurs
+aucune méthode capable de le faire (`enqueue` / `drain` / `peek` / `size` /
+`cleanup` ; `cleanup` est purement TTL), et `_drainPendingMessages` n'a jamais
+porté le moindre contrôle d'appartenance.
+
+**La conjonction n'a rien d'exotique — c'est le cas courant.** On retire d'un
+groupe quelqu'un qui n'est pas là : absent quand les messages s'enfilent,
+toujours absent quand son appartenance prend fin, il reçoit à son retour
+l'arriéré complet d'une conversation dont `GET /conversations` ne lui sert plus
+la ligne.
+
+Deux conséquences distinctes :
+
+1. **Autorisation** — du contenu livré APRÈS la fin de l'autorisation qui le
+   justifiait.
+2. **Cohérence de la liste** — une conversation ressuscitée dans une liste dont
+   ces mêmes routes viennent de la retirer, les clients appliquant `message:new`
+   à leur store local.
+
+**La cause est une confusion de temps.** L'audience de la file est décidée à la
+MISE EN FILE, par `enqueueForOfflineParticipants`, sur l'appartenance de cet
+instant-là. Entre l'enfilement et la LIVRAISON il y a précisément l'absence —
+c'est-à-dire la fenêtre pendant laquelle on quitte un groupe.
+
+## Le correctif — relire l'autorité au dernier instant possible
+
+`_dropEndedMemberships(userId, isAnonymous, drained)`, appelé par
+`_drainPendingMessages` entre le `drain()` et la première émission. Une entrée
+dont l'appartenance a pris fin n'est pas rejouée, et ne compte dans **aucun**
+des trois signaux :
+
+- l'émission elle-même ;
+- `pending-messages:delivered`, dont `count` et `conversationIds` ne portent
+  plus que le rejoué ;
+- l'accusé de réception — qui affirme « ce message est arrivé chez son
+  destinataire », et mentirait à son auteur s'il était affirmé d'un message
+  qu'on vient justement de refuser de livrer.
+
+Quand tout est écarté, **plus rien n'est émis** — pas même un
+`pending-messages:delivered` à zéro, qui ferait boucler un client s'en servant
+pour déclencher une réconciliation.
+
+**Une garde unique, pas quatre purges.** Purger la file depuis chaque route
+aurait ajouté une CINQUIÈME copie d'une obligation à une famille qui en comptait
+déjà quatre — la dérive exacte que `enqueueForOfflineParticipants` documente en
+tête de fichier après cinq réimplémentations. Lire l'autorité à la LIVRAISON la
+rend valable pour les quatre routes et pour toute transition future, sans
+qu'aucune ait à s'en souvenir, et supprime la course résiduelle (un enfilement
+en vol juste après une purge).
+
+**Échec OUVERT sur une panne, FERMÉ sur une réponse.** Le drain est destructif :
+les entrées ont déjà quitté la file quand la garde s'exécute. Une réponse « plus
+membre » fait autorité et l'entrée est jetée. Une absence de réponse n'autorise
+rien à conclure — jeter l'arriéré parce que la base n'a pas répondu échangerait
+une fuite rare (panne ET retrait ET arriéré simultanés) contre une perte de
+données probable, une tempête de reconnexions étant exactement le moment où la
+base est sous pression. L'état d'avant le correctif était de toute façon ouvert
+à 100 % : la garde ne peut donc que réduire la surface, jamais l'élargir.
+
+**`bannedAt` filtré en JS, pas dans le `where`.** Sous MongoDB un
+`bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
+écrit) et exclurait les lignes historiques — le piège que `ban.ts` documente
+déjà pour `leftAt` (audit C5). La clé de lecture suit la convention
+d'enfilement (`userId` pour un inscrit, `Participant.id` pour un invité de lien
+partagé), et la requête est bornée aux seules conversations effectivement
+drainées.
+
+**Aucun changement client** : la forme et l'ordre des événements rejoués sont
+inchangés, seule leur audience l'est.
+
+## Pourquoi ça a survécu
+
+Les quatre routes font toutes, visiblement et avec commentaire, le geste
+d'éviction. Une lecture qui les compare voit **quatre fermetures cohérentes du
+canal vivant** — et repart rassurée. Rien, nulle part, ne nommait le canal
+DIFFÉRÉ qu'aucune des quatre n'atteignait : ni un commentaire, ni un test, ni
+une méthode sur `RedisDeliveryQueue` qu'on aurait pu constater inutilisée. Le
+silence d'une capacité ABSENTE est plus difficile à voir que celui d'une
+capacité présente et non appelée.
+
+## Constats latents — relevés, NON livrés, avec leur raison
+
+1. **Fenêtre de déconnexion anonyme.** `AuthHandler.handleDisconnection`
+   traverse des `await` Prisma (recherche des participations d'appel actives,
+   `leaveCall` en boucle) AVANT `connectedUsers.delete`. Pendant ces quelques
+   dizaines de ms, la socket a déjà quitté ses rooms (Socket.IO les vide avant
+   `disconnect`) mais le registre dit encore « connecté » : un événement émis
+   dans cette fenêtre n'atteint ni la room ni la file. Étroit, et propre au
+   participant ANONYME en appel. Non livré ce cycle pour ne pas mêler une
+   réorganisation de la séquence de déconnexion d'appel à un correctif
+   d'autorisation.
+2. **`conversation:any`.** Chaque socket JWT rejoint cette room à
+   l'authentification ; **aucun émetteur du dépôt ne l'adresse** (balayage
+   gateway + web + iOS + Android : une seule occurrence, le `join` lui-même).
+   Entrée d'adaptateur par socket, sans lecteur. Retrait trivial mais hors sujet
+   de ce cycle.
+3. **Dilution de la file par des entrées mortes.** Le plafond
+   `DELIVERY_QUEUE_MAX_PER_USER` (500, cycle 25) tranche par arrivée : des
+   entrées devenues indélivrables peuvent évincer des entrées délivrables avant
+   que la garde ne les écarte. Une purge à l'éviction supprimerait ce
+   second-ordre — mais c'est une optimisation de ressource, pas une correction
+   d'autorisation, et elle rouvrirait la question des quatre copies. Le TTL de
+   48 h la borne déjà.
+
+## Surfaces vérifiées correctes — ne pas ré-instruire
+
+- Ordre jonction-des-rooms / inscription au registre sur les DEUX chemins
+  d'auth (§ balayage 1).
+- Les 10 sites d'appel de `joinUserToConversationRoom` (§ balayage 2).
+- Le contrôle d'appartenance de `conversation:join`, chemins inscrit et anonyme
+  (§ balayage 3).
+- Le cache `(userId, conversationId) → participantId` de `MessageHandler` :
+  positif uniquement (aucune entrée négative, donc aucun blocage persistant
+  après une adhésion), invalidé par les cinq routes qui mutent l'appartenance.
+
+## Gates
+
+- [x] 8 RED discriminants vus rouges avant correctif (9e témoin : échec ouvert
+      sur panne, vert des deux côtés par construction — il interdit qu'un
+      durcissement ultérieur transforme la garde en perte de données)
+- [x] `MeeshySocketIOManager.test.ts` : 348/348 verts
+- [x] Suite gateway complète : **719 suites / 17612 tests verts**
+      (cycle 25 : 719 / 17601 — +11)
+- [x] `tsc --noEmit` gateway : 0 erreur
+- [x] CHANGELOG + journal d'audit (§ Cycle 26) + `lessons.md` (Leçon 257)
+
+## Note de méthode — deux témoins voisins ré-outillés
+
+Deux témoins pré-existants utilisaient `prisma.participant.findMany` comme
+sonde d'un chemin qui n'avait qu'un appelant, et qui en a maintenant deux. Leur
+COMPORTEMENT asserté est inchangé ; seule leur sonde a été rendue
+discriminante — la lecture d'appartenance est la seule des deux à demander
+`select.bannedAt`. C'est le pendant du corollaire de la Leçon 255 : un test qui
+prouve « rien ne s'est passé » par l'absence d'appel à un mock partagé cesse de
+prouver quoi que ce soit dès qu'un second appelant partage ce mock.

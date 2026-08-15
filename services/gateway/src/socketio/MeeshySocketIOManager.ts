@@ -471,10 +471,92 @@ export class MeeshySocketIOManager {
     this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
+  /**
+   * Retire du rejeu les entrées des conversations dont l'appartenance a pris
+   * fin PENDANT l'absence.
+   *
+   * L'audience de la file est décidée à la MISE EN FILE, par
+   * `enqueueForOfflineParticipants`, sur l'appartenance de cet instant-là.
+   * Entre cet instant et la LIVRAISON il y a précisément l'absence — c'est-à-dire
+   * la fenêtre pendant laquelle on quitte un groupe, s'en fait retirer, s'y fait
+   * bannir, ou le supprime pour soi. Les quatre routes qui écrivent ces
+   * transitions (`leave.ts`, `participants.ts`, `ban.ts`, `delete-for-me.ts`)
+   * sortent toutes les sockets de la cible de `conversation:<id>` : le canal
+   * VIVANT est fermé à l'instant même. Aucune ne touche cette file, qui garde
+   * jusqu'à `DELIVERY_QUEUE_TTL_SECONDS` (48 h) d'événements de cette même
+   * conversation — messages, éditions, réactions, traductions — et les rejouait
+   * intégralement à la reconnexion suivante : du contenu livré APRÈS la fin de
+   * l'autorisation qui le justifiait, et une conversation ressuscitée dans une
+   * liste dont ces mêmes routes viennent de la retirer.
+   *
+   * Une autorisation se lit donc contre l'autorité au dernier instant possible,
+   * jamais contre une copie prise à l'enfilement. C'est ce qui rend cette garde
+   * unique et non quadruple : elle vaut pour les quatre routes et pour toute
+   * transition future, sans qu'aucune ait à s'en souvenir.
+   *
+   * Échec OUVERT sur une PANNE, FERMÉ sur une RÉPONSE. Le drain est destructif —
+   * les entrées ont déjà quitté la file quand cette garde s'exécute. Une réponse
+   * « plus membre » fait autorité et l'entrée est jetée. Une absence de réponse
+   * n'autorise rien à conclure : jeter l'arriéré parce que la base n'a pas
+   * répondu échangerait une fuite rare (panne ET retrait ET arriéré simultanés)
+   * contre une perte de données probable, une tempête de reconnexions étant
+   * exactement le moment où la base est sous pression.
+   *
+   * `bannedAt` est filtré en JS, pas dans le `where` : sous MongoDB un
+   * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
+   * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
+   * documente déjà pour `leftAt` (audit C5).
+   */
+  private async _dropEndedMemberships(
+    userId: string,
+    isAnonymous: boolean,
+    drained: QueuedMessagePayload[]
+  ): Promise<QueuedMessagePayload[]> {
+    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
+    try {
+      // Clé de file = `userId` pour un inscrit, `Participant.id` pour un invité
+      // de lien partagé — la convention exacte que `enqueueForOfflineParticipants`
+      // applique en enfilant (`p.userId ?? p.id`).
+      const rows = await this.prisma.participant.findMany({
+        where: isAnonymous
+          ? { id: userId, conversationId: { in: conversationIds }, isActive: true }
+          : { userId, conversationId: { in: conversationIds }, isActive: true },
+        select: { conversationId: true, bannedAt: true },
+      });
+      const live = new Set(
+        rows.filter(row => row.bannedAt == null).map(row => row.conversationId)
+      );
+      if (live.size === conversationIds.length) return drained;
+
+      const kept = drained.filter(entry => live.has(entry.conversationId));
+      logger.info('Dropped queued events for conversations the reader has left', {
+        userId,
+        dropped: drained.length - kept.length,
+        conversationIds: conversationIds.filter(id => !live.has(id)),
+      });
+      return kept;
+    } catch (error) {
+      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
+        userId,
+        error,
+      });
+      return drained;
+    }
+  }
+
   private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
     try {
-      const pending = await this.deliveryQueue.drain(userId);
+      const drained = await this.deliveryQueue.drain(userId);
+      if (drained.length === 0) return;
+
+      // Gate d'autorisation, avant toute émission : une entrée dont
+      // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
+      // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
+      // accusé de réception). Un accusé affirme « ce message est arrivé chez son
+      // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
+      // mentirait à son auteur.
+      const pending = await this._dropEndedMemberships(userId, isAnonymous, drained);
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
