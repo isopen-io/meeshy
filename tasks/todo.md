@@ -253,3 +253,44 @@ seule aurait converti un 400 en corruption silencieuse), les deux
 contournements clients qui étaient des rapports de bug non déposés, et la
 question proposée au cycle 34 : quels faits ce dépôt lit-il à travers un
 drapeau plutôt qu'à travers la donnée qui les porte ?
+
+# Cycle 34 — les octets partaient, le fait qui les décrit restait
+
+Sonde annoncée en clôture du cycle 33 : quels faits ce dépôt lit-il à travers un
+drapeau plutôt qu'à travers la donnée qui les porte ?
+
+## Constat
+
+- [x] 5 candidats écartés, vérifiés jusqu'au site d'écriture (`isEdited`+`editedAt`
+      écrits ensemble par les 4 transports ; `UpdateMessageBodySchema.isEdited`
+      inerte ; `isForwarded` rattrapé ; view-once/blur d'attachment sans écrivain ;
+      scan/moderation sans lecteur)
+- [x] Défaut : `copyForwardedAttachments` partage `filePath` (le MÊME blob) et
+      laisse derrière les 11 champs qui disent que ce blob est du chiffré
+- [x] Le gateway ne déchiffre pas — le client déchiffre d'après ce que la ligne
+      DÉCLARE : la copie annonçait « clair » en pointant du chiffré
+- [x] Le chiffré était donc rendu TEL QUEL comme s'il était le média
+- [x] `thumbHash` / `imageVariants` perdus aussi (écrivain réel : `UploadProcessor`)
+
+## Correctifs
+
+- [x] La copie emporte les 11 champs qui décrivent ses propres octets
+- [x] `thumbHash` / `imageVariants` suivent le média dont ils dérivent
+- [x] Une pièce en clair reste en clair — l'absence du fait copiée aussi fidèlement
+
+## Gates
+
+- [x] 5 RED discriminants vus rouges avant correctif
+- [x] 2 non-régressions vertes d'emblée, dont le discriminant anti-sur-correction
+- [x] Suite gateway complète : 722 suites / 17 689 tests verts
+- [x] `tsc --noEmit` gateway : 0
+- [x] CHANGELOG + journal d'audit (§ Cycle 34) + leçon 268
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 34 — le tableau des 5
+candidats écartés, pourquoi le garde du cycle 93 ne couvrait pas ce cas (il lit
+`Message`, jamais les pièces jointes), les 3 constats latents dont la
+distribution de clés e2ee, et la question proposée au cycle 35 : où ce dépôt
+duplique-t-il une ligne en la réénumérant à la main, et qu'a cessé d'emporter
+chacune de ces projections ?

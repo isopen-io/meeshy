@@ -696,6 +696,45 @@ export class MessageProcessor {
               transcription: att.transcription ?? undefined,
               translations: att.translations ?? undefined,
               metadata: att.metadata ?? undefined,
+
+              // Le placeholder instantané et les variantes WebP sont DÉJÀ
+              // dérivés de ces octets-là. Les laisser derrière condamnait la
+              // copie au téléchargement pleine taille pour un travail déjà fait.
+              thumbHash: att.thumbHash,
+              imageVariants: att.imageVariants ?? undefined,
+
+              // ── Ce que la copie doit dire de SES PROPRES OCTETS ───────────
+              //
+              // `filePath`/`fileUrl` sont repris à l'identique : les deux lignes
+              // désignent le MÊME blob. Quand l'original est chiffré, ce blob
+              // est du chiffré — et la copie naissait pourtant sans un seul de
+              // ces champs, donc avec le défaut Prisma `isEncrypted: false`.
+              //
+              // Le gateway ne déchiffre rien : `routes/attachments/download.ts`
+              // sert les octets bruts et c'est le CLIENT qui déchiffre, d'après
+              // ce que la ligne déclare (`attachmentIncludes` publie
+              // `isEncrypted`, `encryptionMode`, `encryptionIv`,
+              // `encryptionAuthTag` exactement pour ça). Une copie qui annonce
+              // « clair » en pointant du chiffré fait donc rendre le chiffré
+              // TEL QUEL comme s'il était le média : le client ne déchiffre pas,
+              // puisqu'on vient de lui dire qu'il n'y a rien à déchiffrer.
+              //
+              // Le fait est porté par les OCTETS ; le drapeau n'en est que
+              // l'écho. Copier les octets par référence en laissant l'écho
+              // derrière, c'est faire mentir la ligne sur ce qu'elle contient.
+              // `originalFileSize` compte au même titre : `fileSize` porte la
+              // taille CHIFFRÉE (cf. `UploadProcessor`) et il EST copié.
+              isEncrypted: att.isEncrypted,
+              encryptionMode: att.encryptionMode,
+              encryptionIv: att.encryptionIv,
+              encryptionAuthTag: att.encryptionAuthTag,
+              encryptionHmac: att.encryptionHmac,
+              originalFileHash: att.originalFileHash,
+              encryptedFileHash: att.encryptedFileHash,
+              originalFileSize: att.originalFileSize,
+              serverKeyId: att.serverKeyId,
+              thumbnailEncryptionIv: att.thumbnailEncryptionIv,
+              thumbnailEncryptionAuthTag: att.thumbnailEncryptionAuthTag,
             }
           })
         )
