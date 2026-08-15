@@ -492,19 +492,62 @@ final class CallHangupFastPathTests: XCTestCase {
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
 
-    func test_showTranscript_autoRevealsOnFirstPassiveSegment_notOnlyLocalToggle() throws {
+    /// Transparence du consentement : un appareil ne doit JAMAIS accumuler en
+    /// silence les paroles de l'autre participant sans rien afficher.
+    ///
+    /// Cette garantie était d'abord tenue par une AUTO-RÉVÉLATION du panneau
+    /// au premier segment reçu (spec 2026-07-11 §4). Le spec 2026-08-13
+    /// (« Cycle de vie du panneau », itération 2 §1) l'a RETIRÉE au profit
+    /// d'un mécanisme plus fort, à la source : la réception elle-même est liée
+    /// au panneau — « Panneau caché ⇒ désabonnement des canaux de réception ET
+    /// d'émission […] L'auto-révélation du panneau au premier segment reçu
+    /// (spec 2026-07-11 §4) est RETIRÉE — panneau caché ⇒ plus aucun segment
+    /// ne peut arriver, la règle n'a plus d'objet. »
+    ///
+    /// Le garde suit la garantie, pas sa vieille forme : il vérifie désormais
+    /// que les DEUX points d'entrée de réception de `CallManager` (le sink
+    /// socket `callTranslatedSegmentReceived` et le routage data channel
+    /// `.transcriptEntry`) refusent tout segment panneau fermé. Un seul des
+    /// deux gardé laisserait le trou ouvert sur l'autre transport.
+    func test_passiveSegments_neverAccumulateWhileTranscriptPanelHidden() throws {
+        // L'ancienne forme ne doit pas revenir sans que ce garde soit revu :
+        // ré-ouvrir le panneau tout seul, alors que rien ne peut plus arriver
+        // panneau fermé, ne ferait qu'afficher un panneau vide.
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.segments.isEmpty)") else {
-            XCTFail("CallView must observe transcriptionService.segments.isEmpty to auto-reveal the panel")
+        XCTAssertFalse(
+            view.contains("adaptiveOnChange(of: transcriptionService.segments.isEmpty)"),
+            "The 2026-07-11 auto-reveal observer was retired by spec 2026-08-13 — reception is " +
+            "now gated on the panel being visible, so nothing can arrive while it is hidden."
+        )
+
+        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
+
+        guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
+            XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 400, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound..<end])
+        let socketEnd = manager.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< manager.endIndex)?
+            .upperBound ?? manager.endIndex
+        let socketSink = String(manager[socketRange.lowerBound ..< socketEnd])
         XCTAssertTrue(
-            body.contains("showTranscript = true"),
-            "The panel must become visible the first time segments arrive, even if the local " +
-            "captionsCycleButton was never tapped — closes the consent-transparency gap where a " +
-            "device silently accumulates the other participant's words with nothing shown."
+            socketSink.contains(gate),
+            "The relayed (server) reception path must drop segments while the transcript panel " +
+            "is hidden — otherwise the device silently accumulates the other participant's " +
+            "words with nothing shown, the exact consent-transparency gap this guard exists for."
+        )
+
+        guard let channelRange = manager.range(of: "case .transcriptEntry(let entry):") else {
+            XCTFail("CallManager must route the data channel's .transcriptEntry case")
+            return
+        }
+        let channelEnd = manager.range(of: "case .ignored:", range: channelRange.upperBound ..< manager.endIndex)?
+            .lowerBound ?? manager.endIndex
+        let channelRoute = String(manager[channelRange.lowerBound ..< channelEnd])
+        XCTAssertTrue(
+            channelRoute.contains(gate),
+            "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
+            "sink — gating only one transport leaves the peer's words flowing in over the other."
         )
     }
 }
