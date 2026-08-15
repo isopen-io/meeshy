@@ -11,6 +11,18 @@ import androidx.security.crypto.MasterKey
  * [lockedConversationIds] is derived from which lock keys exist rather than
  * kept as a separate persisted list, so it can never drift from the hashes
  * that actually gate a conversation.
+ *
+ * No Robolectric unit test exercises this class directly: `MasterKey.Builder`
+ * requires the `AndroidKeyStore` security provider, which Robolectric's JVM
+ * does not provide (`NoSuchAlgorithmException`/`KeyStoreException` — confirmed
+ * live in CI, not assumed). This is exactly why `EncryptedTokenStore`, the
+ * pattern this mirrors, ships with no dedicated test either — a codebase-wide
+ * constraint of this Robolectric setup, not something specific to this class.
+ * [InMemoryConversationLockStore] carries the full behavioural contract
+ * ([InMemoryConversationLockStoreTest]); this class is a structural port of
+ * the same logic onto real storage, verified by `./apps/android/meeshy.sh
+ * check` compiling and by manual/instrumented verification before shipping
+ * any UI on top of it.
  */
 class EncryptedConversationLockStore(context: Context) : ConversationLockStore {
 
