@@ -1976,7 +1976,11 @@ ici elle n'en protège aucun, et sa seule existence dissuade de la réécrire.
       le 4e est le témoin de NON-RÉGRESSION : l'admin publie toujours)
 - [x] `links-messages.test.ts` — 3 témoins de câblage, les 3 rouges sans le garde
 - [x] RED prouvé par neutralisation de chaque garde, pas par raisonnement
-- [x] `tsc --noEmit` gateway : 0
+- [x] **Suite gateway complète après merge MANUEL de `main` : 721 suites /
+      17 658 tests verts** (exit 0). Le total baisse de 6 par rapport à `main`
+      — 35 témoins de l'orphelin supprimés, ~29 ajoutés : la couverture se
+      déplace de la règle morte vers la règle vivante.
+- [x] `tsc --noEmit` gateway : 0, avant ET après le merge
 - [x] CHANGELOG + ce journal + leçon 263
 
 ## Constats latents — relevés, NON livrés
