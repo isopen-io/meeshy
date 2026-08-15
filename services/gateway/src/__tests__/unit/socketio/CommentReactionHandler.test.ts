@@ -655,6 +655,185 @@ describe('CommentReactionHandler', () => {
         error: 'User not authenticated',
       });
     });
+
+    // La synchronisation REND l'identité de chaque réacteur (`userIds` dans
+    // `CommentReactionSync`). C'est une LECTURE du fil, donc elle doit passer la
+    // même audience que la lecture du fil — `canUserConsumePost`, celle que
+    // `handleJoinPost` applique déjà pour laisser entrer dans la room. Sans
+    // garde, n'importe quel compte authentifié obtenait le roster complet d'un
+    // commentaire d'un post PRIVATE en connaissant son seul `commentId`.
+    it('test_handleRequestSync_postNotConsumable_deniesWithoutOracle', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.postComment.findFirst.mockResolvedValue({
+        postId: POST_ID,
+        post: { authorId: ANOTHER_USER_ID, visibility: 'PRIVATE', visibilityUserIds: [] },
+      });
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getCommentReactions).not.toHaveBeenCalled();
+      // Refus INDISTINCT, comme les frères : jamais de 403 qui confirmerait
+      // l'existence du commentaire visé.
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Comment not found',
+      });
+    });
+
+    it('test_handleRequestSync_commentAbsent_deniesWithoutServiceCall', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.postComment.findFirst.mockResolvedValue(null);
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getCommentReactions).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Comment not found',
+      });
+    });
+
+    it('test_handleRequestSync_consumableButNotInteractable_stillAllows', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID };
+      const callback = jest.fn();
+      const syncData = { commentId: COMMENT_ID, reactions: [], totalCount: 0, userReactions: [] };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      // Audience de CONSOMMATION (amis ∪ contacts DM), pas d'INTERACTION (amis
+      // stricts) : un contact DM non-ami qui lit légitimement le fil doit
+      // pouvoir en synchroniser les réactions. Gater la lecture sur l'audience
+      // d'écriture transformerait un lecteur légitime en 404.
+      mockPrisma.postComment.findFirst.mockResolvedValue({
+        postId: POST_ID,
+        post: { authorId: ANOTHER_USER_ID, visibility: 'FRIENDS', visibilityUserIds: [] },
+      });
+      mockPrisma.friendRequest.findFirst.mockResolvedValue(null);
+      mockPrisma.participant.findMany.mockResolvedValue([{ conversationId: 'c-1' }]);
+      mockPrisma.participant.findFirst.mockResolvedValue({ id: 'p-1' });
+      mockReactionService.getCommentReactions.mockResolvedValue(syncData as any);
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getCommentReactions).toHaveBeenCalledWith({
+        commentId: COMMENT_ID,
+        currentUserId: USER_ID,
+      });
+      expect(callback).toHaveBeenCalledWith({ success: true, data: syncData });
+    });
+  });
+
+  // ===== Adresse de diffusion : le `postId` du payload n'est pas une autorité =====
+  //
+  // Le `postId` porté par `comment:reaction-add` / `-remove` est FOURNI PAR LE
+  // CLIENT. La garde d'audience, elle, résout le post DEPUIS le commentaire
+  // (`loadCommentPostAcl`) — donc le handler tient déjà la vérité. Il ne s'en
+  // servait pas pour ADRESSER la diffusion, qui partait vers
+  // `ROOMS.post(<postId du client>)`.
+  //
+  // `PostReactionHandler` établit l'invariant inverse depuis la tâche 9 : room
+  // ET payload portent la cible RÉSOLUE (`targetPostId`), jamais l'id brut.
+  // Les deux handlers implémentent la même règle ; seul celui-ci croyait le
+  // client. Un commentaire est TOUJOURS écrit sur la cible résolue
+  // (`routes/posts/comments.ts` § `targetPostId`), donc `thread.postId` EST la
+  // racine — aucune requête supplémentaire à payer.
+  describe('adresse de diffusion résolue depuis le commentaire', () => {
+    const CLIENT_SUPPLIED_POST_ID = '507f1f77bcf86cd7994390ff';
+
+    it('test_handleAddReaction_clientPostIdDiffers_broadcastsToCommentsRealPostRoom', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: CLIENT_SUPPLIED_POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      // Le commentaire appartient à POST_ID (stub `postComment.findFirst`).
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.post(CLIENT_SUPPLIED_POST_ID));
+    });
+
+    it('test_handleAddReaction_clientPostIdDiffers_payloadCarriesRealPostId', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: CLIENT_SUPPLIED_POST_ID, emoji: EMOJI };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, jest.fn());
+
+      // `createUpdateEvent(commentId, emoji, action, userId, postId)` — le 5e
+      // argument devient le `postId` du payload que web/iOS utilisent comme CLÉ
+      // de cache (`patchCommentInPostCaches`). Un id étranger y écrit un
+      // commentaire fantôme dans le cache d'un autre post.
+      expect(mockReactionService.createUpdateEvent).toHaveBeenCalledWith(
+        COMMENT_ID,
+        EMOJI,
+        'add',
+        USER_ID,
+        POST_ID,
+      );
+    });
+
+    it('test_handleRemoveReaction_clientPostIdDiffers_broadcastsToCommentsRealPostRoom', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: CLIENT_SUPPLIED_POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.removeReaction.mockResolvedValue(true);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleRemoveReaction(socket as any, data, callback);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.post(CLIENT_SUPPLIED_POST_ID));
+      expect(mockReactionService.createUpdateEvent).toHaveBeenCalledWith(
+        COMMENT_ID,
+        EMOJI,
+        'remove',
+        USER_ID,
+        POST_ID,
+      );
+    });
+
+    it('test_handleAddReaction_clientPostIdDiffers_notificationTargetsRealPost', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: CLIENT_SUPPLIED_POST_ID, emoji: EMOJI };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.postComment.findUnique.mockResolvedValue({
+        authorId: ANOTHER_USER_ID,
+        content: 'un commentaire',
+      });
+      mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, jest.fn());
+      await new Promise((r) => setImmediate(r));
+
+      // La notification porte le lien profond ET relit `post.type`/l'auteur pour
+      // composer son corps. Sur un id étranger elle nommait le mauvais auteur et
+      // renvoyait le destinataire sur un post qu'il ne peut peut-être pas voir.
+      expect(mockPrisma.post.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: POST_ID } }),
+      );
+      expect(mockNotificationService.createCommentReactionNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ postId: POST_ID }),
+      );
+    });
   });
 
   // ===== Rate limiting (Fix 4) =====

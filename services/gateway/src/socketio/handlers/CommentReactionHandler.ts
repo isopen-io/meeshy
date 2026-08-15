@@ -28,7 +28,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { loadCommentPostAcl, canUserInteractWithPost } from '../../services/posts/postVisibility.js';
+import { loadCommentPostAcl, canUserInteractWithPost, canUserConsumePost } from '../../services/posts/postVisibility.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -117,7 +117,8 @@ export class CommentReactionHandler {
 
       // Le fil hérite de l'audience de son post, et réagir est une INTERACTION.
       // Le post est résolu DEPUIS le commentaire : le `postId` du payload est
-      // fourni par le client, il ne sert qu'à adresser la room de diffusion.
+      // fourni par le client et n'est JAMAIS cru — ni pour l'audience, ni pour
+      // adresser la diffusion (voir `postId` ci-dessous).
       // Refus indistinct d'un commentaire inexistant — pas d'oracle.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
       if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
@@ -125,6 +126,7 @@ export class CommentReactionHandler {
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
+      const postId = thread.postId;
 
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
@@ -141,12 +143,34 @@ export class CommentReactionHandler {
         return;
       }
 
+      // `postId` = celui du COMMENTAIRE, jamais celui du payload. Trois raisons,
+      // et la vérité est déjà en main (`thread.postId`), donc gratuite :
+      //
+      // 1. ADRESSE. `handleJoinPost` fait entrer les viewers dans la room de la
+      //    cible RÉSOLUE (`resolveConsumptionTarget` : un repost simple n'a pas
+      //    de vie sociale propre, sa room est celle de sa racine). Un
+      //    commentaire est lui aussi toujours écrit sur la cible résolue
+      //    (`routes/posts/comments.ts` § `targetPostId`). Diffuser vers l'id
+      //    brut du client — celui de la carte affichée, donc le REPOST —
+      //    envoyait l'événement dans une room où personne n'est jamais entré :
+      //    tous les autres lecteurs gardaient un compteur périmé, en silence,
+      //    puisque l'ACK de l'acteur, lui, disait `success`.
+      // 2. INTÉGRITÉ. `postId` est la CLÉ de cache côté client
+      //    (`patchCommentInPostCaches` web, `FeedPersistenceActor` iOS). Un
+      //    `postId` arbitraire y injectait l'agrégation d'un commentaire
+      //    étranger, et divulguait au passage son existence et son décompte à
+      //    l'audience d'un post sans rapport.
+      // 3. INVARIANT PARTAGÉ. `PostReactionHandler` porte déjà la cible
+      //    résolue dans SA room et SON payload (`targetPostId`, tâche 9). Les
+      //    deux handlers implémentent la même règle ; seul celui-ci croyait le
+      //    client — le seul écart qu'aucun test ne regardait, parce qu'en
+      //    nominal les deux ids coïncident.
       const updateEvent = await this.commentReactionService.createUpdateEvent(
         validated.commentId,
         validated.emoji,
         'add',
         userId,
-        validated.postId
+        postId
       );
 
       // Contrat ACK == broadcast : on renvoie l'`updateEvent` (commentId, postId,
@@ -171,13 +195,13 @@ export class CommentReactionHandler {
         return;
       }
 
-      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
+      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
       // Fire-and-forget: notification errors must not reach the outer catch after
       // success was already confirmed to the client.
       this._createCommentReactionNotification(
         validated.commentId,
-        validated.postId,
+        postId,
         validated.emoji,
         userId
       ).catch(err => this.logger.error('comment reaction notification failed', err, { commentId: validated.commentId }));
@@ -245,6 +269,12 @@ export class CommentReactionHandler {
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
+      // Symétrique de la pose : room ET payload portent le post du COMMENTAIRE,
+      // jamais l'id du payload (rationale complet dans `handleAddReaction`). Un
+      // retrait mal adressé est pire qu'un ajout mal adressé : les lecteurs
+      // gardent une réaction qui n'existe plus, et rien ne la rattrape tant
+      // qu'ils ne refetchent pas le fil entier.
+      const postId = thread.postId;
 
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
@@ -267,7 +297,7 @@ export class CommentReactionHandler {
         validated.emoji,
         'remove',
         userId,
-        validated.postId
+        postId
       );
 
       // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
@@ -278,7 +308,7 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
+      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
 
       // Le symétrique du `_createCommentReactionNotification` du chemin
       // d'ajout. Le retrait couvre les DEUX familles que le commentaire
@@ -336,6 +366,26 @@ export class CommentReactionHandler {
       const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      // Synchroniser, c'est LIRE le fil : même audience que le lire
+      // (`canUserConsumePost` — amis ∪ contacts DM), celle que `handleJoinPost`
+      // applique déjà pour laisser entrer dans la room. Ses deux frères
+      // (`handleAddReaction`, `handleRemoveReaction`) gardaient leur accès ;
+      // celui-ci ne gardait rien, alors qu'il rend PLUS que le broadcast :
+      // `CommentReactionSync` porte les `userIds` de chaque réacteur. Un
+      // `commentId` suffisait donc à obtenir le roster nominatif d'un
+      // commentaire sur un post PRIVATE dont on n'est pas l'audience.
+      //
+      // Audience de CONSOMMATION, pas d'INTERACTION : un contact DM non-ami lit
+      // légitimement le fil (cf. `postVisibility.ts` § `canUserConsumePost`) —
+      // le gater sur les amis stricts en ferait un 404, ce que la lecture REST
+      // du même fil n'impose pas.
+      const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
+      if (!thread || !(await canUserConsumePost(this.prisma, thread.post, userId))) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-sync denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
 
