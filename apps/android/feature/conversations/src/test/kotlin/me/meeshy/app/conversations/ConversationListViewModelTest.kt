@@ -28,6 +28,8 @@ import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiConversationPreferences
@@ -127,9 +129,10 @@ class ConversationListViewModelTest {
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
         session: SessionRepository = session(),
         messageRepo: MessageRepository = messageRepository(),
+        lockStore: ConversationLockStore = InMemoryConversationLockStore(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
-        categoryRepository, categorySocketManager, connection, session,
+        categoryRepository, categorySocketManager, connection, session, lockStore,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -172,6 +175,32 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.presenceByUserId.keys).containsExactly("u1", "u2")
+    }
+
+    @Test
+    fun a_lock_store_emission_is_reflected_in_locked_conversation_ids() = runTest(dispatcher) {
+        val lockStore = InMemoryConversationLockStore()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, lockStore = lockStore)
+        advanceUntilIdle()
+
+        lockStore.setLock("c1", "1111")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockedConversationIds).containsExactly("c1")
+    }
+
+    @Test
+    fun removeLock_on_the_store_is_reflected_in_locked_conversation_ids() = runTest(dispatcher) {
+        val lockStore = InMemoryConversationLockStore().apply { setLock("c1", "1111") }
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, lockStore = lockStore)
+        advanceUntilIdle()
+
+        lockStore.removeLock("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockedConversationIds).isEmpty()
     }
 
     @Test
