@@ -31,6 +31,7 @@ const mockListHistory = jest.fn<any>();
 const mockFinalizeCallSummary = jest.fn<any>();
 const mockBroadcastCallEndedIfTerminal = jest.fn<any>();
 const mockInvalidateSignalCache = jest.fn<any>();
+const mockBroadcastParticipantLeft = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -55,6 +56,7 @@ jest.mock('../../../services/CallService', () => ({
     finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
     broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
     invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
+    broadcastParticipantLeft: (...args: any[]) => mockBroadcastParticipantLeft(...args),
   })),
 }));
 
@@ -1182,6 +1184,135 @@ describe('callRoutes', () => {
       );
 
       expect(reply._body?.error).toBe('Failed to leave call');
+    });
+
+    // Bug fix — this route (self-leave AND moderator kick) never broadcast
+    // CALL_EVENTS.PARTICIPANT_LEFT at all, unlike the socket `call:leave`
+    // handler: other peers of a group call that keeps going never learned a
+    // member left/was removed until the ~120s GC swept the stale row.
+    describe('PARTICIPANT_LEFT broadcast (parité socket call:leave)', () => {
+      it('broadcasts using the CallParticipant ROW id from the pre-leave snapshot, not leaveParticipantId', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        // `participantId` on the CallParticipant row is the conversation
+        // Participant.id (== authContext.participantId here); `id` is the
+        // row's OWN id — the two must never be conflated in the broadcast.
+        const session = makeCallSession({
+          mode: 'p2p',
+          participants: [{ id: 'call-participant-row-id', participantId: PART_ID, leftAt: null }],
+        });
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID, participantId: USER_ID } });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).toHaveBeenCalledWith(
+          CALL_ID,
+          'call-participant-row-id',
+          USER_ID,
+          'p2p'
+        );
+      });
+
+      it('broadcasts the TARGET\'s userId (not the moderator\'s) when a moderator kicks another participant', async () => {
+        const modMembership = makeMembership({ role: 'moderator' });
+        const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(modMembership)
+          .mockResolvedValueOnce(resolvedTargetParticipant);
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        const session = makeCallSession({
+          mode: 'p2p',
+          participants: [
+            { id: 'target-row-id', participantId: resolvedTargetParticipant.id, leftAt: null },
+          ],
+        });
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID, participantId: TARGET_PART_ID } });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).toHaveBeenCalledWith(
+          CALL_ID,
+          'target-row-id',
+          TARGET_PART_ID,
+          'p2p'
+        );
+      });
+
+      it('broadcasts even when the call stays non-terminal (group call continues) — unconditional, unlike call:ended', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        const session = makeCallSession({
+          status: 'active',
+          endedAt: null,
+          mode: 'p2p',
+          participants: [{ id: 'row-1', participantId: PART_ID, leftAt: null }],
+        });
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID, participantId: USER_ID } });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not broadcast when no matching pre-leave participant row is found (defensive no-op)', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        // `participants: []` (default makeCallSession) — no row matches.
+        const session = makeCallSession();
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID, participantId: USER_ID } });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).not.toHaveBeenCalled();
+      });
+
+      it('ignores an already-left row with a matching participantId (leftAt already set)', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        const session = makeCallSession({
+          participants: [
+            { id: 'stale-row', participantId: PART_ID, leftAt: new Date('2026-01-01') },
+          ],
+        });
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID, participantId: USER_ID } });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -127,3 +127,48 @@ roster nominatif d'un commentaire sur un post `PRIVATE`, à partir du seul
 Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 26 — la sonde neuve
 (« autorité de l'entrée »), la matrice handlers × adresse, les deux défauts, et
 les quatre surfaces vérifiées correctes à ne pas re-instruire.
+
+# Cycle 28 — l'entrée du client fixait l'AUDIENCE, pas seulement l'adresse
+
+Routine « amélioration continue temps réel ». Ce cycle ne cherche pas un
+nouveau site : il **prend le candidat que le cycle 26 avait consigné avec sa
+preuve**, délibérément laissé de côté parce qu'il demandait trois décisions
+plutôt qu'un renommage.
+
+## Constat
+
+`DELETE /posts/:postId/comments/:commentId` supprime par `commentId` (la garde
+de propriété est juste) puis relisait un post par le `:postId` du CHEMIN, dont
+il tirait trois décisions : la clé de cache client du payload, le
+`commentCount` annoncé, et `authorId`/`visibility`/`visibilityUserIds` — **la
+liste de diffusion elle-même**. Un cran au-delà du D1 du cycle 26 : l'appelant
+choisissait non plus seulement *où*, mais *à qui*.
+
+Cas non-malveillant, le repost simple : les commentaires vivent sur la RACINE,
+les lecteurs sont dans `post:<racine>`, l'annonce partait vers `post:<repost>`
+— room vide. Aucun refetch ne rattrape (`getComments` filtre `parentId: null`).
+
+## Correctifs
+
+- [x] `PostCommentService.deleteComment` rend `postId` (déjà chargé — 0 requête)
+- [x] Route : adresse, ACL, compteur et audience dérivés du résultat ; le
+      `:postId` du chemin n'est plus lu
+- [x] `onDuplicate` relit la ligne soft-supprimée (le soft-delete ne l'efface
+      pas) pour que le rejeu ait la même adresse serveur
+- [x] Adresse indérivable ⇒ aucune diffusion (repli explicite, jamais `undefined`)
+- [x] Doubles de test réalignés sur un monde possible (le mock figeait le défaut)
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges avant correctif
+- [x] Suites voisines : 21 suites / 793 tests verts
+- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte
+- [x] CHANGELOG + journal d'audit (§ Cycle 27) + leçon 259
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 28 — les trois décisions
+tranchées, la matrice des SIX chemins du fil (un seul divergeait, la famille est
+close), et la question neuve proposée au cycle 29 : le MOMENT de la diffusion
+par rapport à la durabilité du fait.

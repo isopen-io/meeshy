@@ -3174,6 +3174,75 @@ describe('CallService - invalidateSignalCache (call:signal cache sur chemins RES
   });
 });
 
+describe('CallService - broadcastParticipantLeft (call:participant-left sur le chemin REST leave/kick)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  // DELETE /calls/:id/participants/:pid (self-leave ET kick modérateur)
+  // appelait leaveCall() mais, contrairement au handler socket call:leave, ne
+  // diffusait jamais CALL_EVENTS.PARTICIPANT_LEFT : les autres pairs d'un
+  // appel de groupe qui continue gardaient le partant/l'exclu dans leur
+  // grille vidéo/roster et leur RTCPeerConnection ouverte jusqu'au GC (~120s).
+  it('délègue au broadcaster avec un événement portant participantId (row CallParticipant), userId et mode', () => {
+    const calls: Array<{ callId: string; event: any }> = [];
+    callService.setParticipantLeftBroadcaster((callId, event) => {
+      calls.push({ callId, event });
+    });
+
+    callService.broadcastParticipantLeft('call-1', 'call-participant-row-9', 'user-kicked', 'p2p');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      callId: 'call-1',
+      event: { callId: 'call-1', participantId: 'call-participant-row-9', userId: 'user-kicked', mode: 'p2p' },
+    });
+  });
+
+  // Contrairement à broadcastCallEndedIfTerminal, AUCUNE garde de statut
+  // terminal : le handler socket call:leave émet PARTICIPANT_LEFT pour
+  // CHAQUE départ, que l'appel continue (groupe) ou se termine (1:1) — c'est
+  // ce qui pilote le teardown WebRTC par pair côté client, indépendamment du
+  // sort de l'appel lui-même.
+  it('diffuse même quand l’appel reste actif (leave de groupe qui continue)', () => {
+    const calls: unknown[] = [];
+    callService.setParticipantLeftBroadcaster(() => { calls.push(true); });
+
+    callService.broadcastParticipantLeft('call-group', 'row-1', 'user-left', 'p2p');
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it('sans broadcaster câblé, ne throw pas (no-op — parité broadcastCallEndedIfTerminal)', () => {
+    expect(() =>
+      callService.broadcastParticipantLeft('call-1', 'row-1', 'user-1', 'p2p')
+    ).not.toThrow();
+  });
+
+  it('un broadcaster qui rejette ne propage jamais (fire-and-forget)', () => {
+    callService.setParticipantLeftBroadcaster(() => Promise.reject(new Error('boom')));
+
+    expect(() =>
+      callService.broadcastParticipantLeft('call-1', 'row-1', 'user-1', 'p2p')
+    ).not.toThrow();
+  });
+
+  it('un broadcaster qui throw synchrone ne propage jamais', () => {
+    callService.setParticipantLeftBroadcaster(() => {
+      throw new Error('sync-boom');
+    });
+
+    expect(() =>
+      callService.broadcastParticipantLeft('call-1', 'row-1', 'user-1', 'p2p')
+    ).not.toThrow();
+  });
+});
+
 describe('CallService - initiateCall phantom cleanup & transaction', () => {
   let callService: CallService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;

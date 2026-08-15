@@ -12,7 +12,7 @@
 
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { CALL_ERROR_CODES, type CallEndedEvent } from '@meeshy/shared/types/video-call';
+import { CALL_ERROR_CODES, type CallEndedEvent, type CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import {
   buildCallSummaryWithMetadata,
   buildGarbageCollectedConversion,
@@ -248,6 +248,19 @@ export class CallService {
   // evict its 2s `call:signal` session cache entry. Mirrors callEndedBroadcaster.
   private signalCacheInvalidator: ((callId: string) => void) | null = null;
 
+  // Wired in server.ts to CallEventsHandler.broadcastParticipantLeftForRest.
+  // Sibling of callEndedBroadcaster: the REST end/leave routes have no `io`,
+  // so `DELETE /calls/:id/participants/:pid` (self-leave AND moderator kick)
+  // never emitted CALL_EVENTS.PARTICIPANT_LEFT at all — only the socket
+  // `call:leave` handler did. Unlike callEndedBroadcaster this must fire
+  // UNCONDITIONALLY, not just when the call goes terminal: a group-call leave
+  // that keeps the call alive still needs its former peers' WebRTC teardown
+  // (VideoCallInterface's own PARTICIPANT_LEFT listener) and roster update
+  // (CallManager's), which otherwise only happened ~120s later at GC.
+  private participantLeftBroadcaster:
+    | ((callId: string, event: CallParticipantLeftEvent) => Promise<void> | void)
+    | null = null;
+
   constructor(
     private prisma: PrismaClient,
     // CALL-RESILIENCE (item H bug class, re-opened by the 2026-07-06 P0 fix)
@@ -426,6 +439,65 @@ export class CallService {
       });
     } catch (error) {
       logger.warn('call-ended broadcaster failed synchronously', { callId: callSession.id, error });
+    }
+  }
+
+  /**
+   * Register the broadcaster that emits CALL_EVENTS.PARTICIPANT_LEFT to the
+   * call room. Wired in server.ts to CallEventsHandler.broadcastParticipantLeftForRest
+   * (which owns `io`). Pattern mirrors setCallEndedBroadcaster.
+   */
+  setParticipantLeftBroadcaster(
+    callback: (callId: string, event: CallParticipantLeftEvent) => Promise<void> | void
+  ): void {
+    this.participantLeftBroadcaster = callback;
+  }
+
+  /**
+   * Bug (parité socket) — `DELETE /calls/:id/participants/:pid` calls
+   * leaveCall() (self-leave OR moderator kick) but never broadcast
+   * PARTICIPANT_LEFT, unlike the socket `call:leave` handler which always
+   * does — terminal or not. A departing/kicked member of a still-live group
+   * call therefore stayed in every other participant's video grid/roster and
+   * kept its WebRTC peer connection open until the ~120s GC sweep.
+   *
+   * Unconditional (no terminal guard, unlike broadcastCallEndedIfTerminal):
+   * the socket handler emits this for EVERY leave, since it drives per-peer
+   * WebRTC teardown that must happen whether or not the call itself ends.
+   * Fire-and-forget — a failing broadcaster never breaks the REST response
+   * (parité broadcastCallEndedIfTerminal).
+   *
+   * @param participantRowId - The CallParticipant's own `id` (NOT the
+   *   conversation Participant.id passed to leaveCall) — this is what
+   *   CallManager's store keys removal on, client-side.
+   * @param userId - The departing/removed participant's userId — required by
+   *   VideoCallInterface's own listener to tear down the right WebRTC peer
+   *   connection (event.userId, "for removing WebRTC connections").
+   */
+  broadcastParticipantLeft(
+    callId: string,
+    participantRowId: string,
+    userId: string,
+    mode: CallMode | string
+  ): void {
+    const broadcaster = this.participantLeftBroadcaster;
+    if (!broadcaster) {
+      return;
+    }
+
+    const event: CallParticipantLeftEvent = {
+      callId,
+      participantId: participantRowId,
+      userId,
+      mode: mode as CallMode
+    };
+
+    try {
+      Promise.resolve(broadcaster(callId, event)).catch((error) => {
+        logger.warn('participant-left broadcaster failed', { callId, error });
+      });
+    } catch (error) {
+      logger.warn('participant-left broadcaster failed synchronously', { callId, error });
     }
   }
 

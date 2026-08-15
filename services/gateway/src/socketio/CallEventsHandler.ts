@@ -1564,6 +1564,19 @@ export class CallEventsHandler {
   }
 
   /**
+   * Public entry point for the REST `DELETE /calls/:id/participants/:pid`
+   * (leave/kick) route, via `CallService.setParticipantLeftBroadcaster`
+   * (wired in server.ts). That route holds no `io`, so it delegates the
+   * `call:participant-left` fanout here — sibling of
+   * `broadcastCallEndedForTerminatedCall`, but unconditional: this fires for
+   * every REST leave, whether or not the call itself becomes terminal, same
+   * as the socket `call:leave` handler.
+   */
+  broadcastParticipantLeftForRest(io: SocketIOServer, event: CallParticipantLeftEvent): void {
+    io.to(ROOMS.call(event.callId)).emit(CALL_EVENTS.PARTICIPANT_LEFT, event);
+  }
+
+  /**
    * Translates a final transcription segment to each active participant's
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
