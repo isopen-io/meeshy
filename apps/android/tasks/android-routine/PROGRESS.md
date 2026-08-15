@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **profile share links (`meeshy://u/{username}`, `https://meeshy.me/u/{username}`)
+> now actually open the app** (slice `profile-share-link-receiver`, PR #3036, merged `5e11449de`).
+> `ProfileShareLink` (`core:model`) has generated both shapes since the `profile-share` slice
+> (2026-07-11, "share profile" + QR code) — **nothing received either one**: no
+> `https://meeshy.me/u/*` intent-filter in the manifest, no `navDeepLink` for either shape on the
+> profile route. A shared link or a scanned QR code opened nothing on Android — the browser for
+> the web link, no matching app at all for the custom scheme (well, almost: see below).
+>
+> **RE-PROUVÉ before starting**: this was found while looking for a genuine follow-up to the
+> previous stale-checkbox run — checked whether `feature-parity.md`'s Phase 6 "Navigation graph +
+> deep links (`meeshy://`, `https://meeshy.me`)" bullet was ALSO stale like the last one, the same
+> way. It wasn't uniformly stale: `meeshy://` custom-scheme routing is extensive (conversations,
+> chat, profile, story, magic-link, join, guest — 9+ distinct hosts wired), but `https://meeshy.me`
+> App Links cover exactly ONE path (`/auth/magic-link`) despite `ProfileShareLink`'s doc comment
+> explicitly promising `/u/{username}` as a Universal Link. Grepped `MeeshyApp.kt` for any
+> `meeshy.me`/`"u/`" reference: zero hits — confirmed the gap was real, not assumed.
+>
+> **The custom-scheme half turned out to be a smaller fix than expected**: the manifest already
+> has a scheme-only `<data android:scheme="meeshy" />` filter with **no host restriction**, so
+> `meeshy://u/{username}` was already reaching the app at the OS level — it just had no matching
+> `navDeepLink` to route it to `ProfileScreen` once there (silently swallowed / fell through to
+> whatever the NavHost's default matching produced, functionally the same as "opened nothing
+> useful"). Re-verifying this saved a redundant, wasted manifest edit.
+>
+> **No new resolution logic needed**: `ProfileViewModel.loadProfile(userId)` already calls
+> `userRepository.getProfile(id)` → `UserApi.getProfile(idOrUsername)`, and the gateway endpoint
+> already resolves either shape. The two new `navDeepLink` patterns route straight to the existing
+> `PROFILE_USER` route/`ProfileScreen`, reusing `{userId}` as the argument name for what is, on
+> this path, actually a username value — confirmed safe by tracing `ProfileScreen`'s downstream
+> callbacks (`onReport`/`onViewPosts`): they read from `state.user` (populated from the API
+> response, whose `.id` is always the real canonical id), never from the raw route arg directly, so
+> a username in that slot only affects the initial lookup call.
+>
+> New `Routes.PROFILE_SHARE_APP_DEEP_LINK`/`PROFILE_SHARE_WEB_DEEP_LINK` build their pattern from
+> `ProfileShareLink.APP_SCHEME`/`WEB_HOST`/`USER_SEGMENT` (cross-module `const val` template
+> reference — same established pattern as `CONVERSATION_DRAFT_DEEP_LINK`'s `ChatViewModel.*`
+> references in this same file) rather than re-hardcoding the same strings, so generator and
+> receiver structurally cannot drift apart again.
+>
+> **Verified**: 3 new contract tests (`ProfileShareDeepLinkTest`) assert the nav pattern with
+> `{userId}` substituted exactly equals what `ProfileShareLink.appLink`/`webLink` produce — no
+> Robolectric/`TestNavHostController` precedent exists in this module for exercising Compose
+> Navigation's own URI-matching machinery (checked first; none found), so this tests the invariant
+> that broke rather than re-verifying framework internals. CI: `Android` green, full `ci.yml`
+> matrix (17 checks) also triggered and green — same finding as the last two Android PRs.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=profile-share-link-receiver`
+> (streak 3→4, still under the streak≥5 IOS_DETTE threshold — stays ANDROID next run). Commit
+> séparé, poussé directement sur `main`, précédent établi par `9b59bd06c`/`475b869b8`/`e0f10c4a1`.
+
 > On 2026-08-15 **`feature-parity.md`'s Phase 5 "Pending" bullets were stale — no code
 > shipped this run, checklist corrected instead.** Scan of reprise clean (`gh pr list` empty).
 > Re-fetched `origin/main` (only 6 commits behind, unrelated gateway work — the 742-commit gap

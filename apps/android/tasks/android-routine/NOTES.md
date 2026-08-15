@@ -498,3 +498,19 @@ Append-only log of gotchas and decisions that save time next run.
   than a stale single-item one, because it only takes ONE of the N items shipping unnoticed to make
   the whole line wrong, and N items shipping over N different runs is the common case, not the rare
   one.**
+- **A link generator with no receiver fails silently, not loudly — grep both halves of a
+  share-link feature before trusting either.** `ProfileShareLink` (`profile-share-link-receiver`,
+  2026-08-15) built correct, well-tested `meeshy://u/{username}` / `https://meeshy.me/u/{username}`
+  URLs for a month; the QR code rendered, the share sheet worked, `ProfileShareLinkTest` was green.
+  Nothing about USING the generator ever surfaces the fact that tapping its own output does
+  nothing — there's no crash, no error toast, just a browser opening to a 404-shaped page or an
+  inert custom-scheme link. **Generalises: whenever a slice ships something that PRODUCES a
+  URL/token/identifier meant to be consumed later (deep links, share links, invite codes), grep for
+  the CONSUMING side in the same run, not just the producing one — a generator's own tests can
+  never catch a missing receiver, because they never round-trip through the OS.**
+- **A manifest's scheme-only, no-host intent-filter is a wildcard — check it before adding a
+  narrower one that would be redundant.** `<data android:scheme="meeshy" />` (no `android:host`)
+  already routed `meeshy://u/{username}` to the app; only the `https://meeshy.me/u/{username}`
+  half needed a new `<intent-filter>`. Re-verifying this against the actual manifest (not assuming
+  symmetry between the custom-scheme and App Link halves) avoided a redundant, no-op manifest
+  entry.
