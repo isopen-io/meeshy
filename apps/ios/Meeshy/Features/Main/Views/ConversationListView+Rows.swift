@@ -123,21 +123,57 @@ struct ConversationRowItem: View {
                     .contextMenu {
                         nativeContextMenu
                     } preview: {
-                        // Preview statique (non interactive dans un contextMenu
-                        // natif) — mêmes inputs que l'overlay custom, sans
-                        // callbacks. Largeur pilotée par le call site, comme
-                        // l'overlay (source de vérité unique).
-                        ConversationPreviewView(
-                            conversation: conversation,
-                            cachedMessages: cachedPreviewMessages,
-                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
-                                .flatMap { MeeshyConfig.resolveMediaURL($0) },
-                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                            storyState: storyRingState,
-                            moodEmoji: moodStatus?.moodEmoji,
-                            presenceState: conversation.type == .direct ? presenceState : nil,
-                            isDirect: conversation.type == .direct
-                        )
+                        // Preview — troisième point d'entrée du menu de mode
+                        // (contrat LWS-8, « trois points d'entrée, une
+                        // préférence »), câblée sur CE chemin par I-067ter :
+                        // jusque-là seul le chemin < iOS 26
+                        // (`conversationContextMenuOverlay`, +Overlays.swift,
+                        // I-072) montait `LentillePeekView` — écart documenté
+                        // par l'en-tête de `LentillePeekView.swift` et
+                        // verrouillé par `PeekViewModelTests
+                        // .test_nativeContextMenuPreviewPath_…`, comblé ici.
+                        // Mêmes entrées que le montage du chemin fallback,
+                        // relues sur les propriétés DÉJÀ stockées de cette
+                        // row (mêmes valeurs, sans re-lire les singletons
+                        // qu'elles encapsulent) — seule `isAnonymous` n'a pas
+                        // d'équivalent stocké et se lit sur `AuthManager
+                        // .shared`, comme +Overlays.swift : ce closure est
+                        // long-press-only (voir le commentaire du portillon
+                        // `.equatable()` plus bas — « minor staleness there
+                        // is acceptable »), jamais évalué à chaque passe de
+                        // body. `Group` fait du if/else UNE expression pour
+                        // que `.frame(width: 340)` s'applique aux deux
+                        // branches, comme l'overlay custom.
+                        Group {
+                            if LentilleFeatureFlag.isLentilleListEnabled {
+                                LentillePeekView(
+                                    conversation: conversation,
+                                    isDark: isDark,
+                                    isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
+                                    preferredContentLanguages: preferredContentLanguages,
+                                    presenceState: conversation.type == .direct ? presenceState : nil,
+                                    storyState: storyRingState,
+                                    moodEmoji: moodStatus?.moodEmoji
+                                )
+                            } else {
+                                // Preview statique (non interactive dans un
+                                // contextMenu natif) — mêmes inputs que
+                                // l'overlay custom, sans callbacks. Largeur
+                                // pilotée par le call site, comme l'overlay
+                                // (source de vérité unique).
+                                ConversationPreviewView(
+                                    conversation: conversation,
+                                    cachedMessages: cachedPreviewMessages,
+                                    bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
+                                        .flatMap { MeeshyConfig.resolveMediaURL($0) },
+                                    avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                                    storyState: storyRingState,
+                                    moodEmoji: moodStatus?.moodEmoji,
+                                    presenceState: conversation.type == .direct ? presenceState : nil,
+                                    isDirect: conversation.type == .direct
+                                )
+                            }
+                        }
                         .frame(width: 340)
                     }
                     .task {
@@ -191,27 +227,81 @@ struct ConversationRowItem: View {
     }
 
     /// Coeur visuel de la ligne, commun aux deux chemins de menu.
+    ///
+    /// MUX de rang sous drapeau (contrat LWS-7, workshop I-067) : sous
+    /// `LentilleFeatureFlag.isLentilleListEnabled` ON, `LentilleConversationRow`
+    /// (rang plat, `Lentille/Row/`) ; OFF, `ThemedConversationRow` (rang
+    /// historique) — INCHANGÉ, bit-à-bit identique à avant ce lot (mêmes
+    /// arguments, même `.equatable()`). `SwipeableRow`, les deux chemins de
+    /// menu contextuel OS et le portillon `.equatable()` de
+    /// `ConversationRowItem` restent posés AUTOUR de ce point unique — rien
+    /// d'autre dans ce fichier ne bouge (mux SEUL).
+    ///
+    /// `@ViewBuilder` nécessaire ici (absent avant ce lot) : les deux
+    /// branches produisent des `EquatableView<…>` de types CONCRETS
+    /// différents (`LentilleConversationRow` vs `ThemedConversationRow`),
+    /// que seul `@ViewBuilder` peut unifier en `_ConditionalContent` sous
+    /// `some View`.
+    ///
+    /// ÉCART CONTRAT↔CODE signalé (pas oublié) : le contrat/workshop I-066
+    /// et I-067 mentionnent `LentilleSkeletonRow` « monté sur cache vide »
+    /// ICI. En réalité, le squelette « cache vide » de la liste
+    /// (`ConversationListEmptyBranch.skeleton` → `SkeletonConversationRow()`,
+    /// `ConversationListView.swift`) est un chemin de rendu ENTIÈREMENT
+    /// séparé, au niveau de la LISTE, gardé par
+    /// `conversationViewModel.groupedConversations.isEmpty` — `ConversationRowItem`
+    /// n'est JAMAIS construit pendant cette branche (elle rend des
+    /// placeholders AVANT que la moindre `Conversation` existe pour
+    /// instancier une ligne). `LentilleSkeletonRow` (I-066, vue pure et
+    /// prête) ne peut donc pas être montée depuis ce mux : son site de
+    /// montage réel est `ConversationListView.swift`, fichier possédé/gelé
+    /// pour cette tâche (édition interdite). À router par Fable — probablement
+    /// une micro-tâche dédiée qui édite ce fichier.
+    @ViewBuilder
     private var rowCore: some View {
-        ThemedConversationRow(
-            conversation: conversation,
-            community: community,
-            availableWidth: rowWidth,
-            isDragging: isDragging,
-            presenceState: presenceState,
-            onViewStory: onViewStory,
-            onViewProfile: onViewProfile,
-            onViewConversationInfo: onViewConversationInfo,
-            onMoodBadgeTap: onMoodBadgeTap,
-            onCreateShareLink: onCreateShareLink,
-            isDark: isDark,
-            storyRingState: storyRingState,
-            moodStatus: moodStatus,
-            typingUsername: typingUsername,
-            isSelected: isSelected,
-            draftSummary: draftSummary,
-            preferredContentLanguages: preferredContentLanguages
-        )
-        .equatable()
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            LentilleConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: rowWidth,
+                isDragging: isDragging,
+                presenceState: presenceState,
+                onViewStory: onViewStory,
+                onViewProfile: onViewProfile,
+                onViewConversationInfo: onViewConversationInfo,
+                onMoodBadgeTap: onMoodBadgeTap,
+                onCreateShareLink: onCreateShareLink,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                isSelected: isSelected,
+                draftSummary: draftSummary,
+                preferredContentLanguages: preferredContentLanguages
+            )
+            .equatable()
+        } else {
+            ThemedConversationRow(
+                conversation: conversation,
+                community: community,
+                availableWidth: rowWidth,
+                isDragging: isDragging,
+                presenceState: presenceState,
+                onViewStory: onViewStory,
+                onViewProfile: onViewProfile,
+                onViewConversationInfo: onViewConversationInfo,
+                onMoodBadgeTap: onMoodBadgeTap,
+                onCreateShareLink: onCreateShareLink,
+                isDark: isDark,
+                storyRingState: storyRingState,
+                moodStatus: moodStatus,
+                typingUsername: typingUsername,
+                isSelected: isSelected,
+                draftSummary: draftSummary,
+                preferredContentLanguages: preferredContentLanguages
+            )
+            .equatable()
+        }
     }
 }
 

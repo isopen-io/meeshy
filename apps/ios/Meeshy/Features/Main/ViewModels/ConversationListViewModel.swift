@@ -551,7 +551,29 @@ class ConversationListViewModel: ObservableObject {
 
     /// Groupe les conversations par section et les trie
     /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
+    ///
+    /// Greffe LWS-5 (contrat `tasks/lentille-implementation-contract.md` §LWS-5,
+    /// E6) : drapeau OFF ⇒ branche legacy INCHANGÉE (`legacyGroupConversations`,
+    /// vérifiée bit-à-bit par `LentilleGroupingGraftTests`). Drapeau ON ⇒ le
+    /// classement/tri passe par le miroir `LentilleSectionResolver`
+    /// (`Lentille/Core/LentilleSectionResolver.swift`, GELÉ S1). Signature,
+    /// `nonisolated`, staticité : inchangées — c'est le seul point de greffe
+    /// (§4.4 du contrat).
     nonisolated private static func groupConversations(
+        _ filtered: [Conversation],
+        categories: [ConversationSection],
+        draftSummaries: [String: DraftSummary]
+    ) -> [(section: ConversationSection, conversations: [Conversation])] {
+        guard LentilleFeatureFlag.isLentilleListEnabled else {
+            return legacyGroupConversations(filtered, categories: categories, draftSummaries: draftSummaries)
+        }
+        return lentilleGroupConversations(filtered, categories: categories)
+    }
+
+    /// Comportement D'AUJOURD'HUI, verbatim — seul appelant sous drapeau OFF.
+    /// Ne JAMAIS modifier cette fonction pour faire passer un test Lentille :
+    /// c'est la ligne de base que la greffe promet de ne pas bouger.
+    nonisolated private static func legacyGroupConversations(
         _ filtered: [Conversation],
         categories: [ConversationSection],
         draftSummaries: [String: DraftSummary]
@@ -594,6 +616,75 @@ class ConversationListViewModel: ObservableObject {
         }
         if !otherConvs.isEmpty {
             result.append((ConversationSection.other, otherConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
+        }
+
+        return result
+    }
+
+    /// Drapeau ON — classement/tri délégués au miroir `LentilleSectionResolver`
+    /// (loi E5/E6 : pinned → live → catégories utilisateur → temporel).
+    ///
+    /// Un écart assumé et documenté, pas un oubli : `liveCall` est TOUJOURS
+    /// `nil` — aucune plateforme (contrat §0, E13) ne porte encore de modèle
+    /// d'appel en direct sur `Conversation`, la section `.live` du résolveur
+    /// est donc structurellement vide ici. Elle est néanmoins TRADUITE (et non
+    /// ignorée) : le jour où le modèle d'appel arrive, cette fonction n'a rien
+    /// à apprendre.
+    ///
+    /// **Levée de l'écart I-060** (décision LWS-6/I-062, propriétaire du
+    /// conteneur) : les buckets `.live` et `.temporal` repliaient
+    /// provisoirement sur `.other` faute d'identité `MeeshyConversationSection`
+    /// (SDK gelé S1). Ils ont désormais la leur —
+    /// `LentilleSectionIdentity.live` / `.section(for:)`, construite depuis
+    /// l'initialiseur public du type SDK, sans toucher au paquet gelé — et
+    /// chaque section du résolveur est rendue TELLE QUELLE, dans son ordre
+    /// (`pinned` → `live` → catégories → today → yesterday → thisWeek →
+    /// older). Le repli disparaît : plus aucune conversation temporelle ne se
+    /// déguise en « Mes conversations ». La partition reste un recouvrement
+    /// exact de `filtered` (garanti par `LentilleSectionResolver`, vérifié par
+    /// `SectionResolverVectorTests`).
+    nonisolated private static func lentilleGroupConversations(
+        _ filtered: [Conversation],
+        categories: [ConversationSection]
+    ) -> [(section: ConversationSection, conversations: [Conversation])] {
+        var byId: [String: Conversation] = [:]
+        byId.reserveCapacity(filtered.count)
+
+        let sectionable: [LentilleSectionResolver.SectionableConversation] = filtered.map { conversation in
+            byId[conversation.id] = conversation
+            return LentilleSectionResolver.SectionableConversation(
+                id: conversation.id,
+                isPinned: conversation.userState.isPinned && conversation.userState.sectionId == nil,
+                categoryId: conversation.userState.sectionId,
+                orderInCategory: conversation.userState.orderInCategory.map { Double($0) },
+                lastMessageAt: conversation.lastMessageAt,
+                updatedAt: conversation.updatedAt,
+                liveCall: nil
+            )
+        }
+        let sectionableCategories = categories.map { LentilleSectionResolver.SectionableCategory(id: $0.id) }
+
+        let resolved = LentilleSectionResolver.resolveSections(
+            conversations: sectionable,
+            categories: sectionableCategories,
+            now: Date(),
+            timeZone: .current
+        )
+
+        var result: [(section: ConversationSection, conversations: [Conversation])] = []
+
+        for section in resolved {
+            switch section {
+            case .pinned(let conversations):
+                result.append((ConversationSection.pinned, conversations.compactMap { byId[$0.id] }))
+            case .category(let categoryId, let conversations):
+                guard let category = categories.first(where: { $0.id == categoryId }) else { continue }
+                result.append((category, conversations.compactMap { byId[$0.id] }))
+            case .live(let conversations):
+                result.append((LentilleSectionIdentity.live, conversations.compactMap { byId[$0.id] }))
+            case .temporal(let kind, let conversations):
+                result.append((LentilleSectionIdentity.section(for: kind), conversations.compactMap { byId[$0.id] }))
+            }
         }
 
         return result
