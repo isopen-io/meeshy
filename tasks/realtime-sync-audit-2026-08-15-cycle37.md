@@ -132,13 +132,43 @@ troisième argument implicitement `undefined` documente mal la branche testée.
 - `bun install` échoue sur le postinstall de `grpc-tools` (binaire précompilé
   inaccessible derrière le proxy) ; `bun install --ignore-scripts` suffit.
 
-## Piste pour le cycle suivant
+## Piste pour le cycle suivant — repérée, NON livrée
 
-Le lecteur anonyme accuse maintenant réception au drain. Reste à vérifier le
-symétrique côté LECTURE (`type: 'read'`) : les deux routes REST de mark-as-read
-et `broadcastReadStatusUpdate` résolvent-elles l'acteur sans compte par la même
-convention `userId ?? id`, ou portent-elles le même `row.userId === userId`
-qu'on vient de corriger ici ? Le champ `lastReadAt`/`unreadCount` étant scopé sur
-`userId`, un acteur anonyme y pose une question de forme DISTINCTE (à qui
-appartient un curseur de lecture sans ligne `User` ?) qui mérite son propre
-cycle.
+Le lecteur anonyme accuse maintenant réception au drain. Le symétrique côté
+LECTURE (`type: 'read'`) a été inspecté pendant ce cycle ; il ne porte PAS le
+même défaut, mais il porte le défaut JUMEAU sur la forme du payload.
+
+**Ce qui va bien.** `broadcastReadStatusUpdate`
+(`services/gateway/src/routes/message-read-status.ts`) n'a aucun `return`
+anticipé pour les anonymes, résout l'acteur par `resolveCallerParticipant` (donc
+correctement pour un invité de lien), lit ses préférences sous
+`shouldShowReadReceipts(userId, isAnonymous)` et diffuse par
+`emitToConversationParticipants`, qui adresse déjà les pairs sans compte. Et
+`authContext.userId` vaut `participant.id` pour un anonyme — **pas** le jeton de
+session (`middleware/auth.ts:444`) : aucun secret ne part en diffusion. La ligne
+de `CLAUDE.md` qui dit « `userId: string, // user.id or sessionToken` » est
+périmée sur ce point.
+
+**Ce qui reste faux.** `broadcastReadStatusUpdate` déclare
+`args.userId: string` (non-nullable) et le recopie tel quel dans
+`payload.userId`. Pour un acteur anonyme, ce champ part donc en portant un
+`Participant.id` — **exactement la forme que ce cycle vient d'interdire sur le
+chemin du drain**, dans un champ que le type, iOS et Android documentent tous
+les trois comme « `User.id` de l'acteur, `null` s'il n'en a pas ».
+
+**Pourquoi ça mérite son propre cycle, et n'aurait pas dû être mélangé ici.**
+`type: 'read'` transporte deux champs que `type: 'received'` n'a pas :
+`lastReadAt` et `unreadCount`, explicitement **scopés sur `userId`** (« a
+recipient whose id differs MUST ignore it »). Corriger `payload.userId` en `null`
+pour un acteur anonyme rendrait donc ces deux champs inapplicables par ses PROPRES
+autres appareils — alors qu'ils sont justement là pour la synchro multi-appareils
+du curseur. La bonne réponse n'est pas mécanique : elle demande de trancher *à
+qui appartient un curseur de lecture sans ligne `User`*, et par quelle clé un
+appareil anonyme reconnaît « c'est moi » (deux appareils partageant un jeton de
+session partagent-ils un `Participant.id` ?). Un `CONVERSATION_UNREAD_UPDATED`
+émis vers `ROOMS.user(args.userId)` dépend de la même réponse — et se trouve,
+lui, correct aujourd'hui précisément PARCE QUE la valeur est un `Participant.id`.
+
+Autrement dit : les deux usages de `args.userId` dans cette fonction veulent des
+choses OPPOSÉES, et c'est ce conflit — pas le renommage d'un paramètre — qui est
+le vrai sujet du cycle suivant.
