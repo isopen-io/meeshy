@@ -70,6 +70,8 @@ La matrice de couverture du vol. 4 §5 exige que « chaque feature de la vue act
 - `Focal/Core/FocalRowInput.swift` (WS-0) : ajout de `let effects: MessageEffects`.
 - `Focal/Row/FocalRow.swift` (WS-4) : branchement conditionnel des deux couches.
 
+**Contrainte dure — l'horloge est l'activation, pas l'apparition.** En rangée plate, un effet d'apparition se déclenche quand le message **devient actif** (élection de focus, §3.4), pas quand la cellule entre à l'écran. La loi complète, et surtout sa réserve sur les drapeaux protecteurs — un message flouté ne se révèle **jamais** par simple défilement — sont en §4.1 et §4.2. WS-12 rend les comportements ; WS-13 leur donne cette horloge. Un implémenteur de WS-12 qui câblerait `onAppear` produirait un rejeu à chaque passage de cellule recyclée : lire §4 avant d'écrire.
+
 **Contrainte dure — aucune réimplémentation de la règle.** `MessageEffectPlan(effects:reduceMotion:)` (`packages/MeeshySDK/.../MessageEffects.swift:117-149`) est la source de vérité, jumelée à `resolveMessageEffectPlan()` côté web. `FocalEffectLayer` la **consomme**, ne la redécide pas. Les sept règles de `apps/ios/CLAUDE.md` § « Effets de message » s'appliquent intégralement — en particulier la règle 7 : `plan.isEmpty ⇒ vue intacte`, l'écrasante majorité des messages ayant `effectFlags == 0` et ne devant payer aucun modifier inerte par cellule.
 
 **Contrainte dure — collision avec la passe de perspective.** WS-5 écrit `layer.transform` et `alpha` sur la cellule ; les effets d'apparition écrivent échelle et opacité sur le contenu. Les deux ne doivent jamais viser la même couche : la passe agit sur la **cellule**, les effets sur le **contenu contre-inversé** à l'intérieur du `UIHostingConfiguration` (contrat §4.1). Un test de non-interférence est exigé — c'est le même piège que R2 (héritage de transform sur cellule recyclée).
@@ -139,22 +141,105 @@ S'ajoutent aux critères d'acceptation de §2.3 :
 
 ---
 
-## 4. Ce qu'on ne fait pas, et pourquoi
+## 4. WS-13 — Le plaisir de la mise au point
+
+### 4.1 La loi : le plan focal est l'horloge
+
+En mode Focal, **le défilement est la mise au point**. Il existe donc, à chaque instant, exactement un message **actif** : celui que `FocalFocusElector.elect(...)` (§3.4) a élu. C'est l'événement le plus riche de l'écran, et il est aujourd'hui inexploité — il ne sert qu'à décorer une carte.
+
+> **Loi de WS-13.** Quand un message devient actif, son comportement se déclenche. Rien d'autre ne déclenche rien.
+
+Trois conséquences, et c'est la loi qui les rend cohérentes plutôt qu'arbitraires :
+
+1. **Une activation = une récompense.** Jamais deux ressorts, jamais haptique *et* animation *et* son sur la même prise de focus. Le budget d'attention est la contrainte qui sépare une app joyeuse d'une app épuisante.
+2. **La fréquence est gouvernée par le lecteur, pas par le produit.** Personne ne subit un effet : on le provoque en amenant le message au point. C'est ce qui empêche la fatigue à la centième fois — on ne se lasse pas de ce qu'on déclenche soi-même.
+3. **Rien ne disparaît en Focal.** Effets et modes d'affichage se comportent comme en bulle ; seule leur **horloge** change — l'activation remplace la venue à l'écran.
+
+### 4.2 La ligne à ne pas franchir : expressif ≠ protecteur
+
+La loi s'applique aux comportements **expressifs**. Elle ne s'applique **jamais** aux comportements **protecteurs**.
+
+| Famille | Drapeaux | L'activation… |
+|---|---|---|
+| Expressif | `shake` `zoom` `explode` `confetti` `fireworks` `waoo` `glow` `pulse` `rainbow` `sparkle` | **déclenche** l'effet |
+| Protecteur | `blurred` `viewOnce` `ephemeral` | **arme l'affordance**, ne consomme rien |
+
+Un message flouté qui se révélerait en atteignant la focale serait révélé par un simple défilement — l'inverse exact de son intention. Un `viewOnce` consommé au passage serait détruit sans avoir été lu. **L'activation rend le geste possible ; seul le geste délibéré consomme.** C'est le piège que la loi, énoncée sans cette réserve, produirait mécaniquement.
+
+### 4.3 Périmètre
+
+**But.** Faire de l'activation focale l'horloge unique des comportements de message, et en tirer le grain tactile qui rend la lecture agréable à manipuler.
+
+**Fichiers possédés** (disjoints de WS-0…WS-12) :
+- `apps/ios/Meeshy/Features/Main/Views/Focal/Delight/FocalActivationLaw.swift`
+- `apps/ios/Meeshy/Features/Main/Views/Focal/Delight/FocalHapticGovernor.swift`
+- `apps/ios/Meeshy/Features/Main/Views/Focal/Delight/FocalAccentRing.swift`
+
+**Les six comportements.**
+
+**D1 — L'effet joue à la prise de focus.** Les effets d'apparition se déclenchent quand le message atteint le plan focal, pas quand la cellule entre à l'écran. Aucune mémoire de lecture (règle 1 de `CLAUDE.md` § Effets) : redescendre puis remonter rejoue. *Réutilise* `MessageEffectPlan` + l'élection de focus. *Ne fatigue pas* : c'est le lecteur qui décide, message par message.
+
+**D2 — Le cran de la focale.** Impact haptique léger à chaque prise de focus, **uniquement en défilement délibéré** ; silence total sur un lancer rapide. `HapticFeedback` (`MeeshyUI/Utilities/HapticFeedback.swift`) n'expose **aucun throttle** — les générateurs sont des singletons `@MainActor` réchauffés par `prepare()`, rien ne borne la cadence. `FocalHapticGovernor` est donc le type manquant : entrée `(vitesse, franchissements, temps écoulé)`, sortie `Bool`, seuil de vitesse + plafond d'impulsions par seconde. Pur, testable sans simulateur. *Ne fatigue pas* précisément grâce au seuil : un lancer à travers 200 messages ne produit rien.
+
+**D3 — La carte se pose.** Le ring accent 1,5 de la carte de focus (WS-4) monte avec la courbe `f` de WS-5 au lieu d'apparaître d'un coup. *Réutilise* `f`, déjà calculé, zéro coût. *Ne fatigue pas* : c'est de la matière continue, pas un événement — au bout d'une semaine on ne le voit plus, et c'est la preuve que ça marche.
+
+**D4 — Le Prisme se révèle à la focale.** Quand le message actif est affiché via une traduction, son drapeau de langue prend un souligné accent — **seulement tant qu'il est actif**. Rend visible le travail du Prisme sans jamais l'annoncer : ni popup, ni bannière (règle du Prisme). *Réutilise* `FocalRowInput.activeDisplayLangCode`.
+
+**D5 — Les modes d'affichage survivent.** Flou, éphémère et vue-unique gardent en rangée plate le comportement qu'ils ont en bulle (c'est WS-12), et l'activation **arme** leur affordance sans la consommer (§4.2).
+
+**D6 — L'accent d'ouverture.** À l'ouverture d'une conversation, la teinte d'accent lave l'écran ~250 ms puis se retire dans l'en-tête. *Réutilise* `conversation.accentColor` + la transition de navigation. *Ne fatigue pas* : 250 ms sur une trajectoire que l'œil suit déjà ; au bout de trois jours c'est sous-perceptif, et ça installe une attente de couleur qui rend chaque conversation reconnaissable avant le premier mot lu.
+
+**Contrat d'accessibilité — opposable aux six.**
+- **Reduce motion** : chaque comportement définit son **état statique équivalent**, jamais son absence. D1 délègue à `MessageEffectPlan` (déjà juste) ; D3 rend le ring fixe à pleine intensité ; D6 pose la couleur d'en-tête sans lavage ; D2 **survit** (une haptique n'est pas du mouvement visuel) ; D4 est un souligné, il survit aussi.
+- **Dynamic Type XL** : aucune cote fixe autour de texte. Le souligné de D4 se dimensionne sur la métrique typographique courante.
+- **VoiceOver** : D3 et D6 sont de la matière → `accessibilityHidden`. D4 est porteur de sens → il s'énonce dans le label composé de la rangée, jamais comme élément séparé.
+- **Contraste AA** : l'accent généré est une couleur de **surface et de signal**, jamais de texte, sauf passage par un correcteur de luminance.
+
+**Types purs à extraire.**
+- `FocalActivationLaw.behaviors(activating: FocalRowInput, plan: MessageEffectPlan, reduceMotion: Bool) -> FocalActivationBehaviors` — décide ce qui se déclenche à l'activation, et **exclut par construction** les drapeaux protecteurs.
+- `FocalHapticGovernor.shouldFire(velocity:crossingsInWindow:since:) -> Bool`.
+- `FocalAccentRing.intensity(focusCurve f: CGFloat, reduceMotion: Bool) -> Double`.
+
+**Fichiers de test.**
+- `apps/ios/MeeshyTests/Unit/Focal/FocalActivationLawTests.swift`
+- `apps/ios/MeeshyTests/Unit/Focal/FocalHapticGovernorTests.swift`
+- `apps/ios/MeeshyTests/Unit/Focal/FocalAccentRingTests.swift`
+
+**Critères d'acceptation.**
+1. Un message portant un drapeau expressif déclenche son effet **à l'activation**, et le rejoue si on le réactive.
+2. Un message portant `blurred` / `viewOnce` / `ephemeral` **ne consomme rien** à l'activation — test explicite par drapeau protecteur. C'est le critère de confidentialité de WS-13.
+3. Une activation ne produit **jamais** plus d'un événement remarquable (budget d'attention) — vérifié sur `FocalActivationBehaviors`.
+4. Au-delà du seuil de vitesse, `FocalHapticGovernor.shouldFire` renvoie `false` pour toute la traversée, et le plafond par seconde tient sur une rafale.
+5. `reduceMotion` ⇒ chaque comportement rend son état statique, aucun n'est simplement absent.
+6. Dynamic Type `.accessibility5` ⇒ aucune troncature sur la rangée active (harnais WS-11).
+
+### 4.4 Ce que WS-13 n'emporte pas
+
+- **Aucun nouveau drapeau, aucun nouveau bit.** WS-13 change l'**horloge** des comportements existants ; il n'invente pas d'effet. Le 4ᵉ axe reste à son chantier (§2 bis. 3).
+- **Aucun son.** Une messagerie s'utilise dans le métro, en réunion, à côté d'un enfant qui dort. Muet par défaut, sans exception.
+- **Aucune série, aucun point, aucun badge.** Une série transforme un plaisir en dette : le jour où on la casse, le produit devient une source de culpabilité.
+- **Aucune donnée fabriquée.** Pas d'anniversaire de conversation, pas de « votre 1000ᵉ message » — le produit n'a pas à décréter que quelque chose compte.
+
+---
+
+## 5. Ce qu'on ne fait pas, et pourquoi
 
 - **Un nouveau composeur** — six des sept capacités demandées existent (§1). Le coût est la remise en jeu de huit comportements stabilisés ; le gain est nul.
 - **Un plan de création dépliable, un composeur tout-en-ligne** — les deux répondent à un problème d'accessibilité des effets qui n'existe pas : le bouton est dans la barre, à deux taps.
 - **Le formatage de texte** — bloqué au transport (§3). Déclaré bloqué, pas simulé.
 - **Les stickers de conversation** — le système de stickers est côté story. Le porter suppose de vérifier que les assets sont teintables ; non vérifié, donc non promis.
-- **Un lot « plaisir » (WS-13)** — écarté à ce stade. Toute idée d'agrément repose sur des moteurs (accent de conversation, haptiques, ressorts, effets) dont ce document vient d'établir qu'ils **ne sont pas rendus** dans le mode de lecture par défaut. Ajouter de l'agrément par-dessus une régression de confidentialité serait un mauvais ordre de travail. WS-12 d'abord ; le sujet se rouvre sur des bases saines ensuite.
 
 ---
 
-## 5. Ordre
+## 6. Ordre
 
 ```
-WS-4 (rangée plate) ──── WS-12 (effets + cycle de vie)
-                              │
-WS-5 (perspective) ───────────┘   ← test de non-interférence transform/alpha
+WS-4 (rangée plate) ──── WS-12 (effets + cycle de vie) ──── WS-13 (horloge d'activation)
+                              │                                      │
+WS-5 (perspective) ───────────┴──────────────────────────────────────┘
+       ↑ test de non-interférence transform/alpha        ↑ fournit la courbe f et l'élection de focus
 ```
 
-WS-12 est **bloquant pour la recette §7** : sans lui, activer le drapeau `reading_modes` expose en clair des messages que leur auteur a envoyés floutés.
+**WS-12 est bloquant pour la recette §7** : sans lui, activer le drapeau `reading_modes` expose en clair des messages que leur auteur a envoyés floutés.
+
+**WS-13 dépend de WS-12, pas l'inverse.** Le plaisir se pose sur des comportements qui existent ; il ne les remplace pas. Ses trois types purs (`FocalActivationLaw`, `FocalHapticGovernor`, `FocalAccentRing`) sont en revanche écrivables et testables **immédiatement**, sans attendre WS-12 — ils ne dépendent que des signatures gelées par WS-0.
