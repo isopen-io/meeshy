@@ -1,0 +1,1071 @@
+<title>Modes en Action</title>
+<style>
+  :root {
+    --paper: #F4F5F8;
+    --surface: #FFFFFF;
+    --ink: #1B2233;
+    --muted: #5C6478;
+    --line: #DBDFE8;
+    --soft: #EBEDF3;
+    --ghost: #C9CEDA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10131B;
+      --surface: #181D29;
+      --ink: #E9EBF2;
+      --muted: #99A1B4;
+      --line: #2B3140;
+      --soft: #202634;
+      --ghost: #3A4254;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131B;
+    --surface: #181D29;
+    --ink: #E9EBF2;
+    --muted: #99A1B4;
+    --line: #2B3140;
+    --soft: #202634;
+    --ghost: #3A4254;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0 20px;
+  }
+  .wrap { max-width: 1020px; margin: 0 auto; }
+  h1, h2, h3 {
+    font-family: "Avenir Next", Futura, "Trebuchet MS", "Segoe UI", sans-serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+  code, pre {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+    font-size: 12.5px;
+  }
+  pre {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; overflow-x: auto; line-height: 1.6; margin: 18px 0 0;
+  }
+  pre .c { color: var(--muted); }
+  pre .k { color: var(--a, #3E93CF); font-weight: 600; }
+
+  .hero { padding: 64px 0 8px; }
+  .hero h1 { font-size: clamp(38px, 6vw, 58px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 4px; }
+  .hero .lede { max-width: 64ch; font-size: 17px; color: var(--muted); margin: 14px 0 0; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 30px 0 0; }
+  nav.toc a {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 6px 11px; font-size: 13px; color: var(--ink); text-decoration: none;
+  }
+  nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--dot); outline: none; }
+  nav.toc a i { width: 9px; height: 9px; border-radius: 50%; background: var(--dot); flex: none; }
+
+  section.prop { padding: 70px 0 8px; border-top: 1px solid var(--line); margin-top: 60px; }
+  section.prop:first-of-type { border-top: none; margin-top: 20px; }
+  .prop-head { display: flex; gap: 22px; align-items: baseline; }
+  .num {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 15px; font-weight: 700; color: var(--a);
+    border: 1.5px solid var(--a); border-radius: 10px; padding: 4px 9px; flex: none;
+    transform: translateY(-4px);
+  }
+  .prop-head h2 { font-size: clamp(25px, 3.4vw, 33px); letter-spacing: -0.015em; }
+  .thesis { font-size: 16.5px; color: var(--muted); max-width: 60ch; margin: 8px 0 0; }
+  .thesis em { color: var(--a); font-style: normal; font-weight: 600; }
+
+  .case { margin-top: 48px; }
+  .case > h3 { font-size: 19px; margin: 0 0 4px; }
+  .case-eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--a); display: block; margin-bottom: 6px;
+  }
+  .case-body {
+    display: grid; grid-template-columns: 330px 1fr; gap: 42px;
+    margin-top: 18px; align-items: start;
+  }
+  @media (max-width: 780px) { .case-body { grid-template-columns: 1fr; } }
+  figure.mock { margin: 0; }
+  figure.mock svg { width: 100%; max-width: 330px; height: auto; display: block; color: var(--muted); }
+  figure.mock figcaption { font-size: 12.5px; color: var(--muted); margin-top: 10px; max-width: 40ch; }
+  figure.diagram { margin: 26px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; overflow-x: auto; }
+  figure.diagram svg { min-width: 640px; width: 100%; height: auto; display: block; color: var(--ink); }
+  figure.diagram figcaption { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+
+  .notes p { font-size: 15px; margin: 0 0 14px; max-width: 62ch; }
+  .notes p b { font-weight: 650; }
+  .notes .beat {
+    border-left: 2.5px solid var(--a); padding: 2px 0 2px 14px; margin: 0 0 12px;
+    font-size: 14.5px; max-width: 60ch;
+  }
+  .notes .beat b { color: var(--a); }
+
+  dl.facets { display: grid; gap: 14px; margin: 20px 0 0; }
+  dl.facets > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+  dl.facets dt {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--a); margin-bottom: 3px;
+  }
+  dl.facets dd { margin: 0; font-size: 14.5px; }
+
+  .rules { display: grid; gap: 14px; margin: 26px 0 0; counter-reset: rule; }
+  .rules > div {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 18px 14px 54px; position: relative; font-size: 14.5px; max-width: 78ch;
+  }
+  .rules > div::before {
+    counter-increment: rule; content: counter(rule);
+    position: absolute; left: 16px; top: 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px; font-weight: 700; color: var(--a);
+    border: 1.5px solid var(--a); border-radius: 8px; width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rules b { font-weight: 650; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-top: 26px; }
+  table { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    border-top: none;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  }
+  td.t { white-space: nowrap; font-weight: 600; }
+  td .never { color: var(--muted); }
+
+  .ios-pack { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 26px; }
+  .ios-pack > div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .ios-pack b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .ios-pack span { font-size: 13px; color: var(--muted); }
+
+  .ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 26px; }
+  .ideas > div { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+  .ideas h3 { font-size: 17px; margin-bottom: 6px; display: flex; align-items: center; gap: 9px; }
+  .ideas h3 i { width: 10px; height: 10px; border-radius: 50%; background: var(--dot); flex: none; }
+  .ideas p { font-size: 14px; margin: 8px 0 0; color: var(--ink); }
+  .ideas p.who { color: var(--muted); font-size: 12.5px; font-style: italic; }
+
+  footer.colophon { padding: 30px 0 56px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); margin-top: 64px; }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Meeshy · Vue conversation · Volume 2 — du concept au concret</p>
+  <h1>Modes en Action</h1>
+  <p class="lede">Le brainstorm « Au-delà des Bulles » posait dix pistes. Ce volume en fait une spécification vivante&nbsp;: des <strong>scènes de vie réelles</strong> pour le Flux Focal, le Résumé Vivant, la Rivière et la Scène — avec les maquettes qui vont avec — puis les <strong>règles exactes de passage d’un mode à l’autre</strong> (avec les seuils chiffrés), l’<strong>API Agent</strong> à deux rôles qui permet à n’importe quelle IA de se brancher sans jamais polluer le fil, et les pistes contenus&nbsp;: stories, réels, médias, création assistée.</p>
+  <nav class="toc" aria-label="Sommaire">
+    <a href="#focal" style="--dot:#E05252"><i></i>Focal — 3 matins</a>
+    <a href="#resume" style="--dot:#3E93CF"><i></i>Résumé — la rampe</a>
+    <a href="#riviere" style="--dot:#5A6FD6"><i></i>Rivière — 24 voix</a>
+    <a href="#scene" style="--dot:#8A63D2"><i></i>Scène — immersion</a>
+    <a href="#orchestrateur" style="--dot:#C9962B"><i></i>L’Orchestrateur</a>
+    <a href="#api" style="--dot:#2E9E96"><i></i>API Agent</a>
+    <a href="#pistes" style="--dot:#D95F82"><i></i>Contenus &amp; création</a>
+  </nav>
+</header>
+
+<!-- ═══════════════════════ 01 · FLUX FOCAL ═══════════════════════ -->
+<section class="prop" id="focal" style="--a:#E05252">
+  <div class="prop-head">
+    <span class="num">01</span>
+    <div>
+      <p class="eyebrow">Trois matins ordinaires</p>
+      <h2>Le Flux Focal, en situation</h2>
+      <p class="thesis">Le mode par défaut de toutes les conversations. Trois scènes de vie&nbsp;: <em>le message qui traverse les langues</em>, <em>la logistique qui se règle en un pouce</em>, <em>le média qui devient création</em>.</p>
+    </div>
+  </div>
+
+  <!-- CAS 01·A -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 01·A — Prisme invisible</span>
+    <h3>Le message d’Avó Maria</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : message de la grand-mère écrit en portugais, affiché traduit en français à pleine taille, lien discret vers l’original, suggestion de réponse de l’assistant en pointillé">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <g opacity="0.25">
+            <circle cx="96" cy="80" r="6" fill="var(--ghost)"/>
+            <rect x="108" y="74" width="96" height="11" rx="5.5" fill="var(--ghost)"/>
+          </g>
+          <g opacity="0.42">
+            <circle cx="84" cy="118" r="7" fill="var(--ghost)"/>
+            <rect x="97" y="111" width="126" height="13" rx="6.5" fill="var(--ghost)"/>
+          </g>
+          <g opacity="0.62">
+            <circle cx="70" cy="164" r="8" fill="var(--ghost)"/>
+            <rect x="85" y="156" width="150" height="15" rx="7.5" fill="var(--ghost)"/>
+            <rect x="85" y="177" width="102" height="15" rx="7.5" fill="var(--ghost)"/>
+          </g>
+          <!-- focal card -->
+          <rect x="24" y="238" width="252" height="196" rx="20" fill="var(--soft)" stroke="#E05252" stroke-width="2"/>
+          <circle cx="52" cy="270" r="15" fill="#E05252"/>
+          <text x="52" y="275" font-size="12" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">A</text>
+          <text x="76" y="266" font-size="13.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Avó Maria</text>
+          <text x="76" y="281" font-size="10" fill="var(--muted)" font-family="system-ui">🇵🇹 → 🇫🇷 · à l’instant</text>
+          <text x="42" y="316" font-size="14" fill="var(--ink)" font-family="system-ui">On fait le dîner dimanche ?</text>
+          <text x="42" y="338" font-size="14" fill="var(--ink)" font-family="system-ui">J’ai préparé la caldeirada 🍲</text>
+          <line x1="42" y1="360" x2="258" y2="360" stroke="var(--line)" stroke-width="1"/>
+          <text x="42" y="382" font-size="10.5" fill="#E05252" font-family="system-ui">appui long · lire l’original portugais</text>
+          <text x="42" y="400" font-size="10.5" fill="var(--muted)" font-family="system-ui">🔊 écouter avec sa voix (clonée)</text>
+          <text x="42" y="418" font-size="10.5" fill="var(--muted)" font-family="system-ui">❤️ 2 · Maman, Léo</text>
+          <!-- assistant suggestion -->
+          <rect x="24" y="452" width="230" height="32" rx="16" fill="none" stroke="#E05252" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M42 462 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#E05252"/>
+          <text x="58" y="472" font-size="11" fill="var(--ink)" font-family="system-ui">« On arrive à 19 h ! » — envoyer ↗</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#E05252"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>Le portugais n’apparaît nulle part — sauf si on le demande. La carte focale porte le texte, la voix et l’original au même endroit.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Dimanche matin. Avó Maria écrit en portugais depuis Porto. Chez vous, son message arrive <b>à pleine taille, en français, comme si elle l’avait écrit en français</b> — le Prisme a fait son travail avant l’affichage, le badge 🇵🇹→🇫🇷 est la seule trace. Un appui long glisse l’original par-dessus, en douceur ; le bouton « écouter » lit le message <b>avec sa voix clonée</b> — c’est bien la voix d’Avó, en français.</p>
+        <p class="beat"><b>Le détail qui change tout&nbsp;:</b> la traduction n’est jamais un état spécial. Pas de bannière « message traduit », pas de mise en page différente. Le contenu traduit <i>est</i> le contenu — c’est la règle du Prisme, rendue physique par le mode Focal.</p>
+        <p>L’assistant (rôle <code>observer</code>, voir l’API plus bas) propose une réponse en pointillé sous la carte — dans la langue du fil, prête à partir. On peut l’envoyer d’un tap, la modifier, ou l’ignorer&nbsp;: elle s’efface au message suivant sans laisser de trace.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 01·B -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 01·B — Logistique en un pouce</span>
+    <h3>« Qui récupère Léo à 18 h ? »</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : question logistique en carte focale, trois raccourcis d’action générés par l’assistant : répondre moi, créer un rappel, proposer un covoiturage">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <g opacity="0.3">
+            <circle cx="90" cy="96" r="7" fill="var(--ghost)"/>
+            <rect x="103" y="89" width="118" height="13" rx="6.5" fill="var(--ghost)"/>
+          </g>
+          <g opacity="0.55">
+            <circle cx="74" cy="146" r="8" fill="var(--ghost)"/>
+            <rect x="88" y="138" width="144" height="15" rx="7.5" fill="var(--ghost)"/>
+          </g>
+          <!-- focal card -->
+          <rect x="24" y="216" width="252" height="150" rx="20" fill="var(--soft)" stroke="#E05252" stroke-width="2"/>
+          <circle cx="52" cy="248" r="15" fill="#E28A3C"/>
+          <text x="52" y="253" font-size="12" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">K</text>
+          <text x="76" y="244" font-size="13.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Karim</text>
+          <text x="76" y="259" font-size="10" fill="var(--muted)" font-family="system-ui">il y a 2 min · te mentionne</text>
+          <text x="42" y="296" font-size="14.5" font-weight="600" fill="var(--ink)" font-family="system-ui">Qui récupère Léo à 18 h</text>
+          <text x="42" y="318" font-size="14.5" font-weight="600" fill="var(--ink)" font-family="system-ui">ce soir ? 🎒</text>
+          <text x="42" y="348" font-size="10.5" fill="var(--muted)" font-family="system-ui">Maman a vu · Papi écrit…</text>
+          <!-- assistant shortcuts -->
+          <text x="26" y="396" font-size="9.5" fill="#E05252" font-family="ui-monospace, Menlo, monospace">✦ RACCOURCIS DE TON ASSISTANT</text>
+          <rect x="24" y="406" width="72" height="34" rx="17" fill="#E05252"/>
+          <text x="60" y="427" font-size="12" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">🙋 Moi !</text>
+          <rect x="104" y="406" width="102" height="34" rx="17" fill="none" stroke="#E05252" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="155" y="427" font-size="11.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">⏰ Rappel 17 h 30</text>
+          <rect x="214" y="406" width="62" height="34" rx="17" fill="none" stroke="#E05252" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="245" y="427" font-size="11.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">🚗 Covoit’</text>
+          <text x="26" y="468" font-size="10" fill="var(--muted)" font-family="system-ui" font-style="italic">« Moi ! » enverra : « Je m’en occupe 👍 » + rappel auto</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#E05252"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>La question génère ses propres boutons. Le premier envoie une vraie réponse dans le fil <i>et</i> pose le rappel — un tap, deux effets.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> 16 h 40, vous sortez de réunion. La carte focale n’est pas un simple message&nbsp;: l’assistant a reconnu une <b>question logistique adressée à vous</b> et l’a montée d’un cran — elle attend, elle ne défile pas. Sous le texte, trois raccourcis fabriqués pour <i>cette</i> question&nbsp;: répondre « moi », poser un rappel, proposer un covoiturage.</p>
+        <p class="beat"><b>La grammaire du pointillé&nbsp;:</b> tout ce qui vient d’un agent est en trait pointillé avec l’étincelle ✦, tout ce qui vient des humains est en trait plein. Un enfant de 8 ans fait la différence en une seconde — et personne ne confond jamais une suggestion avec un message.</p>
+        <p>Les indicateurs sociaux restent minimaux&nbsp;: « Maman a vu · Papi écrit… » en une ligne grise. Pas de double-coches anxiogènes sur chaque message — l’information de présence n’existe que sur la carte focale, là où elle sert.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 01·C -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 01·C — Le média devient création</span>
+    <h3>La photo de Mia, remixée en story</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : photo partagée affichée en pleine carte focale avec actions remixer et publier en story, proposition d’album par l’assistant">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <g opacity="0.3">
+            <circle cx="88" cy="86" r="7" fill="var(--ghost)"/>
+            <rect x="101" y="79" width="122" height="13" rx="6.5" fill="var(--ghost)"/>
+          </g>
+          <g opacity="0.55">
+            <circle cx="74" cy="132" r="8" fill="var(--ghost)"/>
+            <rect x="88" y="124" width="148" height="15" rx="7.5" fill="var(--ghost)"/>
+          </g>
+          <!-- focal photo card -->
+          <rect x="24" y="182" width="252" height="268" rx="20" fill="var(--soft)" stroke="#E05252" stroke-width="2"/>
+          <circle cx="52" cy="212" r="14" fill="#BC55A0"/>
+          <text x="52" y="217" font-size="11" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">M</text>
+          <text x="74" y="209" font-size="13" font-weight="700" fill="var(--ink)" font-family="system-ui">Mia</text>
+          <text x="74" y="223" font-size="10" fill="var(--muted)" font-family="system-ui">au parc · il y a 1 min</text>
+          <!-- photo -->
+          <rect x="40" y="238" width="220" height="140" rx="12" fill="var(--ghost)"/>
+          <circle cx="220" cy="266" r="14" fill="var(--surface)" opacity="0.9"/>
+          <path d="M40 350 L 106 292 L 150 330 L 196 284 L 260 344 L 260 366 a12 12 0 0 1 -12 12 L 52 378 a12 12 0 0 1 -12 -12 z" fill="var(--muted)" opacity="0.75"/>
+          <!-- overlay actions -->
+          <rect x="40" y="392" width="86" height="30" rx="15" fill="#E05252"/>
+          <text x="83" y="411" font-size="11.5" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">🎨 Remixer</text>
+          <rect x="134" y="392" width="78" height="30" rx="15" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="173" y="411" font-size="11.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">↗ Story</text>
+          <rect x="220" y="392" width="40" height="30" rx="15" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="240" y="411" font-size="11.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">❤️</text>
+          <!-- assistant album -->
+          <rect x="24" y="466" width="252" height="32" rx="16" fill="none" stroke="#E05252" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M42 476 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#E05252"/>
+          <text x="58" y="486" font-size="11" fill="var(--ink)" font-family="system-ui">12 photos aujourd’hui — créer l’album « Parc » ?</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#E05252"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>Le média reçu porte ses verbes : remixer, publier en story, réagir. L’assistant range en album sans qu’on le lui demande deux fois.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Mia envoie une photo du parc. En Focal, un média n’est pas une vignette à agrandir&nbsp;: la photo <b>est</b> la carte focale, plein cadre, le passé s’estompe au-dessus. Et surtout, elle arrive <b>avec ses verbes</b>&nbsp;: « Remixer » ouvre le Studio (annoter, générer une variante par IA, la transformer en sticker), « Story » la republie en story avec crédit automatique « 📸 Mia », le cœur réagit.</p>
+        <p class="beat"><b>Répondre par la création&nbsp;:</b> le remix renvoyé s’insère dans le fil comme une réponse liée à l’original — la conversation devient un ping-pong créatif, pas une pile de fichiers. C’est le pont direct vers les stories, réels et contenus IA (section « Contenus » plus bas).</p>
+        <p>L’assistant compte les photos du jour et propose l’album en une ligne pointillée. Accepté, l’album apparaît dans l’Étagère de la conversation — visible par tous, construit par personne.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ 06 · RÉSUMÉ VIVANT ═══════════════════════ -->
+<section class="prop" id="resume" style="--a:#3E93CF">
+  <div class="prop-head">
+    <span class="num">06</span>
+    <div>
+      <p class="eyebrow">Le retour, sans la dette</p>
+      <h2>Le Résumé Vivant, en situation</h2>
+      <p class="thesis">Deux scènes&nbsp;: <em>revenir de cinq jours de déconnexion</em> en dix secondes, et la <em>Rampe de visages</em> — atteindre et répondre à <em>une</em> personne parmi des dizaines, en deux gestes.</p>
+    </div>
+  </div>
+
+  <!-- CAS 06·A -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 06·A — 300 messages, 10 secondes</span>
+    <h3>Retour de randonnée</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : carte d’état après cinq jours d’absence avec une décision actée, une question adressée à vous et une prochaine étape, épisodes repliés en dessous">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <!-- digest -->
+          <rect x="22" y="42" width="256" height="272" rx="20" fill="var(--soft)" stroke="#3E93CF" stroke-width="2"/>
+          <path d="M42 64 l2.8 5.4 5.4 2.8 -5.4 2.8 -2.8 5.4 -2.8 -5.4 -5.4 -2.8 5.4 -2.8 z" fill="#3E93CF"/>
+          <text x="60" y="76" font-size="13.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Pendant tes 5 jours</text>
+          <text x="42" y="96" font-size="9.5" fill="var(--muted)" font-family="system-ui">312 messages · 9 personnes · lu pour toi à l’instant</text>
+          <rect x="42" y="112" width="14" height="14" rx="4" fill="#3E93CF"/>
+          <path d="M45 119 l3 3.5 5 -6" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="64" y="123" font-size="12" fill="var(--ink)" font-family="system-ui">Cabane réservée · 12–14 sept</text>
+          <rect x="42" y="140" width="14" height="14" rx="4" fill="#3E93CF"/>
+          <path d="M45 147 l3 3.5 5 -6" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="64" y="151" font-size="12" fill="var(--ink)" font-family="system-ui">Budget voté : 40 € / personne</text>
+          <circle cx="49" cy="182" r="8" fill="none" stroke="#3E93CF" stroke-width="1.8"/>
+          <text x="49" y="186" font-size="11" font-weight="700" fill="#3E93CF" font-family="system-ui" text-anchor="middle">?</text>
+          <text x="64" y="179" font-size="12" fill="var(--ink)" font-family="system-ui">Karim te demande : covoiturage</text>
+          <text x="64" y="194" font-size="12" fill="var(--ink)" font-family="system-ui">au retour, tu peux ?</text>
+          <path d="M43 216 h10 m-4 -4 l4 4 -4 4" stroke="#3E93CF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="64" y="221" font-size="12" fill="var(--ink)" font-family="system-ui">Ce soir : Mia envoie la liste courses</text>
+          <rect x="42" y="242" width="122" height="30" rx="15" fill="#3E93CF"/>
+          <text x="103" y="261" font-size="11" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">Répondre à Karim</text>
+          <rect x="172" y="242" width="88" height="30" rx="15" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="216" y="261" font-size="11" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Tout va bien</text>
+          <text x="42" y="298" font-size="9.5" font-style="italic" fill="var(--muted)" font-family="system-ui">toucher une ligne = voir les messages qui la prouvent</text>
+          <!-- episodes -->
+          <text x="26" y="344" font-size="10" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">LES 5 JOURS, REPLIÉS</text>
+          <rect x="22" y="356" width="256" height="34" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+          <path d="M38 368 l6 5 -6 5" stroke="var(--muted)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="54" y="377" font-size="11" fill="var(--ink)" font-family="system-ui">Lun–Mar · 174 · choisir la cabane</text>
+          <rect x="22" y="398" width="256" height="34" rx="12" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+          <path d="M38 410 l6 5 -6 5" stroke="var(--muted)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="54" y="419" font-size="11" fill="var(--ink)" font-family="system-ui">Mer–Jeu · 96 · budget &amp; matériel</text>
+          <rect x="22" y="440" width="256" height="34" rx="12" fill="var(--surface)" stroke="#3E93CF" stroke-width="1.5"/>
+          <path d="M38 452 l6 5 -6 5" stroke="#3E93CF" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="54" y="461" font-size="11" font-weight="600" fill="var(--ink)" font-family="system-ui">Aujourd’hui · en direct → reprendre en Focal</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#3E93CF"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>Deux décisions, une question pour vous, une étape à venir : 312 messages tiennent en une carte — et chaque ligne est vérifiable d’un tap.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Cinq jours sans réseau. À l’ouverture, pas de mur de 312 non-lus&nbsp;: l’Orchestrateur a choisi le Résumé Vivant (règle 4, plus bas). La carte dit <b>ce qui a été décidé</b> (coché), <b>ce qu’on vous demande</b> (le « ? » bleu — la seule chose qui attend réellement), et <b>ce qui arrive</b>. Deux boutons&nbsp;: répondre à Karim, ou « Tout va bien » — qui marque tout comme lu, sans culpabilité.</p>
+        <p class="beat"><b>La confiance se vérifie d’un geste&nbsp;:</b> chaque ligne du résumé s’ouvre sur les messages qui la prouvent, surlignés dans leur épisode. L’agent n’est jamais cru sur parole — c’est ce qui rend le résumé utilisable par une famille, pas seulement par des early adopters.</p>
+        <p>La dernière rangée d’épisodes — « Aujourd’hui · en direct » — est la porte de sortie&nbsp;: un tap et on reprend le fil en Focal, à l’endroit exact où la conversation vit maintenant.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 06·B -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 06·B — Atteindre une personne parmi 40</span>
+    <h3>La Rampe de visages</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : rampe horizontale d’avatars triée par besoin de réponse, Karim sélectionné, ses trois messages filtrés, composeur pré-adressé pour lui répondre">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <text x="24" y="52" font-size="10" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">ILS T’ATTENDENT D’ABORD</text>
+          <!-- rail -->
+          <circle cx="46" cy="86" r="18" fill="#E28A3C"/>
+          <text x="46" y="91" font-size="13" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">K</text>
+          <circle cx="46" cy="86" r="24" fill="none" stroke="#3E93CF" stroke-width="2.5"/>
+          <circle cx="62" cy="70" r="9" fill="#3E93CF"/>
+          <text x="62" y="74" font-size="10" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">3</text>
+          <circle cx="98" cy="86" r="18" fill="#BC55A0"/>
+          <text x="98" y="91" font-size="13" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">M</text>
+          <circle cx="112" cy="70" r="8" fill="#3E93CF"/>
+          <text x="112" y="74" font-size="9.5" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">1</text>
+          <circle cx="148" cy="86" r="16" fill="var(--ghost)"/>
+          <circle cx="192" cy="86" r="16" fill="var(--ghost)"/>
+          <circle cx="236" cy="86" r="16" fill="var(--ghost)"/>
+          <text x="268" y="90" font-size="12" fill="var(--muted)" font-family="system-ui">+34</text>
+          <text x="46" y="122" font-size="10" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Karim</text>
+          <text x="98" y="122" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Mia</text>
+          <!-- search -->
+          <rect x="24" y="136" width="252" height="30" rx="15" fill="var(--soft)"/>
+          <circle cx="42" cy="151" r="6" fill="none" stroke="var(--muted)" stroke-width="1.6"/>
+          <line x1="47" y1="156" x2="52" y2="161" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"/>
+          <text x="62" y="155" font-size="11" fill="var(--muted)" font-family="system-ui">taper « ka »… trouve Karim, Katia</text>
+          <!-- filtered panel -->
+          <rect x="22" y="184" width="256" height="270" rx="18" fill="var(--soft)" stroke="#3E93CF" stroke-width="1.5"/>
+          <text x="40" y="212" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Karim · 3 messages pour toi</text>
+          <text x="40" y="228" font-size="9.5" fill="var(--muted)" font-family="system-ui">le reste du groupe est masqué le temps de répondre</text>
+          <rect x="40" y="244" width="220" height="52" rx="12" fill="var(--surface)"/>
+          <text x="52" y="266" font-size="11.5" fill="var(--ink)" font-family="system-ui">Tu rentres quand samedi ?</text>
+          <text x="52" y="284" font-size="9.5" fill="var(--muted)" font-family="system-ui">mer. 18:12 · dans « le budget »</text>
+          <rect x="40" y="304" width="220" height="52" rx="12" fill="var(--surface)"/>
+          <text x="52" y="326" font-size="11.5" fill="var(--ink)" font-family="system-ui">On partage le covoit’ retour ?</text>
+          <text x="52" y="344" font-size="9.5" fill="var(--muted)" font-family="system-ui">jeu. 09:40 · ✋ sans réponse</text>
+          <rect x="40" y="364" width="220" height="36" rx="12" fill="var(--surface)" opacity="0.6"/>
+          <rect x="52" y="378" width="150" height="9" rx="4.5" fill="var(--ghost)"/>
+          <!-- addressed composer -->
+          <rect x="40" y="412" width="220" height="32" rx="16" fill="var(--surface)" stroke="#3E93CF" stroke-width="1.5"/>
+          <text x="54" y="432" font-size="11" fill="var(--muted)" font-family="system-ui">→ Karim : « Oui pour le covoit’,…</text>
+          <text x="150" y="486" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">ta réponse citera son message dans le fil commun</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#3E93CF"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>La rampe est triée par « besoin de toi », pas par alphabet. Karim d’abord : il a trois messages sans réponse.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Le groupe « Rando du club » compte 40 personnes. Vous cherchez <i>une</i> chose&nbsp;: répondre à Karim. En haut du Résumé Vivant, la <b>Rampe de visages</b>&nbsp;: les avatars triés non par alphabet mais par <b>« besoin de toi »</b> — ceux qui vous ont posé une question d’abord, badge à l’appui. Karim est en tête avec son « 3 ».</p>
+        <p class="beat"><b>Deux gestes, pas plus&nbsp;:</b> ① tap sur Karim → l’écran se filtre sur ses messages qui vous concernent, sortis de leurs épisodes, datés et contextualisés. ② le composeur est <b>pré-adressé</b> (« → Karim ») — la réponse part citée dans le vrai fil, visible de tous, au bon endroit. Au-delà de 12 visages, la recherche prend le relais&nbsp;: deux lettres suffisent.</p>
+        <p>Cette rampe n’est pas propre au Résumé&nbsp;: c’est un <b>composant transversal</b> — le même geste existe en Rivière (cas 07·B) et en Focal (tirer la barre de titre). Un seul apprentissage, partout le même résultat&nbsp;: <i>une personne, ses messages, répondre</i>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ 07 · LA RIVIÈRE ═══════════════════════ -->
+<section class="prop" id="riviere" style="--a:#5A6FD6">
+  <div class="prop-head">
+    <span class="num">07</span>
+    <div>
+      <p class="eyebrow">Vingt-quatre voix, un regard</p>
+      <h2>La Rivière, en situation</h2>
+      <p class="thesis">Le mode des grands groupes&nbsp;: <em>voir la structure avant de lire</em>, suivre une personne dans la foule, et répondre sans jamais perdre le fil — le sien.</p>
+    </div>
+  </div>
+
+  <!-- CAS 07·A -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 07·A — L’assemblée de l’asso</span>
+    <h3>24 personnes, 3 conversations en une</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : rivière de fils colorés pour un groupe de 24, trois tresses distinctes visibles, un nœud cerclé adresse une question à vous, bandeau de réponse pré-adressé en bas">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <rect x="24" y="38" width="252" height="26" rx="13" fill="var(--soft)"/>
+          <text x="150" y="55" font-size="10.5" fill="var(--ink)" font-family="system-ui" text-anchor="middle">24 personnes · 3 fils en cours · 2 pour toi</text>
+          <!-- streams -->
+          <path d="M55 88 C 55 150, 55 180, 55 240 C 55 300, 100 310, 104 340 C 108 366, 55 380, 55 440" fill="none" stroke="#E05252" stroke-width="2" opacity="0.8"/>
+          <path d="M105 88 L 105 250 C 105 300, 106 320, 108 340 C 110 360, 105 380, 105 440" fill="none" stroke="#3F9E63" stroke-width="2" opacity="0.8"/>
+          <path d="M155 88 L 155 440" fill="none" stroke="#C9962B" stroke-width="2" opacity="0.55"/>
+          <path d="M205 88 C 205 160, 240 170, 242 200 C 244 226, 205 240, 205 300 L 205 440" fill="none" stroke="#2E9E96" stroke-width="2" opacity="0.8"/>
+          <path d="M245 88 C 245 150, 242 170, 242 200 C 242 230, 245 250, 245 440" fill="none" stroke="#5A6FD6" stroke-width="4"/>
+          <!-- name dots -->
+          <circle cx="55" cy="78" r="10" fill="#E05252"/>
+          <circle cx="105" cy="78" r="10" fill="#3F9E63"/>
+          <circle cx="155" cy="78" r="10" fill="#C9962B"/>
+          <circle cx="205" cy="78" r="10" fill="#2E9E96"/>
+          <circle cx="245" cy="78" r="11" fill="#5A6FD6"/>
+          <text x="245" y="62" font-size="9.5" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Toi</text>
+          <!-- nodes -->
+          <circle cx="55" cy="140" r="6" fill="#E05252"/>
+          <circle cx="105" cy="176" r="6" fill="#3F9E63"/>
+          <circle cx="243" cy="200" r="8" fill="#2E9E96" stroke="var(--surface)" stroke-width="2"/>
+          <text x="196" y="180" font-size="9" fill="var(--muted)" font-family="system-ui">Nadia → toi</text>
+          <circle cx="243" cy="200" r="13" fill="none" stroke="#5A6FD6" stroke-width="2.5"/>
+          <circle cx="106" cy="340" r="8" fill="#E05252" stroke="var(--surface)" stroke-width="2"/>
+          <text x="126" y="332" font-size="9" fill="var(--muted)" font-family="system-ui">Sarah répond à Louis</text>
+          <circle cx="155" cy="260" r="6" fill="#C9962B" opacity="0.6"/>
+          <circle cx="55" cy="404" r="6" fill="#E05252"/>
+          <circle cx="245" cy="380" r="7" fill="#5A6FD6"/>
+          <!-- fold hint -->
+          <text x="150" y="466" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">zone lue, lissée par l’agent ✦ — tirer pour déplier</text>
+          <!-- readout -->
+          <rect x="24" y="480" width="252" height="46" rx="14" fill="var(--soft)" stroke="#5A6FD6" stroke-width="1.5"/>
+          <text x="38" y="498" font-size="10.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Nadia → toi</text>
+          <text x="38" y="514" font-size="11" fill="var(--ink)" font-family="system-ui">« Tu valides l’affiche avant jeudi ? »</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <text x="36" y="563" font-size="11" fill="var(--muted)" font-family="system-ui">→ Nadia : « Oui, je regarde ce soir »</text>
+          <circle cx="262" cy="559" r="19" fill="#5A6FD6"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>Trois tresses = trois discussions. Le nœud cerclé de votre couleur vous adresse une question ; le bandeau bas la lit et la réponse part pré-adressée.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> L’assemblée de l’association prépare la fête&nbsp;: 24 personnes, et comme toujours, trois discussions entremêlées — l’affiche, la buvette, la sono. En bulles, c’est illisible. En Rivière, <b>on voit la soirée avant de la lire</b>&nbsp;: trois tresses distinctes, votre fil épais à droite, et deux nœuds cerclés — les seuls messages qui vous visent.</p>
+        <p class="beat"><b>Le tri visuel est fait d’avance&nbsp;:</b> nœud cerclé = on vous parle. Tresse dense = débat chaud. Fil droit et pâle = quelqu’un qui poste dans le vide. Zone lissée = du lu, replié par l’agent en un simple motif. Vous ne lisez que ce que vous touchez — un nœud à la fois, dans le bandeau bas.</p>
+        <p>Toucher le nœud de Nadia affiche sa question et <b>pré-adresse la réponse</b> (« → Nadia »)&nbsp;: elle partira citée dans le fil commun. Personne d’autre n’a besoin d’être dérangé, et vous n’avez jamais quitté la vue d’ensemble.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 07·B -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 07·B — Trouver quelqu’un dans la foule</span>
+    <h3>La Loupe de personnes</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : la rivière s’estompe derrière une feuille de recherche de personnes, actifs à l’instant en tête, mode suivi de Sarah qui met son fil en évidence">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <!-- dimmed river -->
+          <g opacity="0.55">
+            <path d="M70 46 C 70 90, 110 100, 112 130 C 114 156, 70 168, 70 196" fill="none" stroke="var(--ghost)" stroke-width="2"/>
+            <path d="M150 46 L 150 196" fill="none" stroke="var(--ghost)" stroke-width="2"/>
+            <path d="M110 46 C 110 90, 112 110, 112 130 C 112 152, 110 170, 110 196" fill="none" stroke="#E05252" stroke-width="3"/>
+            <circle cx="112" cy="130" r="6" fill="#E05252"/>
+            <path d="M230 46 L 230 196" fill="none" stroke="var(--ghost)" stroke-width="2"/>
+          </g>
+          <text x="150" y="216" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">mode suivi : le fil de Sarah reste net, le reste s’estompe</text>
+          <!-- sheet -->
+          <rect x="16" y="232" width="268" height="300" rx="22" fill="var(--soft)" stroke="var(--line)" stroke-width="1.5"/>
+          <rect x="134" y="242" width="32" height="4" rx="2" fill="var(--ghost)"/>
+          <rect x="34" y="258" width="232" height="32" rx="16" fill="var(--surface)"/>
+          <circle cx="52" cy="274" r="6" fill="none" stroke="var(--muted)" stroke-width="1.6"/>
+          <line x1="57" y1="279" x2="62" y2="284" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"/>
+          <text x="72" y="279" font-size="11.5" fill="var(--ink)" font-family="system-ui">sa</text>
+          <rect x="86" y="266" width="2" height="16" fill="#5A6FD6"/>
+          <text x="34" y="316" font-size="9.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">ACTIFS À L’INSTANT</text>
+          <!-- result rows -->
+          <rect x="34" y="326" width="232" height="46" rx="12" fill="var(--surface)" stroke="#5A6FD6" stroke-width="1.5"/>
+          <circle cx="58" cy="349" r="14" fill="#E05252"/>
+          <text x="58" y="354" font-size="11" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">S</text>
+          <text x="82" y="345" font-size="12" font-weight="700" fill="var(--ink)" font-family="system-ui">Sarah</text>
+          <text x="82" y="361" font-size="9.5" fill="var(--muted)" font-family="system-ui">t’a mentionné · écrit en ce moment…</text>
+          <rect x="196" y="335" width="58" height="26" rx="13" fill="#5A6FD6"/>
+          <text x="225" y="352" font-size="10.5" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">Suivre</text>
+          <rect x="34" y="380" width="232" height="42" rx="12" fill="var(--surface)"/>
+          <circle cx="58" cy="401" r="13" fill="#3F9E63"/>
+          <text x="58" y="406" font-size="10.5" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">S</text>
+          <text x="82" y="397" font-size="12" fill="var(--ink)" font-family="system-ui">Samir</text>
+          <text x="82" y="413" font-size="9.5" fill="var(--muted)" font-family="system-ui">2 messages cette heure</text>
+          <rect x="34" y="430" width="232" height="42" rx="12" fill="var(--surface)"/>
+          <circle cx="58" cy="451" r="13" fill="var(--ghost)"/>
+          <text x="82" y="447" font-size="12" fill="var(--ink)" font-family="system-ui">Sandra</text>
+          <text x="82" y="463" font-size="9.5" fill="var(--muted)" font-family="system-ui">calme depuis mardi</text>
+          <text x="150" y="502" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">« Suivre » = son fil + tout ce qui le croise, en net.</text>
+          <text x="150" y="518" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">Un tap sur la rive libère le suivi.</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#5A6FD6"/>
+          <path d="M255 559 h13 m-5 -5 l5 5 -5 5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <figcaption>Deux lettres suffisent. « Suivre Sarah » met son fil en pleine netteté — ses messages, ses réponses, et ce qui les croise.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Vous cherchez ce que Sarah a dit sur l’affiche, mais Sarah est un fil parmi vingt-quatre. Balayage vers le haut sur la berge (ou tap sur la rampe de visages)&nbsp;: la <b>Loupe de personnes</b> monte, la rivière s’estompe derrière. Le tri est intelligent d’office — <b>actifs à l’instant d’abord</b>, ceux qui vous ont mentionné en tête — et la recherche répond à la deuxième lettre.</p>
+        <p class="beat"><b>Le mode Suivi&nbsp;:</b> « Suivre Sarah » ne filtre pas la conversation — il la <b>met au point</b>, comme un objectif photo&nbsp;: le fil de Sarah et tout ce qui le croise restent nets et lisibles, le reste devient un motif pâle. On garde le contexte du groupe, on lit une personne. Un tap hors du fil libère le suivi.</p>
+        <p>Et pour répondre&nbsp;: le composeur en mode Suivi est pré-adressé à Sarah. La mécanique est la même que la Rampe du Résumé Vivant — <i>une personne, ses messages, répondre</i> — apprise une fois, valable partout.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ 08 · LA SCÈNE ═══════════════════════ -->
+<section class="prop" id="scene" style="--a:#8A63D2">
+  <div class="prop-head">
+    <span class="num">08</span>
+    <div>
+      <p class="eyebrow">Le grand soir du vocal multilingue</p>
+      <h2>La Scène, en immersion totale</h2>
+      <p class="thesis">Trois actes&nbsp;: <em>l’appel trilingue où personne n’appuie sur rien</em>, <em>la vidéo et le partage d’écran mis en scène automatiquement</em>, et <em>l’appel qui vous suit partout</em> — PiP, Dynamic Island, écran verrouillé.</p>
+    </div>
+  </div>
+
+  <!-- CAS 08·A -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 08·A — L’appel du dimanche, trilingue</span>
+    <h3>Abuela parle espagnol, vous entendez du français — avec sa voix</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : scène vocale avec Abuela qui parle, sa voix traduite en français en temps réel avec timbre conservé, sous-titres en direct, prise de parole automatique gérée par le régisseur">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <!-- stage -->
+          <rect x="18" y="40" width="264" height="330" rx="22" fill="var(--soft)"/>
+          <circle cx="150" cy="128" r="44" fill="#8A63D2"/>
+          <text x="150" y="136" font-size="22" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">A</text>
+          <circle cx="150" cy="128" r="54" fill="none" stroke="#8A63D2" stroke-width="2" opacity="0.45"/>
+          <circle cx="150" cy="128" r="63" fill="none" stroke="#8A63D2" stroke-width="1.5" opacity="0.2"/>
+          <text x="150" y="206" font-size="14" font-weight="700" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Abuela</text>
+          <!-- waveform -->
+          <rect x="118" y="216" width="5" height="12" rx="2.5" fill="#8A63D2"/>
+          <rect x="128" y="210" width="5" height="24" rx="2.5" fill="#8A63D2"/>
+          <rect x="138" y="204" width="5" height="36" rx="2.5" fill="#8A63D2"/>
+          <rect x="148" y="212" width="5" height="20" rx="2.5" fill="#8A63D2"/>
+          <rect x="158" y="206" width="5" height="32" rx="2.5" fill="#8A63D2"/>
+          <rect x="168" y="214" width="5" height="16" rx="2.5" fill="#8A63D2"/>
+          <!-- translation pill -->
+          <rect x="52" y="250" width="196" height="24" rx="12" fill="#8A63D2"/>
+          <text x="150" y="266" font-size="10.5" font-weight="600" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">🇪🇸 → 🇫🇷 en direct · timbre de sa voix conservé</text>
+          <!-- subtitle -->
+          <rect x="34" y="286" width="232" height="66" rx="14" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="48" y="308" font-size="12.5" fill="var(--ink)" font-family="system-ui">« Le repas de Noël, on le fait</text>
+          <text x="48" y="328" font-size="12.5" fill="var(--ink)" font-family="system-ui">chez nous cette année ! »</text>
+          <text x="48" y="345" font-size="9" fill="var(--muted)" font-family="system-ui">sous-titre live · appui : V.O. espagnole</text>
+          <!-- audience -->
+          <circle cx="60" cy="404" r="17" fill="var(--ghost)"/>
+          <text x="60" y="409" font-size="11" font-weight="700" fill="var(--surface)" font-family="system-ui" text-anchor="middle">P</text>
+          <circle cx="110" cy="404" r="17" fill="var(--ghost)"/>
+          <text x="110" y="409" font-size="11" font-weight="700" fill="var(--surface)" font-family="system-ui" text-anchor="middle">L</text>
+          <circle cx="160" cy="404" r="17" fill="#5A6FD6"/>
+          <text x="160" y="409" font-size="11" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">T</text>
+          <circle cx="210" cy="404" r="17" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <path d="M210 396 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="var(--muted)"/>
+          <text x="150" y="446" font-size="10.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">file du régisseur ✦ : Papa, puis toi</text>
+          <!-- no button hint -->
+          <rect x="42" y="466" width="216" height="40" rx="20" fill="none" stroke="#8A63D2" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="150" y="484" font-size="11.5" font-weight="600" fill="var(--ink)" font-family="system-ui" text-anchor="middle">Parle, simplement.</text>
+          <text x="150" y="499" font-size="9.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">pas de bouton — le régisseur t’entend et te place</text>
+          <rect x="20" y="540" width="180" height="38" rx="19" fill="var(--soft)"/>
+          <text x="36" y="563" font-size="10.5" fill="var(--muted)" font-family="system-ui">💬 glisser un mot sans parler…</text>
+          <circle cx="226" cy="559" r="17" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="226" y="564" font-size="11" fill="var(--muted)" font-family="system-ui" text-anchor="middle">🎥</text>
+          <circle cx="266" cy="559" r="17" fill="#E05252"/>
+          <path d="M259 552 l14 14 m0 -14 l-14 14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <figcaption>Aucun bouton de parole. La voix d’Abuela arrive en français, avec son timbre ; le sous-titre suit, la V.O. est à un appui.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Dimanche, 18 h. Trois pays, trois langues&nbsp;: Abuela à Séville (espagnol), Papa à Lyon (français), votre cousine à Berlin (allemand). L’appel démarre depuis la conversation — un tap — et là, le moment magique&nbsp;: Abuela raconte Noël en espagnol, et <b>vous l’entendez en français, avec sa voix</b>. Le pipeline Whisper → NLLB → clonage vocal de Meeshy tourne en direct&nbsp;: chacun entend chacun <b>dans sa propre langue, avec les vraies voix de la famille</b>. Le sous-titre défile sous la scène — un appui l’espace d’un instant, et c’est la V.O. espagnole.</p>
+        <p class="beat"><b>La prise de parole est automatique&nbsp;:</b> pas de push-to-talk, pas de « main levée » obligatoire. Le régisseur ✦ écoute l’activité vocale&nbsp;: scène libre → vous parlez, vous y êtes (fondu de 300 ms). Scène occupée → parlez quand même&nbsp;: votre phrase est <b>capturée, transcrite, et délivrée</b> quand votre tour arrive — rien ne se perd, personne ne se coupe. Un enfant de 8 ans fait ça sans y penser&nbsp;: il parle, c’est tout.</p>
+        <p><b>Et sans micro&nbsp;?</b> Le champ « glisser un mot sans parler » envoie du texte qui rejoint la scène — lu en sous-titre par les autres, ou vocalisé par votre voix clonée si vous l’activez. Être muet dans le bus n’exclut pas de l’appel de famille.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 08·B -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 08·B — Vidéo &amp; partage d’écran</span>
+    <h3>La réalisation automatique</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : partage d’écran occupant la scène, vidéo de l’orateur en médaillon, sous-titre traduit sous la scène, public en vignettes, note de réalisation automatique">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <!-- stage: screenshare -->
+          <rect x="18" y="40" width="264" height="252" rx="18" fill="var(--soft)" stroke="#8A63D2" stroke-width="2"/>
+          <text x="34" y="64" font-size="9.5" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">PARTAGE D’ÉCRAN · NOAH</text>
+          <!-- document -->
+          <rect x="46" y="76" width="208" height="192" rx="8" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+          <rect x="62" y="94" width="120" height="10" rx="5" fill="var(--ghost)"/>
+          <rect x="62" y="114" width="176" height="7" rx="3.5" fill="var(--ghost)" opacity="0.7"/>
+          <rect x="62" y="128" width="176" height="7" rx="3.5" fill="var(--ghost)" opacity="0.7"/>
+          <rect x="62" y="142" width="132" height="7" rx="3.5" fill="var(--ghost)" opacity="0.7"/>
+          <rect x="62" y="170" width="176" height="7" rx="3.5" fill="var(--ghost)" opacity="0.7"/>
+          <rect x="62" y="184" width="150" height="7" rx="3.5" fill="var(--ghost)" opacity="0.7"/>
+          <!-- highlighted zone -->
+          <rect x="56" y="214" width="188" height="40" rx="8" fill="none" stroke="#8A63D2" stroke-width="2"/>
+          <rect x="62" y="226" width="96" height="8" rx="4" fill="#8A63D2" opacity="0.6"/>
+          <text x="236" y="238" font-size="12" fill="#8A63D2" font-family="system-ui" text-anchor="middle">✍️</text>
+          <!-- speaker medallion -->
+          <rect x="206" y="252" width="68" height="52" rx="12" fill="var(--surface)" stroke="#8A63D2" stroke-width="2"/>
+          <circle cx="240" cy="274" r="14" fill="#3F9E63"/>
+          <text x="240" y="279" font-size="11" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">N</text>
+          <rect x="222" y="292" width="36" height="5" rx="2.5" fill="#8A63D2"/>
+          <!-- subtitle -->
+          <rect x="26" y="316" width="248" height="52" rx="14" fill="var(--surface)" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="40" y="337" font-size="12" fill="var(--ink)" font-family="system-ui">Noah : « c’est ici qu’on signe,</text>
+          <text x="40" y="355" font-size="12" fill="var(--ink)" font-family="system-ui">en bas de la page 3 »</text>
+          <!-- audience -->
+          <rect x="26" y="386" width="56" height="42" rx="10" fill="var(--soft)"/>
+          <circle cx="54" cy="407" r="12" fill="var(--ghost)"/>
+          <rect x="92" y="386" width="56" height="42" rx="10" fill="var(--soft)"/>
+          <circle cx="120" cy="407" r="12" fill="var(--ghost)"/>
+          <rect x="158" y="386" width="56" height="42" rx="10" fill="var(--soft)"/>
+          <circle cx="186" cy="407" r="12" fill="#5A6FD6"/>
+          <text x="186" y="411" font-size="9.5" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">T</text>
+          <rect x="224" y="386" width="56" height="42" rx="10" fill="var(--soft)"/>
+          <circle cx="252" cy="407" r="12" fill="var(--ghost)"/>
+          <!-- director note -->
+          <rect x="26" y="446" width="248" height="34" rx="17" fill="none" stroke="#8A63D2" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <path d="M44 456 l2.6 5 5 2.6 -5 2.6 -2.6 5 -2.6 -5 -5 -2.6 5 -2.6 z" fill="#8A63D2"/>
+          <text x="60" y="467" font-size="10.5" fill="var(--ink)" font-family="system-ui">réalisation auto : l’écran passe devant quand on en parle</text>
+          <text x="150" y="510" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">double-tap sur le document = zoom pour tous (pointeur partagé)</text>
+          <rect x="20" y="540" width="222" height="38" rx="19" fill="var(--soft)"/>
+          <circle cx="262" cy="559" r="19" fill="#E05252"/>
+          <path d="M255 552 l14 14 m0 -14 l-14 14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <figcaption>Le document a pris la scène, Noah est passé en médaillon — personne n’a rien réglé. Le sous-titre traduit continue de défiler.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> Le syndic de l’immeuble, en visio, trois générations connectées. Noah partage le contrat à signer. En Scène, la vidéo et le partage d’écran ne sont pas des « modes » à configurer&nbsp;: c’est <b>le régisseur qui fait la réalisation</b>, comme à la télé. Quelqu’un parle → son visage prend la scène. Quelqu’un partage un document et en parle → <b>le document prend la scène</b>, l’orateur glisse en médaillon. On revient au visage quand le document se tait. Zéro bouton de layout.</p>
+        <p class="beat"><b>Le sous-titre ne s’arrête jamais&nbsp;:</b> audio, vidéo, partage d’écran — la barre de transcription traduite est le sol commun de la Scène. C’est elle qui rend l’appel accessible (malentendants, environnement bruyant) et multilingue en continu, quel que soit ce qui occupe l’écran.</p>
+        <p>Les gestes restent enfantins&nbsp;: double-tap sur le document = zoom partagé pour tout le monde, avec un pointeur visible. Appui long = « lever la main » explicite si l’on préfère demander la parole plutôt que la prendre. Tout le reste, le régisseur s’en charge.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAS 08·C -->
+  <div class="case">
+    <span class="case-eyebrow">Cas 08·C — L’appel qui vous suit</span>
+    <h3>PiP, Dynamic Island, écran verrouillé</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : écran d’accueil iOS avec la Dynamic Island affichant qui parle et une fenêtre picture-in-picture de la Scène avec sous-titre en direct">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <!-- Dynamic Island expanded -->
+          <rect x="60" y="16" width="180" height="34" rx="17" fill="#0B0D12"/>
+          <circle cx="82" cy="33" r="9" fill="#8A63D2"/>
+          <text x="82" y="37" font-size="8.5" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">M</text>
+          <text x="100" y="31" font-size="9.5" font-weight="600" fill="#FFFFFF" font-family="system-ui">Mia parle…</text>
+          <text x="100" y="43" font-size="8" fill="#9AA3B5" font-family="system-ui">scène familiale · 🇩🇪→🇫🇷</text>
+          <rect x="196" y="27" width="3" height="12" rx="1.5" fill="#34D399"/>
+          <rect x="203" y="24" width="3" height="18" rx="1.5" fill="#34D399"/>
+          <rect x="210" y="29" width="3" height="8" rx="1.5" fill="#34D399"/>
+          <rect x="217" y="26" width="3" height="14" rx="1.5" fill="#34D399"/>
+          <!-- home grid -->
+          <g opacity="0.8">
+            <rect x="30" y="76" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="96" y="76" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="162" y="76" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="228" y="76" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="30" y="142" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="96" y="142" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="162" y="142" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="228" y="142" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="30" y="208" width="50" height="50" rx="12" fill="var(--soft)"/>
+            <rect x="96" y="208" width="50" height="50" rx="12" fill="var(--soft)"/>
+          </g>
+          <!-- notes app open suggestion: keep grid only -->
+          <!-- PiP window -->
+          <rect x="140" y="404" width="140" height="104" rx="16" fill="var(--soft)" stroke="#8A63D2" stroke-width="2"/>
+          <circle cx="170" cy="436" r="16" fill="#8A63D2"/>
+          <text x="170" y="441" font-size="12" font-weight="700" fill="#FFFFFF" font-family="system-ui" text-anchor="middle">M</text>
+          <rect x="194" y="426" width="14" height="5" rx="2.5" fill="#8A63D2"/>
+          <rect x="212" y="422" width="14" height="9" rx="2.5" fill="#8A63D2" opacity="0.6"/>
+          <rect x="152" y="462" width="116" height="34" rx="8" fill="var(--surface)"/>
+          <text x="160" y="476" font-size="9" fill="var(--ink)" font-family="system-ui">« bon, on commence</text>
+          <text x="160" y="489" font-size="9" fill="var(--ink)" font-family="system-ui">sans Papa ! » 😄</text>
+          <text x="150" y="536" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">l’appel continue — sous-titré — pendant que</text>
+          <text x="150" y="551" font-size="10" fill="var(--muted)" font-family="system-ui" text-anchor="middle">tu cherches la recette dans Notes</text>
+          <text x="150" y="578" font-size="9.5" fill="#8A63D2" font-family="system-ui" text-anchor="middle">un tap sur la fenêtre = retour pleine scène</text>
+        </svg>
+        <figcaption>La Scène réduite : l’Island dit qui parle, le PiP garde le sous-titre traduit. Parler reste possible — le régisseur vous entend toujours.</figcaption>
+      </figure>
+      <div class="notes">
+        <p><b>La scène.</b> En plein appel, vous devez retrouver la recette dans Notes. Vous glissez vers l’accueil&nbsp;: la Scène <b>se replie sans se taire</b>. La Dynamic Island affiche qui parle et la direction de traduction ; le PiP système garde le visage de l’oratrice <b>et la ligne de sous-titre</b> — l’appel reste compréhensible même en silencieux. Vous parlez&nbsp;? Le régisseur vous entend et vous place, comme si vous n’étiez jamais parti. Un tap&nbsp;: retour pleine scène.</p>
+        <p class="beat"><b>Écran verrouillé&nbsp;:</b> une Live Activity affiche la transcription qui défile — l’appel de famille devient lisible dans le train, comme des sous-titres de cinéma. Et avec des AirPods, l’audio est <b>spatialisé façon Table Ronde</b>&nbsp;: Abuela légèrement à gauche, Papa à droite — le cerveau suit qui parle sans regarder.</p>
+        <dl class="facets">
+          <div><dt>Le paquet iOS</dt><dd><b>CallKit</b> (la Scène est un vrai appel système, écran d’appel natif) · <b>AVKit PiP</b> · <b>Live Activities / Dynamic Island</b> · <b>Audio spatial</b> personnalisé · <b>App Intents</b>&nbsp;: « Dis Siri, réponds à Karim que j’arrive » — l’assistant rédige, vous validez.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ ORCHESTRATEUR ═══════════════════════ -->
+<section class="prop" id="orchestrateur" style="--a:#C9962B">
+  <div class="prop-head">
+    <span class="num">⇄</span>
+    <div>
+      <p class="eyebrow">Le passage d’un mode à l’autre, sans surprise</p>
+      <h2>L’Orchestrateur de vues</h2>
+      <p class="thesis">Les modes ne sont utiles que si l’on sait <em>toujours</em> où l’on est, pourquoi, et comment en changer. Sept règles, des seuils chiffrés, un seul geste de zoom.</p>
+    </div>
+  </div>
+
+  <div class="rules">
+    <div><b>Le mode ne change jamais sous vos doigts.</b> L’Orchestrateur ne décide qu’à l’<b>ouverture</b> de la conversation. Une fois dedans, l’écran vous appartient — aucune bascule automatique en cours de lecture, jamais.</div>
+    <div><b>Le choix manuel est collant.</b> Si vous choisissez un mode via le sélecteur, la conversation s’ouvre dans ce mode tant que vous ne le rechangez pas. La recommandation automatique ne s’applique qu’aux conversations restées « en mode auto ».</div>
+    <div><b>Un mode indisponible n’est jamais un écran vide.</b> Il est masqué du sélecteur — ou affiché grisé avec sa raison et son seuil (« la Rivière s’ouvrira à 5 personnes actives — 3 aujourd’hui »). On ne montre jamais une Rivière sans tresse ni des Îlots sans sujets.</div>
+    <div><b>Focal → Résumé Vivant&nbsp;: le seuil est un coût de lecture, pas une durée.</b> À l’ouverture&nbsp;: <b>≤ 25 non-lus</b> (≈ 90 secondes de lecture) → Focal, avec un <b>pont</b> ✦ — une ligne de résumé inline au-dessus du présent. <b>&gt; 25 non-lus</b>, ou <b>absence &gt; 24 h avec ≥ 10 non-lus</b> → Résumé Vivant d’abord, et « Reprendre le fil » ramène en Focal à l’endroit vivant. On n’ouvre jamais sur un mur de non-lus.</div>
+    <div><b>La Rivière&nbsp;: X = 5 actifs, proposée à 8.</b> Jamais en conversation directe (à deux, la structure « qui parle à qui » est triviale — la Rivière n’encoderait rien). Elle devient <b>disponible</b> quand <b>≥ 5 participants actifs</b> sur la fenêtre récente (7 jours / 100 derniers messages) <b>et</b> qu’une tresse existe (≥ 2 fils de réponses entrecroisés). Elle est <b>proposée par défaut</b> à partir de 8 actifs. Compter les <i>actifs</i>, pas les membres&nbsp;: un groupe de 40 où 3 parlent est un petit groupe. Sous le seuil&nbsp;? Focal et Îlots couvrent le besoin — une rivière sans tresse n’apporte rien, donc elle n’existe pas encore.</div>
+    <div><b>La Scène est une couche, pas un cran de zoom.</b> Elle s’active quand l’appel commence (bouton 🎥/🎙, ou suggestion quand ≥ 2 membres passent en vocal) et se replie en PiP quand il finit — quel que soit le mode de lecture en dessous.</div>
+    <div><b>Un seul geste à apprendre&nbsp;: le zoom sémantique.</b> Pincer pour dézoomer = plus de synthèse (Focal → Perles → Résumé Vivant). Écarter pour zoomer = plus de détail. Le sélecteur (la « lentille » en haut) montre toujours le cran courant — et la Rivière s’y présente comme <i>vue latérale</i> du cran Focal pour les grands groupes.</div>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 320" role="img" aria-label="Diagramme : à l’ouverture, moins de 26 non-lus mène au Focal avec pont, davantage mène au Résumé Vivant puis retour au Focal via Reprendre le fil ; en dessous, l’axe de zoom sémantique Résumé–Perles–Focal avec la Rivière en vue latérale et la Scène en couche live">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#C9962B"/>
+        </marker>
+      </defs>
+      <!-- row 1: opening decision -->
+      <rect x="10" y="34" width="150" height="48" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="85" y="55" font-size="12" fill="currentColor" font-family="system-ui" text-anchor="middle">Tu ouvres la</text>
+      <text x="85" y="70" font-size="12" fill="currentColor" font-family="system-ui" text-anchor="middle">conversation</text>
+      <line x1="160" y1="58" x2="204" y2="58" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- diamond -->
+      <polygon points="272,24 344,58 272,92 200,58" fill="none" stroke="#C9962B" stroke-width="2"/>
+      <text x="272" y="52" font-size="11.5" fill="currentColor" font-family="system-ui" text-anchor="middle">non-lus ≤ 25</text>
+      <text x="272" y="68" font-size="11.5" fill="currentColor" font-family="system-ui" text-anchor="middle">et absence ≤ 24 h ?</text>
+      <!-- yes -->
+      <line x1="344" y1="58" x2="426" y2="58" stroke="#C9962B" stroke-width="2" marker-end="url(#arrA)"/>
+      <text x="384" y="48" font-size="11" fill="#C9962B" font-family="system-ui" text-anchor="middle">oui</text>
+      <rect x="430" y="30" width="130" height="56" rx="12" fill="none" stroke="#E05252" stroke-width="2"/>
+      <text x="495" y="53" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">FOCAL</text>
+      <text x="495" y="72" font-size="10.5" fill="currentColor" font-family="system-ui" text-anchor="middle">+ pont ✦ (résumé inline)</text>
+      <!-- no -->
+      <line x1="272" y1="92" x2="272" y2="136" stroke="#C9962B" stroke-width="2" marker-end="url(#arrA)"/>
+      <text x="286" y="118" font-size="11" fill="#C9962B" font-family="system-ui">non</text>
+      <rect x="196" y="140" width="152" height="52" rx="12" fill="none" stroke="#3E93CF" stroke-width="2"/>
+      <text x="272" y="162" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">RÉSUMÉ VIVANT</text>
+      <text x="272" y="180" font-size="10.5" fill="currentColor" font-family="system-ui" text-anchor="middle">l’état d’abord, la preuve à un tap</text>
+      <line x1="348" y1="166" x2="470" y2="166 " stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="410" y="156" font-size="10.5" fill="currentColor" font-family="system-ui" text-anchor="middle">« Reprendre le fil »</text>
+      <line x1="495" y1="86" x2="495" y2="162" stroke="none"/>
+      <path d="M474 166 L 495 166 L 495 90" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- row 2: zoom axis -->
+      <line x1="40" y1="266" x2="560" y2="266" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="110" cy="266" r="7" fill="#3E93CF"/>
+      <text x="110" y="292" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">RÉSUMÉ</text>
+      <text x="110" y="307" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">l’état</text>
+      <circle cx="300" cy="266" r="7" fill="#BC55A0"/>
+      <text x="300" y="292" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">PERLES</text>
+      <text x="300" y="307" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">les épisodes</text>
+      <circle cx="490" cy="266" r="7" fill="#E05252"/>
+      <text x="490" y="292" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">FOCAL</text>
+      <text x="490" y="307" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">message par message</text>
+      <text x="300" y="240" font-size="11" fill="#C9962B" font-family="system-ui" text-anchor="middle">⟵ pincer : synthèse · écarter : détail ⟶</text>
+      <!-- riviere side view -->
+      <rect x="576" y="238" width="132" height="56" rx="12" fill="none" stroke="#5A6FD6" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="642" y="260" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">RIVIÈRE</text>
+      <text x="642" y="276" font-size="9.5" fill="currentColor" font-family="system-ui" text-anchor="middle">vue latérale du Focal</text>
+      <text x="642" y="289" font-size="9.5" fill="currentColor" font-family="system-ui" text-anchor="middle">dès 5 actifs · défaut à 8</text>
+      <line x1="497" y1="266" x2="572" y2="266" stroke="#5A6FD6" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+      <!-- scene layer -->
+      <rect x="576" y="30" width="132" height="56" rx="12" fill="none" stroke="#8A63D2" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="642" y="52" font-size="12" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">SCÈNE</text>
+      <text x="642" y="68" font-size="9.5" fill="currentColor" font-family="system-ui" text-anchor="middle">couche live (appel)</text>
+      <text x="642" y="81" font-size="9.5" fill="currentColor" font-family="system-ui" text-anchor="middle">par-dessus tout mode</text>
+    </svg>
+    <figcaption>La décision d’ouverture (haut) et l’axe de zoom sémantique (bas). La Rivière est une vue latérale du cran Focal ; la Scène, une couche live indépendante du zoom.</figcaption>
+  </figure>
+
+  <!-- lens sheet mockup + availability table -->
+  <div class="case">
+    <span class="case-eyebrow">Le sélecteur — « la Lentille »</span>
+    <h3>Changer de mode en un tap, comprendre en un regard</h3>
+    <div class="case-body">
+      <figure class="mock">
+        <svg viewBox="0 0 300 600" role="img" aria-label="Maquette : feuille de sélection des modes, mode courant coché, Rivière grisée avec sa raison et son seuil, astuce du geste de pincement en bas">
+          <rect x="3" y="3" width="294" height="594" rx="32" fill="var(--surface)" stroke="var(--line)" stroke-width="2"/>
+          <rect x="122" y="17" width="56" height="5" rx="2.5" fill="var(--line)"/>
+          <!-- lens pill -->
+          <rect x="86" y="38" width="128" height="30" rx="15" fill="var(--soft)" stroke="#C9962B" stroke-width="1.5"/>
+          <circle cx="106" cy="53" r="6" fill="#E05252"/>
+          <text x="120" y="57" font-size="11.5" font-weight="600" fill="var(--ink)" font-family="system-ui">Focal ⌄</text>
+          <!-- sheet -->
+          <rect x="16" y="88" width="268" height="452" rx="22" fill="var(--soft)"/>
+          <rect x="134" y="98" width="32" height="4" rx="2" fill="var(--ghost)"/>
+          <text x="34" y="126" font-size="10" fill="var(--muted)" font-family="ui-monospace, Menlo, monospace">VOIR CETTE CONVERSATION EN…</text>
+          <!-- Résumé -->
+          <rect x="32" y="138" width="236" height="54" rx="14" fill="var(--surface)"/>
+          <circle cx="56" cy="165" r="9" fill="#3E93CF"/>
+          <text x="76" y="161" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Résumé Vivant</text>
+          <text x="76" y="178" font-size="10" fill="var(--muted)" font-family="system-ui">l’état en 4 lignes — idéal après une absence</text>
+          <!-- Perles -->
+          <rect x="32" y="200" width="236" height="54" rx="14" fill="var(--surface)"/>
+          <circle cx="56" cy="227" r="9" fill="#BC55A0"/>
+          <text x="76" y="223" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Perles de Temps</text>
+          <text x="76" y="240" font-size="10" fill="var(--muted)" font-family="system-ui">les épisodes, un collier de moments</text>
+          <!-- Focal current -->
+          <rect x="32" y="262" width="236" height="54" rx="14" fill="var(--surface)" stroke="#C9962B" stroke-width="2"/>
+          <circle cx="56" cy="289" r="9" fill="#E05252"/>
+          <text x="76" y="285" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Focal · mode actuel ✓</text>
+          <text x="76" y="302" font-size="10" fill="var(--muted)" font-family="system-ui">le fil, un message à la fois</text>
+          <!-- Rivière greyed -->
+          <rect x="32" y="324" width="236" height="66" rx="14" fill="var(--surface)" opacity="0.62"/>
+          <circle cx="56" cy="351" r="9" fill="#5A6FD6" opacity="0.6"/>
+          <text x="76" y="347" font-size="12.5" font-weight="700" fill="var(--muted)" font-family="system-ui">Rivière · bientôt</text>
+          <text x="76" y="364" font-size="10" fill="var(--muted)" font-family="system-ui">s’ouvrira à 5 personnes actives —</text>
+          <text x="76" y="378" font-size="10" fill="var(--muted)" font-family="system-ui">vous êtes 3 cette semaine</text>
+          <!-- Scene -->
+          <rect x="32" y="398" width="236" height="54" rx="14" fill="var(--surface)"/>
+          <circle cx="56" cy="425" r="9" fill="#8A63D2"/>
+          <text x="76" y="421" font-size="12.5" font-weight="700" fill="var(--ink)" font-family="system-ui">Scène 🎙 · passer en vocal</text>
+          <text x="76" y="438" font-size="10" fill="var(--muted)" font-family="system-ui">appel traduit en direct, sous-titré</text>
+          <!-- auto note -->
+          <rect x="32" y="462" width="236" height="30" rx="15" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+          <text x="150" y="481" font-size="10.5" fill="var(--muted)" font-family="system-ui" text-anchor="middle">revenir en mode auto (choix de l’Orchestrateur)</text>
+          <text x="150" y="520" font-size="10" fill="#C9962B" font-family="system-ui" text-anchor="middle">astuce : pincez l’écran — Focal → Perles → Résumé</text>
+          <rect x="20" y="540" width="260" height="38" rx="19" fill="var(--surface)" opacity="0.5"/>
+        </svg>
+        <figcaption>Chaque mode dit ce qu’il est en langage humain. La Rivière grisée explique son seuil au lieu de disparaître mystérieusement.</figcaption>
+      </figure>
+      <div class="notes">
+        <p>La <b>Lentille</b> vit en haut de chaque conversation&nbsp;: une pastille qui nomme le mode courant — toujours visible, jamais ambiguë. Un tap l’ouvre en feuille&nbsp;: chaque mode disponible se présente en une phrase de langage humain, le mode courant est coché, les modes non disponibles sont grisés <b>avec leur raison et leur seuil</b>. « Revenir en mode auto » rend la main à l’Orchestrateur (et enlève le « collant » de la règle 2).</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Type de conversation</th><th>Défaut à l’ouverture</th><th>Disponibles</th><th>Jamais</th></tr></thead>
+            <tbody>
+              <tr><td class="t">Directe (2)</td><td>Focal (Résumé si &gt; 25 non-lus)</td><td>Script, Cartes, Perles, Résumé</td><td class="never">Rivière, Table Ronde</td></tr>
+              <tr><td class="t">Petit groupe (3–7 actifs)</td><td>Focal / Résumé selon non-lus</td><td>+ Table Ronde, Îlots (si ≥ 2 sujets), Scène</td><td class="never">Rivière (sauf tresse à 5+)</td></tr>
+              <tr><td class="t">Groupe (8–30 actifs)</td><td>Focal / Résumé selon non-lus</td><td>+ Rivière (proposée), Îlots, Perles</td><td class="never">Table Ronde (&gt; 8, le cercle sature)</td></tr>
+              <tr><td class="t">Communauté (30+ actifs)</td><td><b>Résumé Vivant</b></td><td>Rivière, Îlots, Perles · Focal = plongée</td><td class="never">Table Ronde, Cartes (volume)</td></tr>
+              <tr><td class="t">Appel en cours</td><td><b>Scène</b> (couche)</td><td>tout mode en dessous, PiP en sortie</td><td class="never">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ API AGENT ═══════════════════════ -->
+<section class="prop" id="api" style="--a:#2E9E96">
+  <div class="prop-head">
+    <span class="num">✦</span>
+    <div>
+      <p class="eyebrow">Discret par construction, ouvert par API</p>
+      <h2>L’API Agent&nbsp;: deux rôles, une grammaire</h2>
+      <p class="thesis">N’importe quel agent peut se brancher sur une conversation — comme <em>membre</em> qui participe, ou comme <em>assistant</em> qui observe et n’écrit jamais dans le fil. La discrétion n’est pas une politesse&nbsp;: c’est le contrat.</p>
+    </div>
+  </div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 720 250" role="img" aria-label="Diagramme : l’agent-membre poste dans le fil réel avec identité visible ; l’agent-assistant lit le flux d’événements en lecture seule et alimente des surfaces privées par utilisateur — suggestions, résumé, actions, titres">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arrT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#2E9E96"/>
+        </marker>
+      </defs>
+      <!-- member agent -->
+      <rect x="16" y="30" width="168" height="62" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="100" y="54" font-size="12.5" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">Agent-membre</text>
+      <text x="100" y="72" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace" text-anchor="middle">role: member</text>
+      <line x1="184" y1="61" x2="272" y2="61" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <text x="228" y="42" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">poste des messages</text>
+      <text x="228" y="55" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">identité ✦ visible</text>
+      <!-- conversation -->
+      <rect x="276" y="26" width="180" height="70" rx="12" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="366" y="54" font-size="13" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">La conversation</text>
+      <text x="366" y="74" font-size="10.5" fill="currentColor" font-family="system-ui" text-anchor="middle">le fil réel, vu par tous</text>
+      <!-- events down to observer -->
+      <line x1="366" y1="96" x2="366" y2="148" stroke="#2E9E96" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrT)"/>
+      <text x="378" y="126" font-size="10" fill="#2E9E96" font-family="system-ui">événements · lecture seule</text>
+      <!-- observer agent -->
+      <rect x="276" y="152" width="180" height="62" rx="12" fill="none" stroke="#2E9E96" stroke-width="2" stroke-dasharray="6 4"/>
+      <text x="366" y="176" font-size="12.5" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">Agent-assistant</text>
+      <text x="366" y="194" font-size="10.5" fill="currentColor" font-family="ui-monospace, Menlo, monospace" text-anchor="middle">role: observer — n’écrit jamais dans le fil</text>
+      <!-- surfaces -->
+      <line x1="456" y1="183" x2="524" y2="183" stroke="#2E9E96" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrT)"/>
+      <rect x="528" y="140" width="180" height="88" rx="12" fill="none" stroke="#2E9E96" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text x="618" y="163" font-size="11.5" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">Surfaces privées ✦</text>
+      <text x="618" y="181" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">suggestions · résumé · actions</text>
+      <text x="618" y="196" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">titres d’épisodes · raccourcis</text>
+      <text x="618" y="214" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">adressées par utilisateur</text>
+      <!-- to user -->
+      <line x1="618" y1="136" x2="618" y2="92" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <rect x="562" y="36" width="112" height="52" rx="12" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="618" y="58" font-size="12.5" font-weight="700" fill="currentColor" font-family="system-ui" text-anchor="middle">Toi</text>
+      <text x="618" y="76" font-size="10" fill="currentColor" font-family="system-ui" text-anchor="middle">pointillé = révocable</text>
+    </svg>
+    <figcaption>Deux chemins étanches : le membre écrit dans le fil (trait plein, identité visible) ; l’assistant lit et n’alimente que des surfaces privées en pointillé, par utilisateur.</figcaption>
+  </figure>
+
+  <div class="case-body" style="grid-template-columns: 1fr; margin-top: 30px;">
+    <div class="notes">
+      <p><b>Rôle <code>member</code> — l’agent-utilisateur.</b> Invité explicitement dans la conversation, il participe comme une personne&nbsp;: il poste des messages, envoie des médias, répond aux mentions. Sa seule différence est sa <b>grammaire visuelle imposée</b> — anneau pointillé, étincelle ✦ — dans toutes les vues (un siège pointillé à la Table Ronde, un fil pointillé dans la Rivière). Exemples&nbsp;: un agent d’analyse qui publie le compte-rendu hebdo, un bot de sondage, un agent météo pour la rando, un agent-créateur qui génère l’illustration demandée. Il est soumis aux mêmes règles que tout membre&nbsp;: invitation, expulsion, rate-limit.</p>
+      <p><b>Rôle <code>observer</code> — l’agent-assistant.</b> Il n’écrit <b>jamais</b> dans le fil. Il s’abonne au flux d’événements (avec consentement au niveau conversation, chiffrement E2E respecté&nbsp;: l’observation se fait côté client ou sur contenu autorisé) et alimente des <b>surfaces privées</b>, adressées utilisateur par utilisateur&nbsp;: la ligne de pont en Focal, les raccourcis d’action (cas 01·B), les lignes du Résumé Vivant, les titres de Perles, le tri de la Rampe de visages, les cartes-couvertures des paquets. Chaque surface est dismissible, chaque sortie est révocable, et l’utilisateur choisit <b>quel</b> assistant alimente <b>quelle</b> surface — le vôtre, celui de Meeshy, ou aucun.</p>
+      <pre><code><span class="c"># Brancher un agent sur une conversation</span>
+<span class="k">POST</span> /api/v1/conversations/:id/agents
+{ "agentId": "agt_kiwi", "role": "member" | "observer",
+  "scopes": ["messages:read", "summary:write", "suggestions:write"] }
+
+<span class="c"># member → poste via l’API messages, identité ✦ visible de tous</span>
+<span class="k">POST</span> /api/v1/conversations/:id/messages   <span class="c">(auth agent, badge imposé)</span>
+
+<span class="c"># observer → reçoit les événements, pousse vers les surfaces privées</span>
+socket.on('message:new', …)                    <span class="c">(lecture seule)</span>
+socket.emit('assist:suggestion',    { forUserId, text, action })
+socket.emit('assist:summary-patch', { forUserId, decided, asked, next })
+socket.emit('assist:actions',       { forUserId, shortcuts: […] })
+socket.emit('assist:episode',       { title, range })</code></pre>
+      <p style="margin-top:16px;">La règle produit qui tient tout&nbsp;: <b>plein = humain (ou membre assumé), pointillé = assistance</b>. Elle vaut dans les dix modes, elle est apprise en une conversation, et elle garantit qu’aucun agent — même le meilleur — ne pourra jamais se faire passer pour votre grand-mère.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ CONTENUS & CRÉATION ═══════════════════════ -->
+<section class="prop" id="pistes" style="--a:#D95F82">
+  <div class="prop-head">
+    <span class="num">＋</span>
+    <div>
+      <p class="eyebrow">Stories, réels, médias, création IA</p>
+      <h2>Quatre pistes pour les contenus</h2>
+      <p class="thesis">La conversation n’est pas que du texte&nbsp;: elle reçoit, fabrique et fait circuler des contenus. Quatre briques qui s’emboîtent dans les modes existants — <em>sans écran de plus</em>.</p>
+    </div>
+  </div>
+  <div class="ideas">
+    <div style="--dot:#E05252">
+      <h3><i></i>Le Studio</h3>
+      <p>Appui long sur le composeur (ou « Remixer » sur tout média reçu) → un atelier plein écran&nbsp;: annoter, découper, générer par IA (« dessine le plan du parc pour dimanche »), transformer en sticker ou en mème. Le résultat repart <b>comme une réponse liée</b> à l’original — la création est une forme de réplique, pas une pièce jointe.</p>
+      <p class="who">Propulsé par un agent-créateur (role member, scope media) — signé ✦ « créé avec IA », toujours.</p>
+    </div>
+    <div style="--dot:#3F9E63">
+      <h3><i></i>Les Étagères</h3>
+      <p>Chaque conversation range automatiquement ce qui y circule&nbsp;: Photos, Liens, Fichiers, Décisions, Stories. L’étagère est tenue par un observer (zéro travail humain) et devient l’onglet « mémoire » de la conversation. <b>Glisser un objet d’une étagère vers une autre conversation = transfert propre</b>, avec provenance.</p>
+      <p class="who">C’est aussi la réponse à « où est le PDF de la cabane ? » — sans scroller trois semaines.</p>
+    </div>
+    <div style="--dot:#3E93CF">
+      <h3><i></i>Le Kiosque</h3>
+      <p>Les stories et réels des membres vivent au-dessus de la liste de conversations — et <b>dans</b> une conversation, un réel partagé s’ouvre naturellement en mode Cartes-Moments&nbsp;: plein écran, un tap pour avancer, réactions en onomatopées qui retombent dans le fil. Une story peut être <b>adressée à une conversation</b> (« story du groupe rando ») plutôt qu’au monde entier.</p>
+      <p class="who">Le Prisme s’applique aux stories aussi : sous-titres traduits automatiques sur les réels vocaux.</p>
+    </div>
+    <div style="--dot:#8A63D2">
+      <h3><i></i>La Passerelle</h3>
+      <p>Transférer un contenu affiche sa <b>chaîne de provenance</b> — « via Lina ← club photo » — élégante et infalsifiable. Le média voyage <b>avec son état de Prisme</b>&nbsp;: traductions, transcription, sous-titres déjà calculés le suivent dans la nouvelle conversation. Le transfert cesse d’être une perte de contexte.</p>
+      <p class="who">Et un agent-membre peut être le destinataire : « envoie ça à mon agent-archiviste ».</p>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="wrap">Meeshy · « Modes en Action » · 14 août 2026 — volume 2 du chantier vue conversation. Volume 1 : « Au-delà des Bulles » (les dix propositions).</div>
+</footer>
+
+</div>
