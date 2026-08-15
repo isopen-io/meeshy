@@ -1534,7 +1534,17 @@ non supposée : le canal existait, seul l'émetteur manquait.
    fermée dont la base ignore qu'elle l'a été. **Non livré** pour tenir le diff
    sur le défaut réel ; à reprendre avec la sonde ci-dessous, dont il relève.
 
-3. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
+3. **L'`include` de l'audience charge TOUS les participants, actifs ou non** —
+   filtrés ensuite en JS. Sur la branche « aucun successeur » d'un grand groupe
+   dont tout le monde est déjà parti, c'est N lignes chargées pour en garder
+   une. Prisma sait pourtant filtrer dans l'`include`
+   (`participants: { where: { isActive: true } }`). **Non livré, et surtout pas
+   ici seulement** : `core.ts` a exactement la même forme, et ne corriger qu'un
+   des deux jumeaux recréerait la dérive que ce cycle vient de refermer. Le coût
+   est par ailleurs payé une fois par clôture — une opération terminale et rare.
+   À traiter comme une passe unique sur les deux sites.
+
+4. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
    encore actif d'une conversation FERMÉE peut y écrire ; le message est
    persisté et diffusé normalement. Le correctif ci-dessus retire la cause
    principale (l'orphelin apprend maintenant la clôture), mais la garde
