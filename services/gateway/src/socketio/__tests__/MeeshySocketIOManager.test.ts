@@ -1253,9 +1253,64 @@ describe('MeeshySocketIOManager', () => {
       await handler({ messageId: 'msg-cached', targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({
         messageId: 'msg-cached',
-        translatedText: 'Bonjour',
-        targetLanguage: 'fr',
       }));
+    });
+
+    /**
+     * Le chemin CACHE répond à une demande EXPLICITE de l'utilisateur
+     * (« traduire ce message »), et c'est le chemin censé être instantané.
+     * Il émettait `{ messageId, translatedText, targetLanguage, confidenceScore }` :
+     *
+     *  · le web ne lit que `data.translation` / `data.translations` et sort en
+     *    silence sinon (`TranslationService.handleTranslationEvent`) ;
+     *  · iOS décode `TranslationEvent`, dont `translations` n'est pas optionnel
+     *    — le décodage échoue et l'événement disparaît.
+     *
+     * Autrement dit : traduire à la demande ne faisait rien tant que la
+     * traduction était déjà en cache, et ne « marchait » que sur cache MISS,
+     * où c'est le retour ZMQ qui répond avec la forme correcte.
+     */
+    it('émet la forme TranslationEvent que les clients savent lire, sur le chemin cache', async () => {
+      const socket = makeSocket('sock-t4c');
+      (manager as any).socketToUser.set('sock-t4c', 'user-t4c');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue({
+        messageId: 'msg-contract',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        translatedText: 'Bonjour',
+        translatorModel: 'premium',
+        confidenceScore: 0.95,
+      });
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-contract',
+        conversationId: 'conv-mine',
+        content: 'Hello',
+        originalLanguage: 'en',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-t4c' });
+      triggerConnection(socket);
+
+      await getTranslationHandler(socket)({ messageId: 'msg-contract', targetLanguage: 'fr' });
+
+      const call = (socket.emit as jest.Mock).mock.calls.find(
+        ([event]) => event === SERVER_EVENTS.MESSAGE_TRANSLATION,
+      );
+      expect(call).toBeDefined();
+      const payload = call![1];
+      expect(payload.messageId).toBe('msg-contract');
+      expect(Array.isArray(payload.translations)).toBe(true);
+      expect(payload.translations).toHaveLength(1);
+      expect(payload.translations[0]).toEqual(expect.objectContaining({
+        messageId: 'msg-contract',
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour',
+        cached: true,
+      }));
+      // Le nom qu'aucun client n'a jamais lu.
+      expect(payload).not.toHaveProperty('translatedText');
     });
 
     it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {

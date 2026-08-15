@@ -468,4 +468,69 @@ describe('TranslationService', () => {
       expect(service.getCacheStats().processedEvents).toBeLessThan(101);
     });
   });
+
+  /**
+   * Le contrat, vu du client — et la trace qui manquait.
+   *
+   * Le chemin CACHE de `translation:request` côté gateway émettait
+   * `{ messageId, translatedText, targetLanguage, confidenceScore }` : aucun
+   * tableau `translations`, donc rien à appliquer ici. « Traduire ce message »
+   * ne faisait rien tant que la traduction était déjà en cache, et pas une
+   * ligne de journal ne le disait.
+   */
+  describe('contrat `message:translation`', () => {
+    it("applique la charge utile que le gateway émet (tableau `translations`)", () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTranslation(listener);
+
+      socket._trigger('message:translation', {
+        messageId: 'msg-contract',
+        translations: [{
+          id: 'msg-contract_fr_1700000000000',
+          messageId: 'msg-contract',
+          sourceLanguage: 'en',
+          targetLanguage: 'fr',
+          translatedContent: 'Bonjour',
+          translationModel: 'premium',
+          cacheKey: 'msg-contract_en_fr',
+          cached: true,
+          confidenceScore: 0.95,
+        }],
+      });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener.mock.calls[0][0]).toEqual(expect.objectContaining({
+        messageId: 'msg-contract',
+      }));
+      expect(service.getCachedTranslation('msg-contract', 'fr')).toEqual(
+        expect.objectContaining({ translatedContent: 'Bonjour' }),
+      );
+    });
+
+    it("journalise le rejet d'une charge utile sans `translation`/`translations`", () => {
+      const { logger } = require('@/utils/logger');
+      (logger.warn as jest.Mock).mockClear();
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTranslation(listener);
+
+      // La forme exacte que le chemin cache du gateway émettait.
+      socket._trigger('message:translation', {
+        messageId: 'msg-legacy',
+        translatedText: 'Bonjour',
+        targetLanguage: 'fr',
+        confidenceScore: 0.95,
+      });
+
+      expect(listener).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[TranslationService]',
+        expect.stringContaining('dropped'),
+        expect.objectContaining({ messageId: 'msg-legacy' }),
+      );
+    });
+  });
 });

@@ -124,3 +124,142 @@ cd packages/shared && bun run build                           # sinon @meeshy/sh
 cd services/gateway && bun x jest --config=jest.config.json    # 716 suites / 17553 tests
 cd packages/shared && bun x vitest run                         # 54 fichiers / 1542 tests
 ```
+
+---
+
+# Cycle 22 (2026-08-15) — `translation:request` : le chemin CACHE parlait une langue qu'aucun client ne lit
+
+Passe suivante de la routine « amélioration continue temps réel ». Le cycle 21
+avait fermé le rejeu HORS LIGNE de `message:translation` ; ce cycle repart du
+même événement par l'autre bout — non plus « qui le reçoit », mais **quelle
+forme il a selon le chemin qui l'émet**.
+
+**Conclusion : un défaut réel trouvé, corrigé, testé.** Trois surfaces balayées
+sans rien trouver sont listées en fin de section pour qu'un prochain cycle ne
+les ré-instruise pas.
+
+## Méthode
+
+Deux balayages mécaniques avant toute lecture ciblée :
+
+1. **Matrice `SERVER_EVENTS` × émetteurs gateway × écouteurs web** (125 events).
+   7 events émis sans écouteur web : `attachment:reaction-added/removed`,
+   `message:read-status-updated` (faux positif — dual-émis avec le legacy
+   `read-status-updated`, que le web écoute), `location:live-started/updated/stopped`
+   (déjà noté au cycle précédent, aucun consommateur web), `heartbeat:ack`
+   (le web émet `heartbeat` mais n'écoute pas l'accusé — informatif, sans effet).
+2. **Matrice `CLIENT_EVENTS` × émetteurs clients × handlers gateway** (58 events).
+   Aucun trou réel : les `CALL_*` sont servis par `CALL_EVENTS` (autre objet de
+   constantes), et `CLIENT_EVENTS.USER_STATUS` n'est émis par personne — iOS ne
+   fait que l'écouter. Entrée morte, sans conséquence.
+
+Puis la question que les deux matrices ne posent pas : **quand un même event a
+PLUSIEURS émetteurs, émettent-ils la même forme ?** C'est là qu'était le défaut.
+
+## Le défaut — deux constructeurs pour une seule charge utile
+
+`SERVER_EVENTS.MESSAGE_TRANSLATION` a deux émetteurs dans `MeeshySocketIOManager` :
+
+| chemin | quand | forme émise |
+|---|---|---|
+| `_handleTextTranslationReady` | retour ZMQ de NLLB (cache MISS) | `TranslationEvent` ✅ |
+| `_handleTranslationRequest` (branche cache) | réponse à `translation:request` (cache HIT) | `{ messageId, translatedText, targetLanguage, confidenceScore }` ❌ |
+
+La seconde forme n'a ni tableau `translations`, ni le nom `translatedContent`
+que `TranslationData` porte. Or les deux clients prennent le contrat au mot :
+
+- **Web** — `TranslationService.handleTranslationEvent` : ni `data.translation`
+  ni `data.translations` ⇒ `return` nu. Pas un log.
+- **iOS** — `MessageSocketManager` : `decode(TranslationEvent.self, …)`, où
+  `translations: [TranslationData]` n'est **pas** optionnel ⇒ décodage en échec,
+  événement perdu.
+
+Séquence complète :
+
+```
+Alice appuie sur « traduire en français ».
+  → translation:request { messageId, targetLanguage: 'fr' }
+  → getTranslation() rend un HIT (quelqu'un a déjà lu ce message en français)
+  → socket.emit(message:translation, { messageId, translatedText, … })
+  → web : return nu             |  iOS : decode échoue
+  → RIEN à l'écran, aucune trace
+```
+
+Et l'ironie du sens : la traduction à la demande ne « marchait » que sur cache
+**MISS**, servie par l'autre constructeur. Plus une traduction était déjà prête,
+moins elle arrivait — le Prisme Linguistique devenu fonction de l'état du cache
+serveur.
+
+**Pourquoi ça a survécu.** Le test qui couvrait cette branche
+(`MeeshySocketIOManager.test.ts`, « emits MESSAGE_TRANSLATION when cached
+translation found ») **assertait la forme cassée** :
+`expect.objectContaining({ translatedText: 'Bonjour', targetLanguage: 'fr' })`.
+Récidive exacte du D4 du cycle 7 — « les tests validaient une coïncidence ».
+
+## Le correctif
+
+`socketio/buildTranslationEvent.ts` — constructeur UNIQUE, appelé par les deux
+chemins. C'est la correction, pas un détail de style : deux copies d'une même
+charge utile ont dérivé exactement comme le cycle 8 l'avait constaté sur le
+corps REST des liens de partage.
+
+Trois décisions inscrites dans le module :
+
+- **`cached` dit la provenance** (`true` sur le chemin cache, `false` au retour
+  ZMQ) au lieu du `false` écrit en dur qu'avait l'unique constructeur correct.
+- **`id` UNIQUE par émission** quand la ligne n'en a pas (`${messageId}_${lang}_${now}`,
+  repli déjà utilisé par le chemin ZMQ). Le web déduplique sur
+  `${messageId}_${translation.id}` et ne purge ce registre qu'au centième
+  événement : un id STABLE ferait avaler la réponse à une demande **explicite**
+  de l'utilisateur au motif qu'une émission antérieure portait la même identité
+  — soit le symptôme même qu'on ferme.
+- **`confidenceScore` par `??`, jamais `||`** : une confiance de 0 est une
+  valeur, pas une absence.
+
+Côté web, le `return` nu devient un `logger.warn` nommant les clés reçues.
+Ignorer une charge utile qu'on ne sait pas lire reste la bonne posture — c'est
+le SILENCE qui a permis la survie, pas le rejet.
+
+## Gates
+
+- [x] 1 RED discriminant vu rouge sur la passerelle avant correctif
+      (`Array.isArray(payload.translations)` → `false`)
+- [x] `buildTranslationEvent.test.ts` : 11 témoins (contrat, replis, unicité d'id)
+- [x] `MeeshySocketIOManager.test.ts` : 337 verts (336 pré-existants inchangés)
+- [x] Suite gateway complète verte
+- [x] Web : `__tests__/services` + `__tests__/hooks/queries` — 63 suites / 2215 verts
+      (dont 2 nouveaux témoins sur `translation.service`)
+- [x] `tsc --noEmit` gateway : 0
+- [x] `tsc --noEmit` web : 1229, base pré-existante **inchangée** (mesurée
+      avant/après par `git stash`)
+
+## Surfaces vérifiées correctes pendant ce cycle (ne pas re-vérifier)
+
+- **`/sync` (SyncEngine A1–A3)** — endpoint enregistré (`route-registration.ts:210`)
+  mais **aucun client ne l'appelle** : ni web, ni SDK iOS. Auditer plus loin ce
+  fichier n'a aucun effet en production tant que le client n'existe pas. Le
+  keyset `(updatedAt, id)`, le budget d'octets (`trimToByteBudget`, préfixe +
+  au-moins-une-ligne + exclusion de la ligne qui franchit), le report de curseur
+  par stream et le retrait de checkpoint (`SYNC_CHECKPOINT_LAG_MS`) ont été relus
+  sans trouver de défaut.
+- **`emitWithSeq` / `SequenceService`** — les deux seuls appelants émettent
+  `NOTIFICATION_NEW` ; le LOCKSTEP client documenté en tête de fichier tient.
+- **`StatusHandler` (typing)** — suppression multi-appareil sur les deux chemins
+  (`handleSocketDisconnecting`, `retractTypingIn`), tracking avant le portillon
+  de throttle, purge de la fenêtre à la retraction. Correct.
+- **`ConnectionService` / `SocketIOOrchestrator` (web)** — le cul-de-sac « JWT
+  expiré au boot ⇒ aucun socket, rien ne réarme » est **déjà fermé**
+  (`authManager.registerOnTokensUpdated` → `onTokensUpdated`), de même que la
+  re-registration des écouteurs (`listenersAttachedSocket`).
+- **`emitToConversationParticipants` / `participantUserRoomTargets`** — règle
+  `userId ?? id` centralisée, chaînage (livraison au plus une fois par socket).
+
+## Environnement de vérification (parité CI)
+
+```bash
+bun install --ignore-scripts                                  # postinstall grpc-tools bloqué par le proxy
+cd packages/shared && npx prisma generate --generator client
+cd packages/shared && bun run build
+cd services/gateway && bun x jest --config=jest.config.json
+cd apps/web && bun x jest __tests__/services __tests__/hooks/queries
+```

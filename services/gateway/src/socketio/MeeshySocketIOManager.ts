@@ -33,6 +33,7 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
+import { buildTranslationEvent } from './buildTranslationEvent';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
@@ -1364,12 +1365,23 @@ export class MeeshySocketIOManager {
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
 
       if (translation) {
-        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
+        // MÊME constructeur que le retour ZMQ (`_handleTextTranslationReady`).
+        // Cette branche émettait sa propre forme — `{ messageId, translatedText,
+        // targetLanguage, confidenceScore }` — que ni le web (qui exige
+        // `translation`/`translations` et sort en silence sinon) ni iOS (qui
+        // décode `TranslationEvent`, `translations` non optionnel) ne sait lire.
+        // « Traduire ce message » ne faisait donc RIEN dès que la traduction
+        // était en cache, c'est-à-dire sur le chemin instantané ; elle ne
+        // « marchait » que sur cache MISS, servie par l'autre constructeur.
+        socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, buildTranslationEvent({
           messageId: data.messageId,
-          translatedText: translation.translatedText,
           targetLanguage: data.targetLanguage,
-          confidenceScore: translation.confidenceScore
-        });
+          translatedText: translation.translatedText,
+          sourceLanguage: translation.sourceLanguage,
+          translationModel: translation.translatorModel || translation.modelType,
+          confidenceScore: translation.confidenceScore,
+          cached: true,
+        }));
 
         this.stats.translations_sent++;
 
@@ -1523,21 +1535,16 @@ export class MeeshySocketIOManager {
       
       // Préparer les données de traduction au format correct pour le frontend
       // FORMAT: TranslationEvent avec un tableau de traductions
-      const translationData: TranslationEvent = {
+      const translationData: TranslationEvent = buildTranslationEvent({
         messageId: result.messageId,
-        translations: [{
-          id: data.translationId || data.id || `${result.messageId}_${targetLanguage}_${Date.now()}`,
-          messageId: result.messageId,
-          sourceLanguage: result.sourceLanguage || 'auto',
-          targetLanguage: targetLanguage,
-          translatedContent: result.translatedText,
-          translationModel: result.translationModel || result.modelType || 'medium',
-          cacheKey: `${result.messageId}_${result.sourceLanguage || 'auto'}_${targetLanguage}`,
-          cached: false,
-          confidenceScore: result.confidenceScore || 0.85,
-          createdAt: new Date()
-        }]
-      };
+        targetLanguage,
+        translatedText: result.translatedText,
+        sourceLanguage: result.sourceLanguage,
+        translationModel: result.translationModel || result.modelType,
+        confidenceScore: result.confidenceScore,
+        cached: false,
+        translationId: data.translationId || data.id,
+      });
       
       
       // Diffuser dans la room de conversation (méthode principale et UNIQUE)

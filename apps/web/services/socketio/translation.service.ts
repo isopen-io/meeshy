@@ -164,6 +164,16 @@ export class TranslationService {
       // Old plural format (backward compatibility)
       translations = data.translations;
     } else {
+      // Ce `return` est la raison pour laquelle une rupture de contrat côté
+      // gateway a pu survivre : le chemin CACHE de `translation:request`
+      // émettait `{ messageId, translatedText, targetLanguage }`, qui tombe
+      // exactement ici — « traduire ce message » ne faisait rien, sans une
+      // ligne de journal nulle part. Une charge utile qu'on ne sait pas lire
+      // reste ignorée (c'est la bonne posture), mais elle se voit désormais.
+      logger.warn('[TranslationService]', 'translation event dropped — no `translation`/`translations` field', {
+        messageId: data?.messageId,
+        keys: data && typeof data === 'object' ? Object.keys(data) : [],
+      });
       return;
     }
 
