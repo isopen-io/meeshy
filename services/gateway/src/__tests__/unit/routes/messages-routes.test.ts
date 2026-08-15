@@ -3773,6 +3773,10 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
   // réelle d'un participant sans compte.
   const ROWS: MongoDocument[] = [
     { id: ANON_PART_ID, userId: null, conversationId: 'resolved-conv-id', isActive: true },
+    // La ligne AVEC compte : elle rend le contraste testable dans ce même
+    // bloc — un acteur enregistré doit continuer de se nommer par son `User.id`
+    // là où l'invité se nomme par `null`.
+    { id: PART_ID, userId: USER_ID, conversationId: 'resolved-conv-id', isActive: true },
   ];
 
   const anonymousRequest = (overrides: any = {}) =>
@@ -3848,6 +3852,91 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
         }),
       }),
     );
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // `read-status:updated` nomme l'ACTEUR par DEUX champs qui ne disent pas la
+  // même chose : `participantId` porte sa ligne `Participant`, `userId` porte
+  // sa ligne `User` — et un invité de lien n'en a pas. Le contrat le dit aux
+  // trois bouts (`ReadStatusUpdatedEventData.userId`,
+  // `ReadStatusUpdateEvent.userId` iOS, `ReadStatusUpdatedEvent.userId`
+  // Android) : « `User.id` de l'acteur, `null` quand il est ANONYME ».
+  //
+  // Le fan-out, lui, a besoin d'une CLÉ DE ROOM, qui vaut `userId ?? id`.
+  // `broadcastReadStatus` servait les deux rôles avec la MÊME variable, et
+  // c'est la forme ROOM qui gagnait : le champ partait en portant un
+  // `Participant.id`. Les émetteurs SOCKET du même événement
+  // (`ConversationHandler._resyncReadStatusToSocket`,
+  // `MessageHandler.autoDeliverToOnlineRecipients`, le drain) émettaient déjà
+  // `null` — le même invité, dans la même conversation, était donc nommé de
+  // deux façons selon le transport qui parlait.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('read-status:updated ne nomme PAS l\'invité par un User.id qu\'il n\'a pas', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
+    mockGetUnreadCount.mockResolvedValue(1);
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
+
+    const payload = fastify._mockEmit.mock.calls
+      .find(([event]: any[]) => event === 'read-status:updated')?.[1] as any;
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBeNull();
+    // …et l'identité de l'acteur n'est pas perdue pour autant : elle est là où
+    // le contrat la place pour un participant sans compte.
+    expect(payload.participantId).toBe(ANON_PART_ID);
+  });
+
+  it('/read nomme l\'invité de la même façon que mark-read', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
+    mockGetUnreadCount.mockResolvedValue(1);
+
+    await fastify._routes['POST']['/conversations/:id/read'](anonymousRequest(), makeReply());
+
+    const payload = fastify._mockEmit.mock.calls
+      .find(([event]: any[]) => event === 'read-status:updated')?.[1] as any;
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBeNull();
+    expect(payload.participantId).toBe(ANON_PART_ID);
+  });
+
+  // ANTI-SUR-CORRECTION. Nuller le champ NE DOIT PAS nuller la clé de room :
+  // c'est `ROOMS.user(Participant.id)` qu'`AuthHandler` fait rejoindre aux
+  // sockets anonymes, et la seule par laquelle le badge de l'invité revient à
+  // zéro. Un correctif qui propagerait le `null` jusqu'ici émettrait vers
+  // `user:null` et rendrait le badge de tous les invités définitivement collé.
+  it('le badge de l\'invité reste adressé à SA room personnelle, receipts activés', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
+    mockGetUnreadCount.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
+
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
+    expect(fastify._mockTo).not.toHaveBeenCalledWith('user:null');
+    expect(fastify._mockTo).not.toHaveBeenCalledWith('user:undefined');
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+  });
+
+  // NON-RÉGRESSION : un acteur AVEC compte continue de se nommer par son
+  // `User.id`. C'est la moitié du contrat que ce correctif ne touche pas, et
+  // celle dont dépend la synchro multi-appareils du curseur de lecture.
+  it('un acteur AVEC compte porte toujours son User.id', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: USER_ID }]);
+    mockGetUnreadCount.mockResolvedValue(1);
+
+    await fastify._routes['POST']['/conversations/:id/mark-read'](makeRequest(), makeReply());
+
+    const payload = fastify._mockEmit.mock.calls
+      .find(([event]: any[]) => event === 'read-status:updated')?.[1] as any;
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBe(USER_ID);
   });
 
   it('les trois routes de lecture acceptent un authentifié SANS COMPTE, jamais un anonyme sans jeton', () => {

@@ -1,6 +1,9 @@
 package me.meeshy.sdk.lock
 
 import java.security.MessageDigest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Hashes a PIN for storage — never persist a PIN in plaintext. Port of iOS
@@ -20,6 +23,14 @@ internal object PinHasher {
  */
 interface ConversationLockStore {
     val lockedConversationIds: Set<String>
+
+    /**
+     * Reactive mirror of [lockedConversationIds] — port of iOS
+     * `ConversationLockManager`'s `@Published lockedConversationIds`, which the
+     * conversation list observes directly so a lock/unlock re-evaluates every
+     * row. Emits the full current snapshot on every mutation (never a delta).
+     */
+    val lockedConversationIdsFlow: StateFlow<Set<String>>
 
     fun hasMasterPin(): Boolean
     fun setMasterPin(pin: String)
@@ -52,8 +63,10 @@ interface ConversationLockStore {
 class InMemoryConversationLockStore : ConversationLockStore {
     private var masterPinHash: String? = null
     private val lockHashes = mutableMapOf<String, String>()
+    private val _lockedConversationIdsFlow = MutableStateFlow<Set<String>>(emptySet())
 
     override val lockedConversationIds: Set<String> get() = lockHashes.keys.toSet()
+    override val lockedConversationIdsFlow: StateFlow<Set<String>> = _lockedConversationIdsFlow.asStateFlow()
 
     override fun hasMasterPin(): Boolean = masterPinHash != null
 
@@ -76,6 +89,7 @@ class InMemoryConversationLockStore : ConversationLockStore {
 
     override fun setLock(conversationId: String, pin: String) {
         lockHashes[conversationId] = PinHasher.hash(pin)
+        _lockedConversationIdsFlow.value = lockHashes.keys.toSet()
     }
 
     override fun verifyLock(conversationId: String, pin: String): Boolean =
@@ -83,9 +97,11 @@ class InMemoryConversationLockStore : ConversationLockStore {
 
     override fun removeLock(conversationId: String) {
         lockHashes.remove(conversationId)
+        _lockedConversationIdsFlow.value = lockHashes.keys.toSet()
     }
 
     override fun removeAllLocks() {
         lockHashes.clear()
+        _lockedConversationIdsFlow.value = emptySet()
     }
 }

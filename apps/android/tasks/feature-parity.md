@@ -2696,6 +2696,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ConversationSettingsForm 10, MemberRole 5, ConversationRepository +2, ConversationSettingsViewModel 7);
       mutation-checked (neutralising the diff killed exactly the 5 partial-patch/dirty tests).
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
+      — pin/category/mute/**mentions-only** are wired (slice `conversation-mentions-only-preference`,
+      2026-08-15, PR #3054: `setMentionsOnlyOptimistic`/`toggleMentionsOnly` + a context-menu toggle,
+      shown only while not muted). Custom name, reaction emoji, and tags still unwired — the model
+      fields (`ApiConversationPreferences.customName/reaction`, `UserConversationPreferences.tags`)
+      exist but nothing reads/writes them from the UI yet. Box stays unchecked until those land.
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
@@ -2705,6 +2710,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
       flow itself. Box stays unchecked until those land.
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
+      — leave, archive, and delete-for-me are wired (`conversation-leave` PR #3055 +
+      `conversation-delete-for-me` PR #3057, 2026-08-16: two context-menu items, each behind its
+      own confirmation dialog, both reusing the existing `ConversationPurge` socket-driven removal
+      path — `conversation:participant-left`/`conversation:deleted`). delete-for-all still
+      unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
+      meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
 - [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
 - [ ] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown

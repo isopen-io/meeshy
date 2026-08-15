@@ -41,6 +41,8 @@
     <string name="conversations_action_unpin">Désépingler</string>
     <string name="conversations_action_mute">Muet</string>
     <string name="conversations_action_unmute">Réactiver le son</string>
+    <string name="conversations_action_mentions_only">Mentions seulement</string>
+    <string name="conversations_action_all_notifications">Toutes les notifications</string>
     <string name="conversations_action_archive">Archiver</string>
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_mark_read">Marquer comme lu</string>
@@ -49,6 +51,15 @@
     <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
     <string name="conversations_action_create_category">Créer « %1$s »</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
+    <string name="conversations_action_leave">Quitter la conversation</string>
+    <string name="conversations_leave_confirm_title">Quitter la conversation ?</string>
+    <string name="conversations_leave_confirm_message">Vous allez quitter « %1$s ». Vous ne recevrez plus de nouveaux messages de cette conversation.</string>
+    <string name="conversations_leave_confirm_button">Quitter</string>
+    <string name="conversations_leave_cancel_button">Annuler</string>
+    <string name="conversations_action_delete_for_me">Supprimer pour moi</string>
+    <string name="conversations_delete_for_me_confirm_title">Supprimer la conversation ?</string>
+    <string name="conversations_delete_for_me_confirm_message">« %1$s » sera définitivement supprimée de vos appareils uniquement. Les autres participants la conservent.</string>
+    <string name="conversations_delete_for_me_confirm_button">Supprimer</string>
     <string name="conversations_action_more">Plus d\'actions</string>
     <string name="conversations_badge_pinned">Épinglée</string>
     <string name="conversations_badge_muted">Muette</string>
