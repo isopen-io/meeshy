@@ -3,7 +3,8 @@
     "input": {
       "conversations": []
     },
-    "expected": []
+    "expected": [],
+    "_label": "entrée vide — aucune conversation"
   },
   {
     "input": {
@@ -23,7 +24,8 @@
     "expected": [
       "pinned-old",
       "not-pinned-recent"
-    ]
+    ],
+    "_label": "épinglée prime sur les récentes non épinglées"
   },
   {
     "input": {
@@ -54,7 +56,8 @@
       "pinned",
       "live",
       "plain"
-    ]
+    ],
+    "_label": "ordre total : pinned > live > plain"
   },
   {
     "input": {
@@ -86,7 +89,8 @@
       "order-0",
       "order-1",
       "order-2"
-    ]
+    ],
+    "_label": "orderInCategory pilote le tri au sein d'une même catégorie"
   },
   {
     "input": {
@@ -115,7 +119,8 @@
       "newer",
       "middle",
       "older"
-    ]
+    ],
+    "_label": "lastMessageAt desc départage les conversations non épinglées/live/catégorisées"
   },
   {
     "input": {
@@ -137,7 +142,8 @@
     "expected": [
       "no-lastmsg-new",
       "no-lastmsg-old"
-    ]
+    ],
+    "_label": "lastMessageAt null retombe sur updatedAt pour le tri"
   },
   {
     "input": {
@@ -157,7 +163,8 @@
     "expected": [
       "a-id",
       "b-id"
-    ]
+    ],
+    "_label": "id ordinal départage à égalité stricte de updatedAt"
   },
   {
     "input": {
@@ -179,7 +186,8 @@
     "expected": [
       "fresh-lastmessage",
       "stale-lastmessage-but-recently-touched"
-    ]
+    ],
+    "_label": "lastMessageAt frais prime sur un lastMessageAt périmé malgré un updatedAt plus ancien"
   },
   {
     "input": {
@@ -232,7 +240,8 @@
       "cat-b-order1",
       "plain-new",
       "plain-old"
-    ]
+    ],
+    "_label": "ordre total combiné : pinned, live, catégorie (orderInCategory), lastMessageAt desc"
   },
   {
     "input": {
@@ -256,6 +265,7 @@
     "expected": [
       "a-tie",
       "z-tie"
-    ]
+    ],
+    "_label": "orderInCategory égal — id départage (a-tie avant z-tie)"
   }
 ]

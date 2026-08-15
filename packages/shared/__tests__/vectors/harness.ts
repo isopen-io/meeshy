@@ -15,10 +15,17 @@ import { dirname, join } from 'node:path';
 /** Tolérance par défaut pour la comparaison des nombres flottants (workshop §2.3). */
 export const FLOAT_TOLERANCE = 1e-4;
 
-/** Un cas de vecteur : `{ input, expected }`. Les deux champs sont volontairement `unknown` — chaque loi typera son propre couple via les génériques de `loadVectors`/`runVectors`. */
+/**
+ * Un cas de vecteur : `{ input, expected, _label? }`. `input`/`expected` sont
+ * volontairement `unknown` — chaque loi typera son propre couple via les
+ * génériques de `loadVectors`/`runVectors`. `_label` (RÉSERVE 8, revue
+ * REV-1) est un descriptif court FACULTATIF, purement pour le nommage du
+ * test (`runVectors`) — jamais comparé, jamais lu par une loi.
+ */
 export type Vector<TInput = unknown, TExpected = unknown> = {
   readonly input: TInput;
   readonly expected: TExpected;
+  readonly _label?: string;
 };
 
 export type LoadVectorsOptions = {
@@ -46,16 +53,33 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const isVectorLike = (value: unknown): value is { input: unknown; expected: unknown } =>
   isPlainObject(value) && 'input' in value && 'expected' in value;
 
+/**
+ * Forme d'en-tête (RÉSERVE 6, revue REV-1) : `{ $format?, vectors: [...] }`.
+ * Rétrocompatible avec le tableau nu historique — n'entre en jeu QUE si le
+ * JSON top-level est un objet portant une clé `vectors`, jamais pour les
+ * fichiers existants (tous des tableaux nus). `$format` n'est pas validée
+ * ici : c'est une note libre pour le lecteur humain/miroir (forme canonique,
+ * provenance), jamais consommée par la loi ni comparée par le harnais.
+ */
+const isVectorContainer = (value: unknown): value is { readonly vectors: unknown } =>
+  isPlainObject(value) && 'vectors' in value;
+
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
  * Charge et valide un fichier de vecteurs `<name>.vectors.json`.
  *
+ * Accepte deux formes au niveau racine :
+ * - le tableau nu historique `[{ input, expected }, ...]` ;
+ * - un objet d'en-tête `{ $format?, vectors: [{ input, expected }, ...] }`
+ *   (RÉSERVE 6) — `$format` documente la forme canonique attendue et la
+ *   provenance du fichier, à côté du tableau réel des cas.
+ *
  * LÈVE une erreur explicite (jamais un tableau vide silencieux) si :
  * - le fichier est absent ;
  * - le contenu n'est pas un JSON valide (fichier vide compris) ;
- * - le JSON n'est pas un tableau ;
- * - le tableau est vide (zéro cas — leçon 257) ;
+ * - le JSON n'est ni un tableau, ni un objet `{ vectors: [...] }` ;
+ * - le tableau de cas (nu ou sous `vectors`) est vide (zéro cas — leçon 257) ;
  * - un élément du tableau n'est pas de la forme `{ input, expected }`.
  */
 export function loadVectors<TInput = unknown, TExpected = unknown>(
@@ -83,19 +107,31 @@ export function loadVectors<TInput = unknown, TExpected = unknown>(
     );
   }
 
-  if (!Array.isArray(parsed)) {
+  const cases: unknown = Array.isArray(parsed)
+    ? parsed
+    : isVectorContainer(parsed)
+      ? parsed.vectors
+      : undefined;
+
+  if (cases === undefined) {
     throw new Error(
-      `loadVectors(${JSON.stringify(name)}): ${path} doit contenir un tableau JSON de cas {input, expected}, reçu ${typeof parsed}`,
+      `loadVectors(${JSON.stringify(name)}): ${path} doit contenir un tableau JSON de cas {input, expected}, ou un objet { $format?, vectors: [...] }, reçu ${typeof parsed}`,
     );
   }
 
-  if (parsed.length === 0) {
+  if (!Array.isArray(cases)) {
+    throw new Error(
+      `loadVectors(${JSON.stringify(name)}): ${path} — la clé "vectors" doit contenir un tableau JSON de cas {input, expected}, reçu ${typeof cases}`,
+    );
+  }
+
+  if (cases.length === 0) {
     throw new Error(
       `loadVectors(${JSON.stringify(name)}): ${path} contient ZÉRO cas — une suite de vecteurs ne doit jamais charger zéro cas (leçon 257, jamais de vert silencieux)`,
     );
   }
 
-  parsed.forEach((entry, index) => {
+  cases.forEach((entry, index) => {
     if (!isVectorLike(entry)) {
       throw new Error(
         `loadVectors(${JSON.stringify(name)}): le cas ${index} de ${path} n'est pas de la forme { input, expected }`,
@@ -103,7 +139,7 @@ export function loadVectors<TInput = unknown, TExpected = unknown>(
     }
   });
 
-  return parsed as ReadonlyArray<Vector<TInput, TExpected>>;
+  return cases as ReadonlyArray<Vector<TInput, TExpected>>;
 }
 
 /**
@@ -137,6 +173,15 @@ export function closeEnough(actual: unknown, expected: unknown, tolerance: numbe
 }
 
 /**
+ * Nom du test pour un cas : `case N — <_label>` quand `_label` est présent
+ * (RÉSERVE 8, revue REV-1 — un miroir Swift/Kotlin rouge dit enfin QUOI a
+ * cassé, pas seulement un index), `case N` sinon — rétrocompatible avec
+ * toute fixture qui n'a jamais porté `_label`.
+ */
+export const caseTestName = (index: number, vector: Vector<unknown, unknown>): string =>
+  vector._label ? `case ${index} — ${vector._label}` : `case ${index}`;
+
+/**
  * Déclare une suite `describe(name)` avec UN `it()` par cas chargé via `loadVectors(name)`,
  * comparant `run(input)` à `expected` via `closeEnough`. À appeler au niveau module d'un
  * fichier de test (le chargement — donc l'échec à zéro cas — a lieu à la collection des tests).
@@ -150,7 +195,7 @@ export function runVectors<TInput, TExpected>(
 
   describe(`vectors: ${name}`, () => {
     vectors.forEach((vector, index) => {
-      it(`case ${index}`, () => {
+      it(caseTestName(index, vector), () => {
         const actual = run(vector.input);
         const pass = closeEnough(actual, vector.expected);
         if (!pass) {

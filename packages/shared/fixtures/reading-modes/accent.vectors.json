@@ -1,279 +1,298 @@
-[
-  {
-    "input": {
-      "name": "demo-fr",
-      "type": "direct",
-      "language": "french",
-      "theme": "general"
-    },
-    "expected": {
-      "primary": "#7B9FB0",
-      "secondary": "#7B84B0",
-      "accent": "#7BB0A6"
-    }
+{
+  "$format": {
+    "hex": "#RRGGBB (6-digit uppercase hex, # prefix, no alpha)",
+    "provenance": "Généré depuis le TS miroir vérifié du Swift (packages/shared/utils/conversation-colors.ts, lui-même miroir de packages/MeeshySDK/Sources/MeeshySDK/Theme/ColorGeneration.swift). Règle : sur divergence entre ce fichier et le TS, c'est le TS qui bouge, jamais le vecteur — le TS est la source de vérité vérifiée manuellement contre le Swift (voir __tests__/conversation-colors.test.ts). Validation croisée XCTest directe contre ColorGeneration.swift prévue V2."
   },
-  {
-    "input": {
-      "name": "demo-en",
-      "type": "direct",
-      "language": "english",
-      "theme": "general"
+  "vectors": [
+    {
+      "input": {
+        "name": "demo-fr",
+        "type": "direct",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#B18880",
-      "secondary": "#B1A080",
-      "accent": "#B18090"
-    }
-  },
-  {
-    "input": {
-      "name": "demo-ar",
-      "type": "direct",
-      "language": "arabic",
-      "theme": "general"
+    {
+      "input": {
+        "name": "demo-fr-iso",
+        "type": "direct",
+        "language": "fr",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#B6A86E",
-      "secondary": "#A0B66E",
-      "accent": "#B6836E"
-    }
-  },
-  {
-    "input": {
-      "name": "demo-zh",
-      "type": "direct",
-      "language": "chinese",
-      "theme": "general"
+    {
+      "input": {
+        "name": "demo-en",
+        "type": "direct",
+        "language": "english",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#B18880",
+        "secondary": "#B1A080",
+        "accent": "#B18090"
+      }
     },
-    "expected": {
-      "primary": "#A5837B",
-      "secondary": "#A5987B",
-      "accent": "#A57B88"
-    }
-  },
-  {
-    "input": {
-      "name": "group-fr",
-      "type": "group",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "demo-ar",
+        "type": "direct",
+        "language": "arabic",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#B6A86E",
+        "secondary": "#A0B66E",
+        "accent": "#B6836E"
+      }
     },
-    "expected": {
-      "primary": "#46BDCA",
-      "secondary": "#467ACA",
-      "accent": "#46CA95"
-    }
-  },
-  {
-    "input": {
-      "name": "community",
-      "type": "community",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "demo-zh",
+        "type": "direct",
+        "language": "chinese",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#A5837B",
+        "secondary": "#A5987B",
+        "accent": "#A57B88"
+      }
     },
-    "expected": {
-      "primary": "#5D9AC6",
-      "secondary": "#5C65C6",
-      "accent": "#5CC6BD"
-    }
-  },
-  {
-    "input": {
-      "name": "bot",
-      "type": "bot",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "group-fr",
+        "type": "group",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#46BDCA",
+        "secondary": "#467ACA",
+        "accent": "#46CA95"
+      }
     },
-    "expected": {
-      "primary": "#2EBDCE",
-      "secondary": "#2E6CCE",
-      "accent": "#2ECE8F"
-    }
-  },
-  {
-    "input": {
-      "name": "travel",
-      "type": "direct",
-      "language": "french",
-      "theme": "travel"
+    {
+      "input": {
+        "name": "community",
+        "type": "community",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#5D9AC6",
+        "secondary": "#5C65C6",
+        "accent": "#5CC6BD"
+      }
     },
-    "expected": {
-      "primary": "#6698A0",
-      "secondary": "#667AA0",
-      "accent": "#66A08B"
-    }
-  },
-  {
-    "input": {
-      "name": "work",
-      "type": "direct",
-      "language": "french",
-      "theme": "work"
+    {
+      "input": {
+        "name": "bot",
+        "type": "bot",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#2EBDCE",
+        "secondary": "#2E6CCE",
+        "accent": "#2ECE8F"
+      }
     },
-    "expected": {
-      "primary": "#708AB9",
-      "secondary": "#7A70B9",
-      "accent": "#70AEB9"
-    }
-  },
-  {
-    "input": {
-      "name": "music",
-      "type": "direct",
-      "language": "french",
-      "theme": "music"
+    {
+      "input": {
+        "name": "travel",
+        "type": "direct",
+        "language": "french",
+        "theme": "travel"
+      },
+      "expected": {
+        "primary": "#6698A0",
+        "secondary": "#667AA0",
+        "accent": "#66A08B"
+      }
     },
-    "expected": {
-      "primary": "#9A71AA",
-      "secondary": "#AA719D",
-      "accent": "#7D71AA"
-    }
-  },
-  {
-    "input": {
-      "name": "truncation-test",
-      "type": "group",
-      "language": "french",
-      "theme": "travel"
+    {
+      "input": {
+        "name": "work",
+        "type": "direct",
+        "language": "french",
+        "theme": "work"
+      },
+      "expected": {
+        "primary": "#708AB9",
+        "secondary": "#7A70B9",
+        "accent": "#70AEB9"
+      }
     },
-    "expected": {
-      "primary": "#31B6BA",
-      "secondary": "#3071BA",
-      "accent": "#30BA79"
-    }
-  },
-  {
-    "input": {
-      "name": "unknown-lang",
-      "type": "direct",
-      "language": "klingon",
-      "theme": "general"
+    {
+      "input": {
+        "name": "music",
+        "type": "direct",
+        "language": "french",
+        "theme": "music"
+      },
+      "expected": {
+        "primary": "#9A71AA",
+        "secondary": "#AA719D",
+        "accent": "#7D71AA"
+      }
     },
-    "expected": {
-      "primary": "#83AFA9",
-      "secondary": "#839FAF",
-      "accent": "#83AF93"
-    }
-  },
-  {
-    "input": {
-      "name": "unknown-type",
-      "type": "alien",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "truncation-test",
+        "type": "group",
+        "language": "french",
+        "theme": "travel"
+      },
+      "expected": {
+        "primary": "#31B6BA",
+        "secondary": "#3071BA",
+        "accent": "#30BA79"
+      }
     },
-    "expected": {
-      "primary": "#7B9FB0",
-      "secondary": "#7B84B0",
-      "accent": "#7BB0A6"
-    }
-  },
-  {
-    "input": {
-      "name": "unknown-theme",
-      "type": "direct",
-      "language": "french",
-      "theme": "quantum"
+    {
+      "input": {
+        "name": "unknown-lang",
+        "type": "direct",
+        "language": "klingon",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#83AFA9",
+        "secondary": "#839FAF",
+        "accent": "#83AF93"
+      }
     },
-    "expected": {
-      "primary": "#7B9FB0",
-      "secondary": "#7B84B0",
-      "accent": "#7BB0A6"
-    }
-  },
-  {
-    "input": {
-      "name": "no-theme",
-      "type": "direct",
-      "language": "french"
+    {
+      "input": {
+        "name": "unknown-type",
+        "type": "alien",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#7B9FB0",
-      "secondary": "#7B84B0",
-      "accent": "#7BB0A6"
-    }
-  },
-  {
-    "input": {
-      "name": "no-language",
-      "type": "direct",
-      "theme": "general"
+    {
+      "input": {
+        "name": "unknown-theme",
+        "type": "direct",
+        "language": "french",
+        "theme": "quantum"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#7B9FB0",
-      "secondary": "#7B84B0",
-      "accent": "#7BB0A6"
-    }
-  },
-  {
-    "input": {
-      "name": "public",
-      "type": "public",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "no-theme",
+        "type": "direct",
+        "language": "french"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#5D9AC6",
-      "secondary": "#5C65C6",
-      "accent": "#5CC6BD"
-    }
-  },
-  {
-    "input": {
-      "name": "global",
-      "type": "global",
-      "language": "french",
-      "theme": "general"
+    {
+      "input": {
+        "name": "no-language",
+        "type": "direct",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#7B9FB0",
+        "secondary": "#7B84B0",
+        "accent": "#7BB0A6"
+      }
     },
-    "expected": {
-      "primary": "#5D9AC6",
-      "secondary": "#5C65C6",
-      "accent": "#5CC6BD"
-    }
-  },
-  {
-    "input": {
-      "name": "broadcast",
-      "type": "broadcast",
-      "language": "english",
-      "theme": "tech"
+    {
+      "input": {
+        "name": "public",
+        "type": "public",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#5D9AC6",
+        "secondary": "#5C65C6",
+        "accent": "#5CC6BD"
+      }
     },
-    "expected": {
-      "primary": "#73839C",
-      "secondary": "#77739C",
-      "accent": "#73979C"
-    }
-  },
-  {
-    "input": {
-      "colorForName": ""
+    {
+      "input": {
+        "name": "global",
+        "type": "global",
+        "language": "french",
+        "theme": "general"
+      },
+      "expected": {
+        "primary": "#5D9AC6",
+        "secondary": "#5C65C6",
+        "accent": "#5CC6BD"
+      }
     },
-    "expected": {
-      "hex": "#DB2777"
-    }
-  },
-  {
-    "input": {
-      "colorForName": "Alice"
+    {
+      "input": {
+        "name": "broadcast",
+        "type": "broadcast",
+        "language": "english",
+        "theme": "tech"
+      },
+      "expected": {
+        "primary": "#73839C",
+        "secondary": "#77739C",
+        "accent": "#73979C"
+      }
     },
-    "expected": {
-      "hex": "#0D9488"
-    }
-  },
-  {
-    "input": {
-      "colorForName": "Bob & Charlie Group 🎉"
+    {
+      "input": {
+        "colorForName": ""
+      },
+      "expected": {
+        "hex": "#DB2777"
+      }
     },
-    "expected": {
-      "hex": "#EC4899"
-    }
-  },
-  {
-    "input": {
-      "colorForName": "system-user-12345"
+    {
+      "input": {
+        "colorForName": "Alice"
+      },
+      "expected": {
+        "hex": "#0D9488"
+      }
     },
-    "expected": {
-      "hex": "#0891B2"
+    {
+      "input": {
+        "colorForName": "Bob & Charlie Group 🎉"
+      },
+      "expected": {
+        "hex": "#EC4899"
+      }
+    },
+    {
+      "input": {
+        "colorForName": "system-user-12345"
+      },
+      "expected": {
+        "hex": "#0891B2"
+      }
     }
-  }
-]
+  ]
+}

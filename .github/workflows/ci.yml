@@ -128,7 +128,7 @@ jobs:
         continue-on-error: true
 
       - name: Law literals guard
-        run: bash scripts/check-law-literals.sh
+        run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
