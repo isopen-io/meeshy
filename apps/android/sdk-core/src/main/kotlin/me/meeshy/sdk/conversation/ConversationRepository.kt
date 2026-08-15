@@ -191,6 +191,15 @@ class ConversationRepository @Inject constructor(
         updatePreferencesOptimistic(id) { it.copy(isArchived = archived) }
 
     /**
+     * Optimistic mentions-only toggle (parity iOS `ConversationOptionsViewModel
+     * .setMentionsOnly`) — independent of [setMutedOptimistic]; the server treats
+     * `isMuted = true` as taking priority, but the two flags are never coupled at
+     * the mutation layer on either platform.
+     */
+    suspend fun setMentionsOnlyOptimistic(id: String, mentionsOnly: Boolean): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(mentionsOnly = mentionsOnly) }
+
+    /**
      * Optimistic drag-to-category (re)assignment (parity iOS
      * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
      * instantly — the section splitter re-buckets the row into [categoryId]'s

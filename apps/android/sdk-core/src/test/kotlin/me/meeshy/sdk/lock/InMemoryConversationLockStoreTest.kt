@@ -165,4 +165,50 @@ class InMemoryConversationLockStoreTest {
         assertThat(sut.hasMasterPin()).isFalse()
         assertThat(sut.lockedConversationIds).isEmpty()
     }
+
+    // ----- reactive locked ids -----
+
+    @Test
+    fun `lockedConversationIdsFlow starts empty`() {
+        assertThat(store().lockedConversationIdsFlow.value).isEmpty()
+    }
+
+    @Test
+    fun `lockedConversationIdsFlow reflects setLock`() {
+        val sut = store()
+        sut.setLock("c1", "1111")
+
+        assertThat(sut.lockedConversationIdsFlow.value).containsExactly("c1")
+    }
+
+    @Test
+    fun `lockedConversationIdsFlow reflects removeLock`() {
+        val sut = store()
+        sut.setLock("c1", "1111")
+        sut.setLock("c2", "2222")
+
+        sut.removeLock("c1")
+
+        assertThat(sut.lockedConversationIdsFlow.value).containsExactly("c2")
+    }
+
+    @Test
+    fun `lockedConversationIdsFlow reflects removeAllLocks`() {
+        val sut = store()
+        sut.setLock("c1", "1111")
+
+        sut.removeAllLocks()
+
+        assertThat(sut.lockedConversationIdsFlow.value).isEmpty()
+    }
+
+    @Test
+    fun `lockedConversationIdsFlow reflects resetForLogout`() {
+        val sut = store()
+        sut.setLock("c1", "1111")
+
+        sut.resetForLogout()
+
+        assertThat(sut.lockedConversationIdsFlow.value).isEmpty()
+    }
 }

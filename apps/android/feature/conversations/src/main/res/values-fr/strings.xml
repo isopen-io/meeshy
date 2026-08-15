@@ -41,6 +41,8 @@
     <string name="conversations_action_unpin">Désépingler</string>
     <string name="conversations_action_mute">Muet</string>
     <string name="conversations_action_unmute">Réactiver le son</string>
+    <string name="conversations_action_mentions_only">Mentions seulement</string>
+    <string name="conversations_action_all_notifications">Toutes les notifications</string>
     <string name="conversations_action_archive">Archiver</string>
     <string name="conversations_action_unarchive">Désarchiver</string>
     <string name="conversations_action_mark_read">Marquer comme lu</string>

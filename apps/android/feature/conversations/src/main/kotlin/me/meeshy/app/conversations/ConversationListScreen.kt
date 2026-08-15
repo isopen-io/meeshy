@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
@@ -200,6 +201,7 @@ fun ConversationListScreen(
                                 onClick = { onConversationClick(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
+                                onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
@@ -361,6 +363,7 @@ private fun ConversationRow(
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
+    onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
@@ -372,6 +375,7 @@ private fun ConversationRow(
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
     val isMuted = prefs?.isMuted == true
+    val mentionsOnly = prefs?.mentionsOnly == true
     val isArchived = prefs?.isArchived == true
 
     // Swipe snaps back after firing the action (non-destructive) — the visual
@@ -404,6 +408,7 @@ private fun ConversationRow(
             draft = draft,
             isPinned = isPinned,
             isMuted = isMuted,
+            mentionsOnly = mentionsOnly,
             isArchived = isArchived,
             categories = categories,
             currentCategoryId = prefs?.categoryId,
@@ -411,6 +416,7 @@ private fun ConversationRow(
             onClick = onClick,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
+            onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
@@ -452,6 +458,7 @@ private fun ConversationRowContent(
     draft: ConversationDraft?,
     isPinned: Boolean,
     isMuted: Boolean,
+    mentionsOnly: Boolean,
     isArchived: Boolean,
     categories: List<CategoryOption>,
     currentCategoryId: String?,
@@ -459,6 +466,7 @@ private fun ConversationRowContent(
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
+    onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
@@ -588,6 +596,7 @@ private fun ConversationRowContent(
             title = title,
             isPinned = isPinned,
             isMuted = isMuted,
+            mentionsOnly = mentionsOnly,
             isArchived = isArchived,
             hasUnread = conversation.unreadCount > 0,
             hasDraft = draft?.isMeaningful == true,
@@ -600,6 +609,7 @@ private fun ConversationRowContent(
             previewLabels = previewLabels,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
+            onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
@@ -617,6 +627,7 @@ private fun ConversationContextMenu(
     title: String,
     isPinned: Boolean,
     isMuted: Boolean,
+    mentionsOnly: Boolean,
     isArchived: Boolean,
     hasUnread: Boolean,
     hasDraft: Boolean,
@@ -629,6 +640,7 @@ private fun ConversationContextMenu(
     previewLabels: LastMessagePreviewLabels,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
+    onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
@@ -677,6 +689,25 @@ private fun ConversationContextMenu(
             },
             onClick = { onToggleMute(); onDismiss() },
         )
+        // Mentions-only is meaningless while fully muted (parity iOS
+        // `ConversationPreferencesTab`'s `isEnabled: !isMuted` gate on the same
+        // toggle) — hidden rather than disabled: this menu has no established
+        // pattern for a disabled row, whereas conditional visibility is already
+        // used below for hasUnread/hasDraft.
+        if (!isMuted) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (mentionsOnly) R.string.conversations_action_all_notifications
+                            else R.string.conversations_action_mentions_only,
+                        ),
+                    )
+                },
+                leadingIcon = { Icon(Icons.Filled.AlternateEmail, contentDescription = null) },
+                onClick = { onToggleMentionsOnly(); onDismiss() },
+            )
+        }
         if (hasUnread) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.conversations_action_mark_read)) },

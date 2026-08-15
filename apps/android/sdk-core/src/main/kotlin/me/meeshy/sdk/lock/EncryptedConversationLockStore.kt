@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * [ConversationLockStore] backed by the Android Keystore via
@@ -40,10 +43,15 @@ class EncryptedConversationLockStore(context: Context) : ConversationLockStore {
     }
 
     override val lockedConversationIds: Set<String>
-        get() = prefs.all.keys
-            .filter { it.startsWith(LOCK_KEY_PREFIX) }
-            .map { it.removePrefix(LOCK_KEY_PREFIX) }
-            .toSet()
+        get() = computeLockedConversationIds()
+
+    private val _lockedConversationIdsFlow = MutableStateFlow(computeLockedConversationIds())
+    override val lockedConversationIdsFlow: StateFlow<Set<String>> = _lockedConversationIdsFlow.asStateFlow()
+
+    private fun computeLockedConversationIds(): Set<String> = prefs.all.keys
+        .filter { it.startsWith(LOCK_KEY_PREFIX) }
+        .map { it.removePrefix(LOCK_KEY_PREFIX) }
+        .toSet()
 
     override fun hasMasterPin(): Boolean = prefs.contains(MASTER_PIN_KEY)
 
@@ -66,6 +74,7 @@ class EncryptedConversationLockStore(context: Context) : ConversationLockStore {
 
     override fun setLock(conversationId: String, pin: String) {
         prefs.edit().putString(lockKey(conversationId), PinHasher.hash(pin)).apply()
+        _lockedConversationIdsFlow.value = computeLockedConversationIds()
     }
 
     override fun verifyLock(conversationId: String, pin: String): Boolean =
@@ -73,12 +82,14 @@ class EncryptedConversationLockStore(context: Context) : ConversationLockStore {
 
     override fun removeLock(conversationId: String) {
         prefs.edit().remove(lockKey(conversationId)).apply()
+        _lockedConversationIdsFlow.value = computeLockedConversationIds()
     }
 
     override fun removeAllLocks() {
         val editor = prefs.edit()
         lockedConversationIds.forEach { editor.remove(lockKey(it)) }
         editor.apply()
+        _lockedConversationIdsFlow.value = computeLockedConversationIds()
     }
 
     private fun lockKey(conversationId: String) = "$LOCK_KEY_PREFIX$conversationId"

@@ -1,5 +1,87 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **Mentions-only per-conversation notification preference shipped** (slice
+> `conversation-mentions-only-preference`, PR #3054, merged `b38764af0`). Picked instead of
+> resuming `ConversationLock`'s swipe-action UI: investigated that UI mechanism first and found a
+> concrete, platform-level reason it isn't a quick follow-up even now that the reactive state
+> (previous slice) exists — Android's swipe surface is Material3 `SwipeToDismissBox`, which is
+> hard-capped at exactly **two** directions (already spoken for: pin/archive), unlike iOS
+> `SwipeableRow`'s arbitrary-length `leadingActions`/`trailingActions` array. Adding lock as a
+> third swipe action isn't possible without redesigning the swipe surface itself (multi-action
+> reveal drawer, or moving it to the long-press menu instead) — a genuine design decision, not a
+> mechanical port, so left it for a dedicated pass rather than forcing it into one increment again.
+>
+> Picked `mentionsOnly` instead after confirming (via `feature-parity.md`'s "Per-conversation
+> preferences" line + the Prisma schema) that the **data model and outbox-mutation infrastructure
+> already fully supported it** — `ApiConversationPreferences.mentionsOnly` and
+> `ConversationPrefsPayload.mentionsOnly` both already existed, unused. Added
+> `ConversationRepository.setMentionsOnlyOptimistic` (mirrors `setMutedOptimistic` exactly, zero
+> outbox/coalescing changes needed) and `ConversationListViewModel.toggleMentionsOnly` (mirrors
+> `toggleMute`). UI: the conversation-list context menu (`DropdownMenu`, NOT the full "Conversation
+> info sheet" — that's a separate, still-unbuilt `feature-parity.md` item — iOS's mentions-only
+> toggle actually lives inside that sheet's `ConversationPreferencesTab`, which Android doesn't
+> have yet) gains a "Mentions only" item threaded through 4 composable levels, shown only while
+> `!isMuted` — parity with iOS's `isEnabled: !isMuted` gate on the same `Toggle`, hidden rather
+> than disabled since this menu has no established disabled-row pattern (conditional visibility is
+> already used here for `hasUnread`/`hasDraft`). New strings in all 4 locales (en/fr/es/pt).
+>
+> **TDD**: RED confirmed via compile failure before either method existed. GREEN: 2 new
+> `ConversationRepositoryTest` cases (flips the pref + queues a snapshot; no-op when already in the
+> target state) + 1 new `ConversationListViewModelTest` case (toggle calls the repository with the
+> flipped value).
+>
+> **Verified**: `./apps/android/meeshy.sh check` green (`assembleDebug` + `testDebugUnitTest`, 970
+> tasks, `BUILD SUCCESSFUL`); CI green independently (16 checks pass/skip, PR #3054).
+>
+> **Still open**: `feature-parity.md`'s "Per-conversation preferences" line stays `[ ]` — custom
+> name, reaction emoji, and tags remain unwired (the model fields exist, same as mentionsOnly did);
+> `ConversationLock`'s swipe-action UI / PIN sheets remain deferred, now with a documented reason.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=conversation-mentions-only-preference`.
+
+
+> On 2026-08-15 **`ConversationLock`'s fourth slice — reactive state plumbing into
+> `ConversationListViewModel` — shipped** (slice `conversation-lock-list-state-plumbing`, PR #3053,
+> merged `80e87ed0d`). Picks up exactly where the previous run's deferred investigation left off:
+> read `ConversationListView+Rows.swift`'s `Equatable` extension in full before designing the
+> Compose shape, per that run's explicit note. Confirmed the iOS mechanism: the list observes
+> `ConversationLockManager` (an `ObservableObject` with `@Published lockedConversationIds`)
+> *directly*, so a lock/unlock re-evaluates every row; `ConversationRowItem.==` then compares the
+> resulting swipe-action *icons* (not just counts) to catch the state change through the equatable
+> gate. Ported the Kotlin-idiomatic equivalent of the `@Published` half of that mechanism — the
+> reactive *source*, not the row-level render gate (Compose's own recomposition model handles the
+> render side differently once state is actually read at the right level; that's slice (2)/(3)'s
+> problem, not this one's).
+>
+> `ConversationLockStore` gained `lockedConversationIdsFlow: StateFlow<Set<String>>`, implemented
+> in both `InMemoryConversationLockStore` (backed by a `MutableStateFlow`, updated on every mutation)
+> and `EncryptedConversationLockStore` (same shape, seeded + recomputed from the encrypted prefs —
+> no dedicated test, same documented Robolectric/AndroidKeyStore constraint as its sibling methods).
+> `ConversationListUiState` gained `lockedConversationIds: Set<String>`, kept in sync via a new
+> `viewModelScope.launch { lockStore.lockedConversationIdsFlow.collect { ... } }` block in `init` —
+> the exact same shape as the existing `presenceByUserId`/`observePresence()` plumbing-only
+> precedent, reused deliberately rather than inventing a new pattern.
+>
+> **TDD**: RED confirmed via compile failure (`Unresolved reference 'lockedConversationIdsFlow'`)
+> before either the interface member or the ViewModel constructor param existed. GREEN: 5 new tests
+> in `InMemoryConversationLockStoreTest` (initial-empty, setLock/removeLock/removeAllLocks/
+> resetForLogout all reflected in the flow's `.value`), 2 new tests in `ConversationListViewModelTest`
+> (a store emission and a removal reflected in `state.value.lockedConversationIds`, mirroring
+> `a_live_user_status_event_is_stored_in_presence_by_user_id`'s exact shape).
+>
+> **Verified**: `./apps/android/meeshy.sh check` green locally (`assembleDebug` + `testDebugUnitTest`,
+> 970 actionable tasks, `BUILD SUCCESSFUL`) — this session's JDK 21 (`/opt/homebrew/opt/openjdk@21`)
+> and the pre-bootstrapped Android SDK were both available, so the local gate ran directly (CI was
+> also green independently: `Android (assemble + unit tests)` + the unrelated `ci.yml` matrix, PR
+> #3053, all 16 checks pass/skip).
+>
+> **Still open**: swipe-action UI (icon swap, recomposition-correctness per the iOS reference),
+> the PIN entry sheet(s), the unlock flow itself. `feature-parity.md`'s "Conversation lock" line
+> stays `[ ]` — this slice is data plumbing only, same as its predecessor.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=conversation-lock-list-state-plumbing`.
+
+
 > On 2026-08-15 **`ConversationLock`'s third slice (UI/`ConversationListViewModel` wiring)
 > investigated, deferred — no code shipped this run.** Scan of reprise clean (one unrelated open
 > PR). Checked the iOS reference (`ConversationListView+Rows.swift`) before scoping a Compose
