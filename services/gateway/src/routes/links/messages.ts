@@ -16,6 +16,7 @@ import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -25,6 +26,27 @@ import {
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
+
+/**
+ * La projection de conversation des DEUX branches de résolution du lien
+ * authentifié — `mshy_…` et id brut.
+ *
+ * Nommée plutôt que recopiée parce qu'elle a déjà divergé une fois : la garde
+ * d'état terminal ajoutée plus bas avait d'abord été posée sur la seule
+ * seconde branche, ce qui la rendait INERTE sur la première — celle que
+ * produisent les URLs réelles. Deux `select` jumeaux à quinze lignes d'écart
+ * sont une garde à moitié posée qui en a l'air d'une entière.
+ */
+const SHARE_LINK_CONVERSATION_SELECT = {
+  id: true,
+  identifier: true,
+  title: true,
+  type: true,
+  // L'état TERMINAL du conteneur. Ramené par la relation déjà chargée : la
+  // garde ne coûte aucune lecture supplémentaire.
+  isActive: true,
+  closedAt: true
+} as const;
 
 /**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
@@ -217,7 +239,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
               conversationId: true,
               isActive: true,
               allowAnonymousMessages: true,
-              expiresAt: true
+              expiresAt: true,
+              // L'état TERMINAL du conteneur. Le lien de partage est le SEUL
+              // transport d'envoi d'un invité anonyme : sans cette lecture,
+              // fermer une conversation ne fermait rien pour l'inconnu qui
+              // détient l'URL.
+              conversation: { select: { isActive: true, closedAt: true } }
             }
           })
         : null;
@@ -236,6 +263,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (!participantShareLink.allowAnonymousMessages) {
         return sendForbidden(reply, 'Les messages anonymes ne sont pas autorisés pour ce lien');
+      }
+
+      // Même garde, même prédicat partagé que le jumeau authentifié ci-dessous :
+      // ce chemin contourne lui aussi le point de convergence.
+      if (isConversationClosed(participantShareLink.conversation)) {
+        return sendError(reply, 410, 'Cette conversation est fermée');
       }
 
       if (!anonymousParticipant.permissions.canSendMessages) {
@@ -478,30 +511,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       if (isLinkId) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                identifier: true,
-                title: true,
-                type: true
-              }
-            }
-          }
+          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
         });
       } else {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                identifier: true,
-                title: true,
-                type: true
-              }
-            }
-          }
+          include: { conversation: { select: SHARE_LINK_CONVERSATION_SELECT } }
         });
       }
 
@@ -515,6 +530,15 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
 
       if (shareLink.expiresAt && new Date() > shareLink.expiresAt) {
         return sendError(reply, 410, 'Ce lien a expiré');
+      }
+
+      // Ce chemin CONTOURNE `MessagingService.handleMessage`, où la règle est
+      // posée pour REST et socket : la garde doit donc être recopiée ici, mais
+      // le PRÉDICAT est partagé — la règle n'existe qu'en un exemplaire.
+      // Les deux gardes ci-dessus lisent l'état terminal du LIEN ; celle-ci
+      // lit celui de la CONVERSATION, que rien ne regardait.
+      if (isConversationClosed(shareLink.conversation)) {
+        return sendError(reply, 410, 'Cette conversation est fermée');
       }
 
       let participant = null;
