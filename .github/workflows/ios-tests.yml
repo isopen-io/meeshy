@@ -128,6 +128,18 @@ on:
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
+#
+# PIÈGE, mesuré le 2026-08-15 sur la PR #3010. Sur un événement `pull_request`,
+# le filtre `paths:` ci-dessus s'évalue sur le DIFF COMPLET de la PR (base → tête),
+# pas sur les fichiers de la poussée. Une PR qui touche `apps/ios/**` déclenche
+# donc ce workflow à CHAQUE synchronisation — y compris pour une poussée qui ne
+# contient que de la documentation. Combiné au `cancel-in-progress` ci-dessous,
+# cela veut dire qu'un commit de docs ANNULE la suite en cours.
+#
+# Conséquence pratique pour l'opt-in par mot-clé : le mot-clé doit se trouver
+# dans le sujet du DERNIER commit poussé. Demander les tests puis pousser un
+# commit de docs par-dessus annule le run demandé et le remplace par une simple
+# compilation, silencieusement — le nouveau run est vert, il n'a juste rien testé.
 concurrency:
   group: ios-tests-${{ github.ref }}
   cancel-in-progress: true
