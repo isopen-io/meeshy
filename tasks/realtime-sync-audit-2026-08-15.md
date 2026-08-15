@@ -263,3 +263,172 @@ cd packages/shared && bun run build
 cd services/gateway && bun x jest --config=jest.config.json
 cd apps/web && bun x jest __tests__/services __tests__/hooks/queries
 ```
+
+---
+
+# Cycle 23 (2026-08-15) — l'aperçu POUSSÉ ignorait le masquage personnel du lecteur
+
+Passe suivante de la routine « amélioration continue temps réel ». Les cycles 21
+et 22 avaient pris `message:translation` par ses deux bouts (qui le reçoit, quelle
+forme il a). Ce cycle change de famille : **`conversation:updated`, la ligne de
+liste** — et non plus « qui/quelle forme » mais **pour QUI le contenu est-il
+seulement le bon ?**
+
+**Conclusion : un défaut réel trouvé, corrigé, testé, avec son garde-fou de
+récurrence.** Cinq surfaces balayées sans rien trouver sont listées en fin de
+section pour qu'un prochain cycle ne les ré-instruise pas.
+
+## Méthode — trois balayages, dont un neuf
+
+1. **`SERVER_EVENTS` × écouteurs iOS** (125 events, jamais croisés ainsi : le
+   cycle 22 avait fait la matrice WEB). 19 events qu'iOS n'écoute pas. Le plus
+   sérieux — `message:hidden-for-me` / `message:restored-for-me`, la
+   synchronisation multi-appareil du « supprimer pour moi » — est un trou
+   CLIENT, non vérifiable ici (aucune toolchain Swift sous Linux, cf. cycle 21).
+   **Consigné pour un cycle disposant d'un runner macOS ; non tenté à l'aveugle.**
+2. **Événements à ≥ 2 émetteurs gateway** (37), c'est-à-dire la sonde qui avait
+   payé au cycle 22, passée cette fois mécaniquement sur toute la table.
+   `read-status:updated` (6 émetteurs) et `conversation:unread-updated` (6) sont
+   déjà unifiés — rien à prendre.
+3. **La question qu'aucune des deux matrices ne pose** : un émetteur qui
+   RECALCULE du contenu le recalcule-t-il pour le bon lecteur ? C'est là qu'était
+   le défaut.
+
+## Le défaut — un dernier message global poussé à des lecteurs qui l'avaient retiré
+
+`emitConversationPreviewUpdate` (5 appelants : édition WS, suppression WS, les
+cinq routes REST de mutation via `broadcastMessageMutation`, la traduction qui
+atterrit) recalcule le dernier message de la conversation :
+
+```ts
+prisma.message.findFirst({ where: { conversationId, deletedAt: null }, … })
+```
+
+`deletedAt` ne porte QUE le « supprimer pour tous ». Le masquage **personnel**
+vit dans deux autres tables — `UserMessageDeletion` (« supprimer pour moi ») et
+`UserConversationPreferences.clearHistoryBefore` (« effacer l'historique ») —
+qu'aucun `deletedAt` ne croise. Le message ainsi recalculé était poussé tel quel
+dans la room personnelle de CHAQUE participant.
+
+```
+Alice fait « supprimer pour moi » sur le dernier message.
+  → sa bulle disparaît, sa ligne de liste avance : correct.
+Puis n'importe quelle mutation de la conversation — Bob édite un AUTRE message,
+quelqu'un supprime, une traduction atterrit :
+  → emitConversationPreviewUpdate recalcule latest = LE MESSAGE MASQUÉ
+  → io.to(user:alice).emit(conversation:updated, { lastMessagePreview: <son texte> })
+  → la ligne de liste d'Alice réaffiche ce qu'elle venait d'en retirer.
+```
+
+Et le REST lui donnait raison au refetch suivant : `GET /conversations` et la
+recherche de conversations résolvent l'aperçu sous le masquage personnel depuis
+longtemps (`resolveVisibleLastMessages`). **Les deux moitiés du même produit se
+contredisaient selon le canal** — et avec `staleTime: Infinity` sur la liste web,
+c'est la version fausse qui restait à l'écran. Même défaut, identique, pour
+`clearHistoryBefore` : « effacer l'historique » puis la ligne qui ressuscite le
+dernier message d'avant l'effacement.
+
+**Pourquoi ça a survécu.** Il existe un garde-fou dédié à exactement cette
+question (`personal-history-hiding-surface-guard.test.ts`) : il dénombre, fichier
+par fichier, chaque lecture de `Message` sous `src/routes/` PUIS sous
+`src/services/`, et exige de chacune une classification. `emitConversationPreviewUpdate`
+est sous `src/socketio/` — ni l'un ni l'autre. Le garde comptait des LECTURES
+(« ce que l'API rend quand on la questionne ») ; un émetteur temps réel ne répond
+à aucune question, il POUSSE. La frontière était déclarée, mais sur deux axes
+seulement, et le défaut vivait sur le troisième.
+
+## Le correctif
+
+`socketio/utils/personalPreviewOverride.ts` — `resolvePersonalPreviewOverrides`
+rend `userId -> son propre dernier message visible`, et ne contient QUE les
+lecteurs pour qui l'aperçu global est masqué.
+
+Trois décisions inscrites dans le module :
+
+- **Deux temps, parce que la question chaude n'est pas la question complète.**
+  L'appelant tourne sur le chemin le plus fréquenté du service. La sonde ne
+  demande que « CE message-ci est-il masqué pour l'un d'eux ? » — deux lectures
+  indexées (clé unique `userId_messageId` ; seuils d'effacement POSTÉRIEURS au
+  message seulement). Personne de concerné ⇒ on s'arrête là, ce qui est le cas de
+  l'écrasante majorité des diffusions. Le masquage COMPLET et le `findFirst` de
+  repli ne sont payés que par les lecteurs concernés. Même économie en deux temps
+  que `resolveVisibleLastMessage` énonce pour la liste REST, restatée par LECTEUR
+  au lieu de par conversation.
+- **Le repli se calcule sous le masquage COMPLET du lecteur**, jamais sous le
+  seul message sondé : masquer les trois derniers messages est un geste
+  ordinaire, et un repli calculé sur un seul rendrait le suivant, masqué lui
+  aussi.
+- **`Map.has`, jamais `get() ?? latest`** : une entrée qui vaut `null` dit
+  « cette personne n'a plus AUCUN message visible ici » (historique entièrement
+  effacé), ce qu'un repli sur l'aperçu global rendrait exactement à l'envers.
+
+Côté appelant, la moitié du payload qui dépend du message (`lastMessageId`,
+`lastMessageAt`, `senderId`, `location`) sort de `basePayload` pour être résolue
+par lecteur — `location` comprise : servir la position du message global à qui ne
+le voit pas placerait une épingle sous un aperçu qui parle d'autre chose. La
+projection devient une constante partagée par les deux requêtes, sans quoi le
+payload d'un lecteur masquant perdrait des champs que celui de son voisin porte.
+
+**Repli OUVERT** quand la sonde échoue : carte vide, donc l'aperçu global pour
+tout le monde — l'état d'avant ce module. Même arbitrage que
+`loadPersonalHistoryHiding` (« serving unfiltered »), et il vaut a fortiori ici :
+faire disparaître la ligne de liste de toute une conversation parce qu'une table
+de préférences est illisible serait bien pire que l'aperçu qu'on rate. Rapporté
+par un `warn` du module et NON au `onError` de l'appelant : la diffusion n'a pas
+échoué, elle a dégradé.
+
+**Aucun changement client.** Le payload garde sa forme ; seul son contenu devient
+juste. Web, iOS et Android en profitent sans livraison.
+
+## Garde-fou de récurrence
+
+Le garde-fou du masquage personnel gagne un **troisième balayage** : tout fichier
+de `src/socketio/` qui RECALCULE un dernier message (`findFirst` +
+`orderBy createdAt desc`) ET diffuse `conversation:updated` doit passer par
+`resolvePersonalPreviewOverrides`. Le critère est la forme du défaut, pas le nom
+du fichier — une recherche par id (le fichier en contient deux) n'est pas un
+recalcul d'aperçu et ne déclenche rien.
+
+## Gates
+
+- [x] 3 RED discriminants vus rouges avant correctif — le plus parlant :
+      `lastMessageId` reçu `"msg-latest"` par le lecteur qui l'avait supprimé
+      pour lui
+- [x] `personalPreviewOverride.test.ts` : 9 témoins (carte, coût, repli ouvert)
+- [x] `emitConversationPreviewUpdate.test.ts` : 23 verts (20 pré-existants
+      inchangés, doubles étendus aux deux tables de masquage)
+- [x] `personal-history-hiding-surface-guard.test.ts` : 12 verts (11 + le
+      troisième balayage)
+- [x] Suite gateway complète verte
+- [x] `tsc --noEmit` gateway : 0 — dont la déduplication de `MutationPrisma`,
+      qui redéclarait un `Pick` jumeau de `PreviewPrisma` et l'a fait diverger
+      dès l'ajout des deux modèles
+
+## Surfaces vérifiées correctes pendant ce cycle (ne pas re-vérifier)
+
+- **`read-status:updated` / `message:read-status-updated`** — les CINQ émetteurs
+  (les deux routes REST d'accusé, `autoDeliverToOnlineRecipients`, le drain hors
+  ligne, le rattrapage au join) passent tous par `emitToConversationParticipants`
+  avec la même forme de payload. La sonde du cycle 22 ne rend rien ici.
+- **`conversation:unread-updated`** — 6 sites, tous `{ conversationId, unreadCount }`.
+  `emitUnreadCountsToRecipients` exclut l'expéditeur sur les DEUX identités et
+  adresse les anonymes par `Participant.id`.
+- **`filterMutedRecipients`** — le mute par conversation est honoré à la fanout
+  de notifications, avec la ligne ambiant/adressé documentée et un repli ouvert.
+- **`RedisDeliveryQueue.peek` / `drain`** — les deux trient par `enqueuedAt`
+  avant toute limite, précisément parce que le supersede-en-place (LSET) garde
+  le slot d'origine en estampillant un `enqueuedAt` plus récent. Les deux chemins
+  (Redis, mémoire, et l'état mixte) sont alignés.
+- **`_drainedEventName`** — la table est TOTALE sur l'union `eventType` de
+  `delivery-queue.ts` ; aucun type ne retombe par accident sur `MESSAGE_NEW`.
+- **`personalMessageVisibilitySync`** — le writer unique de `UserMessageDeletion`
+  tient bien ses trois obligations (persister, rétracter la notification,
+  diffuser à `user:{id}`), avec des postures d'échec délibérément distinctes.
+
+## Reste ouvert (non tenté, faute d'environnement)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.** Le
+  serveur diffuse pourtant les deux à la room personnelle, et le web les traite.
+  Un « supprimer pour moi » fait sur iPhone ne converge donc sur aucun autre
+  appareil de la même personne. À reprendre depuis un runner macOS — la matrice
+  du § Méthode donne les 18 autres events non écoutés.
