@@ -642,9 +642,19 @@ struct ConversationListView: View {
             ? min(windowWidth * 0.42, 520)
             : windowWidth - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
+        // Drapeau résolu UNE fois par section, jamais par rang : `LentilleFeatureFlag`
+        // relit `ProcessInfo.environment` (et réalloue donc son dictionnaire) à chaque
+        // appel — même règle que `tracksVisibleSection` (I-063bis), un cran plus bas
+        // puisque c'est ici que le rang se construit. Sous OFF, `false` fait rendre le
+        // rang NU : aucun modificateur de Lentille monté (contrat LWS-8/I-069).
+        let perspectiveEnabled = LentilleFeatureFlag.isLentilleListEnabled
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth, orderedConversationIds: orderedConversationIds)
+                    // Passe de compositor (§4.1) : opacité et échelle SEULES, sur la
+                    // courbe `.list` du miroir gelé. Posée AU-DESSUS du portillon
+                    // `.equatable()` du rang — elle ne rediffuse rien, elle repeint.
+                    .lentillePerspective(isEnabled: perspectiveEnabled)
                     .onAppear {
                         // Cursor-based infinite scroll: trigger `loadMore`
                         // 5 rows before the loaded tail. The ViewModel
