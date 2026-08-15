@@ -582,6 +582,141 @@ describe('MessageProcessor.saveMessage', () => {
     expect(attCreate).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * Le transfert d'une pièce jointe CHIFFRÉE.
+   *
+   * La copie reprend `filePath`/`fileUrl` À L'IDENTIQUE : les deux lignes
+   * désignent le MÊME blob sur disque, et ce blob est du chiffré. Mais la copie
+   * naissait sans un seul champ de chiffrement — `isEncrypted` retombait sur son
+   * défaut Prisma `false`, sans IV, sans tag d'authentification.
+   *
+   * Or le gateway ne déchiffre RIEN : `routes/attachments/download.ts` sert les
+   * octets bruts (`createReadStream(filePath)`), et c'est le client qui déchiffre
+   * d'après ce que la ligne DÉCLARE (`attachmentIncludes` publie `isEncrypted`,
+   * `encryptionMode`, `encryptionIv`, `encryptionAuthTag` exactement pour ça).
+   * Une copie qui déclare `isEncrypted: false` en pointant du chiffré fait donc
+   * rendre le CHIFFRÉ TEL QUEL comme s'il était le média : le client ne
+   * déchiffre pas, puisqu'on vient de lui dire qu'il n'y a rien à déchiffrer.
+   *
+   * C'est la question du cycle 34 dans sa forme la plus nue : le fait « ces
+   * octets sont du chiffré » est porté par les OCTETS ; la ligne l'affirme via un
+   * drapeau séparé. La copie emporte les octets par référence et laisse le
+   * drapeau derrière — le porteur et le drapeau divergent, et tous les lecteurs
+   * consultent le drapeau.
+   */
+  const encryptedOrigAtt = {
+    id: 'orig-enc-att', fileName: 'secret.enc', originalName: 'secret.jpg',
+    mimeType: 'image/jpeg', fileSize: 2048, filePath: '/uploads/secret.enc',
+    fileUrl: 'https://cdn/secret.enc', title: null, alt: null, caption: null,
+    width: 100, height: 100, thumbnailPath: null, thumbnailUrl: null,
+    duration: null, bitrate: null, sampleRate: null, codec: null,
+    channels: null, fps: null, videoCodec: null, pageCount: null, lineCount: null,
+    transcription: null, translations: null, metadata: null,
+    isEncrypted: true,
+    encryptionMode: 'e2ee',
+    encryptionIv: 'iv-base64',
+    encryptionAuthTag: 'tag-base64',
+    encryptionHmac: 'hmac-base64',
+    originalFileHash: 'sha256-plain',
+    encryptedFileHash: 'sha256-cipher',
+    originalFileSize: 1024,
+    serverKeyId: 'srv-key-1',
+    thumbnailEncryptionIv: 'thumb-iv',
+    thumbnailEncryptionAuthTag: 'thumb-tag',
+    thumbHash: 'thumbhash-b64',
+    imageVariants: [{ width: 50, height: 50, url: 'https://cdn/v.webp', size: 300, format: 'webp' }],
+  };
+
+  const forwardedAttachmentData = async () => {
+    attFindMany.mockResolvedValueOnce([encryptedOrigAtt]).mockResolvedValue([]);
+    attCreate.mockResolvedValue({ ...encryptedOrigAtt });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    return (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+  };
+
+  it('la copie transférée DÉCLARE le chiffrement des octets qu’elle partage', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      isEncrypted: true,
+      encryptionMode: 'e2ee',
+    });
+  });
+
+  it('la copie transférée emporte le matériel cryptographique de déchiffrement', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      encryptionIv: 'iv-base64',
+      encryptionAuthTag: 'tag-base64',
+      encryptionHmac: 'hmac-base64',
+    });
+  });
+
+  /**
+   * `fileSize` porte la taille CHIFFRÉE quand la pièce est chiffrée
+   * (`UploadProcessor`: `fileSize: encryptionResult.metadata.encryptedSize`), et
+   * il EST copié. Sans `originalFileSize` à côté, la copie annonce donc la
+   * taille du chiffré comme étant celle du fichier — et plus rien ne permet de
+   * vérifier le déchiffrement (`originalFileHash` est l'`expectedHash` attendu).
+   */
+  it('la copie transférée emporte les empreintes et la taille d’origine', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      originalFileHash: 'sha256-plain',
+      encryptedFileHash: 'sha256-cipher',
+      originalFileSize: 1024,
+    });
+  });
+
+  it('la copie transférée emporte la clé serveur et le chiffrement de la vignette', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      serverKeyId: 'srv-key-1',
+      thumbnailEncryptionIv: 'thumb-iv',
+      thumbnailEncryptionAuthTag: 'thumb-tag',
+    });
+  });
+
+  /**
+   * `thumbHash` et `imageVariants` ont un écrivain réel (`UploadProcessor`) et
+   * sont publiés aux clients. Les perdre au transfert prive la copie de son
+   * placeholder instantané et de ses variantes WebP responsive : le client
+   * retombe sur le téléchargement pleine taille, pour un média DÉJÀ dérivé.
+   */
+  it('la copie transférée conserve le placeholder et les variantes responsive', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      thumbHash: 'thumbhash-b64',
+      imageVariants: encryptedOrigAtt.imageVariants,
+    });
+  });
+
+  // ── Non-régressions ──────────────────────────────────────────────────────
+
+  /**
+   * Le discriminant qui interdit la sur-correction : une pièce jointe EN CLAIR
+   * ne doit surtout pas se voir inventer un chiffrement. Copier le fait, c'est
+   * copier son ABSENCE aussi fidèlement que sa présence.
+   */
+  it('un transfert en clair reste en clair — aucun chiffrement inventé', async () => {
+    const plainAtt = { ...encryptedOrigAtt, id: 'plain-att',
+      isEncrypted: false, encryptionMode: null, encryptionIv: null,
+      encryptionAuthTag: null, encryptionHmac: null, originalFileHash: null,
+      encryptedFileHash: null, originalFileSize: null, serverKeyId: null,
+      thumbnailEncryptionIv: null, thumbnailEncryptionAuthTag: null };
+    attFindMany.mockResolvedValueOnce([plainAtt]).mockResolvedValue([]);
+    attCreate.mockResolvedValue({ ...plainAtt });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    const data = (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(data.isEncrypted).toBeFalsy();
+    expect(data.encryptionIv ?? null).toBeNull();
+    expect(data.encryptionAuthTag ?? null).toBeNull();
+  });
+
+  /** La copie reste une COPIE : lignage du transfert et propriété inchangés. */
+  it('la copie transférée garde son lignage et son nouveau propriétaire', async () => {
+    expect(await forwardedAttachmentData()).toMatchObject({
+      forwardedFromAttachmentId: 'orig-enc-att',
+      isForwarded: true,
+      uploadedBy: SENDER_ID,
+      isAnonymous: false,
+    });
+  });
+
   it('updates message type to image when first forwarded attachment is image', async () => {
     const imageAtt = {
       id: 'img-att', fileName: 'img.jpg', originalName: 'img.jpg',

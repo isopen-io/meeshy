@@ -1715,8 +1715,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
       tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
       direct-type gate and the snapshot merge.
-- [ ] Story tray + per-conversation story rings
-- [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
+- [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
+      badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
+      Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above
+      (Phase 5), this was a duplicate stale entry, not a separate deliverable.
+- [x] In-app dashboard ("Tableau de bord") — `DashboardScreen.kt` (292 lines, wired in
+      `MeeshyApp.kt`): unread total (`totalUnreadCount()` SSOT), `DASHBOARD_RECENT_COUNT` recent
+      conversations, `QuickActionRow`, share-link stats surfaced. Re-verified 2026-08-15 — stale,
+      upgraded to done.
 
 ## C. Chat / Messaging
 - [x] **Composer affordances gated by the viewer's send permissions** (slice

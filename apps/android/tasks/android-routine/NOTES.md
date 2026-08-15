@@ -514,3 +514,12 @@ Append-only log of gotchas and decisions that save time next run.
   half needed a new `<intent-filter>`. Re-verifying this against the actual manifest (not assuming
   symmetry between the custom-scheme and App Link halves) avoided a redundant, no-op manifest
   entry.
+- **Finding the SAME bug pattern twice does not mean the third instance costs the same to fix —
+  check the resolution shape before assuming another 2-line `navDeepLink`.** `/u/{username}` and
+  `/join/{identifier}` (this session's two prior slices) were direct 1:1 route mappings; the third
+  generator found by the same grep, `/l/{token}` (`MessageTextParser.kt`'s Meeshy links), needs an
+  ASYNC network resolve into one of 5 destination types before it can route anywhere — a `navDeepLink`
+  alone structurally cannot express that. **Generalises: "same defect class, found by the same grep"
+  is a discovery signal, not a scope estimate — read what the REFERENCE implementation (here, iOS's
+  `DeepLinkRouter.resolveTrackedLink`) actually does with the value before promising a mechanical
+  fix, especially when the first two instances of a pattern were unusually simple.**

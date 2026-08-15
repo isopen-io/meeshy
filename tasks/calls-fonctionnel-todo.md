@@ -8546,3 +8546,78 @@ des items déjà traités/reconduits pour ne pas les faire ressurgir), scope gat
   affecté du même bug d'étoile-vs-maillage que le fix web de la Vague 126 (à auditer avec toolchain
   disponible) ; W6 (grille adaptative, roster mute/vidéo) et W7 (i18n groupe restant) toujours à
   traiter.
+
+## Vague 128 — `supportsCameraSwitch` (`CallControls`) figé au montage : jamais réévalué (web) (2026-08-15)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée
+alignée bit à bit sur `origin/main` (`c7adb2a38`, contient jusqu'à la Vague 127 — PR mergée), aucune
+PR ouverte de cette routine au démarrage. Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (confirmé à nouveau, cf. Vagues 126/127). Recensement par audit ciblé (agent en lecture
+seule, item explicitement flagué « candidat plus net » lors de l'audit de la Vague 127 sur
+`setSinkId`/sélection de périphérique de sortie — investigué en profondeur mais écarté à son tour
+comme feature multi-fichiers nécessitant une décision produit d'UI, pas un bug chirurgical ; l'item
+`supportsCameraSwitch` relevé en passant lors de cet audit est repris ici), scope web.
+
+- **Root cause** : `CallControls.tsx`, le hook qui détecte si le bouton « changer de caméra » doit
+  s'afficher appelait `navigator.mediaDevices.enumerateDevices()` **une seule fois**, dans un
+  `useEffect(() => { … }, [])` sans dépendances et sans abonnement à l'événement standard
+  `devicechange`. Le résultat (`supportsCameraSwitch`) était donc figé pour toute la durée de vie du
+  composant sur ce qui était vrai au tout premier rendu.
+- **Scénario de défaillance** : (a) un appel démarre avant que le navigateur n'ait fini de peupler
+  les labels/périphériques (permission caméra accordée juste après le premier montage) — le bouton
+  reste caché pour toute la durée de l'appel même si 2+ caméras sont bien présentes ; (b) un
+  utilisateur branche une seconde caméra (webcam USB) en cours d'appel — le bouton n'apparaît
+  jamais, il faudrait raccrocher et rappeler pour le voir se révéler. Aucun des deux cas n'était
+  couvert par la suite de tests existante : `CallControls.test.tsx` ne testait même pas ce hook
+  (aucun mock de `navigator.mediaDevices` dans ce fichier avant ce correctif), et jsdom ne définit
+  pas `navigator.mediaDevices` par défaut — la garde `if (navigator.mediaDevices && …)` était donc
+  systématiquement `false` en test, `supportsCameraSwitch` restant `false` sans jamais exercer la
+  branche d'affichage du bouton.
+- **Fix** : le hook s'abonne maintenant à `devicechange` sur `navigator.mediaDevices` (même
+  probe `enumerateDevices` réutilisée en callback nommé, ré-exécutée à chaque événement) et se
+  désabonne au démontage. Garde défensive supplémentaire (`typeof
+  mediaDevices.addEventListener !== 'function'`) pour les environnements — dont plusieurs mocks
+  déjà en place dans `VideoCallInterface.test.tsx` — qui exposent `enumerateDevices` sans le reste
+  de l'interface `EventTarget` : la probe initiale s'exécute toujours, seul l'abonnement live est
+  sauté silencieusement plutôt que de jeter. Correctif à un seul fichier de production ; aucune
+  autre consommation de `supportsCameraSwitch` dans la base.
+- **Tests** (TDD, RED confirmé — 2 échecs nets contre le code non corrigé, les autres cas neufs
+  passant trivialement par construction) : 4 cas neufs dans `CallControls.test.tsx` — le bouton
+  reste caché tant qu'une seule caméra est connue ; il apparaît après un `devicechange` qui fait
+  passer le décompte de 1 à 2 caméras ; l'abonnement/désabonnement suit le cycle
+  montage/démontage (`addEventListener`/`removeEventListener` appelés avec `'devicechange'`) ; la
+  probe initiale s'exécute et ne jette pas quand `mediaDevices` n'expose pas `addEventListener`
+  (mock partiel, même forme que celui déjà utilisé ailleurs dans la suite). Suite du fichier :
+  **11/11** verts (+4 nets). Sweep `--testPathPatterns="[Cc]all"` : **53 suites / 486 tests** verts
+  (+4 nets, 0 régression — y compris les 3 blocs `VideoCallInterface.test.tsx` qui mockent
+  `navigator.mediaDevices` sans `addEventListener`, confirmant que la garde défensive est
+  nécessaire et suffisante). Couverture du fichier modifié : **100 % stmts / 100 % lines / 100 %
+  funcs** (branches 71.64 %, gaps préexistants sans rapport avec ce diff — props JSX non couvertes
+  par `baseProps`). `npx tsc --noEmit` : diff `git stash`/`stash pop` — **1768 erreurs préexistantes
+  identiques avant et après** (diff textuel vide), 0 nouvelle. `eslint`/`next lint` : toujours
+  inexploitable dans ce sandbox (même erreur `Converting circular structure to JSON` que documentée
+  aux vagues précédentes, limitation d'environnement indépendante de ce diff). Prérequis CLAUDE.md
+  rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts` (bun 1.3.11
+  disponible localement, pas 1.3.14), puis `packages/shared && npx prisma generate --generator
+  client && bun run build` sans erreur.
+- **Non fait volontairement** : sélection réelle de périphérique de SORTIE audio (`setSinkId`) —
+  ré-auditée en profondeur cette session (aucune trace de `setSinkId`/`sinkId`/`audiooutput` dans
+  `apps/web`, `services/gateway` ou `packages/shared`, confirmé) et de nouveau écartée comme feature
+  multi-fichiers (nouveau composant de sélection, pas un simple toggle booléen, support navigateur
+  limité à Chromium desktop à feature-détecter) nécessitant une décision produit d'UI plutôt qu'un
+  correctif chirurgical — reconduite ci-dessous. Copie i18n `controls.speakerOff`/`speakerOn`
+  (« Turn off/on speaker ») toujours techniquement inexacte pour ce que fait vraiment le bouton
+  (mute/unmute de la lecture audio distante, pas un vrai routage matériel) — déjà tranchée comme
+  acceptée à la Vague 111, non rouverte ici. Mesh iOS/Android mono-PC (I1-I7, potentiellement le
+  même bug étoile-vs-maillage que le fix web de la Vague 126) toujours hors de portée sans
+  toolchain.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`, feature multi-fichiers, décision
+  produit d'UI requise) ; `MAX_CALL_PARTICIPANTS = 9999` sans plafond effectif sur le mesh P2P
+  (décision produit) ; mesh iOS/Android mono-PC potentiellement affecté du même bug étoile-vs-maillage
+  que le fix web de la Vague 126 (à auditer avec toolchain disponible) ; W6 (grille adaptative,
+  roster mute/vidéo) et W7 (i18n groupe restant) toujours à traiter.

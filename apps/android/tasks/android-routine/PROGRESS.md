@@ -1,5 +1,79 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **2 more stale Phase B checkboxes corrected, `ConversationLock` scoped as a real,
+> substantial gap for a future decomposed run** (no code shipped again this run — but unlike the
+> `tracked-link-resolution-audit` run, this one produced two verified `[x]` upgrades plus a properly
+> scoped finding, not just a deferral).
+>
+> **RE-PROUVÉ before starting**: scan of reprise clean. Sampled `feature-parity.md`'s unchecked
+> boxes outside the already-corrected Phase 5 block (134 → 131 remaining) for plausible stale
+> entries — `Story tray + per-conversation story rings` and `In-app dashboard` (Phase B, lines
+> 1718-1719) turned out to duplicate work already shipped and documented elsewhere:
+> - **Story tray**: `StoryTray.kt` is wired as the conversation list's `header` in `MeeshyApp.kt`
+>   (`StoryTray(...)` at the call site) — and was ALREADY fully documented under the `:feature:stories`
+>   Phase 5 bullet (ring gradient/grey/badge semantics). This was a duplicate leftover line, not a
+>   second deliverable.
+> - **In-app dashboard**: `DashboardScreen.kt` (292 lines) exists, is wired in `MeeshyApp.kt`, and
+>   covers everything the checklist item names — unread total via the shared `totalUnreadCount()`
+>   SSOT, `DASHBOARD_RECENT_COUNT` recent conversations, a `QuickActionRow`, share-link stats.
+>
+> **`ConversationLock` checked next (line 2693) — confirmed a REAL, substantial gap, NOT stale**:
+> grepped for `ConversationLock`/`BiometricPrompt`/`AppLock`/`PinCode`/`PinEntry` across all of
+> `apps/android` — zero hits. There is currently **no PIN/biometric/app-lock infrastructure at all**
+> on Android, not even a partial primitive to build on. The iOS reference
+> (`ConversationLockManager.swift` + `ConversationLockSheet.swift`, 560 lines combined, wired into
+> 5 more files — `SecurityView.swift`, `ConversationListView(+Overlays/+Rows)`,
+> `ConversationContextMenuView.swift`) confirms this is genuinely a multi-file feature (master PIN
+> setup/change/remove, per-conversation 4-digit lock, list filtering/hiding of locked
+> conversations, unlock-all flow, context-menu wiring) — not a mechanical port candidate for one
+> increment. Needs the same decomposition treatment as `tracked-link-resolution-audit`
+> (foundation — secure PIN storage via Android Keystore — then consumer slices), not attempted
+> here.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=conversations-phase-b-stale-checkbox-and-lock-scoping`.
+
+
+> **Candidat déposé le 2026-08-15 — 3ᵉ instance vérifiée du défaut « générateur de lien sans
+> récepteur », NON livré, trop large pour un incrément unique.** Suite explicite du run
+> `guest-join-web-deep-link` (« a systematic grep for every `https://meeshy.me/` string literal
+> across `core:model` would be the way to close this out completely, not attempted here »). Ce grep
+> a trouvé un 3ᵉ générateur : `MessageTextParser.kt` (`m+TOKEN` tapé dans un message →
+> `https://meeshy.me/l/<TOKEN>`, un « Meeshy link » tracké, rendu cliquable par `RichMessageText.kt`/
+> `MessageBubble.kt`). Ni `/l/` dans le manifest, ni route `l/{token}` dans `MeeshyApp.kt` — un
+> Meeshy link tapé dans une conversation ouvre un navigateur au lieu de l'app, exactement comme les
+> deux instances précédentes.
+>
+> **Pourquoi PAS livré ce run, contrairement aux deux précédents** : `/u/{username}` et
+> `/join/{identifier}` étaient des mappings DIRECTS 1:1 vers un écran existant (aucune résolution,
+> juste un deuxième `navDeepLink` sur une route déjà là). `/l/{token}` est structurellement
+> différent — port iOS `DeepLinkRouter.resolveTrackedLink` (`case "l"`, 4 sites) : un appel réseau
+> ASYNC résout le token en `{kind, targetType, targetId}` (`TrackedLinkService.resolve`), enregistre
+> le clic (`recordClick`), PUIS route vers l'une de 5 destinations différentes selon `targetType`
+> (`CONVERSATION` → flow de join existant même si le token n'est pas un vrai linkId de conversation ;
+> `STORY`/`PROFILE`/`REEL`/`POST`/`STATUS` → détail correspondant ; inconnu/expiré → repli join). Un
+> simple `navDeepLink { uriPattern }` NE PEUT PAS exprimer ceci — il faut un écran/ViewModel
+> résolveur intermédiaire (chargement bref → redirection).
+>
+> **État de l'infrastructure Android, vérifié ce run** : `TrackingLink.kt` (`core:model`) existe
+> mais ce sont les modèles CRUD de la feature marketing « mes liens trackés » (`TrackingLinksView`/
+> `TrackingLinkDetailView` côté iOS) — PAS le service de résolution client-side dont
+> `resolveTrackedLink` a besoin ; aucun équivalent Android de `TrackedLinkResolving`/
+> `TrackedLinkService.resolve(token:)` n'existe. Côté gateway, `GET /l/:token`
+> (`services/gateway/src/routes/tracking-links/tracking.ts:46`) est un endpoint de **redirection
+> HTTP 302** (capture analytics, renvoie `Location: originalUrl`) — PAS une réponse JSON
+> `{targetType, targetId}` exploitable pour un routage in-app sans suivre la redirection. La forme
+> exacte de la résolution JSON qu'utilise iOS (`TrackedLinkService.resolve`) n'a pas été retrouvée
+> côté gateway ce run — **question ouverte pour la prochaine reprise** : soit un autre endpoint
+> existe (non trouvé par ce grep), soit iOS suit la redirection 302 et parse la destination
+> autrement (`Location` header ? réponse enrichie sur `Accept: application/json` ?) — à élucider
+> AVANT de concevoir le client Android, pas à deviner.
+>
+> Prochain run qui reprend ce candidat : (1) élucider le contrat de résolution JSON côté gateway/iOS
+> (lire `TrackedLinkService.swift` complet, tracer son appel réseau exact), (2) concevoir le
+> repository/API Android correspondant, (3) un écran résolveur minimal (spinner → redirection),
+> (4) le manifest + `navDeepLink` `l/{token}` vers cet écran. Probablement 2 sous-slices distincts
+> (fondation résolution + câblage nav), pas un seul incrément.
+
 > On 2026-08-15 **conversation invite links (`https://meeshy.me/join/{identifier}`) now actually
 > open the app** (slice `guest-join-web-deep-link`, PR #3039, merged `7c9293002`) — the SAME
 > defect class as `profile-share-link-receiver` (just above), found by deliberately checking
