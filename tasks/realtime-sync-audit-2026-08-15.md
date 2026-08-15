@@ -1365,6 +1365,23 @@ participant, donc aucune assertion ne pouvait distinguer « annonce correcte » 
 « aucune annonce ». Deux assertions préexistantes épinglaient `data: { isActive:
 false }` à l'exact : elles figeaient la forme INCOMPLÈTE de l'écriture, réalignées.
 
+### Les deux clients consomment déjà l'événement — vérifié, aucun changement requis
+
+La correction ne vaut que si `conversation:closed` est écouté. Il l'est, des
+deux côtés, et avec exactement le payload que le nouvel émetteur produit :
+
+- **web** — `presence.service.ts` s'abonne à `SERVER_EVENTS.CONVERSATION_CLOSED`
+  et `use-socket-cache-sync.ts` (l. 795) retire la conversation du cache
+  infini + purge sa `detail` query ;
+- **iOS/SDK** — `SocialSocketManager` fanne le payload dans le publisher
+  `conversationDeleted` (témoin B6, `SocialSocketAdditionalTests`), dont le
+  commentaire dit s'aligner sur « the live `conversation:closed` payload from
+  `core.ts` » — la forme `{ conversationId, closedBy, closedAt }` que ce
+  correctif émet à l'identique.
+
+C'est ce qui rend l'entrée CHANGELOG « aucun changement client » vérifiée et
+non supposée : le canal existait, seul l'émetteur manquait.
+
 ## Gates
 
 - [x] 4 RED discriminants vus rouges avant correctif (2 adresse/audience, 2 durabilité)
@@ -1382,7 +1399,29 @@ false }` à l'exact : elles figeaient la forme INCOMPLÈTE de l'écriture, réal
    personne ne consulte. Non livré ce cycle : c'est de l'hygiène, pas un défaut
    de synchronisation, et le retrait mérite sa propre passe (vérifier qu'aucun
    outil d'exploitation ne les lit hors dépôt).
-2. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
+2. **`leave.ts` est le 4e écrivain de `isActive: false` et n'écrit pas non plus
+   `closedAt` — mais sans victime.** Balayage complet de la famille (méthode du
+   cycle 26 : ne jamais s'arrêter au site qui a déclenché la sonde) :
+
+   | Écrivain | `closedAt` | Diffusion | Verdict |
+   |---|---|---|---|
+   | `core.ts` `DELETE /conversations/:id` | ✅ | `CONVERSATION_CLOSED` | ✅ le jumeau modèle |
+   | `delete-for-me.ts` — DM vide | ❌ → ✅ | aucune → `CONVERSATION_CLOSED` | ❌ **ce cycle** |
+   | `delete-for-me.ts` — sans successeur | ❌ → ✅ | aucune (personne d'autre) | ❌ **ce cycle** |
+   | `leave.ts` — créateur dernier membre | ❌ | aucune | ⚠️ latent |
+
+   `leave.ts` ne ferme que si `otherActiveCount === 0` : par construction il n'y
+   a personne à prévenir, donc l'absence de diffusion est correcte. Reste le
+   `closedAt` manquant — et il n'a pas de victime non plus, vérifié plutôt que
+   supposé : le partant reçoit un tombstone `leftAt` (posé par la même route),
+   et tout participant devenu inactif en tient un aussi (`participants.ts`
+   estampille `leftAt` au retrait, `ban.ts` `bannedAt`, `delete-for-me`
+   `deletedForMe`) — les trois sources du stream sont couvertes. C'est donc une
+   incohérence de champ, pas un trou de synchronisation : une conversation
+   fermée dont la base ignore qu'elle l'a été. **Non livré** pour tenir le diff
+   sur le défaut réel ; à reprendre avec la sonde ci-dessous, dont il relève.
+
+3. **Aucune garde `Conversation.isActive` sur le chemin d'envoi.** Un participant
    encore actif d'une conversation FERMÉE peut y écrire ; le message est
    persisté et diffusé normalement. Le correctif ci-dessus retire la cause
    principale (l'orphelin apprend maintenant la clôture), mais la garde
