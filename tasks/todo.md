@@ -396,3 +396,46 @@ cycle 39 : elle porte sur **iOS**, pas sur le gateway — donner au SDK une
 identité d'acteur courant qui couvre la session anonyme
 (`AuthManager.currentUser` reste nil pour un invité), puis aligner les 3 gardes
 dessus.
+
+# Cycle 39 — le doublon, et le bout qu'il a rendu visible
+
+## Constat
+
+- [x] La piste du cycle 37 a été instruite **deux fois en parallèle** par deux
+      sessions de la même routine, sans coordination possible
+- [x] La PR #3052 (session A) a mergé à 21:06 ; ce cycle a ouvert sa PR une heure
+      trop tard, sur un défaut déjà réparé — même diagnostic, mêmes 5 RED, même
+      nom de fichier d'audit
+- [x] Le correctif de ce cycle a donc été **jeté**, pas redéposé
+
+## Le bout resté ouvert (livré)
+
+- [x] En rendant `payload.userId` légitimement `null` pour un invité, #3052 a
+      rendu inapplicable pour cette population le seul contrat qui disait comment
+      revendiquer `lastReadAt`/`unreadCount`
+- [x] L'identité qui convient voyage DÉJÀ dans le payload : `participantId`
+- [x] L'acteur se reconnaît par `userId ?? participantId` — la même règle que
+      celle qui nomme sa room personnelle
+- [x] Contrat partagé + miroir iOS + KDoc Android (absent jusqu'ici) + README
+      socketio § seconde moitié de la règle
+- [x] Zéro changement de code d'exécution, zéro migration client
+
+## Écarté délibérément
+
+- [x] `resolveBroadcastActor` — construit, testé, puis retiré : le type
+      `actorUserId: string | null` de #3052 ferme déjà le trou que l'unité aurait
+      fermé (leçon 273)
+
+## Gates
+
+- [x] Aucun fichier `.ts` d'exécution touché
+- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète sur la base à jour : 724 suites / 17 732 tests verts (inchangé)
+- [x] CHANGELOG + journal d'audit (cycle 39) + leçon 273
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le tableau de la
+collision entre les deux sessions, pourquoi le doublon n'était pas stérile, et
+l'enseignement de coordination : relire `main` sur les FICHIERS visés avant
+d'ouvrir la PR, pas seulement au démarrage.

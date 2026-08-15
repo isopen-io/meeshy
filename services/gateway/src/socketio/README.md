@@ -430,6 +430,40 @@ anonymes, parce que l'audience de terminaison d'un appel doit refleter son
 audience d'invitation et que `call:initiated` porte le meme filtre — un
 participant sans compte n'est jamais sonne. La raison est ecrite dans le fichier.
 
+#### La regle a une SECONDE moitie : ce qui peut etre DIVULGUE
+
+`userId ?? participantId` repond a « quelle room ». Elle ne repond PAS a « que
+mettre dans un champ de payload nomme `userId` », et les deux reponses divergent
+exactement sur la population sans compte :
+
+| Usage | Valeur attendue | Pour un invite de lien |
+|---|---|---|
+| Cle de `ROOMS.user()` | `userId ?? participantId` | son `Participant.id` — **la room existe** |
+| Champ de payload `userId` | `User.id` ou `null` | **`null`** |
+
+`UnifiedAuthContext.userId` n'est pas UNE identite mais DEUX repliees dans une
+seule variable : `User.id` pour un inscrit, `Participant.id` pour un invite
+(`middleware/auth.ts`). Les deux roles ont longtemps partage cette variable, et
+c'est la forme ROOM qui gagnait — le champ du contrat partait donc en portant un
+`Participant.id`. **Aucun type ne rattrapait le mensonge** : les deux espaces
+d'id sont des ObjectId de 24 caracteres, indiscernables par la forme ; seule
+l'ORIGINE de la valeur les distingue, et elle se perd a la copie. Corrige sur les
+cinq routes REST par la PR #3052 ; les emetteurs SOCKET, qui derivaient
+l'identite d'une COLONNE Prisma (`participant.userId`, nulle par construction
+pour une ligne sans compte), avaient la separation gratuitement.
+
+Piege symetrique, et c'est celui qui coute le plus cher : **nuller le champ du
+contrat sans deriver la cle de room a part eteint le badge de toute la
+population anonyme.** `ROOMS.user(null)` collerait leur compteur definitivement.
+Les deux moities se corrigent ensemble ou pas du tout.
+
+**Corollaire sur les champs par-acteur.** `lastReadAt` et `unreadCount`
+(`ReadStatusUpdatedEventData`) sont scopes sur l'ACTEUR, et l'acteur se reconnait
+par `userId ?? participantId` — la MEME regle, pour la meme raison. Un client
+sans compte qui ne comparerait que `userId` ne pourrait jamais reconnaitre ses
+propres autres appareils, maintenant que ce champ vaut legitimement `null` pour
+lui. Une seule regle d'identite d'acteur dans tout le systeme, pas deux.
+
 ---
 
 ## L'apercu de la ligne de liste — qui l'emet, et A QUEL INSTANT
