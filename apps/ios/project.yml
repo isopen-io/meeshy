@@ -316,6 +316,16 @@ targets:
       - path: MeeshyShareExtension/ShareSession.swift
       - path: MeeshyShareExtension/ShareConversationStore.swift
       - path: MeeshyShareExtension/ShareSender.swift
+    # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
+    # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
+    # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),
+    # copié comme ressource de bundle de test. `type: folder` préserve
+    # l'arborescence (reading-modes/, conformance/, …) dans le bundle, pour
+    # que les suites XCTest sous MeeshyTests/Unit/Vectors/ retrouvent les
+    # mêmes sous-chemins que les autres plateformes.
+    resources:
+      - path: ../../packages/shared/fixtures
+        type: folder
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic
