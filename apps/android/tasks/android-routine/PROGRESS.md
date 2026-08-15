@@ -1,5 +1,38 @@
 # Progress — state & what to do next
 
+> On 2026-08-15 **2 more stale Phase B checkboxes corrected, `ConversationLock` scoped as a real,
+> substantial gap for a future decomposed run** (no code shipped again this run — but unlike the
+> `tracked-link-resolution-audit` run, this one produced two verified `[x]` upgrades plus a properly
+> scoped finding, not just a deferral).
+>
+> **RE-PROUVÉ before starting**: scan of reprise clean. Sampled `feature-parity.md`'s unchecked
+> boxes outside the already-corrected Phase 5 block (134 → 131 remaining) for plausible stale
+> entries — `Story tray + per-conversation story rings` and `In-app dashboard` (Phase B, lines
+> 1718-1719) turned out to duplicate work already shipped and documented elsewhere:
+> - **Story tray**: `StoryTray.kt` is wired as the conversation list's `header` in `MeeshyApp.kt`
+>   (`StoryTray(...)` at the call site) — and was ALREADY fully documented under the `:feature:stories`
+>   Phase 5 bullet (ring gradient/grey/badge semantics). This was a duplicate leftover line, not a
+>   second deliverable.
+> - **In-app dashboard**: `DashboardScreen.kt` (292 lines) exists, is wired in `MeeshyApp.kt`, and
+>   covers everything the checklist item names — unread total via the shared `totalUnreadCount()`
+>   SSOT, `DASHBOARD_RECENT_COUNT` recent conversations, a `QuickActionRow`, share-link stats.
+>
+> **`ConversationLock` checked next (line 2693) — confirmed a REAL, substantial gap, NOT stale**:
+> grepped for `ConversationLock`/`BiometricPrompt`/`AppLock`/`PinCode`/`PinEntry` across all of
+> `apps/android` — zero hits. There is currently **no PIN/biometric/app-lock infrastructure at all**
+> on Android, not even a partial primitive to build on. The iOS reference
+> (`ConversationLockManager.swift` + `ConversationLockSheet.swift`, 560 lines combined, wired into
+> 5 more files — `SecurityView.swift`, `ConversationListView(+Overlays/+Rows)`,
+> `ConversationContextMenuView.swift`) confirms this is genuinely a multi-file feature (master PIN
+> setup/change/remove, per-conversation 4-digit lock, list filtering/hiding of locked
+> conversations, unlock-all flow, context-menu wiring) — not a mechanical port candidate for one
+> increment. Needs the same decomposition treatment as `tracked-link-resolution-audit`
+> (foundation — secure PIN storage via Android Keystore — then consumer slices), not attempted
+> here.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=conversations-phase-b-stale-checkbox-and-lock-scoping`.
+
+
 > **Candidat déposé le 2026-08-15 — 3ᵉ instance vérifiée du défaut « générateur de lien sans
 > récepteur », NON livré, trop large pour un incrément unique.** Suite explicite du run
 > `guest-join-web-deep-link` (« a systematic grep for every `https://meeshy.me/` string literal
