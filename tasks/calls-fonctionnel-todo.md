@@ -8366,3 +8366,58 @@ fix chirurgical).
   mais même famille que les Vagues 117/118 (`CallStatusIndicator`, `ConnectionQualityBadgeCompact`)
   — un futur correctif de qualité risque d'éditer la mauvaise implémentation. Candidat direct pour
   un cycle « suppression » dédié.
+
+## Vague 125 — `WebRTCService.startQualityMonitor`/`stopQualityMonitor`/`computeQualityLevel` : code mort dérivé, jamais appelé en production (web) (2026-08-15)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée
+déjà alignée bit à bit sur `origin/main` (`33c12b401`, contient la Vague 124 — PR mergée), aucune
+PR ouverte de cette routine au démarrage. Ce sandbox n'a ni Xcode ni SDK Android (`swift`/
+`xcodebuild` absents) : périmètre web, comme la quasi-totalité des vagues récentes. Repris
+directement le candidat « cycle suppression dédié » laissé en fin de Vague 124 plutôt que de
+relancer un audit générique — même famille que les Vagues 117/118.
+
+- **Root cause confirmée par lecture directe** : `webrtc-service.ts` porte un second pipeline de
+  mesure de qualité (`startQualityMonitor()`/`stopQualityMonitor()`/`computeQualityLevel()`,
+  interval 3s sur `peerConnection.getStats()`, callback `config.onConnectionQualityChange`) —
+  entièrement distinct du pipeline RÉELLEMENT utilisé en production, `use-call-quality.ts` (son
+  propre `getStats()` direct sur la `RTCPeerConnection`, sa propre fonction de classification).
+  Vérifié exhaustif (`Grep` sur tout `apps/web`, pas de troncature `| head`, leçon de la Vague
+  post-2026-06-05 appliquée) : **zéro appelant en production** — le seul site de construction
+  `new WebRTCService({...})` avec callbacks (`use-webrtc-p2p.ts#getWebRTCService`) ne passe jamais
+  `onConnectionQualityChange` et n'appelle jamais `.startQualityMonitor()` ; l'autre site
+  (`initializeLocalStream`) construit `new WebRTCService()` sans config du tout. Les seuls
+  appelants restants étaient les tests du fichier lui-même. Les deux implémentations avaient déjà
+  DÉRIVÉ l'une de l'autre — seuils RTT différents (`good < 200`/`< 400` côté mort vs. `< 300`/
+  `< 450` côté vivant, recalibré mobile/international, cf. commentaire `use-call-quality.ts`) —
+  exactement le risque déjà signalé en fin de Vague 124 : un futur correctif de qualité aurait pu
+  éditer la mauvaise implémentation sans effet visible.
+- **Fix** : suppression pure — `startQualityMonitor()`, `stopQualityMonitor()`,
+  `computeQualityLevel()`, le champ `qualityMonitorInterval`, la constante
+  `QUALITY_MONITOR_INTERVAL_MS`, `onConnectionQualityChange` du type `WebRTCServiceConfig`, l'import
+  `ConnectionQualityLevel` (devenu inutile), et l'appel `this.stopQualityMonitor()` dans `close()`.
+  Aucune ligne de logique métier vivante touchée ; `use-call-quality.ts` intouché.
+- **Tests** : suppression symétrique des 3 describe blocks dédiés dans
+  `webrtc-service.coverage.test.ts` (`startQualityMonitor`, `stopQualityMonitor`,
+  `startQualityMonitor — null-coalescing branches`, 22 tests au total) + le test `stops quality
+  monitor during close` (assertait un comportement qui n'existe plus) + `onConnectionQualityChange`
+  retiré du helper `setup()`. Pas de TDD RED/GREEN ici — suppression de code mort, pas de nouveau
+  comportement à verrouiller (même patron que les Vagues 117/118).
+- **Vérification** : `webrtc-service.coverage.test.ts` (152/152, -22 net) vert ; sweep
+  `webrtc-service|call-infrastructure|use-webrtc` (4 suites / 240 tests) vert ; sweep complet
+  `--testPathPatterns="[Cc]all"` (53 suites / 478 tests) vert, 0 régression. Couverture du fichier
+  modifié : 97.47% stmts / 94.06% branches / 93.33% funcs — aucune ligne non couverte introduite par
+  la suppression. `npx tsc --noEmit` : diff `git stash`/`stash pop` — **1229 erreurs préexistantes
+  identiques avant et après**, 0 nouvelle. `eslint`/`next lint` : non exécutable dans ce sandbox
+  (`Couldn't find any 'pages' or 'app' directory` — limitation d'environnement distincte de celle
+  documentée aux vagues précédentes mais de même nature, non bloquante, indépendante de ce diff).
+  Prérequis CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install
+  --ignore-scripts` (bun 1.3.11 disponible localement, pas 1.3.14), puis `packages/shared && npx
+  prisma generate --generator client && bun run build` sans erreur.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`) ; `MAX_CALL_PARTICIPANTS = 9999`
+  sans plafond effectif sur le mesh P2P (Vague 124, décision produit hors scope d'un fix
+  chirurgical).
