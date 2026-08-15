@@ -572,6 +572,32 @@ inchangées ; seul le coût de leur calcul l'est.
   `_drainedEventName` ont chacun un émetteur qui les enfile via
   `enqueueForOfflineParticipants`.
 
+## Candidat pour le cycle suivant — `DELETE /posts/:postId/comments/:commentId`
+
+Troisième instance PROBABLE de la même classe, **délibérément non traitée dans
+cette passe** parce qu'elle n'est pas gratuite, contrairement à D1 et D1 bis.
+
+La route soft-supprime par `commentId` (le service vérifie la propriété du
+commentaire), puis relit le post par le `:postId` de l'URL et s'en sert pour
+TROIS choses : le `postId` du broadcast, le `commentCount` annoncé, et surtout
+**l'audience du fan-out** (`post.authorId`, `post.visibility`,
+`post.visibilityUserIds` passés à `broadcastCommentDeleted`). Rien ne vérifie
+que ce post est celui du commentaire.
+
+Conséquence attendue : l'audience d'une suppression est dérivée d'un post que
+l'appelant choisit — et sur un repost simple, le cas non-malveillant, la
+suppression est annoncée à une room où les lecteurs du fil ne sont pas.
+
+**Pourquoi ce n'est pas le même correctif à une ligne près.**
+`PostCommentService.deleteComment` rend `{ success, deletedCommentIds,
+parentId }` — **pas** `postId`. La vérité n'est donc PAS en scope, à la
+différence de D1/D1 bis où `thread.postId` était déjà chargé. La corriger
+demande soit une lecture supplémentaire, soit d'élargir le retour du service ; et
+le chemin de **rejeu idempotent** (`onDuplicate` ne rend qu'un `{ id }`) n'a
+aucune ligne vivante à relire, donc il faut lui écrire un repli explicite plutôt
+que de laisser `undefined` adresser la diffusion. Trois décisions à prendre, pas
+un renommage : ça mérite sa propre passe, avec ses propres témoins.
+
 ## Reste ouvert (inchangé depuis le cycle 23)
 
 - **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
