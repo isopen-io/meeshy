@@ -1253,8 +1253,13 @@ struct ConversationListView: View {
     /// Drapeau OFF ⇒ AUCUN hôte d'élection : ni mesure, ni carte (LWS-8/I-070).
     /// Sous ON, l'hôte est posé sur le CONTENEUR de défilement, jamais dans son
     /// contenu — c'est la seule position d'où le bas de la région visible se
-    /// mesure, et il ne défile pas avec les rangs. Purement observationnel : il
-    /// ne rend rien de visible et n'intercepte aucun geste.
+    /// mesure, et il ne défile pas avec les rangs. `LentilleFocusElectionHost`
+    /// reste purement observationnel : il ne rend rien de visible et
+    /// n'intercepte aucun geste — c'est `LentilleFocusCardHost` (I-071,
+    /// `Lentille/Mode/LentilleFocusCard.swift`) qui peint la carte à la
+    /// position qu'il publie, dans le MÊME overlay, sur le magasin
+    /// `focusElection` passé par référence (ce body ne lit jamais l'élu
+    /// lui-même — l'hôte de la carte le lit dans SON fichier à lui).
     @ViewBuilder
     private var lentilleFocusElectionOverlay: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
@@ -1262,6 +1267,12 @@ struct ConversationListView: View {
                 relay: scrollOffsetRelay,
                 registry: focusCandidateRegistry,
                 election: focusElection
+            )
+            LentilleFocusCardHost(
+                election: focusElection,
+                registry: focusCandidateRegistry,
+                conversations: conversationViewModel.groupedConversations.flatMap(\.conversations),
+                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true
             )
         }
     }
