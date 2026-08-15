@@ -8,9 +8,11 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.StoryViewerWire
 import me.meeshy.sdk.model.StoryViewersResponse
 import me.meeshy.sdk.net.MeeshyApi
@@ -60,6 +62,10 @@ class StoryRepositoryTest {
 
     private fun story(id: String, createdAt: String = "2026-06-20T10:00:00Z") =
         ApiPost(id = id, type = "STORY", createdAt = createdAt)
+
+    /** A row seeded directly into Room to stand in for a prior sync's cache — never round-tripped through [story]/the API. */
+    private fun staleEntity(id: String) =
+        StoryEntity(id = id, payload = "{}", createdAt = 0L, cachedAt = 0L)
 
     @Test
     fun viewers_mapsWirePayloadToDomain() = runTest {
@@ -149,6 +155,70 @@ class StoryRepositoryTest {
 
         assertThat(thrown).isInstanceOf(StorySyncException::class.java)
         assertThat(thrown).hasMessageThat().isEqualTo("Server down")
+    }
+
+    @Test
+    fun `refresh follows nextCursor across pages and prunes once the server reports no more`() = runTest {
+        coEvery { api.list(null, any()) } returns ApiResponse(
+            success = true,
+            data = listOf(story("s1"), story("s2")),
+            pagination = Pagination(hasMore = true, nextCursor = "c1"),
+        )
+        coEvery { api.list("c1", any()) } returns ApiResponse(
+            success = true,
+            data = listOf(story("s3")),
+            pagination = Pagination(hasMore = false),
+        )
+        // A story from a previous, now-superseded sync — must be pruned once the
+        // fetched window is proven complete (server said hasMore = false).
+        db.storyDao().upsertAll(listOf(staleEntity("stale")))
+
+        repository().refresh()
+
+        assertThat(db.storyDao().observeAll().first().map { it.id })
+            .containsExactly("s1", "s2", "s3").inOrder()
+    }
+
+    @Test
+    fun `refresh never prunes when the page budget is reached before the server reports completion`() = runTest {
+        // Every page still claims more remains — a tray deeper than the budget.
+        for (page in 0 until 6) {
+            val cursor = if (page == 0) null else "c$page"
+            coEvery { api.list(cursor, any()) } returns ApiResponse(
+                success = true,
+                data = listOf(story("s$page")),
+                pagination = Pagination(hasMore = true, nextCursor = "c${page + 1}"),
+            )
+        }
+        // A story from a previous sync, outside the budget-limited window this
+        // refresh fetches — deleting it would be the exact regression this test
+        // guards: truncating at the page budget must never authorize a prune.
+        db.storyDao().upsertAll(listOf(staleEntity("beyond-budget")))
+
+        repository().refresh()
+
+        val ids = db.storyDao().observeAll().first().map { it.id }
+        assertThat(ids).contains("beyond-budget")
+        assertThat(ids).containsAtLeast("s0", "s1", "s2", "s3", "s4", "s5")
+    }
+
+    @Test
+    fun `refresh throws and leaves the cache untouched when a later page fails`() = runTest {
+        coEvery { api.list(null, any()) } returns ApiResponse(
+            success = true,
+            data = listOf(story("s1")),
+            pagination = Pagination(hasMore = true, nextCursor = "c1"),
+        )
+        coEvery { api.list("c1", any()) } returns ApiResponse(success = false, error = "Server down")
+        db.storyDao().upsertAll(listOf(staleEntity("previously-synced")))
+
+        val thrown = runCatching { repository().refresh() }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(StorySyncException::class.java)
+        // Neither the first page's stories nor a prune landed — the previous
+        // complete tray survives an unproven, partially-fetched window intact.
+        assertThat(db.storyDao().observeAll().first().map { it.id })
+            .containsExactly("previously-synced")
     }
 
     @Test
