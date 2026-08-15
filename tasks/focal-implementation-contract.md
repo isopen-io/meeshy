@@ -1375,6 +1375,10 @@ Le modèle `ComposerRichTextModel` / `ComposerEffectSelection` est **déclaré e
 8. **Aucun hex en dur.** L'accent vient de `conversation.accentColor`, les couleurs de `MeeshyColors`. Les 13 hex hors palette de la spec sont refusés à la revue.
 9. **Aucune police fixe.** `MeeshyFont.relative(...)` partout ; `.font(.system(size:))` est interdit dans `Focal/**` (garde source WS-11).
 10. **Flag OFF = comportement identique.** Chaque PR doit démontrer que, flag éteint, le chemin de rendu est celui d'aujourd'hui, à l'octet près.
+11. **Se resynchroniser sur `main` régulièrement.** Douze workstreams avancent en parallèle : une branche qui vit trois jours sans revoir `main` accumule une dette de conflit qui coûtera plus cher que la fonctionnalité elle-même. Chaque agent, chaque worktree :
+    - `git fetch origin main && git merge origin/main` **au démarrage** de son workstream, puis **au moins une fois par session de travail**, et **systématiquement avant d'ouvrir sa PR** ;
+    - en cas de conflit sur un fichier dont l'agent **n'est pas** propriétaire (§1.2) : prendre la version de `main` sans discuter — la propriété exclusive rend le conflit impossible sur ses propres fichiers, donc un conflit ailleurs signale toujours que `main` a raison ;
+    - après une resynchronisation, relancer le gate (`./apps/ios/meeshy.sh test`) avant de pousser : un merge propre au sens de git n'est pas un merge correct au sens du compilateur.
 
 ---
 
