@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { isBlockedBetween, getBlockedUserIdsAmong } from '../blocking';
+import { isBlockedBetween, getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../blocking';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 function createMockPrisma(findFirstImpl: (args: unknown) => unknown) {
@@ -122,5 +122,65 @@ describe('getBlockedUserIdsAmong', () => {
     const { prisma } = createMockPrisma({ findUniqueResult: null });
 
     await expect(getBlockedUserIdsAmong(prisma, 'A', ['B'])).resolves.toEqual(new Set());
+  });
+});
+
+describe('getBlockRelatedUserIds', () => {
+  function createMockPrisma(opts: {
+    findManyResult?: Array<{ id: string }>;
+    findUniqueResult?: { blockedUserIds: string[] } | null;
+  }) {
+    const findMany = jest.fn(async (_args: unknown) => opts.findManyResult ?? []);
+    const findUnique = jest.fn(async (_args: unknown) => opts.findUniqueResult ?? null);
+    const prisma = { user: { findMany, findUnique } } as unknown as PrismaClient;
+    return { prisma, findMany, findUnique };
+  }
+
+  it('unions both directions of the block relation', async () => {
+    const { prisma } = createMockPrisma({
+      findManyResult: [{ id: 'B' }],
+      findUniqueResult: { blockedUserIds: ['C'] },
+    });
+
+    await expect(getBlockRelatedUserIds(prisma, 'A')).resolves.toEqual(new Set(['B', 'C']));
+  });
+
+  it('asks for who-blocked-me WITHOUT an id filter — the whole point of this helper', async () => {
+    // `getBlockedUserIdsAmong` narrows this query with `id: { in: candidateIds }`,
+    // which is correct only while the candidate list is bounded by the audience.
+    // This helper exists for the callers whose only candidate list would be the
+    // entire connected population, so it must not carry an `id` filter at all.
+    const { prisma, findMany } = createMockPrisma({});
+
+    await getBlockRelatedUserIds(prisma, 'A');
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+    const arg = findMany.mock.calls[0][0] as {
+      where: { blockedUserIds: { has: string }; id?: unknown };
+      select: { id: boolean };
+    };
+    expect(arg.where).toEqual({ blockedUserIds: { has: 'A' } });
+    expect(arg.select).toEqual({ id: true });
+  });
+
+  it('never reports the user as blocking themselves', async () => {
+    const { prisma } = createMockPrisma({
+      findManyResult: [{ id: 'A' }],
+      findUniqueResult: { blockedUserIds: ['A'] },
+    });
+
+    await expect(getBlockRelatedUserIds(prisma, 'A')).resolves.toEqual(new Set());
+  });
+
+  it('handles a missing user row gracefully', async () => {
+    const { prisma } = createMockPrisma({ findUniqueResult: null });
+
+    await expect(getBlockRelatedUserIds(prisma, 'A')).resolves.toEqual(new Set());
+  });
+
+  it('returns an empty set when the user has no block relation at all', async () => {
+    const { prisma } = createMockPrisma({ findUniqueResult: { blockedUserIds: [] } });
+
+    await expect(getBlockRelatedUserIds(prisma, 'A')).resolves.toEqual(new Set());
   });
 });

@@ -66,8 +66,53 @@ export async function getBlockedUserIdsAmong(
   ]);
 
   const blocked = new Set(blockedByCandidates.map((r) => r.id));
+  // Membership through a Set, never `ids.includes`: this runs on the presence
+  // and typing broadcast paths, where `ids` is the online audience and
+  // `blockedUserIds` is the broadcaster's own block list. A linear scan per
+  // blocked id makes the intersection |blockedUserIds| x |ids| — synchronous
+  // work on the event loop, on a path that fires per keystroke burst and per
+  // presence transition.
+  const candidateSet = new Set(ids);
   for (const bid of (userRow?.blockedUserIds ?? []) as string[]) {
-    if (ids.includes(bid)) blocked.add(bid);
+    if (candidateSet.has(bid)) blocked.add(bid);
   }
   return blocked;
+}
+
+/**
+ * The FULL bidirectional block set for one user — every id that blocked them or
+ * that they blocked — resolved without a candidate list.
+ *
+ * The sibling {@link getBlockedUserIdsAmong} narrows "who blocked me" with
+ * `id: { in: candidateIds }`, which is the right shape while the candidates are
+ * an AUDIENCE: one conversation's participants, one snapshot's contacts. It is
+ * the wrong shape for a caller whose only candidate list is the entire connected
+ * population, because the query then grows with the server rather than with the
+ * question — and the caller pays it on every presence transition.
+ *
+ * This helper inverts that: the cost is bounded by the block relation itself
+ * (`@@index([blockedUserIds])` on `User`), which is empty for almost everyone.
+ *
+ * Intersecting the result with a live socket map is the caller's job and is what
+ * makes the swap behaviour-preserving: an id in this set that owns no socket
+ * contributes nothing to an exclusion list, exactly as a candidate filter would
+ * have dropped it.
+ */
+export async function getBlockRelatedUserIds(
+  prisma: PrismaClient,
+  userId: string
+): Promise<Set<string>> {
+  const [blockers, userRow] = await Promise.all([
+    prisma.user.findMany({
+      where: { blockedUserIds: { has: userId } },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { blockedUserIds: true } }),
+  ]);
+
+  const related = new Set<string>();
+  for (const row of blockers) related.add(row.id);
+  for (const bid of (userRow?.blockedUserIds ?? []) as string[]) related.add(bid);
+  related.delete(userId);
+  return related;
 }

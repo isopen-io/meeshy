@@ -432,3 +432,148 @@ recalcul d'aperçu et ne déclenche rien.
   Un « supprimer pour moi » fait sur iPhone ne converge donc sur aucun autre
   appareil de la même personne. À reprendre depuis un runner macOS — la matrice
   du § Méthode donne les 18 autres events non écoutés.
+
+# Cycle 24 (2026-08-15) — le filtre de confidentialité de la présence coûtait le SERVEUR, pas la question
+
+Passe suivante de la routine « amélioration continue temps réel ». Les cycles 21
+et 22 avaient pris `message:translation` par ses deux bouts, le cycle 23
+`conversation:updated` par son audience. Ce cycle change à nouveau de famille —
+**`user:status`, la présence** — et de question : non plus « qui reçoit / quelle
+forme / pour qui est-ce juste », mais **combien coûte une diffusion, et en
+fonction de QUOI ce coût grandit.**
+
+**Conclusion : un défaut de passage à l'échelle réel trouvé, corrigé, testé.**
+Quatre sondes rendues vides sont listées en fin de section pour qu'un prochain
+cycle ne les ré-instruise pas.
+
+## Méthode — quatre sondes, dont deux neuves
+
+1. **Contrat d'ACK** (neuve) : pour chaque `socket.on(CLIENT_EVENTS.X)`, tout
+   chemin de sortie répond-il au callback ? Un `return` muet laisse l'UI
+   optimiste de l'expéditeur pendue jusqu'à son propre timeout. 56 écouteurs
+   balayés mécaniquement, tous les `return` nus classés. **Rien** : les seuls
+   `return` non suivis d'un callback sont POSTÉRIEURS à l'ACK (garde
+   `unchanged` de `PostReactionHandler` / `CommentReactionHandler`).
+2. **`CLIENT_EVENTS` × écouteurs gateway** (neuve, miroir des matrices des
+   cycles 22 et 23 qui allaient dans l'autre sens). 58 events déclarés. Les 24
+   sans écouteur sont les `CALL_*` (servis par la table `CALL_EVENTS`, faux
+   négatifs) plus `USER_STATUS`, déclaré dans les DEUX tables depuis toujours et
+   émis seulement serveur→client. Déclaration morte, pas un défaut.
+3. **Couverture du rejeu hors ligne** : les 11 `eventType` de la file
+   (`_drainedEventName`) ont tous un émetteur qui les enfile. Rien à prendre.
+4. **Le coût d'une diffusion** — c'est là qu'était le défaut.
+
+## Le défaut — une transition de présence portait un `$in` dimensionné par la gateway entière
+
+`_broadcastUserStatus` doit exclure les viewers en relation de blocage
+bidirectionnel avec la personne dont le statut change. Il le faisait ainsi :
+
+```ts
+const onlineOtherUserIds = [...this.connectedUsers.keys()].filter(id => id !== user.id);
+const blockedUserIds = await getBlockedUserIdsAmong(this.prisma, user.id, onlineOtherUserIds);
+```
+
+`getBlockedUserIdsAmong(prisma, userId, candidateIds)` est une sonde **bornée par
+son audience** : `findMany({ where: { id: { in: candidateIds }, blockedUserIds: { has: userId } } })`.
+La forme est juste tant que `candidateIds` est une audience. Ici la liste de
+candidats était **toute la population connectée du serveur**.
+
+Or ce chemin s'exécute à CHAQUE transition de présence : chaque connexion, chaque
+déconnexion, et — en rafale — pour chaque user que le balayage de maintenance
+(`updateOfflineUsers`) passe hors ligne d'un coup. Le coût d'une seule connexion
+grandissait donc avec le nombre de personnes **déjà connectées**, ce qui rend le
+total quadratique en connexions sur une plateforme dont la cible affichée est
+100k+ messages/seconde.
+
+Le même appel portait un second terme, purement synchrone :
+
+```ts
+for (const bid of userRow?.blockedUserIds ?? []) {
+  if (ids.includes(bid)) blocked.add(bid);   // O(|blockedUserIds| × |ids|)
+}
+```
+
+`Array.includes` dans une boucle : avec `ids` = la population connectée et une
+personne ayant bloqué quelques centaines de comptes, l'intersection devenait des
+millions de comparaisons de chaînes **sur la boucle d'événements**, à chaque
+transition de présence.
+
+**Pourquoi ça a survécu.** La règle est implémentée DEUX fois, et l'autre copie
+est juste. `StatusHandler._getBlockedSocketIdsInRoom` — le canal `typing`, voisin
+immédiat — borne ses candidats aux participants de la conversation, et son
+commentaire dit explicitement s'aligner sur `_broadcastUserStatus`. Les deux
+copies rendent le même résultat ; elles ne diffèrent que par la **taille de la
+liste de candidats**, la seule propriété qu'aucun test ne regardait. Une revue
+qui compare les deux les trouve d'accord.
+
+## Le correctif
+
+`utils/blocking.ts` — `getBlockRelatedUserIds(prisma, userId)` rend la relation
+de blocage COMPLÈTE d'une personne, **sans liste de candidats**. Le coût est
+borné par la relation elle-même (vide pour la quasi-totalité des comptes) au lieu
+de l'être par le serveur.
+
+Trois points inscrits dans le module :
+
+- **L'échange est neutre en comportement.** L'ancien code calculait
+  `candidats ∩ relation`, puis mappait vers les sockets via `userSockets`. Un id
+  en relation de blocage qui ne possède AUCUN socket vivant n'apporte rien à
+  `.except()` — exactement ce que le pré-filtre par `connectedUsers` retirait.
+  L'intersection se fait désormais en mémoire, contre `userSockets` (vidé à la
+  déconnexion par `AuthHandler.handleDisconnection`), au lieu d'être payée en
+  base. Le témoin `still excludes a blocked viewer who is connected` fige ce
+  raisonnement en incluant un bloqueur hors ligne dans le résultat de la requête.
+- **`getBlockedUserIdsAmong` n'est PAS remplacé** : sa forme `$in` reste la bonne
+  pour ses trois autres appelants, dont les candidats sont de vraies audiences
+  (les participants d'une conversation pour `typing`, les contacts d'un snapshot
+  pour `_applyPresencePrefs`). Le défaut n'était pas la fonction, c'était
+  l'appelant qui lui donnait le serveur entier pour audience.
+- **`ids.includes` devient un `Set`** dans `getBlockedUserIdsAmong` : le terme
+  synchrone bénéficie à TOUS les appelants, y compris ceux dont les candidats
+  sont déjà bornés.
+
+`schema.prisma` — `@@index([blockedUserIds])` sur `User`. Sans lui, la requête
+« qui m'a bloqué ? » privée de son filtre `id` devient un COLLSCAN : l'index
+multikey est ce qui rend le nouveau chemin borné plutôt que simplement déplacé.
+Additif, à créer par `prisma db push` comme les 212 autres index du schéma.
+
+**Aucun changement client.** La forme du payload et l'audience effective sont
+inchangées ; seul le coût de leur calcul l'est.
+
+## Gates
+
+- [x] 1 RED discriminant vu rouge avant correctif — le témoin
+      `WITHOUT enumerating the connected population` échoue contre l'appelant
+      d'origine (vérifié en restaurant le code pré-correctif, puis restauré)
+- [x] `blocking.test.ts` : 17 verts (12 pré-existants inchangés + 5 témoins sur
+      le nouveau résolveur, dont la forme de requête SANS filtre `id`)
+- [x] `MeeshySocketIOManager.test.ts` : 339 verts (337 pré-existants inchangés)
+- [x] Suite gateway complète : 718 suites / 17588 tests verts
+- [x] `prisma validate` : schéma valide avec le nouvel index
+- [x] `tsc --noEmit` gateway : 0
+- [x] Migration mongosh jumelle `011_user_blocked_user_ids_index.js`, enregistrée
+      dans `run_migrations.sh` et le README
+
+## Surfaces vérifiées correctes pendant ce cycle (ne pas re-vérifier)
+
+- **Contrat d'ACK des 56 écouteurs `socket.on`** — chaque chemin de sortie
+  répond, et le wrapper de `MeeshySocketIOManager` rattrape en plus tout `throw`
+  par un `callback?.({ success: false })`. Les `return` nus détectés sont tous
+  postérieurs à l'ACK.
+- **`participantUserRooms` / `ROOMS.user(userId ?? id)`** — les 60+ sites
+  d'appel sont conformes ; les seuls qui nomment `ROOMS.user()` avec un `User.id`
+  brut sont des routes REST sous `requiredAuth`, où l'identité anonyme ne peut
+  pas se présenter.
+- **`_joinUserConversations`** — toutes les conversations sont rejointes à
+  l'auth, avec retry et une escalade en `error` sur échec persistant. La
+  présence diffusée aux rooms de conversation atteint donc bien la liste, qui
+  est l'écran où les pastilles vivent.
+- **Couverture du rejeu hors ligne** — les 11 `eventType` de
+  `_drainedEventName` ont chacun un émetteur qui les enfile via
+  `enqueueForOfflineParticipants`.
+
+## Reste ouvert (inchangé depuis le cycle 23)
+
+- **iOS n'écoute ni `message:hidden-for-me` ni `message:restored-for-me`.**
+  Toujours non tenté : aucune toolchain Swift sous Linux. À reprendre depuis un
+  runner macOS.

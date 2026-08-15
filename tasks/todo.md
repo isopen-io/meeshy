@@ -53,3 +53,64 @@ MISS. Le Prisme Linguistique devenu fonction de l'état du cache serveur.
 Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 22 — méthode (deux
 matrices d'events), défaut, correctif, et les 5 surfaces vérifiées correctes à
 ne pas re-instruire.
+
+
+# Cycle 24 — la présence payait le serveur entier pour savoir qui l'avait bloquée
+
+Routine « amélioration continue temps réel ». Les cycles 21–23 avaient pris
+`message:translation` puis `conversation:updated`. Ce cycle change de famille
+(`user:status`, la présence) et de QUESTION : non plus « qui reçoit / quelle
+forme / pour qui est-ce juste », mais **en fonction de quoi le coût d'une
+diffusion grandit**.
+
+## Constat
+
+**D1 — une transition de présence portait un `$in` dimensionné par la gateway.**
+
+`_broadcastUserStatus` passait `[...connectedUsers.keys()]` — toute la
+population connectée — en liste de candidats à `getBlockedUserIdsAmong`. La
+forme `$in` de cette sonde est juste pour une AUDIENCE ; ici c'était le serveur.
+
+Le chemin s'exécute à chaque connexion, chaque déconnexion, et en rafale au
+balayage `updateOfflineUsers`. Le coût d'UNE connexion grandissait donc avec le
+nombre de personnes déjà connectées → quadratique en connexions.
+
+Second terme, synchrone : `ids.includes(bid)` dans une boucle sur
+`blockedUserIds` — `|blocked| × |connectés|` comparaisons sur la boucle
+d'événements, à chaque transition.
+
+**Pourquoi ça a survécu** : la règle a DEUX implémentations et l'autre est juste
+(`StatusHandler._getBlockedSocketIdsInRoom` borne ses candidats aux participants
+de la conversation, et dit s'aligner sur `_broadcastUserStatus`). Les deux
+rendent le même résultat ; elles ne diffèrent que par la TAILLE de la liste de
+candidats — la seule propriété qu'aucun test ne regardait.
+
+## Correctifs
+
+- [x] `utils/blocking.ts` — `getBlockRelatedUserIds` : relation de blocage
+      complète, SANS liste de candidats, bornée par la relation elle-même
+- [x] `getBlockedUserIdsAmong` conservé (sa forme `$in` est juste pour ses 3
+      autres appelants, dont les candidats sont de vraies audiences)
+- [x] `ids.includes` → `Set` dans `getBlockedUserIdsAmong` (bénéficie à tous)
+- [x] `@@index([blockedUserIds])` sur `User` — sans lui le nouveau chemin serait
+      déplacé, pas borné
+- [x] Échange neutre en comportement : l'intersection avec les sockets vivants
+      se fait en mémoire au lieu d'en base
+
+## Gates
+
+- [x] 1 RED discriminant vu rouge avant correctif (vérifié en restaurant le code
+      pré-correctif, puis restauré)
+- [x] `blocking.test.ts` : 17 verts (12 pré-existants + 5 témoins)
+- [x] `MeeshySocketIOManager.test.ts` : 339 verts (337 pré-existants inchangés)
+- [x] `prisma validate` : schéma valide avec le nouvel index
+- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : 718 suites / 17588 tests verts
+- [x] CHANGELOG + journal d'audit (§ Cycle 24)
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15.md` § Cycle 24 — les quatre sondes
+(dont deux neuves : contrat d'ACK, `CLIENT_EVENTS` × écouteurs gateway), le
+défaut, le correctif, et les quatre surfaces vérifiées correctes à ne pas
+re-instruire.
