@@ -183,7 +183,11 @@ final class PhonebookViewModelTests: XCTestCase {
 
     func test_search_whenTheDirectoryFindsNothing_relaysToThePlatform() async {
         let (sut, _, _, _, users) = makeSUT(
-            contacts: [makeContact(displayName: "Bob", username: "bob")],
+            // Email/téléphone explicitement distincts du défaut de la factory
+            // ("awa@test.com" / "+221771234567") : sinon "Bob" matcherait
+            // quand même la requête "awa" par cet email hérité, le répertoire
+            // répondrait, et le relais plateforme ne se déclencherait jamais.
+            contacts: [makeContact(displayName: "Bob", phoneNumbers: ["+33612345678"], emails: ["bob@test.com"], username: "bob")],
             platformResults: [platformUser()]
         )
         await sut.load(forceNetwork: true)
