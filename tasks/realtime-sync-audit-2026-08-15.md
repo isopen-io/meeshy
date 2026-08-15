@@ -1232,7 +1232,9 @@ cas où les deux ids DIVERGENT sont désormais déclarés explicitement, un par 
       3 adresse/audience/compteur, 2 rejeu)
 - [x] Suites voisines : 21 suites / 793 tests verts
 - [x] Suite gateway complète : **719 suites / 17620 tests verts** (17614 au
-      cycle 26 — exactement les 6 témoins neufs, aucune suite déplacée)
+      cycle 26 — exactement les 6 témoins neufs, aucune suite déplacée) ;
+      **17629 après merge manuel de `main`**, le cycle 27 parallèle en ayant
+      apporté 9 de plus
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + ce journal + leçon 259
 
