@@ -330,3 +330,22 @@ Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
 | V4 | bloquée par PORTE V1 | — | — |
 | V5 | bloquée par PORTE V2 | — | — |
 | V6 | bloquée par REV-5 | — | — |
+
+---
+
+## Annexe S-001 — ancrages re-prouvés sur `abbf6aa9` (2026-08-15)
+
+Tous les symboles cités par les contrats **existent** — aucun ABSENT. Corrections à retenir
+(le reste des ancrages est vérifié exact ; re-preuve locale obligatoire avant édition, règle §0) :
+
+| Ancrage cité | Réalité | Impact |
+|---|---|---|
+| `groupConversations` `:554` | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift:554` — pipeline `CombineLatest4` L495, debounce 16 ms L496 (bloc réel 495-513) | aucun |
+| `expandedSections` « dans le ViewModel » | vit dans `ConversationListView.swift` (état de vue) | I-062 le consomme là |
+| `meeshy.sh:1584` `NON_PHASE_SUITES` | `:1591` (+7) | Q-144 |
+| `CollapsibleHeader` « iOS » | `packages/MeeshySDK/Sources/MeeshyUI/Navigation/CollapsibleHeader.swift` (SDK, pas apps/ios) | ne pas l'éditer côté app |
+| `emitConversationPreviewUpdate.ts` | `services/gateway/src/socketio/` (gateway, pas web) | classement §1.5 |
+| **E14** : `EmptyConversations.tsx:19` appellerait la clé plate | le code appelle DÉJÀ `t('conversationSearch.noConversationsFound')` — défaut vraisemblablement corrigé sur cette lignée | W9-003 : vérifier à l'exécution puis ATTESTER (test de non-régression), ne pas re-corriger |
+| E10/E11 (tri `lastMessage.createdAt`, dupli frontière de page) | **confirmés** — `useConversationSorting.ts:43-44`, commentaires `use-conversations-query.ts` | W9-001/002 fondés |
+| `useFeatureFlags` | lit uniquement `NEXT_PUBLIC_*` — confirmé | WL-100 fondé |
+| `components/v2/SplitViewLayout` | non routé (0 import sous `apps/web/app`) — confirmé | interdit E12 fondé |
