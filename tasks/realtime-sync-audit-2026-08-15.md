@@ -1755,7 +1755,11 @@ de la garde et jamais son alimentation — et les deux échouent séparément.
       (branche `mshy_…`), sur un double qui PROJETTE
 - [x] Suites voisines : 3 suites / 179 tests verts
 - [x] Suite gateway complète : **721 suites / 17 664 tests verts**
-      (cycle 30 : 720 / 17 649 — +1 suite, +15 témoins, exactement les ajoutés)
+      (cycle 30 : 720 / 17 649 — +1 suite, +15 témoins, exactement les ajoutés) ;
+      **17 665 après merge manuel de `origin/main`** (une passe parallèle sur
+      `participantCount` des appels en apporte 1 — aucune suite déplacée,
+      aucun test perdu au passage)
+- [x] CI verte sur la PR #3033 : 13 jobs, dont `Test gateway` et `Build (bun)`
 - [x] `tsc --noEmit` gateway : 0
 - [x] CHANGELOG + ce journal + `tasks/todo.md`
 
