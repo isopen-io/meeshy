@@ -412,8 +412,27 @@ export class PostReactionHandler {
         return;
       }
 
+      // Synchroniser = LIRE l'état social du post, donc la MÊME porte que
+      // `handleJoinPost` : `resolveConsumptionTarget` (amis ∪ contacts DM), qui
+      // rend `null` — refus indistinct, jamais de 403 — pour un post absent,
+      // supprimé ou hors audience. Sans elle la garde de la room ne bornait
+      // rien : plutôt que de s'abonner, il suffisait de demander l'état, et
+      // n'importe quel compte authentifié obtenait le décompte de réactions
+      // d'un post PRIVATE à partir de son seul id.
+      //
+      // La redirection des reposts simples vient avec, et il le faut : le
+      // room-join redirige déjà vers la racine, donc synchroniser sur l'id brut
+      // rendait un état qui n'est pas celui que la room diffusera ensuite —
+      // l'ouverture d'un repost affichait 0 réaction puis se corrigeait au
+      // premier événement.
+      const target = await resolveConsumptionTarget(this.prisma, validated.postId, userId);
+      if (!target) {
+        this.logger.warn('[PostReactionHandler] post:reaction-sync denied (visibility)', { userId, postId: validated.postId });
+        return callback?.({ success: false, error: 'Post not found' });
+      }
+
       const reactionSync = await this.postReactionService.getPostReactions({
-        postId: validated.postId,
+        postId: target.id,
         currentUserId: userId,
       });
 

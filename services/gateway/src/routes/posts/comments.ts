@@ -553,11 +553,22 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      // `thread.postId` et non `:postId` : la garde ci-dessus a déjà résolu le
+      // post DEPUIS le commentaire, et c'est cette valeur qui fait autorité.
+      // `broadcastCommentLiked` en fait une room (`ROOMS.post`) et les clients
+      // une clé de cache (`patchCommentInPostCaches`) — servi depuis l'URL, que
+      // l'appelant choisit librement, il diffuse dans une room où les lecteurs
+      // du fil ne sont pas et écrit l'agrégation d'un commentaire dans le cache
+      // d'un post étranger. Le cas se produit sans malveillance sur un repost
+      // simple, dont le client affiche l'id alors que le commentaire vit sur la
+      // racine. Jumeau REST de l'invariant que porte `CommentReactionHandler`.
+      const commentPostId = thread.postId;
+
       // Broadcast comment liked via Socket.IO
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
         socialEvents.broadcastCommentLiked({
-          postId: request.params.postId,
+          postId: commentPostId,
           commentId,
           userId: authContext.registeredUser.id,
           emoji,
@@ -579,13 +590,13 @@ export function registerCommentRoutes(
             select: { content: true },
           }),
           fastify.prisma?.post?.findUnique({
-            where: { id: request.params.postId },
+            where: { id: commentPostId },
             select: { type: true },
           }),
         ]);
         notifService.createCommentLikeNotification({
           actorId: authContext.registeredUser.id,
-          postId: request.params.postId,
+          postId: commentPostId,
           commentId,
           commentAuthorId: result.authorId,
           emoji,
