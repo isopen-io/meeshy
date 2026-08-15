@@ -16,7 +16,7 @@ import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
-import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission.js';
+import { admitConversationWriteFor, isConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -42,10 +42,13 @@ const SHARE_LINK_CONVERSATION_SELECT = {
   identifier: true,
   title: true,
   type: true,
-  // L'état TERMINAL du conteneur. Ramené par la relation déjà chargée : la
-  // garde ne coûte aucune lecture supplémentaire.
+  // L'état TERMINAL du conteneur ET sa police d'écriture (canal d'annonces,
+  // `defaultWriteRole`). Ramenés par la relation déjà chargée : la garde ne
+  // coûte aucune lecture supplémentaire.
   isActive: true,
-  closedAt: true
+  closedAt: true,
+  isAnnouncementChannel: true,
+  defaultWriteRole: true
 } as const;
 
 /**
@@ -240,11 +243,20 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
               isActive: true,
               allowAnonymousMessages: true,
               expiresAt: true,
-              // L'état TERMINAL du conteneur. Le lien de partage est le SEUL
-              // transport d'envoi d'un invité anonyme : sans cette lecture,
-              // fermer une conversation ne fermait rien pour l'inconnu qui
-              // détient l'URL.
-              conversation: { select: { isActive: true, closedAt: true } }
+              // L'état TERMINAL du conteneur ET sa police d'écriture. Le lien
+              // de partage est le SEUL transport d'envoi d'un invité anonyme :
+              // sans cette lecture, fermer une conversation ne fermait rien
+              // pour l'inconnu qui détient l'URL, et un canal d'annonces lui
+              // restait grand ouvert.
+              conversation: {
+                select: {
+                  type: true,
+                  isActive: true,
+                  closedAt: true,
+                  isAnnouncementChannel: true,
+                  defaultWriteRole: true
+                }
+              }
             }
           })
         : null;
@@ -266,14 +278,24 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       // Même garde, même prédicat partagé que le jumeau authentifié ci-dessous :
-      // ce chemin contourne lui aussi le point de convergence.
-      if (isConversationClosed(participantShareLink.conversation)) {
-        return sendError(reply, 410, 'Cette conversation est fermée');
+      // ce chemin contourne lui aussi le point de convergence. Les droits du
+      // LIEN vérifiés autour disent ce que le lien autorise ; ils ne disent rien
+      // de ce que la conversation accepte, et un lien anonyme ouvert sur un
+      // canal d'annonces est précisément la contradiction que ce garde tranche.
+      const anonymousAdmission = await admitConversationWriteFor(fastify.prisma, {
+        conversation: participantShareLink.conversation,
+        senderParticipantId: anonymousParticipant.id
+      });
+      if (isConversationWriteRefused(anonymousAdmission)) {
+        return anonymousAdmission.reason === 'conversation-closed'
+          ? sendError(reply, 410, 'Cette conversation est fermée')
+          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
       }
 
       if (!anonymousParticipant.permissions.canSendMessages) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
       }
+
 
       // Traiter les liens dans le message AVANT la sauvegarde
       const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({
@@ -532,15 +554,6 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         return sendError(reply, 410, 'Ce lien a expiré');
       }
 
-      // Ce chemin CONTOURNE `MessagingService.handleMessage`, où la règle est
-      // posée pour REST et socket : la garde doit donc être recopiée ici, mais
-      // le PRÉDICAT est partagé — la règle n'existe qu'en un exemplaire.
-      // Les deux gardes ci-dessus lisent l'état terminal du LIEN ; celle-ci
-      // lit celui de la CONVERSATION, que rien ne regardait.
-      if (isConversationClosed(shareLink.conversation)) {
-        return sendError(reply, 410, 'Cette conversation est fermée');
-      }
-
       let participant = null;
 
       if (shareLink.conversation.identifier === "meeshy") {
@@ -567,6 +580,25 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       if (!participant) {
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
+
+      // Ce chemin CONTOURNE `MessagingService.handleMessage`, où la règle est
+      // posée pour REST et socket : la garde doit donc être recopiée ici, mais
+      // le PRÉDICAT est partagé — la règle n'existe qu'en un exemplaire.
+      // Les deux gardes plus haut lisent l'état terminal du LIEN ; celle-ci lit
+      // celui de la CONVERSATION, que rien ne regardait. Elle vient APRÈS la
+      // résolution du participant parce que le rang d'écriture est le sien, et
+      // la conversation ne restreint que rarement : le chemin nominal n'ajoute
+      // toujours aucune lecture.
+      const linkAdmission = await admitConversationWriteFor(fastify.prisma, {
+        conversation: shareLink.conversation,
+        senderParticipantId: participant.id
+      });
+      if (isConversationWriteRefused(linkAdmission)) {
+        return linkAdmission.reason === 'conversation-closed'
+          ? sendError(reply, 410, 'Cette conversation est fermée')
+          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
+      }
+
 
       // Traiter les liens dans le message AVANT la sauvegarde
       const { processedContent, trackingLinks } = await trackingLinkService.processMessageLinks({

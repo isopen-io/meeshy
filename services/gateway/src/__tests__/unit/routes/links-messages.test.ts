@@ -561,6 +561,86 @@ describe('POST /links/:id/messages — anonymous: canSendMessages=false', () => 
   });
 });
 
+// Le RANG d'écriture, sur les mêmes deux routes. Les droits du LIEN vérifiés
+// autour disent ce que le lien autorise ; ils ne disent rien de ce que la
+// conversation accepte. Un lien anonyme ouvert sur un canal d'annonces est la
+// contradiction que la garde tranche — et sans elle, le lien de partage restait
+// le seul tuyau par lequel un simple membre y publiait.
+
+describe('POST /links/:id/messages — anonymous: canal d’annonces', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>()
+      .mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async (args: any) => ({
+        ...mockParticipantShareLink,
+        conversation: projectConversation(args, {
+          type: 'group',
+          isActive: true,
+          closedAt: null,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin',
+        }),
+      }));
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      role: 'member', user: null,
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 and writes nothing for a plain member', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
+// Les DEUX branches ici aussi : le rang d'écriture se lit dans la MÊME
+// projection que l'état terminal, donc un champ oublié dans l'une des deux la
+// rendrait inerte exactement comme la garde de clôture l'avait été.
+describe.each([
+  ['mshy_ link id', MSHY_ID],
+  ['raw db id', DB_ID],
+])('POST /links/:id/messages/auth — canal d’annonces (%s)', (_label, linkParam) => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(
+      async (args: any) => ({
+        ...mockShareLink,
+        conversation: projectConversation(args, {
+          ...mockShareLink.conversation,
+          isActive: true,
+          closedAt: null,
+          isAnnouncementChannel: true,
+          defaultWriteRole: 'admin',
+        }),
+      })
+    );
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    prisma.participant.findUnique = jest.fn<any>().mockResolvedValue({
+      role: 'member', user: { role: 'USER' },
+    });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 and writes nothing for a plain member', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${linkParam}/messages/auth`, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: with tracking links', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });

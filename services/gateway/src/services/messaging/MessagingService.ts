@@ -169,12 +169,14 @@ export class MessagingService {
         }
       }
 
-      // 3.6. Admission dans le CONTENEUR — « no one can write », la phrase que
-      //      le schéma consacre à `Conversation.closedAt` et que personne
-      //      n'appliquait. Aucune des gardes traversées jusqu'ici ne lit l'état
-      //      de la conversation : celle du dessus porte bien un `isActive`,
-      //      mais c'est celui du `Participant`, et fermer une conversation ne
-      //      touche aucune ligne `Participant`. Voir `conversationWriteAdmission`.
+      // 3.6. Admission par l'ÉTAT DU CONTENEUR — la clôture, puis le rang
+      //      d'écriture. Aucune des gardes traversées jusqu'ici ne lit l'état de
+      //      la conversation : celle du dessus porte bien un `isActive`, mais
+      //      c'est celui du `Participant`, et fermer une conversation ne touche
+      //      aucune ligne `Participant`. Le drapeau `isAnnouncementChannel` ne
+      //      gouvernait rien non plus — sa règle vivait dans
+      //      `MessageValidator.checkPermissions`, sans un seul appelant de
+      //      production. Voir `conversationWriteAdmission`.
       //
       //      Posé ICI, comme `admitMessageForward` plus bas, parce que les
       //      trois transports d'envoi convergent sur `handleMessage`.
@@ -190,13 +192,20 @@ export class MessagingService {
       //      l'acheter.
       const conversationAdmission = await performanceLogger.withTiming(
         'messaging.conversationWriteAdmission',
-        () => admitConversationWrite(this.prisma, { conversationId }),
+        () => admitConversationWrite(this.prisma, {
+          conversationId,
+          senderParticipantId: participant.id
+        }),
         { ...corr, conversationId }
       );
       if (isConversationWriteRefused(conversationAdmission)) {
-        logger.info('write refused — conversation closed', { ...corr, conversationId });
+        logger.info('conversation write refused', {
+          ...corr, conversationId, reason: conversationAdmission.reason
+        });
         return this.createErrorResponse(
-          'Cette conversation est fermée : elle n’accepte plus de messages'
+          conversationAdmission.reason === 'conversation-closed'
+            ? 'Cette conversation est fermée : elle n’accepte plus de messages'
+            : 'Vous n’avez pas le droit d’écrire dans cette conversation'
         );
       }
 

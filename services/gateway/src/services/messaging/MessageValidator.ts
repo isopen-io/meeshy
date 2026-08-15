@@ -1,14 +1,29 @@
 /**
  * Message Validation Module
  * Handles all validation logic for message requests
+ *
+ * `checkPermissions` VIVAIT ICI, et n'a jamais été appelée par une seule ligne
+ * de production : `MessagingService.handleMessage` — l'entonnoir des trois
+ * transports d'envoi — n'invoque de ce module que `validateRequest`,
+ * `resolveConversationId` et `detectLanguage`. Les règles qu'elle portait ne
+ * gouvernaient donc rien : le canal d'annonces acceptait les messages de tout
+ * membre, et une conversation clôturée acceptait encore des écritures.
+ *
+ * Elles vivent désormais dans `conversationWriteAdmission.ts`, CÂBLÉE dans
+ * l'entonnoir et prouvée par ses témoins. Ce module ne garde que ce qu'il fait
+ * réellement — un garde orphelin à côté d'un garde réel est pire qu'aucun
+ * garde : il fait croire la règle appliquée.
+ *
+ * Ses règles ANONYMES (lien actif, non expiré, `allowAnonymousMessages`,
+ * `permissions.canSendMessages`) n'ont rien perdu : `routes/links/messages.ts`
+ * les applique en propre sur le chemin REST anonyme, qui est le seul à les
+ * avoir jamais fait respecter.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type {
   MessageRequest,
-  MessageValidationResult,
-  MessagePermissionResult,
-  AuthenticationContext
+  MessageValidationResult
 } from '@meeshy/shared/types';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
 import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
@@ -91,228 +106,6 @@ export class MessageValidator {
   }
 
   /**
-   * Vérification des permissions d'envoi de message
-   * Support authentication context robuste
-   */
-  async checkPermissions(
-    authContext: AuthenticationContext,
-    conversationId: string,
-    request: MessageRequest
-  ): Promise<MessagePermissionResult> {
-    try {
-      // Résoudre l'ID de conversation d'abord
-      const resolvedConversationId = await this.resolveConversationId(request.conversationId);
-      if (!resolvedConversationId) {
-        return this.createPermissionDenied('Conversation non trouvée');
-      }
-
-      // Récupérer les informations de la conversation
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: resolvedConversationId },
-        select: { type: true, identifier: true }
-      });
-
-      if (!conversation) {
-        return this.createPermissionDenied('Conversation non trouvée');
-      }
-
-      // Cas spécial : conversation globale
-      if (conversation.type === 'global') {
-        return {
-          canSend: true,
-          canSendAnonymous: authContext.isAnonymous,
-          canAttachFiles: !authContext.isAnonymous,
-          canMentionUsers: !authContext.isAnonymous,
-          canUseHighPriority: false
-        };
-      }
-
-      // Vérifier les permissions selon le type d'authentification
-      if (authContext.isAnonymous) {
-        return await this.checkAnonymousPermissions(authContext, conversationId);
-      } else {
-        return await this.checkRegisteredUserPermissions(authContext, conversationId);
-      }
-
-    } catch (error) {
-      logger.error('Error checking permissions', error as Error);
-
-      return this.createPermissionDenied(
-        `Erreur lors de la vérification des permissions: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
-      );
-    }
-  }
-
-  /**
-   * Vérifier les permissions pour un utilisateur anonyme
-   */
-  private async checkAnonymousPermissions(
-    authContext: AuthenticationContext,
-    conversationId: string
-  ): Promise<MessagePermissionResult> {
-    const identifier = authContext.sessionToken || authContext.userId || '';
-
-    const participant = await this.prisma.participant.findFirst({
-      where: {
-        sessionTokenHash: identifier,
-        conversationId: conversationId,
-        type: 'anonymous',
-        isActive: true
-      }
-    });
-
-    if (!participant) {
-      return this.createPermissionDenied(
-        'Utilisateur anonyme non autorisé dans cette conversation ou lien invalide'
-      );
-    }
-
-    // Look up the share link via conversation
-    const shareLink = await this.prisma.conversationShareLink.findFirst({
-      where: {
-        conversationId: conversationId,
-        isActive: true
-      },
-      select: {
-        id: true,
-        isActive: true,
-        allowAnonymousMessages: true,
-        allowAnonymousFiles: true,
-        allowAnonymousImages: true,
-        maxUses: true,
-        currentUses: true,
-        expiresAt: true,
-        maxConcurrentUsers: true,
-        currentConcurrentUsers: true
-      }
-    });
-
-    if (!shareLink) {
-      return this.createPermissionDenied(
-        'Aucun lien de partage actif pour cette conversation'
-      );
-    }
-
-    // Vérifier si le lien est toujours actif et valide
-    if (!shareLink.isActive) {
-      return this.createPermissionDenied('Le lien de partage a été désactivé');
-    }
-
-    // Vérifier la date d'expiration
-    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-      return this.createPermissionDenied('Le lien de partage a expiré');
-    }
-
-    // NB : `maxUses`/`currentUses` est un quota de JOINS (compteur incrémenté
-    // une fois par arrivée anonyme dans routes/anonymous.ts et
-    // routes/conversations/sharing.ts, vérifié contre `maxUses` au moment du
-    // join, exposé par l'admin comme `totalParticipants`/`anonymousCount`). Ce
-    // n'est PAS un budget de messages : re-gater chaque envoi dessus muterait
-    // définitivement tout participant déjà admis dès que le lien est plein. La
-    // limite d'usage se contrôle à l'entrée, jamais sur le chemin d'envoi.
-
-    // Vérifier les permissions spécifiques du lien
-    if (!shareLink.allowAnonymousMessages) {
-      return this.createPermissionDenied('Ce lien ne permet pas l\'envoi de messages');
-    }
-
-    // Vérifier les permissions spécifiques du participant
-    if (!participant.permissions?.canSendMessages) {
-      return this.createPermissionDenied('Vos permissions d\'envoi de messages ont été révoquées');
-    }
-
-    // Permissions accordées selon le lien et les capacités du participant
-    return {
-      canSend: true,
-      canSendAnonymous: true,
-      canAttachFiles: shareLink.allowAnonymousFiles && (participant.permissions?.canSendFiles ?? false),
-      canMentionUsers: false,
-      canUseHighPriority: false,
-      restrictions: {
-        maxContentLength: 1000,
-        maxAttachments: shareLink.allowAnonymousFiles ? 5 : 0,
-        allowedAttachmentTypes: shareLink.allowAnonymousFiles ?
-          (shareLink.allowAnonymousImages ? ['image', 'file'] : ['file']) : [],
-        rateLimitRemaining: 20
-      }
-    };
-  }
-
-  /**
-   * Vérifier les permissions pour un utilisateur enregistré
-   */
-  private async checkRegisteredUserPermissions(
-    authContext: AuthenticationContext,
-    conversationId: string
-  ): Promise<MessagePermissionResult> {
-    const userId = authContext.userId!;
-
-    const membership = await this.prisma.participant.findFirst({
-      where: {
-        conversationId,
-        userId,
-        isActive: true
-      }
-    });
-
-    if (!membership) {
-      return this.createPermissionDenied('Vous n\'êtes pas membre de cette conversation');
-    }
-
-    // Récupérer les infos de la conversation pour les permissions
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { type: true, isAnnouncementChannel: true, defaultWriteRole: true }
-    });
-
-    if (!conversation) {
-      return this.createPermissionDenied('Conversation non trouvée');
-    }
-
-    // Enforce write permissions (broadcast / announcement channels)
-    if (conversation.isAnnouncementChannel || (conversation.defaultWriteRole && conversation.defaultWriteRole !== 'everyone')) {
-      const roleHierarchy: Record<string, number> = {
-        member: 1, moderator: 2, admin: 3, creator: 4
-      };
-      const requiredRole = conversation.isAnnouncementChannel ? 'admin' : (conversation.defaultWriteRole || 'everyone');
-      const userRoleLevel = roleHierarchy[membership.role] ?? 0;
-      const requiredLevel = roleHierarchy[requiredRole] ?? 0;
-
-      // Also allow global platform admins (check via User table)
-      let isGlobalAdmin = false;
-      if (userRoleLevel < requiredLevel && authContext.userId) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: authContext.userId },
-          select: { role: true }
-        });
-        isGlobalAdmin = ['ADMIN', 'BIGBOSS', 'MODERATOR'].includes(user?.role || '');
-      }
-
-      if (userRoleLevel < requiredLevel && !isGlobalAdmin) {
-        return this.createPermissionDenied(
-          conversation.isAnnouncementChannel
-            ? 'Ce canal est en mode annonce — seuls les administrateurs peuvent publier'
-            : `Rôle insuffisant pour écrire dans cette conversation (requis: ${requiredRole})`
-        );
-      }
-    }
-
-    return {
-      canSend: membership.permissions?.canSendMessages ?? true,
-      canSendAnonymous: false,
-      canAttachFiles: membership.permissions?.canSendFiles ?? true,
-      canMentionUsers: true,
-      canUseHighPriority: conversation.type !== 'public' && conversation.type !== 'broadcast',
-      restrictions: {
-        maxContentLength: MESSAGE_LIMITS.MAX_MESSAGE_LENGTH,
-        maxAttachments: 100,
-        allowedAttachmentTypes: ['image', 'file', 'audio', 'video'],
-        rateLimitRemaining: 100
-      }
-    };
-  }
-
-  /**
    * Résout l'ID de conversation réel à partir de différents formats
    */
   async resolveConversationId(identifier: string): Promise<string | null> {
@@ -338,19 +131,5 @@ export class MessageValidator {
       logger.error('Language detection failed, fallback to fr', error as Error);
       return 'fr';
     }
-  }
-
-  /**
-   * Helper pour créer une réponse de permission refusée
-   */
-  private createPermissionDenied(reason: string): MessagePermissionResult {
-    return {
-      canSend: false,
-      canSendAnonymous: false,
-      canAttachFiles: false,
-      canMentionUsers: false,
-      canUseHighPriority: false,
-      reason
-    };
   }
 }
