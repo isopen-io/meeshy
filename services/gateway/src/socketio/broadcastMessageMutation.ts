@@ -1,8 +1,14 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { emitConversationPreviewUpdate, type PreviewEmitIO } from './emitConversationPreviewUpdate';
+import {
+  emitConversationPreviewUpdate,
+  type PreviewEmitIO,
+  type PreviewPrisma,
+} from './emitConversationPreviewUpdate';
 
-type MutationPrisma = Pick<PrismaClient, 'participant' | 'message'>;
+// Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
+// Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
+// modèles de diverger.
+type MutationPrisma = PreviewPrisma;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it

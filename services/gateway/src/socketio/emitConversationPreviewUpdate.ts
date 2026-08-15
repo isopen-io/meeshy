@@ -6,6 +6,7 @@ import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
 } from './utils/lastMessagePreviewPrism';
+import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -16,7 +17,47 @@ export interface PreviewEmitIO {
   to(room: string): { emit(event: string, payload: unknown): unknown };
 }
 
-type PreviewPrisma = Pick<PrismaClient, 'participant' | 'message'>;
+/**
+ * Exporté pour que les relais qui ne font que TRANSMETTRE ce prisma
+ * (`broadcastMessageMutation`) le dérivent au lieu d'en redéclarer un `Pick`
+ * jumeau — c'est cette duplication qui laissait la liste des modèles diverger
+ * d'un côté sans que l'autre l'apprenne.
+ */
+export type PreviewPrisma = Pick<
+  PrismaClient,
+  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences'
+>;
+
+/**
+ * La projection de l'aperçu, partagée par le dernier message GLOBAL et par le
+ * remplaçant que se voit servir un lecteur qui a masqué ce dernier — deux
+ * requêtes qui doivent rendre la même forme, sans quoi le payload d'un lecteur
+ * masquant perdrait des champs que celui de son voisin porte.
+ *
+ * Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche jamais sa
+ * position dans ce fanout temps réel de l'aperçu.
+ * `translations` / `originalLanguage` : le Prisme de la ligne de liste.
+ */
+const PREVIEW_MESSAGE_SELECT = {
+  id: true,
+  content: true,
+  senderId: true,
+  createdAt: true,
+  metadata: true,
+  translations: true,
+  originalLanguage: true,
+} as const;
+
+/** Ce qu'un dernier message — global ou propre à un lecteur — met sur le fil. */
+type PreviewMessage = {
+  id: string;
+  content: string | null;
+  senderId: string;
+  createdAt: Date;
+  metadata?: unknown;
+  translations?: unknown;
+  originalLanguage?: string | null;
+};
 
 /**
  * Restreint le fan-out d'un appelant qui ne parle PAS au nom d'une mutation du
@@ -68,6 +109,15 @@ export interface PreviewUpdateScope {
  * The current latest non-deleted message is recomputed here so the payload
  * is always self-consistent: editing or deleting a NON-latest message emits
  * the unchanged preview, which is an idempotent no-op on clients.
+ *
+ * Ce dernier message est GLOBAL, et il n'est pas celui de tout le monde :
+ * `deletedAt` ne porte que le « supprimer pour tous ». Le masquage PERSONNEL
+ * (`UserMessageDeletion`, `UserConversationPreferences.clearHistoryBefore`) vit
+ * dans deux tables qu'aucun `deletedAt` ne croise, si bien que ce fan-out
+ * repoussait dans la ligne de liste d'un lecteur le message qu'il venait d'en
+ * retirer — pendant que `GET /conversations` le lui masquait correctement
+ * (`resolveVisibleLastMessages`). `resolvePersonalPreviewOverrides` rend son
+ * propre dernier message visible à chaque lecteur concerné, et à eux seuls.
  *
  * Every active participant is reached, accountless ones included — see
  * `participantUserRooms`. This paragraph used to say the opposite ("anonymous
@@ -122,28 +172,45 @@ export async function emitConversationPreviewUpdate(
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        // Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche
-        // jamais sa position dans ce fanout temps réel de l'aperçu.
-        // `translations` / `originalLanguage` : le Prisme de la ligne de liste.
-        select: {
-          id: true,
-          content: true,
-          senderId: true,
-          createdAt: true,
-          metadata: true,
-          translations: true,
-          originalLanguage: true,
-        },
-      }),
+        select: PREVIEW_MESSAGE_SELECT,
+      }) as Promise<PreviewMessage | null>,
     ]);
 
     if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;
 
-    // Un message géolocalisé sans légende a un `lastMessagePreview` vide —
-    // hisser `location` ne fabrique aucun texte de repli côté serveur ; le
-    // client décide comment rendre "" + location (ex. via messageType ou la
+    // Le dernier message GLOBAL n'est pas le dernier message de tout le monde :
+    // `deletedAt` ne porte que le « supprimer pour tous », et le masquage
+    // personnel vit dans deux autres tables. Sans cette carte, un lecteur qui
+    // avait retiré ce message de sa propre vue se le voyait repousser dans sa
+    // ligne de liste — voir `resolvePersonalPreviewOverrides`. Résolue APRÈS le
+    // portillon `onlyIfLatestIs` : le chemin des traductions, le plus fréquenté
+    // des trois, abandonne avant d'avoir rien sondé.
+    const overrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
+      conversationId,
+      latest,
+      userIds: participants.map((p) => p.userId).filter((id): id is string => typeof id === 'string'),
+      select: PREVIEW_MESSAGE_SELECT,
+    });
+
+    // La moitié du payload qui dépend du message, donc du LECTEUR dès qu'il en
+    // a masqué un. `location` comprise : servir la position du message global à
+    // qui ne le voit pas placerait une épingle sous un aperçu qui parle d'autre
+    // chose. Un message géolocalisé sans légende a un `lastMessagePreview`
+    // vide — hisser `location` ne fabrique aucun texte de repli côté serveur ;
+    // le client décide comment rendre "" + location (ex. via messageType ou la
     // seule présence de `location`), pas ce helper.
-    const place = sharedPlaceFromMetadata((latest as { metadata?: unknown } | null)?.metadata);
+    const messagePayloadFor = (message: PreviewMessage | null) => {
+      const place = sharedPlaceFromMetadata(message?.metadata);
+      return {
+        lastMessageAt: message?.createdAt ?? null,
+        lastMessageId: message?.id ?? null,
+        // `lastMessagePreview` n'est PAS ici : il sort de
+        // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
+        // comme elle.
+        senderId: message?.senderId ?? null,
+        ...(place ? { location: place } : {}),
+      };
+    };
 
     const basePayload = {
       conversationId,
@@ -154,14 +221,7 @@ export async function emitConversationPreviewUpdate(
       // or the latest message is deleted leaving an earlier one on top. Mirrors
       // the send path in MeeshySocketIOManager, which always fills this field.
       updatedBy: { id: updatedByUserId },
-      lastMessageAt: latest?.createdAt ?? null,
-      lastMessageId: latest?.id ?? null,
-      // `lastMessagePreview` n'est PAS ici : il sort de
-      // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
-      // comme elle.
-      senderId: latest?.senderId ?? null,
       updatedAt: new Date().toISOString(),
-      ...(place ? { location: place } : {}),
     };
 
     // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme du
@@ -171,10 +231,18 @@ export async function emitConversationPreviewUpdate(
     const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
 
     for (const { room, participant } of participantUserRoomTargets(participants)) {
-      const prism = resolveLastMessagePreviewPrism(participant, latest);
+      // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
+      // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
+      // l'aperçu global rendrait exactement à l'envers.
+      const own =
+        participant.userId != null && overrides.has(participant.userId)
+          ? overrides.get(participant.userId) ?? null
+          : latest;
+      const prism = resolveLastMessagePreviewPrism(participant, own);
       if (wantedLanguage != null && !carriesLanguage(prism.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...basePayload,
+        ...messagePayloadFor(own),
         ...prism,
       });
     }

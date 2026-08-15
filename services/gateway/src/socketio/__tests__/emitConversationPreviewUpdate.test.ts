@@ -27,6 +27,11 @@ function makePrisma(
   return {
     participant: { findMany: jest.fn(async () => participants) },
     message: { findFirst: jest.fn(async () => latest) },
+    // Personne n'a rien masqué : la sonde du masquage personnel ne trouve rien
+    // et l'aperçu global est servi tel quel. C'est le cas de l'écrasante
+    // majorité des diffusions, donc le défaut de ce double.
+    userMessageDeletion: { findMany: jest.fn(async () => []) },
+    userConversationPreferences: { findMany: jest.fn(async () => []) },
   } as any;
 }
 
@@ -327,6 +332,116 @@ describe('emitConversationPreviewUpdate', () => {
     const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
     await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
+  });
+
+  // ── Masquage personnel du dernier message ────────────────────────────────
+  //
+  // `GET /conversations` résout déjà l'aperçu sous le masquage personnel
+  // (`resolveVisibleLastMessages`). Ce fan-out temps réel recalculait UN dernier
+  // message global et le poussait à tout le monde : un lecteur qui avait fait
+  // « supprimer pour moi » sur ce message se le voyait REVENIR dans sa ligne de
+  // liste dès la mutation suivante de la conversation.
+  function makeHidingPrisma(args: {
+    participants: Array<{ id?: string; userId: string | null; user?: unknown }>;
+    latest: any;
+    hiddenBy?: string[];
+    clearedBy?: string[];
+    replacement?: any;
+  }) {
+    const findFirst = jest.fn(async (q: any) => {
+      // La requête de repli porte le masquage du lecteur ; la requête globale non.
+      const isFallback = q?.where?.id !== undefined || q?.where?.createdAt !== undefined;
+      return isFallback ? (args.replacement ?? null) : args.latest;
+    });
+    return {
+      participant: { findMany: jest.fn(async () => args.participants) },
+      message: { findFirst },
+      userMessageDeletion: {
+        // Sert la sonde (`{ userId }`) ET le chargement complet du masquage des
+        // seuls lecteurs concernés (`{ userId, messageId }`).
+        findMany: jest.fn(async () =>
+          (args.hiddenBy ?? []).map((userId) => ({ userId, messageId: args.latest?.id })),
+        ),
+      },
+      userConversationPreferences: {
+        findMany: jest.fn(async () =>
+          (args.clearedBy ?? []).map((userId) => ({ userId, clearHistoryBefore: new Date('2030-01-01T00:00:00Z') })),
+        ),
+      },
+    } as any;
+  }
+
+  it('never pushes back a last message the reader deleted for themselves', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeHidingPrisma({
+      participants: [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+      ],
+      latest,
+      hiddenBy: ['user-A'],
+      replacement: {
+        id: 'msg-previous',
+        content: 'the one before',
+        senderId: 'participant-B',
+        createdAt: new Date('2026-07-09T09:00:00Z'),
+      },
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    const toA = emitted.find((e) => e.room === 'user:user-A')!;
+    const toB = emitted.find((e) => e.room === 'user:user-B')!;
+    // B n'a rien masqué : il reçoit l'aperçu global, inchangé.
+    expect(toB.payload.lastMessageId).toBe('msg-latest');
+    expect(toB.payload.lastMessagePreview).toBe('the current last message');
+    // A l'a masqué : il reçoit SON dernier message visible, jamais celui-là.
+    expect(toA.payload.lastMessageId).toBe('msg-previous');
+    expect(toA.payload.lastMessagePreview).toBe('the one before');
+    expect(toA.payload.senderId).toBe('participant-B');
+    expect(toA.payload.lastMessageAt).toEqual(new Date('2026-07-09T09:00:00Z'));
+  });
+
+  it('serves a blank preview to a reader who cleared the whole history', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeHidingPrisma({
+      participants: [{ id: 'p-A', userId: 'user-A' }],
+      latest,
+      clearedBy: ['user-A'],
+      replacement: null,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].payload.lastMessageId).toBeNull();
+    expect(emitted[0].payload.lastMessagePreview).toBeNull();
+    expect(emitted[0].payload.lastMessageAt).toBeNull();
+  });
+
+  it('asks only whether THIS preview is hidden, never for the reader s whole deletion history', async () => {
+    const prisma = makeHidingPrisma({
+      participants: [{ id: 'p-A', userId: 'user-A' }],
+      latest,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo([]), 'conv-1', 'user-editor');
+
+    expect((prisma.userMessageDeletion.findMany as jest.Mock).mock.calls[0][0]).toMatchObject({
+      where: { messageId: 'msg-latest', userId: { in: ['user-A'] } },
+    });
+  });
+
+  it('costs nothing when the conversation has no message left to hide', async () => {
+    const prisma = makeHidingPrisma({
+      participants: [{ id: 'p-A', userId: 'user-A' }],
+      latest: null,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo([]), 'conv-1', 'user-editor');
+
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+    expect(prisma.userConversationPreferences.findMany).not.toHaveBeenCalled();
   });
 
   it('never throws and reports through onError when the query fails', async () => {
