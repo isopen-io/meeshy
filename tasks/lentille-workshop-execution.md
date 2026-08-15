@@ -325,8 +325,8 @@ Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
 |---|---|---|---|
 | V0 | ✅ livrée (S-001→S-005, S-006 = cette table) | 42d3d9a2e | vert local |
 | V1 + P0 | ✅ livrée — 22 tâches, PR P0 = #3030 ; C-031 sur branche (dépend de la loi partagée, suivra en P1) | (courant) | bun vert local, macOS en cours |
-| V2 | ✅ 12/12 livrées — 5 miroirs Swift (89 vecteurs rejoués du bundle), providers TS+Swift, métriques, drapeaux, tokens CSS ; gel S1 prononcé ; main mergé. **REV-2 rendu** : 1 blocker (LocalBridgeProvider TS lisait `window.unreadCount` au lieu du `input.unreadCount` autoritatif du protocole — corrigé, tests discriminants jumeaux TS+Swift) + réserves R1 (substitution TS ajoutée), R3 (formatMediaSegment Swift aligné `count > 0`), R2/R4/R5/R6 tracées pour V3+. Exécution croisée : shared 1955 verts, web 899 verts, XCTest 11 suites Lentille vertes (run 31887931317), sdk-tests 7235/7236 (garde CollapsibleHeader réparé 8b30ec4f0) | (courant) | gel S1 confirmé sous condition du re-run vert |
-| V3 | bloquée par V2 | — | — |
+| V2 | ✅ 12/12 livrées — 5 miroirs Swift (89 vecteurs rejoués du bundle), providers TS+Swift, métriques, drapeaux, tokens CSS ; gel S1 prononcé ; main mergé. **REV-2 rendu** : 1 blocker (LocalBridgeProvider TS lisait `window.unreadCount` au lieu du `input.unreadCount` autoritatif du protocole — corrigé, tests discriminants jumeaux TS+Swift) + réserves R1 (substitution TS ajoutée), R3 (formatMediaSegment Swift aligné `count > 0`), R2/R4/R5/R6 tracées pour V3+. Exécution croisée : shared 1955 verts, web 899 verts, XCTest 11 suites Lentille vertes (run 31887931317), sdk-tests 7235/7236 (garde CollapsibleHeader réparé 8b30ec4f0) | 037a739d2 | **gel S1 CONFIRMÉ** — CI+iOS+SDK Tests verts sur 037a739d2 (runs 31891087403/306/455) |
+| V3 | **prête** — S1 gelé, réserves REV-2 R2/R4/R5/R6 à solder au fil des I-*/F-* ; démarrer sur `main` fraîche post-merge #3028 (worktrees §4) | — | — |
 | V4 | bloquée par PORTE V1 | — | — |
 | V5 | bloquée par PORTE V2 | — | — |
 | V6 | bloquée par REV-5 | — | — |
