@@ -86,6 +86,42 @@ final class StickySectionStructureTests: XCTestCase {
         )
     }
 
+    /// Épingler ne sert à rien si la ligne d'épinglage est CACHÉE. Un
+    /// `LazyVStack(pinnedViews:)` épingle au bord haut de la région visible de
+    /// son `ScrollView` ; ici ce bord est couvert par
+    /// `ConversationListHeaderOverlay`. L'inset descend la ligne sous la barre
+    /// REPLIÉE — l'état de la barre pendant qu'on défile, donc la seule cote
+    /// qui garantit un sticker entièrement visible tout du long.
+    func test_stickyPinLine_isPushedBelowTheHeaderBar_onlyWhenTheFlagIsOn() throws {
+        let code = normalizedCode(try listViewSource())
+
+        XCTAssertTrue(
+            code.contains("private var stickyHeaderInset: CGFloat { LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0 }"),
+            "L'inset de tête doit valoir la hauteur de la barre REPLIÉE sous drapeau ON et " +
+            "ZÉRO sous OFF, lue depuis `CollapsibleHeaderMetrics` — la métrique que le " +
+            "header consomme lui-même, jamais un nombre recopié. Un inset inconditionnel " +
+            "décalerait la liste de tout le monde, drapeau éteint compris."
+        )
+        XCTAssertTrue(
+            code.contains("private var scrollContentTopPadding: CGFloat { CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset }"),
+            "Ce que l'inset prend à la région visible, le padding de contenu cesse de le " +
+            "prendre au contenu : la somme reste `expandedHeight`, donc la position de repos " +
+            "de la liste ne bouge pas d'un point entre ON et OFF."
+        )
+        XCTAssertTrue(
+            code.contains("topPadding: scrollContentTopPadding"),
+            "Le `topPadding` passé à `MeeshyRefreshableScroll` doit être la part RESTANTE, " +
+            "pas `expandedHeight` en dur — sinon la liste démarre une hauteur de barre trop " +
+            "bas sous drapeau ON."
+        )
+        XCTAssertTrue(
+            code.contains(".safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: stickyHeaderInset) }"),
+            "L'inset se pose au SITE D'APPEL, sur `MeeshyRefreshableScroll` : le ScrollView " +
+            "interne hérite de la safe area réduite et sa ligne d'épinglage descend d'autant. " +
+            "`MeeshyRefreshableScroll` (SDK) n'est pas touché — gel S1."
+        )
+    }
+
     // MARK: - Travail 1-2 — rangs en contenu, sticker en header
 
     func test_eachGroup_rendersASectionWithRowsAsContentAndHeaderInHeaderSlot() throws {

@@ -169,22 +169,22 @@ struct ConversationListView: View {
 
     // MARK: - Pilule de section (LWS-6, drapeau Lentille)
     //
-    // AUCUN observateur de défilement nouveau ici — c'est la contrainte dure
-    // du contrat (« un seul détecteur, trois consommateurs »). Le détecteur
-    // reste l'unique `onScrollOffsetChange` de `MeeshyRefreshableScroll` ; il
-    // alimente déjà `isScrollingDown`, que consomment la barre du bas et les
-    // boutons flottants (RootView). La pilule est le TROISIÈME consommateur du
-    // MÊME signal : chaque bascule d'`isScrollingDown` est injectée comme un
-    // `.scrolled` dans la loi partagée, et c'est la LOI qui décide de la
-    // visibilité — jamais un timing réécrit ici.
+    // AUCUN observateur de défilement nouveau — contrainte dure du contrat. Le
+    // détecteur reste l'unique `onScrollOffsetChange` de
+    // `MeeshyRefreshableScroll` : il écrit dans `scrollOffsetRelay` ET dérive
+    // `isScrollingDown`. Trois consommateurs — la barre du bas et les boutons
+    // flottants (RootView) lisent `isScrollingDown` ; la pilule s'abonne au
+    // RELAIS, dans `SectionScrollPillHost`, exactement comme
+    // `ConversationListHeaderOverlay` le fait depuis toujours. C'est ce qui lui
+    // donne un événement par TICK de défilement, donc un effacement une fenêtre
+    // après l'ARRÊT réel et non après la dernière bascule de direction (le
+    // signal booléen ne bascule qu'aux changements de sens, throttlés à 0,15 s,
+    // et il est aussi remis à false par programme).
+    //
+    // L'état de la loi vit dans l'hôte, JAMAIS ici : le porter dans ce body
+    // re-diffuserait ~99 rangs à chaque tick — précisément le défaut que ce
+    // relais a été créé pour éliminer.
 
-    /// État de `ScrollTimePillLaw` (miroir Focal/Core, GELÉ S1 — partagé avec
-    /// la pilule du fil, amendement A4). Invisible à l'ouverture par
-    /// construction : `initialState()` n'a jamais vu de défilement.
-    @State private var scrollActivity: ScrollActivityState = ScrollTimePillLaw.initialState()
-    /// Visibilité RENDUE, recopiée depuis la loi (`isVisible`) et jamais
-    /// décidée ici.
-    @State private var isSectionPillVisible = false
     /// Section dont la pilule porte le nom. Alimentée par l'`onAppear` des
     /// rangs — le hook qui existe DÉJÀ (`triggerLoadMoreIfNeeded`) — et non par
     /// une sonde de géométrie, qui serait l'observateur que le contrat
@@ -612,55 +612,6 @@ struct ConversationListView: View {
         return LentilleSticker.displayTitle(match.name)
     }
 
-    /// Horodatage injecté dans la loi, en millisecondes — la loi ne lit JAMAIS
-    /// l'horloge murale elle-même (`ScrollTimePillLaw` : « les peaux sont
-    /// seules responsables de l'horloge »).
-    nonisolated static func scrollActivityTimestamp(_ date: Date = Date()) -> Double {
-        date.timeIntervalSince1970 * 1000
-    }
-
-    /// Délai de re-sondage, en nanosecondes pour `Task.sleep`. La FENÊTRE vient
-    /// de la loi partagée (`ScrollTimePillLaw.lingerMs`, miroir de
-    /// `SCROLL_ACTIVITY_LINGER_MS`) : cette peau n'écrit ni ne recopie sa
-    /// valeur, elle convertit une unité (garde R15).
-    nonisolated static var pillProbeDelayNanoseconds: UInt64 {
-        UInt64(ScrollTimePillLaw.lingerMs * 1_000_000)
-    }
-
-    /// Le signal existant a basculé ⇒ un `.scrolled` pour la loi. C'est le
-    /// SEUL point d'entrée de la pilule : aucune sonde, aucun timer permanent,
-    /// aucun `ScrollViewReader`.
-    private func handleScrollActivitySignal() {
-        guard LentilleFeatureFlag.isLentilleListEnabled else { return }
-        let instant = Self.scrollActivityTimestamp()
-        scrollActivity = ScrollTimePillLaw.reduce(state: scrollActivity, event: .scrolled(at: instant))
-        applyScrollActivity(at: instant)
-        scheduleScrollActivityProbe()
-    }
-
-    /// Re-sondage unique, une fenêtre après ce défilement-ci. `Task.sleep`
-    /// plutôt qu'un timer qui tourne : la liste ne paie rien tant que personne
-    /// ne défile, et chaque défilement porte SON propre re-sondage — le dernier
-    /// arrivé décide, ce qui reproduit exactement le réarmement de la loi sans
-    /// le réimplémenter. La sonde n'envoie qu'un `.tick` : elle ne réarme
-    /// jamais l'état, elle ne fait que redemander à la loi si l'on est encore
-    /// visible.
-    private func scheduleScrollActivityProbe() {
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: Self.pillProbeDelayNanoseconds)
-            let instant = Self.scrollActivityTimestamp()
-            scrollActivity = ScrollTimePillLaw.reduce(state: scrollActivity, event: .tick(at: instant))
-            applyScrollActivity(at: instant)
-        }
-    }
-
-    /// La LOI décide, la vue recopie. Écriture gardée par l'inégalité : sans
-    /// elle, chaque sonde invaliderait le body de la liste pour rien.
-    private func applyScrollActivity(at instant: Double) {
-        let visible = ScrollTimePillLaw.isVisible(state: scrollActivity, at: instant)
-        if visible != isSectionPillVisible { isSectionPillVisible = visible }
-    }
-
     /// `nil` ⇒ suivi éteint (drapeau OFF). Écriture gardée par l'inégalité :
     /// l'`onAppear` des rangs est un chemin chaud, et seule une FRONTIÈRE de
     /// section doit re-évaluer le body.
@@ -1020,11 +971,6 @@ struct ConversationListView: View {
         mainContentZStack
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
-                // TROISIÈME consommateur du même signal (barre du bas, boutons
-                // flottants, pilule) — greffé sur l'observateur EXISTANT plutôt
-                // qu'à côté : deux `adaptiveOnChange` de la même valeur, ce
-                // serait déjà deux détecteurs à tenir d'accord.
-                handleScrollActivitySignal()
             }
             .onAppear {
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
@@ -1151,22 +1097,29 @@ struct ConversationListView: View {
     // MARK: - Rail vivants & stories (LWS-6, drapeau Lentille)
 
     /// Mux de tête de liste. Drapeau OFF : `StoryTrayView`, à l'identique.
+    /// Drapeau ON : la FUSION — pastille « moi » en tête (arbitrage
+    /// I-063bis), puis les autres, bornées à `≤ 6` par le rail lui-même.
     ///
-    /// ÉCART SIGNALÉ (pas un oubli) : `StoryTrayView` héberge, en plus du
-    /// carrousel, la bulle « ma story » et ses chemins (composer, « Mes
-    /// stories », ajout de statut, sheet de profil). `StoriesVivantsRail`
-    /// (I-061, vue pure) ne porte que les pastilles des AUTRES : sous drapeau
-    /// ON, ces affordances personnelles disparaissent donc de la tête de liste.
-    /// Le contrat décrit le rail comme la « fusion `StoryTrayView` + vivants »,
-    /// ce qui appelle bien un remplacement — mais la moitié « ma story » de la
-    /// fusion n'a pas encore de vue. À trancher par Fable : soit le rail
-    /// reprend l'entrée « moi », soit la peau garde les deux.
+    /// Aucune navigation nouvelle : les trois destinations de « moi » sont les
+    /// chemins existants, appelés depuis ici plutôt que depuis le tray —
+    /// `StoryTrayActionResolver` décide (même règle, même annonce VoiceOver),
+    /// la liste « Mes stories » passe par le listener `openMyStories` des
+    /// RACINES (celui que la tuile Stories du profil emprunte déjà), le
+    /// composeur de story par `storyViewModel.showStoryComposer` (cover monté
+    /// aux racines) et le composeur de statut par la sheet que CETTE vue
+    /// héberge déjà (`showStatusComposer`).
     @ViewBuilder
     private var lentilleRailOrStoryTray: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
             StoriesVivantsRail(
+                selfEntry: lentilleRailSelfEntry,
                 entries: lentilleRailEntries,
-                onSelect: { userId in onStoryViewRequest?(userId, true) }
+                onSelect: { userId in onStoryViewRequest?(userId, true) },
+                onSelectSelf: { openMyStoriesFromRail() },
+                onSelfMoodTap: {
+                    showStatusComposer = true
+                    HapticFeedback.medium()
+                }
             )
         } else {
             StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
@@ -1175,6 +1128,52 @@ struct ConversationListView: View {
                 showStatusComposer = true
             })
         }
+    }
+
+    /// La pastille « moi ». `nil` si aucun utilisateur n'est résolu — le rail
+    /// retombe alors sur les seules autres pastilles, et sur `EmptyView` s'il
+    /// n'y en a aucune.
+    private var lentilleRailSelfEntry: LentilleRailSelfEntry? {
+        guard let currentUser = AuthManager.shared.currentUser else { return nil }
+        let userId = currentUser.id
+        // Un groupe entièrement expiré est traité comme « pas de story » —
+        // même règle que le tray, sinon l'anneau promet un viewer qui se
+        // refermerait aussitôt.
+        let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        return LentilleRailSelfEntry(
+            displayName: currentUser.displayName ?? currentUser.username,
+            avatarURL: currentUser.avatar,
+            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+            hasActiveStory: myGroup != nil,
+            // Le libellé sort de la MÊME règle que le routage ci-dessous : les
+            // deux ne peuvent pas diverger (régression déjà vécue côté tray).
+            actionLabel: StoryTrayActionResolver.avatarAccessibilityLabel(
+                hasMyStory: myGroup != nil,
+                hasAnyStory: storyViewModel.hasStories(forUserId: userId)
+            )
+        )
+    }
+
+    /// Tap sur « moi » : la décision appartient à `StoryTrayActionResolver`
+    /// (règle partagée avec le tray, déjà testée), jamais à cette vue. Les deux
+    /// destinations sont celles d'aujourd'hui — la liste « Mes stories » par le
+    /// listener des racines, le composeur par le cover des racines.
+    private func openMyStoriesFromRail() {
+        let userId = AuthManager.shared.currentUser?.id ?? ""
+        let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        switch StoryTrayActionResolver.avatarTap(
+            hasMyStory: myGroup != nil,
+            hasAnyStory: storyViewModel.hasStories(forUserId: userId)
+        ) {
+        case .manageStories:
+            // MÊME porte que la tuile « Stories » du profil
+            // (`ProfileUserPostsList`) : un listener unique par racine, jamais
+            // une sheet de plus montée par cet écran.
+            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+        case .createStory:
+            storyViewModel.showStoryComposer = true
+        }
+        HapticFeedback.medium()
     }
 
     /// Entrées du rail. Même filtrage que le tray (`storyScrollView`) : ni
@@ -1203,6 +1202,28 @@ struct ConversationListView: View {
             }
     }
 
+    // MARK: - Ligne d'épinglage des stickers (LWS-6/I-063bis)
+
+    /// Hauteur retirée à la région visible du défilement pour que les stickers
+    /// épinglés se posent SOUS la barre de header au lieu de disparaître
+    /// derrière elle. Vaut la hauteur de la barre REPLIÉE : c'est l'état de la
+    /// barre quand on défile, donc la seule cote qui garantit un sticker
+    /// entièrement visible pendant tout le défilement. Les deux valeurs
+    /// viennent de `CollapsibleHeaderMetrics` (64 déployée / 44 repliée), la
+    /// métrique que le header lui-même consomme — jamais un nombre recopié ici.
+    /// `0` sous drapeau OFF : ni inset, ni décalage.
+    private var stickyHeaderInset: CGFloat {
+        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0
+    }
+
+    /// Padding de contenu RESTANT, pour que la position de repos de la liste ne
+    /// bouge pas d'un point : ce que l'inset prend à la région visible, ce
+    /// padding cesse de le prendre au contenu. Somme constante =
+    /// `expandedHeight`, drapeau ON comme OFF.
+    private var scrollContentTopPadding: CGFloat {
+        CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset
+    }
+
     /// Drapeau OFF ⇒ AUCUNE pilule (rendu identique à aujourd'hui). Sous ON, la
     /// pilule est montée dès qu'il existe une section à nommer et reste dans
     /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
@@ -1214,7 +1235,7 @@ struct ConversationListView: View {
                 visibleSectionId: visibleSectionId,
                 sections: conversationViewModel.groupedConversations.map(\.section)
            ) {
-            SectionScrollPill(isVisible: isSectionPillVisible, text: title)
+            SectionScrollPillHost(relay: scrollOffsetRelay, title: title)
         }
     }
 
@@ -1250,7 +1271,7 @@ struct ConversationListView: View {
                         isScrollingDown = scrollingDown
                     }
                 },
-                topPadding: CollapsibleHeaderMetrics.expandedHeight
+                topPadding: scrollContentTopPadding
             ) {
                 VStack(spacing: 0) {
                     // Story carousel — sous drapeau Lentille, le rail « vivants
@@ -1363,6 +1384,19 @@ struct ConversationListView: View {
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 120)
+            }
+            // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
+            // épingle au bord haut de la RÉGION VISIBLE de son ScrollView. Ici
+            // ce bord est couvert par `ConversationListHeaderOverlay` : sans
+            // inset, le sticker épinglé se rangeait DERRIÈRE la barre — la
+            // restructuration I-062 était juste et son effet invisible.
+            // `safeAreaInset` réduit la région visible du ScrollView interne :
+            // la ligne d'épinglage descend sous la barre repliée, sans toucher
+            // à `MeeshyRefreshableScroll` (SDK, gelé S1).
+            // Drapeau OFF : hauteur 0 ⇒ inset inerte et `topPadding` inchangé
+            // (`expandedHeight`), rendu strictement identique à aujourd'hui.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: stickyHeaderInset)
             }
             .scrollDismissesKeyboard(.interactively)
 

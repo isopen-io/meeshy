@@ -34,6 +34,14 @@ final class ScrollPillStateTests: XCTestCase {
         try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
+    private func pillHostSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Lentille/Chrome/SectionScrollPillHost.swift")
+    }
+
+    private func railSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Lentille/Chrome/StoriesVivantsRail.swift")
+    }
+
     private func normalizedCode(_ source: String) -> String {
         AppSourceGuard.stripComments(source)
             .components(separatedBy: .whitespacesAndNewlines)
@@ -45,60 +53,79 @@ final class ScrollPillStateTests: XCTestCase {
         haystack.components(separatedBy: needle).count - 1
     }
 
-    // MARK: - Un seul détecteur, trois consommateurs
+    // MARK: - Un seul détecteur, un consommateur de plus
 
     func test_noNewScrollObserver_isIntroducedByTheLentilleChrome() throws {
-        let code = normalizedCode(try listViewSource())
+        let view = normalizedCode(try listViewSource())
+        let host = normalizedCode(try pillHostSource())
 
-        for forbidden in ["ScrollViewReader", "onScrollGeometryChange", "PreferenceKey"] {
-            XCTAssertEqual(
-                occurrences(of: forbidden, in: code), 0,
-                "`\(forbidden)` est apparu dans ConversationListView.swift : la pilule doit " +
-                "réutiliser le signal EXISTANT (contrat LWS-6 travail 4, « un seul détecteur, " +
-                "trois consommateurs — aucun observateur de scroll nouveau »). Un second " +
-                "observateur ne casse rien de visible : il double simplement le coût du " +
-                "défilement et fait diverger deux vérités."
-            )
+        for (file, code) in [("ConversationListView.swift", view), ("SectionScrollPillHost.swift", host)] {
+            for forbidden in ["ScrollViewReader", "onScrollGeometryChange", "PreferenceKey"] {
+                XCTAssertEqual(
+                    occurrences(of: forbidden, in: code), 0,
+                    "`\(forbidden)` est apparu dans \(file) : la pilule doit réutiliser le " +
+                    "détecteur EXISTANT (contrat LWS-6 travail 4, « un seul détecteur — aucun " +
+                    "observateur de scroll nouveau »). Un second observateur ne casse rien de " +
+                    "visible : il double le coût du défilement et fait diverger deux vérités."
+                )
+            }
         }
 
         XCTAssertEqual(
-            occurrences(of: "onScrollOffsetChange:", in: code), 1,
-            "Le détecteur de défilement doit rester UNIQUE — l'`onScrollOffsetChange` de " +
-            "`MeeshyRefreshableScroll`, qui alimente `isScrollingDown`."
+            occurrences(of: "onScrollOffsetChange:", in: view), 1,
+            "Le détecteur doit rester UNIQUE — l'`onScrollOffsetChange` de " +
+            "`MeeshyRefreshableScroll`, qui écrit `scrollOffsetRelay` ET dérive " +
+            "`isScrollingDown`."
         )
         XCTAssertEqual(
-            occurrences(of: "adaptiveOnChange(of: isScrollingDown)", in: code), 1,
-            "La pilule doit se greffer sur l'observateur EXISTANT d'`isScrollingDown`, pas " +
-            "s'en ajouter un second : deux `adaptiveOnChange` de la même valeur, ce sont " +
-            "déjà deux consommateurs à tenir d'accord."
+            occurrences(of: "adaptiveOnChange(of: isScrollingDown)", in: view), 1,
+            "Un seul observateur d'`isScrollingDown` — celui qui existait."
         )
         XCTAssertTrue(
-            code.contains("if !wasHidden && isHidden { showSearchOverlay = false } handleScrollActivitySignal() }"),
-            "Le troisième consommateur (la pilule) vit DANS le handler existant, après les " +
-            "deux autres — barre du bas et boutons flottants (RootView) lisent le même " +
-            "`isScrollingDown`."
+            view.contains("adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in if !wasHidden && isHidden { showSearchOverlay = false } }"),
+            "Le signal booléen ne pilote PLUS la pilule (arbitrage I-063bis) : il ne bascule " +
+            "qu'aux changements de direction, throttlés, et il est remis à false par " +
+            "programme (filtre, feed). Le brancher là donnait « une fenêtre après la dernière " +
+            "bascule », pas « une fenêtre après l'ARRÊT ». Il reste ce qu'il était pour la " +
+            "barre du bas et les boutons flottants."
+        )
+        XCTAssertTrue(
+            host.contains("@ObservedObject var relay: ScrollOffsetRelay"),
+            "La pilule s'abonne au RELAIS existant — un consommateur de plus sur un objet qui " +
+            "publiait déjà, exactement comme `ConversationListHeaderOverlay`."
+        )
+        XCTAssertTrue(
+            host.contains(".adaptiveOnChange(of: relay.offset) { _, _ in noteScrollEvent() }"),
+            "Un tick d'offset = un événement de défilement pour la loi. C'est ce qui donne à " +
+            "la pilule un ARRÊT observable, là où `isScrollingDown` n'a que des bascules."
+        )
+        XCTAssertEqual(
+            occurrences(of: "ScrollTimePillLaw", in: view), 0,
+            "L'état de la loi ne doit PAS vivre dans le body de la liste : l'y porter " +
+            "re-diffuserait ~99 rangs à chaque tick — le défaut même que `ScrollOffsetRelay` " +
+            "a été créé pour éliminer. Il vit dans l'hôte nominal."
         )
     }
 
     // MARK: - La loi décide, la peau recopie
 
     func test_pillVisibility_isDelegatedToTheSharedLaw_neverReimplemented() throws {
-        let code = normalizedCode(try listViewSource())
+        let code = normalizedCode(try pillHostSource())
 
         XCTAssertTrue(
-            code.contains("scrollActivity = ScrollTimePillLaw.reduce(state: scrollActivity, event: .scrolled(at: instant))"),
-            "Chaque bascule du signal doit entrer dans la loi comme un `.scrolled` — c'est " +
-            "elle qui réarme, jamais la vue."
+            code.contains("activity = ScrollTimePillLaw.reduce(state: activity, event: .scrolled(at: instant))"),
+            "Chaque tick d'offset doit entrer dans la loi comme un `.scrolled` — c'est elle " +
+            "qui réarme, jamais la vue."
         )
         XCTAssertTrue(
-            code.contains("let visible = ScrollTimePillLaw.isVisible(state: scrollActivity, at: instant)"),
+            code.contains("let visible = ScrollTimePillLaw.isVisible(state: activity, at: instant)"),
             "La visibilité doit être DEMANDÉE à la loi (`isVisible`), jamais calculée ici : " +
             "critère LWS-6 « loi LWS-0, pas une réimplémentation »."
         )
         XCTAssertTrue(
-            code.contains("event: .tick(at: instant)"),
-            "Le re-sondage doit passer un `.tick` : il redemande la visibilité SANS réarmer " +
-            "(un `.scrolled` de sonde ferait vivre la pilule pour toujours)."
+            code.contains("event: .tick(at: now)"),
+            "Le re-sondage passe un `.tick` : il redemande la visibilité SANS réarmer (un " +
+            "`.scrolled` de sonde ferait vivre la pilule pour toujours)."
         )
         XCTAssertEqual(
             occurrences(of: "900", in: code), 0,
@@ -106,23 +133,57 @@ final class ScrollPillStateTests: XCTestCase {
             "seule maison est `SCROLL_ACTIVITY_LINGER_MS` (packages/shared), mirroré par " +
             "`ScrollTimePillLaw.lingerMs`."
         )
+        XCTAssertTrue(
+            code.contains("guard !probeScheduled else { return }"),
+            "Une seule sonde en vol : sans ce verrou, un défilement de 60 ticks/s armerait " +
+            "60 `Task` dormantes par seconde pour un seul effacement à venir."
+        )
     }
 
-    /// Le délai de re-sondage est DÉRIVÉ de la loi : si la fenêtre partagée
-    /// change, la sonde suit sans qu'on touche à la vue. Le test compare à la
-    /// loi, jamais à un nombre — il resterait vert (et juste) après un
-    /// changement de fenêtre.
-    func test_probeDelay_isDerivedFromTheLawWindow() {
+    /// L'ARRÊT, pas la dernière bascule : la sonde se replace toujours sur
+    /// l'échéance de la fenêtre COURANTE, donc un défilement survenu entre
+    /// temps la repousse d'autant, et la pilule s'efface une fenêtre après le
+    /// DERNIER événement. Le test compare à la loi, jamais à un nombre — il
+    /// reste vrai si la fenêtre partagée change.
+    func test_probeDelay_tracksTheEndOfScrolling_notTheFirstEvent() {
+        let start = ScrollTimePillLaw.initialState()
         XCTAssertEqual(
-            ConversationListView.pillProbeDelayNanoseconds,
-            UInt64(ScrollTimePillLaw.lingerMs * 1_000_000),
-            "Le délai de re-sondage doit valoir EXACTEMENT la fenêtre de la loi, convertie " +
-            "en nanosecondes pour `Task.sleep`."
+            SectionScrollPillHost.probeDelayMs(state: start, at: 5_000), 0,
+            "Aucun défilement observé ⇒ rien à sonder (et rien à effacer)."
         )
-        XCTAssertGreaterThan(
-            ConversationListView.pillProbeDelayNanoseconds, 0,
-            "Une sonde à zéro sonderait avant que la fenêtre ne s'ouvre : la pilule " +
-            "clignoterait au lieu de persister."
+
+        let firstScroll = 1_000.0
+        var state = ScrollTimePillLaw.reduce(state: start, event: .scrolled(at: firstScroll))
+        XCTAssertEqual(
+            SectionScrollPillHost.probeDelayMs(state: state, at: firstScroll),
+            ScrollTimePillLaw.lingerMs,
+            "Juste après un défilement, l'échéance est une fenêtre plus loin."
+        )
+
+        // Le défilement CONTINUE : 300 ms plus tard, un nouvel événement.
+        let secondScroll = firstScroll + 300
+        state = ScrollTimePillLaw.reduce(state: state, event: .scrolled(at: secondScroll))
+        XCTAssertEqual(
+            SectionScrollPillHost.probeDelayMs(state: state, at: secondScroll),
+            ScrollTimePillLaw.lingerMs,
+            "Chaque événement repousse l'échéance : la pilule ne peut pas s'effacer PENDANT " +
+            "qu'on défile — c'est la différence entre « après l'arrêt » et « après la " +
+            "dernière bascule de direction »."
+        )
+        XCTAssertTrue(
+            ScrollTimePillLaw.isVisible(state: state, at: firstScroll + ScrollTimePillLaw.lingerMs),
+            "À l'échéance du PREMIER événement, un défilement plus récent la garde visible."
+        )
+
+        // Sonde à l'échéance courante : la fenêtre est écoulée.
+        let deadline = secondScroll + ScrollTimePillLaw.lingerMs
+        XCTAssertEqual(
+            SectionScrollPillHost.probeDelayMs(state: state, at: deadline), 0,
+            "À l'échéance, plus rien à attendre — la sonde ne se réarme pas."
+        )
+        XCTAssertFalse(
+            ScrollTimePillLaw.isVisible(state: state, at: deadline),
+            "Une fenêtre après le DERNIER défilement : invisible."
         )
     }
 
@@ -161,7 +222,7 @@ final class ScrollPillStateTests: XCTestCase {
     func test_timestamp_isInMilliseconds_theUnitTheLawExpects() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         XCTAssertEqual(
-            ConversationListView.scrollActivityTimestamp(date),
+            SectionScrollPillHost.timestamp(date),
             1_700_000_000_000,
             "La loi raisonne en MILLISECONDES (miroir du TS). Injecter des secondes " +
             "rendrait la fenêtre 1000 fois trop longue — la pilule ne s'effacerait " +
@@ -220,14 +281,19 @@ final class ScrollPillStateTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertEqual(
-            occurrences(of: "SectionScrollPill(", in: code), 1,
-            "La pilule doit être montée — une fois. I-061 l'a écrite et testée sans la " +
-            "monter : une vue juste, compilée, invisible."
+            occurrences(of: "SectionScrollPillHost(relay: scrollOffsetRelay, title: title)", in: code), 1,
+            "La pilule doit être montée — une fois, via son hôte, alimenté par le relais " +
+            "EXISTANT. I-061 l'avait écrite et testée sans la monter : une vue juste, " +
+            "compilée, invisible."
         )
         XCTAssertTrue(
             code.contains("if LentilleFeatureFlag.isLentilleListEnabled, let title = Self.sectionPillTitle("),
             "…et derrière SA condition : drapeau OFF ⇒ aucune pilule, rendu identique à " +
             "aujourd'hui."
+        )
+        XCTAssertEqual(
+            occurrences(of: "SectionScrollPill(", in: normalizedCode(try pillHostSource())), 1,
+            "La vue pure de I-061 est rendue par son hôte, et par lui seul."
         )
     }
 
@@ -257,6 +323,99 @@ final class ScrollPillStateTests: XCTestCase {
         XCTAssertTrue(
             code.contains("PinnedStoryTrailBand( viewModel: storyViewModel, scrollOffset: offset, onViewStory: { userId in onStoryViewRequest?(userId, true) } )"),
             "`PinnedStoryTrailBand` : inchangé (contrat LWS-6 travail 5)."
+        )
+    }
+
+    // MARK: - Fusion du rail : « moi » en première pastille (I-063bis)
+
+    func test_railRendersTheSelfEntryFirst_beforeTheOthers() throws {
+        let rail = normalizedCode(try railSource())
+
+        guard let selfIndex = rail.range(of: "LentilleRailSelfEntryView(")?.lowerBound,
+              let othersIndex = rail.range(of: "ForEach(visible)")?.lowerBound else {
+            return XCTFail(
+                "Le rail doit rendre une pastille « moi » (`LentilleRailSelfEntryView`) ET la " +
+                "liste des autres (`ForEach(visible)`) — StoriesVivantsRail.swift."
+            )
+        }
+
+        XCTAssertTrue(
+            selfIndex < othersIndex,
+            "« Moi » est la PREMIÈRE pastille (arbitrage I-063bis) : rendue avant le " +
+            "`ForEach` des autres. Sous drapeau ON le rail REMPLACE `StoryTrayView` — " +
+            "reléguer « moi » après les autres, ou l'oublier, retire de la tête de liste le " +
+            "seul chemin vers mes stories et mon statut."
+        )
+        XCTAssertTrue(
+            rail.contains("if let selfEntry { LentilleRailSelfEntryView("),
+            "…et seulement s'il y a un utilisateur résolu."
+        )
+    }
+
+    /// La borne des `≤ 6` compte les AUTRES : « moi » n'est pas une des six,
+    /// exactement comme le tray comptait les autres à droite de son bouton.
+    func test_selfEntry_doesNotConsumeOneOfTheSixSlots() {
+        let entries = (0..<9).map { LentilleRailEntry(id: "u\($0)", displayName: "User \($0)") }
+        XCTAssertEqual(
+            LentilleRailPolicy.visibleEntries(entries).count,
+            LentilleMetrics.Rail.maxEntries,
+            "La troncature s'applique aux entrées des autres, indépendamment de « moi »."
+        )
+    }
+
+    func test_railIsHidden_onlyWhenThereIsNeitherSelfNorAnyone() {
+        let me = LentilleRailSelfEntry(displayName: "Moi")
+
+        XCTAssertFalse(
+            LentilleRailPolicy.shouldRender(selfEntry: nil, entries: []),
+            "Ni moi ni personne ⇒ masqué (règle « masquée si vide » du contrat)."
+        )
+        XCTAssertTrue(
+            LentilleRailPolicy.shouldRender(selfEntry: me, entries: []),
+            "Personne d'autre n'a publié, mais « moi » reste : le rail est rendu. Le tray " +
+            "était lui aussi toujours là — faire disparaître le seul accès à mes stories et " +
+            "à mon statut parce que mes amis n'ont rien publié serait une régression."
+        )
+        XCTAssertTrue(
+            LentilleRailPolicy.shouldRender(selfEntry: nil, entries: [LentilleRailEntry(id: "u1", displayName: "A")]),
+            "Utilisateur non résolu mais des stories à montrer ⇒ rendu."
+        )
+    }
+
+    /// Les trois destinations de « moi » sont celles d'AUJOURD'HUI : la règle
+    /// de routage est le résolveur partagé, la liste passe par le listener des
+    /// racines, le composeur de statut par la sheet que la liste héberge déjà.
+    /// Zéro navigation nouvelle.
+    func test_selfEntryRouting_reusesTheExistingDoors() throws {
+        let code = normalizedCode(try listViewSource())
+
+        XCTAssertEqual(
+            occurrences(of: "StoryTrayActionResolver.avatarTap(", in: code), 1,
+            "La décision du tap « moi » appartient au résolveur PARTAGÉ avec le tray " +
+            "(`StoryTrayActionResolver`), jamais à une règle recopiée dans la liste — les " +
+            "deux peaux ne peuvent pas diverger."
+        )
+        XCTAssertTrue(
+            code.contains("actionLabel: StoryTrayActionResolver.avatarAccessibilityLabel("),
+            "L'annonce VoiceOver sort de la MÊME règle que le routage : le libellé et la " +
+            "destination ne peuvent pas diverger (régression déjà vécue côté tray, « Changer " +
+            "mon mood » annoncé pour un tap qui ouvrait le composeur)."
+        )
+        XCTAssertEqual(
+            occurrences(of: "NotificationCenter.default.post(name: Notification.Name(\"openMyStories\")", in: code), 1,
+            "« Mes stories » passe par le listener des RACINES (RootView / iPadRootView) — la " +
+            "porte que la tuile Stories du profil emprunte déjà. Monter une sheet de plus " +
+            "depuis cet écran serait une navigation nouvelle, et une double présentation le " +
+            "jour où deux écrans la montent."
+        )
+        XCTAssertTrue(
+            code.contains("case .createStory: storyViewModel.showStoryComposer = true"),
+            "Le composeur de story passe par le cover monté aux racines, comme depuis S5."
+        )
+        XCTAssertEqual(
+            occurrences(of: "showStatusComposer = true", in: code), 2,
+            "L'ajout de statut ouvre la sheet que CETTE vue héberge déjà — un site pour le " +
+            "rail (drapeau ON), un pour le tray (OFF), et pas une sheet de plus."
         )
     }
 

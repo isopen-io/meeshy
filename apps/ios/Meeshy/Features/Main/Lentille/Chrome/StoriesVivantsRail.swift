@@ -31,6 +31,47 @@ nonisolated public struct LentilleRailEntry: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Entrée « moi » du rail — la moitié PERSONNELLE de la fusion
+/// `StoryTrayView` + vivants (arbitrage LWS-6/I-063bis). Toujours rendue en
+/// PREMIÈRE pastille, et hors de la borne des `≤ 6` : cette borne compte les
+/// AUTRES, exactement comme le tray comptait les autres à droite de son bouton
+/// « moi ».
+///
+/// Aucune décision de routage ici : la vue expose deux gestes (la pastille, sa
+/// pastille de mood) et l'appelant y branche les chemins qui existent déjà.
+///
+/// `nonisolated` — même raison que `LentilleRailEntry`.
+nonisolated public struct LentilleRailSelfEntry: Equatable, Sendable {
+    public let displayName: String
+    public let avatarURL: String?
+    /// Mood courant s'il existe — la pastille secondaire l'affiche, comme le
+    /// bouton « moi » du tray ; à défaut elle affiche un `+`.
+    public let moodEmoji: String?
+    /// Anneau accentué = au moins une story ACTIVE (jamais un historique
+    /// entièrement expiré, dont le viewer se refermerait aussitôt).
+    public let hasActiveStory: Bool
+    /// Annonce VoiceOver du tap — fournie par l'appelant, qui la tient de la
+    /// MÊME règle que le routage (`StoryTrayActionResolver`). Le libellé et la
+    /// destination ne peuvent donc pas diverger (régression déjà vécue côté
+    /// tray : « Changer mon mood » annoncé pour un tap qui ouvrait le
+    /// composeur). `nil` ⇒ repli sur le nom affiché.
+    public let actionLabel: String?
+
+    public init(
+        displayName: String,
+        avatarURL: String? = nil,
+        moodEmoji: String? = nil,
+        hasActiveStory: Bool = false,
+        actionLabel: String? = nil
+    ) {
+        self.displayName = displayName
+        self.avatarURL = avatarURL
+        self.moodEmoji = moodEmoji
+        self.hasActiveStory = hasActiveStory
+        self.actionLabel = actionLabel
+    }
+}
+
 /// Politique pure du rail — testable indépendamment de tout rendu SwiftUI.
 /// `nonisolated` — même précédent que `LentilleRailEntry` ci-dessus.
 nonisolated public enum LentilleRailPolicy {
@@ -45,6 +86,15 @@ nonisolated public enum LentilleRailPolicy {
     /// `EmptyView` plutôt qu'un rail vide avec un fond visible.
     public static func shouldRender(_ entries: [LentilleRailEntry]) -> Bool {
         !visibleEntries(entries).isEmpty
+    }
+
+    /// Depuis la fusion (I-063bis), « vide » veut dire : NI moi, NI personne.
+    /// Tant qu'il y a une entrée « moi » le rail est rendu — le tray était lui
+    /// aussi toujours là, et faire disparaître le seul chemin vers « mes
+    /// stories » et « mon statut » parce que personne d'autre n'a publié serait
+    /// une régression, pas une épure.
+    public static func shouldRender(selfEntry: LentilleRailSelfEntry?, entries: [LentilleRailEntry]) -> Bool {
+        selfEntry != nil || shouldRender(entries)
     }
 }
 
@@ -66,28 +116,148 @@ nonisolated public enum LentilleRailPolicy {
 /// loi en dur ici (garde R15).
 public struct StoriesVivantsRail: View {
 
+    /// La moitié « moi » de la fusion — PREMIÈRE pastille, hors de la borne
+    /// des `≤ 6`. `nil` = pas d'utilisateur résolu (le rail retombe alors sur
+    /// les seules autres pastilles).
+    public var selfEntry: LentilleRailSelfEntry?
     public let entries: [LentilleRailEntry]
     public var onSelect: ((String) -> Void)?
+    /// Tap sur « moi » — l'appelant y branche la règle EXISTANTE
+    /// (`StoryTrayActionResolver.avatarTap`), le rail n'en connaît rien.
+    public var onSelectSelf: (() -> Void)?
+    /// Tap sur la pastille de mood de « moi » — le composeur de statut, même
+    /// chemin qu'aujourd'hui.
+    public var onSelfMoodTap: (() -> Void)?
 
-    public init(entries: [LentilleRailEntry], onSelect: ((String) -> Void)? = nil) {
+    public init(
+        selfEntry: LentilleRailSelfEntry? = nil,
+        entries: [LentilleRailEntry],
+        onSelect: ((String) -> Void)? = nil,
+        onSelectSelf: (() -> Void)? = nil,
+        onSelfMoodTap: (() -> Void)? = nil
+    ) {
+        self.selfEntry = selfEntry
         self.entries = entries
         self.onSelect = onSelect
+        self.onSelectSelf = onSelectSelf
+        self.onSelfMoodTap = onSelfMoodTap
     }
 
     @ViewBuilder
     public var body: some View {
         let visible = LentilleRailPolicy.visibleEntries(entries)
-        if visible.isEmpty {
+        if !LentilleRailPolicy.shouldRender(selfEntry: selfEntry, entries: entries) {
             EmptyView()
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.sm) {
+                    if let selfEntry {
+                        LentilleRailSelfEntryView(
+                            entry: selfEntry,
+                            onSelect: onSelectSelf,
+                            onMoodTap: onSelfMoodTap
+                        )
+                    }
                     ForEach(visible) { entry in
                         LentilleRailEntryView(entry: entry, onSelect: onSelect)
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
             }
+        }
+    }
+}
+
+/// Pastille « moi » — même géométrie que les autres (`LentilleMetrics.Rail`),
+/// plus la pastille de mood qui ouvre le composeur de statut. Deux
+/// `Button(.plain)` distincts, jamais un `.onTapGesture` : c'est la paire
+/// (avatar, mood) que `MeeshyAvatar` offre déjà au bouton « moi » du tray,
+/// rendue avec les cotes du rail.
+private struct LentilleRailSelfEntryView: View {
+    let entry: LentilleRailSelfEntry
+    var onSelect: (() -> Void)?
+    var onMoodTap: (() -> Void)?
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
+    var body: some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            ZStack(alignment: .bottomTrailing) {
+                Button { onSelect?() } label: { pastille }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .accessibilityLabel(entry.actionLabel ?? entry.displayName)
+
+                if let onMoodTap {
+                    Button(action: onMoodTap) { moodBadge }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .accessibilityLabel(StoryTrayCopy.changeMood)
+                }
+            }
+
+            Text(entry.displayName)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .lineLimit(1)
+                .frame(width: LentilleMetrics.Rail.size)
+        }
+    }
+
+    private var pastille: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(ringColor, lineWidth: LentilleMetrics.Rail.ringWidth)
+                .frame(width: LentilleMetrics.Rail.size, height: LentilleMetrics.Rail.size)
+
+            avatarContent
+                .frame(width: avatarDiameter, height: avatarDiameter)
+                .clipShape(Circle())
+        }
+    }
+
+    private var moodBadge: some View {
+        ZStack {
+            Circle()
+                .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
+                .frame(width: badgeDiameter, height: badgeDiameter)
+
+            if let moodEmoji = entry.moodEmoji {
+                Text(moodEmoji)
+                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
+            } else {
+                Image(systemName: "plus")
+                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize, weight: .bold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+            }
+        }
+    }
+
+    /// Dérivé de l'anneau du rail, jamais une cote nouvelle (garde R15) : la
+    /// pastille de mood fait la place laissée par l'anneau, de part et d'autre.
+    private var badgeDiameter: CGFloat {
+        LentilleMetrics.Rail.ringWidth * 2 + LentilleMetrics.Tags.emojiSize
+    }
+
+    private var avatarDiameter: CGFloat {
+        LentilleMetrics.Rail.size - LentilleMetrics.Rail.ringWidth * 2
+    }
+
+    private var ringColor: Color {
+        entry.hasActiveStory ? MeeshyColors.brandPrimary : MeeshyColors.textMuted(isDark: isDark)
+    }
+
+    @ViewBuilder
+    private var avatarContent: some View {
+        if let raw = entry.avatarURL, let url = URL(string: raw) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
+            }
+        } else {
+            Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
         }
     }
 }
