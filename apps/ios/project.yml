@@ -326,6 +326,14 @@ targets:
     resources:
       - path: ../../packages/shared/fixtures
         type: folder
+      # Domicile des cotes Lentille (contrat LWS-5, §0/§4.3) : le JSON vit
+      # sous packages/shared/design/, PAS sous fixtures/ — un dossier distinct
+      # au même titre, câblé par la même mécanique `type: folder` pour que
+      # LentilleMetricsTests le retrouve dans le bundle de tests sous
+      # `design/lentille-tokens.json`. Propriété de ce fichier, ligne unique
+      # additionnelle : LWS-5 (M-045).
+      - path: ../../packages/shared/design
+        type: folder
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic
