@@ -166,7 +166,7 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
    explicitement relevé à iOS 17+ dans une décision future et séparée. Retiré du backlog actif —
    ne plus re-proposer sans qu'une nouvelle décision utilisateur relève le plancher.
 
-7. **[PARTIELLEMENT FAIT — sous-lot SDK-side livré 2026-08-12, PR #2868, `2762362b0`]**
+7. **[FAIT — clos 2026-08-15, dernière pièce PR #3050, `bafc8b39d`]**
    `UIScreen.main` deprecated (iOS 16+, remplaçant : `@Environment(\.displayScale)` pour
    `.scale` en contexte View, la fenêtre active pour `.bounds`). **25 fichiers matchent le grep,
    mais l'écrasante majorité N'EST PAS un vrai gap** — triage complet effectué avant de conclure
@@ -222,13 +222,39 @@ journal ci-dessous pour la preuve associée à chaque changement de statut.
      vert, CI PR #2868 verte (17 checks — cf. correction de doc au §Livrer de ce fichier prompt :
      un diff `packages/MeeshySDK`-only déclenche en réalité TOUTE la matrice `ci.yml`, pas
      seulement `sdk-tests`).
-   - **Reste ouvert, différé** : `Bubble/BubbleStandardLayout+Media.swift:548` (app,
-     `UIScreen.main.scale` seul — PAS `.bounds`, donc hors scope de ce sous-lot ; candidat propre
-     pour `@Environment(\.displayScale)` mais nécessite de vérifier si `BubbleGridImageView` a déjà
-     accès à un `@Environment` dans son contexte body, pas fait ce run).
-   Prochain run qui reprend cet item : traiter `BubbleStandardLayout+Media.swift:548` seul —
-   c'est la dernière pièce du groupe "candidats View confirmés" du run précédent, scope différent
-   des swaps `WindowMetrics` (nécessite `@Environment`, pas une simple substitution).
+   - **[LIVRÉ 2026-08-15, PR #3050, `bafc8b39d`]** `Bubble/BubbleStandardLayout+Media.swift:548`
+     (`BubbleGridImageView`, `targetWidthPx = Int((cellPointWidth * UIScreen.main.scale).rounded())`)
+     — seul usage `UIScreen.main` restant dans le fichier (confirmé par grep exhaustif avant coder),
+     `.scale` seul (pas `.bounds`), en contexte `View` réel (`BubbleGridImageView: View`, struct
+     SwiftUI simple, pas de contrainte MainActor/CALayer comme les sites StoryXxxLayer). Différent
+     du budget de décodage `ConversationMediaGalleryView.swift:251`/`BubbleStandardLayout.swift:612`
+     (NE PAS TOUCHER, ci-dessus) : ici `.frame` a déjà résolu la taille de cellule au moment où
+     `targetWidthPx` choisit seulement quelle variante pré-encodée demander — aucun compromis
+     Stage-Manager sur/sous-décodage à préserver, c'est une pure modernité d'API. Remplacé par
+     `@Environment(\.displayScale) private var displayScale: CGFloat` + `cellPointWidth *
+     displayScale`. Garde de source dédiée
+     `BubbleGridImageDisplayScaleSourceGuardTests.swift` (égalité exacte
+     `@Environment(\.displayScale)` présent / `UIScreen.main` absent du fichier), avec contrôle
+     positif (détecte le pattern banni) et contrôle négatif (accepte la forme corrigée, ignore les
+     commentaires). Mutation-proof : fichier remis temporairement à `UIScreen.main.scale` (copie de
+     secours `/tmp`, jamais `git checkout --`) → exactement ce test échoue, restauré, re-vérifié
+     vert. Vérifié : test ciblé vert (3/3), `./apps/ios/meeshy.sh build` vert, CI PR #3050 — 17
+     checks tous verts (`Trivy`/`Voice E2E Benchmark` : skipping, normal). Ce dernier candidat
+     clôturait le groupe "candidats View confirmés" identifié aux runs précédents — **l'item 7 est
+     maintenant intégralement FAIT** (SDK-side PR #2868 + safe-area PR #3041 + ce dernier site) :
+     zéro usage `UIScreen.main` restant dans le repo qui ne soit pas un faux positif commentaire, une
+     contrainte MainActor/CALayer délibérée, un budget de décodage vérifié, ou un usage hors-contexte
+     `View` nécessitant un threading de paramètre (catégories toutes documentées ci-dessus,
+     inchangées).
+   **Incident opérationnel ce run, sans rapport avec le code livré** : disque plein (`ENOSPC`) en
+   cours de vérification — root cause : 6 dossiers `~/Library/Developer/Xcode/DerivedData/
+   Meeshy-<hash>` (~13.5GB) accumulés par des appels `xcodebuild test` directs sans
+   `-derivedDataPath`, distincts du dossier partagé workspace-relatif `apps/ios/Build` utilisé par
+   `meeshy.sh`/CI. Résolu par suppression des dossiers orphelins (libère l'espace, aucun impact sur
+   le build partagé). Leçon retenue : toujours passer `-derivedDataPath apps/ios/Build` (ou
+   équivalent) sur tout appel `xcodebuild` direct pour éviter la récidive — la preuve de mutation
+   avait déjà été capturée dans le log AVANT l'incident, donc aucune perte de travail ni re-run
+   nécessaire une fois l'espace disque restauré.
 
 8. **[FAIT — 2026-08-15, PR #3041, `d123fe444`]** `StoryComposerView+Canvas.swift:1440`
    (`safeAreaBottomInset`), `MeeshyImageEditorView.swift:118-120` et
@@ -959,4 +985,52 @@ dont un nouveau « Build app (app + cibles de test) » et « Portée du run » o
 fois (infra CI ajoutée par le chantier « Lentille » récemment mergé — aucune action requise).
 
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-windowmetrics-safearea`
+  (commit séparé, poussé directement sur `main`).
+
+### 2026-08-15 — Run #9 (item 7 : dernière pièce, BubbleGridImageView → @Environment(\.displayScale))
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5
+last_run=conversation-lock-listview-scoping` — règle d'alternance (streak ≥ 5) déclenchée, bascule
+vers `IOS_DETTE`. Scan de reprise : aucune PR ouverte matchant la routine. Repris exactement le
+finding laissé en différé au run #8 (item 7 backlog) : `BubbleStandardLayout+Media.swift:548`, seul
+site `UIScreen.main` restant du groupe "candidats View confirmés".
+
+**RE-PROUVÉ avant de coder** : grep exhaustif du fichier entier confirme `UIScreen.main.scale` comme
+UNIQUE occurrence ; lu `BubbleGridImageView` en entier — struct `View` SwiftUI simple, aucune
+contrainte MainActor/CALayer (contrairement aux `StoryXxxLayer`) ; confirmé via son seul call site
+que `.frame` a déjà résolu la taille de cellule avant que `targetWidthPx` ne choisisse la variante à
+requêter — donc pas un budget de décodage Stage-Manager (contrairement à
+`ConversationMediaGalleryView.swift:251`/`BubbleStandardLayout.swift:612`), une pure modernité d'API.
+
+**TDD** : RED — `BubbleGridImageDisplayScaleSourceGuardTests.swift` (garde de source, égalité exacte
+`@Environment(\.displayScale)` présent / `UIScreen.main` absent), + contrôle positif/négatif.
+Confirmé en échec contre la source non modifiée. GREEN — ajout de `@Environment(\.displayScale)
+private var displayScale: CGFloat`, `cellPointWidth * UIScreen.main.scale` →
+`cellPointWidth * displayScale`. Test relancé isolément → succès (3/3).
+
+**Mutation-proof** : fichier remis temporairement à `UIScreen.main.scale` (copie de secours
+`/tmp/BubbleStandardLayout+Media.swift.bak`, jamais `git checkout --`) → exactement le test
+`test_bubbleGridImageView_readsDisplayScaleFromTheEnvironment` échoue, restauré, re-vérifié vert.
+
+**Incident, résolu, sans rapport avec le code livré** : `ENOSPC` (disque plein) pendant la
+vérification — tout appel Bash échouait, y compris un `df -h` nu, en tentant d'écrire son propre
+fichier de sortie. Root cause diagnostiquée au réveil suivant : 6 dossiers orphelins
+`~/Library/Developer/Xcode/DerivedData/Meeshy-<hash>` (~13.5GB) accumulés par des appels `xcodebuild
+test` directs sans `-derivedDataPath`, distincts du dossier partagé workspace-relatif
+`apps/ios/Build` qu'utilisent `meeshy.sh`/CI. Supprimés (aucun impact sur le build partagé), espace
+restauré (9.9Gi libres). La preuve de mutation avait déjà été capturée dans le log AVANT le crash —
+aucune perte de travail, aucun re-run nécessaire. Leçon retenue pour les runs suivants : toujours
+passer `-derivedDataPath apps/ios/Build` sur tout appel `xcodebuild` direct.
+
+**Vérifié** : test ciblé vert (3/3), `./apps/ios/meeshy.sh build` vert. PR #3050
+(`claude/apps/ios/debt-bubblegrid-displayscale`, commit `2819acf6a`), squash-mergée (`bafc8b39d`).
+CI : 17 checks tous verts (`Trivy`/`Voice E2E Benchmark` : skipping, normal). Remarque sans rapport
+avec ce diff : au retour du worktree sur `origin/main` post-merge, fast-forward de 554 commits
+incluant un chantier tiers volumineux (« Lentille »/« Focal », ~26k lignes) mergé pendant ce run —
+aucun conflit avec les fichiers touchés par cette routine, aucune action requise.
+
+**Item 7 clôturé intégralement** (voir Backlog #7 ci-dessus pour le détail complet des 3 sous-lots :
+SDK-side PR #2868, safe-area PR #3041, ce dernier site PR #3050).
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-bubblegrid-displayscale`
   (commit séparé, poussé directement sur `main`).

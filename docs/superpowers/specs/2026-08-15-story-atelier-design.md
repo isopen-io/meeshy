@@ -214,3 +214,36 @@ commentaires.
 | C5 Lieu | pastille et métadonnée indépendantes | une source, deux rendus (+ toggle découvrabilité) | **B** (fuite iOS impossible) |
 | C6 Langue | par objet seulement | langue de publication héritée + surcharge par objet | **B** (Prisme fiable partout) |
 | C7 Édition | intent edit = atelier complet | inline léger + escalade atelier | **A** socle, B raccourci contextuel |
+
+### Après la publication : les 17 actions (addendum)
+
+Les actions de lecture gardent le rail figé du Reader (invariant) ; le détail
+descend dans la feuille d'engagement ; les actions d'auteur hors lecture vivent
+dans l'Étagère ; le reste dans le menu « … ». Quatre surfaces, aucune nouvelle,
+valables pour les trois formats.
+
+| Action | Qui | Destination |
+|---|---|---|
+| Réagir (tap + scrub emoji) | lecteur | Rail (geste conservé) + compteurs dans la feuille |
+| Répondre → conversation | lecteur | Rail + feuille ; `ReplyContext.story` étendu post/réel |
+| Envoyer / transférer | lecteur · auteur | Rail (✈️) + carte d'Étagère (sheet forward existante) |
+| Repost / quote | lecteur | Rail → Barre de publication (PublishIntent, C4) |
+| Commentaires | lecteur | Feuille d'engagement — thread commun, traduit |
+| Vues (compteur + liste) | auteur | Rail (👁) + feuille ; `storyViews` |
+| Sauvegarder photo/vidéo | auteur | Rail (anneau conservé) + Étagère — cas C8 |
+| Partager (share système) | auteur | Rail |
+| Muet / son | lecteur | Rail + mute per-piste conservé |
+| Traductions / Original | lecteur | Rail « Abc » + barre isomorphe + geste « maintenir » |
+| Transcription audio | lecteur | Menu « … » (bascule conservée) |
+| Signaler | lecteur | Menu « … » |
+| Modifier | auteur | Menu « … » / Étagère → intent `edit` (C7) |
+| Republier (rejoue 20 h) | auteur | Carte archivée d'Étagère + notification d'expiration ; premier client web de `/republish` |
+| Supprimer | auteur | Menu « … » + Étagère |
+| Changer l'audience | auteur | Menu de carte → `PUT /posts/:id` (même picker que la Barre) |
+| Épingler au profil | auteur | Menu de carte → route `/pin` |
+
+**Cas C8 · Sauvegarder/exporter** — A : l'export devient un rendu du registre
+(CanvasPlayer hors écran → AVAssetWriter/WebCodecs, parité exacte, export web
+possible). B : pipeline dédié conservé (StoryVideoExportService/PhotoSave)
+rebranché sur v2. **Reco : B en phases 2-5 (acquis), A en cible — le pipeline
+séparé disparaît en phase 6.**

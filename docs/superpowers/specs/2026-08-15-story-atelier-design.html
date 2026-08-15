@@ -781,8 +781,8 @@
 
 <section>
   <p class="eyebrow">06 · Intégration des features</p>
-  <h2>Trente-neuf features, cinq destinations</h2>
-  <p class="lede">Inventaire exhaustif des six surfaces de création existantes (StoryComposer, PostComposer, AudioPostComposer, FeedComposerSheet, composer inline, StatusComposer) : 39 features recensées. Chacune reçoit UNE destination dans l'atelier — et les features cassées sont réparées par le passage au contrat, pas répliquées : médias des posts web jamais rattachés (donc <em>aucun réel web n'a jamais existé</em>), chemins iOS inline qui perdent audience et lieu, <code>PostMedia.order</code> jamais écrit, <code>originalLanguage</code> jamais envoyée par le web.</p>
+  <h2>Cinquante-six features, six destinations</h2>
+  <p class="lede">Inventaire exhaustif des six surfaces de création existantes (StoryComposer, PostComposer, AudioPostComposer, FeedComposerSheet, composer inline, StatusComposer) : <strong>39 features de création</strong> — auxquelles s'ajoutent les <strong>17 actions de lecture et d'auteur</strong> (répondre, réagir, republier, sauvegarder, transférer…). Chacune reçoit UNE destination dans l'atelier — et les features cassées sont réparées par le passage au contrat, pas répliquées : médias des posts web jamais rattachés (donc <em>aucun réel web n'a jamais existé</em>), chemins iOS inline qui perdent audience et lieu, <code>PostMedia.order</code> jamais écrit, <code>originalLanguage</code> jamais envoyée par le web.</p>
 
   <div class="tablewrap">
     <table>
@@ -816,7 +816,35 @@
 
   <p style="margin-top:16px;max-width:68ch" class="muted">Inexistantes partout (ni client ni serveur) : sondages, programmation, alt text média, désactivation des commentaires. Hors périmètre — mais l'architecture les accueillera comme un contrôle de Dock ou un champ de <code>PublishIntent</code>, jamais comme une vue nouvelle.</p>
 
-  <h3 style="font-size:22px;margin-top:44px">Les sept cas complexes — deux options chacun</h3>
+  <h3 style="font-size:22px;margin-top:44px">Après la publication : répondre, republier, sauvegarder…</h3>
+  <p class="lede" style="margin-top:8px">Les actions de lecture gardent le rail figé du Reader (invariant préservé) ; le détail descend dans la feuille d'engagement ; les actions d'auteur hors lecture vivent dans l'Étagère ; le reste dans le menu « … ». Quatre surfaces, aucune nouvelle — et tout vaut pour les trois formats.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Action</th><th>Qui</th><th>Où dans l'atelier</th><th>Aujourd'hui</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Réagir</strong> (tap ❤️, long-press → scrub emoji)</td><td>lecteur</td><td>Rail du Reader — geste et plan figé conservés ; compteurs dans la feuille d'engagement</td><td class="muted">StoryActionSidebarView + EmojiReactionPicker</td></tr>
+        <tr><td><strong>Répondre</strong> (→ conversation privée)</td><td>lecteur</td><td>Rail + feuille (« Répondre à… ») ; <code>ReplyContext.story</code> conservé, étendu à post/réel</td><td class="muted">rail story uniquement</td></tr>
+        <tr><td><strong>Envoyer / transférer</strong> vers des conversations</td><td>lecteur · auteur</td><td>Rail (✈️) ; côté auteur, aussi depuis la carte d'Étagère (sheet de forward existante)</td><td class="muted">rail + MyStoriesView</td></tr>
+        <tr><td><strong>Repost / quote</strong></td><td>lecteur (contenu public)</td><td>Rail → Barre de publication (<code>PublishIntent</code>, cas C4)</td><td class="muted">route /repost sans audience</td></tr>
+        <tr><td><strong>Commentaires</strong></td><td>lecteur</td><td>Feuille d'engagement (S12) — thread commun aux 3 formats, traduit par le Prisme</td><td class="muted">rail (si count &gt; 0) + overlay</td></tr>
+        <tr><td><strong>Vues</strong> (compteur + liste)</td><td>auteur</td><td>Rail (👁) + feuille ; <code>storyViews</code> inchangé</td><td class="muted">rail auteur + sheet viewers</td></tr>
+        <tr><td><strong>Sauvegarder</strong> (photo / vidéo)</td><td>auteur</td><td>Rail (⤓ + anneau de progression conservé) + carte d'Étagère — cas C8</td><td class="muted">StoryVideoExportService, StoryPhotoSaveService</td></tr>
+        <tr><td><strong>Partager</strong> (share sheet système)</td><td>auteur</td><td>Rail</td><td class="muted">StoryExportRailButtons</td></tr>
+        <tr><td><strong>Muet / son</strong></td><td>lecteur</td><td>Rail + mute per-piste sur les chips audio (conservé)</td><td class="muted">rail + StoryReaderAudioMuteRegistry</td></tr>
+        <tr><td><strong>Traductions</strong> (langues + Original)</td><td>lecteur</td><td>Rail « Abc » + barre de langues isomorphe (préservés) + geste « maintenir le texte » (rupture §07)</td><td class="muted">StoryLanguageQuickBar</td></tr>
+        <tr><td><strong>Transcription audio</strong></td><td>lecteur</td><td>Menu « … » — bascule conservée telle quelle</td><td class="muted">menu … du reader</td></tr>
+        <tr><td><strong>Signaler</strong></td><td>lecteur</td><td>Menu « … »</td><td class="muted">menu …</td></tr>
+        <tr><td><strong>Modifier</strong></td><td>auteur</td><td>Menu « … » et carte d'Étagère → intent <code>edit</code> (cas C7) ; reset d'engagement inchangé</td><td class="muted">StoryEditSession + EditPostSheet</td></tr>
+        <tr><td><strong>Republier</strong> (story expirée → rejoue 20 h)</td><td>auteur</td><td>Carte archivée de l'Étagère (« Republier ») + notification d'expiration → même intent ; <strong>premier client web</strong> de <code>/republish</code></td><td class="muted">MyStoriesView + StoryExpiredContent (iOS seul)</td></tr>
+        <tr><td><strong>Supprimer</strong></td><td>auteur</td><td>Menu « … » + carte d'Étagère ; <code>story:deleted</code> / <code>post:deleted</code> inchangés</td><td class="muted">MyStoriesDeleteConfirmation</td></tr>
+        <tr><td><strong>Changer l'audience</strong> après publication</td><td>auteur</td><td>Menu de carte d'Étagère → <code>PUT /posts/:id</code> (visibility) — même picker que la Barre</td><td class="muted">sheet audience de MyStoriesView</td></tr>
+        <tr><td><strong>Épingler au profil</strong></td><td>auteur</td><td>Menu de carte d'Étagère → route <code>/pin</code> existante</td><td class="muted">route seule, UI profil</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:22px;margin-top:44px">Les huit cas complexes — deux options chacun</h3>
 
   <div class="cases">
     <div class="case">
@@ -874,6 +902,14 @@
         <div class="opt"><b>Option B — édition légère + escalade</b>Un inline rapide (texte, visibilité) dans le feed, et « Ouvrir dans l'atelier » pour le reste. Deux surfaces, mais le correctif rapide reste à un tap.</div>
       </div>
       <p class="reco"><b>Recommandation :</b> A comme socle (une porte), B comme raccourci de menu contextuel — même endpoint, pas de logique dupliquée.</p>
+    </div>
+    <div class="case">
+      <h4>C8 · Sauvegarder / exporter (photo &amp; vidéo)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — l'export est un rendu</b>Le CanvasPlayer rend hors écran vers un writer vidéo (AVAssetWriter / WebCodecs). Un seul moteur : ce qui est exporté est exactement ce que le lecteur voit, et l'export devient possible sur le web. Le pipeline dédié meurt.</div>
+        <div class="opt"><b>Option B — pipeline dédié conservé</b><code>StoryVideoExportService</code>, <code>StoryPhotoSaveService</code> et <code>TimelineExportPreflightSheet</code> restent tels quels, rebranchés sur le modèle v2. Zéro risque, export iOS seulement, anneau de progression du rail inchangé.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B pendant les phases 2 à 5 — c'est l'acquis, on ne casse pas un export qui marche. A en cible une fois le registre stabilisé : l'export redevient « un rendu », le pipeline séparé disparaît en phase 6.</p>
     </div>
   </div>
 </section>

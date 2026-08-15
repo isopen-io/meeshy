@@ -26,11 +26,20 @@ final class SectionFrameRegistry {
 /// retrait reste l'action dédiée du menu — jamais de dés-épinglage par drop).
 struct SectionDropDelegate: DropDelegate {
     let sectionId: String
+    /// `false` pour une section CALCULÉE par la loi Lentille (`EN DIRECT`,
+    /// `AUJOURD'HUI`…) : sa borne vient de `lastMessageAt`, elle n'est pas
+    /// assignable, et `ChipDropResolver` traduirait son id en
+    /// `moveToSection(sectionId:)` — soit une catégorie fantôme dans l'état
+    /// utilisateur. Le refus vit ICI, dans `validateDrop` : SwiftUI n'appelle
+    /// alors ni `dropEntered` (pas de surbrillance, pas d'haptique) ni
+    /// `performDrop`. Défaut `true` ⇒ chemin d'aujourd'hui (drapeau OFF,
+    /// `pinned`, catégories utilisateur, `other`) strictement inchangé.
+    var acceptsDrop: Bool = true
     @Binding var dropTargetSection: String?
     let onDrop: ([NSItemProvider]) -> Bool
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.text])
+        acceptsDrop && info.hasItemsConforming(to: [.text])
     }
 
     func dropEntered(info: DropInfo) {
@@ -157,6 +166,42 @@ struct ConversationListView: View {
     /// (~99 rows reconstruites + diff Equatable) à chaque tick de scroll.
     @State private var scrollOffsetRelay = ScrollOffsetRelay()
     @State private var lastScrollDirectionChange: Date = .distantPast
+
+    // MARK: - Focus card (LWS-8, drapeau Lentille)
+    //
+    // Deux références retenues sans abonnement — même famille que
+    // `scrollOffsetRelay` et `sectionFrameRegistry`, et pour la même raison :
+    // ce body ne doit RIEN apprendre du défilement. Le registre est une boîte
+    // inerte que les `GeometryReader` des rangs remplissent à chaque layout ;
+    // le magasin d'élu est écrit par `LentilleFocusElectionHost`, l'hôte dédié,
+    // et sera lu par la focus card (I-071). L'élection elle-même n'existe nulle
+    // part dans ce fichier : la liste monte un hôte, c'est tout.
+    @State private var focusCandidateRegistry = LentilleFocusCandidateRegistry()
+    @State private var focusElection = LentilleFocusElection()
+
+    // MARK: - Pilule de section (LWS-6, drapeau Lentille)
+    //
+    // AUCUN observateur de défilement nouveau — contrainte dure du contrat. Le
+    // détecteur reste l'unique `onScrollOffsetChange` de
+    // `MeeshyRefreshableScroll` : il écrit dans `scrollOffsetRelay` ET dérive
+    // `isScrollingDown`. Trois consommateurs — la barre du bas et les boutons
+    // flottants (RootView) lisent `isScrollingDown` ; la pilule s'abonne au
+    // RELAIS, dans `SectionScrollPillHost`, exactement comme
+    // `ConversationListHeaderOverlay` le fait depuis toujours. C'est ce qui lui
+    // donne un événement par TICK de défilement, donc un effacement une fenêtre
+    // après l'ARRÊT réel et non après la dernière bascule de direction (le
+    // signal booléen ne bascule qu'aux changements de sens, throttlés à 0,15 s,
+    // et il est aussi remis à false par programme).
+    //
+    // L'état de la loi vit dans l'hôte, JAMAIS ici : le porter dans ce body
+    // re-diffuserait ~99 rangs à chaque tick — précisément le défaut que ce
+    // relais a été créé pour éliminer.
+
+    /// Section dont la pilule porte le nom. Alimentée par l'`onAppear` des
+    /// rangs — le hook qui existe DÉJÀ (`triggerLoadMoreIfNeeded`) — et non par
+    /// une sonde de géométrie, qui serait l'observateur que le contrat
+    /// interdit.
+    @State private var visibleSectionId: String? = nil
 
     // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
     // brand-coherent qui combine `.refreshable` natif iOS + animation
@@ -355,9 +400,19 @@ struct ConversationListView: View {
         // any filtered/sectioned view whose visible rows don't line up with
         // the full-account top-20 by recency (fix 2026-07-21).
         let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
-        LazyVStack(spacing: 8) {
+        // Drapeau lu UNE fois par passe de body, jamais par rang : l'`onAppear`
+        // d'un rang est un chemin chaud, et `LentilleFeatureFlag` interroge
+        // `ProcessInfo.environment` à chaque appel. Le booléen descend ensuite
+        // sous la forme d'un `sectionId` optionnel — `nil` = suivi éteint, donc
+        // sous drapeau OFF l'`onAppear` ne gagne pas une seule instruction utile.
+        let tracksVisibleSection = LentilleFeatureFlag.isLentilleListEnabled
+        LazyVStack(spacing: 8, pinnedViews: pinnedSectionHeaders) {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
-                sectionView(for: group, orderedConversationIds: orderedConversationIds)
+                sectionView(
+                    for: group,
+                    orderedConversationIds: orderedConversationIds,
+                    trackedSectionId: tracksVisibleSection ? group.section.id : nil
+                )
             }
         }
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
@@ -365,18 +420,154 @@ struct ConversationListView: View {
         .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
     }
 
+    /// L'épinglage est une propriété du CONTENEUR, pas de la vue de header
+    /// (contrat LWS-6, écart E4) : le même `LazyVStack` sert les deux peaux et
+    /// n'épingle QUE sous drapeau. Sous OFF l'ensemble est vide — c'est la
+    /// valeur par défaut du paramètre, donc le rendu d'aujourd'hui, sections
+    /// NON épinglées, au bit près.
+    private var pinnedSectionHeaders: PinnedScrollableViews {
+        LentilleFeatureFlag.isLentilleListEnabled ? [.sectionHeaders] : []
+    }
+
     private var isSingleUngroupedSection: Bool {
         conversationViewModel.groupedConversations.count == 1
         && conversationViewModel.groupedConversations[0].section.id == "other"
     }
 
-    @ViewBuilder
+    // MARK: - Sections : pliage et cible de drop (règles PURES)
+
+    /// Une section repliable est une section dont le pliage a un SENS
+    /// PERSISTANT : `pinned` et les catégories utilisateur, dont
+    /// `toggleSection` persiste l'état (`persistCategoryExpansion`, E4). Les
+    /// sections calculées par la loi Lentille (`EN DIRECT`, `AUJOURD'HUI`…) ne
+    /// sont persistées nulle part : repliées, elles se rouvriraient au
+    /// prochain chargement. Elles restent donc dépliées et leur sticker n'est
+    /// pas un bouton. Drapeau OFF : aucun id `lentille.` n'existe ⇒ toujours
+    /// `true`, exactement comme aujourd'hui.
+    nonisolated static func isSectionCollapsible(sectionId: String) -> Bool {
+        !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
+    }
+
+    /// Cible de drop légitime. Même partition que `isSectionCollapsible` — une
+    /// section calculée n'est ni pliable ni assignable — mais les deux règles
+    /// restent distinctes : elles répondent à deux questions (« puis-je la
+    /// replier ? », « puis-je y déposer ? ») qui pourraient diverger demain.
+    nonisolated static func acceptsSectionDrop(sectionId: String) -> Bool {
+        !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
+    }
+
+    /// Rangs visibles ? Réécriture PURE et testable de la condition
+    /// d'aujourd'hui (`isSingleUngroupedSection || expandedSections.contains`),
+    /// étendue du seul cas neuf : une section non repliable est toujours
+    /// dépliée. Sous drapeau OFF la troisième clause est inatteignable — la
+    /// condition dégénère au bit près en celle d'avant LWS-6.
+    nonisolated static func isSectionContentVisible(
+        sectionId: String,
+        expandedSections: Set<String>,
+        isSingleUngroupedSection: Bool
+    ) -> Bool {
+        if isSingleUngroupedSection { return true }
+        if !isSectionCollapsible(sectionId: sectionId) { return true }
+        return expandedSections.contains(sectionId)
+    }
+
+    private func isSectionContentVisible(_ sectionId: String) -> Bool {
+        Self.isSectionContentVisible(
+            sectionId: sectionId,
+            expandedSections: expandedSections,
+            isSingleUngroupedSection: isSingleUngroupedSection
+        )
+    }
+
+    // MARK: - Section (conteneur épinglable)
+
+    /// UNE `Section` par groupe : les rangs en contenu, le sticker/header en
+    /// `header:` — la forme qu'exige `pinnedViews: [.sectionHeaders]` (E4 : une
+    /// restructuration du conteneur, pas un échange de vue). Le pliage garde
+    /// exactement sa sémantique : il masque le CONTENU, jamais le header, donc
+    /// une catégorie repliée conserve son sticker.
     private func sectionView(
         for group: (section: ConversationSection, conversations: [Conversation]),
-        orderedConversationIds: [String]
+        orderedConversationIds: [String],
+        trackedSectionId: String?
+    ) -> some View {
+        Section {
+            sectionContent(for: group, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
+        } header: {
+            sectionHeader(for: group)
+        }
+    }
+
+    @ViewBuilder
+    private func sectionContent(
+        for group: (section: ConversationSection, conversations: [Conversation]),
+        orderedConversationIds: [String],
+        trackedSectionId: String?
+    ) -> some View {
+        // Section Content — always visible when no categories, otherwise animated expand/collapse
+        if isSectionContentVisible(group.section.id) {
+            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
+                .padding(.horizontal, 16)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
+                    removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+                ))
+        }
+    }
+
+    /// Le header de section — UNE seule vue logique, quelle que soit la peau :
+    /// le registre de frames et le `.onDrop` sont posés ICI, autour du mux, et
+    /// jamais dans l'une des deux branches. C'est la garde du contrat
+    /// (« le `.onDrop` doit rester sur la MÊME vue logique, sinon la cible de
+    /// drop se décale d'une section ») : un seul site de câblage, donc aucun
+    /// décalage possible entre la vue qui affiche la section *n* et celle qui
+    /// reçoit son drop.
+    @ViewBuilder
+    private func sectionHeader(
+        for group: (section: ConversationSection, conversations: [Conversation])
     ) -> some View {
         // Hide section header when there are no user categories (flat list)
         if !isSingleUngroupedSection {
+            sectionHeaderLabel(for: group)
+                // Frame globale du header → registre inerte : cible de drop de la
+                // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { registerSectionFrame(group.section.id, geo.frame(in: .global)) }
+                            .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                                registerSectionFrame(group.section.id, frame)
+                            }
+                    }
+                )
+                .onDrop(of: [.text], delegate: SectionDropDelegate(
+                    sectionId: group.section.id,
+                    acceptsDrop: Self.acceptsSectionDrop(sectionId: group.section.id),
+                    dropTargetSection: $dropTargetSection,
+                    onDrop: { handleDrop(to: group.section.id, providers: $0) }
+                ))
+        }
+    }
+
+    /// Mux de peau du header — et RIEN d'autre : ni drop, ni mesure (posés par
+    /// l'appelant). Sous drapeau OFF, `SectionHeaderView` et ses deux paddings,
+    /// dans le même ordre qu'avant LWS-6.
+    @ViewBuilder
+    private func sectionHeaderLabel(
+        for group: (section: ConversationSection, conversations: [Conversation])
+    ) -> some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            // Pleine largeur, sans marge latérale : épinglé, ce sticker passe
+            // AU-DESSUS des rangs qui défilent dessous — son fond doit couvrir
+            // toute la largeur, sinon les rangs réapparaissent dans les
+            // gouttières. Les cotes (10.5/800/.1em, padding 4/13) vivent dans
+            // `LentilleMetrics.Sticker`, jamais ici (garde R15).
+            LentilleSticker(
+                title: group.section.name,
+                isExpanded: isSectionContentVisible(group.section.id),
+                onToggle: sectionToggle(for: group.section.id)
+            )
+        } else {
             SectionHeaderView(
                 section: group.section,
                 count: group.conversations.count,
@@ -391,37 +582,62 @@ struct ConversationListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            // Frame globale du header → registre inerte : cible de drop de la
-            // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { sectionFrameRegistry.frames[group.section.id] = geo.frame(in: .global) }
-                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
-                            sectionFrameRegistry.frames[group.section.id] = frame
-                        }
-                }
-            )
-            .onDrop(of: [.text], delegate: SectionDropDelegate(
-                sectionId: group.section.id,
-                dropTargetSection: $dropTargetSection,
-                onDrop: { handleDrop(to: group.section.id, providers: $0) }
-            ))
-        }
-
-        // Section Content — always visible when no categories, otherwise animated expand/collapse
-        if isSingleUngroupedSection || expandedSections.contains(group.section.id) {
-            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds)
-                .padding(.horizontal, 16)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
-                    removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
-                ))
         }
     }
 
+    /// `nil` ⇒ sticker non interactif (section calculée). Sinon le MÊME
+    /// `toggleSection` qu'avant LWS-6 — `expandedSections`, `toggleSection` et
+    /// `persistCategoryExpansion` sont consommés inchangés, un seul appelant,
+    /// donc `persistCategoryExpansion` reste appelé UNE fois par pliage.
+    private func sectionToggle(for sectionId: String) -> (() -> Void)? {
+        guard Self.isSectionCollapsible(sectionId: sectionId) else { return nil }
+        return { toggleSection(sectionId) }
+    }
+
+    /// Le registre sert le hit-test du drop de la chip (`handleChipDrop`,
+    /// +Overlays, possédé par LWS-8) : une section qui refuse le drop ne doit
+    /// pas y figurer, sinon la chip la « toucherait » quand même et
+    /// `ChipDropResolver` en ferait un `moveToSection` vers une catégorie
+    /// fantôme. Le refus est ainsi porté par la Lentille, sans rien apprendre
+    /// au résolveur de drop. Drapeau OFF : toutes les sections acceptent ⇒
+    /// registre identique à celui d'aujourd'hui.
+    private func registerSectionFrame(_ sectionId: String, _ frame: CGRect) {
+        guard Self.acceptsSectionDrop(sectionId: sectionId) else { return }
+        sectionFrameRegistry.frames[sectionId] = frame
+    }
+
+    // MARK: - Pilule de section — TROISIÈME consommateur du signal existant
+
+    /// Libellé de la pilule : la section dont les rangs viennent d'entrer à
+    /// l'écran, à défaut la première section rendue. Fonction PURE (aucune
+    /// dépendance SwiftUI/MainActor), donc directement testable — même
+    /// convention que `emptyBranch` / `shouldAutoLoadPreview`. La MAJUSCULE
+    /// vient de `LentilleSticker.displayTitle` : pilule et sticker crient le
+    /// même mot, par la même fonction, jamais par deux transformations
+    /// parallèles qui dériveraient.
+    nonisolated static func sectionPillTitle(
+        visibleSectionId: String?,
+        sections: [ConversationSection]
+    ) -> String? {
+        guard let fallback = sections.first else { return nil }
+        let match = sections.first(where: { $0.id == visibleSectionId }) ?? fallback
+        return LentilleSticker.displayTitle(match.name)
+    }
+
+    /// `nil` ⇒ suivi éteint (drapeau OFF). Écriture gardée par l'inégalité :
+    /// l'`onAppear` des rangs est un chemin chaud, et seule une FRONTIÈRE de
+    /// section doit re-évaluer le body.
+    private func noteVisibleSection(_ sectionId: String?) {
+        guard let sectionId, visibleSectionId != sectionId else { return }
+        visibleSectionId = sectionId
+    }
+
     @ViewBuilder
-    private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
+    private func sectionConversations(
+        _ conversations: [Conversation],
+        orderedConversationIds: [String],
+        trackedSectionId: String? = nil
+    ) -> some View {
         // rowWidth derives from the actual containing column width (iPad
         // left column is much narrower than the window) minus
         // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
@@ -438,9 +654,23 @@ struct ConversationListView: View {
             ? min(windowWidth * 0.42, 520)
             : windowWidth - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
+        // Drapeau résolu UNE fois par section, jamais par rang : `LentilleFeatureFlag`
+        // relit `ProcessInfo.environment` (et réalloue donc son dictionnaire) à chaque
+        // appel — même règle que `tracksVisibleSection` (I-063bis), un cran plus bas
+        // puisque c'est ici que le rang se construit. Sous OFF, `false` fait rendre le
+        // rang NU : aucun modificateur de Lentille monté (contrat LWS-8/I-069).
+        let perspectiveEnabled = LentilleFeatureFlag.isLentilleListEnabled
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth, orderedConversationIds: orderedConversationIds)
+                    // Passe de compositor (§4.1) : opacité et échelle SEULES, sur la
+                    // courbe `.list` du miroir gelé. Posée AU-DESSUS du portillon
+                    // `.equatable()` du rang — elle ne rediffuse rien, elle repeint.
+                    .lentillePerspective(isEnabled: perspectiveEnabled)
+                    // Candidature à la focus card : le rang publie son milieu dans
+                    // une boîte INERTE. Écrire n'élit rien — seul un tick de
+                    // défilement déclenche l'élection (§4.2).
+                    .lentilleFocusCandidate(id: conversation.id, registry: focusCandidateRegistry, isEnabled: perspectiveEnabled)
                     .onAppear {
                         // Cursor-based infinite scroll: trigger `loadMore`
                         // 5 rows before the loaded tail. The ViewModel
@@ -448,6 +678,10 @@ struct ConversationListView: View {
                         // is safe to call this on every onAppear past
                         // the threshold.
                         triggerLoadMoreIfNeeded(conversation: conversation)
+                        // Libellé de la pilule de section — porté par le hook
+                        // qui existe DÉJÀ sur ce rang, jamais par une sonde
+                        // neuve. `nil` sous drapeau OFF : rien ne s'exécute.
+                        noteVisibleSection(trackedSectionId)
                     }
             }
         }
@@ -886,6 +1120,178 @@ struct ConversationListView: View {
             }
     }
 
+    // MARK: - Rail vivants & stories (LWS-6, drapeau Lentille)
+
+    /// Mux de tête de liste. Drapeau OFF : `StoryTrayView`, à l'identique.
+    /// Drapeau ON : la FUSION — pastille « moi » en tête (arbitrage
+    /// I-063bis), puis les autres, bornées à `≤ 6` par le rail lui-même.
+    ///
+    /// Aucune navigation nouvelle : les trois destinations de « moi » sont les
+    /// chemins existants, appelés depuis ici plutôt que depuis le tray —
+    /// `StoryTrayActionResolver` décide (même règle, même annonce VoiceOver),
+    /// la liste « Mes stories » passe par le listener `openMyStories` des
+    /// RACINES (celui que la tuile Stories du profil emprunte déjà), le
+    /// composeur de story par `storyViewModel.showStoryComposer` (cover monté
+    /// aux racines) et le composeur de statut par la sheet que CETTE vue
+    /// héberge déjà (`showStatusComposer`).
+    @ViewBuilder
+    private var lentilleRailOrStoryTray: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            StoriesVivantsRail(
+                selfEntry: lentilleRailSelfEntry,
+                entries: lentilleRailEntries,
+                onSelect: { userId in onStoryViewRequest?(userId, true) },
+                onSelectSelf: { openMyStoriesFromRail() },
+                onSelfMoodTap: {
+                    showStatusComposer = true
+                    HapticFeedback.medium()
+                }
+            )
+        } else {
+            StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
+                onStoryViewRequest?(userId, true)
+            }, onAddStatus: {
+                showStatusComposer = true
+            })
+        }
+    }
+
+    /// La pastille « moi ». `nil` si aucun utilisateur n'est résolu — le rail
+    /// retombe alors sur les seules autres pastilles, et sur `EmptyView` s'il
+    /// n'y en a aucune.
+    private var lentilleRailSelfEntry: LentilleRailSelfEntry? {
+        guard let currentUser = AuthManager.shared.currentUser else { return nil }
+        let userId = currentUser.id
+        // Un groupe entièrement expiré est traité comme « pas de story » —
+        // même règle que le tray, sinon l'anneau promet un viewer qui se
+        // refermerait aussitôt.
+        let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        return LentilleRailSelfEntry(
+            displayName: currentUser.displayName ?? currentUser.username,
+            avatarURL: currentUser.avatar,
+            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+            hasActiveStory: myGroup != nil,
+            // Le libellé sort de la MÊME règle que le routage ci-dessous : les
+            // deux ne peuvent pas diverger (régression déjà vécue côté tray).
+            actionLabel: StoryTrayActionResolver.avatarAccessibilityLabel(
+                hasMyStory: myGroup != nil,
+                hasAnyStory: storyViewModel.hasStories(forUserId: userId)
+            )
+        )
+    }
+
+    /// Tap sur « moi » : la décision appartient à `StoryTrayActionResolver`
+    /// (règle partagée avec le tray, déjà testée), jamais à cette vue. Les deux
+    /// destinations sont celles d'aujourd'hui — la liste « Mes stories » par le
+    /// listener des racines, le composeur par le cover des racines.
+    private func openMyStoriesFromRail() {
+        let userId = AuthManager.shared.currentUser?.id ?? ""
+        let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
+        switch StoryTrayActionResolver.avatarTap(
+            hasMyStory: myGroup != nil,
+            hasAnyStory: storyViewModel.hasStories(forUserId: userId)
+        ) {
+        case .manageStories:
+            // MÊME porte que la tuile « Stories » du profil
+            // (`ProfileUserPostsList`) : un listener unique par racine, jamais
+            // une sheet de plus montée par cet écran.
+            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+        case .createStory:
+            storyViewModel.showStoryComposer = true
+        }
+        HapticFeedback.medium()
+    }
+
+    /// Entrées du rail. Même filtrage que le tray (`storyScrollView`) : ni
+    /// moi-même, ni un groupe entièrement expiré — un groupe expiré ouvrirait
+    /// puis refermerait le viewer (tap-puis-flash déjà documenté côté tray).
+    /// La troncature `≤ 6` et le masquage si vide appartiennent au rail
+    /// (`LentilleRailPolicy`), pas à cet appelant.
+    ///
+    /// ÉCART SIGNALÉ : la moitié « vivants » de la fusion reste vide —
+    /// `isLive` est toujours `false`, faute de modèle d'appel en cours sur
+    /// `Conversation` (contrat §0/E13, même constat que la greffe I-060 qui
+    /// passe `liveCall: nil`). Le rail est donc, aujourd'hui, un rail de
+    /// stories ; la pastille pulsée s'allumera sans changer cette vue le jour
+    /// où la donnée existera.
+    private var lentilleRailEntries: [LentilleRailEntry] {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        return storyViewModel.storyGroups
+            .filter { $0.id != currentUserId && !$0.isFullyExpired() }
+            .map { group in
+                LentilleRailEntry(
+                    id: group.id,
+                    displayName: group.username,
+                    avatarURL: group.avatarURL,
+                    isLive: false
+                )
+            }
+    }
+
+    // MARK: - Ligne d'épinglage des stickers (LWS-6/I-063bis)
+
+    /// Hauteur retirée à la région visible du défilement pour que les stickers
+    /// épinglés se posent SOUS la barre de header au lieu de disparaître
+    /// derrière elle. Vaut la hauteur de la barre REPLIÉE : c'est l'état de la
+    /// barre quand on défile, donc la seule cote qui garantit un sticker
+    /// entièrement visible pendant tout le défilement. Les deux valeurs
+    /// viennent de `CollapsibleHeaderMetrics` (64 déployée / 44 repliée), la
+    /// métrique que le header lui-même consomme — jamais un nombre recopié ici.
+    /// `0` sous drapeau OFF : ni inset, ni décalage.
+    private var stickyHeaderInset: CGFloat {
+        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0
+    }
+
+    /// Padding de contenu RESTANT, pour que la position de repos de la liste ne
+    /// bouge pas d'un point : ce que l'inset prend à la région visible, ce
+    /// padding cesse de le prendre au contenu. Somme constante =
+    /// `expandedHeight`, drapeau ON comme OFF.
+    private var scrollContentTopPadding: CGFloat {
+        CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset
+    }
+
+    /// Drapeau OFF ⇒ AUCUN hôte d'élection : ni mesure, ni carte (LWS-8/I-070).
+    /// Sous ON, l'hôte est posé sur le CONTENEUR de défilement, jamais dans son
+    /// contenu — c'est la seule position d'où le bas de la région visible se
+    /// mesure, et il ne défile pas avec les rangs. `LentilleFocusElectionHost`
+    /// reste purement observationnel : il ne rend rien de visible et
+    /// n'intercepte aucun geste — c'est `LentilleFocusCardHost` (I-071,
+    /// `Lentille/Mode/LentilleFocusCard.swift`) qui peint la carte à la
+    /// position qu'il publie, dans le MÊME overlay, sur le magasin
+    /// `focusElection` passé par référence (ce body ne lit jamais l'élu
+    /// lui-même — l'hôte de la carte le lit dans SON fichier à lui).
+    @ViewBuilder
+    private var lentilleFocusElectionOverlay: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            LentilleFocusElectionHost(
+                relay: scrollOffsetRelay,
+                registry: focusCandidateRegistry,
+                election: focusElection
+            )
+            LentilleFocusCardHost(
+                election: focusElection,
+                registry: focusCandidateRegistry,
+                conversations: conversationViewModel.groupedConversations.flatMap(\.conversations),
+                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true
+            )
+        }
+    }
+
+    /// Drapeau OFF ⇒ AUCUNE pilule (rendu identique à aujourd'hui). Sous ON, la
+    /// pilule est montée dès qu'il existe une section à nommer et reste dans
+    /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
+    /// rien à animer (une vue démontée n'a pas d'état d'où partir).
+    @ViewBuilder
+    private var sectionScrollPillOverlay: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled,
+           let title = Self.sectionPillTitle(
+                visibleSectionId: visibleSectionId,
+                sections: conversationViewModel.groupedConversations.map(\.section)
+           ) {
+            SectionScrollPillHost(relay: scrollOffsetRelay, title: title)
+        }
+    }
+
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
             // Layer 1: Full-screen scroll content
@@ -918,15 +1324,15 @@ struct ConversationListView: View {
                         isScrollingDown = scrollingDown
                     }
                 },
-                topPadding: CollapsibleHeaderMetrics.expandedHeight
+                topPadding: scrollContentTopPadding
             ) {
                 VStack(spacing: 0) {
-                    // Story carousel
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        onStoryViewRequest?(userId, true)
-                    }, onAddStatus: {
-                        showStatusComposer = true
-                    })
+                    // Story carousel — sous drapeau Lentille, le rail « vivants
+                    // & stories » (contrat LWS-6 travail 5 : fusion du tray et
+                    // des vivants, ≤ 6 entrées, masqué si vide) prend sa place.
+                    // Le ROUTAGE du tap est le même des deux côtés :
+                    // `onStoryViewRequest?(userId, true)`.
+                    lentilleRailOrStoryTray
 
                     // Sectioned conversation list (skeleton -> content -> empty/error).
                     // Skeleton ONLY when cold-start with no cached groups —
@@ -945,10 +1351,30 @@ struct ConversationListView: View {
                             searchTextIsEmpty: conversationViewModel.searchText.isEmpty
                         ) {
                         case .skeleton:
+                            // Mux de squelette sous drapeau (contrat LWS-7,
+                            // workshop I-067bis — exception de périmètre
+                            // accordée par l'orchestrateur, seule ouverture
+                            // consentie dans ce fichier hors du mux de rang
+                            // I-067). `LentilleSkeletonRow` (`Lentille/Row/`,
+                            // I-066, vue pure prête depuis ce lot) ne pouvait
+                            // pas être montée depuis `ConversationRowItem`
+                            // (ÉCART CONTRAT↔CODE signalé par I-067,
+                            // `ConversationListView+Rows.swift` : cette
+                            // branche « cache vide » est un chemin de rendu
+                            // ENTIÈREMENT séparé, au niveau de la LISTE, où
+                            // aucune `Conversation` n'existe encore pour
+                            // instancier un `ConversationRowItem`). Drapeau
+                            // OFF : `SkeletonConversationRow()` INCHANGÉ, bit
+                            // à bit identique à avant ce lot.
                             LazyVStack(spacing: 8) {
                                 ForEach(0..<6, id: \.self) { index in
-                                    SkeletonConversationRow()
-                                        .staggeredAppear(index: index, baseDelay: 0.04)
+                                    if LentilleFeatureFlag.isLentilleListEnabled {
+                                        LentilleSkeletonRow()
+                                            .staggeredAppear(index: index, baseDelay: 0.04)
+                                    } else {
+                                        SkeletonConversationRow()
+                                            .staggeredAppear(index: index, baseDelay: 0.04)
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -1032,7 +1458,26 @@ struct ConversationListView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 120)
             }
+            // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
+            // épingle au bord haut de la RÉGION VISIBLE de son ScrollView. Ici
+            // ce bord est couvert par `ConversationListHeaderOverlay` : sans
+            // inset, le sticker épinglé se rangeait DERRIÈRE la barre — la
+            // restructuration I-062 était juste et son effet invisible.
+            // `safeAreaInset` réduit la région visible du ScrollView interne :
+            // la ligne d'épinglage descend sous la barre repliée, sans toucher
+            // à `MeeshyRefreshableScroll` (SDK, gelé S1).
+            // Drapeau OFF : hauteur 0 ⇒ inset inerte et `topPadding` inchangé
+            // (`expandedHeight`), rendu strictement identique à aujourd'hui.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Color.clear.frame(height: stickyHeaderInset)
+            }
             .scrollDismissesKeyboard(.interactively)
+            // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
+            // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du
+            // défilement, la seule ancre de la bande de focus (§4.2). Il ne rend
+            // rien, n'intercepte rien, et n'ajoute AUCUN observateur — il s'abonne
+            // au relais d'offset qui publiait déjà, comme le header et la pilule.
+            .overlay { lentilleFocusElectionOverlay }
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
             ConversationListBottomBar(
@@ -1075,6 +1520,15 @@ struct ConversationListView: View {
                     )
                 }
             )
+        }
+        // Layer 4 : pilule de section (drapeau Lentille). Posée APRÈS le header
+        // pour passer au-dessus de lui — son ancrage `top 64` la place juste
+        // sous la barre déployée (`LentilleMetrics.Pill.top`, §4.3). Elle ne
+        // capte aucun geste (`allowsHitTesting(false)` dans la vue) et
+        // n'observe rien : `isSectionPillVisible` est décidé par la loi
+        // partagée, `visibleSectionId` par l'`onAppear` des rangs.
+        .overlay(alignment: .top) {
+            sectionScrollPillOverlay
         }
         .sheet(isPresented: $showShareLinkSheet) {
             ShareLinkPickerSheet(
