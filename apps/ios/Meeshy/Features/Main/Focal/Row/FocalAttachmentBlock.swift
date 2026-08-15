@@ -87,12 +87,49 @@ nonisolated public enum FocalMediaGridLayout {
     }
 }
 
+// MARK: - FocalMediaProtection — flou / voir-une-fois, décision pure (F-083bis)
+
+/// État de protection d'UNE pièce jointe, à un instant `isRevealed` donné —
+/// fonction PURE, testable sans SwiftUI (même discipline que
+/// `FocalMediaGridLayout`/`FocalAudioRouting`).
+nonisolated public enum FocalMediaProtectionState: Equatable {
+    /// Rien à masquer — la case `mediaLayer` se rend normalement.
+    case none
+    /// Flouté/masqué, PAS révélé — `isViewOnce` distingue le libellé
+    /// (« Voir une fois » vs « Contenu masqué »), miroir de la même
+    /// distinction côté `AttachmentBlurOverlayView` (`private`, non
+    /// réutilisable — RE-PREUVE, cf. doc de `FocalGridCell`).
+    case blurred(isViewOnce: Bool)
+}
+
+nonisolated public enum FocalMediaProtection {
+    /// `attachment.isBlurred || attachment.isViewOnce`, ET pas encore
+    /// révélé ⇒ `.blurred`. Une fois révélé (`isRevealed == true`), TOUJOURS
+    /// `.none` — y compris pour `isViewOnce`, le média redevient net le
+    /// temps de la fenêtre de révélation (portée par `BubbleBlurRevealController`,
+    /// réutilisé tel quel côté vue, §WS-0-adjacent : lifecycle PUR, non
+    /// `fileprivate`).
+    public static func state(for attachment: MessageAttachment, isRevealed: Bool) -> FocalMediaProtectionState {
+        guard !isRevealed, attachment.isBlurred || attachment.isViewOnce else { return .none }
+        return .blurred(isViewOnce: attachment.isViewOnce)
+    }
+
+    /// Pastille de compte « vue unique » — miroir de `viewCountBadge`
+    /// (`BubbleGridCell`, `private`) : affichée seulement si `isViewOnce`
+    /// ET qu'un compte existe déjà (`viewOnceCount > 0`), INDÉPENDAMMENT de
+    /// `isRevealed` (le compte reste visible même après révélation — même
+    /// règle que la source réelle).
+    public static func showsViewOnceBadge(for attachment: MessageAttachment) -> Bool {
+        attachment.isViewOnce && attachment.viewOnceCount > 0
+    }
+}
+
 // MARK: - FocalGridCell — cellule nominale (évite la crash de démangling, §WS-3)
 
 /// Cellule nominale d'une grille média du Fil — image ou vidéo, RADIUS 16
 /// (`FocalMetrics.Media.radius`), aucune bulle, aucun `cornerRadius: 18`.
 ///
-/// **RE-PREUVE (§0 avant écriture)** : le contrat §WS-3 nomme
+/// **RE-PREUVE (§0 avant écriture, F-082)** : le contrat §WS-3 nomme
 /// `BubbleGridCell` (« struct nominale existante ») comme réutilisation.
 /// Relecture de `BubbleStandardLayout+Media.swift:264` (`fileprivate struct
 /// BubbleGridCell`), `:536` (`fileprivate struct BubbleGridImageView`),
@@ -109,39 +146,71 @@ nonisolated public enum FocalMediaGridLayout {
 /// documentée sur ce fichier) SANS réutiliser son TYPE. Le rendu réutilise
 /// les primitives réellement accessibles : `ProgressiveCachedImage`,
 /// `VideoAvailabilityResolver` + `MeeshyVideoPlayer`, `DownloadBadgeView`
-/// (`internal`, non `fileprivate` — vérifié). Volontairement DÉPOUILLÉ vs
-/// `BubbleGridCell` : pas de réaction par-image, pas de flou/voir-une-fois
-/// — ni l'un ni l'autre n'est couvert par les critères d'acceptation §WS-3
-/// (matrice §5 : grilles + absence de bulle + routage audio), et les
-/// ajouter sans compilateur local serait un risque non couvert par un test.
-/// Écart signalé pour arbitrage — extension possible en widening d'accès
-/// `BubbleStandardLayout+Media.swift` (hors périmètre WS-3).
+/// (`internal`, non `fileprivate` — vérifié).
+///
+/// **Flou / voir-une-fois (arbitrage F-083bis, planche des 25 cas)** :
+/// `AttachmentBlurOverlayView` et `viewCountBadge` (`BubbleGridCell`) sont
+/// `private` — non réutilisables (même RE-PREUVE que `BubbleGridCell`
+/// lui-même). Reconstruits NATIVEMENT ici (même approche que
+/// `Focal/Row/FocalSystemRows.swift`) : mêmes clés i18n
+/// (`bubble.media.viewOnce`/`.masked`/`.holdToView`/`.a11y.*`, un seul
+/// domicile — jamais dupliquées), même geste (`onLongPressGesture(minimumDuration: 0.3)`),
+/// et la VRAIE machine à états de révélation (`BubbleBlurRevealController`,
+/// `Bubble/BubbleBlurRevealLifecycle.swift` — `internal`, PAS `fileprivate`,
+/// vérifié avant réutilisation) plutôt qu'un booléen local reconstruit à la
+/// main. La décision (« flouter ou pas ») est PURE (`FocalMediaProtection`,
+/// ci-dessus), testable sans rendu.
+///
+/// **Toujours HORS périmètre, documenté (accepté par arbitrage)** : les
+/// réactions par-image (`AttachmentReactionLongPress`/`reactionsBadge`/
+/// `reactionPickerOverlay` de `BubbleGridCell`) — aucun critère d'acceptation
+/// §WS-3/planche ne les couvre, et les ajouter sans compilateur local serait
+/// un risque non couvert par un test.
 struct FocalGridCell: View {
     let attachment: MessageAttachment
     let slot: FocalMediaSlot
     let accentHex: String
     let messageDeliveryStatus: Message.DeliveryStatus
     var onTap: ((MessageAttachment) -> Void)? = nil
+    /// Consomme le compteur voir-une-fois AVANT de révéler — miroir exact
+    /// de `BubbleGridCell.onConsumeViewOnce` (même signature, même contrat
+    /// d'appel : succès → révélation).
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+
+    @StateObject private var revealController = BubbleBlurRevealController()
+
+    private var protectionState: FocalMediaProtectionState {
+        FocalMediaProtection.state(for: attachment, isRevealed: revealController.isRevealed)
+    }
 
     var body: some View {
         ZStack {
             Color.black
-            mediaLayer
+            if case .none = protectionState {
+                mediaLayer
+            }
             overflowOverlay
         }
         .frame(width: slot.width, height: slot.height)
         .clipShape(RoundedRectangle(cornerRadius: FocalMetrics.Media.radius))
         .clipped()
         .contentShape(Rectangle())
-        .onTapGesture { onTap?(attachment) }
-        .overlay(alignment: .bottomTrailing) {
-            DownloadBadgeView(
-                attachment: attachment,
-                accentColor: accentHex,
-                messageDeliveryStatus: messageDeliveryStatus,
-                compact: attachment.type == .video
-            )
+        .onTapGesture {
+            guard case .none = protectionState else { return }
+            onTap?(attachment)
         }
+        .overlay { protectionOverlay }
+        .overlay(alignment: .bottomTrailing) {
+            if case .none = protectionState {
+                DownloadBadgeView(
+                    attachment: attachment,
+                    accentColor: accentHex,
+                    messageDeliveryStatus: messageDeliveryStatus,
+                    compact: attachment.type == .video
+                )
+            }
+        }
+        .overlay(alignment: .topTrailing) { viewOnceBadge }
     }
 
     @ViewBuilder
@@ -192,6 +261,62 @@ struct FocalGridCell: View {
                 .foregroundColor(.white)
         }
     }
+
+    /// Recouvrement flou/masqué — natif (voir doc de tête). Rendu SEUL
+    /// (aucun `mediaLayer` en dessous, garanti par `protectionState` gate
+    /// dans `body`) : « la grille floutée ne rend pas l'image nette »,
+    /// vérifié par `FocalMediaProtectionTests` (décision pure) +
+    /// `FocalRichBlockEquatableTests` (garde source : `mediaLayer` posé
+    /// derrière une condition sur `protectionState`).
+    @ViewBuilder
+    private var protectionOverlay: some View {
+        if case .blurred(let isViewOnce) = protectionState {
+            ZStack {
+                Color.black.opacity(0.5)
+                VStack(spacing: 5) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .foregroundStyle(.white)
+                    Text(isViewOnce
+                        ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main)
+                        : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
+                        .font(MeeshyFont.relative(9))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(isViewOnce
+                ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
+                : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+            .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
+            .onLongPressGesture(minimumDuration: 0.3) {
+                HapticFeedback.medium()
+                revealController.requestReveal(
+                    request: BubbleBlurRevealLifecycle.RevealRequest(messageId: attachment.id, isViewOnce: isViewOnce),
+                    consumeViewOnce: onConsumeViewOnce
+                )
+            }
+        }
+    }
+
+    /// Pastille de compte « vue unique » — voir
+    /// `FocalMediaProtection.showsViewOnceBadge`.
+    @ViewBuilder
+    private var viewOnceBadge: some View {
+        if FocalMediaProtection.showsViewOnceBadge(for: attachment) {
+            Text("\(attachment.viewOnceCount)")
+                .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(MeeshyColors.error.opacity(0.85)))
+                .padding(6)
+                .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")", bundle: .main)))
+        }
+    }
 }
 
 // MARK: - FocalAttachmentBlock (WS-3)
@@ -208,11 +333,18 @@ struct FocalAttachmentBlock: View, Equatable {
     let accentHex: String
     let messageDeliveryStatus: Message.DeliveryStatus
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
 
     static func == (lhs: FocalAttachmentBlock, rhs: FocalAttachmentBlock) -> Bool {
         lhs.items.map(\.id) == rhs.items.map(\.id)
             && lhs.items.map(\.thumbnailUrl) == rhs.items.map(\.thumbnailUrl)
             && lhs.items.map(\.fileUrl) == rhs.items.map(\.fileUrl)
+            // F-083bis : le flou/voir-une-fois affecte le rendu — mêmes
+            // champs que `BubbleContent.Attachments.attachmentsHaveSameState`
+            // (`isBlurred`/`viewOnceCount`), lu jamais modifié.
+            && lhs.items.map(\.isBlurred) == rhs.items.map(\.isBlurred)
+            && lhs.items.map(\.isViewOnce) == rhs.items.map(\.isViewOnce)
+            && lhs.items.map(\.viewOnceCount) == rhs.items.map(\.viewOnceCount)
             && lhs.accentHex == rhs.accentHex
             && lhs.messageDeliveryStatus == rhs.messageDeliveryStatus
     }
@@ -267,7 +399,8 @@ struct FocalAttachmentBlock: View, Equatable {
             slot: slot,
             accentHex: accentHex,
             messageDeliveryStatus: messageDeliveryStatus,
-            onTap: onMediaTap
+            onTap: onMediaTap,
+            onConsumeViewOnce: onConsumeViewOnce
         )
     }
 }

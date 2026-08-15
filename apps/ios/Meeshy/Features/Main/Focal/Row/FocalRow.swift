@@ -134,7 +134,8 @@ struct FocalRow: View {
                 items: items,
                 accentHex: input.accentHex,
                 messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
-                onMediaTap: actions.onMediaTap
+                onMediaTap: actions.onMediaTap,
+                onConsumeViewOnce: actions.onConsumeViewOnce
             )
         }
     }

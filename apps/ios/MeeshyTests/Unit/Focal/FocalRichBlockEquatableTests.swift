@@ -139,4 +139,73 @@ final class FocalRichBlockEquatableTests: XCTestCase {
             FocalSystemNoticeRow(text: "b", isDark: false)
         )
     }
+
+    // MARK: - F-083bis — citation : filet au token, jamais le chrome verbatim
+
+    /// « Filet == FocalMetrics.Quote.rule » (mandat F-083bis) : le fichier
+    /// pose son filet via la cote partagée, jamais un littéral concurrent —
+    /// en particulier PAS l'ancien filet `4`pt de `BubbleQuotedReply`
+    /// (`RoundedRectangle(cornerRadius: 2).frame(width: 4)`, chrome
+    /// abandonné par cet arbitrage).
+    func test_focalQuotedReplyView_railWidth_comesFromFocalMetricsQuote_neverALiteral() throws {
+        let stripped = AppSourceGuard.stripComments(try source("FocalQuotedReplyView.swift"))
+        XCTAssertTrue(
+            stripped.contains("FocalMetrics.Quote.railWidth"),
+            "FocalQuotedReplyView.swift doit poser son filet via FocalMetrics.Quote.railWidth"
+        )
+        XCTAssertFalse(stripped.contains("frame(width: 4)"), "l'ancien filet 4pt de BubbleQuotedReply ne doit plus apparaître")
+        XCTAssertFalse(stripped.contains("BubbleQuotedReply("), "FocalQuotedReplyView ne doit plus INSTANCIER BubbleQuotedReply (chrome natif désormais)")
+    }
+
+    func test_focalMetricsQuote_railWidth_is2_5() {
+        XCTAssertEqual(FocalMetrics.Quote.railWidth, 2.5, "miroir de thread.quote.borderSize, présence vérifiée dans lentille-tokens.json avant F-083bis")
+    }
+
+    // MARK: - F-083bis — grille : flou/vue unique jamais l'image nette
+
+    /// « La grille floutée ne rend pas l'image nette » : `mediaLayer` n'est
+    /// jamais rendu SANS être gardé par `protectionState == .none` dans
+    /// `FocalAttachmentBlock.swift` (`FocalGridCell.body`). Garde
+    /// STRUCTURELLE (compte d'occurrences du gate) — la décision elle-même
+    /// est prouvée exhaustivement par `FocalMediaProtectionTests` (pure,
+    /// sans rendu).
+    func test_focalGridCell_mediaLayer_isGuardedByProtectionState() throws {
+        let stripped = AppSourceGuard.stripComments(try source("FocalAttachmentBlock.swift"))
+        XCTAssertTrue(
+            stripped.contains("if case .none = protectionState {\n                mediaLayer\n            }") ||
+            stripped.contains("case .none = protectionState") && stripped.contains("mediaLayer"),
+            "mediaLayer doit être gardé par protectionState == .none"
+        )
+        // Au moins 2 gates réels : le rendu du média ET le tap (ouverture
+        // plein écran interdite tant que le média est protégé).
+        let gateOccurrences = stripped.components(separatedBy: "protectionState").count - 1
+        XCTAssertGreaterThanOrEqual(gateOccurrences, 3, "protectionState doit gater le rendu ET le tap ET l'overlay de recouvrement")
+    }
+
+    func test_focalGridCell_neverInstantiatesThePrivateBubbleGridCellFamily() throws {
+        let stripped = AppSourceGuard.stripComments(try source("FocalAttachmentBlock.swift"))
+        XCTAssertFalse(stripped.contains("BubbleGridCell("))
+        XCTAssertFalse(stripped.contains("AttachmentBlurOverlayView("), "réimplémentation native attendue, pas un accès élargi au type fileprivate")
+    }
+
+    func test_focalAttachmentBlock_equatable_blurredVsNot_isNotEqual() {
+        var blurred = imageAttachment(id: "a1")
+        blurred.isBlurred = true
+        let plain = imageAttachment(id: "a1")
+        let lhs = FocalAttachmentBlock(items: [blurred], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        let rhs = FocalAttachmentBlock(items: [plain], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        XCTAssertNotEqual(lhs, rhs)
+    }
+
+    func test_focalAttachmentBlock_equatable_viewOnceCountChange_isNotEqual() {
+        var a = imageAttachment(id: "a1")
+        a.isViewOnce = true
+        a.viewOnceCount = 1
+        var b = imageAttachment(id: "a1")
+        b.isViewOnce = true
+        b.viewOnceCount = 2
+        let lhs = FocalAttachmentBlock(items: [a], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        let rhs = FocalAttachmentBlock(items: [b], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        XCTAssertNotEqual(lhs, rhs)
+    }
 }
