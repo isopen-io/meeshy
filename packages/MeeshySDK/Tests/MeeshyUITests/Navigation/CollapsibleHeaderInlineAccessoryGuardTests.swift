@@ -56,12 +56,14 @@ final class CollapsibleHeaderInlineAccessoryGuardTests: XCTestCase {
     }
 
     /// La position : entre le titre et le `Spacer` qui précède les actions. La
-    /// trail se retrouve donc bien « à gauche des boutons d'actions ».
+    /// trail se retrouve donc bien « à gauche des boutons d'actions ». Depuis
+    /// 3ae86ff5b le `Spacer` est à `minLength: 0` — l'écart visuel a déménagé
+    /// sur les actions (`titleActionsGap`) ; l'ORDRE, lui, n'a pas bougé.
     func test_theAccessorySitsInTheTitleSlotLeftOfTheTrailingActions() throws {
         let code = try headerSource()
         let title = try XCTUnwrap(code.range(of: "if let titleView"))
         let accessory = try XCTUnwrap(code.range(of: "titleAccessory()"))
-        let spacer = try XCTUnwrap(code.range(of: "Spacer(minLength: 8)"))
+        let spacer = try XCTUnwrap(code.range(of: "Spacer(minLength: 0)"))
         let trailing = try XCTUnwrap(code.range(of: "trailing()"))
 
         XCTAssertTrue(
@@ -70,7 +72,11 @@ final class CollapsibleHeaderInlineAccessoryGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             accessory.lowerBound < spacer.lowerBound && spacer.lowerBound < trailing.lowerBound,
-            "…et il reste À GAUCHE des boutons d'actions, séparé d'eux par le Spacer."
+            "…et il reste À GAUCHE des boutons d'actions, le Spacer entre eux."
+        )
+        XCTAssertTrue(
+            code.contains("padding(.leading, CollapsibleHeaderMetrics.titleActionsGap)"),
+            "L'écart trail↔actions vit sur les actions (titleActionsGap), réservé avec elles."
         )
     }
 
