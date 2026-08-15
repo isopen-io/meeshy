@@ -460,6 +460,8 @@ struct MessageEffectsModifier: ViewModifier {
                 .overlay {
                     if plan.appearance.contains(.confetti) { ConfettiOverlay() }
                     if plan.appearance.contains(.fireworks) { FireworksOverlay() }
+                    if plan.appearance.contains(.explode) { ExplodeOverlay() }
+                    if plan.appearance.contains(.waoo) { WaooOverlay() }
                 }
         }
     }

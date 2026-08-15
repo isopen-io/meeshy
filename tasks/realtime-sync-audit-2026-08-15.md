@@ -912,7 +912,7 @@ capacité présente et non appelée.
 - [x] Suite gateway complète : **719 suites / 17612 tests verts**
       (cycle 25 : 719 / 17601 — +11)
 - [x] `tsc --noEmit` gateway : 0 erreur
-- [x] CHANGELOG + journal d'audit (§ Cycle 26) + `lessons.md` (Leçon 257)
+- [x] CHANGELOG + journal d'audit (§ Cycle 26) + `lessons.md` (Leçon 258)
 
 ## Note de méthode — deux témoins voisins ré-outillés
 
