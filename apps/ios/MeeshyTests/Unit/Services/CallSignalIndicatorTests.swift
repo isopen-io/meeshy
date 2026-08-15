@@ -411,18 +411,47 @@ final class CallHangupFastPathTests: XCTestCase {
             XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 900, limitedBy: view.endIndex) ?? view.endIndex
+        // Borné à l'accolade fermante de la fonction, commentaires retirés.
+        // La fenêtre de 900 caractères qu'utilisait ce garde a été mangée par
+        // le commentaire de douze lignes qui documente la branche d'échappement
+        // « réception seule » (spec 2026-08-13) : le `switch` tombait hors
+        // fenêtre alors qu'il n'avait pas bougé.
+        let end = view.range(of: "\n    }", range: range.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+
+        guard
+            let translatedRange = body.range(of: "case .translated:"),
+            let originalRange = body.range(of: "case .original:"),
+            let offRange = body.range(of: "case .off:")
+        else {
+            XCTFail("advanceCaptionsMode must switch over the 3 captions modes")
+            return
+        }
+        // Assertions PAR BRANCHE : chercher les jetons dans le corps entier
+        // laisserait la branche .off — qui appelle elle aussi
+        // toggleTranscription() — satisfaire le garde de la branche
+        // .translated.
+        let translatedBranch = String(body[translatedRange.upperBound ..< originalRange.lowerBound])
+        let originalBranch = String(body[originalRange.upperBound ..< offRange.lowerBound])
+
         XCTAssertTrue(
-            body.contains("case .translated:") && body.contains("callManager.toggleTranscription()"),
+            translatedBranch.contains("callManager.toggleTranscription()"),
             "advanceCaptionsMode's .translated branch must call callManager.toggleTranscription() " +
             "— this is the entry point that actually starts transcription."
         )
         XCTAssertTrue(
-            body.contains("case .original:") && body.contains("showOriginalText = true"),
-            "advanceCaptionsMode's .original branch must flip showOriginalText without " +
-            "calling toggleTranscription() again — transcription keeps running, only the " +
-            "display flag changes."
+            originalBranch.contains("showOriginalText = true"),
+            "advanceCaptionsMode's .original branch must flip showOriginalText."
+        )
+        XCTAssertFalse(
+            originalBranch.contains("toggleTranscription"),
+            "advanceCaptionsMode's .original branch must NOT call toggleTranscription() again — " +
+            "transcription keeps running, only the display flag changes; toggling here would " +
+            "stop the engine one third of the way round the cycle."
         )
     }
 
