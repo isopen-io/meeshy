@@ -458,3 +458,142 @@ describe('emitConversationPreviewUpdate', () => {
     expect(onError).toHaveBeenCalledWith(err);
   });
 });
+
+/**
+ * Troisième borne du fan-out : le LECTEUR.
+ *
+ * Les deux premières (`onlyIfLatestIs`, `onlyIfPreviewCarriesLanguage`) bornent
+ * l'INSTANT et la LANGUE. Celle-ci borne l'AUDIENCE, et elle existe pour la
+ * famille d'appelants que ce module n'avait pas encore : un masquage PERSONNEL
+ * (« supprimer pour moi », « effacer l'historique »). Un tel geste ne change la
+ * ligne de liste que de celui qui l'a fait — le dernier message global n'a pas
+ * bougé d'un octet, donc tous les autres participants recevraient un payload
+ * identique à l'octet près, à raison d'un événement chacun par geste.
+ *
+ * Elle borne aussi la SONDE : sans elle, `resolvePersonalPreviewOverrides`
+ * demanderait à la base si CHAQUE participant a masqué cet aperçu, alors qu'un
+ * seul vient de le faire et qu'on sait lequel.
+ */
+describe('emitConversationPreviewUpdate — scope.onlyForReaderUserId', () => {
+  const latest = {
+    id: 'msg-latest',
+    content: 'the current last message',
+    senderId: 'participant-A',
+    createdAt: new Date('2026-08-15T10:00:00Z'),
+  };
+
+  function makeReaderPrisma(args: {
+    participants: Array<{ id?: string; userId: string | null; user?: unknown }>;
+    latest: any;
+    hiddenBy?: string[];
+    replacement?: any;
+  }) {
+    const findFirst = jest.fn(async (q: any) => {
+      const isFallback = q?.where?.id !== undefined || q?.where?.createdAt !== undefined;
+      return isFallback ? (args.replacement ?? null) : args.latest;
+    });
+    return {
+      participant: { findMany: jest.fn(async () => args.participants) },
+      message: { findFirst },
+      userMessageDeletion: {
+        findMany: jest.fn(async () =>
+          (args.hiddenBy ?? []).map((userId) => ({ userId, messageId: args.latest?.id })),
+        ),
+      },
+      userConversationPreferences: { findMany: jest.fn(async () => []) },
+    } as any;
+  }
+
+  it('n adresse QUE la room du lecteur nommé, jamais celles de ses pairs', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeReaderPrisma({
+      participants: [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+        { id: 'p-anon', userId: null },
+      ],
+      latest,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-A', undefined, {
+      onlyForReaderUserId: 'user-A',
+    });
+
+    expect(emitted.map((e) => e.room)).toEqual(['user:user-A']);
+  });
+
+  it('ne sonde le masquage personnel que pour ce lecteur', async () => {
+    const prisma = makeReaderPrisma({
+      participants: [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+      ],
+      latest,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo([]), 'conv-1', 'user-A', undefined, {
+      onlyForReaderUserId: 'user-A',
+    });
+
+    expect((prisma.userMessageDeletion.findMany as jest.Mock).mock.calls[0][0]).toMatchObject({
+      where: { messageId: 'msg-latest', userId: { in: ['user-A'] } },
+    });
+  });
+
+  it('sert au lecteur borné SON propre dernier message visible', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeReaderPrisma({
+      participants: [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+      ],
+      latest,
+      hiddenBy: ['user-A'],
+      replacement: {
+        id: 'msg-previous',
+        content: 'the one before',
+        senderId: 'participant-B',
+        createdAt: new Date('2026-08-15T09:00:00Z'),
+      },
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-A', undefined, {
+      onlyForReaderUserId: 'user-A',
+    });
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].room).toBe('user:user-A');
+    expect(emitted[0].payload.lastMessageId).toBe('msg-previous');
+    expect(emitted[0].payload.lastMessagePreview).toBe('the one before');
+  });
+
+  it('n émet rien quand le lecteur nommé n est plus participant actif', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeReaderPrisma({
+      participants: [{ id: 'p-B', userId: 'user-B' }],
+      latest,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-A', undefined, {
+      onlyForReaderUserId: 'user-A',
+    });
+
+    expect(emitted).toEqual([]);
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+  });
+
+  it('sans la borne, le fan-out reste complet — la borne est un CHOIX de l appelant', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makeReaderPrisma({
+      participants: [
+        { id: 'p-A', userId: 'user-A' },
+        { id: 'p-B', userId: 'user-B' },
+      ],
+      latest,
+    });
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-A');
+
+    expect(emitted.map((e) => e.room).sort()).toEqual(['user:user-A', 'user:user-B']);
+  });
+});
