@@ -1195,7 +1195,7 @@ struct ConversationListView: View {
             // MÊME porte que la tuile « Stories » du profil
             // (`ProfileUserPostsList`) : un listener unique par racine, jamais
             // une sheet de plus montée par cet écran.
-            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+            NotificationCenter.default.post(name: .openMyStories, object: nil)
         case .createStory:
             storyViewModel.showStoryComposer = true
         }
@@ -1240,6 +1240,38 @@ struct ConversationListView: View {
     /// `0` sous drapeau OFF : ni inset, ni décalage.
     private var stickyHeaderInset: CGFloat {
         LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0
+    }
+
+    /// R-a (réserve tracée Porte V1, `tasks/lentille-workshop-execution.md`
+    /// §8) : `.safeAreaInset(edge: .top)` était monté INCONDITIONNELLEMENT
+    /// sur le conteneur de défilement, `stickyHeaderInset` retombant
+    /// seulement à une hauteur `0` drapeau OFF. Un `safeAreaInset(height: 0)`
+    /// n'est PAS bit-à-bit identique à l'absence du modificateur : il reste
+    /// posé dans l'arbre de vue et continue de composer la région de
+    /// sécurité vue par le contenu défilant (`GeometryProxy.safeAreaInsets`),
+    /// même à hauteur nulle — SwiftUI ne « replie » jamais un modificateur
+    /// à zéro effet en un no-op structurel. Ce `ViewModifier` retire le
+    /// modificateur du tout, plutôt que de retirer seulement sa hauteur :
+    /// `isEnabled == false` ⇒ `body(content:)` renvoie `content` SANS
+    /// AUCUNE chaîne de modificateur ajoutée, drapeau ON comme avant tout ce
+    /// lot. `isEnabled` est INJECTÉ (jamais lu depuis le drapeau global en
+    /// interne) : le témoin `LentilleStickyHeaderInsetSourceGuardTests`
+    /// (garde source — proof-by-reading, aucun toolchain Swift local pour ce
+    /// lot) vérifie que la branche OFF ne chaîne plus rien après `content`.
+    private struct LentilleStickyHeaderInsetModifier: ViewModifier {
+        let isEnabled: Bool
+        let height: CGFloat
+
+        @ViewBuilder
+        func body(content: Content) -> some View {
+            if isEnabled {
+                content.safeAreaInset(edge: .top, spacing: 0) {
+                    Color.clear.frame(height: height)
+                }
+            } else {
+                content
+            }
+        }
     }
 
     /// Padding de contenu RESTANT, pour que la position de repos de la liste ne
@@ -1529,11 +1561,15 @@ struct ConversationListView: View {
             // `safeAreaInset` réduit la région visible du ScrollView interne :
             // la ligne d'épinglage descend sous la barre repliée, sans toucher
             // à `MeeshyRefreshableScroll` (SDK, gelé S1).
-            // Drapeau OFF : hauteur 0 ⇒ inset inerte et `topPadding` inchangé
-            // (`expandedHeight`), rendu strictement identique à aujourd'hui.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Color.clear.frame(height: stickyHeaderInset)
-            }
+            // Drapeau OFF : R-a — le modificateur lui-même n'est PAS monté
+            // (`LentilleStickyHeaderInsetModifier.isEnabled == false` ⇒
+            // `content` renvoyé tel quel), zéro modificateur ajouté, bit à
+            // bit identique à aujourd'hui. `topPadding` (`scrollContentTopPadding`)
+            // reste `expandedHeight` dans les deux cas.
+            .modifier(LentilleStickyHeaderInsetModifier(
+                isEnabled: LentilleFeatureFlag.isLentilleListEnabled,
+                height: stickyHeaderInset
+            ))
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du

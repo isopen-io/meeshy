@@ -198,6 +198,13 @@ function makePrisma({
         ? jest.fn().mockRejectedValue(upsertError)
         : jest.fn().mockResolvedValue(upsertResult),
     },
+    // Le SECOND rangement de la confidentialité — les lignes clé/valeur
+    // héritées de janvier 2026, lues et retirées par les routes `privacy`
+    // (`services/preferences/privacy-storage`).
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     // categories sub-routes need these too
     userConversationCategory: {
       findMany: jest.fn().mockResolvedValue([]),

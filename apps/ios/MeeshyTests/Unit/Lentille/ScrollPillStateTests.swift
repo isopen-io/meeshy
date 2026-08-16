@@ -464,7 +464,13 @@ final class ScrollPillStateTests: XCTestCase {
             "mon mood » annoncé pour un tap qui ouvrait le composeur)."
         )
         XCTAssertEqual(
-            occurrences(of: "NotificationCenter.default.post(name: Notification.Name(\"openMyStories\")", in: code), 1,
+            // R-j (Porte V1) : la chaîne littérale a migré vers la constante
+            // partagée `Notification.Name.openMyStories` (`RootView.swift`) —
+            // ce témoin recherche désormais le SITE D'APPEL constant, pas la
+            // chaîne recopiée. `LentilleOpenMyStoriesLiteralGuardTests`
+            // couvre la garde d'ensemble « aucun des quatre sites ne recopie
+            // plus jamais le littéral » à part.
+            occurrences(of: "NotificationCenter.default.post(name: .openMyStories", in: code), 1,
             "« Mes stories » passe par le listener des RACINES (RootView / iPadRootView) — la " +
             "porte que la tuile Stories du profil emprunte déjà. Monter une sheet de plus " +
             "depuis cet écran serait une navigation nouvelle, et une double présentation le " +

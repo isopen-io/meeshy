@@ -732,6 +732,10 @@ final class MessageListViewController: UIViewController {
             }
         case .typingIndicator:
             topDayStart = nil
+        case .conversationStart:
+            // R-d : marqueur de tête, jamais un jour — même traitement que
+            // le typing (aucune sticky day label à en tirer).
+            topDayStart = nil
         }
         guard let dayStart = topDayStart else {
             stickyDayState.label = nil
@@ -865,6 +869,37 @@ final class MessageListViewController: UIViewController {
             let dark = self.isDark
             cell.contentConfiguration = UIHostingConfiguration {
                 MessageDaySeparator(label: label, isDark: dark)
+                    .scaleEffect(x: 1, y: -1)
+            }
+            .margins(.all, 0)
+            cell.backgroundColor = .clear
+        }
+
+        // 4ᵉ registration — marqueur « Début de la conversation » (contrat
+        // Focal §4.5/§4.8, WS-6 travail 4 ; R-d, réserve tracée Porte V1,
+        // `tasks/lentille-workshop-execution.md` §8). Re-preuve : le cas
+        // `.conversationStart` existait dans le contrat et dans le rendu PUR
+        // `FocalConversationStartRow` (`Focal/Row/`), mais `MessageListItem`
+        // ne le déclarait pas encore et aucun site ne le montait — trou
+        // fermé ici. Appended EN QUEUE du tableau d'items par
+        // `applySnapshot` (= haut visuel du flux inversé), UNIQUEMENT quand
+        // `hasReachedOldest == true` : jamais en tête, la préservation
+        // d'offset au prepend en dépend (§4.5). SOUS DRAPEAU : monté
+        // seulement en perspective (`readingMode.usesPerspective` — Focal ;
+        // Script est plat par construction, WS-4 ; Bulles ignore ce
+        // marqueur, rendu historique inchangé).
+        let startRegistration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
+            guard let self, case .conversationStart = item else {
+                cell.contentConfiguration = nil
+                return
+            }
+            // R2 (§4.8, « hors sites ») — même raison que les deux
+            // registrations ci-dessus.
+            if self.readingMode != .bubbles { self.focalPass.reset(cell) }
+            let name = self.conversationViewModel?.currentConversationName ?? ""
+            let dark = self.isDark
+            cell.contentConfiguration = UIHostingConfiguration {
+                FocalConversationStartRow(conversationName: name, isDark: dark)
                     .scaleEffect(x: 1, y: -1)
             }
             .margins(.all, 0)
@@ -1284,6 +1319,8 @@ final class MessageListViewController: UIViewController {
                 return cv.dequeueConfiguredReusableCell(using: dayHeaderRegistration, for: indexPath, item: item)
             case .typingIndicator:
                 return cv.dequeueConfiguredReusableCell(using: typingRegistration, for: indexPath, item: item)
+            case .conversationStart:
+                return cv.dequeueConfiguredReusableCell(using: startRegistration, for: indexPath, item: item)
             }
         }
     }
@@ -1340,7 +1377,20 @@ final class MessageListViewController: UIViewController {
         // the inverted layout, just below the newest message. A live message
         // then inserts at index 1 and pushes the conversation up naturally.
         let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
-        let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
+        var items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
+        // R-d (contrat Focal §4.5/§4.8, WS-6 travail 4) : `.conversationStart`
+        // appended EN QUEUE — donc au-delà même du `dayHeader` du groupe le
+        // plus ancien, = haut visuel absolu du flux inversé — JAMAIS en
+        // tête, la préservation d'offset au prepend en dépend. Deux gardes :
+        // `hasReachedOldest` (la page la plus ancienne est chargée — sans
+        // quoi la marque anticiperait une page non chargée, même défaut que
+        // §4.5 pour `headInset`) ET `readingMode.usesPerspective` (Focal
+        // seul — la rangée vit dans l'espace réservé par `headInset`, qui
+        // n'existe qu'en perspective ; Script reste plat par construction,
+        // WS-4 ; Bulles ignore ce marqueur, rendu historique inchangé).
+        if readingMode.usesPerspective && hasReachedOldest {
+            items.append(.conversationStart)
+        }
         snapshot.appendItems(items, toSection: .main)
         // The diffable datasource only re-runs the cell registration closure
         // when an item's IDENTIFIER changes — we key items by `localId` which

@@ -22,6 +22,16 @@ public extension View {
     /// behaves identically across iOS versions. Requires the content to sit at
     /// `contentOffset.y == 0` at rest (use the ZStack-overlay + `Color.clear` spacer
     /// header pattern, NOT `.safeAreaInset`, which shifts the rest offset).
+    ///
+    /// **N'Y METTEZ JAMAIS DE DEBOUNCE** (réserve R-g,
+    /// `tasks/lentille-workshop-execution.md` §8). Ce point est le SOMMET de la
+    /// chaîne d'offset : ce qu'il émet devient, via `MeeshyRefreshableScroll` →
+    /// `ScrollOffsetRelay`, la cadence du header repliable, de la pilule de
+    /// section ET de l'élection de la focus card de la Lentille — laquelle est
+    /// contractuellement tenue de suivre le défilement à la cadence de
+    /// l'affichage. Une fenêtre ajoutée ici pour lisser UN consommateur les
+    /// dégraderait tous les trois, et rien dans `Lentille/` ne le montrerait :
+    /// c'est `LentilleFocusElectionCadenceTests` qui garde ce fichier.
     @ViewBuilder
     func trackScrollContentOffset(_ onChange: @escaping (CGFloat) -> Void) -> some View {
         if #available(iOS 18.0, *) {

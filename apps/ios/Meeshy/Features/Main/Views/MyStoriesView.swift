@@ -212,9 +212,10 @@ struct MyStoriesView: View {
             // Sheet des posts, réutilisée telle quelle (composeur de réponse
             // déjà fonctionnel par défaut) — jamais l'overlay incrusté du
             // reader (`StoryViewerView.showCommentsOverlay`), hors périmètre.
-            // Une sheet crée un environnement neuf : `statusViewModel` et
-            // `storyViewModel` doivent être réinjectés, sinon la présentation
-            // crashe (piège connu du projet, cf. RootView.swift).
+            // `CommentsSheetView` ne déclare plus d'`@EnvironmentObject` : son
+            // chrome social passe par des EnvironmentValues, dont une feuille
+            // hérite (cf. SocialChromeEnvironment.swift). Les injections
+            // ci-dessous restent pour les vues internes qui en dépendraient.
             CommentsSheetView(post: target.post, accentColor: target.post.authorColor)
                 .environmentObject(statusViewModel)
                 .environmentObject(viewModel)

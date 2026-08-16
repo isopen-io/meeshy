@@ -9,6 +9,10 @@ import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils
 import { createPreferenceRouter } from './preference-router-factory';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
 import {
+  resolveStoredPrivacyPreferences,
+  retireLegacyPrivacyRows,
+} from '../../../services/preferences/privacy-storage';
+import {
   PREFERENCE_CATEGORIES,
   emitPreferenceCategoryUpdated
 } from '../../../services/preferences/preferences-broadcast';
@@ -67,16 +71,22 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean', example: true },
+              // `additionalProperties: true` sur CHAQUE catégorie : un
+              // `type: 'object'` sans `properties` ni cette clause fait
+              // sérialiser `{}` par fast-json-stringify. Cette route rendait
+              // donc sept objets vides — chaque réglage effacé à la sortie,
+              // silencieusement. Le `GET` d'une seule catégorie, lui, l'a
+              // toujours déclaré.
               data: {
                 type: 'object',
                 properties: {
-                  privacy: { type: 'object' },
-                  audio: { type: 'object' },
-                  message: { type: 'object' },
-                  notification: { type: 'object' },
-                  video: { type: 'object' },
-                  document: { type: 'object' },
-                  application: { type: 'object' }
+                  privacy: { type: 'object', additionalProperties: true },
+                  audio: { type: 'object', additionalProperties: true },
+                  message: { type: 'object', additionalProperties: true },
+                  notification: { type: 'object', additionalProperties: true },
+                  video: { type: 'object', additionalProperties: true },
+                  document: { type: 'object', additionalProperties: true },
+                  application: { type: 'object', additionalProperties: true }
                 }
               }
             }
@@ -94,18 +104,30 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const prefs = await prisma.userPreferences.findUnique({
-          where: { userId }
+        // `privacy` a un SECOND rangement que les portes de diffusion obéissent
+        // encore (cf. `services/preferences/privacy-storage`) : le lire par le
+        // résolveur est la seule façon que cet écran montre ce que le serveur
+        // fait. Les six autres catégories n'ont que leur document.
+        const [prefs, privacy] = await Promise.all([
+          prisma.userPreferences.findUnique({ where: { userId } }),
+          resolveStoredPrivacyPreferences(prisma, userId)
+        ]);
+
+        // Les défauts comblent les clés muettes, comme au `GET` d'une seule
+        // catégorie : un document partiel se lisait autrement selon la porte.
+        const complete = <T extends object>(defaults: T, stored: unknown): T => ({
+          ...defaults,
+          ...(stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {})
         });
 
         return sendSuccess(reply, {
-          privacy: prefs?.privacy || PRIVACY_PREFERENCE_DEFAULTS,
-          audio: prefs?.audio || AUDIO_PREFERENCE_DEFAULTS,
-          message: prefs?.message || MESSAGE_PREFERENCE_DEFAULTS,
-          notification: prefs?.notification || NOTIFICATION_PREFERENCE_DEFAULTS,
-          video: prefs?.video || VIDEO_PREFERENCE_DEFAULTS,
-          document: prefs?.document || DOCUMENT_PREFERENCE_DEFAULTS,
-          application: prefs?.application || APPLICATION_PREFERENCE_DEFAULTS
+          privacy: complete(PRIVACY_PREFERENCE_DEFAULTS, privacy),
+          audio: complete(AUDIO_PREFERENCE_DEFAULTS, prefs?.audio),
+          message: complete(MESSAGE_PREFERENCE_DEFAULTS, prefs?.message),
+          notification: complete(NOTIFICATION_PREFERENCE_DEFAULTS, prefs?.notification),
+          video: complete(VIDEO_PREFERENCE_DEFAULTS, prefs?.video),
+          document: complete(DOCUMENT_PREFERENCE_DEFAULTS, prefs?.document),
+          application: complete(APPLICATION_PREFERENCE_DEFAULTS, prefs?.application)
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Error fetching all preferences');
@@ -162,6 +184,11 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
             application: null
           }
         });
+
+        // Le document mis à `null` ne suffit pas : la lecture redescendrait
+        // alors sur les lignes de janvier, et « tout réinitialiser » laisserait
+        // un réglage que le serveur obéit et qu'aucun écran ne montre plus.
+        await retireLegacyPrivacyRows(prisma, userId);
 
         // La remise à zéro globale efface AUSSI `privacy` : le cache partagé
         // des portes de diffusion doit l'apprendre, comme sur une écriture
@@ -289,8 +316,18 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
   // ═══════════════════════════════════════════════════════════════════════════
 
   // /me/preferences/privacy
+  //
+  // La SEULE catégorie dont l'état ne tient pas dans son document : un endpoint
+  // présent du 12 au 18 janvier 2026 a écrit des lignes clé/valeur, puis a été
+  // retiré sans reprise de données. Les six portes de diffusion les obéissent
+  // toujours ; sans ce rangement injecté, l'écran affichait le défaut « tout
+  // visible » pendant que le serveur taisait, et le `PATCH` d'un réglage voisin
+  // effaçait l'opt-out. `afterWrite` clôt la fenêtre au premier réglage écrit.
   fastify.register(
-    createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS),
+    createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, {
+      readStored: resolveStoredPrivacyPreferences,
+      afterWrite: retireLegacyPrivacyRows
+    }),
     { prefix: '/privacy' }
   );
 

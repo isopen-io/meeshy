@@ -412,7 +412,7 @@ struct ProfileUserPostsList: View {
         guard userId == AuthManager.shared.currentUser?.id else { return }
         dismissHost()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+            NotificationCenter.default.post(name: .openMyStories, object: nil)
         }
     }
 

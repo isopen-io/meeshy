@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
 import { getCacheStore } from '../../services/CacheStore';
 import { AgentHttpClient } from '../../services/AgentHttpClient';
+import { submittedKeysOnly } from '../../utils/partial-update';
 import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/shared/types/socketio-events';
 
 /**
@@ -173,9 +174,13 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       return;
     }
     try {
+      // `partial()` ne retire pas les `default()` de `examples`,
+      // `cooldownMinutes` et `isActive` : écrire `parsed.data` tel quel
+      // renvoyait ces trois champs à leur défaut à chaque renommage.
+      // Cf. `utils/partial-update`.
       const updated = await fastify.prisma.agentTopicCatalog.update({
         where: { id },
-        data: parsed.data,
+        data: submittedKeysOnly(parsed.data as Record<string, unknown>, request.body),
       });
       await broadcastTopicsInvalidation(fastify);
       notifyAdminDashboards(fastify);

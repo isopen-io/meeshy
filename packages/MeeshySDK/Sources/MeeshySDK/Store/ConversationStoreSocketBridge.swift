@@ -231,7 +231,7 @@ public final class ConversationStoreSocketBridge {
         ConversationUpdatedStoreEvent(
             conversationId: event.conversationId,
             lastMessageAt: event.lastMessageAt,
-            lastMessageId: event.lastMessageId,
+            lastMessage: event.lastMessage,
             lastMessagePreview: event.lastMessagePreview,
             lastMessageTranslations: event.lastMessageTranslations,
             lastMessageOriginalLanguage: event.lastMessageOriginalLanguage,

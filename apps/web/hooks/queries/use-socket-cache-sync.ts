@@ -77,6 +77,24 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (key === 'lastMessageId') {
+      // `lastMessageId: null` — la clé PRÉSENTE et nulle — est la façon dont le
+      // serveur dit « ce lecteur n'a plus AUCUN message visible ici » : il vient
+      // de masquer POUR LUI (suppression pour soi, purge d'historique) le
+      // dernier message qui lui restait. Seul `emitConversationPreviewUpdate`
+      // produit cette forme ; les mises à jour de métadonnées n'emportent pas la
+      // clé du tout, et les chemins message-driven la portent toujours pleine.
+      //
+      // La ligne de liste rend `conversation.lastMessage`, pas
+      // `lastMessagePreview` : périmer le second sans le premier laisse le texte
+      // affiché intact. Le vidage doit donc porter sur l'objet que la ligne lit.
+      //
+      // L'id lui-même n'entre PAS dans le cache : `Conversation` (web) ne le
+      // déclare pas et aucun lecteur ne l'interroge — seul le signal qu'il porte
+      // a un sens ici. Le recopier n'ajoutait qu'un champ fantôme par ligne.
+      if (value === null) patch.lastMessage = undefined;
+      continue;
+    }
     if (key === 'lastMessageTranslations') {
       // `null` est une VALEUR ici, pas une absence : le serveur périme
       // `Message.translations` dans la même écriture qu'une édition, et c'est ce

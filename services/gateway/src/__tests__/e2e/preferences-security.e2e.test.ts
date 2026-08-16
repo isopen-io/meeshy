@@ -46,6 +46,13 @@ describe('E2E: Preferences Security', () => {
       // La remise à zéro passe par `updateMany` (cycle 48).
       updateMany: jest.fn()
     },
+    // Le SECOND rangement de la confidentialité : lignes clé/valeur héritées
+    // de janvier 2026, lues et retirées par les routes `privacy`
+    // (`services/preferences/privacy-storage`).
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 })
+    },
     userConversationCategory: {
       findMany: jest.fn(),
       count: jest.fn(),

@@ -20,7 +20,10 @@ struct ConversationInfoSheet: View {
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la fiche conversation.
     private var presenceManager: PresenceManager { PresenceManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
+    // Feuille : hérite des EnvironmentValues, PAS des EnvironmentObject.
+    // Cf. SocialChromeEnvironment.swift.
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
 
     @State private var participants: [PaginatedParticipant] = []
     @State private var isLoadingParticipants = false
@@ -241,8 +244,8 @@ struct ConversationInfoSheet: View {
                 context: .profileSheet,
                 accentColor: accentColor,
                 avatarURL: conversation.participantAvatarURL,
-                moodEmoji: otherUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                onMoodTap: otherUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+                moodEmoji: otherUserId.flatMap { moodEmojiResolver?($0) },
+                onMoodTap: otherUserId.flatMap { moodTapResolver?($0) }
             )
 
             Text(conversation.name)
@@ -593,9 +596,9 @@ struct ConversationInfoSheet: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
-                moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                moodEmoji: participant.userId.flatMap { moodEmojiResolver?($0) },
                 presenceState: presence,
-                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+                onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
             )
 
             VStack(alignment: .leading, spacing: 2) {

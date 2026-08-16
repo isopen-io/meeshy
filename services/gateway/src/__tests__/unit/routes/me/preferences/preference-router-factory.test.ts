@@ -440,3 +440,134 @@ describe('DELETE / — preference-router-factory', () => {
     await app.close();
   });
 });
+
+// ─── PATCH partiel — le schéma injectait ses défauts ──────────────────────────
+
+/**
+ * `ZodObject.partial()` enveloppe chaque champ dans `optional()` SANS retirer
+ * son `default()` : parser `{}` contre un schéma défaillé rend le schéma
+ * ENTIER, garni de ses valeurs par défaut.
+ *
+ * Le `PATCH` fusionnait donc `{ ...existant, ...validé }` où `validé` portait
+ * toutes les clés — la fusion était inerte, et chaque réglage non mentionné
+ * repartait à son défaut. Toucher UN interrupteur en remettait à zéro treize à
+ * trente-deux autres, dans les sept catégories.
+ *
+ * `NotifSchema` ne peut pas exhiber le défaut : ses champs n'ont pas de
+ * `default()`. Il faut un schéma qui en porte, comme les sept vrais.
+ */
+const DefaultedSchema = z.object({
+  pushEnabled: z.boolean().default(true),
+  soundEnabled: z.boolean().default(true),
+  vibrate: z.boolean().default(true),
+});
+
+type DefaultedPrefs = z.infer<typeof DefaultedSchema>;
+
+const DEFAULTED_DEFAULTS: DefaultedPrefs = {
+  pushEnabled: true,
+  soundEnabled: true,
+  vibrate: true,
+};
+
+async function buildDefaultedApp(stored: Partial<DefaultedPrefs>): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+
+  app.decorate('prisma', {
+    userPreferences: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: 'pref-1', notification: stored }),
+      upsert: jest.fn<any>(async ({ update }: any) => ({ id: 'pref-1', ...update })),
+      update: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
+  } as any);
+
+  app.addHook('preHandler', async (req: FastifyRequest) => {
+    (req as any).auth = { userId: USER_ID, isAuthenticated: true, isAnonymous: false };
+  });
+
+  await app.register(
+    createPreferenceRouter('notification', DefaultedSchema, DEFAULTED_DEFAULTS)
+  );
+  await app.ready();
+  return app;
+}
+
+describe('PATCH / — n\'applique QUE les clés envoyées', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Le témoin `onDuplicate` plus haut REMPLACE durablement l'implémentation
+    // du double : sans ce rétablissement, l'écriture ne serait jamais tentée.
+    (withMutationLog as jest.Mock<any>).mockImplementation(
+      ({ op }: { op: () => Promise<any> }) => op()
+    );
+  });
+
+  it('laisse intactes les clés absentes du corps, malgré leurs défauts', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false, soundEnabled: false });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { vibrate: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    expect(written).toEqual({ pushEnabled: false, soundEnabled: false, vibrate: false });
+    await app.close();
+  });
+
+  it('un corps vide n\'écrit aucun changement', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false, soundEnabled: false });
+
+    const res = await app.inject({ method: 'PATCH', url: '/', payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    expect(written).toEqual({ pushEnabled: false, soundEnabled: false, vibrate: true });
+    await app.close();
+  });
+
+  it('une valeur envoyée qui COÏNCIDE avec le défaut est bien appliquée', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false, soundEnabled: false });
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { pushEnabled: true },
+    });
+
+    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    expect(written.pushEnabled).toBe(true);
+    expect(written.soundEnabled).toBe(false);
+    await app.close();
+  });
+
+  it('rejette toujours une valeur invalide', async () => {
+    const app = await buildDefaultedApp({});
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { pushEnabled: 'oui' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('ignore toujours une clé inconnue du schéma', async () => {
+    const app = await buildDefaultedApp({ pushEnabled: false });
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/',
+      payload: { vibrate: false, sneaky: 'x' },
+    });
+
+    const written = (app as any).prisma.userPreferences.upsert.mock.calls[0][0].update.notification;
+    expect(written).not.toHaveProperty('sneaky');
+    await app.close();
+  });
+});
