@@ -7,7 +7,9 @@ import { MessageTranslationService } from '../services/message-translation/Messa
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
+import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -68,6 +70,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   const attachmentService = new AttachmentService(prisma);
   const translationService = fastify.translationService;
   const socketIOHandler = fastify.socketIOHandler;
+  const privacyPreferencesService = new PrivacyPreferencesService(prisma);
   const trackingLinkService = new TrackingLinkService(prisma);
 
   // Middleware d'authentification requis pour les messages
@@ -754,45 +757,39 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           );
         }
 
-        // Diffuser le statut de lecture via Socket.IO
-        // Emit to the conversation room AND each participant's personal room so
-        // message authors still receive updates when they've navigated away from
-        // the conversation view. Socket.IO deduplicates per-socket delivery when
-        // multiple rooms are chained on a single emit call.
+        // Diffuser le statut de lecture via Socket.IO.
+        //
+        // Cette porte portait la QUATRIÈME copie du fan-out d'accusés, et elle
+        // en avait perdu trois pièces que les trois autres tenaient :
+        //   - la préférence `showReadReceipts` n'était jamais consultée, donc
+        //     un utilisateur qui avait retiré ses accusés diffusait quand même
+        //     un événement NOMINATIF à toute la conversation ;
+        //   - `lastReadAt` / `unreadCount` ne partaient nulle part, donc les
+        //     autres appareils de l'acteur ne recalaient jamais leur curseur ;
+        //   - aucun `conversation:unread-updated`, donc leur badge non plus.
+        // Elle passe désormais par l'unité partagée, qui est la seule forme de
+        // cette diffusion : une règle de confidentialité qui tenait à trois
+        // portes sur quatre n'en était pas une.
         try {
-          const socketIOManager = socketIOHandler.getManager();
-          if (socketIOManager) {
-            const [summary, activeParticipants] = await Promise.all([
-              readStatusService.getLatestMessageSummary(message.conversationId),
-              prisma.participant.findMany({
-                where: { conversationId: message.conversationId, isActive: true },
-                // `id` NAMES the personal room of a participant with no `User`
-                // row — sans lui, l'identité de repli n'était pas ignorée, elle
-                // n'était jamais lue.
-                select: { id: true, userId: true }
-              })
-            ]);
-            const payload = {
+          await broadcastReadStatus(
+            {
+              io: socketIOHandler.getManager()?.getIO(),
+              prisma,
+              readStatusService,
+              privacyPreferencesService
+            },
+            {
               conversationId: message.conversationId,
               participantId: participant.id,
               userId,
-              type: 'read',
-              updatedAt: new Date(),
-              summary
-            };
-            // Quatrième copie verbatim de ce fan-out, et la dernière : les trois
-            // autres (MessageHandler auto-deliver, /message-read-status, la route
-            // conversations/messages) sont passées par cette unité partagée en
-            // adressant `userId ?? id`. Celle-ci était restée sur `userId` seul,
-            // donc un participant sans compte ne recevait aucun accusé de lecture.
-            emitToConversationParticipants({
-              io: socketIOManager.getIO(),
-              conversationId: message.conversationId,
-              participants: activeParticipants,
-              events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-              payload
-            });
-          }
+              // `allowAnonymous: false` sur ces routes : l'identité qui arrive
+              // ici est toujours un `User.id`. Le champ est passé explicitement
+              // plutôt que déduit, pour que l'unité n'ait pas à connaître la
+              // politique d'authentification de chaque appelant.
+              isAnonymous: false,
+              type: 'read'
+            }
+          );
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         }

@@ -562,3 +562,53 @@ les deux options écartées (porter les champs par `conversation:unread-updated`
 retirer la room de conversation de l'éventail), et la piste du cycle 42 :
 `routes/messages.ts` émet un `read` qui ne synchronise AUCUN appareil de
 l'acteur — le symétrique de cette fuite, pas une fuite.
+
+# Cycle 42 — la préférence tenait à trois portes sur quatre
+
+Piste ouverte à la fin du cycle 41, instruite ici — et plus large que ce qu'elle
+annonçait.
+
+## Constat
+
+- [x] `POST /messages/:messageId/status` est le 4e émetteur REST de
+      `read-status:updated`, et le seul qui ne consulte JAMAIS
+      `showReadReceipts` : un utilisateur ayant retiré ses accusés diffusait
+      quand même un événement NOMINATIF à toute la conversation
+- [x] `summary` retirait déjà les opt-out de ses compteurs — ce n'est pas le
+      compteur qui fuyait, c'est le NOM de l'acteur
+- [x] Les deux manques annoncés par la piste confirmés : ni `actorReadSync`
+      (curseur multi-appareils), ni `conversation:unread-updated` (badge)
+- [x] Aucun client du dépôt n'appelle cette route — balayage web / iOS /
+      Android / SDK / E2E ; seuls deux fichiers de tests gateway l'exercent
+
+## Correctifs
+
+- [x] Une unité partagée, `socketio/broadcastReadStatus.ts`, remplace les
+      QUATRE copies — écrire une 4e copie correcte aurait rejoué le mécanisme
+      qui a produit le défaut
+- [x] La préférence décide de la DIFFUSION, jamais de la LECTURE : le badge de
+      l'acteur part sur les deux branches
+- [x] Acquis des cycles 38 et 41 (deux identités, deux payloads) désormais tenus
+      à un seul endroit
+- [x] Préférence et arriéré lus EN PARALLÈLE — le chemin chaud perd une attente
+      sérielle
+- [x] Route conservée, pas retirée : aucun appelant dans le dépôt ne prouve
+      aucun appelant sur le terrain
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges, 5 non-régressions vertes d'emblée
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : 726 suites, 17 771 tests, tout vert
+- [x] `broadcastReadStatus.ts` 100 % ; `message-read-status.ts` 100 % lignes
+- [x] 2 doubles de test préexistants complétés (`.except` manquant ; `io` absent)
+- [x] CHANGELOG + README socketio + journal d'audit + leçon 277
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle42.md` — le tableau des trois
+pièces manquantes, pourquoi c'est le nom et non le compteur qui fuyait, le
+raisonnement aligner-plutôt-que-retirer, les deux doubles réparés, et la piste
+du cycle 43 : les deux émetteurs SOCKET du même événement ne consultent pas la
+préférence non plus, mais leur fan-out est collectif — établir d'abord si un
+`received` automatique relève de ce réglage.
