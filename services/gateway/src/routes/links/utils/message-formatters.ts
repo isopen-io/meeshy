@@ -31,6 +31,18 @@ function extractSenderInfo(sender: any) {
 
 /**
  * Formate un message avec sender unifié pour l'affichage
+ *
+ * Ne recopie PAS `status` — dernier reste du défaut que ce cycle a fermé sur le
+ * formateur jumeau. Son unique appelant (`retrieval.ts`) le nourrit de
+ * `getConversationMessages`, dont l'`include` ne charge que `sender` : le champ
+ * valait TOUJOURS `[]`, et `messageSchema` ne le déclarant pas,
+ * `fast-json-stringify` le retirait juste après. Construit, jamais rempli,
+ * jamais servi.
+ *
+ * Le retirer ferme aussi le piège, exactement comme pour `statusEntries` :
+ * `status` est une forme d'ACCUSÉ NOMINATIF, et qui le déclarerait au schéma
+ * pour « réparer » son absence le publierait sans le gate `showReadReceipts`
+ * qu'appliquent les cinq lecteurs de `MessageReadStatusService`.
  */
 export function formatMessageWithUnifiedSender(message: any) {
   const senderInfo = extractSenderInfo(message.sender);
@@ -40,7 +52,6 @@ export function formatMessageWithUnifiedSender(message: any) {
     content: message.content,
     originalLanguage: message.originalLanguage || 'fr',
     createdAt: message.createdAt,
-    status: message.status || [],
     sender: senderInfo,
     translations: transformTranslationsToArray(
       message.id,
