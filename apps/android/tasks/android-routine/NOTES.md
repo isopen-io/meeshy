@@ -590,3 +590,30 @@ Append-only log of gotchas and decisions that save time next run.
   SerializationException ladder. The gateway's own source comment already records that normalising
   this route server-side is a coordinated breaking change for iOS and web, so the deviation is
   permanent and worth absorbing client-side rather than papering over.
+
+- **REOPENED (partially): the DataStore timeout flake survives the 15 s bump.** (2026-08-16, during
+  `conversation-members-roster`'s CI.) The entry above closed `datastore-test-timeout-flake` on the
+  reasoning that the two never-flaky files used `withTimeout(15_000)` while the four flaky ones used
+  `5_000`, and bumped all 19 occurrences to 15 s. That reasoning has now been **falsified by the
+  strongest possible counter-example**: `MediaDownloadPreferencesStoreTest.
+  dataStore_setPreferences_isReflectedInTheFlow` — one of the two files that had *always* been at
+  15 s and had *never* flaked — timed out at 15 s
+  (`kotlinx.coroutines.TimeoutCancellationException`, run 31946819183). So 15 s was never the
+  mechanism; it was a threshold that happened to sit above the observed contention on those runs.
+  **Correction to the earlier lesson: "a sibling already proved this constant" shows a constant is
+  *sufficient so far*, never that it is *correct*.** Evidence it is non-determinism and not a
+  regression: the identical tree passed the same job ~15 min earlier (head `882f80e8`, run
+  31946075339, all 16 checks green); the only delta was a merge of `origin/main` touching neither
+  `:sdk-core`'s media package nor DataStore.
+  **Do NOT reflexively bump to 30 s** — that repeats the move this data point just invalidated and
+  buys, at best, another quiet interval. The real mechanism is that these tests drive a *real*
+  file-backed DataStore over `Dispatchers.IO` under `runBlocking`, so they measure the CI runner's
+  scheduling latency, and this Android job runs concurrently with the whole monorepo matrix. The
+  actual fix is to remove wall-clock time from the assertion — inject the dispatcher/scope into
+  `DataStoreMediaDownloadPreferencesStore` (and its siblings) so the test drives a controlled
+  scheduler, or collect through a deterministic turbine-style helper. That is a genuine refactor of
+  files this slice does not own, so it is **left as a named follow-up**, not smuggled into an
+  unrelated diff. Meanwhile a rerun remains the correct unblock for THIS failure class specifically
+  — it is documented, reproducible-by-contention, and provably orthogonal to the diff under test —
+  but every occurrence should be recorded here rather than silently retried, so the follow-up keeps
+  accumulating evidence instead of resetting to "known flake, keep rerunning".
