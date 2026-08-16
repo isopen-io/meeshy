@@ -16,6 +16,17 @@
  *
  * Les deux sont gâtés strictement au [callId] actif : le fanout d'un appel en
  * attente ou une trame retardataire d'un appel précédent est inerte.
+ *
+ * Identité du/des pair(s) concerné(s) (Vague 131, 2026-08-16) : les deux
+ * booléens ci-dessus ne disent PAS qui est dégradé/capturant — dans un appel
+ * de groupe, `VideoCallInterface` labellisait ces alertes avec le premier
+ * participant distant trouvé (`.find()`), sans rapport avec le VRAI
+ * `event.participantId` que le gateway relaie déjà. Ce hook expose donc aussi
+ * `remoteQualityDegradedParticipantId` (le DERNIER pair à avoir rapporté une
+ * dégradation — cohérent avec l'auto-effacement 15 s, qui suit le dernier
+ * rapporteur) et `remoteScreenCapturingParticipantIds` (l'ensemble ordonné
+ * des pairs actuellement capturants, miroir exact de `capturingParticipants`
+ * ci-dessous) pour que l'appelant résolve le VRAI nom à afficher.
  */
 
 'use client';
@@ -34,14 +45,22 @@ const REMOTE_QUALITY_RESET_MS = 15_000;
 
 export function useRemoteCallAlerts(callId: string | null): {
   remoteQualityDegraded: boolean;
+  remoteQualityDegradedParticipantId: string | null;
   remoteScreenCapturing: boolean;
+  remoteScreenCapturingParticipantIds: readonly string[];
 } {
   const [remoteQualityDegraded, setRemoteQualityDegraded] = useState(false);
+  const [remoteQualityDegradedParticipantId, setRemoteQualityDegradedParticipantId] =
+    useState<string | null>(null);
   const [remoteScreenCapturing, setRemoteScreenCapturing] = useState(false);
+  const [remoteScreenCapturingParticipantIds, setRemoteScreenCapturingParticipantIds] =
+    useState<readonly string[]>([]);
 
   useEffect(() => {
     setRemoteQualityDegraded(false);
+    setRemoteQualityDegradedParticipantId(null);
     setRemoteScreenCapturing(false);
+    setRemoteScreenCapturingParticipantIds([]);
     if (!callId) return;
 
     const socket = meeshySocketIOService.getSocket();
@@ -67,10 +86,14 @@ export function useRemoteCallAlerts(callId: string | null): {
     const handleQualityAlert = (event: CallQualityAlertEvent) => {
       if (event.callId !== callId) return;
       setRemoteQualityDegraded(true);
+      // Last reporter wins — consistent with the 15s auto-clear below, which
+      // already tracks only the most recent alert regardless of who sent it.
+      setRemoteQualityDegradedParticipantId(event.participantId);
       if (resetTimeout) clearTimeout(resetTimeout);
       resetTimeout = setTimeout(() => {
         resetTimeout = null;
         setRemoteQualityDegraded(false);
+        setRemoteQualityDegradedParticipantId(null);
       }, REMOTE_QUALITY_RESET_MS);
     };
 
@@ -82,6 +105,7 @@ export function useRemoteCallAlerts(callId: string | null): {
         capturingParticipants.delete(event.participantId);
       }
       setRemoteScreenCapturing(capturingParticipants.size > 0);
+      setRemoteScreenCapturingParticipantIds(Array.from(capturingParticipants));
     };
 
     // A capturing participant can leave the call (hangup, disconnect) without
@@ -92,6 +116,7 @@ export function useRemoteCallAlerts(callId: string | null): {
       if (event.callId !== callId) return;
       if (capturingParticipants.delete(event.participantId)) {
         setRemoteScreenCapturing(capturingParticipants.size > 0);
+        setRemoteScreenCapturingParticipantIds(Array.from(capturingParticipants));
       }
     };
 
@@ -107,5 +132,10 @@ export function useRemoteCallAlerts(callId: string | null): {
     };
   }, [callId]);
 
-  return { remoteQualityDegraded, remoteScreenCapturing };
+  return {
+    remoteQualityDegraded,
+    remoteQualityDegradedParticipantId,
+    remoteScreenCapturing,
+    remoteScreenCapturingParticipantIds,
+  };
 }

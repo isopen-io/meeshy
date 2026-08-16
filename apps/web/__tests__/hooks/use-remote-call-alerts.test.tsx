@@ -226,4 +226,72 @@ describe('useRemoteCallAlerts', () => {
       expect(result.current.remoteScreenCapturing).toBe(true);
     });
   });
+
+  // --- participant identity (Vague 131 — CallQualityOverlay named the WRONG
+  // peer in a group call: it always used the first non-self participant,
+  // never the one the alert was actually ABOUT) -------------------------
+
+  describe('participant identity exposed to callers', () => {
+    it('une quality-alert expose le participantId du pair dégradé', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, qualityAlert()));
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBe('p2');
+    });
+
+    it('le participantId dégradé retombe à null avec l’indicateur (auto-effacement 15 s)', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, qualityAlert()));
+
+      act(() => { jest.advanceTimersByTime(15_000); });
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBeNull();
+    });
+
+    it('une quality-alert d’un DEUXIÈME pair remplace l’identité (le dernier rapporteur gagne)', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, qualityAlert()));
+      expect(result.current.remoteQualityDegradedParticipantId).toBe('p2');
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, {
+        callId: CALL_ID, participantId: 'p3', metric: 'packetLoss', value: 8, threshold: 5,
+      }));
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBe('p3');
+    });
+
+    it('une screen-capture-alert expose l’ensemble des participantIds CAPTURANTS', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p2')));
+
+      expect(result.current.remoteScreenCapturingParticipantIds).toEqual(['p1', 'p2']);
+    });
+
+    it('le stop d’UN pair retire SEULEMENT son id — l’AUTRE pair capturant reste dans l’ensemble', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p2')));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(false, CALL_ID, 'p1')));
+
+      expect(result.current.remoteScreenCapturingParticipantIds).toEqual(['p2']);
+    });
+
+    it('un changement de callId remet aussi les deux identités à zéro', () => {
+      const { result, rerender } = renderHook(
+        ({ callId }: { callId: string | null }) => useRemoteCallAlerts(callId),
+        { initialProps: { callId: CALL_ID } },
+      );
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, qualityAlert()));
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+
+      rerender({ callId: 'call-next' });
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBeNull();
+      expect(result.current.remoteScreenCapturingParticipantIds).toEqual([]);
+    });
+  });
 });

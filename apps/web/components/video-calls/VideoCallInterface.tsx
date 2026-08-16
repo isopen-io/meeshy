@@ -145,7 +145,12 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Remote-peer alerts relayed by the gateway (iOS/Android parity): the PEER's
   // sustained degradation (transient pill, 15 s auto-clear) and the privacy
   // signal when the peer captures the call screen.
-  const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
+  const {
+    remoteQualityDegraded,
+    remoteQualityDegradedParticipantId,
+    remoteScreenCapturing,
+    remoteScreenCapturingParticipantIds,
+  } = useRemoteCallAlerts(callId);
   const { captions } = useCallCaptions(callId);
   // Journal de transcription (displayName (heure): message + tag de langue) —
   // alimenté par les DEUX transports : data channel WebRTC P2P quand le pair
@@ -686,6 +691,19 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     p => (p.userId || p.participantId) !== user?.id && !p.leftAt
   );
 
+  // Vague 131 — `remoteParticipant` above is an arbitrary "first non-self"
+  // pick, correct only for a 1:1 call. `remoteQualityDegraded`/
+  // `remoteScreenCapturing` are call-WIDE aggregates (Vague 129) but each
+  // alert is still ABOUT a specific peer (`event.participantId`, already
+  // relayed by the gateway and exposed by useRemoteCallAlerts below) — in a
+  // group call that peer is not necessarily `remoteParticipant`. Resolve
+  // each alert's name independently instead of reusing the same guess for
+  // both.
+  const resolveParticipantName = (participantId: string | null | undefined): string =>
+    (participantId
+      ? currentCall?.participants?.find((p) => (p.userId || p.participantId) === participantId)?.username
+      : undefined) || '';
+
   // Toggle fullscreen for a participant
   const handleToggleFullscreen = (participantId: string) => {
     setFullscreenParticipantId((current) => (current === participantId ? null : participantId));
@@ -722,7 +740,8 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         userWantsVideo={controls.videoEnabled}
         remoteQualityDegraded={remoteQualityDegraded}
         remoteScreenCapturing={remoteScreenCapturing}
-        participantName={remoteParticipant?.username || ''}
+        qualityDegradedParticipantName={resolveParticipantName(remoteQualityDegradedParticipantId)}
+        screenCapturingParticipantName={resolveParticipantName(remoteScreenCapturingParticipantIds[0])}
       />
 
       {/* Live translated captions from peers (call:translated-segment) */}

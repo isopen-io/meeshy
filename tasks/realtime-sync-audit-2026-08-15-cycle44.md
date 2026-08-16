@@ -129,7 +129,7 @@ la seule forme qui observe un contrat de sortie.
       partagé avec `GET /links/:identifier`, dont le formateur est plus maigre —
       un témoin vérifie qu'aucun champ fantôme n'y apparaît (aucune propriété
       ajoutée ne porte de `default`, qui serait matérialisé)
-- [x] CHANGELOG + journal de cycle + leçon 279
+- [x] CHANGELOG + journal de cycle + leçon 280
 
 ## Écarté délibérément
 

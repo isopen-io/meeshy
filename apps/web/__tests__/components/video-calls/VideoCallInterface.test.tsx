@@ -37,9 +37,22 @@ const storeState: Record<string, unknown> = {
 };
 
 const useAdaptiveDegradationMock = jest.fn(() => ({ videoSuspended: false }));
+const useRemoteCallAlertsMock = jest.fn(() => ({
+  remoteQualityDegraded: false,
+  remoteQualityDegradedParticipantId: null as string | null,
+  remoteScreenCapturing: false,
+  remoteScreenCapturingParticipantIds: [] as readonly string[],
+}));
 
 jest.mock('@/hooks/useI18n', () => ({
-  useI18n: () => ({ t: (k: string) => k, isLoading: false }),
+  // remoteAlerts.* carry a {name} placeholder in the real catalog (mirrors
+  // CallQualityOverlay's own test mock) — needed so the group-call name-
+  // attribution tests below (Vague 131) can assert on the interpolated name
+  // instead of a bare, un-interpolated translation key.
+  useI18n: () => ({
+    t: (k: string) => (k.startsWith('remoteAlerts.') ? `${k} {name}` : k),
+    isLoading: false,
+  }),
 }));
 // VideoStream carries heavy WebRTC/ref machinery — stub it for the fullscreen-region test.
 // `data-muted` mirrors the real `muted` prop so tests can assert speaker-toggle wiring
@@ -75,7 +88,7 @@ jest.mock('@/hooks/use-call-quality', () => ({
   useCallQuality: () => ({ qualityStats: null }),
 }));
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
-  useRemoteCallAlerts: () => ({ remoteQualityDegraded: false, remoteScreenCapturing: false }),
+  useRemoteCallAlerts: (...args: unknown[]) => useRemoteCallAlertsMock(...(args as [])),
 }));
 jest.mock('@/hooks/use-call-captions', () => ({
   useCallCaptions: () => ({ captions: [] }),
@@ -137,6 +150,12 @@ describe('VideoCallInterface (container)', () => {
       ],
     };
     useAdaptiveDegradationMock.mockReturnValue({ videoSuspended: false });
+    useRemoteCallAlertsMock.mockReturnValue({
+      remoteQualityDegraded: false,
+      remoteQualityDegradedParticipantId: null,
+      remoteScreenCapturing: false,
+      remoteScreenCapturingParticipantIds: [],
+    });
     useAudioEffectsMock.mockReturnValue({
       outputStream: null,
       effectsState: {},
@@ -524,6 +543,73 @@ describe('VideoCallInterface (container)', () => {
       expect(webrtc.createOffer).toHaveBeenCalledTimes(2);
       expect(webrtc.createOffer).toHaveBeenCalledWith('a-peer');
       expect(webrtc.createOffer).toHaveBeenCalledWith('z-peer');
+    });
+  });
+
+  // Vague 131 — CallQualityOverlay's remote-peer alerts (quality-degraded,
+  // screen-capturing) used to be labelled with the FIRST non-self participant
+  // found (`remoteParticipant`), regardless of which peer the alert was
+  // actually ABOUT. In a group call this names the wrong person.
+  describe('group calls — remote-alert overlay must name the peer the alert is ABOUT, not just the first one', () => {
+    beforeEach(() => {
+      storeState.currentCall = {
+        id: 'call1',
+        startedAt: new Date().toISOString(),
+        initiatorId: 'organizer',
+        participants: [
+          { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          { userId: 'alice', username: 'Alice', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          { userId: 'bob', username: 'Bob', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        ],
+      };
+    });
+
+    it('names the ACTUAL degraded peer (Bob), not the first remote participant (Alice)', () => {
+      useRemoteCallAlertsMock.mockReturnValue({
+        remoteQualityDegraded: true,
+        remoteQualityDegradedParticipantId: 'bob',
+        remoteScreenCapturing: false,
+        remoteScreenCapturingParticipantIds: [],
+      });
+
+      render(<VideoCallInterface callId="call1" />);
+
+      const indicator = screen.getByTestId('remote-quality-indicator');
+      expect(indicator.getAttribute('aria-label')).toContain('Bob');
+      expect(indicator.getAttribute('aria-label')).not.toContain('Alice');
+    });
+
+    it('names the ACTUAL capturing peer (Bob), not the first remote participant (Alice)', () => {
+      useRemoteCallAlertsMock.mockReturnValue({
+        remoteQualityDegraded: false,
+        remoteQualityDegradedParticipantId: null,
+        remoteScreenCapturing: true,
+        remoteScreenCapturingParticipantIds: ['bob'],
+      });
+
+      render(<VideoCallInterface callId="call1" />);
+
+      const pill = screen.getByTestId('screen-capture-pill');
+      expect(pill.textContent).toContain('Bob');
+      expect(pill.textContent).not.toContain('Alice');
+    });
+
+    it('names each alert independently when the degraded peer and the capturing peer are DIFFERENT people', () => {
+      useRemoteCallAlertsMock.mockReturnValue({
+        remoteQualityDegraded: true,
+        remoteQualityDegradedParticipantId: 'alice',
+        remoteScreenCapturing: true,
+        remoteScreenCapturingParticipantIds: ['bob'],
+      });
+
+      render(<VideoCallInterface callId="call1" />);
+
+      const indicator = screen.getByTestId('remote-quality-indicator');
+      expect(indicator.getAttribute('aria-label')).toContain('Alice');
+      expect(indicator.getAttribute('aria-label')).not.toContain('Bob');
+      const pill = screen.getByTestId('screen-capture-pill');
+      expect(pill.textContent).toContain('Bob');
+      expect(pill.textContent).not.toContain('Alice');
     });
   });
 
