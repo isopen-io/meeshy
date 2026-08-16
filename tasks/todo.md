@@ -55,7 +55,11 @@ reculer. C'est ce cycle-ci, avec sa question ouverte tranchée d'abord.
 - [x] `bunx tsc --noEmit` gateway : 0 ; web : aucune erreur nouvelle
       (comparaison ensembliste, 1233 préexistantes)
 - [x] Suite gateway COMPLÈTE : **733 suites / 17 850 tests** verts
-- [x] Swift vérifié par CI (`sdk-tests.yml`, `ios.yml`) — pas de toolchain ici
+- [x] Swift : pas de toolchain ici. `sdk-tests.yml` EXÉCUTE les 9 témoins SDK ;
+      `ios.yml` a COMPILÉ la moitié app sans l'exécuter (son check s'appelle
+      « Build app (app + cibles de test) » précisément pour le dire — la suite
+      `MeeshyTests` demande un mot-clé dans le sujet du commit). Détail et
+      analyse du résidu non joué au §5 du journal
 - [x] CHANGELOG + ADR `packages/MeeshySDK/decisions.md` + journal d'audit
       (cycle 49) + leçon 207
 

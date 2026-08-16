@@ -230,9 +230,27 @@ teste déjà `!isEmpty` — mais une seule dit ce que le modèle veut dire.
       avant/après sur le projet, qui en porte 1233 préexistantes).
 - [x] Suite gateway COMPLÈTE : **733 suites / 17 850 tests** verts (399 s).
       Le diff gateway est un unique fichier de tests : +1 suite, +3 témoins.
-- [x] Swift vérifié par CI (`sdk-tests.yml` pour le SDK, `ios.yml` pour l'app) —
-      aucune toolchain Swift dans ce conteneur, même contrainte qu'aux cycles 40
-      et 46 bis.
+- [x] Swift : aucune toolchain dans ce conteneur (même contrainte qu'aux cycles
+      40 et 46 bis), donc vérification par CI — mais **les deux moitiés n'ont
+      pas la même valeur, et il faut le dire précisément** :
+      - `sdk-tests.yml` **exécute** `MeeshySDKTests` : les 9 témoins Swift du
+        SDK (décodage ×3, fusion ×4, pont ×1, moteur de synchro ×1) sont
+        réellement joués.
+      - `ios.yml` n'a **compilé** que la moitié app. Son job s'appelle
+        littéralement « Build app (app + cibles de test) » — par opposition à
+        « Build app + tests unitaires » — parce que la suite `MeeshyTests` n'est
+        exécutée que sur poussée vers `main`, `workflow_dispatch`, ou si le
+        SUJET du commit de tête contient `smoke test` / `run test` / `to test`.
+        **Un vert sur ce nom-là ne dit pas que les tests passent, il dit que le
+        code compile** — les auteurs du workflow ont nommé le check exprès pour
+        que la distinction soit lisible, et la noter ici évite de la relire à
+        l'envers au prochain cycle.
+      - Ce que ça laisse non joué : les **2** témoins
+        `ConversationListViewModelTests`. Leur logique est le miroir exact de
+        témoins SDK réellement exécutés, et le seul mécanisme nouveau de leur
+        fabrique (`NSNull()` traversant `JSONSerialization` pour écrire une clé
+        à `null`) est le MÊME que celui de la branche du Prisme trois lignes plus
+        bas, joué en CI depuis le cycle 46 bis.
 
 ## 6. Écarté délibérément
 
