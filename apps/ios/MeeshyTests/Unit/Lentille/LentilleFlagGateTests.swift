@@ -1,15 +1,14 @@
 import XCTest
 @testable import Meeshy
 
-/// M-046 — le portillon des drapeaux Lentille (`lentilleList`,
-/// `readingModes`, et `focalDevPreview` depuis I-075). Toute résolution passe
-/// par `isEnabled(defaults:environment:)`, JAMAIS par les
-/// `static var isLentilleListEnabled`/`isReadingModesEnabled`/
-/// `isFocalDevPreviewEnabled` (qui lisent `UserDefaults.standard` + le vrai
-/// `ProcessInfo` — les appeler ici laisserait un résidu visible au lancement
-/// suivant, leçon `reference_outbox_db_path_and_test_residue`). Chaque test
-/// fabrique sa propre suite `UserDefaults` UUID, jamais partagée, jamais
-/// nettoyée en sortie de process car jamais écrite au vrai domaine.
+/// M-046 — le portillon des deux drapeaux Lentille (`lentilleList`,
+/// `readingModes`). Toute résolution passe par `isEnabled(defaults:environment:)`,
+/// JAMAIS par les `static var isLentilleListEnabled`/`isReadingModesEnabled`
+/// (qui lisent `UserDefaults.standard` + le vrai `ProcessInfo` — les appeler
+/// ici laisserait un résidu visible au lancement suivant, leçon
+/// `reference_outbox_db_path_and_test_residue`). Chaque test fabrique sa
+/// propre suite `UserDefaults` UUID, jamais partagée, jamais nettoyée en
+/// sortie de process car jamais écrite au vrai domaine.
 final class LentilleFlagGateTests: XCTestCase {
 
     // MARK: - Fabriques
@@ -41,59 +40,6 @@ final class LentilleFlagGateTests: XCTestCase {
         defaults.set(false, forKey: LentilleFeatureFlag.readingModes.userDefaultsKey)
 
         XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    // MARK: - focalDevPreview (I-075) — même patron exactement
-
-    func test_isEnabled_focalDevPreview_noUserDefaultsValueNoEnvOverride_returnsFalse() {
-        let defaults = makeIsolatedDefaults()
-
-        XCTAssertFalse(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_isEnabled_focalDevPreview_userDefaultsTrueNoEnvOverride_returnsTrue() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(true, forKey: LentilleFeatureFlag.focalDevPreview.userDefaultsKey)
-
-        XCTAssertTrue(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_isEnabled_focalDevPreview_envOne_primesOverUserDefaultsFalse_returnsTrue() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(false, forKey: LentilleFeatureFlag.focalDevPreview.userDefaultsKey)
-        let environment = [LentilleFeatureFlag.focalDevPreview.environmentKey: "1"]
-
-        XCTAssertTrue(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: environment))
-    }
-
-    func test_isEnabled_focalDevPreview_envZero_primesOverUserDefaultsTrue_returnsFalse() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(true, forKey: LentilleFeatureFlag.focalDevPreview.userDefaultsKey)
-        let environment = [LentilleFeatureFlag.focalDevPreview.environmentKey: "0"]
-
-        XCTAssertFalse(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: environment))
-    }
-
-    /// Absent de l'environnement (ni "1" ni "0") ⇒ repli `UserDefaults`,
-    /// même règle que les deux autres drapeaux (aucune valeur par défaut
-    /// "vraie" tant que rien ne l'active explicitement).
-    func test_isEnabled_focalDevPreview_envAbsent_fallsBackToUserDefaults() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(true, forKey: LentilleFeatureFlag.focalDevPreview.userDefaultsKey)
-
-        XCTAssertTrue(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    /// Indépendance : allumer `focalDevPreview` ne doit JAMAIS allumer
-    /// `readingModes` — la raison d'être même de ce troisième drapeau séparé
-    /// (docstring `LentilleFeatureFlag`, I-075 §0(a)).
-    func test_isEnabled_focalDevPreviewOnReadingModesOff_flagsAreIndependent() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(true, forKey: LentilleFeatureFlag.focalDevPreview.userDefaultsKey)
-
-        XCTAssertTrue(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: [:]))
-        XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
-        XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
     }
 
     // MARK: - La surcharge process prime
@@ -157,22 +103,5 @@ final class LentilleFlagGateTests: XCTestCase {
         LentilleFeatureFlag.setForDebug(.lentilleList, enabled: true, defaults: defaults)
 
         XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_setForDebug_focalDevPreview_enabledTrue_isEnabledReturnsTrue() {
-        let defaults = makeIsolatedDefaults()
-
-        LentilleFeatureFlag.setForDebug(.focalDevPreview, enabled: true, defaults: defaults)
-
-        XCTAssertTrue(LentilleFeatureFlag.focalDevPreview.isEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_setForDebug_focalDevPreview_doesNotAffectTheOtherTwoFlags() {
-        let defaults = makeIsolatedDefaults()
-
-        LentilleFeatureFlag.setForDebug(.focalDevPreview, enabled: true, defaults: defaults)
-
-        XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
-        XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
     }
 }
