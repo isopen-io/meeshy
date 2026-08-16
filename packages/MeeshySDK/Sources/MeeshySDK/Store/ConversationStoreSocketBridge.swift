@@ -235,6 +235,7 @@ public final class ConversationStoreSocketBridge {
             lastMessagePreview: event.lastMessagePreview,
             lastMessageTranslations: event.lastMessageTranslations,
             lastMessageOriginalLanguage: event.lastMessageOriginalLanguage,
+            previewRecalculated: event.previewRecalculated,
             title: event.title,
             avatar: event.avatar,
             description: event.description,

@@ -55,7 +55,7 @@ object ConversationFilters {
             ConversationFilter.OPEN -> (type == "public" || type == "community") && active && archiveOk
             ConversationFilter.GLOBAL -> type == "global" && active && archiveOk
             ConversationFilter.CHANNELS -> isAnnouncementChannel && active && archiveOk
-            ConversationFilter.FAVORITES -> prefs?.reaction != null && active && archiveOk
+            ConversationFilter.FAVORITES -> !prefs?.reaction.isNullOrBlank() && active && archiveOk
             ConversationFilter.ARCHIVED -> archived
         }
     }

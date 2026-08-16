@@ -49,6 +49,9 @@
     <string name="conversations_rename_dialog_title">Renomear conversa</string>
     <string name="conversations_rename_field_label">Nome da conversa</string>
     <string name="conversations_rename_confirm_button">Salvar</string>
+    <string name="conversations_action_favorite">Favorito</string>
+    <string name="conversations_action_remove_favorite">Remover favorito</string>
+    <string name="conversations_favorite_set_content_description">Definir reação favorita %1$s</string>
     <string name="conversations_action_mark_read">Marcar como lida</string>
     <string name="conversations_action_mark_unread">Marcar como não lida</string>
     <string name="conversations_action_move_to_category">Mover para uma categoria</string>

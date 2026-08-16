@@ -1393,19 +1393,30 @@ struct ConversationListView: View {
                         // EXACT, bit à bit identique (mêmes arguments,
                         // aucun `compact:`).
                         case .searchNoResults:
-                            if LentilleFeatureFlag.isLentilleListEnabled {
-                                EmptyStateView(
-                                    icon: "magnifyingglass",
-                                    title: String(localized: "search.no_results"),
-                                    subtitle: String(localized: "search.try_other_terms"),
-                                    compact: true
-                                )
-                            } else {
-                                EmptyStateView(
-                                    icon: "magnifyingglass",
-                                    title: String(localized: "search.no_results"),
-                                    subtitle: String(localized: "search.try_other_terms")
-                                )
+                            // `Group` : un modificateur ne s'attache pas à un
+                            // `if/else` dans un ViewBuilder (« instance member
+                            // 'padding' cannot be used on type 'View' »). Le
+                            // mux de drapeau posé ici a rendu ces deux lignes
+                            // orphelines. `Group` est transparent au rendu —
+                            // il rétablit la cible du modificateur sans
+                            // dupliquer les métriques dans chaque branche, ce
+                            // qui est précisément ce que ce restylage promet
+                            // (« même `.padding(.top, 60)` »).
+                            Group {
+                                if LentilleFeatureFlag.isLentilleListEnabled {
+                                    EmptyStateView(
+                                        icon: "magnifyingglass",
+                                        title: String(localized: "search.no_results"),
+                                        subtitle: String(localized: "search.try_other_terms"),
+                                        compact: true
+                                    )
+                                } else {
+                                    EmptyStateView(
+                                        icon: "magnifyingglass",
+                                        title: String(localized: "search.no_results"),
+                                        subtitle: String(localized: "search.try_other_terms")
+                                    )
+                                }
                             }
                             .padding(.top, 60)
                             .transition(.opacity)
@@ -1416,52 +1427,56 @@ struct ConversationListView: View {
                             // cold start with stale/expired token or network
                             // issues — previously they were trapped on an empty
                             // list with no feedback.
-                            if LentilleFeatureFlag.isLentilleListEnabled {
-                                EmptyStateView(
-                                    icon: "exclamationmark.arrow.triangle.2.circlepath",
-                                    title: String(localized: "conversations.error.title"),
-                                    subtitle: String(localized: "conversations.error.subtitle"),
-                                    actionLabel: String(localized: "conversations.error.retry"),
-                                    compact: true,
-                                    onAction: {
-                                        Task { await conversationViewModel.forceRefresh() }
-                                    }
-                                )
-                            } else {
-                                EmptyStateView(
-                                    icon: "exclamationmark.arrow.triangle.2.circlepath",
-                                    title: String(localized: "conversations.error.title"),
-                                    subtitle: String(localized: "conversations.error.subtitle"),
-                                    actionLabel: String(localized: "conversations.error.retry"),
-                                    onAction: {
-                                        Task { await conversationViewModel.forceRefresh() }
-                                    }
-                                )
+                            Group {
+                                if LentilleFeatureFlag.isLentilleListEnabled {
+                                    EmptyStateView(
+                                        icon: "exclamationmark.arrow.triangle.2.circlepath",
+                                        title: String(localized: "conversations.error.title"),
+                                        subtitle: String(localized: "conversations.error.subtitle"),
+                                        actionLabel: String(localized: "conversations.error.retry"),
+                                        compact: true,
+                                        onAction: {
+                                            Task { await conversationViewModel.forceRefresh() }
+                                        }
+                                    )
+                                } else {
+                                    EmptyStateView(
+                                        icon: "exclamationmark.arrow.triangle.2.circlepath",
+                                        title: String(localized: "conversations.error.title"),
+                                        subtitle: String(localized: "conversations.error.subtitle"),
+                                        actionLabel: String(localized: "conversations.error.retry"),
+                                        onAction: {
+                                            Task { await conversationViewModel.forceRefresh() }
+                                        }
+                                    )
+                                }
                             }
                             .padding(.top, 60)
                             .transition(.opacity)
                         case .createFirstConversation:
-                            if LentilleFeatureFlag.isLentilleListEnabled {
-                                EmptyStateView(
-                                    icon: "bubble.left.and.bubble.right",
-                                    title: String(localized: "conversations.empty.title"),
-                                    subtitle: String(localized: "conversations.empty.subtitle"),
-                                    actionLabel: String(localized: "conversations.empty.action"),
-                                    compact: true,
-                                    onAction: {
-                                        onNewConversation?()
-                                    }
-                                )
-                            } else {
-                                EmptyStateView(
-                                    icon: "bubble.left.and.bubble.right",
-                                    title: String(localized: "conversations.empty.title"),
-                                    subtitle: String(localized: "conversations.empty.subtitle"),
-                                    actionLabel: String(localized: "conversations.empty.action"),
-                                    onAction: {
-                                        onNewConversation?()
-                                    }
-                                )
+                            Group {
+                                if LentilleFeatureFlag.isLentilleListEnabled {
+                                    EmptyStateView(
+                                        icon: "bubble.left.and.bubble.right",
+                                        title: String(localized: "conversations.empty.title"),
+                                        subtitle: String(localized: "conversations.empty.subtitle"),
+                                        actionLabel: String(localized: "conversations.empty.action"),
+                                        compact: true,
+                                        onAction: {
+                                            onNewConversation?()
+                                        }
+                                    )
+                                } else {
+                                    EmptyStateView(
+                                        icon: "bubble.left.and.bubble.right",
+                                        title: String(localized: "conversations.empty.title"),
+                                        subtitle: String(localized: "conversations.empty.subtitle"),
+                                        actionLabel: String(localized: "conversations.empty.action"),
+                                        onAction: {
+                                            onNewConversation?()
+                                        }
+                                    )
+                                }
                             }
                             .padding(.top, 60)
                             .transition(.opacity)

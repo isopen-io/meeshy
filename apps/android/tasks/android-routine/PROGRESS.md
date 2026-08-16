@@ -1,5 +1,56 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Per-conversation favorite reaction shipped, fixing a genuinely dead filter tab**
+> (slice `conversation-favorite-reaction`) — re-proved against real code before starting: the prior
+> slice's own `PROGRESS.md`/`feature-parity.md` notes claimed "iOS has no real UI for `reaction`
+> either", which turned out to be **wrong** on closer reading — `ConversationPreferencesTab.swift`
+> has a real "Reaction" settings row (emoji picker sheet) and, more importantly,
+> `ConversationListView+Overlays.swift` has a "Favori" context-menu submenu (fixed 8-emoji set
+> ⭐️❤️🔥💎🎯✨🏆💡ﾠ+ "Retirer le favori", both routed through the same `setFavoriteReaction` →
+> `store.apply(.setReaction(emoji))` mutation as the settings-tab picker — one field, two entry
+> points). Corrected the stale note in place rather than silently overwriting it.
+>
+> **A second, stronger justification surfaced mid-investigation**: `ConversationFilter.FAVORITES`
+> already exists as a user-visible filter chip on Android (`ConversationFilters.kt`), gated on
+> `prefs?.reaction != null` — but grepping every write site found **zero** callers ever setting
+> `ApiConversationPreferences.reaction`. The tab was live in the UI and permanently, silently empty
+> for every user on every account — not a missing-feature gap but an active dead end, matching the
+> orchestrator's "no dead ends, no orphan code" principle even more directly than a plain parity
+> gap would.
+>
+> **Repository → outbox → flush pipeline**, mirroring `setCustomNameOptimistic`'s exact shape:
+> `ConversationRepository.setReactionOptimistic(id, emoji: String?)` stores `emoji.orEmpty()` — a
+> `null` argument (clear) becomes an explicit `""`, never a Kotlin `null`, for the same
+> `explicitNulls = false` reason documented on `customName`. `ConversationPrefsPayload.reaction`
+> (new field, doc-commented) threads through `OutboxFlushWorker`'s `UPDATE_CONVERSATION_PREFS`
+> sender into `ConversationPreferencesUpdate.reaction` (already modeled on the wire, unused until
+> now).
+>
+> **Read-side fix required by the same clear-as-empty-string convention**:
+> `ConversationFilters.kt`'s `FAVORITES` branch changed from `prefs?.reaction != null` to
+> `!prefs?.reaction.isNullOrBlank()` — otherwise a cleared favorite (`reaction = ""`) would have
+> kept matching the filter, since `""` is non-null. Same blank-means-absent convention already
+> established for `customName`.
+>
+> **UI**: a "Favorite" section in the context menu (between Rename and Move-to-category, matching
+> iOS's Rename → Favori → Déplacer vers ordering) — 8 fixed emoji chips (identical set to iOS, for
+> cross-platform consistency) + a conditional "Remove favorite" row shown only once one is set. No
+> full categorized emoji picker (`sdk-ui`'s `EmojiFullPicker`) needed — iOS itself uses a small
+> fixed set for this feature, not its full picker, so mirroring the SIMPLER iOS shape was the
+> correct call, not a shortcut. Strings added in all 4 locales (en/fr/es/pt).
+>
+> **+6 tests**: 1 `ConversationFiltersTest` (blank reaction ≠ favorite), 3 `ConversationRepositoryTest`
+> (sets + queues a snapshot, no-op when unchanged, clearing sends an explicit `"reaction":""` — same
+> raw-JSON-payload assertion pattern as the `customName` clear test), 2 `ConversationListViewModelTest`
+> (`setReaction` forwards an emoji / forwards `null` to clear). The new context-menu rows are UI
+> glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 32s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=conversation-favorite-reaction`
+> — streak reaches 5: **next iteration bascules to the IOS_DETTE lane** per the alternation rule.
+
 > On 2026-08-16 **Per-conversation custom name (rename) shipped** (slice
 > `conversation-custom-name`) — advances `feature-parity.md`'s "Per-conversation preferences: custom
 > name, reaction emoji, pin, category, tags, mute, mentions-only" line (still unchecked: reaction
