@@ -79,6 +79,15 @@ async function buildApp(
         conversationId: CONV_ID,
         isActive: true,
       })),
+      // Lu par le rafraîchissement de la ligne de liste
+      // (`personalPreviewRefresh` → `emitConversationPreviewUpdate`). Sans ce
+      // double, l'émetteur d'aperçu — canal best-effort qui avale ses propres
+      // pannes — resterait MUET, et le témoin de câblage ci-dessous serait vert
+      // sur une route qui n'appelle rien.
+      findMany: jest.fn(async () => [
+        { id: 'part-1', userId: USER_ID },
+        { id: 'part-2', userId: 'peer-user' },
+      ]),
     },
     userConversationPreferences: {
       findUnique: jest.fn(async () => null),
@@ -86,6 +95,12 @@ async function buildApp(
       findMany: jest.fn(async () => []),
     },
     message: {
+      findFirst: jest.fn(async () => ({
+        id: 'msg-previous',
+        content: 'the one before',
+        senderId: 'part-2',
+        createdAt: new Date('2026-08-15T09:00:00Z'),
+      })),
       findUnique: jest.fn(async () => ({
         id: MSG_ID,
         conversationId: CONV_ID,
@@ -97,6 +112,7 @@ async function buildApp(
       findMany: jest.fn(async () => over.msgFindMany ?? [{ id: MSG_ID, conversationId: CONV_ID }]),
     },
     userMessageDeletion: {
+      findMany: jest.fn(async () => [{ userId: USER_ID, messageId: MSG_ID }]),
       findUnique: jest.fn(async () =>
         over.msgDeletionFindUnique === undefined
           ? { message: { conversationId: CONV_ID } }
@@ -230,6 +246,122 @@ describe('les routes de masquage personnel diffusent aux AUTRES appareils', () =
     });
     expect(res.statusCode).toBe(400);
     expect(emissions).toHaveLength(0);
+
+    await app.close();
+  });
+});
+
+/**
+ * Second témoin de CÂBLAGE, une couche plus loin : les routes rafraîchissent-elles
+ * la LIGNE DE LISTE de leur auteur ?
+ *
+ * `personalPreviewRefresh` + `emitConversationPreviewUpdate` savent la recalculer
+ * depuis longtemps — au masquage personnel de chaque lecteur, et à lui seul. Il
+ * leur manquait un appelant AU MOMENT où le masquage naît : la ligne se corrigeait
+ * à la mutation suivante d'un tiers, jamais au geste lui-même.
+ *
+ * Les quatre routes de masquage personnel sont couvertes ici, `clear-history`
+ * comprise : elle écrit l'autre des deux tables que la règle lit.
+ */
+describe('les routes de masquage personnel rafraîchissent la ligne de liste', () => {
+  let emissions: Emission[];
+
+  const previews = (all: Emission[]) =>
+    all.filter((e) => e.event === SERVER_EVENTS.CONVERSATION_UPDATED);
+
+  beforeEach(() => {
+    emissions = [];
+  });
+
+  it('DELETE /delete-for-me pousse le remplaçant dans la seule room de l’auteur', async () => {
+    const app = await buildApp(emissions);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+
+    const refreshed = previews(emissions);
+    expect(refreshed).toHaveLength(1);
+    expect(refreshed[0]?.room).toBe(`user:${USER_ID}`);
+    expect((refreshed[0]?.payload as { lastMessageId: string | null }).lastMessageId).toBe(
+      'msg-previous'
+    );
+
+    await app.close();
+  });
+
+  it('le lot rafraîchit UNE ligne par conversation traversée', async () => {
+    const app = await buildApp(emissions, {
+      msgFindMany: [
+        { id: MSG_ID, conversationId: CONV_ID },
+        { id: MSG_ID_2, conversationId: OTHER_CONV_ID },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/messages/bulk/delete-for-me',
+      headers: AUTH,
+      payload: { messageIds: [MSG_ID, MSG_ID_2] },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect(
+      previews(emissions)
+        .map((e) => (e.payload as { conversationId: string }).conversationId)
+        .sort()
+    ).toEqual([CONV_ID, OTHER_CONV_ID].sort());
+
+    await app.close();
+  });
+
+  it('POST /restore-for-me rafraîchit au même titre', async () => {
+    const app = await buildApp(emissions);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/messages/${MSG_ID}/restore-for-me`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect(previews(emissions).map((e) => e.room)).toEqual([`user:${USER_ID}`]);
+
+    await app.close();
+  });
+
+  it('POST /clear-history rafraîchit la ligne que la coupure vient de vider', async () => {
+    const app = await buildApp(emissions);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/conversations/${CONV_ID}/clear-history`,
+      headers: AUTH,
+      payload: { beforeDate: '2026-08-15T12:00:00.000Z' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const refreshed = previews(emissions);
+    expect(refreshed).toHaveLength(1);
+    expect(refreshed[0]?.room).toBe(`user:${USER_ID}`);
+
+    await app.close();
+  });
+
+  it('un lot sans aucun message accessible ne rafraîchit rien', async () => {
+    const app = await buildApp(emissions, { msgFindMany: [] });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/messages/bulk/delete-for-me',
+      headers: AUTH,
+      payload: { messageIds: [MSG_ID] },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(previews(emissions)).toHaveLength(0);
 
     await app.close();
   });

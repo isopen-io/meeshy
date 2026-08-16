@@ -89,6 +89,22 @@ export interface PreviewUpdateScope {
    * la carte ne bouge pas recevrait un payload identique à l'octet près.
    */
   readonly onlyIfPreviewCarriesLanguage?: string;
+  /**
+   * N'émet qu'à CE lecteur, et ne sonde le masquage personnel que pour lui.
+   *
+   * Les deux bornes ci-dessus tiennent l'INSTANT et la LANGUE ; celle-ci tient
+   * l'AUDIENCE, pour la famille d'appelants dont le geste ne change la ligne de
+   * liste que de son auteur : un masquage PERSONNEL (« supprimer pour moi »,
+   * « effacer l'historique »). Le dernier message GLOBAL n'a pas bougé, donc
+   * tous les autres participants recevraient un payload identique à l'octet
+   * près — un événement chacun, par geste.
+   *
+   * Sélectionne par `Participant.userId`, donc un lecteur INSCRIT : les quatre
+   * routes de masquage personnel sont montées `allowAnonymous: false`, et les
+   * deux tables de masquage sont elles-mêmes scopées `userId`. Un participant
+   * sans compte ne peut ni écrire dans l'une ni figurer ici.
+   */
+  readonly onlyForReaderUserId?: string;
 }
 
 /**
@@ -178,6 +194,18 @@ export async function emitConversationPreviewUpdate(
 
     if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;
 
+    // La borne du LECTEUR se pose ICI, avant la sonde et avant la boucle, parce
+    // qu'elle vaut pour les deux : demander à la base si CHAQUE participant a
+    // masqué cet aperçu, alors qu'un seul vient de le faire et qu'on sait
+    // lequel, coûterait la question la plus large pour la réponse la plus
+    // étroite. Vide ⇒ le lecteur nommé n'est plus participant actif : rien à
+    // sonder, rien à émettre.
+    const targets =
+      scope?.onlyForReaderUserId != null
+        ? participants.filter((p) => p.userId === scope.onlyForReaderUserId)
+        : participants;
+    if (targets.length === 0) return;
+
     // Le dernier message GLOBAL n'est pas le dernier message de tout le monde :
     // `deletedAt` ne porte que le « supprimer pour tous », et le masquage
     // personnel vit dans deux autres tables. Sans cette carte, un lecteur qui
@@ -188,7 +216,7 @@ export async function emitConversationPreviewUpdate(
     const overrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
       conversationId,
       latest,
-      userIds: participants.map((p) => p.userId).filter((id): id is string => typeof id === 'string'),
+      userIds: targets.map((p) => p.userId).filter((id): id is string => typeof id === 'string'),
       select: PREVIEW_MESSAGE_SELECT,
     });
 
@@ -230,7 +258,7 @@ export async function emitConversationPreviewUpdate(
     // tout le monde.
     const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
 
-    for (const { room, participant } of participantUserRoomTargets(participants)) {
+    for (const { room, participant } of participantUserRoomTargets(targets)) {
       // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
       // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
       // l'aperçu global rendrait exactement à l'envers.

@@ -290,7 +290,12 @@ describe('read-status routes — un participant sans compte', () => {
 // et le drain. Le même invité, dans la même conversation, était donc nommé de
 // deux façons selon le transport qui parlait.
 
-type CapturedEmit = { readonly rooms: readonly string[]; readonly event: string; readonly payload: any };
+type CapturedEmit = {
+  readonly rooms: readonly string[];
+  readonly excepts: readonly string[];
+  readonly event: string;
+  readonly payload: any;
+};
 
 describe('read-status:updated — comment l\'événement nomme un acteur sans compte', () => {
   let socketApp: FastifyInstance;
@@ -299,10 +304,14 @@ describe('read-status:updated — comment l\'événement nomme un acteur sans co
   // Double de room CHAÎNÉE : `io.to(a).to(b).emit(e, p)` est la forme réelle
   // d'`emitToConversationParticipants`. Capturer la chaîne entière (et pas le
   // dernier `.to()`) est ce qui rend la clé de room observable.
-  const chain = (rooms: readonly string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+  const chain = (rooms: readonly string[], excepts: readonly string[] = []): any => ({
+    to: (room: string) => chain([...rooms, room], excepts),
+    // L'exclusion est RETENUE, pas avalee : c'est elle qui garantit que
+    // l'acteur ne recoit pas DEUX copies d'un evenement dont une seule porte
+    // ses champs prives.
+    except: (room: string) => chain(rooms, [...excepts, room]),
     emit: (event: string, payload: unknown) => {
-      emits.push({ rooms, event, payload });
+      emits.push({ rooms, excepts, event, payload });
       return true;
     }
   });
@@ -417,17 +426,42 @@ describe('read-status:updated — comment l\'événement nomme un acteur sans co
     }
   });
 
-  // L'autre moitié de l'anti-sur-correction : le fan-out atteint TOUJOURS les
-  // deux pairs, celui sans compte par son `Participant.id`.
-  it('le fan-out atteint toujours le pair sans compte ET le pair enregistré', async () => {
+  // L'autre moitié de l'anti-sur-correction : personne n'est laissé de côté,
+  // celui sans compte étant joint par son `Participant.id`.
+  //
+  // Les deux ne sont plus atteints par la MÊME chaîne, et c'est voulu : ici
+  // l'invité est l'ACTEUR, donc l'éventail l'exclut pour qu'il reçoive à part
+  // la version portant sa frontière de lecture et son arriéré — deux mesures de
+  // sa personne, que le pair enregistré n'a pas à recevoir. L'union des chaînes
+  // reste ce que ce témoin garde : aucune room ne disparaît.
+  it('personne n\'est laissé de côté : le pair enregistré par l\'éventail, l\'acteur sans compte par sa room', async () => {
     await socketApp.inject({
       method: 'POST',
       url: `/conversations/${CONVERSATION_ID}/mark-as-read`
     });
 
-    const rooms = roomsOf('read-status:updated');
-    expect(rooms).toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
-    expect(rooms).toContain(`user:${REGISTERED_USER_ID}`);
+    const readStatusEmits = emits.filter((emit) => emit.event === 'read-status:updated');
+    const allRooms = readStatusEmits.flatMap((emit) => emit.rooms);
+    expect(allRooms).toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+    expect(allRooms).toContain(`user:${REGISTERED_USER_ID}`);
+
+    // L'éventail — la chaîne de plus d'une room — porte le pair, pas l'acteur.
+    const fanOut = readStatusEmits.filter((emit) => emit.rooms.length > 1);
+    expect(fanOut).not.toHaveLength(0);
+    for (const emit of fanOut) {
+      expect(emit.rooms).toContain(`user:${REGISTERED_USER_ID}`);
+      expect(emit.rooms).not.toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+      expect(emit.excepts).toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+      expect(emit.payload).not.toHaveProperty('unreadCount');
+    }
+
+    // La chaîne d'une seule room est celle de l'acteur, et elle porte les deux
+    // champs qui ne regardent que lui.
+    const actorEmit = readStatusEmits.find(
+      (emit) => emit.rooms.length === 1 && emit.rooms[0] === `user:${ANONYMOUS_PARTICIPANT_ID}`
+    );
+    expect(actorEmit).toBeDefined();
+    expect(actorEmit!.payload).toHaveProperty('unreadCount');
   });
 
   // NON-RÉGRESSION : l'acteur AVEC compte continue de se nommer par son
