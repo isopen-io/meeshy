@@ -1118,5 +1118,23 @@ en cours de run : « commit au fur et à mesure exceptionnellement puis push sur
 autres sessions actives bénéficient immédiatement du build réparé plutôt que de redécouvrir/re-
 corriger le même problème en parallèle. CI GitHub Actions armée en observation post-push.
 
+**CI post-push (job « Build app + tests unitaires », le job authentique — cf.
+`reference_ios_release_andp_workflow_broken_local_fallback.md` sur Xcode Cloud qui ment) : 6564
+tests, 6550 verts, 11 rouges.** 10 correspondent exactement aux items déjà documentés ci-dessus
+(locale française × 7, RTL chevron, tri `topSenders`, `test_r15…` — voir juste en dessous). Le
+11e était un **4e bug de test réel**, raté par mon propre scan local (mon script de surveillance
+filtrait `XCTAssert.*failed` et cette suite échoue via `XCTFail` nu, sans préfixe `XCTAssert` —
+angle mort de ma propre vérification, pas du hasard) :
+
+- `FocalHostSourceGuardTests.test_r15_newComputationSections_carryNoLawLiteral` — cherchait ses
+  deux bornes de section (`// MARK: - §4.5…` / `// MARK: - §4.7…`) DANS la source déjà passée par
+  `AppSourceGuard.stripComments` — qui efface justement les commentaires de ligne, dont ces bornes
+  font partie. Contradiction interne, échec garanti à 100 %, jamais vu vert. Reproduit en
+  isolation locale (0.187s, déterministe, PAS un flake). Corrigé : bornes cherchées dans la source
+  BRUTE, `stripComments` appliqué seulement à la tranche extraite entre les deux bornes — la garde
+  vérifie enfin ce qu'elle prétend vérifier (aucun littéral de loi en dur dans les deux sections
+  ajoutées par F-085). Commit séparé `c0c402117`, poussé directement sur `main` selon la même
+  procédure exceptionnelle.
+
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-build-break-focal-lentille`
   (ce commit, poussé directement sur `main`).
