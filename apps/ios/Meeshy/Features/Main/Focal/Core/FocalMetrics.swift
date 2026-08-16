@@ -205,9 +205,11 @@ nonisolated public enum FocalMetrics {
 
     /// `thread.hiddenChrome` — identique à `list.hiddenChrome` (même loi de
     /// chrome sur les deux écrans, `translateY(94)` + opacité 0,
-    /// `easeOut .25`). Propriété WS-6 (hôte de défilement) — mirrorée ici
-    /// pour la parité EXHAUSTIVE `thread.*` de la tâche 0, non consommée par
-    /// WS-3/WS-4.
+    /// `easeOut .25`). Propriété WS-6 (hôte de défilement), branchée depuis
+    /// le 2026-08-16 : `easeOut` cadence la disparition du header entier
+    /// dans `ConversationView.swift`. `translateY` et `opacityEnd` restent
+    /// mirrorées pour la parité EXHAUSTIVE `thread.*` de la tâche 0, sans
+    /// consommateur à ce jour.
     nonisolated public enum HiddenChrome {
         public static let translateY: CGFloat = 94
         public static let opacityEnd: Double = 0
