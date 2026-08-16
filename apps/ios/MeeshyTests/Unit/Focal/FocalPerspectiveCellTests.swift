@@ -16,6 +16,7 @@ import UIKit
 /// 167 ms — les « sauts de grandissement » du rapport.
 ///
 /// Ces tests montent l'effacement tel quel, sans simulateur ni défilement.
+@MainActor
 final class FocalPerspectiveCellTests: XCTestCase {
 
     private func makeCell() -> FocalPerspectiveCell {
@@ -35,6 +36,7 @@ final class FocalPerspectiveCellTests: XCTestCase {
         cell.writeFocalTransform(FocalCellTransform(scale: 0.62, alpha: 0.4, translation: CGSize(width: -30, height: -12)))
 
         cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
 
         XCTAssertEqual(
             cell.layer.transform.m11, 0.62, accuracy: 0.0001,
@@ -47,6 +49,7 @@ final class FocalPerspectiveCellTests: XCTestCase {
         cell.writeFocalTransform(FocalCellTransform(scale: 0.62, alpha: 0.4, translation: .zero))
 
         cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
 
         XCTAssertEqual(
             cell.alpha, 0.4, accuracy: 0.0001,
@@ -59,6 +62,7 @@ final class FocalPerspectiveCellTests: XCTestCase {
         cell.writeFocalTransform(FocalCellTransform(scale: 0.62, alpha: 1, translation: CGSize(width: -30, height: -12)))
 
         cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
 
         XCTAssertEqual(cell.layer.transform.m41, -30, accuracy: 0.0001, "FocalPerspectiveCell.apply doit reposer l'ancrage horizontal (§4.3)")
         XCTAssertEqual(cell.layer.transform.m42, -12, accuracy: 0.0001, "FocalPerspectiveCell.apply doit reposer l'ancrage vertical (§4.3)")
@@ -72,10 +76,32 @@ final class FocalPerspectiveCellTests: XCTestCase {
 
         for _ in 0..<12 {
             cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
         }
 
         XCTAssertEqual(cell.layer.transform.m11, 0.5, accuracy: 0.0001, "la perspective doit survivre à une CASCADE de re-mesures, pas seulement à la première")
         XCTAssertEqual(cell.alpha, 0.3, accuracy: 0.0001, "la perspective doit survivre à une CASCADE de re-mesures, pas seulement à la première")
+    }
+
+    /// **La garde anti-crash.** Reposer le transform SYNCHRONIQUEMENT dans
+    /// `apply(_:)` s'exécute au milieu de la passe de mise à jour de la
+    /// collection : la mesure self-sizing voit une cellule transformée, la
+    /// passe ré-invalide, ré-applique, la cellule repose — et la convergence
+    /// ne vient jamais. Constaté par crash au simulateur iOS 26.1
+    /// (`Meeshy-2026-08-16-214007.ips` : assertion Swift dans
+    /// `_setNeedsVisibleCellsUpdate`, `_updateVisibleCellsNow` récursif).
+    /// Le repose DOIT attendre `layoutSubviews`.
+    func test_applyLayoutAttributes_doesNotRewriteSynchronously() {
+        let cell = makeCell()
+        cell.layoutIfNeeded()
+        cell.writeFocalTransform(FocalCellTransform(scale: 0.5, alpha: 0.3, translation: .zero))
+
+        cell.apply(makeAttributes())
+
+        XCTAssertTrue(
+            CATransform3DIsIdentity(cell.layer.transform),
+            "apply(_:) ne doit PAS réécrire le transform dans la passe — c'est le crash iOS 26 (self-sizing non convergente) ; le repose appartient à layoutSubviews"
+        )
     }
 
     // MARK: - Recyclage
@@ -99,6 +125,7 @@ final class FocalPerspectiveCellTests: XCTestCase {
         cell.prepareForReuse()
 
         cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
 
         XCTAssertTrue(
             CATransform3DIsIdentity(cell.layer.transform),
@@ -115,6 +142,7 @@ final class FocalPerspectiveCellTests: XCTestCase {
 
         pass.reset(cell)
         cell.apply(makeAttributes())
+        cell.layoutIfNeeded()
 
         XCTAssertTrue(
             CATransform3DIsIdentity(cell.layer.transform),

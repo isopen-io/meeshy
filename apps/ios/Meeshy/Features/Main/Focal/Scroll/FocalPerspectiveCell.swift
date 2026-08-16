@@ -30,7 +30,9 @@ import UIKit
 /// Ajouter un septième site d'appel ne pouvait pas suffire : l'effacement ne
 /// suit aucun événement observable de l'extérieur, il suit la mesure. La seule
 /// écriture qui survive à une application d'attributs est celle qui a lieu
-/// APRÈS elle — donc ici, dans `apply(_:)`, sous le contrôle de la cellule.
+/// APRÈS elle — ici `apply(_:)` marque (`setNeedsLayout`) et `layoutSubviews`
+/// repose, dans le même commit CoreAnimation (voir la doc d'`apply` pour la
+/// raison de ce détour : reposer DANS `apply` fait boucler la self-sizing).
 ///
 /// ## Ce que ce type ne fait pas
 ///
@@ -46,15 +48,37 @@ final class FocalPerspectiveCell: UICollectionViewCell {
     /// son occupant précédent.
     private(set) var focalTransform: FocalCellTransform = .identity
 
-    /// Le seul écrivain — `FocalScrollPass.write(_:to:)`.
+    /// Le seul écrivain — `FocalScrollPass.write(_:to:)`. Appelé hors de toute
+    /// passe de layout (les six sites du pass) : l'écriture directe est sûre.
     func writeFocalTransform(_ transform: FocalCellTransform) {
         focalTransform = transform
         renderFocalTransform()
     }
 
-    /// `super.apply` vient d'écraser `layer.transform` et `alpha`. On repose.
+    /// `super.apply` vient d'écraser `layer.transform` et `alpha`. On ne
+    /// repose PAS ici : on marque, et `layoutSubviews` reposera.
+    ///
+    /// **Reposer synchroniquement dans `apply(_:)` fait boucler la
+    /// self-sizing** — constaté par crash au simulateur iOS 26.1
+    /// (`Meeshy-2026-08-16-214007.ips`) : assertion Swift dans
+    /// `_setNeedsVisibleCellsUpdate`, `_updateVisibleCellsNow` récursif sur
+    /// 14 niveaux. `apply` s'exécute AU MILIEU de la passe de mise à jour de
+    /// la collection ; y réécrire `layer.transform` laisse la mesure
+    /// `preferredLayoutAttributesFitting` voir une cellule transformée, la
+    /// passe ré-invalide, ré-applique, on repose — et la convergence ne vient
+    /// jamais. `setNeedsLayout` est coalescé, non réentrant, et garantit un
+    /// `layoutSubviews` dans le MÊME commit CoreAnimation : zéro frame rendue
+    /// sans perspective, zéro écriture dans la passe.
     override func apply(_ layoutAttributes: UICollectionViewLayoutAttributes) {
         super.apply(layoutAttributes)
+        setNeedsLayout()
+    }
+
+    /// S'exécute APRÈS la passe de la collection (le layout des sous-couches
+    /// suit `layoutSubviews` de la collection dans le même commit), donc la
+    /// consigne reposée ici n'est jamais visible d'une re-mesure en cours.
+    override func layoutSubviews() {
+        super.layoutSubviews()
         renderFocalTransform()
     }
 
