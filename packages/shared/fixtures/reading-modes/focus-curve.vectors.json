@@ -6,8 +6,8 @@
       "variant": "thread"
     },
     "expected": {
-      "alpha": 1,
-      "scale": 1
+      "alpha": 1.0,
+      "scale": 1.0
     }
   },
   {
@@ -17,8 +17,8 @@
       "variant": "thread"
     },
     "expected": {
-      "alpha": 0.5900000000000001,
-      "scale": 0.8
+      "alpha": 0.7150000000000001,
+      "scale": 0.8611538461538462
     }
   },
   {
@@ -28,8 +28,8 @@
       "variant": "thread"
     },
     "expected": {
-      "alpha": 0.18000000000000005,
-      "scale": 0.6
+      "alpha": 0.43000000000000005,
+      "scale": 0.7223076923076923
     }
   },
   {
@@ -39,8 +39,8 @@
       "variant": "thread"
     },
     "expected": {
-      "alpha": 0.18000000000000005,
-      "scale": 0.6
+      "alpha": 0.3999999999999999,
+      "scale": 0.7076923076923076
     }
   },
   {
@@ -138,8 +138,8 @@
       "variant": "thread"
     },
     "expected": {
-      "alpha": 1,
-      "scale": 1
+      "alpha": 1.0,
+      "scale": 1.0
     }
   }
 ]
