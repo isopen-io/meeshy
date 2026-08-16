@@ -740,7 +740,8 @@
       },
       "typing": {
         "one": "{name} está escribiendo…"
-      }
+      },
+      "draft": "✎ Borrador"
     }
   },
   "bubbleStream": {

@@ -742,7 +742,8 @@
       },
       "typing": {
         "one": "{name} écrit…"
-      }
+      },
+      "draft": "✎ Brouillon"
     }
   },
   "bubbleStream": {

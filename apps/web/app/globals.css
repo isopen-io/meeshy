@@ -10,6 +10,11 @@
 /* Import des styles de conversations */
 @import url('../styles/conversations-layout.css');
 
+/* Tokens Lentille (LWS-10, M-049) — cotes normatives §4.3 du contrat,
+   consommées par les composants sous drapeau `lentille_list`, jamais
+   recopiées en dur (garde R15). Voir apps/web/styles/lentille-tokens.css. */
+@import url('../styles/lentille-tokens.css');
+
 /* Force scroll behavior globally for conversation components */
 .conversation-area .messages-scroll,
 .conversation-area .conversation-list-scroll {
