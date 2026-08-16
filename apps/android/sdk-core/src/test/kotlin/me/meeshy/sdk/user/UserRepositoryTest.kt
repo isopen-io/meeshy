@@ -94,4 +94,47 @@ class UserRepositoryTest {
         // the optimistic flip still happened — only the queue write coalesced away
         verify(exactly = 1) { session.applyProfileEdit(any()) }
     }
+
+    @Test
+    fun `searchUsersPaged forwards the query and offset, preserving the pagination block`() = runTest {
+        val api = mockk<UserApi>()
+        val users = listOf(
+            me.meeshy.sdk.net.api.UserSearchResult(id = "u1", username = "alice", displayName = "Alice"),
+        )
+        coEvery { api.search("ali", 20, 20) } returns me.meeshy.sdk.model.ApiResponse(
+            success = true,
+            data = users,
+            pagination = me.meeshy.sdk.model.Pagination(total = 45, offset = 20, limit = 20, hasMore = true),
+        )
+        val repository = UserRepository(
+            userApi = api,
+            sessionRepository = mockk(relaxed = true),
+            outboxRepository = mockk(relaxed = true),
+        )
+
+        val result = repository.searchUsersPaged("ali", offset = 20)
+
+        val success = result as me.meeshy.sdk.net.NetworkResult.Success
+        assertThat(success.data.data).isEqualTo(users)
+        assertThat(success.data.pagination?.hasMore).isTrue()
+        assertThat(success.data.pagination?.offset).isEqualTo(20)
+    }
+
+    @Test
+    fun `searchUsersPaged folds a failed envelope into a Failure`() = runTest {
+        val api = mockk<UserApi>()
+        coEvery { api.search(any(), any(), any()) } returns me.meeshy.sdk.model.ApiResponse(
+            success = false,
+            error = "down",
+        )
+        val repository = UserRepository(
+            userApi = api,
+            sessionRepository = mockk(relaxed = true),
+            outboxRepository = mockk(relaxed = true),
+        )
+
+        val result = repository.searchUsersPaged("ali")
+
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
+    }
 }
