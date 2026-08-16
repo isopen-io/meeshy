@@ -2213,6 +2213,60 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Event with lastMessageAt must promote the conversation to the top")
     }
 
+    /// Supprimer le DERNIER message pour tous : le serveur recalcule et sert le
+    /// message PRÉCÉDENT, donc plus ancien. L'aperçu et l'id s'appliquaient
+    /// déjà ; `lastMessageAt`, lui, restait celui du message supprimé — la
+    /// ligne affichait le bon texte au mauvais RANG, la liste étant triée par
+    /// `lastMessageAt` décroissant.
+    func test_conversationUpdated_recalculatedPreview_movesLastMessageAtBackwards() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 9_000)),
+            makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let previous = Date(timeIntervalSince1970: 3_000)
+        messageSocket.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c",
+            lastMessageAt: previous,
+            lastMessageId: "msg-previous",
+            lastMessagePreview: "celui d avant",
+            previewRecalculated: true
+        ))
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let row = try XCTUnwrap(sut.conversations.first(where: { $0.id == "c" }))
+        XCTAssertEqual(row.lastMessageAt, previous,
+                       "a declared recalculation must carry the timestamp back with the preview")
+        XCTAssertEqual(row.lastMessagePreview, "celui d avant")
+        XCTAssertEqual(row.lastMessageId, "msg-previous")
+    }
+
+    /// La contre-épreuve : le MÊME recul, sans la déclaration du serveur, décrit
+    /// une diffusion arrivée dans le désordre. L'horodatage doit rester celui
+    /// qu'on tient — c'est la raison d'être du `>` strict sur le chemin du bump.
+    func test_conversationUpdated_backwardsWithoutRecalcFlag_keepsTimestamp() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        let current = Date(timeIntervalSince1970: 9_000)
+        sut.setConversations([makeConversation(id: "c", lastMessageAt: current)])
+
+        messageSocket.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c",
+            lastMessageAt: Date(timeIntervalSince1970: 3_000),
+            lastMessageId: "msg-stale",
+            lastMessagePreview: "perime"
+        ))
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let row = try XCTUnwrap(sut.conversations.first(where: { $0.id == "c" }))
+        XCTAssertEqual(row.lastMessageAt, current,
+                       "an undeclared backwards timestamp is a stale broadcast — it must not move the row")
+    }
+
     /// P1 — end-to-end through the real socket sink (not calling
     /// `bumpToTop` directly): CONVERSATION_UPDATED never carries the new
     /// message's sender/attachments/flags, so the row must not keep
@@ -3757,7 +3811,8 @@ private func makeConversationUpdatedEvent(
     lastMessageTranslations: LastMessagePreviewTranslations? = nil,
     lastMessageOriginalLanguage: String? = nil,
     locationName: String? = nil,
-    senderId: String? = nil
+    senderId: String? = nil,
+    previewRecalculated: Bool = false
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -3789,6 +3844,10 @@ private func makeConversationUpdatedEvent(
     if let lastMessageAt {
         json["lastMessageAt"] = isoFormatter.string(from: lastMessageAt)
     }
+    // Omis quand faux, comme le fait le gateway : le drapeau n'est posé que par
+    // `emitConversationPreviewUpdate`, et son absence doit rester le cas nominal
+    // que traversent tous les autres témoins de ce fichier.
+    if previewRecalculated { json["previewRecalculated"] = true }
     let data = try! JSONSerialization.data(withJSONObject: json)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in

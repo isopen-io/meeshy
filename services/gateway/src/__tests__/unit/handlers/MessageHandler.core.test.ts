@@ -1351,6 +1351,38 @@ describe('MessageHandler.broadcastNewMessage', () => {
     expect(updated![1]).toMatchObject({ updatedBy: { id: 'user-sender' } });
   });
 
+  /**
+   * Garde de non-régression du drapeau `previewRecalculated`.
+   *
+   * Ce chemin-ci est message-driven : il porte le message qu'on vient d'écrire,
+   * et c'est LUI que la garde monotone des clients protège — une diffusion
+   * arrivée dans le désordre y désigne un message périmé, dont le groupe
+   * d'aperçu doit être jeté. Poser le drapeau ici rendrait la garde inopérante
+   * sur le seul chemin qui en a besoin, ce qui est exactement le défaut
+   * symétrique de celui que le drapeau ferme.
+   *
+   * Seul `emitConversationPreviewUpdate` — qui RECALCULE depuis la base — le
+   * pose. Cf. `emitConversationPreviewUpdate.recalcFlag.test.ts`.
+   */
+  it('does NOT mark the message-driven bump as a recalculation', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => [{ userId: 'user-a' }]) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    await handler.broadcastNewMessage(makeMessage(), 'conv-abc');
+
+    const updated = io._emit.mock.calls.find(
+      (c: any[]) => c[0] === 'conversation:updated',
+    );
+    expect(updated).toBeDefined();
+    expect((updated![1] as Record<string, unknown>).previewRecalculated).toBeUndefined();
+  });
+
   it('catches error in CONVERSATION_UPDATED silently', async () => {
     const io = makeMockIo();
     // participant.findMany throws on 2nd call (conversation:updated path)

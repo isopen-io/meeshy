@@ -662,6 +662,101 @@ final class ConversationStoreTests: XCTestCase {
                        "a stale broadcast must not overwrite the preview paired with the newer timestamp")
     }
 
+    // MARK: - Un aperçu RECALCULÉ a le droit de reculer
+    //
+    // La garde monotone ci-dessus lit tout recul comme la marque d'un message
+    // périmé. C'en est une pour un événement message-driven ; c'en est une
+    // FAUSSE pour un recalcul serveur, qui recule légitimement sur deux chemins
+    // NOMINAUX : supprimer le dernier message pour tous (la ligne redescend sur
+    // le message précédent) et masquer son propre dernier message visible (le
+    // remplaçant est plus ancien par construction). Du seul contenu, les deux
+    // sont indiscernables — c'est pourquoi le serveur le DÉCLARE.
+
+    func test_applyConversationUpdated_recalculatedPreview_appliesEvenWhenItMovesBackwards() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-latest"
+        conv.lastMessagePreview = "le dernier message"
+        await store.hydrate(conv)
+
+        // Le dernier message vient d'être supprimé pour tous : le serveur
+        // recalcule et sert le PRÉCÉDENT, donc plus ancien.
+        let previous = Date(timeIntervalSince1970: 1_699_000_000)
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: previous,
+            lastMessageId: "msg-previous",
+            lastMessagePreview: "celui d avant",
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageAt, previous,
+                       "a declared recalculation must be allowed to move the row DOWN the list")
+        XCTAssertEqual(after.lastMessageId, "msg-previous",
+                       "the recalculated id must replace the deleted message's")
+        XCTAssertEqual(after.lastMessagePreview, "celui d avant",
+                       "the row must stop rendering the preview of a message that no longer exists")
+    }
+
+    /// La contre-épreuve, et elle porte la raison d'être du drapeau : le MÊME
+    /// payload, au même recul, sans la déclaration du serveur, reste jeté. Sans
+    /// ce témoin, un correctif qui aurait simplement supprimé la garde
+    /// monotone passerait pour bon.
+    func test_applyConversationUpdated_backwardsWithoutRecalcFlag_staysRejected() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-latest"
+        conv.lastMessagePreview = "le dernier message"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_699_000_000),
+            lastMessageId: "msg-previous",
+            lastMessagePreview: "celui d avant"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageAt, t0,
+                       "an undeclared payload is still a stale broadcast — the guard must hold")
+        XCTAssertEqual(after.lastMessageId, "msg-latest")
+        XCTAssertEqual(after.lastMessagePreview, "le dernier message")
+    }
+
+    /// Le Prisme appartient au même groupe : un recalcul qui recule doit aussi
+    /// périmer la carte de traductions, sans quoi la ligne rendrait le texte
+    /// TRADUIT du message supprimé sous l'aperçu du message précédent — le
+    /// résolveur préfère la traduction à l'aperçu brut.
+    func test_applyConversationUpdated_recalculatedPreview_carriesThePrismBackwardsToo() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        conv.lastMessageId = "msg-latest"
+        conv.lastMessagePreview = "le dernier message"
+        conv.lastMessageTranslations = ["fr": "le dernier message"]
+        conv.lastMessageOriginalLanguage = "en"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_699_000_000),
+            lastMessageId: "msg-previous",
+            lastMessagePreview: "celui d avant",
+            lastMessageTranslations: .replaced(["fr": "celui d avant"]),
+            lastMessageOriginalLanguage: "en",
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "celui d avant"],
+                       "the prism belongs to the same group — a recalculation must carry it too")
+    }
+
     // MARK: - Prisme de la ligne de liste après une édition
     //
     // Le défaut fermé ici : après une ÉDITION, la ligne de liste affichait le

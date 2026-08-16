@@ -1047,6 +1047,29 @@ class ConversationListViewModel: ObservableObject {
                             prism.map.isEmpty ? nil : prism.map
                         self.conversations[index].lastMessageOriginalLanguage = prism.originalLanguage
                     }
+                    // L'horodatage, lui, ne suivait PAS l'aperçu quand celui-ci
+                    // recule — la branche ci-dessus n'est atteinte que si
+                    // `lastMessageAt` n'a pas avancé, et rien ne le réécrivait.
+                    //
+                    // Un recalcul autoritatif du serveur recule légitimement :
+                    // supprimer le dernier message POUR TOUS fait redescendre la
+                    // ligne sur le message précédent. L'aperçu et l'id
+                    // s'appliquaient bien, mais la ligne gardait l'horodatage du
+                    // message supprimé — donc sa PLACE dans la liste, triée par
+                    // `lastMessageAt` décroissant. La ligne affichait le bon
+                    // texte au mauvais rang, jusqu'à la synchro suivante.
+                    //
+                    // Réservé au drapeau : sans lui, un horodatage qui recule
+                    // décrit un message périmé (diffusion arrivée dans le
+                    // désordre) et doit rester ignoré — c'est la raison d'être
+                    // du `>` strict au-dessus. Seul l'émetteur les distingue.
+                    //
+                    // Pas de re-tri explicite : les sections d'affichage trient
+                    // à la construction (`conversationsAreInOrder`), donc la
+                    // place se corrige au prochain rendu.
+                    if event.previewRecalculated, let recalculatedAt = event.lastMessageAt {
+                        self.conversations[index].lastMessageAt = recalculatedAt
+                    }
                     // Metadata-only mutation (rename, avatar swap, broadcast
                     // toggle) still needs to land in L2 so a cold restart
                     // doesn't show the pre-event title for a frame. bumpToTop
