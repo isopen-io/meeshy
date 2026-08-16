@@ -45,6 +45,10 @@
     <string name="conversations_action_all_notifications">Todas las notificaciones</string>
     <string name="conversations_action_archive">Archivar</string>
     <string name="conversations_action_unarchive">Desarchivar</string>
+    <string name="conversations_action_rename">Renombrar conversación</string>
+    <string name="conversations_rename_dialog_title">Renombrar conversación</string>
+    <string name="conversations_rename_field_label">Nombre de la conversación</string>
+    <string name="conversations_rename_confirm_button">Guardar</string>
     <string name="conversations_action_mark_read">Marcar como leído</string>
     <string name="conversations_action_mark_unread">Marcar como no leído</string>
     <string name="conversations_action_move_to_category">Mover a una categoría</string>

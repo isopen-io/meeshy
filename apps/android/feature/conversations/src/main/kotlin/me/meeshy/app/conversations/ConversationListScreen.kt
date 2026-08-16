@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ManageSearch
@@ -211,6 +212,7 @@ fun ConversationListScreen(
                                 onLeaveConversation = { viewModel.leaveConversation(conversation.id) },
                                 onDeleteForMe = { viewModel.deleteConversationForMe(conversation.id) },
                                 onDeleteForAll = { viewModel.deleteConversationForAll(conversation.id) },
+                                onRename = { viewModel.setCustomName(conversation.id, it) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -376,6 +378,7 @@ private fun ConversationRow(
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
     onDeleteForAll: () -> Unit,
+    onRename: (String) -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -432,6 +435,8 @@ private fun ConversationRow(
             onLeaveConversation = onLeaveConversation,
             onDeleteForMe = onDeleteForMe,
             onDeleteForAll = onDeleteForAll,
+            onRename = onRename,
+            currentCustomName = prefs?.customName,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -485,6 +490,8 @@ private fun ConversationRowContent(
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
     onDeleteForAll: () -> Unit,
+    onRename: (String) -> Unit,
+    currentCustomName: String?,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -633,6 +640,8 @@ private fun ConversationRowContent(
             onLeaveConversation = onLeaveConversation,
             onDeleteForMe = onDeleteForMe,
             onDeleteForAll = onDeleteForAll,
+            onRename = onRename,
+            currentCustomName = currentCustomName,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -668,6 +677,8 @@ private fun ConversationContextMenu(
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
     onDeleteForAll: () -> Unit,
+    onRename: (String) -> Unit,
+    currentCustomName: String?,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -677,6 +688,8 @@ private fun ConversationContextMenu(
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
+    var showRenameDialog by remember(expanded) { mutableStateOf(false) }
+    var renameText by remember(expanded) { mutableStateOf(currentCustomName.orEmpty()) }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
@@ -768,6 +781,11 @@ private fun ConversationContextMenu(
             },
             leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
             onClick = { onToggleArchive(); onDismiss() },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.conversations_action_rename)) },
+            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+            onClick = { showRenameDialog = true },
         )
         // Move-to-category / create-category (parity iOS `CategoryPickerField` +
         // `ConversationOptionsViewModel.setCategory`/`createCategoryAndSelect`): a
@@ -912,6 +930,38 @@ private fun ConversationContextMenu(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteForAllConfirm = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
+    }
+
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(stringResource(R.string.conversations_rename_dialog_title)) },
+            text = {
+                TextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.conversations_rename_field_label)) },
+                    placeholder = { Text(title) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        onRename(renameText)
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_rename_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },
