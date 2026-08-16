@@ -6,7 +6,7 @@
 
 import {
   formatMessageWithUnifiedSender,
-  formatMessageWithSeparateSenders,
+  formatLinkMessageWithDetails,
 } from '../../../../routes/links/utils/message-formatters';
 
 function makeUserSender(overrides: Record<string, unknown> = {}) {
@@ -105,7 +105,7 @@ describe('formatMessageWithUnifiedSender', () => {
   });
 });
 
-describe('formatMessageWithSeparateSenders', () => {
+describe('formatLinkMessageWithDetails', () => {
   // Le formateur recopiait `statusEntries` — des accusés NOMINATIFS — que
   // `messageSchema` (routes/links/types.ts) ne déclare pas, donc que
   // `fast-json-stringify` retirait juste après. Ne plus les recopier retire du
@@ -113,29 +113,35 @@ describe('formatMessageWithSeparateSenders', () => {
   // champ au schéma pour « réparer » l'absence, il publierait des accusés sans
   // le gate `showReadReceipts` que les cinq lecteurs du service appliquent.
   it("ne recopie pas les accusés nominatifs que le schéma de sortie ne déclare pas", () => {
-    const result = formatMessageWithSeparateSenders(
+    const result = formatLinkMessageWithDetails(
       makeMessage({ statusEntries: [{ participantId: 'part_001', readAt: new Date() }] })
     );
     expect(result).not.toHaveProperty('statusEntries');
   });
 
-  it('populates sender for registered user, null anonymousSender', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage());
+  it('porte l\'identité d\'un auteur INSCRIT dans `sender`', () => {
+    const result = formatLinkMessageWithDetails(makeMessage());
     expect(result.sender).not.toBeNull();
     expect(result.sender!.id).toBe('user_001');
-    expect(result.anonymousSender).toBeNull();
+    expect(result.sender!.isMeeshyer).toBe(true);
   });
 
-  it('populates anonymousSender for anonymous sender, null sender', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage({ sender: makeAnonSender() }));
-    expect(result.anonymousSender).not.toBeNull();
-    expect(result.anonymousSender!.id).toBe('anon_session_abc');
-    expect(result.anonymousSender!.username).toBe('Guest User');
-    expect(result.sender).toBeNull();
+  // `sender: null` + identité rangée dans `anonymousSender` = message d'invité
+  // SANS NOM sur le fil : `messageSchema` ne déclarait pas `anonymousSender`
+  // (retiré à la sérialisation) et aucun client ne l'a jamais lu. `sender` est
+  // le seul champ que les bulles regardent, sur ce point de service comme sur
+  // `GET /links/:identifier`.
+  it('porte l\'identité d\'un auteur ANONYME dans `sender`, pas dans une seconde voie', () => {
+    const result = formatLinkMessageWithDetails(makeMessage({ sender: makeAnonSender() }));
+    expect(result.sender).not.toBeNull();
+    expect(result.sender!.id).toBe('anon_session_abc');
+    expect(result.sender!.username).toBe('Guest User');
+    expect(result.sender!.isMeeshyer).toBe(false);
+    expect(result).not.toHaveProperty('anonymousSender');
   });
 
   it('returns all top-level fields', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage());
+    const result = formatLinkMessageWithDetails(makeMessage());
     expect(result.id).toBe('msg_001');
     expect(result.content).toBe('Hello world');
     expect(result.messageType).toBe('text');
@@ -154,14 +160,14 @@ describe('formatMessageWithSeparateSenders', () => {
       createdAt: new Date(),
       sender: makeUserSender(),
     };
-    const result = formatMessageWithSeparateSenders(makeMessage({ replyTo }));
+    const result = formatLinkMessageWithDetails(makeMessage({ replyTo }));
     expect(result.replyTo).not.toBeNull();
     expect(result.replyTo!.id).toBe('msg_000');
     expect(result.replyTo!.sender!.id).toBe('user_001');
-    expect(result.replyTo!.anonymousSender).toBeNull();
+    expect(result.replyTo!.sender!.isMeeshyer).toBe(true);
   });
 
-  it('formats replyTo with anonymous sender', () => {
+  it('nomme aussi l\'auteur ANONYME d\'un message cité', () => {
     const replyTo = {
       id: 'msg_anon',
       content: 'Anon reply',
@@ -170,23 +176,47 @@ describe('formatMessageWithSeparateSenders', () => {
       createdAt: new Date(),
       sender: makeAnonSender(),
     };
-    const result = formatMessageWithSeparateSenders(makeMessage({ replyTo }));
-    expect(result.replyTo!.anonymousSender).not.toBeNull();
-    expect(result.replyTo!.sender).toBeNull();
+    const result = formatLinkMessageWithDetails(makeMessage({ replyTo }));
+    expect(result.replyTo!.sender!.username).toBe('Guest User');
+    expect(result.replyTo!.sender!.isMeeshyer).toBe(false);
+    expect(result.replyTo!).not.toHaveProperty('anonymousSender');
+  });
+
+  // Le message cité ne rend que son texte et son auteur : ne pas recopier ses
+  // pièces jointes / réactions est ce qui justifie de ne plus les CHARGER
+  // (`getConversationMessagesWithDetails`).
+  it('ne recopie ni pièces jointes ni réactions du message cité', () => {
+    const replyTo = {
+      id: 'msg_000',
+      content: 'Original',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: new Date(),
+      sender: makeUserSender(),
+      attachments: [{ id: 'att_1' }],
+      reactions: [{ id: 'rea_1', emoji: '👍' }],
+    };
+    const result = formatLinkMessageWithDetails(makeMessage({ replyTo }));
+    expect(result.replyTo!).not.toHaveProperty('attachments');
+    expect(result.replyTo!).not.toHaveProperty('reactions');
   });
 
   it('sets replyTo to null when missing', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage({ replyTo: null }));
+    const result = formatLinkMessageWithDetails(makeMessage({ replyTo: null }));
     expect(result.replyTo).toBeNull();
   });
 
-  it('includes systemLanguage on sender from user', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage());
-    expect(result.sender!.systemLanguage).toBe('fr');
+  // `systemLanguage` n'a jamais franchi le sérialiseur — `messageSenderSchema`
+  // ne le déclare pas — et aucun client ne le lit : les bulles décident de la
+  // traduction sur `message.originalLanguage`. Le recopier était une dépense
+  // muette de plus.
+  it('ne recopie pas `systemLanguage` sur le sender', () => {
+    const result = formatLinkMessageWithDetails(makeMessage());
+    expect(result.sender!).not.toHaveProperty('systemLanguage');
   });
 
   it('falls back to fr for missing originalLanguage', () => {
-    const result = formatMessageWithSeparateSenders(makeMessage({ originalLanguage: undefined }));
+    const result = formatLinkMessageWithDetails(makeMessage({ originalLanguage: undefined }));
     expect(result.originalLanguage).toBe('fr');
   });
 });

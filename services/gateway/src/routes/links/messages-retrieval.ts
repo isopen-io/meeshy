@@ -8,7 +8,7 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
-import { formatMessageWithSeparateSenders } from './utils/message-formatters';
+import { formatLinkMessageWithDetails } from './utils/message-formatters';
 import {
   conversationSummarySchema,
   messageSchema
@@ -24,7 +24,7 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
   fastify.get('/links/:identifier/messages', {
     onRequest: [authOptional],
     schema: {
-      description: 'Get messages from a conversation via share link with pagination. Returns messages with full sender information (registered users have sender field, anonymous users have anonymousSender field), attachments, reactions, and translations. Supports both authenticated and anonymous users with appropriate access control.',
+      description: 'Get messages from a conversation via share link with pagination. Every message carries its author in `sender` — registered and anonymous alike, discriminated by `sender.isMeeshyer` — along with attachments, reactions, the quoted message and translations. Supports both authenticated and anonymous users with appropriate access control.',
       tags: ['links', 'messages'],
       summary: 'Get link messages',
       params: {
@@ -139,7 +139,7 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
 
-      const formattedMessages = messages.map(formatMessageWithSeparateSenders);
+      const formattedMessages = messages.map(formatLinkMessageWithDetails);
 
       return sendSuccess(reply, {
           messages: formattedMessages.reverse(),

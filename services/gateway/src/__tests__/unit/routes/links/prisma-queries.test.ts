@@ -320,7 +320,7 @@ describe('getConversationMessagesWithDetails', () => {
     });
   });
 
-  // Ici le formateur les recopiait bien (`formatMessageWithSeparateSenders`),
+  // Ici le formateur les recopiait bien (`formatLinkMessageWithDetails`),
   // mais `messageSchema` (routes/links/types.ts) ne les déclare pas :
   // `fast-json-stringify` retirait le tableau juste après. Chargé, recopié,
   // jeté — sur CHAQUE page de messages d'un lien partagé, sans opt-in.
@@ -340,7 +340,11 @@ describe('getConversationMessagesWithDetails', () => {
     expect(include).not.toHaveProperty('statusEntries');
   });
 
-  it('replyTo includes nested sender, attachments and reactions', async () => {
+  // Le message CITÉ ne rend que son texte et son auteur : `formatReplyToMessage`
+  // n'a jamais recopié ses pièces jointes ni ses réactions. Les charger était
+  // une jointure imbriquée par page pour des données qui n'atteignaient même
+  // pas le sérialiseur.
+  it('replyTo ne charge que son sender — ni pièces jointes ni réactions', async () => {
     const prisma = makeMockPrisma();
     const findMany = prisma.message.findMany as jest.Mock;
     findMany.mockResolvedValue([]);
@@ -353,8 +357,8 @@ describe('getConversationMessagesWithDetails', () => {
     expect(replyTo).toHaveProperty('include');
     const replyToInclude = replyTo.include as Record<string, unknown>;
     expect(replyToInclude).toHaveProperty('sender');
-    expect(replyToInclude).toHaveProperty('attachments');
-    expect(replyToInclude).toHaveProperty('reactions');
+    expect(replyToInclude).not.toHaveProperty('attachments');
+    expect(replyToInclude).not.toHaveProperty('reactions');
   });
 
   it('forwards limit and offset correctly', async () => {

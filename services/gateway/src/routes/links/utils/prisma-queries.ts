@@ -132,7 +132,7 @@ export async function getConversationMessages(
 /**
  * Récupère les messages avec toutes les relations pour l'endpoint /messages
  *
- * Ne charge PAS `statusEntries` : `formatMessageWithSeparateSenders` les
+ * Ne charge PAS `statusEntries` : `formatLinkMessageWithDetails` les
  * recopiait bien, mais `messageSchema` (`routes/links/types.ts`) ne les déclare
  * pas — `fast-json-stringify` retirait le tableau juste après. Chargé, recopié,
  * jeté, sur CHAQUE page de messages d'un lien partagé et sans opt-in possible.
@@ -141,6 +141,12 @@ export async function getConversationMessages(
  * accusés NOMINATIFS : à faire alors via le gate `showReadReceipts`
  * (`MessageReadStatusService.filterReadReceiptVisible`), comme le fait déjà
  * `GET /conversations/:id/statuses`.
+ *
+ * Ne charge pas non plus les pièces jointes ni les réactions du message CITÉ :
+ * `formatReplyToMessage` ne rend d'une citation que son texte et son auteur, il
+ * ne les a jamais recopiées. C'était une jointure imbriquée par page pour des
+ * données qui n'atteignaient même pas le sérialiseur. Les pièces jointes et
+ * réactions du message RACINE, elles, sont chargées ET servies.
  */
 export async function getConversationMessagesWithDetails(
   prisma: PrismaClient,
@@ -161,16 +167,7 @@ export async function getConversationMessagesWithDetails(
       attachments: { select: attachmentMediaSelect },
       replyTo: {
         include: {
-          sender: senderInclude,
-          attachments: { select: attachmentMediaSelect },
-          reactions: {
-            select: {
-              id: true,
-              emoji: true,
-              participantId: true,
-              createdAt: true
-            }
-          }
+          sender: senderInclude
         }
       },
       reactions: {
