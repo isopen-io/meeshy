@@ -43,6 +43,18 @@ struct LentilleConversationRow: View {
     var isSelected: Bool = false
     var draftSummary: DraftSummary? = nil
     var preferredContentLanguages: [String] = []
+    /// Appel en cours (Scène) — contrat LWS-2bis/§3.3, behaviour-matrix:L13.
+    /// `nil` (défaut) ⇒ AUCUN rendu : zéro donnée fabriquée, exactement le
+    /// même contrat que `moodStatus`/`draftSummary`. Le rang ne nomme
+    /// AUCUN `Local…Provider`/`Gateway…Provider` (garde source LWS-2bis) —
+    /// il reçoit la valeur déjà résolue par l'appelant, à qui revient le
+    /// câblage du provider (`ConversationLiveCallProviding`, hors périmètre
+    /// de ce fichier ; voir le commentaire de `liveCall` pour l'état du
+    /// câblage amont).
+    var liveCall: ConversationLiveCall? = nil
+    /// Tap sur le bouton Rejoindre — jamais invoqué si `liveCall.joined`
+    /// (pas de bouton, contrat §3.3 « rien de plus »).
+    var onJoinLiveCall: (() -> Void)? = nil
 
     private var accentColorHex: String { conversation.accentColor }
     private var accent: Color { Color(hex: accentColorHex) }
@@ -78,6 +90,22 @@ struct LentilleConversationRow: View {
 
     private var rowOpacity: Double {
         Self.rowOpacity(isMuted: conversation.userState.isMuted, isDragging: isDragging)
+    }
+
+    // MARK: - Dot de présence pendant le typing (contrat behaviour-matrix.json
+    // L01 : « … et force le dot de présence au vert »)
+    //
+    // vol.5 §5.3 (docs/design/2026-08-15-conversation-list-lentille.html,
+    // lignes 188/355/406/456/491-492, RE-PROUVÉ à cinq endroits distincts du
+    // document normatif — jamais une seule occurrence isolée) : « Quelqu'un
+    // écrit → dot présence forcé vert (typing = preuve d'activité) », répété
+    // mot pour mot dans la matrice de couverture ET dans les critères
+    // d'acceptation R5 (« typing, dot vert forcé »). Combiné SEULEMENT ici,
+    // au niveau du rang — jamais dans `LentilleRowAvatar`/`MeeshyAvatar`, qui
+    // restent de purs relais (même discipline que L10 ci-dessous, « mood
+    // gagne, présence sinon » vit dans `MeeshyAvatar`, jamais réinterprété).
+    private var effectivePresenceState: PresenceState {
+        typingUsername != nil ? .online : presenceState
     }
 
     var body: some View {
@@ -144,7 +172,7 @@ struct LentilleConversationRow: View {
 
             LentilleRowAvatar(
                 conversation: conversation,
-                presenceState: presenceState,
+                presenceState: effectivePresenceState,
                 storyRingState: storyRingState,
                 moodStatus: moodStatus,
                 onViewStory: onViewStory,
@@ -160,6 +188,17 @@ struct LentilleConversationRow: View {
 
     private var headerLine: some View {
         HStack(spacing: MeeshySpacing.xs) {
+            // behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant
+            // le nom » (vol.5 §5.3, re-preuve ligne 296/361 du document
+            // normatif : « 📌/🔒 avant le nom »). Décorative — annoncée par
+            // `accessibilityLabel` (même clé « accessibility.pinned » que
+            // le rang historique).
+            if conversation.userState.isPinned {
+                Text("📌")
+                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
+                    .accessibilityHidden(true)
+            }
+
             Text(conversation.displayName)
                 .font(LentilleMetrics.Name.font)
                 .foregroundColor(textPrimary)
@@ -185,22 +224,35 @@ struct LentilleConversationRow: View {
 
             tagPastilles
 
-            Text("·")
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(textMuted)
+            // behaviour-matrix:L13 — appel en cours (Scène) : « … remplace
+            // toute autre info à droite » (contrat §3.3). `liveCall == nil`
+            // (défaut) ⇒ la queue de ligne INCHANGÉE (heure + outbox) :
+            // zéro donnée fabriquée quand l'appelant ne branche rien
+            // (contrat LWS-2bis, « un appel inconnu n'est pas affiché »).
+            if let liveCall {
+                Spacer(minLength: 0)
+                LentilleLiveCallBadge(liveCall: liveCall, accentColorHex: accentColorHex)
+                if !liveCall.joined {
+                    joinLiveCallButton
+                }
+            } else {
+                Text("·")
+                    .font(LentilleMetrics.Time.font)
+                    .foregroundColor(textMuted)
 
-            LentilleRowTimestamp(date: conversation.lastMessageAt)
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
-                .layoutPriority(1)
+                LentilleRowTimestamp(date: conversation.lastMessageAt)
+                    .font(LentilleMetrics.Time.font)
+                    .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
+                    .layoutPriority(1)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
 
-            if conversation.userState.hasPendingSync {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(accent.opacity(0.7))
-                    .accessibilityHidden(true)
+                if conversation.userState.hasPendingSync {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                        .foregroundColor(accent.opacity(0.7))
+                        .accessibilityHidden(true)
+                }
             }
         }
     }
@@ -219,14 +271,42 @@ struct LentilleConversationRow: View {
         .accessibilityHidden(true)
     }
 
-    /// Reprend `ThemedConversationRow.timestampColor` (même règle : rouge
-    /// sémantique si non-lu, sinon accent) — copiée, pas importée : la
-    /// méthode source est `static` mais déclarée sur un type dont ce
-    /// fichier n'a pas le droit d'édition, et une extension depuis ce
-    /// fichier n'ajouterait rien qu'une redéclaration locale n'apporte déjà.
-    /// `nonisolated` (`MeeshyColors` l'est déjà) : testable sans `await`.
-    nonisolated static func timestampColor(unreadCount: Int, accent: Color) -> Color {
-        unreadCount > 0 ? MeeshyColors.error : accent
+    /// behaviour-matrix:L06 — « le timestamp rouge sur non-lu [est]
+    /// supprimé […] l'heure reste TERTIAIRE au même format ». Diverge
+    /// délibérément de `ThemedConversationRow.timestampColor` (rouge
+    /// sémantique si non-lu, sinon accent) : le rang plat ne bascule plus
+    /// JAMAIS sur le rouge — le pont ✦ + le point accent 8 px portent déjà
+    /// la nouvelle du non-lu (contrat §LWS-7), le timestamp reste un
+    /// troisième niveau de texte, quel que soit l'état de lecture.
+    /// `unreadCount`/`accent` restent dans la signature pour la stabilité
+    /// d'appel (site d'appel + suite de tests inchangés) mais ne
+    /// discriminent plus rien ; `isDark` a un défaut pour rester appelable
+    /// sans vue (tests purs, même discipline que `rowOpacity`/`showsBridge`).
+    nonisolated static func timestampColor(unreadCount: Int, accent: Color, isDark: Bool = false) -> Color {
+        MeeshyColors.textMuted(isDark: isDark)
+    }
+
+    // MARK: - Appel en cours (Scène) — bouton Rejoindre (behaviour-matrix:L13)
+
+    /// « Non rejoint : bouton Rejoindre capsule accent en trailing » (contrat
+    /// §3.3) — réutilise la clé `call.header.rejoin` déjà traduite dans les
+    /// 7 langues de l'app (`ConversationView+Header.swift`, bandeau d'appel
+    /// du fil) plutôt que d'ouvrir une seconde clé pour le même mot.
+    /// `Button(.plain)` + `.contentShape(Rectangle())` (contrat §LWS-7 : un
+    /// contrôle interne au rang ne doit jamais être un `.onTapGesture`, avalé
+    /// par le long-press du conteneur).
+    private var joinLiveCallButton: some View {
+        Button(action: { onJoinLiveCall?() }) {
+            Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, 3)
+                .background(Capsule(style: .continuous).fill(accent))
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
     }
 
     // MARK: - Ligne 2 — précédence INCHANGÉE : typing > brouillon > pont > préview
@@ -311,19 +391,34 @@ struct LentilleConversationRow: View {
         conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? ""
     }
 
+    // behaviour-matrix:L03 — « conservent leurs glyphes SF actuels (timer,
+    // eye.slash, flame) en tête de ligne 2, en italique » — les quatre
+    // glyphes ci-dessous reprennent `ThemedConversationRow` (lignes
+    // ~510/549/561/573, fichier interdit d'édition, lu seulement) : `timer`
+    // pour l'éphémère actif, `timer.badge.xmark` pour l'expiré, `eye.slash`
+    // pour le masqué, `flame` pour la vue unique — jamais réimportés
+    // (fichier interdit), reproduits ici comme `timestampColor` l'est déjà.
     @ViewBuilder
     private var previewLine: some View {
         switch conversation.lastMessageSummaryKind() {
         case .expired:
-            Text(String(localized: "message.expired"))
-                .font(LentilleMetrics.Line2.font)
-                .italic()
-                .foregroundColor(textMuted)
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                Image(systemName: "timer.badge.xmark")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundColor(textMuted)
+                Text(String(localized: "message.expired"))
+                    .font(LentilleMetrics.Line2.font)
+                    .italic()
+                    .foregroundColor(textMuted)
+                    .lineLimit(1)
+            }
 
         case .hidden:
             HStack(spacing: 4) {
                 senderLabel
+                Image(systemName: "eye.slash")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundColor(textSecondary)
                 Text(String(localized: "conversation.summary.hidden"))
                     .font(LentilleMetrics.Line2.font)
                     .italic()
@@ -334,6 +429,9 @@ struct LentilleConversationRow: View {
         case .viewOnce:
             HStack(spacing: 4) {
                 senderLabel
+                Image(systemName: "flame")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundColor(accent)
                 Text(String(localized: "conversation.summary.view_once"))
                     .font(LentilleMetrics.Line2.font)
                     .italic()
@@ -341,19 +439,27 @@ struct LentilleConversationRow: View {
                     .lineLimit(1)
             }
 
-        case .ephemeralActive, .standard:
-            standardPreview
+        case .ephemeralActive:
+            standardPreview(showEphemeralIcon: true)
+
+        case .standard:
+            standardPreview(showEphemeralIcon: false)
         }
     }
 
     @ViewBuilder
-    private var standardPreview: some View {
+    private func standardPreview(showEphemeralIcon: Bool) -> some View {
         let hasText = !resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let attachments = conversation.lastMessageAttachments
         let totalCount = conversation.lastMessageAttachmentCount
 
         if hasText {
             HStack(spacing: 4) {
+                if showEphemeralIcon {
+                    Image(systemName: "timer")
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                        .foregroundColor(accent)
+                }
                 senderLabel
                 Text(resolvedPreviewText)
                     .font(LentilleMetrics.Line2.font)
@@ -363,6 +469,11 @@ struct LentilleConversationRow: View {
         } else if let first = attachments.first {
             let display = AttachmentDisplay.make(for: first.mimeType)
             HStack(spacing: 4) {
+                if showEphemeralIcon {
+                    Image(systemName: "timer")
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                        .foregroundColor(accent)
+                }
                 senderLabel
                 Image(systemName: display.icon)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
@@ -435,7 +546,8 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.presenceState == rhs.presenceState &&
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
-        lhs.preferredContentLanguages == rhs.preferredContentLanguages
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
+        lhs.liveCall == rhs.liveCall
     }
 }
 
@@ -501,7 +613,17 @@ private struct LentilleRowAvatar: View {
             avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
             storyState: storyRingState,
             moodEmoji: moodStatus?.moodEmoji,
-            presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
+            // behaviour-matrix:L10 — « … avec des dots de présence aussi
+            // pour les groupes (agrégat PresenceManager, "quelqu'un
+            // d'actif") ». La règle « un seul coin, mood gagne, présence
+            // sinon » vit dans MeeshyAvatar (§1.3, frozen) : ce fichier ne
+            // fait plus que la moitié de cette règle (mood gagne), le
+            // second membre (« présence sinon ») ne doit plus être
+            // court-circuité par `isDirect` — un groupe a autant droit à un
+            // dot de présence agrégée qu'un DM. `presenceState` porte déjà
+            // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
+            // verrouillé par MeeshyAvatar, pas ici).
+            presenceState: moodStatus == nil ? presenceState : nil,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
@@ -559,5 +681,59 @@ private struct LentilleTypingDots: View {
         .onAppear { isAnimating = true }
         .onDisappear { isAnimating = false }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Appel en cours (Scène) — badge (behaviour-matrix:L13)
+
+/// « ● pulsant (accent) + « {n} voix · depuis {durée} » — durée par le
+/// TimelineView 60 s déjà présent pour l'heure » (contrat §3.3). Même
+/// patron que `LentilleRowTimestamp` pour le ticker : la durée vit HORS du
+/// portillon `.equatable()` du rang, recalculée à chaque tick plutôt que
+/// figée au montage. Purement dérivé de `ConversationLiveCall` (LWS-2bis,
+/// `LentilleProviders.swift`) : cette vue ne sait rien d'un
+/// `Local…Provider`/`Gateway…Provider`, elle reçoit une valeur déjà
+/// résolue — zéro donnée fabriquée.
+private struct LentilleLiveCallBadge: View {
+    let liveCall: ConversationLiveCall
+    let accentColorHex: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isPulsing = false
+
+    private var accent: Color { Color(hex: accentColorHex) }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(accent)
+                .frame(width: LentilleMetrics.Tags.size, height: LentilleMetrics.Tags.size)
+                .scaleEffect(reduceMotion ? 1.0 : (isPulsing ? 1.3 : 1.0))
+                .animation(
+                    reduceMotion
+                        ? nil
+                        : Animation.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+                .onAppear { isPulsing = true }
+                .onDisappear { isPulsing = false }
+
+            TimelineView(.periodic(from: liveCall.startedAt, by: 60)) { _ in
+                Text(
+                    String(
+                        format: String(
+                            localized: "lentille.livecall.status",
+                            defaultValue: "%lld voix · depuis %@",
+                            bundle: .main
+                        ),
+                        liveCall.voices,
+                        RelativeTimeFormatter.shortString(for: liveCall.startedAt)
+                    )
+                )
+                .font(LentilleMetrics.Line2.font)
+                .foregroundColor(accent)
+                .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
