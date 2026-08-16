@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
@@ -195,6 +196,13 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun removeParticipant(id: String, userId: String): NetworkResult<Unit> =
         apiCallUnit { conversationApi.removeParticipant(id, userId) }
+
+    /**
+     * Adds [userId] to [id] (server-enforced creator/admin/moderator-only — the client
+     * only gates the affordance). Mirror of iOS `AddParticipantSheet.addParticipant`.
+     */
+    suspend fun addParticipant(id: String, userId: String): NetworkResult<Unit> =
+        apiCallUnit { conversationApi.addParticipant(id, AddParticipantRequest(userId)) }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to

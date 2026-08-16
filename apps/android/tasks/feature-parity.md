@@ -2698,10 +2698,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       answers). Real-time: `participant:role-updated` / `conversation:participant-left` /
       `conversation:participant-banned` were listened for in `MessageSocketManager` but had **no
       consumer** before this slice — the sheet is now that consumer, so a moderation action taken
-      on another device or by another moderator lands without a refetch. Still open: **add
-      member** (needs its own user-search surface, iOS has `AddParticipantSheet`) and **ban/unban**
-      (`PATCH .../ban`/`.../unban` exist on the gateway; iOS does not wire them in this view
-      either). Box stays unchecked until those two land.
+      on another device or by another moderator lands without a refetch. **Add member shipped
+      2026-08-16** (slice `add-participant-sheet`) — a nested `AddParticipantSheet` (Android port
+      of iOS's own `AddParticipantSheet`), opened from a new "+" icon in the members sheet header,
+      gated on `viewerRole.hasMinimumRole(MODERATOR)` (mirror of iOS `canManageMembers = isAdmin
+      || isModerator`, itself matching the gateway's own `['creator','admin','moderator']` check
+      in `routes/conversations/participants.ts`). New `POST /conversations/{id}/participants`
+      wired (`ConversationApi.addParticipant`/`ConversationRepository.addParticipant`) — the
+      client only gates the affordance, the server remains the authority. `AddParticipantViewModel`
+      reuses the exact debounced-search shape already established by `NewConversationViewModel`
+      (300 ms, 2-char floor, `UserRepository.searchUsers`) but adds no multi-select: each row's
+      "Add" button fires immediately, tracked per-user (`isAdding`/`isMember`) so a repeat tap
+      mid-flight is a no-op and a refusal rolls the row back to offering the button again with the
+      server's error surfaced. `existingMemberIds` passed in from the already-loaded roster so a
+      current member never gets an enabled "Add" button; `onAdded` refreshes the roster sheet
+      behind it, mirroring iOS's own callback. +8 tests (`ConversationRepositoryTest` ×2 for the
+      new endpoint, `AddParticipantViewModelTest` ×6 for debounce/floor/member-flagging/add/
+      refusal-rollback/in-flight-dedup). **Still open: ban/unban** (`PATCH .../ban`/`.../unban`
+      exist on the gateway; iOS does not wire them in this view either). Box stays unchecked until
+      that lands too.
 - [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
       settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
       earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**

@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
@@ -57,6 +58,8 @@ private abstract class StubConversationApi : ConversationApi {
     override suspend fun updateParticipantRole(id: String, userId: String, body: ParticipantRoleUpdate) =
         ApiResponse<Unit>(success = false)
     override suspend fun removeParticipant(id: String, userId: String) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun addParticipant(id: String, body: AddParticipantRequest) =
         ApiResponse<Unit>(success = false)
 }
 
@@ -119,6 +122,7 @@ private class RecordingParticipantsApi(
     private val response: PaginatedParticipantsResponse = PaginatedParticipantsResponse(success = true),
     private val roleResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
     private val removeResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+    private val addResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
 ) : StubConversationApi() {
     var lastId: String? = null
     var lastSearch: String? = null
@@ -127,6 +131,7 @@ private class RecordingParticipantsApi(
     var lastRoleUserId: String? = null
     var lastRoleBody: ParticipantRoleUpdate? = null
     var lastRemovedUserId: String? = null
+    var lastAddedUserId: String? = null
 
     override suspend fun participants(
         id: String,
@@ -156,6 +161,12 @@ private class RecordingParticipantsApi(
         lastId = id
         lastRemovedUserId = userId
         return removeResponse
+    }
+
+    override suspend fun addParticipant(id: String, body: AddParticipantRequest): ApiResponse<Unit> {
+        lastId = id
+        lastAddedUserId = body.userId
+        return addResponse
     }
 }
 
@@ -970,5 +981,32 @@ class ConversationRepositoryTest {
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.message).isEqualTo("Insufficient rights")
+    }
+
+    @Test
+    fun `addParticipant forwards the conversation and user ids`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.addParticipant("c1", "u1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastAddedUserId).isEqualTo("u1")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `addParticipant folds a refusal into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                addResponse = ApiResponse(success = false, error = "Only admins and moderators can add participants"),
+            ),
+        )
+
+        val result = repo.addParticipant("c1", "u1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message)
+            .isEqualTo("Only admins and moderators can add participants")
     }
 }
