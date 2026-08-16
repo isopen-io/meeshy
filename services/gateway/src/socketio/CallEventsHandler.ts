@@ -1052,20 +1052,23 @@ export class CallEventsHandler {
    * depending on which the sender resolved (mirrors `bufferedOfferFor`'s own
    * dual-key lookup).
    *
-   * Group-call bug this fixes (calling-stack audit 2026-08-16): the buffer
-   * is deliberately per-RECIPIENT (`bufferOffer`'s own doc comment — an
-   * offer buffered for one participant and another buffered for a second
-   * participant on the SAME call are independent slots). But every "a
-   * participant left" call site used to clear via `clearBufferedOffer`
-   * (whole-call sweep) regardless of whether the call was ending for
-   * everyone or continuing for the rest — correct for a 1:1 call (the only
-   * shape that existed when §4.6 was written) but wrong the moment a GROUP
-   * call continues past one participant's leave: participant D leaving
-   * wiped a still-pending buffered offer meant for a totally unrelated,
-   * still-active participant C (e.g. C's socket hadn't (re)joined the call
-   * room yet), permanently starving C's mesh connection to whoever sent it —
-   * `bufferedOfferFor` would find nothing on C's eventual `call:join` and
-   * never replay it.
+   * Group-call bug this fixes (calling-stack audit 2026-08-16, extended
+   * Vague 138): the buffer is deliberately per-RECIPIENT (`bufferOffer`'s
+   * own doc comment — an offer buffered for one participant and another
+   * buffered for a second participant on the SAME call are independent
+   * slots). But several call sites used to clear via `clearBufferedOffer`
+   * (whole-call sweep) whenever only ONE recipient's slot was actually known
+   * to be moot — regardless of whether the call was ending for everyone or
+   * continuing for the rest. Correct for a 1:1 call (the only shape that
+   * existed when §4.6 was written), but wrong the moment a GROUP call
+   * continues past that one recipient: e.g. participant D leaving (or D's
+   * own stale buffered offer, sender long gone, being dropped on D's
+   * `call:join`) wiped a still-pending buffered offer meant for a totally
+   * unrelated, still-active participant C (e.g. C's socket hadn't (re)joined
+   * the call room yet), permanently starving C's mesh connection to whoever
+   * sent it — `bufferedOfferFor` would find nothing on C's eventual
+   * `call:join` and never replay it. Used by: `call:leave`, `call:force-leave`,
+   * `call:end` (group-continues branch), and `call:join`'s stale-sender drop.
    */
   private clearBufferedOfferFor(callId: string, ...participantIdentities: readonly (string | null | undefined)[]): void {
     for (const id of participantIdentities) {
@@ -2748,7 +2751,18 @@ export class CallEventsHandler {
               type: replayOffer.signal.type
             });
           } else {
-            this.clearBufferedOffer(data.callId);
+            // Vague 138 — scoped to THIS joiner's own stale slot, mirroring
+            // `clearBufferedOfferFor`'s doc comment (the group-call bug it
+            // fixed for call:leave/call:force-leave/call:end). This branch
+            // used to call whole-call `clearBufferedOffer(data.callId)`: we
+            // only just proved ONE recipient's slot (this joiner's) is stale
+            // because ITS sender left, but a call-wide sweep also discards
+            // every OTHER still-active recipient's unrelated pending offer on
+            // the SAME call (e.g. a slow third participant who hasn't
+            // (re)joined the room yet) — permanently starving their mesh
+            // connection to whoever sent it, the exact same failure mode
+            // `clearBufferedOfferFor` was introduced to prevent.
+            this.clearBufferedOfferFor(data.callId, userId, joinerParticipantId);
             logger.info('📦 [CALL] Buffered offer sender no longer active — dropped', {
               callId: data.callId,
               type: replayOffer.signal.type
