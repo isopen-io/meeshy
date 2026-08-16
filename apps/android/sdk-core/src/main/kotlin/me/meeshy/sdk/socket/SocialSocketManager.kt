@@ -98,6 +98,20 @@ class SocialSocketManager @Inject constructor(
         listen("status:unreacted", _statusUnreacted)
     }
 
+    /**
+     * Joins the post-detail realtime room (port of iOS `SocialSocketManager.joinPostRoom`) —
+     * required to receive `post:liked`/`post:unliked`/`comment:added`/`comment:deleted` for a
+     * post the viewer isn't otherwise implicitly subscribed to via a friend's feed room.
+     */
+    fun joinPostRoom(postId: String) {
+        socketManager.emit("post:join", JSONObject().put("postId", postId))
+    }
+
+    /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */
+    fun leavePostRoom(postId: String) {
+        socketManager.emit("post:leave", JSONObject().put("postId", postId))
+    }
+
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
         socketManager.on(event) { args ->
             runCatching {

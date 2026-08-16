@@ -61,20 +61,26 @@ class PostDetailViewModel @Inject constructor(
     private val status = MutableStateFlow(PostDetailStatus())
 
     /**
-     * The server-authoritative comment count carried by the most recent live room event, or `null`
-     * when the badge should reflect the fetched post's own count. A successful fetch clears it so
-     * fresh server truth always wins over a stale live overlay.
+     * The post-detail realtime room's live overlay — server-authoritative comment count / like
+     * count / viewer-own like state carried by the most recently received room event, or `null`
+     * per-field when the header should reflect the fetched post's own value. A successful fetch
+     * resets the whole overlay so fresh server truth always wins over a stale live value.
      */
-    private val liveCommentCount = MutableStateFlow<Int?>(null)
+    private data class LiveOverlay(
+        val commentCount: Int? = null,
+        val likeCount: Int? = null,
+        val isLiked: Boolean? = null,
+    )
+    private val liveOverlay = MutableStateFlow(LiveOverlay())
 
     private val _state = MutableStateFlow(PostDetailUiState())
     val state: StateFlow<PostDetailUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            combine(rawPost, sessionRepository.currentUser, activeCode, status, liveCommentCount) {
-                post, user, active, st, liveCount ->
-                project(post, user, active, st, liveCount)
+            combine(rawPost, sessionRepository.currentUser, activeCode, status, liveOverlay) {
+                post, user, active, st, overlay ->
+                project(post, user, active, st, overlay)
             }.collect { projected -> _state.value = projected }
         }
         observeRealtime()
@@ -82,24 +88,50 @@ class PostDetailViewModel @Inject constructor(
     }
 
     /**
-     * The header's slice of the post-detail realtime room: a live `comment:added`/`comment:deleted`
-     * for this post resyncs the comment-count badge to the authoritative count the event carries
-     * (healing any drift from the thread VM's optimistic arithmetic). A blank route [postId] never
-     * subscribes, and events for any other post are ignored. Mirror of iOS `PostDetailViewModel`.
+     * The header's slice of the post-detail realtime room: joins [SocialSocketManager
+     * .joinPostRoom] so live `comment:added`/`comment:deleted`/`post:liked`/`post:unliked` for
+     * this post reach the client even when the viewer isn't otherwise implicitly subscribed via
+     * a friend's feed room — resyncing the comment-count badge and like state/count to the
+     * authoritative value each event carries (healing any drift from the thread VM's optimistic
+     * arithmetic). A blank route [postId] never subscribes, and events for any other post are
+     * ignored. Mirror of iOS `PostDetailViewModel` + `SocialSocketManager.joinPostRoom`.
      */
     private fun observeRealtime() {
         if (postId.isBlank()) return
+        socialSocket.joinPostRoom(postId)
         viewModelScope.launch {
             socialSocket.commentAdded.collect { event ->
-                if (event.postId == postId) liveCommentCount.value = event.commentCount
+                if (event.postId == postId) liveOverlay.update { it.copy(commentCount = event.commentCount) }
             }
         }
         viewModelScope.launch {
             socialSocket.commentDeleted.collect { event ->
-                if (event.postId == postId) liveCommentCount.value = event.commentCount
+                if (event.postId == postId) liveOverlay.update { it.copy(commentCount = event.commentCount) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postLiked.collect { event ->
+                if (event.postId != postId) return@collect
+                val mine = if (event.userId == currentUserId()) true else null
+                liveOverlay.update { it.copy(likeCount = event.likesCount, isLiked = mine ?: it.isLiked) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postUnliked.collect { event ->
+                if (event.postId != postId) return@collect
+                val mine = if (event.userId == currentUserId()) false else null
+                liveOverlay.update { it.copy(likeCount = event.likesCount, isLiked = mine ?: it.isLiked) }
             }
         }
     }
+
+    /** Leaves the post-detail realtime room this VM joined in [observeRealtime]. */
+    override fun onCleared() {
+        if (postId.isNotBlank()) socialSocket.leavePostRoom(postId)
+        super.onCleared()
+    }
+
+    private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
     /**
      * First load. Guarded so a re-entrant call while a fetch is in flight or after the post
@@ -129,7 +161,7 @@ class PostDetailViewModel @Inject constructor(
                 when (val result = postRepository.getPost(postId)) {
                     is NetworkResult.Success -> {
                         rawPost.value = result.data
-                        liveCommentCount.value = null
+                        liveOverlay.value = LiveOverlay()
                         status.update {
                             it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null)
                         }
@@ -176,14 +208,17 @@ class PostDetailViewModel @Inject constructor(
         user: MeeshyUser?,
         active: String?,
         st: PostDetailStatus,
-        liveCount: Int?,
+        overlay: LiveOverlay,
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let {
             FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active)
         }?.let { presentation ->
-            if (liveCount == null) presentation
-            else presentation.copy(commentCount = liveCount.coerceAtLeast(0))
+            presentation.copy(
+                commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,
+                likeCount = overlay.likeCount?.coerceAtLeast(0) ?: presentation.likeCount,
+                isLiked = overlay.isLiked ?: presentation.isLiked,
+            )
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null
         return PostDetailUiState(
