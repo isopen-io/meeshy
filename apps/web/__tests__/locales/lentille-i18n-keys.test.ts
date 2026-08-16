@@ -56,8 +56,15 @@ const LENTILLE_KEYS = [
   'lentille.modes.resume',
   'lentille.modes.riviere',
   'lentille.modes.autoBadge',
-  'lentille.modes.riviereLocked',
-  'lentille.modes.riviereLockedDirect',
+  // Trifurcation amendée (REV-3/B3, S1) — WL-106/LWS-11 : la raison Rivière
+  // grisée n'est plus une formule unique (l'ancienne paire
+  // `riviereLocked`/`riviereLockedDirect`, dishonnête sur `direct` et sur un
+  // compte inconnu — voir `packages/shared/utils/reading-modes.ts`,
+  // `RiverEligibilityReasonKind`). Trois clés, patron `lentille.mode.river.*`
+  // de `apps/ios/Meeshy/Localizable.xcstrings`, transposé en camelCase JSON.
+  'lentille.modes.river.never',
+  'lentille.modes.river.thresholdOnly',
+  'lentille.modes.river.reason',
   'lentille.typing.one',
   'lentille.draft',
   'lentille.sections.pinned',
