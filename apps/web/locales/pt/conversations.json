@@ -455,6 +455,9 @@
       "single": "Este arquivo já foi adicionado",
       "multiple": "{count} arquivos já foram adicionados"
     },
+    "attachmentUploadFailure": {
+      "reduceCount": "Reduza o número de anexos ({count} em curso) e tente novamente."
+    },
     "pasteTooLongTxtCreated": "Texto muito longo: um arquivo .txt foi criado automaticamente",
     "filter": {
       "all": "Todas",

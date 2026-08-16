@@ -22,6 +22,7 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
 }));
 
 import { MessageValidator } from '../../../../services/messaging/MessageValidator';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 
@@ -120,12 +121,31 @@ describe('MessageValidator.validateRequest', () => {
     expect(result.errors.find(e => e.code === 'ANONYMOUS_NAME_REQUIRED')).toBeUndefined();
   });
 
-  it('errors when total attachments exceed 10', async () => {
+  it(`errors when total attachments exceed ${MAX_ATTACHMENTS_PER_MESSAGE}`, async () => {
     const result = await validator.validateRequest(makeRequest({
-      attachmentIds: new Array(6).fill('att'),
+      attachmentIds: new Array(MAX_ATTACHMENTS_PER_MESSAGE - 4).fill('att'),
       attachments: new Array(5).fill({ id: 'att' }) as unknown as MessageRequest['attachments'],
     }));
     expect(result.errors.some(e => e.code === 'TOO_MANY_ATTACHMENTS')).toBe(true);
+  });
+
+  it(`accepts exactly ${MAX_ATTACHMENTS_PER_MESSAGE} attachments`, async () => {
+    const result = await validator.validateRequest(makeRequest({
+      content: '',
+      attachmentIds: new Array(MAX_ATTACHMENTS_PER_MESSAGE).fill('att'),
+    }));
+    expect(result.errors.find(e => e.code === 'TOO_MANY_ATTACHMENTS')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
+  // Régression : ce cap est le seul appliqué aux deux transports. Figé à 10, il
+  // rejetait tout envoi du composer iOS (plafonné à 199 depuis le 2026-08-14).
+  it('accepts a full iOS composer selection (199 pieces) with a group caption', async () => {
+    const result = await validator.validateRequest(makeRequest({
+      content: 'Notre voyage',
+      attachmentIds: new Array(199).fill('att'),
+    }));
+    expect(result.isValid).toBe(true);
   });
 
   it('produces long-content warning when content > 1000 chars', async () => {

@@ -33,6 +33,7 @@ import { UnifiedAuthRequest, createUnifiedAuthMiddleware } from '../../middlewar
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 import {
   messageSchema,
   errorResponseSchema
@@ -132,7 +133,9 @@ export const SendMessageBodySchema = z.object({
     )
     .optional(),
   isEncrypted: z.boolean().optional(),
-  attachmentIds: z.array(z.string()).optional(),
+  // Même plafond que le schéma socket et que `MessageValidator` — ce tableau
+  // n'était borné nulle part sur le chemin REST.
+  attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
   effectFlags: z.number().int().optional(),
@@ -1622,7 +1625,7 @@ export function registerMessagesRoutes(
             type: 'boolean',
             description: 'Optional echo of the encryption fact. When true, encryptedContent is REQUIRED — the server never downgrades a message declared encrypted to plaintext.'
           },
-          attachmentIds: { type: 'array', items: { type: 'string' }, description: 'IDs des attachments pré-uploadés' },
+          attachmentIds: { type: 'array', items: { type: 'string' }, maxItems: MAX_ATTACHMENTS_PER_MESSAGE, description: 'IDs des attachments pré-uploadés' },
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
           effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
