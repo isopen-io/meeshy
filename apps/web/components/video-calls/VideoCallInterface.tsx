@@ -614,7 +614,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const handleParticipantLeft = (event: unknown) => {
       if (event.callId !== callId) return;
 
-      const participantId = event.userId || event.anonymousId;
+      // Vague 133 — `CallParticipantLeftEvent` has no `anonymousId` field
+      // (see packages/shared/types/video-call.ts); that fallback was always
+      // dead. `participantId` (the DB CallParticipant id) is the one field
+      // the event always carries — fall back to it instead so a payload
+      // whose optional `userId` is absent still disconnects/cleans up the
+      // right tile instead of silently no-oping.
+      const participantId = event.userId || event.participantId;
       if (!participantId) return;
 
       logger.info('[VideoCallInterface]', 'Participant left event received', { participantId });

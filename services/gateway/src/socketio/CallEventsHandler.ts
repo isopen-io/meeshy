@@ -785,13 +785,14 @@ export class CallEventsHandler {
       {
         callId: participation.callSessionId,
         participantId: participation.id,
-        // Vague 132 — the only PARTICIPANT_LEFT emit site that omitted
-        // `userId` (the other two — call:leave, REST leave/kick — already
-        // set it). Without it, a client tracking per-participant state keyed
-        // by `userId` (e.g. `useRemoteCallAlerts`' screen-capturing Set)
-        // could never clear a registered peer's entry on a disconnect-grace
-        // expiry specifically. `userId` is already the resolved caller
-        // identity passed into this method — no extra lookup needed.
+        // Vague 132 — this emit omitted `userId` (call:leave and REST
+        // leave/kick already set it; Vague 133 closed the last gap, the
+        // forceCleanupParticipationAfterLeaveFailure fallback below). Without
+        // it, a client tracking per-participant state keyed by `userId`
+        // (e.g. `useRemoteCallAlerts`' screen-capturing Set) could never
+        // clear a registered peer's entry on a disconnect-grace expiry
+        // specifically. `userId` is already the resolved caller identity
+        // passed into this method — no extra lookup needed.
         userId,
         mode: participation.callSession.mode
       } as CallParticipantLeftEvent
@@ -933,6 +934,16 @@ export class CallEventsHandler {
         {
           callId: participation.callSessionId,
           participantId: participation.id,
+          // Vague 133 — Vague 132's own comment above claimed
+          // broadcastParticipantLeftResult was "the only PARTICIPANT_LEFT
+          // emit site that omitted `userId`", but this sibling fallback
+          // (reached when leaveCall itself throws — DB blip, validation
+          // failure) still omitted it. `userId` is already in scope (see
+          // destructure above) — every client that resolves identity by
+          // `userId` (VideoCallInterface, useRemoteCallAlerts) silently
+          // no-ops specifically on this fallback path, leaving the other
+          // participants' UI with a stale tile/zombie RTCPeerConnection.
+          userId,
           mode: participation.callSession.mode
         } as CallParticipantLeftEvent
       );

@@ -8926,3 +8926,75 @@ des correctifs déjà livrés (Vagues 126-131) et des chantiers ouverts pour ne 
   Focal/Lentille (hors périmètre calling) ; backup candidat non poursuivi — `CallControls.tsx` bouton
   haut-parleur, `aria-label` décrivant l'ACTION et `title` décrivant l'ÉTAT (asymétrie mineure,
   libellé déjà tranché Vague 111).
+
+## Vague 133 — `forceCleanupParticipationAfterLeaveFailure` was the sibling emit site Vague 132 missed (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), suite directe de
+la Vague 132 (merge PR #3068). Audit dédié (subagent lecture directe, périmètre gateway
+`CallEventsHandler.ts`/`CallService.ts` + web `use-webrtc-p2p.ts`/`video-calls/**`, exclusion
+explicite des bugs déjà couverts par les Vagues 126-132) mandaté pour trouver un correctif chirurgical
+neuf sans dupliquer les 132 vagues précédentes. Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox.
+
+- **Root cause** : la Vague 132 a ajouté `userId` à l'émission `PARTICIPANT_LEFT` de
+  `broadcastParticipantLeftResult` (chemin normal `leaveCall` réussi), avec un commentaire affirmant
+  que c'était *« le seul site d'émission PARTICIPANT_LEFT à omettre `userId` »*. C'était faux : son
+  frère jumeau `forceCleanupParticipationAfterLeaveFailure` — le repli atteint quand `leaveCall`
+  lui-même rejette (conflit d'écriture DB transitoire, échec de validation) — émettait toujours
+  l'ancienne forme sans `userId`, alors que la variable est dans la même portée (déstructurée dans les
+  deux méthodes). Le bug jumeau côté client : `VideoCallInterface.tsx` résolvait l'identité via
+  `event.userId || event.anonymousId` — `CallParticipantLeftEvent` (types partagés) n'a jamais eu de
+  champ `anonymousId`, ce fallback était mort depuis toujours ; sans `userId`, `participantId` (le
+  seul champ non-optionnel du type) n'était jamais essayé et `if (!participantId) return;` sortait en
+  silence.
+- **Scénario de défaillance** : appel de groupe, le participant A perd sa connexion sans `call:leave`
+  explicite (crash appli, coupure réseau). La fenêtre de grâce de reconnexion expire,
+  `CallService.leaveCall` est appelée et rejette (blip DB transitoire — exactement la condition pour
+  laquelle ce repli existe). Le gateway stampe correctement `leftAt` en DB et termine l'appel
+  côté serveur si A était le dernier participant, mais le `call:participant-left` diffusé aux AUTRES
+  participants ne porte aucun `userId`. Sur leurs clients web, `handleParticipantLeft` sort en silence
+  au tout premier `if (!participantId) return;` — pas de marqueur `disconnectedParticipants`, pas de
+  `removeRemoteStream`/`removeParticipant` différé, pas de purge `offersCreatedFor`. La vignette figée
+  de A et sa `RTCPeerConnection` morte restent affichées indéfiniment (jusqu'à la fin de l'appel), et
+  si A rejoint dans un nouvel onglet/session, `offersCreatedFor` croit à tort qu'une offre a déjà été
+  envoyée à A — aucune offre fraîche n'est jamais créée pour la session qui rejoint.
+- **Fix** : `forceCleanupParticipationAfterLeaveFailure` (gateway) ajoute désormais `userId` à son
+  émission `PARTICIPANT_LEFT`, miroir exact de `broadcastParticipantLeftResult` — la variable était
+  déjà dans la portée. Le commentaire de la Vague 132 sur l'autre site a été corrigé (n'affirme plus
+  être « le seul »). `VideoCallInterface.tsx` (web) résout maintenant l'identité par
+  `event.userId || event.participantId` — retire le fallback mort `anonymousId`, tombe sur le champ
+  toujours présent du type au lieu de sortir en silence quand `userId` est absent (défense en
+  profondeur : couvre aussi un ancien build de gateway qui omettrait encore `userId`).
+- **Tests** (TDD, RED confirmé contre le code non corrigé avant chaque fix — stash/pop du seul fichier
+  source concerné, suite rejouée à chaque état) :
+  `CallEventsHandler-signal-cache-invalidation.test.ts` — nouveau cas asserting le payload
+  `PARTICIPANT_LEFT` émis par `forceCleanupParticipationAfterLeaveFailure` contient `userId` ; RED
+  confirmé (`expect(participantLeftCall).toBeDefined()` échouait faute de mock `$transaction` sur le
+  prisma nu, puis une fois ce mock ajouté, RED confirmé sur le champ `userId` manquant précisément).
+  Suite du fichier : **8/8** verts (+1 net). `VideoCallInterface.test.tsx` — nouveau groupe
+  « PARTICIPANT_LEFT falls back to participantId when userId is absent », 2 cas neufs (fallback vers
+  `participantId` nettoie bien la vignette ; absence des DEUX champs reste un no-op, parité avec les
+  gardes existantes) ; RED confirmé contre le code non corrigé. Suite du fichier : **48/48** verts
+  (+2 nets). Sweep `--testPathPatterns="[Cc]all"` : gateway **52 suites / 1206 tests** verts (+1 net,
+  0 régression) ; web **53 suites / 506 tests** verts (+2 nets, 0 régression). `npx tsc --noEmit`
+  (apps/web) : diff `git stash`/`stash pop` — 1768 erreurs préexistantes identiques avant/après (les 2
+  lignes touchant `VideoCallInterface.tsx` se décalent de 617→623 à cause des commentaires ajoutés,
+  texte d'erreur inchangé), 0 nouvelle.
+- **Merge du backlog de la routine précédente** : PR #3068 (gateway+web, Vague 132 — identifier-space
+  fix pour les alertes qualité/capture d'écran) rebasé à la main sur `main` actualisé (seul conflit :
+  numérotation `tasks/lessons.md`, Leçon 282 en collision — résolu par renumérotation 283, contenu des
+  deux leçons conservé intact) ; suites gateway (`CallEventsHandler` ×4 fichiers, 305 tests) et web
+  (`use-remote-call-alerts`/`VideoCallInterface`, 71 tests) rejouées vertes post-rebase avant de
+  poursuivre cette vague.
+- **Non fait volontairement** : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ; les 6
+  trouvailles Android de la Vague 70 (`dl.google.com` toujours refusé par la politique d'egress) ;
+  piste `CXSetHeldCallAction` vs. `supportsHolding = false` (Vague 84, on-device requis) ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle de périphérique de sortie audio
+  (`setSinkId`, décision produit requise) ; `MAX_CALL_PARTICIPANTS = 9999` sans plafond effectif
+  (décision produit) ; mesh iOS/Android potentiellement affecté du même bug étoile-vs-maillage que la
+  Vague 126 (à auditer avec toolchain) ; W6/W7 grille adaptative + i18n groupe restant ; détection de
+  capture d'écran côté navigateur web (aucun émetteur `call:screen-capture-detected`, feature neuve) ;
+  `CallManager.tsx`'s propre référence morte à `event.anonymousId` (ligne de LOG uniquement — jamais
+  utilisée pour résoudre une identité réelle, `removeParticipant(event.participantId)` gouverne déjà
+  le nettoyage sur ce composant ; corriger le log serait cosmétique, hors scope chirurgical).
