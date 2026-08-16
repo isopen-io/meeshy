@@ -33,19 +33,34 @@ struct FocalRow: View {
 
     private var content: BubbleContent { input.content }
 
-    /// Retrait du texte — suit la pastille, qui grandit en focus (§4.6).
-    /// `FocalMetrics.Text.indent` (29) reste le cas nominal ; l'élue prend
-    /// `FocalMetrics.Focus.textIndent`, dérivé de la MÊME gouttière de 7 pt,
-    /// jamais un second littéral.
+    /// Retrait CONSTANT — il ne suit plus la pastille.
+    ///
+    /// Même raison que `textSize` : le retrait fixe la largeur disponible,
+    /// donc le retour à la ligne, donc la hauteur. Le faire varier avec le
+    /// focus faisait changer la cellule de taille au basculement d'élection,
+    /// et la liste sautait. Le retrait de l'élue (41) est retenu pour TOUTES
+    /// les rangées : c'est celui qui laisse la place à la pastille de 34, que
+    /// l'en-tête réserve désormais en permanence.
     private var indent: CGFloat {
-        input.isFocused ? FocalMetrics.Focus.textIndent : FocalMetrics.Text.indent
+        FocalMetrics.Focus.textIndent
     }
 
-    /// « Typographie 15 → 16 » (§4.6) — l'écart que le contrat nomme depuis
-    /// toujours et que rien ne rendait, faute d'un champ de focus sur
-    /// `FocalRowInput`.
+    /// **Le « 15 → 16 » de §4.6 est ABANDONNÉ, et c'est un choix.**
+    ///
+    /// Grossir le texte de l'élue relance le calcul de retour à la ligne :
+    /// un paragraphe de quatre lignes en 15 peut en faire cinq en 16, et la
+    /// cellule change de hauteur. Comme la reconfiguration a lieu à l'ARRÊT
+    /// du défilement, ce changement de hauteur déplaçait tout ce qui était à
+    /// l'écran — filmé au simulateur, un saut par arrêt de geste.
+    ///
+    /// Le contrat écrivait cet écart quand la rangée élue n'avait rien
+    /// d'autre pour se distinguer. Elle a maintenant sa pastille de 34, son
+    /// nom agrandi, sa date complète, sa barre de contrôles — et surtout
+    /// l'échelle pleine que le pass de perspective lui donne pendant qu'il
+    /// réduit ses voisines. Un point de corps de plus ne vaut pas un
+    /// défilement saccadé.
     private var textSize: CGFloat {
-        input.isFocused ? FocalMetrics.Focus.textSize : FocalMetrics.Text.size
+        FocalMetrics.Text.size
     }
 
     var body: some View {
@@ -245,9 +260,38 @@ struct FocalRow: View {
     /// ternaire ni un `.opacity(0)`), pour qu'une rangée ordinaire
     /// n'instancie même pas la vue — la même discipline que le mux de
     /// cellule de l'hôte.
-    @ViewBuilder
+    /// **La barre occupe une hauteur RÉSERVÉE, focus ou pas.**
+    ///
+    /// La faire apparaître seulement sur l'élue ajoutait ~30 pt à une cellule
+    /// et les retirait à une autre au moment précis où l'élection bascule —
+    /// c'est-à-dire à l'arrêt du défilement, quand `reconfigureFocusTypography
+    /// AtScrollStop` reconfigure les deux. La taille de contenu changeait et
+    /// la liste sautait sous le doigt.
+    ///
+    /// Le créneau est donc toujours là ; seul son CONTENU dépend du focus.
+    /// La rangée garde une hauteur identique dans les deux états, et plus
+    /// aucune reconfiguration ne peut déplacer le contenu à l'écran.
+    ///
+    /// Le coût est réel — cette réserve s'ajoute à chaque rangée — et c'est
+    /// un arbitrage assumé : un défilement fluide vaut mieux qu'une densité
+    /// maximale. C'est la première chose à réexaminer si le fil paraît trop
+    /// aéré ; la sortie propre serait de sortir la barre du layout de la
+    /// cellule (un overlay flottant ancré par l'hôte au rectangle de l'élue),
+    /// ce qui rendrait la réserve inutile.
     private var focusControlBar: some View {
-        if input.isFocused {
+        Group {
+            if input.isFocused {
+                focusControlBarContent
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: FocalFocusControlBar.rowHeight)
+    }
+
+    @ViewBuilder
+    private var focusControlBarContent: some View {
+        Group {
             FocalFocusControlBar(
                 messageId: content.messageId,
                 accentHex: input.accentHex,
@@ -274,12 +318,13 @@ struct FocalRow: View {
             )
             .equatable()
             .padding(.leading, indent)
-            // Dernier enfant de la VStack, SANS débord : le cadre de la carte
-            // (`FocalFocusDecoration`, encarté de `FocusCard.margin` dans la
-            // cellule) fait donc le tour de la rangée ET de cette barre, d'un
-            // seul trait continu. Un `offset` la ferait chevaucher l'anneau
-            // et couperait le trait en deux.
-            .padding(.top, FocalMetrics.Row.paddingVertical)
+            // SANS débord : quand le cadre est réactivé
+            // (`FocalFocusDecoration.drawsFocusCard`), il fait le tour de la
+            // rangée ET de cette barre d'un seul trait continu. Un `offset`
+            // la ferait chevaucher l'anneau et couperait le trait en deux.
+            // Aucun padding vertical non plus — la hauteur du créneau est
+            // fixée par le `frame` de `focusControlBar`, l'ajouter ici
+            // rendrait la réserve et le contenu incohérents.
         }
     }
 

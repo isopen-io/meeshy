@@ -157,7 +157,19 @@ struct FocalIdentityHeader: View, Equatable {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
-        .frame(minHeight: avatarSize)
+        // Hauteur RÉSERVÉE À LA TAILLE FOCALE, focus ou pas.
+        //
+        // Faire varier `minHeight` avec `avatarSize` changeait la hauteur de
+        // la cellule au moment où l'élection bascule. La reconfiguration de
+        // §4.6 se produisant à l'ARRÊT du défilement, l'ancienne élue se
+        // contractait et la nouvelle se dilatait dans la même passe : la
+        // taille de contenu changeait, et tout ce qui était à l'écran sautait.
+        // Filmé au simulateur — un saut par arrêt de geste.
+        //
+        // La pastille grandit toujours (22 → 34) ; c'est le seul CADRE qui ne
+        // bouge plus. La rangée garde donc exactement la même hauteur qu'elle
+        // soit élue ou non, et le défilement ne se réorganise jamais.
+        .frame(minHeight: FocalMetrics.Focus.avatarSize)
     }
 
     private var avatarSize: CGFloat {
