@@ -194,4 +194,9 @@
     <string name="conversation_members_ban_title">¿Banear a este miembro?</string>
     <string name="conversation_members_ban_message">%1$s será eliminado y no podrá volver a unirse a esta conversación.</string>
     <string name="conversation_members_ban_confirm">Banear</string>
+    <string name="share_target_title">Compartir en Meeshy</string>
+    <string name="share_target_search_hint">Buscar conversaciones</string>
+    <string name="share_target_send">Enviar</string>
+    <string name="share_target_sent">Enviado</string>
+    <string name="share_target_signed_out">Inicia sesión en Meeshy para compartir contenido.</string>
 </resources>

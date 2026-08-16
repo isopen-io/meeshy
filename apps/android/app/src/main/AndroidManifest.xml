@@ -104,6 +104,22 @@
             </intent-filter>
         </activity>
 
+        <!-- "Share to Meeshy" target (feature-parity §O, lot 1 — text/URL, mirrors the
+             iOS MeeshyShareExtension's own phased scope). android:excludeFromRecents keeps it
+             out of the task switcher — it is a single-purpose relay, not a real screen. -->
+        <activity
+            android:name=".ShareTargetActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Meeshy"
+            android:excludeFromRecents="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- FCM Push -->
         <service
             android:name=".push.MeeshyFcmService"

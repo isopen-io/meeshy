@@ -1,5 +1,62 @@
 # Progress — state & what to do next
 
+> On 2026-08-17 **Share-target lot 1 (text/URL) shipped** (slice `share-target-text-url`) —
+> Android's counterpart to iOS's own `MeeshyShareExtension`, from a fresh section scan
+> (`§O Links`) rather than re-attacking the four candidates the previous run had already
+> documented as rejected/ambiguous (`gh pr list --state open --search "apps/android OR
+> apps/ios"` showed 4 concurrent PRs, none touching `apps/android`; `df -h /` showed 8.4 Gi free,
+> stable after the previous run's proactive cleanup).
+>
+> **Chosen after scanning "I. Communities" (entirely `[ ]`, 7 items — a whole unbuilt sub-app,
+> too large) and "N. Search" (Global/local FTS search — both `[ ]`, need query-routing across 3
+> domains — also too large) before landing on "O. Links"**, which turned out almost entirely
+> `[x]` already (the share-link management vertical is complete) except for one genuinely
+> well-scoped, high-value gap: "Generic in-app share picker / Android Share-Sheet receiver".
+>
+> **Re-proved against both the iOS reference AND Android's own existing infrastructure before
+> writing anything.** `apps/ios/CLAUDE.md` documents `MeeshyShareExtension` in detail, including
+> its own explicit phased scope: "Portée lot 1 : texte + URL" — images/video are iOS's OWN
+> deferred lot 2, giving this slice a scope boundary to mirror rather than invent. Confirmed
+> Android has ZERO share-target capability (`grep` for `ACTION_SEND` across the whole app found
+> only OUTBOUND uses — the app sharing OUT via other apps' share sheets — never an inbound
+> `<intent-filter>`).
+>
+> **Deliberately simpler than the iOS reference, and the PROGRESS entry says why**: iOS's
+> extension is a separate PROCESS (a genuine app extension target) that cannot see the main app's
+> in-memory session, so it reads an App Group Keychain session directly and relays a failed send
+> through its own dedicated `ShareSender`/`SharePendingSendConsumer` queue. Android's share target
+> is just another `Activity` in the SAME process/APK — no App Group equivalent needed, and no new
+> offline-relay machinery either: `MessageRepository.sendOptimistic` (already used by the whole
+> rest of the app) already durably queues through the existing outbox on a failed send, for free.
+>
+> **Reused two pieces of existing infrastructure wholesale rather than reinventing them**: the
+> conversation picker's filtering rule is `ForwardTargets.of(...)` — the EXACT pure SSOT
+> `ChatViewModel`'s own message-forward sheet already uses (a source conversation id of `""`
+> simply never matches any real conversation, so nothing gets excluded) — and the send call is
+> the same `MessageRepository.sendOptimistic` every other send path in the app uses. Zero new
+> pure-logic types were needed beyond the `ShareTargetUiState`/`ShareTargetViewModel` shell
+> itself.
+>
+> **Picks exactly ONE conversation and finishes** (`isFinished` closes the Activity) — unlike the
+> in-app forward sheet, which is deliberately multi-target ("forward one message to several
+> conversations in one sitting"). A share arriving from another app is a single-shot platform
+> convention (matching both Android's own share-sheet UX expectations and iOS's own single-target
+> extension), so no multi-select state was carried over from `ForwardUiState`.
+>
+> **+7 tests** (`ShareTargetViewModelTest`): picker populates from the cache-first conversation
+> stream; query filters by title; a successful send marks the target sent, clears the sending
+> flag, and sets `isFinished`; a second target while the first send is in flight is a no-op;
+> blank shared text never hits the network; no signed-in user never hits the network; a failed
+> send surfaces the error and clears the sending flag without finishing.
+>
+> **Verified**: Android SDK available in this container — `./apps/android/meeshy.sh check`
+> (assembleDebug + testDebugUnitTest, all modules) green before any push. `:app:compileDebugKotlin`
+> checked explicitly too (the new Activity/manifest wiring lives there, outside the usual
+> `:feature:*` test scope).
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=<confirmed at merge> last_run=share-target-text-url`.
+
 > On 2026-08-16 **No code shipped — the four remaining named candidates were re-proved and each
 > found genuinely too large, too ambiguous, or non-functional even on iOS, documented here so a
 > future run doesn't repeat the same investigation** (streak was 4, this was meant to be the 5th

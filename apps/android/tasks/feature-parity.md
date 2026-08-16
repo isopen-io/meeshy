@@ -5391,7 +5391,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] UTM tracking links: create, list, toggle, delete; aggregate + per-link click stats
       (geo/device/browser breakdown, click timeline), QR generation
 - [ ] Affiliate / referral links: create, copy, share, delete, dashboard stats
-- [ ] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story → conversation)
+- [~] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story →
+      conversation) — **lot 1 (text/URL) shipped 2026-08-17** (slice `share-target-text-url`),
+      Android's counterpart to iOS's own `MeeshyShareExtension`, scoped identically to iOS's own
+      documented lot 1 ("Portée lot 1 : texte + URL" — `apps/ios/CLAUDE.md`). New
+      `ShareTargetActivity` (`:app`, `android:excludeFromRecents`) registers an `ACTION_SEND`
+      intent-filter for `text/plain` (a shared URL arrives as `EXTRA_TEXT` too, so one MIME type
+      covers both). Unlike iOS's extension — a separate process needing its own App Group session
+      read and a dedicated offline-relay queue (`ShareSender`/`SharePendingSendConsumer`) — this
+      runs in the SAME process as the rest of Meeshy, so `ShareTargetViewModel` reuses the app's
+      own `SessionRepository` and `MessageRepository.sendOptimistic` (already durably queued
+      through the existing outbox on a failed send) directly: no new relay machinery needed. The
+      conversation picker reuses `ForwardTargets` — the exact pure SSOT `ChatViewModel`'s own
+      forward-picker sheet already uses — rather than a second filtering rule. Unlike forwarding
+      (multi-target), a share picks exactly ONE conversation and finishes, matching platform
+      share-sheet convention. +7 tests (`ShareTargetViewModelTest`: picker populates from the
+      cache-first conversation stream, query filters by title, a successful send marks the target
+      sent and finishes, a second target while one send is in flight is a no-op, blank shared text
+      never hits the network, no signed-in user never hits the network, a failed send surfaces the
+      error and clears the sending flag without finishing). **Still open (lot 2, matching iOS's own
+      deferral): image/video attachments** — needs the TUS upload pipeline, its own activation
+      rule per iOS's own documented plan ("Les images et vidéos reviendront avec le pipeline TUS
+      (lot 2), leur règle d'activation EN MÊME TEMPS").
 
 ## P. Media (viewers & editors)
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
