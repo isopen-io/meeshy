@@ -617,3 +617,32 @@ Append-only log of gotchas and decisions that save time next run.
   — it is documented, reproducible-by-contention, and provably orthogonal to the diff under test —
   but every occurrence should be recorded here rather than silently retried, so the follow-up keeps
   accumulating evidence instead of resetting to "known flake, keep rerunning".
+
+- **The DataStore flake is NOT "DataStore tests are slow" — it is one specific test shape.**
+  (2026-08-16, second occurrence during `conversation-members-roster`'s CI, run 31948685756.)
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` timed out at 15 s,
+  after `MediaDownloadPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` did the
+  same an hour earlier. **Same method name, two different files** — that is a much sharper signal
+  than the "bump the constant" story, so it is worth stating precisely:
+  - Every `DataStore*Store` exposes `preferences` as
+    `dataStore.data.map { … }.stateIn(scope, SharingStarted.Eagerly, DEFAULT)`.
+  - The flaky test is always the one that constructs the store and **writes immediately**, then
+    asserts via `first { predicate }`: construct → `setPreferences(…)` → `first { … }`. `Eagerly`
+    only *launches* the upstream collection into `scope` (`Dispatchers.IO`); it does not await its
+    first emission, so the write races the reader's start-up. Under runner contention that race
+    widens past any wall-clock bound.
+  - The sibling tests in the very same files have never been reported flaky, and their shapes
+    explain why: `dataStore_defaultsToTheDefaultBlockOnEmptyStore` never writes at all, and
+    `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` writes through a *separate* writer
+    before constructing the reader — neither one races start-up.
+  - The same construct-then-write-immediately shape is present in `ThemeStoreTest`,
+    `PrivacyPreferencesStoreTest`, `MediaDownloadPreferencesStoreTest` and
+    `NotificationPreferencesStoreTest`; `ThemeStoreTest` and `NotificationPreferencesStoreTest` are
+    both on the historical flaky list. The shape is necessary, not sufficient — whether it trips is
+    contention-dependent, which is exactly why raising a timeout only buys a quiet interval.
+  **So the follow-up is now concrete and small**, and no longer "refactor DataStore testing": in
+  these four tests, await the store's first emission before writing (`store.preferences.first()`
+  once, or collect-then-write), which removes the race without touching production code or any
+  timeout. Injecting a scheduler remains the more thorough option but is no longer required to close
+  this. **What must NOT happen is another constant bump** — this entry and the one above it are two
+  independent falsifications of that move.
