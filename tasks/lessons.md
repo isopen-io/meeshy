@@ -8426,8 +8426,7 @@ consulte comme suspect — soit il couvre un chemin que le premier ne couvre pas
 et il faut pouvoir le nommer, soit il détruit une donnée sans contrepartie.
 Écrire toujours, taire à la sortie.
 
-## Leçon 200 — une préférence peut être lue partout et appliquée nulle part : vérifier l'ADRESSE avant la logique (2026-08-16, routine temps réel, cycle 46)
-## Leçon 283 — un correctif qui expose une IDENTITÉ peut choisir le mauvais espace, et sa propre suite de tests peut le masquer (2026-08-16, routine appels, Vague 132)
+## Leçon 201 — un correctif qui expose une IDENTITÉ peut choisir le mauvais espace, et sa propre suite de tests peut le masquer (2026-08-16, routine appels, Vague 132)
 
 **Le fait.** La Vague 131 a corrigé un vrai bug (les alertes de qualité/capture d'écran nommaient le
 mauvais pair en appel de groupe) en exposant `event.participantId` jusqu'à l'UI. Mais
@@ -8468,7 +8467,7 @@ structure partagée entre plusieurs émetteurs/consommateurs (ici un `Set` alime
 en train de corriger : le nettoyage `participant-left` de la Vague 129 vivait déjà dans un
 troisième espace, invisible tant qu'on ne creusait pas le même `Set`.
 
-## Leçon 284 — un commentaire qui affirme « le seul » n'a pas vérifié les frères jumeaux du site qu'il corrige (2026-08-16, routine appels, Vague 133)
+## Leçon 202 — un commentaire qui affirme « le seul » n'a pas vérifié les frères jumeaux du site qu'il corrige (2026-08-16, routine appels, Vague 133)
 
 **Le fait.** La Vague 132 a corrigé `broadcastParticipantLeftResult` pour inclure `userId` dans son
 émission `PARTICIPANT_LEFT`, avec un commentaire affirmant que c'était « le seul site d'émission
@@ -8495,7 +8494,7 @@ exactement ce doute qui a mené au correctif de cette vague. Un test qui verroui
 classe de bug devrait cibler l'INVARIANT (« tout émetteur de PARTICIPANT_LEFT inclut `userId` »),
 pas un site nommé un par un — un futur troisième émetteur ajouté au fichier n'aurait sinon aucune
 raison de le respecter.
-## Leçon 283 — une préférence peut être lue partout et appliquée nulle part : vérifier l'ADRESSE avant la logique (2026-08-16, routine temps réel, cycle 46)
+## Leçon 200 — une préférence peut être lue partout et appliquée nulle part : vérifier l'ADRESSE avant la logique (2026-08-16, routine temps réel, cycle 46)
 
 **Le fait.** Le cycle 45 s'était clos sur une règle : « devant une préférence de
 confidentialité consultée à plus d'un endroit, établir d'abord **où elle est
