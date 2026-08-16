@@ -49,6 +49,27 @@
 > **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 31s (970 actionable tasks,
 > matching prior slices — no build-graph regression), zero regressions.
 >
+> **Real merge conflict while this PR sat in CI** — a concurrent session's `conversation-members-
+> roster` (PR #3083) merged to `main` first; resolved by hand in this file (classic simultaneous-
+> prepend conflict, both entries kept, this one placed first since it merged later
+> chronologically) — `feature-parity.md` and the production diff itself auto-merged cleanly
+> (verified: no corrupted lines). Re-ran the full local gate after the merge (green, 50s) before
+> re-pushing.
+>
+> **The already-documented DataStore timeout flake (`datastore-test-timeout-flake`, PR #3058)
+> recurred TWICE on this PR's CI, on two DIFFERENT files each time** (1st:
+> `MediaDownloadPreferencesStoreTest`/`NotificationPreferencesStoreTest`; 2nd: `ThemeStoreTest`) —
+> both already carry `withTimeout(15_000)` (confirmed by grep before either rerun, not assumed),
+> and neither file has any relation to this PR's diff. `gh run rerun --failed` resolved it both
+> times. **Not yet at the "3+ recurrences" threshold** the earlier fix's own lesson sets for
+> re-investigating (compare every DataStore test's timeout, not just the 6 already bumped) — but
+> two occurrences on ONE PR's CI, each on a different file, is a stronger signal than the
+> occasional single flake this fix was meant to close. Flagging as a genuine open question for a
+> future run to watch: is 15s still enough headroom on the CI runner's current load, or does the
+> fix need a wider sweep / a larger constant? Not investigated further this run — the two reruns
+> resolved it, no code in this PR was implicated, and forcing an investigation here would have
+> meant working on files this slice never touched.
+>
 > `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=user-search-pagination`
 > (re-read at merge time, not at slice-selection time — this run's own choice of ordering
 > confirms the caution the concurrent `conversation-members-roster` entry below records:
