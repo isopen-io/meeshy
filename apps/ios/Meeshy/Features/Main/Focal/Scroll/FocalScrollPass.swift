@@ -296,7 +296,7 @@ final class FocalScrollPass {
                 isFocused: entry.allowsFocusCard
                     && entry.localId != nil
                     && entry.localId == focusedLocalId
-                    && Self.isFullyVisible(entry.cell, in: collectionView),
+                    && isFullyVisible(entry.cell, in: collectionView),
                 accentHex: accentHex,
                 isDark: isDark
             )
@@ -325,26 +325,34 @@ final class FocalScrollPass {
     /// magnification du contenu, qui elle n'a rien à voir avec le cadre) :
     /// seule la DÉCORATION est suspendue. Un message partiellement visible
     /// n'en devient pas moins manipulable.
-    nonisolated static func isFullyVisible(
-        _ cell: UICollectionViewCell,
-        in collectionView: UICollectionView
-    ) -> Bool {
-        let readable = collectionView.bounds.inset(
-            by: UIEdgeInsets(
-                top: collectionView.contentInset.bottom,
-                left: 0,
-                bottom: collectionView.contentInset.top,
-                right: 0
-            )
-        )
-        guard readable.height > 0 else { return false }
-        // `bounds.origin` d'une scroll view EST `contentOffset` : `readable`
-        // vit donc déjà dans l'espace de CONTENU, le même que `cell.frame`.
-        // Décaler le frame de `-contentOffset.y` (ce que faisait la première
-        // version) le ramenait à l'origine 0 et le comparait à une fenêtre
-        // restée, elle, à `contentOffset` — les deux repères ne coïncidaient
-        // qu'en haut de liste, et la carte ne s'affichait jamais.
-        return cell.frame.minY >= readable.minY && cell.frame.maxY <= readable.maxY
+    func isFullyVisible(_ cell: UICollectionViewCell, in collectionView: UICollectionView) -> Bool {
+        let viewport = collectionView.bounds.height
+        guard viewport > 0 else { return false }
+        let offsetY = collectionView.contentOffset.y
+
+        // La MÊME conversion que tout le reste du pass — `visualY = H −
+        // (contentY − contentOffset.y)`, §4.2 — appliquée aux deux bords de
+        // la cellule. L'inversion échange les extrémités : le `maxY` de
+        // contenu devient le HAUT visuel.
+        //
+        // Deux repères faux ont précédé celui-ci, tous deux constatés au
+        // simulateur (la carte ne s'affichait jamais) :
+        // 1. comparer `cell.frame` décalé de `−contentOffset.y` à une fenêtre
+        //    dérivée de `bounds` — dont l'origine EST déjà `contentOffset` ;
+        // 2. rétrécir `bounds` par `contentInset` — or `contentInset.bottom`
+        //    porte ici le `headInset` de §4.5, une réserve de DÉFILEMENT de
+        //    plusieurs centaines de points, pas une occlusion de chrome :
+        //    la fenêtre devenait plus petite que n'importe quelle cellule.
+        let visualTop = viewport - (cell.frame.maxY - offsetY)
+        let visualBottom = viewport - (cell.frame.minY - offsetY)
+
+        // Seul le composeur occulte réellement, et sa garde est déjà nommée :
+        // `contentInset.top` est ce que la géométrie appelle son
+        // `bottomClearance` (cf. `focusY(viewportHeight:bottomClearance:)`).
+        // Le haut de l'écran n'occulte rien en Focal — le header s'efface
+        // pendant le défilement.
+        let readableBottom = viewport - collectionView.contentInset.top
+        return visualTop >= 0 && visualBottom <= readableBottom
     }
 
     // MARK: - Site 2 — la cellule entrante seule
@@ -397,7 +405,7 @@ final class FocalScrollPass {
             cell: cell,
             isFocused: descriptor.allowsFocusCard
                 && localId == focusedLocalId
-                && Self.isFullyVisible(cell, in: collectionView),
+                && isFullyVisible(cell, in: collectionView),
             accentHex: accentHex,
             isDark: isDark
         )
