@@ -51,7 +51,12 @@ export interface MessageTranslation {
 
 /**
  * Statut de lecture/réception par utilisateur (aligné avec Prisma MessageStatusEntry)
- * Optionnel: retourné uniquement si include_status=true
+ *
+ * AUCUNE liste de messages ne sert cette forme. `include_status=true` ne l'a
+ * jamais rendue : le schéma de sortie ne déclare pas `statusEntries`, et
+ * fast-json-stringify retire ce qu'il ne déclare pas. Le détail nominatif se
+ * lit sur `GET /conversations/:id/statuses`, qui applique le gate
+ * `showReadReceipts` — ce qu'une liste de messages ne faisait pas.
  */
 export interface MessageStatusEntry {
   readonly id: string;
@@ -213,7 +218,11 @@ export interface GatewayMessage {
   readonly reactions?: readonly MessageReaction[];
   /** Pièces jointes */
   readonly attachments?: readonly MessageAttachment[];
-  /** Statuts par utilisateur (optionnel: include_status=true) */
+  /**
+   * Statuts par utilisateur — jamais peuplé par une liste de messages (voir
+   * `MessageStatusEntry`). Les coches se peignent avec `deliveredCount` /
+   * `readCount` / `recipientCount`, qui eux appliquent le gate d'opt-out.
+   */
   readonly statusEntries?: readonly MessageStatusEntry[];
 }
 
