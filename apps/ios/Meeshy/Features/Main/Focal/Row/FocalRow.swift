@@ -379,7 +379,9 @@ struct FocalRow: View {
                 onRequestTranslation: actions.onRequestTranslation,
                 onShowTranslationDetail: actions.onShowTranslationDetail,
                 onReplyTap: actions.onReplyTap,
-                onStoryReplyTap: actions.onStoryReplyTap
+                onStoryReplyTap: actions.onStoryReplyTap,
+                audioQueueTailProvider: actions.audioQueueTailProvider,
+                onTapConsentNotice: actions.onTapConsentNotice
             )
         }
     }

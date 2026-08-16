@@ -1390,6 +1390,11 @@ final class MessageListViewController: UIViewController {
                 focalActions.onPlayAudio = { [weak self] attachmentId in
                     self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                 }
+                // Parité audio avec le chemin bulle : la MÊME file de lecture
+                // continue et le MÊME tap de consentement (→ Réglages) — les
+                // deux étaient les seuls câblages absents du lecteur Focal.
+                focalActions.audioQueueTailProvider = audioQueueTailProvider
+                focalActions.onTapConsentNotice = { [weak self] in self?.router.push(.settings) }
                 focalActions.onOpenProfile = openProfileHandler
                 // Le « … » de la barre de contrôles ouvre EXACTEMENT le menu
                 // de l'appui long — même gestionnaire, donc même liste

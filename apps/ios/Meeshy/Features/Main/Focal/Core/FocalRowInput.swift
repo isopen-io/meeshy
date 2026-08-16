@@ -315,6 +315,13 @@ struct FocalRowActions {
     var onViewStory: ((String) -> Void)?
     var onCallBack: ((String) -> Void)?
     var onLongPressCallDetail: ((String) -> Void)?
+    /// File de lecture continue : `ConversationViewModel.audioQueueTail(after:)`
+    /// verbatim — la même que le chemin bulle, jamais redéfinie. Sans elle,
+    /// une piste jouée depuis Focal s'arrêtait à sa fin au lieu d'enchaîner.
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])?
+    /// Tap sur l'avertissement de consentement vocal (message à soi avec
+    /// clonage non consenti) — pousse les Réglages, comme côté bulle.
+    var onTapConsentNotice: (() -> Void)?
 
     init(
         onToggleReaction: ((String) -> Void)? = nil,
@@ -336,7 +343,9 @@ struct FocalRowActions {
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onCallBack: ((String) -> Void)? = nil,
-        onLongPressCallDetail: ((String) -> Void)? = nil
+        onLongPressCallDetail: ((String) -> Void)? = nil,
+        audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil,
+        onTapConsentNotice: (() -> Void)? = nil
     ) {
         self.onToggleReaction = onToggleReaction
         self.onAddReaction = onAddReaction
@@ -358,5 +367,7 @@ struct FocalRowActions {
         self.onViewStory = onViewStory
         self.onCallBack = onCallBack
         self.onLongPressCallDetail = onLongPressCallDetail
+        self.audioQueueTailProvider = audioQueueTailProvider
+        self.onTapConsentNotice = onTapConsentNotice
     }
 }
