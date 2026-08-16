@@ -1,6 +1,6 @@
 /**
  * `FocalThread` — l'arbre vivant du fil sous le drapeau Focal
- * (`useReadingModesFlag`, WF-110). Point d'entrée du mux minimal dans
+ * (`useReadingModesFlag`, WF-110/111). Point d'entrée du mux minimal dans
  * `ConversationMessages.tsx` (patron WL-101).
  *
  * TOPOLOGIE RE-PROUVÉE (§0, avant d'écrire ce fichier) — `ConversationView.tsx`
@@ -23,17 +23,22 @@
  *     médias/capsule/pont) — documenté ici comme écart de périmètre assumé,
  *     pas un oubli. Le rapport WF-113 le reprend.
  *
- * WF-110 (CE commit) : ordonnancement + densité + rangées seules. La
- * perspective/élection/pilule (WF-111) et la capsule date/pont (WF-112)
- * arrivent aux commits suivants, sur ce même fichier.
+ * WF-111 (CE commit) : perspective `.thread` (`useFocalPerspective`),
+ * élection, pilule jour·heure (`useScrollActivity`, partagée avec la liste)
+ * s'ajoutent à l'ordonnancement/densité de WF-110. La capsule date/pont
+ * (WF-112) arrive au commit suivant, sur ce même fichier.
  */
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
+import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
+import { useFocalPerspective } from '@/hooks/lentille/use-focal-perspective';
 import { FocalRow, type FocalDensity } from './FocalRow';
+import { FocalTimePill } from './FocalTimePill';
+import { formatDayTimePillLabel } from './focal-row-utils';
 
 /**
  * Duck-typée à dessein (mêmes 5 champs que `LentilleRow`/`ConversationView`
@@ -67,16 +72,11 @@ export function FocalThread({
   messages,
   currentUser,
   density = 'focal',
+  scrollContainerRef,
   onNavigateToMessage,
 }: FocalThreadProps) {
   const { t, locale } = useI18n('conversations');
 
-  // Cast ciblé : `getUserLanguagePreferences` est typé contre l'alias `User`
-  // de `@/types` (un troisième alias, distinct de `SocketIOUser` ET du
-  // `User` de `@meeshy/shared/types`) — les CHAMPS lus (systemLanguage,
-  // regionalLanguage, customDestinationLanguage, deviceLocale) sont présents
-  // dans `FocalThreadCurrentUser`, le désaccord est purement nominal. MÊME
-  // patron que `LentilleRow` (cast local `as { deviceLocale?: string }`).
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser as unknown as Parameters<typeof getUserLanguagePreferences>[0]),
     [
@@ -92,7 +92,33 @@ export function FocalThread({
   // (reverseOrder=true) le fait pour le même prop.
   const ordered = useMemo(() => [...messages].reverse(), [messages]);
 
+  const { visible: pillVisible, notifyScrolled } = useScrollActivity();
+  const { registerRow, focusedId, setAlphaCeiling } = useFocalPerspective({
+    containerRef: scrollContainerRef,
+    enabled: density === 'focal',
+    isSettled: !pillVisible,
+  });
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => notifyScrolled();
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [scrollContainerRef, notifyScrolled]);
+
   const youLabel = t('focal.row.you');
+
+  // Libellé de la pilule : le jour·heure du dernier message visible (le plus
+  // récent chargé) — approximation honnête en l'absence d'un signal de
+  // "rang le plus proche du haut du viewport" dédié (hors périmètre de ce
+  // lot, la pilule liste (WL-103) a le même genre de simplification pour
+  // son premier jet).
+  const pillLabel = useMemo(() => {
+    const last = ordered[ordered.length - 1];
+    if (!last) return '';
+    return formatDayTimePillLabel(new Date(last.createdAt), locale);
+  }, [ordered, locale]);
 
   const onQuoteJump = useCallback(
     (messageId: string) => onNavigateToMessage?.(messageId),
@@ -101,6 +127,8 @@ export function FocalThread({
 
   return (
     <div data-testid="focal-thread" data-density={density}>
+      <FocalTimePill label={pillLabel} visible={pillVisible} />
+
       {ordered.map((message, index) => {
         const previous = index > 0 ? ordered[index - 1] : null;
         const time = new Date(message.createdAt).toLocaleTimeString(locale, {
@@ -119,6 +147,9 @@ export function FocalThread({
             time={time}
             youLabel={youLabel}
             isOptimistic={isOptimisticMessage(message)}
+            isFocused={density === 'focal' && focusedId === message.id}
+            registerRow={registerRow}
+            setAlphaCeiling={setAlphaCeiling}
             onQuoteJump={onQuoteJump}
           />
         );

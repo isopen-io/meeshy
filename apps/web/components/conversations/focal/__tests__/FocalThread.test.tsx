@@ -1,5 +1,6 @@
 /**
- * WF-110 — `FocalThread`, l'arbre vivant du fil (ordonnancement + densité).
+ * WF-110/111 — `FocalThread`, l'arbre vivant du fil (ordonnancement +
+ * densité + perspective/pilule).
  */
 import React, { createRef } from 'react';
 import { render, screen } from '@testing-library/react';
@@ -76,6 +77,24 @@ describe('FocalThread — drapeau densité', () => {
       />
     );
     expect(screen.getByTestId('focal-row')).toHaveAttribute('data-density', 'script');
+  });
+});
+
+describe('FocalThread — perspective + pilule jour·heure (WF-111)', () => {
+  it('monte la pilule jour·heure (FocalTimePill) au-dessus des rangées', () => {
+    const containerRef = createRef<HTMLDivElement>();
+    render(
+      <FocalThread messages={[makeMessage('m1')]} currentUser={currentUser} scrollContainerRef={containerRef} />
+    );
+    expect(screen.getByTestId('focal-time-pill')).toBeInTheDocument();
+  });
+
+  it('chaque rangée expose un wrapper de perspective (registerRow branché — densité focal)', () => {
+    const containerRef = createRef<HTMLDivElement>();
+    render(
+      <FocalThread messages={[makeMessage('m1'), makeMessage('m2')]} currentUser={currentUser} scrollContainerRef={containerRef} />
+    );
+    expect(screen.getAllByTestId('focal-row-perspective-wrapper')).toHaveLength(2);
   });
 });
 

@@ -18,17 +18,51 @@
  * hauteur, une police, ni aucune propriété qui invaliderait le layout
  * (`FOCUS_BAND_OFFSET`/`focusCurve` eux-mêmes ne référencent jamais `64`,
  * la hauteur du rang — §4.1).
+ *
+ * FACTORISATION WF-111 (documentée, périmètre volontairement minimal) :
+ * `computeFocusTransform` ci-dessous extrait la SEULE part de ce fichier que
+ * le pendant `.thread` (`use-focal-perspective.ts`) doit consommer À
+ * L'IDENTIQUE — la conversion `distance → { opacity, transform }` par
+ * `focusCurve`. Le reste de ce hook (l'effet, la boucle rAF, le repli
+ * `prefers-reduced-motion`) reste PROPRE à la Lentille : le fil a besoin, en
+ * plus, d'élire un rang (`electFocusRow`) ET de continuer de le faire quand
+ * `prefers-reduced-motion` est actif (§4.9 du contrat Focal : « la
+ * surbrillance survit, l'animation non ») — un comportement que ce hook
+ * n'a jamais eu et qu'il n'y a pas lieu de lui donner (la Lentille n'élit
+ * toujours aucun rang, re-prouvé : `ReadingModeMenu.tsx` l'atteste). Dupliquer
+ * la dizaine de lignes d'effet aurait donc été plus sûr que de les fusionner
+ * de force ; ce qui EST partagé (la loi) ne l'est plus deux fois.
  */
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { FOCUS_BAND_OFFSET, focusCurve } from '@meeshy/shared/utils/focus-curve';
+import {
+  FOCUS_BAND_OFFSET,
+  focusCurve,
+  type FocusCurveVariant,
+} from '@meeshy/shared/utils/focus-curve';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 
 export interface UseLentillePerspectiveOptions {
   readonly containerRef: React.RefObject<HTMLElement | null>;
   /** Off si la peau parente n'a rien à animer (ex. liste vide). Défaut `true`. */
   readonly enabled?: boolean;
+}
+
+/**
+ * `distance → { opacity, transform }` par `focusCurve` — extrait pour être
+ * RÉUTILISÉ tel quel par `useFocalPerspective` (WF-111). Pure, sans DOM :
+ * les deux hooks restent seuls responsables de la MESURE (`getBoundingClientRect`)
+ * et de l'ÉCRITURE (`el.style...`), cette fonction ne fait que le calcul.
+ */
+export function computeFocusTransform(
+  midY: number,
+  focusY: number,
+  variant: FocusCurveVariant
+): { readonly opacity: string; readonly transform: string } {
+  const distance = focusY - midY;
+  const { alpha, scale } = focusCurve(distance, variant);
+  return { opacity: String(alpha), transform: `scale(${scale})` };
 }
 
 export interface UseLentillePerspectiveResult {
@@ -100,10 +134,9 @@ export function useLentillePerspective({
       rowsRef.current.forEach((el) => {
         const rect = el.getBoundingClientRect();
         const midY = (rect.top + rect.bottom) / 2;
-        const distance = focusY - midY;
-        const { alpha, scale } = focusCurve(distance, 'list');
-        el.style.opacity = String(alpha);
-        el.style.transform = `scale(${scale})`;
+        const { opacity, transform } = computeFocusTransform(midY, focusY, 'list');
+        el.style.opacity = opacity;
+        el.style.transform = transform;
       });
 
       frameId = requestAnimationFrame(tick);
