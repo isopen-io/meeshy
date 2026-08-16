@@ -145,6 +145,10 @@ function cssVarPrefix(section: 'list' | 'thread', family: string): string {
 // fichiers de définition et HORS `MeeshyTests` — zéro site dans les DEUX cas
 // pour les trois familles ci-dessous (2026-08-16).
 //
+// `thread.hiddenChrome` en faisait partie jusqu'au 2026-08-16 ; elle a depuis
+// gagné un consommateur iOS réel et son entrée a été retirée (voir la note à
+// l'emplacement qu'elle occupait, plus bas).
+//
 // `list.tags` et `list.muted` (les deux AUTRES tokens que REV-4 soupçonnait
 // morts côté web, avec `thread.hiddenChrome`) ont été VÉRIFIÉS VIVANTS côté
 // iOS lors de cette re-preuve — `LentilleMetrics.Tags` (tags/favori de rang,
@@ -185,16 +189,14 @@ const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
       'de la ligne V3). Mort des deux côtés. Attend le même chantier que la réserve R-e ' +
       '(drapeau agent_grammar orphelin), hors périmètre de ce lot.',
   },
-  {
-    family: 'thread.hiddenChrome',
-    since: '2026-08-16',
-    owner: 'Fable — WS-6 iOS (hôte de défilement Focal) + WL-10x web',
-    reason:
-      'FocalMetrics.HiddenChrome documente lui-même « non consommée par WS-3/WS-4 » ; ' +
-      're-preuve confirme zéro site RÉEL (WS-6, le propriétaire annoncé, ne la branche pas ' +
-      'encore). REV-4 l\'avait déjà signalée morte côté web (`--lentille-thread-hidden-chrome-*` ' +
-      '— fichier CSS inerte). Mort des deux côtés, confirmé.',
-  },
+  // `thread.hiddenChrome` FIGURAIT ici, exclue le 2026-08-16 au motif que
+  // « WS-6, le propriétaire annoncé, ne la branche pas encore ». WS-6 la branche
+  // désormais : `ConversationView.swift` lit `FocalMetrics.HiddenChrome.easeOut`
+  // pour la durée d'animation du chrome escamotable. L'entrée est donc RETIRÉE
+  // plutôt que laissée périmée — exactement ce que prescrit
+  // « exclusion « $family » : toujours réellement morte des deux côtés », qui l'a
+  // signalée dès le premier commit consommateur. La famille est maintenant
+  // couverte par le chemin normal (consommateur iOS trouvé).
 ];
 
 const excludedFamilySet = new Set(EXCLUDED_DEAD_FAMILIES.map((e) => e.family));
