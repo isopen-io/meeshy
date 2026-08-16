@@ -55,7 +55,13 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
     }
 
     func test_applyingConversationUpdate_renameKeepsOrderAndUserState() {
-        var pinned = TestFactories.makeConversation(id: "c1", title: "Alpha",
+        // `.group` et non le `.direct` par défaut du fixture : le titre d'un DM
+        // n'est pas celui de la base, et `merging` ignore désormais un `title`
+        // qui le viserait (cf. `ConversationStoreTests`
+        // `test_merging_directConversation_neverTakesTheRawTitle`). Le sujet ici
+        // est l'ORDRE et le `userState`, pas la garde — d'où une conversation
+        // qui accepte d'être renommée.
+        var pinned = TestFactories.makeConversation(id: "c1", type: .group, title: "Alpha",
                                                     lastMessageAt: Date(timeIntervalSince1970: 100))
         pinned.userState.isPinned = true
         let other = TestFactories.makeConversation(id: "c2", title: "Zulu",
@@ -68,6 +74,25 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertEqual(merged?.map(\.id), ["c1", "c2"], "un rename ne doit pas réordonner la liste")
         XCTAssertEqual(merged?.first?.title, "Renommée")
         XCTAssertEqual(merged?.first?.userState.isPinned, true, "le userState local doit survivre au merge")
+    }
+
+    /// La garde « le titre d'un DM n'est pas celui de la base » vaut AUSSI sur
+    /// ce chemin — et c'est lui qui portait la conséquence durable. L'écran
+    /// (`ConversationListViewModel`) refuse ce titre depuis le 2026-07-04, mais
+    /// `applyingConversationUpdate` écrit le CACHE DISQUE et rediffuse la liste
+    /// via `conversationsDidChange` : le nom greffé revenait à l'écran par
+    /// derrière, et survivait au redémarrage. Ce témoin épingle la délégation à
+    /// `ConversationStore.merging` plutôt que de la supposer.
+    func test_applyingConversationUpdate_directConversation_doesNotPersistTheRawTitle() {
+        let dm = TestFactories.makeConversation(id: "dm-1", type: .direct, title: "Sandra Raveloson")
+
+        XCTAssertNil(
+            ConversationSyncEngine.applyingConversationUpdate(
+                ConversationUpdatedStoreEvent(conversationId: "dm-1", title: "Sany"),
+                to: [dm]
+            ),
+            "aucune écriture cache : le seul champ du payload ne s'applique pas à un DM"
+        )
     }
 
     func test_applyingConversationUpdate_newerLastMessageAt_resortsList() {
@@ -107,7 +132,7 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
     func test_conversationUpdatedRelay_persistsRenameIntoTheCachedList() async throws {
         let (engine, socket, cache) = try makeEngine()
         try await cache.conversations.save(
-            [TestFactories.makeConversation(id: "c-rename", title: "Avant")], for: "list"
+            [TestFactories.makeConversation(id: "c-rename", type: .group, title: "Avant")], for: "list"
         )
         await engine.startSocketRelay()
 

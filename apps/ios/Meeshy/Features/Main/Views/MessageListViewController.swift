@@ -686,18 +686,34 @@ final class MessageListViewController: UIViewController {
     /// heure » du message en haut visible, même approche que
     /// `updateStickyDayLabel` (jour seul) mais `createdAt` complet : la
     /// pilule a besoin de l'heure en plus du jour.
+    /// Appelée à CHAQUE frame de `scrollViewDidScroll`.
+    ///
+    /// **Le calcul du libellé a été retiré — c'était du travail MORT.** Il
+    /// résolvait le message du haut de l'écran (`indexPathsForVisibleItems
+    /// .max()` + `store.message(for:)`) puis formatait « jour · heure »
+    /// (`MessageDayLabel` + `TimeStringCache`) pour alimenter
+    /// `ScrollTimePillState.label` — c'est-à-dire une pilule qui n'est PLUS
+    /// MONTÉE nulle part depuis que les heures sont revenues aux rangées.
+    /// Une résolution de message et deux formatages par frame de défilement,
+    /// pour un état que plus aucune vue n'observait.
+    ///
+    /// La LOI, elle, reste alimentée : c'est elle qui décide de la fenêtre du
+    /// révélé, et son horloge doit continuer de recevoir chaque événement.
+    /// Seul l'étiquetage disparaît.
+    ///
+    /// L'horodatage est pris UNE fois et partagé par les deux consommateurs :
+    /// deux appels à `nowMs()` dans la même frame produisaient deux instants
+    /// différents pour un seul et même événement.
     private func noteScrollTimePillActivity() {
         guard readingMode != .bubbles else { return }
-        let label = topVisibleMessageDate().map {
-            ScrollTimePillLabelFormatter.label(for: $0, now: Date(), calendar: .current, locale: .current)
-        }
-        scrollTimePillState.note(.scrolled(at: Double(Self.nowMs())), label: label)
-        // Même événement, même horloge, même loi — l'autre consommateur
-        // (§WS-2 amendement A4 : « une loi, deux libellés », ici un
-        // troisième support). C'est ce qui garantit que les heures des
-        // rangées s'ouvrent et se referment EXACTEMENT sur le tempo qu'avait
-        // la pilule, sans réimplémenter la fenêtre.
-        timestampReveal.note(.scrolled(at: Double(Self.nowMs())))
+        let now = Double(Self.nowMs())
+        scrollTimePillState.note(.scrolled(at: now))
+        // Même événement, même horloge, même loi — §WS-2 amendement A4
+        // (« une loi, deux libellés »), ici un troisième support. C'est ce
+        // qui garantit que les heures des rangées s'ouvrent et se referment
+        // EXACTEMENT sur le tempo qu'avait la pilule, sans réimplémenter la
+        // fenêtre.
+        timestampReveal.note(.scrolled(at: now))
     }
 
     private func topVisibleMessageDate() -> Date? {
