@@ -43,8 +43,16 @@
 > **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
 > run before any push.
 >
-> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
-> android_streak=<confirmed at merge> last_run=conversation-member-ban`.
+> `tasks/lane-cursor.md` → re-read fresh at merge time (unchanged from before this PR's CI wait,
+> `streak=3`, no race) → advances to `lane=ANDROID android_streak=4
+> last_run=conversation-member-ban`. **At streak=4, one more Android run before the alternation
+> rule fires — the NEXT slice after this one switches to `IOS_DETTE`.**
+>
+> A mid-run disk-full incident (root `/` hit 0 bytes free, blocking even the Bash tool's own
+> output writes) was resolved by asking the user to clear `~/Library/Developer/Xcode/
+> DerivedData` + this worktree's own `apps/ios/Build` via the `!` shell-escape prefix — no code
+> or diff impact, noted here only because it's the second such disk-contention incident this
+> session's memory record knows about.
 
 > On 2026-08-16 **"Add member" shipped, closing the last open gap in conversation member
 > moderation** (slice `add-participant-sheet`). `gh pr list --state open --search "apps/android
