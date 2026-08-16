@@ -88,11 +88,64 @@ struct LentilleFocusCard: View {
             notch
                 .offset(x: -LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
         }
+        // behaviour-matrix:L08 — « le badge de type (groupe/canal/bot +
+        // memberCount) est absorbé par la focus card (chip) et l'anneau
+        // accent ». `Lentille/Row/` ne rend plus ce badge (contrat §LWS-7,
+        // « AUCUNE carte ») ; c'est CETTE carte qui en devient le domicile.
+        // Coin bas-gauche : le seul coin encore libre (l'encoche occupe
+        // haut-droit, le ring/fond couvrent tout). Purement décoratif,
+        // `allowsHitTesting(false)` — aucune nouvelle zone de tap.
+        .overlay(alignment: .bottomLeading) {
+            if conversation.type != .direct {
+                typeBadge
+                    .padding(.leading, MeeshySpacing.sm)
+                    .padding(.bottom, MeeshySpacing.xs)
+                    .allowsHitTesting(false)
+            }
+        }
         // PAS de `.accessibilityElement(children: .combine)` ici : ça
         // fusionnerait le `Button` de l'encoche dans un bloc non-actionnable
         // — le fond décoratif n'a rien à annoncer (`allowsHitTesting(false)`
         // le retire déjà du hit-testing, pas de VoiceOver), l'encoche doit
         // rester SON PROPRE élément accessible, avec le trait bouton.
+    }
+
+    // MARK: - Chip de type + memberCount (behaviour-matrix:L08)
+
+    /// Réimplémenté ici (pas importé) : `ThemedConversationRow.typeBadge`/
+    /// `.typeBadgeIcon` sont PRIVÉS à un fichier interdit d'édition — même
+    /// discipline que `LentilleConversationRow.timestampColor` (copié, pas
+    /// importé). Mêmes icônes, même seuil `memberCount > 1`, même capsule
+    /// accent(0.15/0.2) — la carte absorbe le CONTENU du badge historique,
+    /// pas une réinvention.
+    private var typeBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                .imageScale(.small)
+            if conversation.memberCount > 1 {
+                Text("\(conversation.memberCount)")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+            }
+        }
+        .foregroundColor(accent)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            Capsule()
+                .fill(accent.opacity(isDark ? 0.2 : 0.15))
+        )
+    }
+
+    private static func typeBadgeIcon(for type: MeeshyConversation.ConversationType) -> String {
+        switch type {
+        case .group: return "person.2.fill"
+        case .community: return "person.3.fill"
+        case .channel: return "megaphone.fill"
+        case .bot: return "sparkles"
+        case .public, .global, .broadcast: return "globe"
+        case .direct: return "person.fill"
+        }
     }
 
     // MARK: - Encoche
