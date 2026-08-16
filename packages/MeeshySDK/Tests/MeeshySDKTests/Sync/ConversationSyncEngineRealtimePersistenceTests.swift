@@ -93,7 +93,7 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
             ConversationUpdatedStoreEvent(
                 conversationId: "c1",
                 lastMessageAt: Date(timeIntervalSince1970: 100),
-                lastMessageId: "m-old",
+                lastMessage: .replaced("m-old"),
                 lastMessagePreview: "périmé"
             ),
             to: [current]
