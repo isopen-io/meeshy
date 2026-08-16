@@ -8950,3 +8950,71 @@ valeur par défaut.
 Le témoin qui les sépare — « une valeur envoyée qui COÏNCIDE avec le défaut est
 bien appliquée » — a été écrit pour cette raison. Quand deux correctifs
 plausibles ne se distinguent que sur un cas, ce cas EST le témoin.
+
+---
+
+## Leçon — un témoin qui épingle une ABSENCE doit dire de quoi elle est le signe (cycle 50)
+
+### 1. Le fait
+
+Deux témoins verts interdisaient au serveur d'émettre une clé `location` sur
+`conversation:updated` quand le message n'avait pas de lieu :
+
+```ts
+expect('location' in payload).toBe(false);
+expect(payload.location).toBeUndefined();
+```
+
+Aucun des deux n'énonçait de raison, et `git log -S` ne remontait qu'à un commit
+d'import massif. Ils décrivaient la forme du code — un spread conditionnel
+`place ? { location: place } : {}` — et rien d'autre.
+
+Pendant ce temps, l'émetteur REST/ZMQ voisin produisait la MÊME absence pour un
+message qui, lui, PORTAIT une position. Les deux témoins étaient verts sur le
+défaut.
+
+### 2. Pourquoi c'est un piège particulier
+
+Un témoin qui épingle une VALEUR se trompe rarement seul : la valeur vient de
+quelque part, et on peut remonter à sa source. Un témoin qui épingle une
+ABSENCE est différent — l'absence n'a pas de source. Elle peut signifier :
+
+- « ce fait est faux ici » (le message n'a pas de lieu),
+- « cet événement ne parle pas de ce sujet » (un renommage ne dit rien du
+  dernier message),
+- « quelqu'un a oublié de l'écrire ».
+
+Les trois produisent exactement le même octet sur le fil : rien. Un test qui
+constate l'absence ne peut donc pas dire LEQUEL des trois il garde — et il
+passe, identique, quand la réponse change.
+
+### 3. La règle
+
+**Épingler une absence n'est légitime que si le test nomme, dans sa raison, le
+lecteur pour qui cette absence est un signal.** « Le client distingue clé
+absente de clé nulle, et voici ce qu'il fait de chacune. » Sans ce lecteur
+nommé, le test ne garde pas un contrat : il photographie une implémentation, et
+il continuera de la photographier après qu'elle a cessé d'être juste.
+
+Corollaire pratique : quand un champ doit pouvoir ÊTRE effacé, une clé présente
+et nulle bat toujours une clé absente — parce qu'elle a une source, donc une
+intention lisible. C'est le troisième champ du même groupe d'aperçu à faire ce
+chemin (`lastMessageTranslations` cycle 46 bis, `lastMessageId` cycle 49,
+`location` cycle 50).
+
+### 4. Ce qu'il faut faire de ces témoins
+
+Ne pas les supprimer. Un témoin faux marque un endroit où quelqu'un a regardé —
+c'est une information. Le RÉÉCRIRE pour qu'il épingle le fait voulu, avec la
+raison écrite cette fois, laisse la trace et corrige le contrat. Les deux
+témoins de ce cycle ont été réécrits ; l'un d'eux se contredisait déjà lui-même
+(son en-tête posait trois lignes plus haut que « la PRÉSENCE de la clé est le
+fait mesuré »), ce qui était le signe le plus net qu'il fallait le relire plutôt
+que lui obéir.
+
+### 5. Le corollaire d'inventaire
+
+Le cycle 49 annonçait « les trois émetteurs de `conversation:updated` ». Il y en
+a quatre. Un audit qui COMPTE doit énumérer par recherche, pas de mémoire — et
+le compte lui-même mérite un témoin quand il porte une garantie (« aucun
+émetteur ne doit poser cette clé »).

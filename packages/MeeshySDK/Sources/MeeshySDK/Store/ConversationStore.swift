@@ -527,7 +527,20 @@ public actor ConversationStore {
                 changed = conv.clearLastMessage() || changed
             } else {
                 if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
-                if case .replaced(.some(let id)) = event.lastMessage { conv.lastMessageId = id; changed = true }
+                if case .replaced(.some(let id)) = event.lastMessage {
+                    conv.lastMessageId = id
+                    // Écrite AVEC l'identité, et jamais seule — même règle que
+                    // l'écran (`ConversationListViewModel`), qui la tenait déjà
+                    // pendant que le store l'ignorait tout à fait. Une épingle
+                    // laissée en place sous l'aperçu d'un AUTRE message est le
+                    // vidage partiel que le cycle 49 a nommé pire que pas de
+                    // vidage : la ligne annonce alors un lieu que le message
+                    // qu'elle décrit ne porte pas. Ce store écrit AUSSI le cache
+                    // disque (`ConversationSyncEngine`), donc l'épingle périmée
+                    // survivait au redémarrage.
+                    conv.lastMessageLocation = event.location
+                    changed = true
+                }
                 if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
                 // préfère la traduction à l'aperçu brut, donc poser l'un sans
@@ -930,6 +943,19 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// ordre, et c'est la seule façon de rendre une édition applicable.
     public let lastMessageTranslations: LastMessagePreviewTranslations
     public let lastMessageOriginalLanguage: String?
+    /// L'épingle de position de la ligne de liste.
+    ///
+    /// Pas de tri-état ici, et c'est délibéré : ce champ n'est appliqué que
+    /// dans la branche `.replaced(.some(id))`, donc c'est l'IDENTITÉ du message
+    /// qui porte déjà la distinction « cet événement parle-t-il du dernier
+    /// message ? ». Un événement de métadonnées (renommage, avatar) laisse
+    /// `lastMessage == .unchanged` et n'atteint jamais l'affectation — son
+    /// silence garde exactement le sens qu'il avait.
+    ///
+    /// `nil` DANS cette branche veut donc dire « le nouveau dernier message n'a
+    /// pas de lieu », et doit éteindre l'épingle du précédent. Le serveur émet
+    /// la clé à `null` pour cela depuis le cycle 50.
+    public let location: SharedPlace?
     /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
     /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
     /// de RECULER dans le temps — voir `merging(_:with:)`.
@@ -950,6 +976,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false,
         title: String? = nil,
         avatar: String? = nil,
@@ -966,6 +993,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.location = location
         self.previewRecalculated = previewRecalculated
         self.title = title
         self.avatar = avatar

@@ -3,6 +3,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview,
 } from '../../routes/conversations/utils/last-message-preview';
+import { sharedPlaceFromMetadata, type SharedPlace } from '../../services/location/sharedPlace';
 
 /**
  * Le fragment `select` Prisma que TOUT émetteur d'aperçu de ligne de liste doit
@@ -55,12 +56,34 @@ export interface PreviewPrismMessage {
   readonly content?: string | null;
   readonly translations?: unknown;
   readonly originalLanguage?: string | null;
+  /**
+   * L'enveloppe brute d'où sort `metadata.location`. Elle appartient à ce
+   * résolveur pour la raison qui y a déjà amené `lastMessagePreview` : un
+   * message position-seule a un `content` VIDE, et sa ligne de liste n'est
+   * rendable QUE par l'épingle. Aperçu et position sont les deux moitiés d'un
+   * même libellé — les séparer, c'est laisser un transport n'en émettre qu'une.
+   */
+  readonly metadata?: unknown;
 }
 
 export interface LastMessagePreviewPrism {
   readonly lastMessagePreview: string | null;
   readonly lastMessageTranslations: Record<string, string> | null;
   readonly lastMessageOriginalLanguage: string | null;
+  /**
+   * `null` est une VALEUR, jamais une absence — même contrat que
+   * `lastMessageTranslations`, et pour un motif jumeau : les clients
+   * appliquent `location` AVEC `lastMessageId`, si bien qu'une clé omise
+   * laisse l'épingle du message PRÉCÉDENT sous l'aperçu du nouveau. Le message
+   * ordinaire qui succède à un partage de position doit donc dire « pas de
+   * lieu », pas se taire.
+   *
+   * Seuls les émetteurs qui parlent du dernier message traversent ce
+   * résolveur : la route de métadonnées (`routes/conversations/core.ts`)
+   * n'emporte toujours aucune clé `lastMessage*` ni `location`, et son
+   * silence garde exactement le sens qu'il avait.
+   */
+  readonly location: SharedPlace | null;
 }
 
 /**
@@ -112,5 +135,11 @@ export function resolveLastMessagePreviewPrism(
       originalLanguage: message?.originalLanguage,
       viewerLanguages,
     }),
+    // Hors du Prisme au sens strict — une position n'a pas de langue — mais
+    // dans la MÊME issue, et pour la même raison que `lastMessagePreview` y
+    // est entré : c'est ce qui rend la paire indissociable. Les trois
+    // émetteurs la composaient chacun de leur côté, et le chemin REST/ZMQ ne
+    // la composait pas du tout.
+    location: sharedPlaceFromMetadata(message?.metadata),
   };
 }

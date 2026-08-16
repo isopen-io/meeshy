@@ -135,6 +135,25 @@ describe('emitConversationPreviewUpdate', () => {
     expect(emitted[0].payload.lastMessagePreview).toBe('');
   });
 
+  // Cycle 50 — le versant EFFAÇANT du témoin ci-dessus, et le seul des deux
+  // qu'une clé omise laissait faux. Supprimer un partage de position fait
+  // redescendre l'aperçu sur un message ordinaire : sans `location: null`
+  // REÇU, la ligne de liste garde l'épingle du message effacé sous le texte du
+  // suivant. Le client applique `location` avec `lastMessageId`, donc il ne
+  // peut pas déduire l'effacement — seul l'émetteur sait que le remplaçant n'a
+  // pas de lieu.
+  it('éteint l\'épingle quand le message qui la portait cède la place à un message ordinaire', async () => {
+    const emitted: Emitted[] = [];
+    const plainReplacement: any = { ...latest, id: 'msg-plain', content: 'Je suis arrivé', metadata: null };
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], plainReplacement);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(Object.prototype.hasOwnProperty.call(emitted[0].payload, 'location')).toBe(true);
+    expect(emitted[0].payload.location).toBeNull();
+    expect(emitted[0].payload.lastMessagePreview).toBe('Je suis arrivé');
+  });
+
   // --- Prisme Linguistique de la ligne de liste (cycle 69) ---------------
   //
   // Le défaut que ces témoins ferment : `GET /conversations` hydrate la ligne

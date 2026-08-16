@@ -121,6 +121,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         title: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
@@ -129,6 +130,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             lastMessageAt: lastMessageAt,
             lastMessage: lastMessage,
             lastMessagePreview: lastMessagePreview,
+            location: location,
             updatedAt: "2024-01-01T00:00:00.000Z",
             previewRecalculated: previewRecalculated
         )
@@ -196,6 +198,34 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         XCTAssertTrue(applied,
                       "the bridge must forward previewRecalculated — a flag decoded but not mapped is inert")
         XCTAssertNotEqual(t0, previous)
+    }
+
+    /// Cycle 50, et la MÊME leçon que le témoin ci-dessus, sur le champ voisin :
+    /// `location` était déjà décodé par `MessageSocketManager` — c'est le pont
+    /// qui ne le recopiait pas. Un champ décodé mais jamais transmis est
+    /// exactement aussi inerte qu'un champ absent, et il ne rougit AUCUN test
+    /// de `merging` pris isolément.
+    func test_conversationUpdated_placeCarriedThroughTheBridge() async {
+        let store = makeStore()
+        var c1 = makeConv(id: "c1")
+        c1.lastMessageId = "msg-old"
+        c1.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_001_000),
+            lastMessage: .replaced("msg-plain"),
+            lastMessagePreview: "Je suis arrivé"
+        ))
+
+        let extinguished = await waitUntil {
+            let c = await store.conversation(id: "c1")
+            return c?.lastMessageId == "msg-plain" && c?.lastMessageLocation == nil
+        }
+        XCTAssertTrue(extinguished,
+                      "the bridge must forward location — a pin left behind describes another message")
     }
 
     func test_conversationUpdated_lastMessageId_andPreview_applied() async {

@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
@@ -221,24 +220,20 @@ export async function emitConversationPreviewUpdate(
     });
 
     // La moitié du payload qui dépend du message, donc du LECTEUR dès qu'il en
-    // a masqué un. `location` comprise : servir la position du message global à
-    // qui ne le voit pas placerait une épingle sous un aperçu qui parle d'autre
-    // chose. Un message géolocalisé sans légende a un `lastMessagePreview`
-    // vide — hisser `location` ne fabrique aucun texte de repli côté serveur ;
-    // le client décide comment rendre "" + location (ex. via messageType ou la
-    // seule présence de `location`), pas ce helper.
-    const messagePayloadFor = (message: PreviewMessage | null) => {
-      const place = sharedPlaceFromMetadata(message?.metadata);
-      return {
-        lastMessageAt: message?.createdAt ?? null,
-        lastMessageId: message?.id ?? null,
-        // `lastMessagePreview` n'est PAS ici : il sort de
-        // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
-        // comme elle.
-        senderId: message?.senderId ?? null,
-        ...(place ? { location: place } : {}),
-      };
-    };
+    // a masqué un. `location` n'est plus ici : elle est sortie au cycle 50 vers
+    // `resolveLastMessagePreviewPrism`, qui la sert à TOUS les émetteurs — et
+    // désormais toujours, `null` compris. La règle qu'elle portait ne change
+    // pas : servir la position du message global à qui ne le voit pas placerait
+    // une épingle sous un aperçu qui parle d'autre chose, et c'est bien `own`
+    // (le dernier message DU LECTEUR) qui traverse les deux résolveurs.
+    const messagePayloadFor = (message: PreviewMessage | null) => ({
+      lastMessageAt: message?.createdAt ?? null,
+      lastMessageId: message?.id ?? null,
+      // `lastMessagePreview` n'est PAS ici : il sort de
+      // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné
+      // comme elle.
+      senderId: message?.senderId ?? null,
+    });
 
     const basePayload = {
       conversationId,

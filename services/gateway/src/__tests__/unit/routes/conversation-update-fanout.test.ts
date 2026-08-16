@@ -181,12 +181,20 @@ describe('PUT /conversations/:id — audience de conversation:updated', () => {
     await app.close();
   });
 
-  it('ne parle pas du dernier message : aucune clé lastMessage* dans le payload', async () => {
+  it('ne parle pas du dernier message : ni clé lastMessage*, ni clé location', async () => {
     // Le tri-état client (`LastMessagePreviewTranslations`) distingue « clé
     // absente » de « clé nulle ». Une mise à jour de métadonnées ne sait RIEN
     // du dernier message : y poser `lastMessageTranslations: null` dirait au
     // client que la carte du Prisme est périmée, et effacerait une traduction
     // parfaitement valide sur toutes les lignes de liste.
+    //
+    // `location` relève EXACTEMENT de la même règle depuis le cycle 50, et
+    // c'est le seul champ du groupe que le préfixe `lastMessage` ne rattrape
+    // pas — d'où son assertion propre. Les émetteurs message-driven la portent
+    // désormais toujours, `null` compris ; cette route, elle, doit continuer de
+    // se TAIRE, sans quoi un simple renommage effacerait l'épingle de position
+    // de toutes les lignes de liste. C'est la contre-épreuve du cycle : le
+    // défaut symétrique, et le plus visible des deux.
     const { prisma } = createMockPrisma();
     const app = await buildApp(prisma, emitted);
 
@@ -197,6 +205,7 @@ describe('PUT /conversations/:id — audience de conversation:updated', () => {
     expect(payload.title).toBe('Nouveau nom');
     expect(payload.conversationId).toBe(CONV_ID);
     expect(Object.keys(payload).some((k) => k.startsWith('lastMessage'))).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(payload, 'location')).toBe(false);
 
     await app.close();
   });

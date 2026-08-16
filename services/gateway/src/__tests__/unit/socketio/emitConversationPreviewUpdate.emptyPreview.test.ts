@@ -114,6 +114,14 @@ describe("emitConversationPreviewUpdate — « ce lecteur n'a plus aucun message
     expect(Object.prototype.hasOwnProperty.call(payload, 'lastMessageAt')).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(payload, 'lastMessagePreview')).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(payload, 'lastMessageTranslations')).toBe(true);
+    // Cycle 50 — `location` a rejoint le groupe, et cette assertion dit
+    // maintenant la même chose que ses quatre sœurs. Elle attendait
+    // `undefined`, ce qui mesurait la forme du code (un spread conditionnel)
+    // plutôt que le fait voulu : le commentaire d'origine — « aucune épingle
+    // de position ne survit au message qui la portait » — est mieux servi par
+    // une clé PRÉSENTE et nulle, seule forme que ce témoin tient pour un
+    // signal (cf. l'en-tête de ce bloc, trois lignes plus haut).
+    expect(Object.prototype.hasOwnProperty.call(payload, 'location')).toBe(true);
 
     expect(payload.lastMessageId).toBeNull();
     expect(payload.lastMessageAt).toBeNull();
@@ -122,7 +130,7 @@ describe("emitConversationPreviewUpdate — « ce lecteur n'a plus aucun message
     expect(payload.lastMessageOriginalLanguage).toBeNull();
     expect(payload.senderId).toBeNull();
     // Aucune épingle de position ne survit non plus au message qui la portait.
-    expect(payload.location).toBeUndefined();
+    expect(payload.location).toBeNull();
   });
 
   /**

@@ -1355,16 +1355,11 @@ export class MessageHandler {
           updatedBy: { id: senderUserId ?? message.senderId },
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
-          // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
-          // le reste de la paire, sous le même plafond qu'elle.
-          // Un message position-seule a un `content` vide : hisser
-          // `metadata.location` (même règle que la liste REST et
-          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
-          // client compose son libellé — aucun texte de repli côté serveur.
-          ...((): Record<string, unknown> => {
-            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-            return place ? { location: place } : {};
-          })(),
+          // `lastMessagePreview` et `location` sortent de
+          // `resolveLastMessagePreviewPrism` avec le reste de la paire, sous le
+          // même plafond qu'elle. La position y a rejoint l'aperçu au cycle 50 :
+          // ce hoist vivait ici en copie, et le chemin REST/ZMQ jumeau ne l'avait
+          // jamais eue.
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };

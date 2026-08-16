@@ -815,7 +815,17 @@ describe('MessageHandler', () => {
       }
     });
 
-    it('sans position, le payload conversation:updated ne porte AUCUNE clé location', async () => {
+    // Cycle 50 — ce témoin épinglait l'ABSENCE de la clé. Il mesurait la forme
+    // du code (un spread conditionnel), pas un contrat : rien côté client ne
+    // lisait cette absence, et le chemin REST/ZMQ jumeau produisait la même
+    // absence pour un message qui, lui, PORTAIT une position — c'est-à-dire le
+    // défaut que ce cycle ferme.
+    //
+    // Ce qu'il garde désormais est le fait qui compte : la clé est PRÉSENTE et
+    // nulle. Les clients appliquent `location` avec `lastMessageId` ; un
+    // message ordinaire qui succède à un partage de position doit donc DIRE
+    // « pas de lieu » pour effacer l'épingle, et non se taire.
+    it('sans position, le payload conversation:updated porte une clé location explicitement nulle', async () => {
       const msg = makeMessage();
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
 
@@ -826,7 +836,8 @@ describe('MessageHandler', () => {
 
       expect(updatedPayloads.length).toBeGreaterThan(0);
       for (const payload of updatedPayloads) {
-        expect('location' in payload).toBe(false);
+        expect('location' in payload).toBe(true);
+        expect(payload.location).toBeNull();
       }
     });
 

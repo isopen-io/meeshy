@@ -2412,6 +2412,81 @@ describe('MeeshySocketIOManager', () => {
       expect(fr.lastMessagePreview).toBe('Hello');
     });
 
+    // Cycle 50 — la position appartient à la moitié message-dépendante du
+    // payload, au même titre que l'aperçu et la carte du Prisme. Un message
+    // position-seule a un `content` VIDE : sans `location`, la ligne de liste
+    // du destinataire n'a plus RIEN à rendre (ni texte, ni épingle), et le
+    // client efface même l'épingle du message précédent puisqu'il applique
+    // `location` avec l'id. Le chemin REST/ZMQ/agent la laissait tomber alors
+    // que le chemin socket la hissait — un même geste, deux transports, deux
+    // lignes de liste différentes.
+    it('carries the shared place of a location-only message in CONVERSATION_UPDATED', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: '',
+        metadata: {
+          location: {
+            latitude: 48.8584,
+            longitude: 2.2945,
+            name: 'Tour Eiffel',
+            address: 'Champ de Mars, Paris',
+            category: 'landmark',
+          },
+        },
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const payload = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-recipient'));
+      expect(payload.location).toEqual({
+        latitude: 48.8584,
+        longitude: 2.2945,
+        name: 'Tour Eiffel',
+        address: 'Champ de Mars, Paris',
+        category: 'landmark',
+      });
+    });
+
+    // La contre-épreuve, et le défaut SYMÉTRIQUE : un message ordinaire qui
+    // succède à un partage de position doit EFFACER l'épingle. Le client
+    // applique `location` avec l'id — encore faut-il que la clé soit là pour
+    // porter le `null`. Omise, elle laisse l'épingle du message d'avant sous
+    // un aperçu qui parle d'autre chose : le vidage partiel que le cycle 49
+    // a nommé pire que pas de vidage du tout.
+    it('carries an explicit null place when the fresh message has none', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'Hello',
+        metadata: null,
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const payload = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-recipient'));
+      expect(payload).toHaveProperty('location');
+      expect(payload.location).toBeNull();
+    });
+
     // Le chemin d'ENVOI est le plus chaud du service : ce payload part une fois
     // PAR participant, à chaque message. Il portait le contenu ENTIER là où la
     // liste REST (`GET /conversations`) et la carte de traductions du MÊME

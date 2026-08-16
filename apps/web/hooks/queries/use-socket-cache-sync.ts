@@ -95,6 +95,18 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
       if (value === null) patch.lastMessage = undefined;
       continue;
     }
+    if (key === 'location') {
+      // Depuis le cycle 50, les émetteurs message-driven portent TOUJOURS cette
+      // clé (`null` compris) pour que les clients puissent éteindre l'épingle
+      // de position d'un message remplacé. La ligne web, elle, rend
+      // `conversation.lastMessage` — un OBJET — et ne lit `location` nulle part
+      // sur la conversation : le type `Conversation` ne la déclare pas.
+      //
+      // La recopier n'ajouterait donc qu'un champ fantôme sur chaque ligne, à
+      // chaque message — exactement ce que `lastMessageId` faisait avant qu'on
+      // l'écarte deux blocs plus haut, et pour la même raison.
+      continue;
+    }
     if (key === 'lastMessageTranslations') {
       // `null` est une VALEUR ici, pas une absence : le serveur périme
       // `Message.translations` dans la même écriture qu'une édition, et c'est ce

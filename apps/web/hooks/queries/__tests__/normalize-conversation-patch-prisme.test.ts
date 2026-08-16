@@ -127,5 +127,30 @@ describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
 
       expect('lastMessage' in patch).toBe(false);
     });
+
+    // Cycle 50 — même règle que `lastMessageId`, sur la clé voisine. Les
+    // émetteurs message-driven portent désormais `location` à CHAQUE message
+    // (`null` compris) pour qu'iOS puisse éteindre l'épingle du message
+    // remplacé. La ligne web rend `lastMessage`, un objet, et ne lit `location`
+    // nulle part sur la conversation : la recopier ajouterait un champ fantôme
+    // par ligne et par message.
+    it('never copies the location facet into the conversation cache', () => {
+      const withPlace = normalizeConversationPatch({
+        lastMessageId: 'msg-7',
+        location: { latitude: 48.85, longitude: 2.29, name: 'Tour Eiffel' },
+      });
+      const withoutPlace = normalizeConversationPatch({ lastMessageId: 'msg-8', location: null });
+
+      expect('location' in withPlace).toBe(false);
+      expect('location' in withoutPlace).toBe(false);
+    });
+
+    // Contre-épreuve : écarter `location` ne doit rien coûter aux clés que la
+    // ligne lit vraiment — le `continue` est ciblé, pas un filtre large.
+    it('keeps normalising the rest of the payload alongside a location key', () => {
+      const patch = normalizeConversationPatch({ title: 'Renamed', location: null });
+
+      expect(patch.title).toBe('Renamed');
+    });
   });
 });

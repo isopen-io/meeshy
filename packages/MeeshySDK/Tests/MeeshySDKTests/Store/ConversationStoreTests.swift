@@ -969,6 +969,83 @@ final class ConversationStoreTests: XCTestCase {
                      "la ligne ne doit plus rien avoir à rendre, dans aucune langue du prisme")
     }
 
+    // MARK: - L'épingle de position suit le message qu'elle décrit (cycle 50)
+    //
+    // Le store ignorait `location` de bout en bout : le champ n'existait pas
+    // sur `ConversationUpdatedStoreEvent`. L'épingle posée par un
+    // `GET /conversations` restait donc en place sous l'aperçu de TOUS les
+    // messages suivants — et comme cette même fonction écrit le cache disque
+    // (`ConversationSyncEngine`), elle survivait au redémarrage.
+
+    /// Un message ordinaire succède à un partage de position : l'épingle
+    /// s'éteint. C'est le cas que la clé omise laissait faux, et il se lit
+    /// comme un bug — la ligne annonce un lieu que le message qu'elle décrit ne
+    /// porte pas.
+    func test_applyConversationUpdated_plainMessageAfterAPlace_extinguishesThePin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-place"
+        conv.lastMessagePreview = ""
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_100),
+            lastMessage: .replaced("msg-plain"),
+            lastMessagePreview: "Je suis arrivé",
+            location: nil
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-plain")
+        XCTAssertEqual(after.lastMessagePreview, "Je suis arrivé")
+        XCTAssertNil(after.lastMessageLocation,
+                     "l'épingle du message précédent ne doit pas survivre à son remplacement")
+    }
+
+    /// Le versant qui ALLUME l'épingle : un partage de position arrivé en
+    /// temps réel doit rendre sa ligne. Un message position-seule a un aperçu
+    /// VIDE — sans ce champ, la ligne n'a strictement rien à afficher.
+    func test_applyConversationUpdated_incomingPlace_lightsThePin() async {
+        let (store, _, _, _) = makeStore()
+        await store.hydrate(makeConv(id: "conv-1"))
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_100),
+            lastMessage: .replaced("msg-place"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel")
+    }
+
+    /// La contre-épreuve, et le défaut SYMÉTRIQUE — bien plus visible que
+    /// celui qu'on ferme. Un renommage ne parle pas du dernier message :
+    /// `lastMessage` reste `.unchanged`, l'affectation n'est jamais atteinte,
+    /// et l'épingle légitime reste en place. Sans cette garde, changer le titre
+    /// d'une conversation effacerait l'épingle de sa ligne.
+    func test_applyConversationUpdated_renameOnly_leavesThePinAlone() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-place"
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Nouveau nom"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.title, "Nouveau nom")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "un événement de métadonnées ne dit rien du dernier message")
+    }
+
     /// Le rang de la ligne survit au vidage. `Conversation.lastMessageAt` est
     /// une donnée GLOBALE, non nullable en base, qu'un masquage PERSONNEL ne
     /// change pour personne : un `GET /conversations` juste après rendrait la
