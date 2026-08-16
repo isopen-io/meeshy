@@ -38,7 +38,18 @@
 >
 > `tasks/lane-cursor.md` → re-read fresh at merge time (see the note on this pattern in the
 > `reels-realtime-room` entry below for why it matters when multiple Android runs land the same
-> day) → `lane=ANDROID android_streak=<to be confirmed at merge>`.
+> day) → unchanged from before this PR's CI wait (`streak=1`), so this run advances it cleanly to
+> `lane=ANDROID android_streak=2 last_run=story-viewer-realtime-room`.
+>
+> **`Test shared` failed on this PR's CI too, again confirmed pre-existing and unrelated** — this
+> time `focus-curve.test.ts` (a Focal-feature curve-math test), verified broken on `main`'s own CI
+> at the exact commit this branch forked from (`723c8ce8c`, run 31965746061, job `Test shared` →
+> `failure`) before merging past it. A concurrent session fixed it independently
+> (`packages/shared/utils/focus-curve.ts` + `FocalFocusCurve.swift` both landed on `main` between
+> this PR opening and merging) — not this routine's fix, not this routine's problem, but worth
+> naming: this is the SECOND time in two consecutive Android runs that an unrelated `Focal`/
+> `packages/shared` regression from concurrent iOS work has shown up as a red `Test shared` check
+> on an `apps/android`-only PR. `Android` (the actual merge gate) was green both times.
 >
 > **All three deferred room-join follow-ups are now closed** (`post-detail-realtime-room` →
 > `reels-realtime-room` → `feed-comments-realtime-room` → `story-viewer-realtime-room`). No further
