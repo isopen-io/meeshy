@@ -64,6 +64,15 @@ export interface LentilleRowProps {
   readonly draft?: LentilleRowDraft;
   readonly bridge?: ConversationBridge | null;
   readonly t: LentilleRowTranslate;
+  /**
+   * Ref-setter du WRAPPER interne (WL-104, `useLentillePerspective`) — reçoit
+   * `opacity`/`transform` à chaque frame de la passe de perspective, JAMAIS
+   * la racine `role="button"` (qui porte la géométrie du rang : hauteur,
+   * marges, padding — invariant « ne touche pas le layout »). Optionnel :
+   * une `LentilleRow` rendue hors de la liste (test, aperçu) reste stable
+   * sans perspective.
+   */
+  readonly perspectiveRef?: (el: HTMLDivElement | null) => void;
 }
 
 /** Sélection déterministe du typeur affiché (L01) : ordre alphabétique du nom, pas l'ordre d'arrivée socket. */
@@ -83,6 +92,7 @@ export const LentilleRow = memo(function LentilleRow({
   draft,
   bridge,
   t,
+  perspectiveRef,
 }: LentilleRowProps) {
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser),
@@ -173,7 +183,7 @@ export const LentilleRow = memo(function LentilleRow({
         }
       }}
       className={cn(
-        'group flex items-center gap-3 cursor-pointer outline-none',
+        'group cursor-pointer outline-none',
         'hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         isSelected && 'bg-primary/10 hover:bg-primary/20'
       )}
@@ -183,104 +193,116 @@ export const LentilleRow = memo(function LentilleRow({
         marginLeft: 'var(--lentille-list-row-margin-horizontal)',
         marginRight: 'var(--lentille-list-row-margin-horizontal)',
         borderRadius: 'var(--lentille-list-row-radius)',
-        transformOrigin: 'var(--lentille-list-row-transform-origin-x) var(--lentille-list-row-transform-origin-y)',
         // @ts-expect-error -- propriété personnalisée, consommée par la teinte de l'anneau ci-dessous
         '--row-accent': accent,
       }}
     >
-      {/* Avatar 44 + anneau accent */}
-      <div className="relative flex-shrink-0" style={{ width: 'var(--lentille-list-avatar-size)', height: 'var(--lentille-list-avatar-size)' }}>
-        <Avatar
-          className="h-full w-full"
-          style={{
-            boxShadow: `0 0 0 var(--lentille-list-avatar-ring-size) color-mix(in srgb, var(--row-accent) calc(var(--lentille-list-avatar-ring-opacity) * 100%), transparent)`,
-          }}
-        >
-          <AvatarImage src={avatarUrl} />
-          <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-            {icon || initials}
-          </AvatarFallback>
-        </Avatar>
-
-        {/* Dots de présence — un ParticipantPresenceIndicator par entrée retenue,
-            superposés : chacun se masque seul s'il est hors ligne. */}
-        {!isTyping &&
-          presenceEntries.map((entry) => (
-            <ParticipantPresenceIndicator
-              key={entry.userId}
-              userId={entry.userId}
-              fallbackUser={entry.source}
-              size="sm"
-              className="absolute -bottom-0.5 -right-0.5"
-            />
-          ))}
-
-        {/* Typing = preuve d'activité : dot FORCÉ vert, indépendant du store de présence. */}
-        {isTyping && (
-          <span
-            data-testid="lentille-row-typing-dot"
-            className="absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-400 animate-pulse ring-2 ring-background"
+      {/* Wrapper interne de perspective (WL-104) — SEUL destinataire de
+          `opacity`/`transform` écrits par `useLentillePerspective`. La
+          racine ci-dessus (hauteur/marges/padding/radius) n'est JAMAIS
+          touchée par la passe de perspective (invariant §4.1). */}
+      <div
+        ref={perspectiveRef}
+        data-testid="lentille-row-perspective-wrapper"
+        className="flex items-center gap-3 h-full w-full"
+        style={{
+          transformOrigin: 'var(--lentille-list-row-transform-origin-x) var(--lentille-list-row-transform-origin-y)',
+        }}
+      >
+        {/* Avatar 44 + anneau accent */}
+        <div className="relative flex-shrink-0" style={{ width: 'var(--lentille-list-avatar-size)', height: 'var(--lentille-list-avatar-size)' }}>
+          <Avatar
+            className="h-full w-full"
             style={{
-              width: 'var(--lentille-list-presence-dot-size)',
-              height: 'var(--lentille-list-presence-dot-size)',
-              borderWidth: 'var(--lentille-list-presence-dot-border-size)',
+              boxShadow: `0 0 0 var(--lentille-list-avatar-ring-size) color-mix(in srgb, var(--row-accent) calc(var(--lentille-list-avatar-ring-opacity) * 100%), transparent)`,
+            }}
+          >
+            <AvatarImage src={avatarUrl} />
+            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+              {icon || initials}
+            </AvatarFallback>
+          </Avatar>
+
+          {/* Dots de présence — un ParticipantPresenceIndicator par entrée retenue,
+              superposés : chacun se masque seul s'il est hors ligne. */}
+          {!isTyping &&
+            presenceEntries.map((entry) => (
+              <ParticipantPresenceIndicator
+                key={entry.userId}
+                userId={entry.userId}
+                fallbackUser={entry.source}
+                size="sm"
+                className="absolute -bottom-0.5 -right-0.5"
+              />
+            ))}
+
+          {/* Typing = preuve d'activité : dot FORCÉ vert, indépendant du store de présence. */}
+          {isTyping && (
+            <span
+              data-testid="lentille-row-typing-dot"
+              className="absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-400 animate-pulse ring-2 ring-background"
+              style={{
+                width: 'var(--lentille-list-presence-dot-size)',
+                height: 'var(--lentille-list-presence-dot-size)',
+                borderWidth: 'var(--lentille-list-presence-dot-border-size)',
+              }}
+            />
+          )}
+        </div>
+
+        {/* Contenu */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className="truncate"
+              style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
+            >
+              {conversationName}
+            </h3>
+            {conversation.lastMessage && (
+              <span
+                className="text-muted-foreground flex-shrink-0"
+                style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+              >
+                {time}
+              </span>
+            )}
+          </div>
+
+          <div
+            className="truncate mt-0.5 text-muted-foreground"
+            style={{ fontSize: 'var(--lentille-list-line2-size)' }}
+          >
+            {isTyping ? (
+              <span style={{ color: 'var(--row-accent)' }} data-testid="lentille-row-typing-line">
+                {t('lentille.typing.one', { name: typingUser!.displayName })}
+              </span>
+            ) : hasDraft ? (
+              <span className="text-destructive" data-testid="lentille-row-draft-line">
+                {t('lentille.draft')} {draft!.content}
+              </span>
+            ) : hasBridge && bridge ? (
+              <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />
+            ) : (
+              previewNode
+            )}
+          </div>
+        </div>
+
+        {/* Point de non-lu accent, 8px — remplace le badge chiffré supprimé (L06). */}
+        {hasUnread && (
+          <span
+            data-testid="lentille-row-unread-dot"
+            aria-hidden="true"
+            className="flex-shrink-0 rounded-full"
+            style={{
+              width: 'var(--lentille-list-unread-dot-size)',
+              height: 'var(--lentille-list-unread-dot-size)',
+              backgroundColor: 'var(--row-accent)',
             }}
           />
         )}
       </div>
-
-      {/* Contenu */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <h3
-            className="truncate"
-            style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
-          >
-            {conversationName}
-          </h3>
-          {conversation.lastMessage && (
-            <span
-              className="text-muted-foreground flex-shrink-0"
-              style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
-            >
-              {time}
-            </span>
-          )}
-        </div>
-
-        <div
-          className="truncate mt-0.5 text-muted-foreground"
-          style={{ fontSize: 'var(--lentille-list-line2-size)' }}
-        >
-          {isTyping ? (
-            <span style={{ color: 'var(--row-accent)' }} data-testid="lentille-row-typing-line">
-              {t('lentille.typing.one', { name: typingUser!.displayName })}
-            </span>
-          ) : hasDraft ? (
-            <span className="text-destructive" data-testid="lentille-row-draft-line">
-              {t('lentille.draft')} {draft!.content}
-            </span>
-          ) : hasBridge && bridge ? (
-            <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />
-          ) : (
-            previewNode
-          )}
-        </div>
-      </div>
-
-      {/* Point de non-lu accent, 8px — remplace le badge chiffré supprimé (L06). */}
-      {hasUnread && (
-        <span
-          data-testid="lentille-row-unread-dot"
-          aria-hidden="true"
-          className="flex-shrink-0 rounded-full"
-          style={{
-            width: 'var(--lentille-list-unread-dot-size)',
-            height: 'var(--lentille-list-unread-dot-size)',
-            backgroundColor: 'var(--row-accent)',
-          }}
-        />
-      )}
     </div>
   );
 });

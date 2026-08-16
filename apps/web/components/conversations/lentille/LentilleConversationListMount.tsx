@@ -1,22 +1,22 @@
 /**
- * Point de montage de la peau Lentille — WL-102/WL-103 (LWS-10).
+ * Point de montage de la peau Lentille — WL-102/WL-103/WL-104 (LWS-10).
  *
  * Remplace le placeholder de WL-101 (voir historique git) : rang plat
  * (`LentilleRow`), sectionnement (`resolveConversationSections` via
  * `useLentilleSections`), stickers sticky (`LentilleSticker`), pilule de
- * défilement (`SectionScrollPill`), rail vivants (`LivesRail`), squelette
- * (`LentilleSkeletonRow`, affiché uniquement cache vide).
+ * défilement (`SectionScrollPill`, pilotée par `useScrollActivity` —
+ * `scrollActivityLaw` partagée), rail vivants (`LivesRail`), squelette
+ * (`LentilleSkeletonRow`, affiché uniquement cache vide), perspective de
+ * liste (`useLentillePerspective` — `focusCurve('list', …)` partagée).
  *
  * Ce composant n'est monté QUE sous drapeau Lentille actif (mux
  * `next/dynamic` de `ConversationList.tsx`, WL-101) — aucun `useQuery` ici
  * ni dans aucun fichier de ce dossier (garde de contrat LWS-10).
  *
- * Pilule de défilement — WIRING TEMPORAIRE (documenté, contrat WL-103) :
- * la VISIBILITÉ suit un minuteur local 900 ms posé ICI en attendant
- * `useScrollActivity` (WL-104, `scrollActivityLaw` partagée) qui la
- * remplacera au commit suivant SANS changer le rendu. Le LIBELLÉ (quelle
- * section est active) n'est PAS gouverné par une loi partagée — c'est de la
- * présentation pure, elle reste ici définitivement.
+ * Le LIBELLÉ de la pilule (quelle section est active) n'est PAS gouverné
+ * par une loi partagée — c'est de la présentation pure, elle vit ici en
+ * dur : `updateActiveSection` compare les positions des stickers au bord
+ * haut du conteneur de défilement.
  */
 'use client';
 
@@ -27,6 +27,8 @@ import type { UserConversationCategory, UserConversationPreferences } from '@mee
 import { useLentilleListTyping } from '@/hooks/lentille/use-lentille-list-typing';
 import { useLentilleSections, type LentilleSection } from '@/hooks/lentille/use-lentille-sections';
 import { useLentilleBridges } from '@/hooks/lentille/use-lentille-bridges';
+import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
+import { useLentillePerspective } from '@/hooks/lentille/use-lentille-perspective';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import { LentilleRow, type LentilleRowTranslate } from './LentilleRow';
 import { LentilleSticker } from './LentilleSticker';
@@ -49,9 +51,6 @@ export interface LentilleConversationListMountProps {
 }
 
 const SKELETON_ROW_COUNT = 8;
-
-/** Fenêtre de linger de la pilule — TEMPORAIRE, voir en-tête (remplacé WL-104). */
-const TEMP_PILL_LINGER_MS = 900;
 
 function sectionKey(section: LentilleSection): string {
   return section.kind === 'category' ? `category-${section.categoryId}` : section.kind;
@@ -117,11 +116,20 @@ export function LentilleConversationListMount({
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLDivElement>());
-  const [pillVisible, setPillVisible] = useState(false);
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(
     sections[0] ? sectionKey(sections[0]) : null
   );
+
+  // WL-104 — visibilité de la pilule pilotée par `scrollActivityLaw` (loi
+  // partagée avec le futur Focal web), plus de minuteur ad hoc local.
+  const { visible: pillVisible, notifyScrolled } = useScrollActivity();
+
+  // WL-104 — UN SEUL requestAnimationFrame sur le conteneur de défilement,
+  // qui écrit opacity/transform sur le wrapper interne de chaque rang
+  // (`focusCurve('list', …)`, jamais recopiée).
+  const { registerRow } = useLentillePerspective({ containerRef: scrollContainerRef });
 
   const updateActiveSection = useCallback(
     (root: HTMLElement) => {
@@ -142,22 +150,18 @@ export function LentilleConversationListMount({
   useEffect(() => {
     const root = rootRef.current?.parentElement;
     if (!root) return;
-
-    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+    scrollContainerRef.current = root;
 
     const handleScroll = () => {
-      setPillVisible(true);
+      notifyScrolled();
       updateActiveSection(root);
-      if (dismissTimer) clearTimeout(dismissTimer);
-      dismissTimer = setTimeout(() => setPillVisible(false), TEMP_PILL_LINGER_MS);
     };
 
     root.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       root.removeEventListener('scroll', handleScroll);
-      if (dismissTimer) clearTimeout(dismissTimer);
     };
-  }, [updateActiveSection]);
+  }, [notifyScrolled, updateActiveSection]);
 
   const activeSection = sections.find((section) => sectionKey(section) === activeSectionKey) ?? sections[0];
   const activeSectionLabel = activeSection ? sectionLabel(activeSection, categories, t) : '';
@@ -201,6 +205,7 @@ export function LentilleConversationListMount({
                   draft={draftMessages[conversation.id]}
                   bridge={resolveRowBridge(conversation, bridgesByConversation)}
                   t={t}
+                  perspectiveRef={registerRow(conversation.id)}
                 />
               ))}
             </div>
