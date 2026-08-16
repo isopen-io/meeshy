@@ -3982,6 +3982,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       overlay needed here (unlike post detail/reels) — the sheet is presented over a surface that
       already tracks its own like state; only the room join/leave was missing. +2 tests (join on open,
       blank route never joins). **Still open** (the last of the three): `StoryViewerViewModel`.
+- [x] Story-viewer room real-time subscription — closed 2026-08-16 (slice `story-viewer-realtime-room`),
+      the last of the three room-join follow-ups `post-detail-realtime-room` named. `StoryViewerViewModel`
+      had no `joinPostRoom`/`leavePostRoom` anywhere (`grep` exhaustive). Unlike the plain open/close of
+      the feed-comments sheet, this one needed the slide-to-slide transition shape: iOS
+      `StoryViewerView.transitionPostRoom(from:to:)` (lines 1188-1195) leaves the old story's room and
+      joins the new one on every slide change, plus an initial join/final leave on `.onAppear`/
+      `.onDisappear` (lines 569/600) — mirror of Android's own `ReelsViewModel.setCurrentReel`. New
+      `transitionPostRoom(nextId: String?)` is called from `emit()` — the ViewModel's single "state
+      changed" checkpoint, already recomputing `currentId = playback.currentSlide?.id` on every call —
+      so the join/leave transition fires exactly when the displayed slide actually changes, and is a
+      no-op (idempotent) for every other reason `emit()` runs (a reaction, an image-resolved callback,
+      a language-override toggle). `onCleared()` leaves the last room, same shape as `PostDetailViewModel`/
+      `ReelsViewModel`. +3 tests (initial join, leave-old/join-new on `advance()`, no re-join/re-leave on
+      an unrelated emit). **All three deferred room-join follow-ups now closed.**
 - [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
