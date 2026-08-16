@@ -33,12 +33,27 @@ final class ReadingModeController: ObservableObject {
     private let store: FocalReadingModePreferenceStoring
     private let now: () -> Date
 
+    /// I-075 — override ÉPHÉMÈRE de développement (item « Focal (dev) » du
+    /// menu d'appui long de la liste, gardé par
+    /// `LentilleFeatureFlag.focalDevPreview`, défaut OFF). Non-`nil` ⇒ la
+    /// décision D'OUVERTURE de CETTE instance est `forcedMode`, quels que
+    /// soient le drapeau `reading_modes`, la préférence collante ou le compte
+    /// de non-lus — court-circuite `Self.decide` (donc
+    /// `ReadingModeOrchestrator.resolveOrchestratorDecision`, la loi GELÉE,
+    /// INTACTE ici : ni lue ni dupliquée) plutôt que de dupliquer la loi.
+    /// `nil` (défaut) ⇒ `init` bit-à-bit identique à avant ce lot. N'affecte
+    /// QUE la décision initiale : un `select()`/`resetToAuto()` manuel
+    /// ultérieur (Aa, feuille Lentille) reprend la loi normale — cet écran
+    /// n'est jamais verrouillé sur Focal, seule son OUVERTURE l'est.
+    private let forcedMode: ConversationReadingMode?
+
     init(
         conversationId: String,
         scope: ReadingModePreferenceScope,
         unreadCount: Int,
         capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
         isFlagEnabled: Bool,
+        forcedMode: ConversationReadingMode? = nil,
         store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
         now: @escaping () -> Date = Date.init
     ) {
@@ -47,20 +62,34 @@ final class ReadingModeController: ObservableObject {
         self.unreadCount = unreadCount
         self.capabilities = capabilities
         self.isFlagEnabled = isFlagEnabled
+        self.forcedMode = forcedMode
         self.store = store
         self.now = now
 
-        let sticky = store.mode(for: conversationId, scope: scope)
-        let resolved = Self.decide(
-            stickyMode: sticky,
-            unreadCount: unreadCount,
-            lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
-            now: now(),
-            capabilities: capabilities,
-            isFlagEnabled: isFlagEnabled
-        )
-        self.decision = resolved
-        self.mode = resolved.mode
+        if let forcedMode {
+            // I-075 : AUCUNE lecture du store, AUCUNE dépendance au drapeau
+            // ni aux capacités — la décision d'ouverture EST `forcedMode`.
+            // `.default` est réutilisé comme raison faute de cas dédié dans
+            // la loi GELÉE (`OrchestratorDecisionReason` n'est pas amendée
+            // pour ce lot dev-only) : conséquence cosmétique acceptée,
+            // documentée ici — l'encoche affichera « AUTO · … » plutôt qu'un
+            // libellé « forcé » dédié.
+            let forced = ReadingModeOrchestrator.OrchestratorDecision(mode: forcedMode, reason: .default)
+            self.decision = forced
+            self.mode = forced.mode
+        } else {
+            let sticky = store.mode(for: conversationId, scope: scope)
+            let resolved = Self.decide(
+                stickyMode: sticky,
+                unreadCount: unreadCount,
+                lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
+                now: now(),
+                capabilities: capabilities,
+                isFlagEnabled: isFlagEnabled
+            )
+            self.decision = resolved
+            self.mode = resolved.mode
+        }
     }
 
     /// Fige un choix manuel — préférence collante (§WS-1 « préférence
