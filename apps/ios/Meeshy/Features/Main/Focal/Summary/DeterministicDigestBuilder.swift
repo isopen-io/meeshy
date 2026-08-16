@@ -63,9 +63,20 @@ nonisolated public enum DeterministicDigestBuilder {
 
     // MARK: - Auteurs les plus actifs
 
-    /// Tri : compte décroissant, puis dernière activité décroissante, puis
-    /// `userId` croissant — déterministe, jamais `hashValue` (contrat §7,
-    /// même règle que `FaceRampRanking`).
+    /// Tri : compte décroissant, puis `userId` croissant — déterministe,
+    /// jamais `hashValue` (contrat §WS-8, critère §7 : « classement stable,
+    /// déterministe, tri secondaire ALPHABÉTIQUE pour départager » ; même
+    /// règle à DEUX niveaux que `FaceRampRanking` — score, puis clé
+    /// alphabétique).
+    ///
+    /// `lastAt` reste PORTÉ par `SenderTally` (contrat §3.7) mais n'entre
+    /// PAS dans le tri : un niveau intermédiaire « dernière activité
+    /// décroissante » ajouterait un troisième signal que le contrat ne nomme
+    /// nulle part, et ferait dépendre l'ordre de deux ex æquo d'une horloge
+    /// plutôt que d'une clé stable. Sans lui, `userId` — unique par
+    /// construction, c'est la clé du `Dictionary` — rend le tri TOTALEMENT
+    /// ordonné : le même jeu de messages rend le même ordre quel que soit
+    /// l'ordre d'itération du `Dictionary` (non déterministe en Swift).
     private static func buildTopSenders(_ real: [DigestInputMessage]) -> [SenderTally] {
         var counts: [String: Int] = [:]
         var lastAt: [String: Date] = [:]
@@ -81,7 +92,6 @@ nonisolated public enum DeterministicDigestBuilder {
             .map { SenderTally(userId: $0.key, messageCount: $0.value, lastAt: lastAt[$0.key] ?? .distantPast) }
             .sorted { lhs, rhs in
                 if lhs.messageCount != rhs.messageCount { return lhs.messageCount > rhs.messageCount }
-                if lhs.lastAt != rhs.lastAt { return lhs.lastAt > rhs.lastAt }
                 return lhs.userId < rhs.userId
             }
     }

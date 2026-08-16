@@ -311,10 +311,12 @@ final class ScrollPillStateTests: XCTestCase {
                 visibleSectionId: LentilleSectionIdentity.olderId,
                 sections: sections
             ),
-            "PLUS ANCIEN",
+            LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .older).name),
             "La pilule nomme la section dont les rangs viennent d'entrer à l'écran, criée " +
             "par la MÊME fonction que le sticker (`LentilleSticker.displayTitle`) — deux " +
-            "transformations parallèles dériveraient."
+            "transformations parallèles dériveraient. Valeur attendue résolue via CETTE " +
+            "MÊME fonction (locale-agnostique par construction), jamais une chaîne " +
+            "française recopiée en dur qui romprait sous la locale `en` du CI."
         )
     }
 
