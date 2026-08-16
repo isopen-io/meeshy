@@ -155,6 +155,7 @@ function makeSocket(rooms: string[] = []) {
     }),
     emit: directEmit,
     to: jest.fn().mockReturnValue({ emit: socketToEmit }),
+    leave: jest.fn<any>(),
     rooms: new Set<string>(['socket-test-1', ...rooms]),
     data: {},
   };
@@ -937,6 +938,74 @@ describe('CallEventsHandler — call:end handler', () => {
 
       // postCallSummary absorbs errors; call:end should still succeed
       expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Group hang-up buffered-offer scoping (calling-stack audit 2026-08-16) —
+  // when call:end is treated as a leave because the group call continues for
+  // other participants, the buffered-offer cleanup must be scoped to the
+  // hanger-up alone. It used to sweep the WHOLE call's buffered offers
+  // (`clearBufferedOffer`), silently discarding a totally unrelated,
+  // still-active participant's own pending buffered offer (e.g. their socket
+  // hasn't (re)joined the call room yet) — permanently starving their mesh
+  // connection, since the buffer is per-recipient and nothing would replay
+  // it on their eventual `call:join`. Mirrors the same fix already applied
+  // to `call:leave` and `call:force-leave`.
+  // -------------------------------------------------------------------------
+
+  describe('group hang-up: buffered-offer cleanup is scoped to the hanger-up, not the whole call', () => {
+    function injectBufferedOffer(handler: InstanceType<typeof CallEventsHandler>, recipient: string): void {
+      (handler as any).bufferedOffers.set(`${CALL_ID}:${recipient}`, {
+        signal: { callId: CALL_ID, signal: { type: 'offer', from: 'someone', to: recipient, sdp: 'v=0' } },
+        bufferedAt: Date.now(),
+      });
+    }
+
+    beforeEach(() => {
+      // Two ACTIVE participants (caller + a bystander) with no `conversation`
+      // field — `isDirectCall` reads `callSession.conversation?.type ===
+      // 'direct'`, so `undefined` already resolves falsy (non-direct), and a
+      // second active participant makes `hasOtherActiveParticipants` true —
+      // together these satisfy `willContinueAsGroupLeave`.
+      mockGetCallSession.mockResolvedValue({
+        mode: 'p2p',
+        participants: [
+          { id: 'call-participant-row-caller', participantId: PARTICIPANT_ID, leftAt: null, participant: { userId: CALLER_ID } },
+          { id: 'call-participant-row-bystander', participantId: 'bystander-participant-id', leftAt: null, participant: { userId: 'bystander-user-id' } },
+        ],
+      });
+      // Non-terminal status: endCall() delegated to leaveCall() because the
+      // group call continues for the bystander.
+      mockEndCall.mockResolvedValue(makeCallSession({ status: 'active' }));
+    });
+
+    it("clears the hanger-up's own buffered offer slot", async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      injectBufferedOffer(handler, CALLER_ID);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:${CALLER_ID}`)).toBe(false);
+    });
+
+    it("does NOT clear the still-active bystander's own buffered offer slot", async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      injectBufferedOffer(handler, 'bystander-user-id');
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:bystander-user-id`)).toBe(true);
     });
   });
 });

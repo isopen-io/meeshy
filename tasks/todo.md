@@ -54,7 +54,7 @@
       `sdk-tests.yml` joue les 8 témoins SDK ; les 2 témoins app restent le
       résidu non joué (même situation qu'aux cycles 49-51, notée au §9 du journal)
 - [x] CHANGELOG + ADR `packages/MeeshySDK/decisions.md` + journal cycle 52 +
-      leçon 210
+      leçon 211
 
 ## Revue
 

@@ -233,4 +233,4 @@ le contrat casserait. Un test redondant est du bruit, pas une ceinture.
   dans le sujet du commit. Le résidu non joué est donc les 2 témoins app — même
   situation qu'aux cycles 49 à 51, notée ici pour ne pas la laisser passer pour
   une couverture complète.
-- CHANGELOG + ADR (`packages/MeeshySDK/decisions.md`) + ce journal + leçon.
+- CHANGELOG + ADR (`packages/MeeshySDK/decisions.md`) + ce journal + leçon 211 (renumérotée : une routine parallèle a posé sa 210 sur `main` pendant que cette PR attendait sa CI — motif des leçons 198 et 204).
