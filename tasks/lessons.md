@@ -8554,7 +8554,7 @@ deux rangements coexistent pour la même donnée, la LECTURE rejoint l'écriture
 jamais l'inverse : faire écrire les deux installe durablement la divergence qu'on
 prétend réparer.*
 
-## Leçon 284 — quand deux causes produisent le même symptôme, le discriminant ne peut pas venir du symptôme (2026-08-16, routine temps réel, cycle 46 bis)
+## Leçon 203 — quand deux causes produisent le même symptôme, le discriminant ne peut pas venir du symptôme (2026-08-16, routine temps réel, cycle 46 bis)
 
 **Le motif.** Un client tenait une garde monotone sur l'aperçu de la ligne de
 liste : un `lastMessageAt` qui RECULE désigne un message périmé, tout le groupe
@@ -8599,9 +8599,10 @@ aux sessions anonymes, les deux bouts s'accordent pour la bonne raison). La
 consigner comme close, avec les deux citations qui tranchent, vaut mieux que de
 la laisser ouverte pour qu'un cycle suivant la ré-instruise.
 
-**Post-scriptum — la leçon 281 s'est reproduite, à l'identique.** Une AUTRE
+**Post-scriptum — la leçon 198 s'est reproduite, à l'identique.** Une AUTRE
 exécution de cette routine tournait en parallèle et a livré son propre « cycle
-46 », avec sa propre « leçon 283 ». Les deux sont parties de la même piste
+46 », avec sa propre leçon (aujourd'hui la 200, après le renumérotage global
+#3075). Les deux sont parties de la même piste
 héritée et ont conclu la même chose sur elle, indépendamment — ce qui la confirme
 à deux voix — avant de diverger sur des surfaces sans recouvrement. Le coût réel
 n'a donc pas été du travail perdu mais une COLLISION DE NOMS, découverte au
@@ -8611,4 +8612,4 @@ qui peut déjà être périmé ; les traiter comme réservés est l'erreur.* Rie
 alloue, et rien ne le fera tant que la réservation ne sera pas écrite quelque
 part que les deux exécutions lisent. En attendant : au moment du merge, relire
 `tasks/lessons.md` et `tasks/todo.md` AVANT de résoudre, et renuméroter la
-sienne — le suffixe « bis » (leçon 281, cycle 44) est la convention établie.
+sienne — le suffixe « bis » (leçon 198, cycle 44) est la convention établie.

@@ -7,7 +7,7 @@ piste ouverte se referme ici sans correctif — voir § 1.
 **« bis » parce qu'une AUTRE exécution de cette routine a tourné en parallèle et
 porte déjà le numéro 46** (`tasks/realtime-sync-audit-2026-08-15-cycle46.md`,
 « l'écran Confidentialité écrivait dans un tiroir que le serveur n'ouvrait
-pas »). C'est le motif exact de la leçon 281, et il s'est reproduit. Les deux
+pas »). C'est le motif exact de la leçon 198, et il s'est reproduit. Les deux
 exécutions sont parties de la MÊME piste léguée par le cycle 45 et ont abouti à
 la MÊME conclusion sur elle (§ 1) — indépendamment, ce qui la confirme à deux
 voix — puis ont divergé : l'autre a suivi les deux rangements de la préférence,

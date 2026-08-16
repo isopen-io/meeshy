@@ -753,7 +753,7 @@ par un témoin.
 
 (« bis » : une autre exécution parallèle de la routine porte déjà le numéro 46 —
 même piste héritée du cycle 45, même conclusion sur elle, surfaces disjointes.
-Motif de la leçon 281, reproduit ; cf. leçon 284.)
+Motif de la leçon 198, reproduit ; cf. leçon 203.)
 
 ## Constat
 
@@ -801,7 +801,7 @@ Motif de la leçon 281, reproduit ; cf. leçon 284.)
 - [x] Suite gateway complète : 730 suites / 17 802 tests verts
       (cycle 45 : 729 / 17 799 — exactement +1 suite, +3 tests)
 - [x] Swift vérifié par `sdk-tests.yml` (aucune toolchain Swift ici)
-- [x] CHANGELOG + journal d'audit (cycle46 bis) + leçon 284
+- [x] CHANGELOG + journal d'audit (cycle46 bis) + leçon 203
 
 ## Revue
 
