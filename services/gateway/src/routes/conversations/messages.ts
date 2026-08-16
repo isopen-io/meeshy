@@ -436,23 +436,42 @@ export function registerMessagesRoutes(
         })
       ]);
 
-      const payload: ReadStatusUpdatedEventData = {
+      // Ce que TOUTE la conversation peut savoir — jumeau du découpage posé
+      // dans `broadcastReadStatusUpdate` (message-read-status.ts) : le résumé
+      // des coches décrit la conversation, `lastReadAt` et `unreadCount`
+      // décrivent l'ACTEUR. Les seconds n'empruntent plus l'éventail : ils
+      // disent de combien l'acteur est en retard sur ce fil, et la préférence
+      // d'accusés de lecture qui autorise cette diffusion consent à « j'ai lu
+      // ton message », pas à la publication d'un arriéré.
+      const peerPayload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId,
         userId: actorUserId,
         type,
         updatedAt: new Date(),
-        summary,
-        ...(actorReadSync ?? {})
+        summary
       };
 
+      // L'acteur n'est retiré de l'éventail que lorsqu'il a une version à lui à
+      // recevoir : sur un 'received', les deux payloads seraient identiques et
+      // l'exclure lui coûterait l'événement.
       emitToConversationParticipants({
         io,
         conversationId,
         participants: activeParticipants,
         events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-        payload
+        payload: peerPayload,
+        exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null
       });
+
+      // La version de l'acteur, dans sa seule room personnelle — celle que
+      // toutes ses sessions ont rejointe à l'authentification, compte ou pas.
+      if (actorReadSync) {
+        const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
+        const actorRoom = io.to(ROOMS.user(personalRoomKey));
+        actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+        actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+      }
 
       emitUnreadUpdate();
     } catch (error) {

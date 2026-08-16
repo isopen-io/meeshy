@@ -439,3 +439,55 @@ Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le tableau de la
 collision entre les deux sessions, pourquoi le doublon n'était pas stérile, et
 l'enseignement de coordination : relire `main` sur les FICHIERS visés avant
 d'ouvrir la PR, pas seulement au démarrage.
+
+# Cycle 41 — la règle était écrite, et appliquée à une seule des deux branches
+
+Piste ouverte au cycle 38, reconduite au cycle 39, instruite ici.
+
+## Constat
+
+- [x] `lastReadAt`/`unreadCount` décrivent l'ACTEUR (sa frontière de lecture,
+      son arriéré sur ce fil), pas la conversation — et partaient dans
+      l'ÉVENTAIL sur un `type: 'read'`
+- [x] Chaque pair recevait donc l'arriéré de lecture de celui qui venait de lire
+- [x] Le raisonnement qui l'interdit était DÉJÀ écrit 15 lignes plus haut, sur
+      la branche `received` : « would needlessly disclose the actor's backlog to
+      every peer in the room »
+- [x] Second angle, le consentement : `shouldShowReadReceipts` consent à « j'ai
+      lu ton message », pas à publier un arriéré — l'utilisateur qui ACTIVAIT
+      ses accusés était celui qui divulguait le plus
+- [x] 2 sites atteints (`message-read-status.ts`, `conversations/messages.ts`) ;
+      les 4 autres émetteurs de l'événement vérifiés indemnes, avec la raison
+
+## Correctifs
+
+- [x] Deux payloads pour deux audiences : l'éventail perd les deux champs, la
+      version complète part dans `ROOMS.user(userId ?? participantId)`
+- [x] `exceptRoom` ajouté à `emitToConversationParticipants` — retirer la room
+      personnelle ne suffit pas, la room de conversation tient l'acteur dès
+      qu'il a le fil ouvert
+- [x] Exclusion conditionnée à la présence des champs : sur un `received` elle
+      coûterait l'événement à l'acteur sans rien protéger
+- [x] Invariant vérifié aux deux bouts d'`AuthHandler` : toute session rejoint
+      sa room personnelle AVANT toute room de conversation
+- [x] 3 consommateurs relus DANS LE CODE avant de restreindre le payload —
+      aucun ne change de comportement
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges (4 site 1, 2 site 2)
+- [x] 3 non-régressions vertes d'emblée, dont 2 gardes anti-sur-correction
+- [x] 1 double `io` préexistant complété (`except` manquait), pas un correctif régressant
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : voir § Validation de l'audit
+- [x] CHANGELOG + journal d'audit (cycle40) + leçon 275 + contrat partagé +
+      miroirs iOS/SDK/Android + README socketio
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle41.md` — le tableau des 6
+émetteurs, celui des 3 consommateurs, pourquoi `exceptRoom` n'est pas décoratif,
+les deux options écartées (porter les champs par `conversation:unread-updated` ;
+retirer la room de conversation de l'éventail), et la piste du cycle 42 :
+`routes/messages.ts` émet un `read` qui ne synchronise AUCUN appareil de
+l'acteur — le symétrique de cette fuite, pas une fuite.

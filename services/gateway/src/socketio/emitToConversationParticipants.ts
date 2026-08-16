@@ -18,6 +18,7 @@ export interface ParticipantRoomTarget {
  */
 export interface ConversationRoomBroadcast {
   to(room: string): ConversationRoomBroadcast;
+  except(room: string): ConversationRoomBroadcast;
   emit(event: string, payload: unknown): void;
 }
 
@@ -127,6 +128,17 @@ export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
  * `emitUnreadCountsToRecipients` (`ROOMS.user(recipient.userId ?? recipient.id)`),
  * which is what makes this an extraction rather than an invention.
  *
+ * `exceptRoom` takes ONE room back out of the fan-out, and exists for the
+ * emitter that has two audiences for one event: a payload for the peers, and a
+ * richer one for the actor. Dropping the actor's personal room from the chain
+ * is not enough — the conversation room is chained too, and it holds the
+ * actor's socket whenever they have the thread open, which would hand them the
+ * peer copy on top of their own. `.except()` removes them from the WHOLE chain,
+ * so each socket still receives the event exactly once (property 1 above), and
+ * the caller is free to emit the actor's version to `ROOMS.user(...)` after.
+ * The returned room list honors the exclusion, so a log never claims a room the
+ * emit did not serve.
+ *
  * Returns the rooms actually reached, in chain order, so a caller can log them
  * without rebuilding the set.
  */
@@ -136,18 +148,24 @@ export function emitToConversationParticipants(params: {
   participants: ReadonlyArray<ParticipantRoomTarget>;
   events: ReadonlyArray<string>;
   payload: unknown;
+  exceptRoom?: string | null;
 }): string[] {
-  const { io, conversationId, participants, events, payload } = params;
+  const { io, conversationId, participants, events, payload, exceptRoom } = params;
   if (!io) return [];
 
   const conversationRoom = ROOMS.conversation(conversationId);
   // Seeding with the conversation room makes it `rooms[0]` AND protects it from
   // being chained twice by a participant that somehow named it. It is already
   // on the emitter below, so the chain resumes at the personal rooms after it.
-  const rooms = participantUserRooms(participants, [conversationRoom]);
+  // The exclusion can only ever remove a PERSONAL room — it is named after an
+  // identity, never after a conversation — so `rooms[0]` survives the filter.
+  const rooms = participantUserRooms(participants, [conversationRoom]).filter(
+    (room) => room !== exceptRoom
+  );
 
   let emitter = io.to(conversationRoom);
   for (const room of rooms.slice(1)) emitter = emitter.to(room);
+  if (exceptRoom) emitter = emitter.except(exceptRoom);
 
   for (const event of events) emitter.emit(event, payload);
 
