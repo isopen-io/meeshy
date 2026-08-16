@@ -278,6 +278,30 @@ extension ConversationListView {
                 )
             }
 
+            // Focal (bêta) — I-075, amendement produit 2026-08-16. Publication
+            // bêta publique (plus un outil de dev) : force le mode Focal pour
+            // CETTE ouverture SEULE, sans écrire NI la préférence de mode NI
+            // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
+            // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
+            // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
+            // utilisateur « Activer les bêta », défaut ON — réglages,
+            // SettingsView) — indépendant de `reading_modes` : allumer ce
+            // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
+            // conversations (mode AUTO), ce que ce chantier interdit.
+            if BetaFeaturesPreference.isEnabled {
+                Divider()
+                Button {
+                    HapticFeedback.light()
+                    router.pendingForcedReadingMode = .focal
+                    onSelect(conversation)
+                } label: {
+                    Label(
+                        String(localized: "context.focal_beta_preview", defaultValue: "Focal (bêta)", bundle: .main),
+                        systemImage: "viewfinder"
+                    )
+                }
+            }
+
             // Bloquer / Débloquer (DM uniquement)
             if conversation.type == .direct, let userId = conversation.participantUserId {
                 let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
@@ -562,6 +586,7 @@ extension ConversationListView {
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
                         canRename: conversation.type != .direct,
+                        isFocalBetaPreviewEnabled: BetaFeaturesPreference.isEnabled,
                         onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
                         onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
                         onMarkReadToggle: {
@@ -623,6 +648,12 @@ extension ConversationListView {
                             // Destructif → confirmation système obligatoire
                             // (dialog attaché dans ConversationListView.body).
                             deleteTargetConversation = conversation
+                        },
+                        onOpenFocalBetaPreview: {
+                            // I-075 — override éphémère, jamais persistant :
+                            // même chemin que l'item du menu natif.
+                            router.pendingForcedReadingMode = .focal
+                            onSelect(conversation)
                         },
                         onDismiss: { dismissContextMenu() }
                     )

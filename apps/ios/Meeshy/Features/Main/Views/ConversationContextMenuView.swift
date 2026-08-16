@@ -38,6 +38,13 @@ struct ConversationContextMenuView: View {
     let isBlocked: Bool
     /// Renommable = conversation de groupe/communauté (pas un DM).
     let canRename: Bool
+    /// I-075 — gardé par `BetaFeaturesPreference.isEnabled` (préférence
+    /// utilisateur « Activer les bêta », défaut ON — amendement produit
+    /// 2026-08-16) : visibilité de l'item « Focal (bêta) » du panneau
+    /// « Plus d'options ». Résolu par l'appelant (comme `isLocked`/
+    /// `isArchived`, ce menu restant self-contained) — jamais lu ici
+    /// directement.
+    let isFocalBetaPreviewEnabled: Bool
     // Callbacks — chacun = action ; la fermeture est faite par l'appelant via onDismiss
     let onPin: () -> Void
     let onMute: () -> Void
@@ -52,6 +59,12 @@ struct ConversationContextMenuView: View {
     let onArchive: () -> Void
     let onBlock: () -> Void
     let onDelete: () -> Void
+    /// I-075 — force le mode Focal pour CETTE ouverture SEULE (override
+    /// éphémère, jamais persistant : n'écrit ni la préférence de mode ni
+    /// aucune préférence bêta). Voir `onOpenFocalBetaPreview` au site
+    /// d'appel (`ConversationListView+Overlays.swift`) pour le câblage réel
+    /// (`router.pendingForcedReadingMode` + `onSelect`).
+    let onOpenFocalBetaPreview: () -> Void
     let onDismiss: () -> Void
 
     private enum Panel { case root, favorite, move, more }
@@ -272,6 +285,15 @@ struct ConversationContextMenuView: View {
                         : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
                     isDestructive: !isBlocked
                 ) { onBlock(); onDismiss() }
+            }
+
+            // Focal (bêta) — I-075, même item que le menu natif (parité).
+            if isFocalBetaPreviewEnabled {
+                divider
+                actionRow(
+                    icon: "viewfinder",
+                    label: String(localized: "context.focal_beta_preview", defaultValue: "Focal (bêta)", bundle: .main)
+                ) { onOpenFocalBetaPreview(); onDismiss() }
             }
         }
     }
