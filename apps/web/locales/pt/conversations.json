@@ -734,6 +734,7 @@
         "script": "Roteiro",
         "resume": "Resumo",
         "riviere": "Rio",
+        "bubbles": "Balões",
         "autoBadge": "AUTO · {decision}",
         "river": {
           "never": "nunca em uma conversa direta",

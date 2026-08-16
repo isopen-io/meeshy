@@ -736,6 +736,7 @@
         "script": "Script",
         "resume": "Résumé",
         "riviere": "Rivière",
+        "bubbles": "Bulles",
         "autoBadge": "AUTO · {decision}",
         "river": {
           "never": "jamais en conversation directe",

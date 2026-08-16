@@ -734,6 +734,7 @@
         "script": "Guion",
         "resume": "Resumen",
         "riviere": "Río",
+        "bubbles": "Burbujas",
         "autoBadge": "AUTO · {decision}",
         "river": {
           "never": "nunca en una conversación directa",

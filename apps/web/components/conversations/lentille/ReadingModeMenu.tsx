@@ -54,6 +54,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { preferenceLabel } from './lentille-mode-labels';
 import type { LentilleRowTranslate } from './LentilleRow';
 
 export interface ReadingModeMenuProps {
@@ -70,20 +71,27 @@ export interface ReadingModeMenuProps {
   readonly 'data-testid'?: string;
 }
 
+/**
+ * WL-108 : les LIBELLÉS ne sont plus épelés ici mais résolus par
+ * `preferenceLabel` (`lentille-mode-labels.ts`) — source UNIQUE partagée
+ * avec l'encoche de la focus card, comme `LentilleModeLabels.swift` l'est
+ * pour les trois surfaces iOS. Mêmes clés qu'avant, au caractère près :
+ * seule leur ADRESSE change, pour qu'« AUTO · Focal » sur la carte et
+ * « Focal » dans ce menu ne puissent plus diverger.
+ */
 type MenuEntry = {
   readonly preference: Exclude<ReadingModePreference, 'auto'>;
   readonly mode: 'focal' | 'script' | 'summary' | 'river';
-  readonly labelKey: string;
 };
 
 /** Ordre du contrat : Auto (traité à part, toujours sélectionnable) puis Focal/Script/Résumé/Rivière. */
 const CATALOG_ENTRIES: readonly MenuEntry[] = [
-  { preference: 'focal', mode: 'focal', labelKey: 'lentille.modes.focal' },
-  { preference: 'script', mode: 'script', labelKey: 'lentille.modes.script' },
-  { preference: 'resume', mode: 'summary', labelKey: 'lentille.modes.resume' },
+  { preference: 'focal', mode: 'focal' },
+  { preference: 'script', mode: 'script' },
+  { preference: 'resume', mode: 'summary' },
 ];
 
-const RIVER_ENTRY: MenuEntry = { preference: 'riviere', mode: 'river', labelKey: 'lentille.modes.riviere' };
+const RIVER_ENTRY: MenuEntry = { preference: 'riviere', mode: 'river' };
 
 /** Libellé de la raison Rivière grisée — trifurcation S1, jamais une formule unique. */
 function riverReasonLabel(capabilities: ReadingModeCapabilities, t: LentilleRowTranslate): string | null {
@@ -130,7 +138,7 @@ export function ReadingModeMenu({
           onValueChange={(value) => onSelect(value as ReadingModePreference)}
         >
           <DropdownMenuRadioItem value="auto" data-testid="reading-mode-item-auto">
-            {t('lentille.modes.auto')}
+            {preferenceLabel('auto', t)}
           </DropdownMenuRadioItem>
 
           {CATALOG_ENTRIES.filter((entry) => capabilities.availableModes.includes(entry.mode)).map((entry) => (
@@ -139,7 +147,7 @@ export function ReadingModeMenu({
               value={entry.preference}
               data-testid={`reading-mode-item-${entry.preference}`}
             >
-              {t(entry.labelKey)}
+              {preferenceLabel(entry.preference, t)}
             </DropdownMenuRadioItem>
           ))}
 
@@ -149,7 +157,7 @@ export function ReadingModeMenu({
             data-testid="reading-mode-item-riviere"
           >
             <div className="flex flex-col">
-              <span>{t(RIVER_ENTRY.labelKey)}</span>
+              <span>{preferenceLabel(RIVER_ENTRY.preference, t)}</span>
               {riverReason && (
                 <span
                   className="text-xs text-muted-foreground"

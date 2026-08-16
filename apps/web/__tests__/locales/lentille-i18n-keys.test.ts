@@ -55,6 +55,11 @@ const LENTILLE_KEYS = [
   'lentille.modes.script',
   'lentille.modes.resume',
   'lentille.modes.riviere',
+  // WL-108 : nom du mode `bubbles` — la décision du drapeau ÉTEINT. Rend
+  // `decisionModeLabel` (`components/conversations/lentille/lentille-mode-labels.ts`)
+  // exhaustif sur `ConversationReadingMode` plutôt que de prétendre un cas
+  // inatteignable ; pendant du `lentille.mode.name.bubbles` iOS.
+  'lentille.modes.bubbles',
   'lentille.modes.autoBadge',
   // Trifurcation amendée (REV-3/B3, S1) — WL-106/LWS-11 : la raison Rivière
   // grisée n'est plus une formule unique (l'ancienne paire

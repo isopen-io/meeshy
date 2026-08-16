@@ -732,6 +732,7 @@
         "script": "Script",
         "resume": "Summary",
         "riviere": "River",
+        "bubbles": "Bubbles",
         "autoBadge": "AUTO · {decision}",
         "river": {
           "never": "never in a direct conversation",
