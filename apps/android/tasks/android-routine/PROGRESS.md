@@ -1,5 +1,62 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Reel-viewer realtime room shipped** (slice `reels-realtime-room`) — the first
+> of the three follow-ups the previous slice (`post-detail-realtime-room`) explicitly deferred,
+> taken up deliberately rather than re-grepping for a fresh candidate: this routine's own standing
+> rule is to build on the prior run, and that run left a named, scoped, three-item list.
+>
+> **The gap is worse here than it was in post detail, and the gateway says so itself.**
+> `ReelsViewModel` had NO realtime handling of any kind — no `post:join`, no listener, its like
+> counter moved only through `toggleLike`'s optimistic arithmetic and never healed. Post detail at
+> least half-worked by incidental fallback (comments dual-broadcast to friend-feed rooms); the reel
+> viewer has no such luck, because `getReels` ranks by **affinity** and deliberately serves reels
+> from authors the viewer does *not* follow — so there is no friend feed room to fall back to, and
+> `post:liked`/`post:unliked` target `ROOMS.post` exclusively (`PostReactionHandler.ts`). Re-read
+> the gateway before writing anything, and its `commentBroadcastRooms` doc comment names the
+> occupant outright: « la post room (`ROOMS.post`) où se trouvent les viewers du détail / **reel
+> viewer** qui ne sont PAS amis de l'auteur ». Android's reel viewer was the one client that never
+> showed up.
+>
+> **`setCurrentReel(reelId: String?)` mirrors iOS `ReelsViewModel.currentId`'s `didSet`** —
+> leave the reel scrolled away from, join the one landed on. Idempotent (re-settling on the same id
+> is a no-op) and blank-safe (`""`/`null` leaves without joining), so it is safe to call on every
+> settle. The cursor lives in a plain private field, not in `ReelsUiState`: it is a subscription
+> cursor, not something the UI renders. `onCleared()` leaves the last room, matching
+> `PostDetailViewModel`'s own precedent.
+>
+> **Live like state reuses the established `mine: Boolean?` convention** rather than inventing one:
+> `likesCount` is the gateway's ABSOLUTE post-mutation count so applying it unconditionally *heals*
+> optimistic drift, while `isLiked` moves only when `event.userId` is the viewer's own id (another
+> user's like moves the number, never the heart). Same shape as `PostDetailViewModel.LiveOverlay`
+> and `FeedRealtimeHead.like`. Events naming a reel outside the loaded thread are inert for free —
+> `updateReel` maps by id.
+>
+> **`ReelsScreen` drives it from `snapshotFlow { pagerState.currentPage }`** (the `ChatScreen`
+> precedent for pager/list-geometry → ViewModel), keyed on the reel **ids** and not on
+> `state.reels`: the state list is a fresh instance on every optimistic like, so keying the
+> `LaunchedEffect` on it would restart the effect on every heart tap. `List<String>` structural
+> equality restarts it exactly when the thread actually changes.
+>
+> **Deliberately still scoped**: iOS also joins this room from `StoryViewerView` and
+> `FeedCommentsSheet`. Those remain the last two of the deferred three, re-recorded in
+> `feature-parity.md` rather than quietly absorbed — each has its own current-item lifecycle.
+>
+> **+12 tests — the `:feature:reels` module's FIRST test file** (it shipped with the test
+> dependencies declared and zero tests): join on settle; leave-then-join in order on a page change;
+> no re-join on re-settle; a blank/null id never joins; `null` after a join still leaves; a
+> viewer-own like/unlike moves count and heart; another user's like moves count only; a live
+> absolute count heals an optimistic toggle's drift; a live like touches only the reel it names;
+> an out-of-thread event is inert; a negative absolute count is clamped; an anonymous viewer never
+> has a like attributed to them.
+>
+> **Verified**: local Gradle is **unavailable in this container** (`dl.google.com` → `CONNECT
+> tunnel failed, response 403`, re-confirmed this run — `sdkmanager` cannot bootstrap, so no Gradle
+> task can run at all). Per `ROUTINE.md` §CI reality the **Android** check is the compiler for this
+> run; the gate is CI-green, recorded below, and nothing was merged before it.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=reels-realtime-room`
+> (streak reaches the alternation threshold — the NEXT run switches to `IOS_DETTE`).
+
 > On 2026-08-16 **Post-detail room real-time subscriptions shipped** (slice
 > `post-detail-realtime-room`) — closes `feature-parity.md`'s §"Post-detail room real-time
 > subscriptions" line, discovered while scanning for the next well-scoped candidate after
