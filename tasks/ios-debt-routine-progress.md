@@ -1034,3 +1034,89 @@ SDK-side PR #2868, safe-area PR #3041, ce dernier site PR #3050).
 
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-bubblegrid-displayscale`
   (commit séparé, poussé directement sur `main`).
+
+## 2026-08-16 — Build-break critique iOS (hors backlog numéroté) : `main` ne compilait plus
+
+**Découverte, pas planifiée** : au démarrage de ce run (streak Android=5 → bascule IOS_DETTE), la
+CI GitHub Actions « iOS » était rouge sur `main` (`bafc8b39d`, mon propre merge précédent) —
+`error: cannot find type 'PresenceState' in scope` dans `LivingSummaryModels.swift`. Confirmé local
+(`meeshy.sh build`) ET distant (log CI récupéré) avant d'investir l'effort — pas une supposition.
+Root cause : le chantier tiers « Lentille/Focal » (~26k lignes, fast-forward mentionné dans
+l'entrée précédente, « aucune action requise » à l'époque — le pbxproj n'avait simplement jamais
+été régénéré après cet ajout de fichiers, donc jamais compilé nulle part avant cette CI).
+
+**Priorisé au-dessus du slice initialement prévu** (migration onChange `MessageLanguageDetailView`,
+mise de côté via `git stash -u`, candidat pour un futur run) — directive CLAUDE.md « Autonomous Bug
+Fixing » : un build cassé bloque TOUTE la CI iOS, priorité absolue sur une dette cosmétique.
+
+**Root cause dominante** : `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (réglage Swift 6 du target
+app) isole implicitement tout type non explicitement `nonisolated` — le chantier Lentille/Focal
+n'avait pas suivi ce patron déjà documenté (`ReadingModePreferenceStore.swift:40-47`). Marqué
+`nonisolated` : `MessageDayLabel`, `BubbleContent`, `LentilleReadingModePreferenceCenter`,
+`LentilleFocusCandidateRegistry`, `NullAgentAssistProvider` (+ `@unchecked Sendable`, requis pour
+l'appel cross-actor dans `NullAssistProviderTests`). Plus ~6 bugs isolés sans rapport (ordre
+d'argument, `await` manquant, `Self` en argument par défaut, qualification de membre statique,
+`if` mutant dans un `@ViewBuilder`, signature de closure legacy) — voir commit `6190d5f80` pour le
+détail exhaustif.
+
+**Doublon partiel découvert en cours de route** : un autre agent avait déjà poussé sur `main`
+(PR #3062, « drive-by iOS CI unblock ») le MÊME fix d'un seul fichier (`import MeeshySDK` dans
+`LivingSummaryModels.swift`), en documentant explicitement les fichiers restants comme hors
+périmètre de son propre run. Merge d'`origin/main` dans la branche de fix : zéro conflit (fix
+identique, git l'a absorbé silencieusement). Leçon : même un « drive-by one-liner » mérite d'être
+recherché sur `main` avant de dupliquer l'investigation complète — voir
+`feedback_routine_prs_duplicate_same_fix.md`.
+
+**3 bugs de test réels supplémentaires trouvés et corrigés**, jamais exécutés avant faute de build
+vert :
+1. `A11yLabelComposerTests.test_compose_receivedMessage_omitsDeliveryStatusSegment` — texte
+   d'exemple `"Salut"` contient la sous-chaîne `"lu"`, faux-positif sur l'assertion `.contains("lu")`
+   indépendamment du statut de livraison réel. Texte changé pour `"Bonjour"`.
+2. `LentillePeekView.swift` — fallback redondant sur `conversation.lastMessagePreview` BRUT alors
+   que `resolvedLastMessagePreview` y retombe déjà en interne ; faisait rougir
+   `ConversationPreviewPrismSourceGuardTests` (garde mécanique sur tout lecteur brut non listé).
+   Fallback supprimé (dead code), pas d'ajout à l'allowlist — le vrai fix, pas une exception.
+3. `ConversationViewLoadingPhaseSourceGuardTests.test_bodyContent_coldStartSkeleton…` — le scan
+   pleine-fonction (`DeclarationBodyScanner.body(containing: "private var bodyContent")`) attrapait
+   un usage LÉGITIME et sans rapport de `viewModel.isLoadingInitial`, ajouté par WS-7
+   (`hasReachedOldest`, détection de frontière de pagination) dans la MÊME `@ViewBuilder`. Assertion
+   négative re-scopée au bloc `if` du skeleton lui-même (second appel à `DeclarationBodyScanner`
+   avec un marqueur plus spécifique) — la garde teste maintenant exactement ce qu'elle prétend
+   tester, sans dépendre de la position relative d'un code sans rapport dans le même fichier.
+
+**Piège locale re-confirmé en conditions réelles** (déjà documenté,
+`reference_simulator_locale_change_breaks_snapshot_baselines.md`) : le simulateur partagé
+`30BFD3A6-…` tournait en anglais (défaut, aucun override `AppleLanguages`/`AppleLocale`). Basculé en
+français pour faire disparaître ~16-20 échecs `MeeshyTests` asserant des littéraux français —
+casse alors 70 `MeeshyUITests` (snapshots baselinés en anglais). Reverti à l'anglais (état
+vérifié : 0 échec `MeeshyUITests`) ; les ~16-20 échecs français restent, pré-existants,
+JAMAIS vus par CI avant (compile cassé), hors périmètre de ce fix — documentés ci-dessous comme
+nouvel item de backlog plutôt que silencieusement ignorés.
+
+**Nouveau backlog découvert** (pré-existant, jamais vu par CI avant ce run, PAS causé par ce fix) :
+- `OfflineQueueTests.test_recoverLastUnsentPost_returnsMostRecentMatchingType` — flaky sur le
+  singleton `OfflineQueue.shared` en suite complète (0 échec en isolation x1) ; root cause non
+  élucidée (hypothèse : pollution d'état entre classes de test malgré `parallelizable = "NO"`,
+  investigation à approfondir).
+- ~16 `MeeshyTests` assertent des littéraux français contre `Bundle.main`/locale simulateur (ex.
+  `LentilleSectionIdentityTests`, `test_riviere_reason_isComposedFromLiveThresholds…`) — nécessitent
+  la migration vers le patron bundle-injectable déjà établi
+  (`feedback_localized_string_assertions_depend_on_simulator_locale.md`, déjà appliqué à
+  `SyncPillLabelsTests`/`PostStatAccessibilityTests` le 2026-07-26) pour devenir locale-agnostiques.
+- `test_joinFlowErrorKeys_resolveInAll5Locales` — `joinFlow.error.linkNotFound` et
+  `joinFlow.error.unknown` absentes de `Localizable.xcstrings` dans les 5 locales (échec
+  locale-INDÉPENDANT, pas lié au réglage simulateur ci-dessus) — clés à ajouter au catalogue.
+
+**Vérification** : `meeshy.sh build` vert, `xcodebuild build-for-testing` vert (2 runs, avant et
+après merge d'`origin/main`), `meeshy.sh test` phase 2 (contenu) passée de 3 échecs → 0 échec après
+les 3 fixes de test. Phases 0/1 : uniquement les échecs pré-existants documentés ci-dessus,
+confirmés sans rapport (fichiers jamais touchés par ce fix, ou reproductibles indépendamment de la
+locale).
+
+**Poussé DIRECTEMENT sur `main`** (`2789200a8`), sans PR — instruction explicite de l'utilisateur
+en cours de run : « commit au fur et à mesure exceptionnellement puis push sur main » pour que les
+autres sessions actives bénéficient immédiatement du build réparé plutôt que de redécouvrir/re-
+corriger le même problème en parallèle. CI GitHub Actions armée en observation post-push.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-build-break-focal-lentille`
+  (ce commit, poussé directement sur `main`).
