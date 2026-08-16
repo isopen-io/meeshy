@@ -365,7 +365,7 @@ export function registerMessagesRoutes(
           around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
-          include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
+          include_status: { type: 'string', enum: ['true', 'false'], description: 'Accepté pour compatibilité, sans effet. Les accusés NOMINATIFS par participant ne sont pas servis par cette liste — `messageSchema` ne les déclare pas, donc fast-json-stringify les a toujours retirés, et les charger revenait à payer une relation par page pour un tableau jeté. Les coches se peignent avec les compteurs agrégés déjà présents sur chaque message (deliveredCount / readCount / recipientCount), qui appliquent le gate showReadReceipts. Pour le détail nominatif, utiliser GET /conversations/:id/statuses, qui applique ce même gate.' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
           languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' }
         }
@@ -442,7 +442,6 @@ export function registerMessagesRoutes(
         around,
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
-        include_status: includeStatusStr = 'false',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
       } = request.query;
@@ -452,7 +451,6 @@ export function registerMessagesRoutes(
       // Parser les paramètres optionnels d'inclusion
       const includeReactions = includeReactionsStr === 'true';
       const includeTranslations = includeTranslationsStr === 'true';
-      const includeStatus = includeStatusStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
 
       // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
@@ -763,26 +761,6 @@ export function registerMessagesRoutes(
             createdAt: 'desc'
           },
           take: 20
-        };
-      }
-
-      if (includeStatus) {
-        // Charger les statusEntries détaillés (par utilisateur)
-        messageSelect.statusEntries = {
-          select: {
-            id: true,
-            userId: true,
-            participantId: true,
-            deliveredAt: true,
-            receivedAt: true,
-            readAt: true,
-            readDurationMs: true,
-            readDevice: true,
-            viewedOnceAt: true,
-            revealedAt: true,
-            createdAt: true,
-            updatedAt: true
-          }
         };
       }
 
@@ -1183,9 +1161,6 @@ export function registerMessagesRoutes(
         }
         if (includeReactions && message.reactions) {
           mappedMessage.reactions = message.reactions;
-        }
-        if (includeStatus && message.statusEntries) {
-          mappedMessage.statusEntries = message.statusEntries;
         }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;

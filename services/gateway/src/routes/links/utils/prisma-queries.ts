@@ -104,6 +104,10 @@ export async function findShareLinkByIdentifier(
 
 /**
  * Récupère les messages d'une conversation avec pagination
+ *
+ * Ne charge PAS `statusEntries` : ce chemin les ramenait sans qu'aucun lecteur
+ * ne les regarde — `formatMessageWithUnifiedSender`, seul formateur en aval,
+ * ne les recopie même pas. Une relation payée à chaque page pour rien.
  */
 export async function getConversationMessages(
   prisma: PrismaClient,
@@ -120,19 +124,23 @@ export async function getConversationMessages(
     take: limit,
     skip: offset,
     include: {
-      sender: senderInclude,
-      statusEntries: {
-        select: {
-          participantId: true,
-          readAt: true
-        }
-      }
+      sender: senderInclude
     }
   });
 }
 
 /**
  * Récupère les messages avec toutes les relations pour l'endpoint /messages
+ *
+ * Ne charge PAS `statusEntries` : `formatMessageWithSeparateSenders` les
+ * recopiait bien, mais `messageSchema` (`routes/links/types.ts`) ne les déclare
+ * pas — `fast-json-stringify` retirait le tableau juste après. Chargé, recopié,
+ * jeté, sur CHAQUE page de messages d'un lien partagé et sans opt-in possible.
+ *
+ * Les rétablir demanderait de déclarer le champ au schéma, donc de publier des
+ * accusés NOMINATIFS : à faire alors via le gate `showReadReceipts`
+ * (`MessageReadStatusService.filterReadReceiptVisible`), comme le fait déjà
+ * `GET /conversations/:id/statuses`.
  */
 export async function getConversationMessagesWithDetails(
   prisma: PrismaClient,
@@ -163,12 +171,6 @@ export async function getConversationMessagesWithDetails(
               createdAt: true
             }
           }
-        }
-      },
-      statusEntries: {
-        select: {
-          participantId: true,
-          readAt: true
         }
       },
       reactions: {

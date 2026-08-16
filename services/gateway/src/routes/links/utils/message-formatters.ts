@@ -67,7 +67,6 @@ export function formatMessageWithSeparateSenders(message: any) {
     replyToId: message.replyToId,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
-    statusEntries: message.statusEntries || [],
     sender: !isAnonymous ? {
       id: senderInfo.id,
       username: senderInfo.username,

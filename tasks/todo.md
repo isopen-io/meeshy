@@ -612,3 +612,48 @@ raisonnement aligner-plutôt-que-retirer, les deux doubles réparés, et la pist
 du cycle 43 : les deux émetteurs SOCKET du même événement ne consultent pas la
 préférence non plus, mais leur fan-out est collectif — établir d'abord si un
 `received` automatique relève de ce réglage.
+
+# Cycle 43 — la piste du cycle 42 était fausse ; le sérialiseur cachait une dépense
+
+## Constat
+
+- [x] Piste héritée VÉRIFIÉE puis écartée : les deux émetteurs socket de
+      `read-status:updated` consultent bien `showReadReceipts` — le cycle 42 se
+      trompait sur les deux
+- [x] Écart réel trouvé à la place, et NON livré : côté socket la préférence
+      coupe le `markMessagesAsReceived` (l'ÉTAT), là où les trois portes REST
+      enregistrent et ne taisent que la diffusion — l'intention n'est donc
+      atteinte par personne, l'état dépend du transport
+- [x] Défaut livré : trois `select` chargent `statusEntries` que
+      `fast-json-stringify` retire faute d'être déclaré au schéma — chargé,
+      parfois recopié, jeté
+- [x] Deux des trois sites payaient la relation SANS opt-in, sur chaque page de
+      messages d'un lien partagé
+- [x] Aucun client du dépôt ne demande `include_status` ; le champ était pourtant
+      promis jusque dans `@meeshy/shared`
+
+## Correctifs
+
+- [x] Trois `select` + le mapping + la recopie du formateur de lien supprimés
+- [x] `include_status` conservé et ACCEPTÉ (aucun client rejeté), description
+      corrigée, renvoi vers la voie gatée `GET /conversations/:id/statuses`
+- [x] La raison écrite aux trois endroits où quelqu'un voudrait les rétablir —
+      déclarer le champ au schéma publierait des accusés nominatifs SANS gate
+- [x] Doc `@meeshy/shared` corrigée (elle promettait un champ jamais servi)
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif
+- [x] Garde de contrat sur un VRAI Fastify — les doubles sans sérialiseur ne
+      pouvaient pas voir le défaut (3e cycle consécutif sur ce motif)
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : 727 suites, 17 776 tests, tout vert
+- [x] CHANGELOG + journal d'audit (cycle43) + leçon 278
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle43.md` — pourquoi la piste
+héritée ne tenait pas, le tableau des trois sites (opt-in / recopié / servi), le
+piège qui survit au correctif, les trois options écartées, et la piste du
+cycle 44 : établir si `showReadReceipts` gouverne les `received` avant de
+retourner le gate d'écriture des deux émetteurs socket.
