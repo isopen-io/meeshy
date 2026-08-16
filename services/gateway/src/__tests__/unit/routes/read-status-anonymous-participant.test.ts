@@ -24,6 +24,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/glo
 import Fastify, { FastifyInstance } from 'fastify';
 import messageReadStatusRoutes from '../../../routes/message-read-status';
 import { findFirstIn, type MongoDocument } from '../../helpers/mongo-where';
+import { makeChainableIO } from '../../helpers/chainable-io';
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439012';
 const MESSAGE_ID = '507f1f77bcf86cd799439013';
@@ -142,6 +143,13 @@ describe('read-status routes — un participant sans compte', () => {
   beforeAll(async () => {
     app = Fastify({ logger: false });
     app.decorate('prisma', mockPrisma);
+    // Un `io` est nécessaire pour que la question de la confidentialité se pose
+    // : l'unité partagée abandonne avant de la poser quand aucun socket n'est
+    // joignable — il n'y aurait rien à taire. Ce double ne sert qu'à ouvrir le
+    // chemin ; les assertions d'émission vivent dans le second `describe`.
+    app.decorate('socketIOHandler', {
+      getManager: () => ({ getIO: () => makeChainableIO() })
+    } as never);
     await app.register(messageReadStatusRoutes);
     await app.ready();
   });
@@ -276,7 +284,7 @@ describe('read-status routes — un participant sans compte', () => {
 //   • `ReadStatusUpdateEvent.userId` (iOS, MessageSocketManager.swift) — `String?`
 //   • `ReadStatusUpdatedEvent.userId` (Android, SocketEvents.kt) — `String? = null`
 //
-// `broadcastReadStatusUpdate` recevait UN `userId: string` et le servait à DEUX
+// `broadcastReadStatus` recevait UN `userId: string` et le servait à DEUX
 // rôles opposés : le champ du contrat, et la CLÉ DE ROOM du badge — laquelle
 // vaut `userId ?? participantId` (`participantUserRoomTargets`, et
 // `AuthHandler` qui fait rejoindre `ROOMS.user(Participant.id)` aux sockets

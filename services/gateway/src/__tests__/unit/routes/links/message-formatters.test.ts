@@ -106,6 +106,19 @@ describe('formatMessageWithUnifiedSender', () => {
 });
 
 describe('formatMessageWithSeparateSenders', () => {
+  // Le formateur recopiait `statusEntries` — des accusés NOMINATIFS — que
+  // `messageSchema` (routes/links/types.ts) ne déclare pas, donc que
+  // `fast-json-stringify` retirait juste après. Ne plus les recopier retire du
+  // même geste la dépense ET le piège : le jour où quelqu'un déclarerait le
+  // champ au schéma pour « réparer » l'absence, il publierait des accusés sans
+  // le gate `showReadReceipts` que les cinq lecteurs du service appliquent.
+  it("ne recopie pas les accusés nominatifs que le schéma de sortie ne déclare pas", () => {
+    const result = formatMessageWithSeparateSenders(
+      makeMessage({ statusEntries: [{ participantId: 'part_001', readAt: new Date() }] })
+    );
+    expect(result).not.toHaveProperty('statusEntries');
+  });
+
   it('populates sender for registered user, null anonymousSender', () => {
     const result = formatMessageWithSeparateSenders(makeMessage());
     expect(result.sender).not.toBeNull();

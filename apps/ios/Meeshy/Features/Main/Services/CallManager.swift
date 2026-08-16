@@ -1209,7 +1209,14 @@ final class CallManager: ObservableObject {
                 }
                 self.currentCallId = ack.callId
                 Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
-                self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                // Audit fix (calling-stack audit 2026-08-15): abort setup on
+                // a genuine peer-connection creation failure instead of
+                // silently proceeding — see WebRTCService.configure's doc.
+                guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else {
+                    Logger.calls.error("[CALL_SETUP] outgoing webRTC.configure failed — aborting")
+                    self.failCall("Failed to initiate call")
+                    return
+                }
                 self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
                 self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
@@ -1309,7 +1316,13 @@ final class CallManager: ObservableObject {
         // and fetches real TURN credentials over the socket on its own
         // (requestFreshTurnCredentials → emitRequestIceServers), same as every
         // other path that lacks a payload-embedded ICE server list.
-        webRTCService.configure(isVideo: isVideo, iceServers: nil)
+        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // peer-connection creation failure instead of silently proceeding.
+        guard webRTCService.configure(isVideo: isVideo, iceServers: nil) else {
+            Logger.calls.error("[CALL_SETUP] rejoin webRTC.configure failed — aborting")
+            failCall("Failed to configure WebRTC")
+            return false
+        }
         armTurnCredentialsAfterConfigure(callId: callId, iceServers: nil)
         applyNegotiationRole()
         configureAudioSession()
@@ -1430,7 +1443,13 @@ final class CallManager: ObservableObject {
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
-        webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // peer-connection creation failure instead of silently proceeding.
+        guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
+            Logger.calls.error("[CALL_SETUP] incoming (VoIP) webRTC.configure failed — aborting")
+            failCall("Failed to configure WebRTC")
+            return
+        }
         armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
@@ -1713,7 +1732,13 @@ final class CallManager: ObservableObject {
         }
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
-        webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // peer-connection creation failure instead of silently proceeding.
+        guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
+            Logger.calls.error("[CALL_SETUP] incoming (notification) webRTC.configure failed — aborting")
+            failCall("Failed to configure WebRTC")
+            return
+        }
         armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         applyNegotiationRole()
         configureAudioSession()

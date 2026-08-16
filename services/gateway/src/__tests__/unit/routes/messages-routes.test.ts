@@ -894,12 +894,19 @@ describe('GET /conversations/:id/messages', () => {
     expect(selectArg.reactions).toBeDefined();
   });
 
-  it('includeStatus=true adds statusEntries to select', async () => {
+  // `include_status=true` ne charge RIEN de plus : les entrées de statut
+  // n'ont jamais atteint le client, `fast-json-stringify` les retirant faute
+  // d'être déclarées dans `messageSchema`. Les charger revenait à payer une
+  // requête de relation par page — jusqu'à `messages × participants` documents
+  // — pour un tableau jeté à la sérialisation. Cf. la garde de contrat dans
+  // `message-status-entries-contract.test.ts`, qui l'établit sur un vrai
+  // Fastify plutôt que sur ce double sans sérialiseur.
+  it("includeStatus=true ne charge PAS statusEntries — la réponse ne les porte pas", async () => {
     prisma.message.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { include_status: 'true' } }), reply);
     const selectArg = (prisma.message.findMany.mock.calls[0][0] as any).select;
-    expect(selectArg.statusEntries).toBeDefined();
+    expect(selectArg.statusEntries).toBeUndefined();
   });
 
   it('include_translations=false skips translations in select', async () => {
@@ -2252,13 +2259,17 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(reply._body.data[0].reactions).toEqual([{ emoji: '👍', count: 2 }]);
   });
 
-  it('includeStatus=true: statusEntries field mapped when present on message', async () => {
+  // Ce témoin affirmait l'inverse, et c'est LUI qui a masqué le défaut : ce
+  // double n'a pas de sérialiseur, donc il voyait un champ que la production
+  // retire depuis toujours. Un double qui décrit un autre programme que celui
+  // qu'on livre — même famille que les deux doubles réparés au cycle 42.
+  it("includeStatus=true : le mapping ne recopie plus des entrées que le sérialiseur retire", async () => {
     const msg = makeMessage({ statusEntries: [{ participantId: PART_ID, status: 'read' }] });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { include_status: 'true' } }), reply);
-    expect(reply._body.data[0].statusEntries).toEqual([{ participantId: PART_ID, status: 'read' }]);
+    expect(reply._body.data[0].statusEntries).toBeUndefined();
   });
 
   it('includeReplies=true: replyTo.sender username resolved from nested user object', async () => {

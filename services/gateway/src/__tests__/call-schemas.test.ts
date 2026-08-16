@@ -244,6 +244,62 @@ describe('Call Validation Schemas', () => {
       expect(result.success).toBe(true);
       expect(result.success && (result.data.signal as Record<string, unknown>).someUndeclaredField).toBeUndefined();
     });
+
+    // Calling-stack audit 2026-08-15 — `from`/`to`/`sdpMid` were the only
+    // fields in this "strict size limits" schema without a `.max()`, leaving
+    // Socket.IO's 1MB default frame size as the sole cap on a relayed field.
+    it('rejects an oversized `from` field', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'x'.repeat(129),
+          to: 'user-2',
+          candidate: '',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects an oversized `to` field', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'x'.repeat(129),
+          candidate: '',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('accepts a `from`/`to` at exactly the 128-char boundary', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'x'.repeat(128),
+          to: 'y'.repeat(128),
+          candidate: '',
+        },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an oversized `sdpMid` field', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          sdpMid: 'x'.repeat(257),
+        },
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('socketHeartbeatSchema', () => {
