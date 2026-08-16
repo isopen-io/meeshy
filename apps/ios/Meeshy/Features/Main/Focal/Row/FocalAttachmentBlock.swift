@@ -7,12 +7,12 @@ import MeeshyUI
 /// Une cellule de la grille média du Fil : largeur/hauteur en points,
 /// `overflowCount` (`> 0` seulement sur la dernière cellule visible d'une
 /// grille `> 4` pièces jointes — le badge `+N`).
-nonisolated public struct FocalMediaSlot: Equatable {
-    public let width: CGFloat
-    public let height: CGFloat
-    public let overflowCount: Int
+nonisolated struct FocalMediaSlot: Equatable {
+    let width: CGFloat
+    let height: CGFloat
+    let overflowCount: Int
 
-    public init(width: CGFloat, height: CGFloat, overflowCount: Int = 0) {
+    init(width: CGFloat, height: CGFloat, overflowCount: Int = 0) {
         self.width = width
         self.height = height
         self.overflowCount = overflowCount
@@ -39,14 +39,14 @@ nonisolated public struct FocalMediaSlot: Equatable {
 /// cadre dans lequel la cellule est posée, la seule valeur qui soit un
 /// littéral réel de `BubbleStandardLayout+Media.swift`. Documenté comme
 /// choix de modélisation, pas comme fait mesuré.
-nonisolated public enum FocalMediaGridLayout {
+nonisolated enum FocalMediaGridLayout {
 
     /// Miroir de `BubbleStandardLayout.gridMaxWidth` (`:169`).
-    public static let gridMaxWidth: CGFloat = 300
+    static let gridMaxWidth: CGFloat = 300
     /// Miroir de `BubbleStandardLayout.gridSpacing` (`:170`).
-    public static let gridSpacing: CGFloat = 2
+    static let gridSpacing: CGFloat = 2
 
-    public static func slots(for count: Int) -> [FocalMediaSlot] {
+    static func slots(for count: Int) -> [FocalMediaSlot] {
         guard count > 0 else { return [] }
         let halfW = (gridMaxWidth - gridSpacing) / 2
 
@@ -92,7 +92,7 @@ nonisolated public enum FocalMediaGridLayout {
 /// État de protection d'UNE pièce jointe, à un instant `isRevealed` donné —
 /// fonction PURE, testable sans SwiftUI (même discipline que
 /// `FocalMediaGridLayout`/`FocalAudioRouting`).
-nonisolated public enum FocalMediaProtectionState: Equatable {
+nonisolated enum FocalMediaProtectionState: Equatable {
     /// Rien à masquer — la case `mediaLayer` se rend normalement.
     case none
     /// Flouté/masqué, PAS révélé — `isViewOnce` distingue le libellé
@@ -102,14 +102,14 @@ nonisolated public enum FocalMediaProtectionState: Equatable {
     case blurred(isViewOnce: Bool)
 }
 
-nonisolated public enum FocalMediaProtection {
+nonisolated enum FocalMediaProtection {
     /// `attachment.isBlurred || attachment.isViewOnce`, ET pas encore
     /// révélé ⇒ `.blurred`. Une fois révélé (`isRevealed == true`), TOUJOURS
     /// `.none` — y compris pour `isViewOnce`, le média redevient net le
     /// temps de la fenêtre de révélation (portée par `BubbleBlurRevealController`,
     /// réutilisé tel quel côté vue, §WS-0-adjacent : lifecycle PUR, non
     /// `fileprivate`).
-    public static func state(for attachment: MessageAttachment, isRevealed: Bool) -> FocalMediaProtectionState {
+    static func state(for attachment: MessageAttachment, isRevealed: Bool) -> FocalMediaProtectionState {
         guard !isRevealed, attachment.isBlurred || attachment.isViewOnce else { return .none }
         return .blurred(isViewOnce: attachment.isViewOnce)
     }
@@ -119,7 +119,7 @@ nonisolated public enum FocalMediaProtection {
     /// ET qu'un compte existe déjà (`viewOnceCount > 0`), INDÉPENDAMMENT de
     /// `isRevealed` (le compte reste visible même après révélation — même
     /// règle que la source réelle).
-    public static func showsViewOnceBadge(for attachment: MessageAttachment) -> Bool {
+    static func showsViewOnceBadge(for attachment: MessageAttachment) -> Bool {
         attachment.isViewOnce && attachment.viewOnceCount > 0
     }
 }

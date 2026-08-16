@@ -155,6 +155,6 @@ nonisolated enum LentilleReadingModeContext {
 /// vit donc ici, au plus près de ses trois consommateurs, sur le modèle des
 /// autres `.shared` de l'app (`PresenceManager.shared`,
 /// `ConversationLockManager.shared`).
-enum LentilleReadingModePreferenceCenter {
+nonisolated enum LentilleReadingModePreferenceCenter {
     static let shared: ReadingModePreferenceStoring = LocalReadingModePreferenceStore()
 }

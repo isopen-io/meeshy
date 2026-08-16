@@ -7,7 +7,7 @@ import MeeshyUI
 /// Les 4 modes de rendu audio du contrat §WS-3 (+ `.none`/`.standalone`,
 /// résidus structurels — voir doc de `FocalAudioRouting.mode(for:)`).
 /// `.none` = aucune pièce jointe audio dans `content`.
-nonisolated public enum FocalAudioMode: Equatable {
+nonisolated enum FocalAudioMode: Equatable {
     case none
     /// `content.attachments == .audio(items)` pur, `items.count > 1`.
     case carousel
@@ -37,13 +37,13 @@ nonisolated public enum FocalAudioMode: Equatable {
 /// ici à l'identique à partir de l'API PUBLIQUE de `BubbleContent`
 /// (`isEmojiOnly`, `hasTextOrNonMediaContent`, `reply`, `audioHostsReply`,
 /// `visualHostsReply`) — même logique, sans dépendre d'un type `private`.
-nonisolated public enum FocalAudioRouting {
+nonisolated enum FocalAudioRouting {
 
     /// Pièces jointes audio de `content`, quel que soit le cas
     /// (`.audio`/`.mixed`) — miroir de `audioAttachments` côté
     /// `BubbleStandardLayout` (calculé depuis `message.attachments` là-bas ;
     /// ici depuis `content.attachments`, la même source une fois résolue).
-    public static func audioAttachments(in content: BubbleContent) -> [MessageAttachment] {
+    static func audioAttachments(in content: BubbleContent) -> [MessageAttachment] {
         switch content.attachments {
         case .audio(let items): return items
         case .mixed(_, let audio, _): return audio
@@ -51,7 +51,7 @@ nonisolated public enum FocalAudioRouting {
         }
     }
 
-    public static func visualAttachments(in content: BubbleContent) -> [MessageAttachment] {
+    static func visualAttachments(in content: BubbleContent) -> [MessageAttachment] {
         switch content.attachments {
         case .visualGrid(let items): return items
         case .mixed(let visual, _, _): return visual
@@ -59,7 +59,7 @@ nonisolated public enum FocalAudioRouting {
         }
     }
 
-    public static func mode(for content: BubbleContent) -> FocalAudioMode {
+    static func mode(for content: BubbleContent) -> FocalAudioMode {
         let audios = audioAttachments(in: content)
         guard !audios.isEmpty else { return .none }
 

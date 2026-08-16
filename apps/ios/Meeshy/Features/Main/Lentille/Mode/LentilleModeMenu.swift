@@ -164,8 +164,8 @@ struct LentilleModeMenu: View {
         // `+Overlays.swift` : `Label("\(category.name) \u{2713}", …)`) plutôt
         // qu'une seconde `Image` sœur — un `Menu`/`.contextMenu` natif ne
         // garantit pas la mise en page d'un item à deux images.
-        var title = entry.disabledReason.map { "\(entry.title) — \($0)" } ?? entry.title
-        if entry.isSelected { title += " \u{2713}" }
+        let baseTitle = entry.disabledReason.map { "\(entry.title) — \($0)" } ?? entry.title
+        let title = entry.isSelected ? baseTitle + " \u{2713}" : baseTitle
         switch entry.icon {
         case .system(let name):
             Label(title, systemImage: name)

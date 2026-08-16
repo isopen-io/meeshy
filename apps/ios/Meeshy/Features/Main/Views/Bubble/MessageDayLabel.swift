@@ -18,7 +18,7 @@ import Foundation
 /// La comparaison se fait sur la frontière minuit du calendrier fourni :
 /// deux dates qui n'occupent pas la même journée locale sont considérées
 /// distantes d'au moins un jour, même si leur écart en secondes < 24h.
-enum MessageDayLabel {
+nonisolated enum MessageDayLabel {
 
     static func label(
         for date: Date,
@@ -76,7 +76,7 @@ enum MessageDayLabel {
 private extension String {
     /// Capitalise uniquement la première lettre — laisse intacts "mai", "lundi"
     /// après le premier mot (`.capitalized` capitaliserait tous les mots).
-    func firstLetterUppercased(locale: Locale) -> String {
+    nonisolated func firstLetterUppercased(locale: Locale) -> String {
         guard let first = first else { return self }
         return String(first).uppercased(with: locale) + dropFirst()
     }

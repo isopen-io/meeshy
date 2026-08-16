@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Aller-retour Auto ⇆ forcé sur le store (contrat LWS-8/I-072, §LWS-8
@@ -83,11 +84,13 @@ final class ModePreferenceRoundTripTests: XCTestCase {
     func test_store_roundTrip_forcedBackToAuto_isWrittenAndReadBack() async {
         await withIsolatedStore { store in
             await store.set(conversationId: "conv-1", value: .resume, optimistic: true)
-            XCTAssertEqual(await store.get(conversationId: "conv-1"), .resume, "Prérequis : le forçage a pris.")
+            let forced = await store.get(conversationId: "conv-1")
+            XCTAssertEqual(forced, .resume, "Prérequis : le forçage a pris.")
 
             await store.set(conversationId: "conv-1", value: .auto, optimistic: true)
+            let backToAuto = await store.get(conversationId: "conv-1")
             XCTAssertEqual(
-                await store.get(conversationId: "conv-1"), .auto,
+                backToAuto, .auto,
                 "Revenir sur Auto doit être un aller-retour COMPLET, pas un état qui reste " +
                 "coincé sur le dernier mode forcé."
             )
@@ -101,9 +104,11 @@ final class ModePreferenceRoundTripTests: XCTestCase {
     func test_store_isolatesPreferenceByConversation() async {
         await withIsolatedStore { store in
             await store.set(conversationId: "conv-a", value: .script, optimistic: true)
-            XCTAssertEqual(await store.get(conversationId: "conv-a"), .script)
+            let conversationA = await store.get(conversationId: "conv-a")
+            XCTAssertEqual(conversationA, .script)
+            let conversationB = await store.get(conversationId: "conv-b")
             XCTAssertEqual(
-                await store.get(conversationId: "conv-b"), .auto,
+                conversationB, .auto,
                 "Une conversation jamais touchée ne doit RIEN hériter du forçage d'une autre."
             )
         }

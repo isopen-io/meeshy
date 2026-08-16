@@ -1216,7 +1216,7 @@ final class MessageListViewController: UIViewController {
                     self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                 }
                 focalActions.onOpenProfile = openProfileHandler
-                focalActions.onViewStory = (senderRingState != .none) ? { viewSenderStoryHandler?(senderId) } : nil
+                focalActions.onViewStory = (senderRingState != .none) ? { _ in viewSenderStoryHandler?(senderId) } : nil
                 focalActions.onCallBack = { _ in
                     guard let summary = message.callSummary else { return }
                     callBackHandler?(summary)

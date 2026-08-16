@@ -27,7 +27,7 @@ final class LentilleFocusCardTests: XCTestCase {
 
     private func makeConversation(
         unreadCount: Int = 0,
-        lastReadAt: Date? = Self.now,
+        lastReadAt: Date? = LentilleFocusCardTests.now,
         type: MeeshyConversation.ConversationType = .group
     ) -> MeeshyConversation {
         MeeshyConversation(
@@ -47,7 +47,7 @@ final class LentilleFocusCardTests: XCTestCase {
         preference: ReadingModeOrchestrator.ReadingModePreference = .auto,
         isAnonymous: Bool = false,
         isLentilleFlagEnabled: Bool = true,
-        now: Date = Self.now
+        now: Date = LentilleFocusCardTests.now
     ) -> ReadingModeOrchestrator.OrchestratorDecision {
         LentilleReadingModeContext.decision(
             for: conversation,

@@ -5,7 +5,7 @@ import MeeshySDK
 /// puis lu par les sous-vues. Aucune sous-vue ne lit `MeeshyMessage` directement —
 /// elles lisent `BubbleContent`. Cela garantit qu'un message simple ne paie
 /// que pour ce qu'il affiche.
-struct BubbleContent: Equatable {
+nonisolated struct BubbleContent: Equatable {
     enum Kind: Equatable {
         case standard
         case deleted

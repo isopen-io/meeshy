@@ -61,70 +61,70 @@ import MeeshyUI
 /// à avant cette extension. Flagué pour confirmation orchestrateur : ajouter
 /// UN champ pour honorer une consigne explicite de CE lot n'est pas un
 /// remodelage de la forme figée.
-public struct FocalRowInput: Equatable {
+struct FocalRowInput: Equatable {
     /// Les deux densités de la rangée plate (contrat Focal §3.1 :
     /// `ConversationReadingMode.usesFlatRow`). `.summary`/`.river`/`.bubbles`
     /// n'ont pas de rangée plate — jamais représentés ici.
-    public enum Density: String, Equatable {
+    enum Density: String, Equatable {
         case focal
         case script
     }
 
-    public let localId: String
-    public let serverId: String?
+    let localId: String
+    let serverId: String?
     /// Réutilisé VERBATIM (contrat §3.6) — aucune seconde résolution de
     /// langue : `content.translation` porte déjà `preferredContent`/
     /// `activeLangCode` résolus en amont par `BubbleContentBuilder`.
-    public let content: BubbleContent
-    public let density: Density
+    let content: BubbleContent
+    let density: Density
 
     // MARK: - Identité de tête de groupe
 
-    public let isFirstInGroup: Bool
-    public let senderId: String
-    public let senderDisplayName: String
-    public let senderUsername: String?
-    public let senderAvatarURL: String?
-    public let senderThumbHash: String?
-    public let senderColorHex: String
-    public let senderPresence: PresenceState
-    public let senderStoryRing: StoryRingState
-    public let senderMoodEmoji: String?
+    let isFirstInGroup: Bool
+    let senderId: String
+    let senderDisplayName: String
+    let senderUsername: String?
+    let senderAvatarURL: String?
+    let senderThumbHash: String?
+    let senderColorHex: String
+    let senderPresence: PresenceState
+    let senderStoryRing: StoryRingState
+    let senderMoodEmoji: String?
 
     // MARK: - Contexte visuel (primitifs uniquement — règle « leaf views »)
 
-    public let accentHex: String
-    public let isDark: Bool
-    public let isDirect: Bool
-    public let isRightToLeft: Bool
+    let accentHex: String
+    let isDark: Bool
+    let isDirect: Bool
+    let isRightToLeft: Bool
 
     // MARK: - États
 
-    public let isOptimistic: Bool
-    public let isAgentAuthored: Bool
-    public let showsAgentGrammar: Bool
-    public let highlightSearchTerm: String?
-    public let mentionDisplayNames: [String: String]
-    public let userLanguages: (regional: String?, custom: String?)
-    public let activeDisplayLangCode: String?
-    public let secondaryLangCode: String?
-    public let voiceConsentMissing: Bool
+    let isOptimistic: Bool
+    let isAgentAuthored: Bool
+    let showsAgentGrammar: Bool
+    let highlightSearchTerm: String?
+    let mentionDisplayNames: [String: String]
+    let userLanguages: (regional: String?, custom: String?)
+    let activeDisplayLangCode: String?
+    let secondaryLangCode: String?
+    let voiceConsentMissing: Bool
 
     // MARK: - Enrichissements audio (mêmes dictionnaires que la bulle)
 
-    public let transcription: String?
-    public let translatedAudios: [MessageTranslatedAudio]
+    let transcription: String?
+    let translatedAudios: [MessageTranslatedAudio]
     /// CORRIGÉ vs le texte littéral du contrat — voir doc de tête.
-    public let allAudioItems: [ConversationViewModel.AudioItem]
-    public let conversationName: String
+    let allAudioItems: [ConversationViewModel.AudioItem]
+    let conversationName: String
 
     // MARK: - Effets (F-083ter, F15)
 
     /// AJOUTÉ (pas dans le contrat §3.6 littéral) — voir doc de tête pour la
     /// justification et la garantie de compatibilité du site de montage.
-    public let effects: MessageEffects
+    let effects: MessageEffects
 
-    public init(
+    init(
         localId: String,
         serverId: String?,
         content: BubbleContent,
@@ -201,7 +201,7 @@ public struct FocalRowInput: Equatable {
     /// (`ConversationViewModel.AudioItem` n'est PAS `Equatable` — comparé
     /// par `id` seul, comme tout gate de re-render dans ce dépôt qui touche
     /// des collections issues du ViewModel, ex. `BubbleContent.Attachments`).
-    public static func == (lhs: FocalRowInput, rhs: FocalRowInput) -> Bool {
+    static func == (lhs: FocalRowInput, rhs: FocalRowInput) -> Bool {
         lhs.localId == rhs.localId
             && lhs.serverId == rhs.serverId
             && lhs.content == rhs.content
@@ -238,31 +238,31 @@ public struct FocalRowInput: Equatable {
 }
 
 /// Sac de callbacks — EXCLU de l'`Equatable` (patron `BubbleFooterActions`).
-public struct FocalRowActions {
-    public var onToggleReaction: ((String) -> Void)?
-    public var onAddReaction: ((String) -> Void)?
-    public var onOpenReactPicker: ((String) -> Void)?
-    public var onShowReactions: ((String) -> Void)?
-    public var onShowReadStatus: ((String) -> Void)?
-    public var onRetry: ((String) -> Void)?
-    public var onReplyTap: ((String) -> Void)?
-    public var onStoryReplyTap: ((String) -> Void)?
-    public var onMediaTap: ((MessageAttachment) -> Void)?
-    public var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
-    public var onReactToAttachment: ((String, String) -> Void)?
-    public var onRequestTranslation: ((String, String) -> Void)?
-    public var onShowTranslationDetail: ((String) -> Void)?
-    public var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
-    public var onSetSecondaryLanguage: ((String, String?) -> Void)?
-    public var onPlayAudio: ((String) -> Void)?
+struct FocalRowActions {
+    var onToggleReaction: ((String) -> Void)?
+    var onAddReaction: ((String) -> Void)?
+    var onOpenReactPicker: ((String) -> Void)?
+    var onShowReactions: ((String) -> Void)?
+    var onShowReadStatus: ((String) -> Void)?
+    var onRetry: ((String) -> Void)?
+    var onReplyTap: ((String) -> Void)?
+    var onStoryReplyTap: ((String) -> Void)?
+    var onMediaTap: ((MessageAttachment) -> Void)?
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    var onReactToAttachment: ((String, String) -> Void)?
+    var onRequestTranslation: ((String, String) -> Void)?
+    var onShowTranslationDetail: ((String) -> Void)?
+    var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
+    var onSetSecondaryLanguage: ((String, String?) -> Void)?
+    var onPlayAudio: ((String) -> Void)?
     /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
     /// dans le dépôt) — voir doc de tête de fichier.
-    public var onOpenProfile: ((ProfileSheetUser) -> Void)?
-    public var onViewStory: ((String) -> Void)?
-    public var onCallBack: ((String) -> Void)?
-    public var onLongPressCallDetail: ((String) -> Void)?
+    var onOpenProfile: ((ProfileSheetUser) -> Void)?
+    var onViewStory: ((String) -> Void)?
+    var onCallBack: ((String) -> Void)?
+    var onLongPressCallDetail: ((String) -> Void)?
 
-    public init(
+    init(
         onToggleReaction: ((String) -> Void)? = nil,
         onAddReaction: ((String) -> Void)? = nil,
         onOpenReactPicker: ((String) -> Void)? = nil,
