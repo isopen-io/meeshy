@@ -255,6 +255,14 @@ public data class ConversationPrefsPayload(
      * the same as absent ([ApiConversation.displayTitle]/[ConversationFilter]).
      */
     val customName: String? = null,
+    /**
+     * The conversation's favorite-reaction emoji (drives the FAVORITES filter
+     * tab). Same null-vs-empty-string convention as [customName]: `null` means
+     * "unrelated snapshot", an explicit `""` means "clear the favorite" and
+     * reaches the gateway as a real clear rather than being dropped by the
+     * shared `explicitNulls = false` encoder.
+     */
+    val reaction: String? = null,
 )
 
 /**

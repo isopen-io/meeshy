@@ -113,6 +113,15 @@ class ConversationFiltersTest {
     }
 
     @Test
+    fun favorites_filter_treats_a_blank_reaction_as_absent() {
+        // A cleared reaction is stored as "" (not null — see
+        // ConversationRepository.setReactionOptimistic's explicitNulls=false
+        // workaround), so the filter must treat blank the same as absent.
+        val convs = listOf(conversation(id = "cleared", reaction = ""))
+        assertThat(convs.ids(ConversationFilter.FAVORITES)).isEmpty()
+    }
+
+    @Test
     fun inactive_conversations_are_hidden_from_non_archived_filters() {
         val convs = listOf(conversation(id = "ended", active = false))
         assertThat(convs.ids(ConversationFilter.ALL)).isEmpty()
