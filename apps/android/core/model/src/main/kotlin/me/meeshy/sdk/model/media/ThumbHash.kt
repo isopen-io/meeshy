@@ -399,4 +399,16 @@ object ThumbHash {
         (255.0 * value.coerceIn(0.0, 1.0)).toInt().coerceIn(0, 255).toByte()
 
     private fun roundHalfUp(value: Double): Int = floor(value + 0.5).toInt()
+
+    /**
+     * Decodes the wire form of a ThumbHash (`ApiPostMedia.thumbHash`, base64) — `null`
+     * for a blank value or anything [decode] would reject (malformed base64, a hash
+     * too short for its own header), never throws. The blur-placeholder call site
+     * (feed images, avatars, story slides, …) treats a bad hash exactly like an
+     * absent one: fall back to the existing flat-tint placeholder, not a crash.
+     */
+    fun decodeBase64(base64: String?): ThumbHashImage? {
+        if (base64.isNullOrBlank()) return null
+        return runCatching { decode(java.util.Base64.getDecoder().decode(base64)) }.getOrNull()
+    }
 }

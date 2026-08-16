@@ -315,4 +315,35 @@ class ThumbHashTest {
         assertThat(image.height).isEqualTo(32)
         assertThat(image.rgba.size).isEqualTo(image.width * image.height * 4)
     }
+
+    // --- decodeBase64 (the wire form: `ApiPostMedia.thumbHash`) --------------------
+
+    @Test
+    fun `decodeBase64 decodes a well-formed base64 hash round-tripped through encode`() {
+        val hash = ThumbHash.encode(2, 2, ByteArray(16) { 128.toByte() })
+        val base64 = java.util.Base64.getEncoder().encodeToString(hash)
+
+        val image = ThumbHash.decodeBase64(base64)
+
+        assertThat(image).isNotNull()
+        assertThat(image!!.rgba.size).isEqualTo(image.width * image.height * 4)
+    }
+
+    @Test
+    fun `decodeBase64 returns null for a null or blank value`() {
+        assertThat(ThumbHash.decodeBase64(null)).isNull()
+        assertThat(ThumbHash.decodeBase64("")).isNull()
+        assertThat(ThumbHash.decodeBase64("   ")).isNull()
+    }
+
+    @Test
+    fun `decodeBase64 returns null for malformed base64 rather than throwing`() {
+        assertThat(ThumbHash.decodeBase64("not valid base64!!!")).isNull()
+    }
+
+    @Test
+    fun `decodeBase64 returns null for a hash too short to decode rather than throwing`() {
+        val tooShort = java.util.Base64.getEncoder().encodeToString(byteArrayOf(1, 2))
+        assertThat(ThumbHash.decodeBase64(tooShort)).isNull()
+    }
 }
