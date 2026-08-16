@@ -53,9 +53,16 @@ final class OrchestratorVectorTests: XCTestCase {
         let riverEligibilityReason: VectorRiverEligibilityReason
     }
 
+    /// AMENDEMENT S1 (REV-3/B3) : `current` devient FAILLIBLE (`null` = compte
+    /// inconnu, jamais « zéro ») et la raison gagne son discriminant
+    /// `riverReason`. Le schéma JSON reste rétro-compatible pour tout ce que
+    /// cette suite lisait déjà (`threshold` inchangé, `current` toujours
+    /// présent quand il est connu) — seule s'ajoute une clé, et `current`
+    /// accepte désormais `null`.
     private struct VectorRiverEligibilityReason: Decodable {
         let threshold: Int
-        let current: Int
+        let current: Int?
+        let riverReason: String
     }
 
     private struct VectorExpected: Decodable {
@@ -132,8 +139,29 @@ final class OrchestratorVectorTests: XCTestCase {
             riverEligible: raw.riverEligible,
             riverEligibilityReason: ReadingModeOrchestrator.RiverEligibilityReason(
                 threshold: raw.riverEligibilityReason.threshold,
-                current: raw.riverEligibilityReason.current
+                current: raw.riverEligibilityReason.current,
+                riverReason: try riverReason(raw.riverEligibilityReason.riverReason, label: label)
             )
+        )
+    }
+
+    private func riverReason(
+        _ raw: String,
+        label: String
+    ) throws -> ReadingModeOrchestrator.RiverEligibilityReasonKind {
+        try XCTUnwrap(
+            ReadingModeOrchestrator.RiverEligibilityReasonKind(rawValue: raw),
+            "riverReason inconnue '\(raw)' — cas '\(label)'"
+        )
+    }
+
+    private func conversationType(
+        _ raw: String,
+        label: String
+    ) throws -> ReadingModeOrchestrator.ConversationType {
+        try XCTUnwrap(
+            ReadingModeOrchestrator.ConversationType(rawValue: raw),
+            "conversationType inconnu '\(raw)' — cas '\(label)'"
         )
     }
 
@@ -164,6 +192,137 @@ final class OrchestratorVectorTests: XCTestCase {
             let expectedBridge = try bridgeMode(vector.expectedBridgeSuggestedMode, label: vector.label)
 
             XCTAssertEqual(bridge, expectedBridge, "expectedBridgeSuggestedMode — cas '\(vector.label)'")
+        }
+    }
+
+    // =========================================================================
+    // MARK: - C-012 `resolveCapabilities` — vecteurs de l'amendement S1 (REV-3/B3)
+    // =========================================================================
+    //
+    // RE-PREUVE : `resolveCapabilities` était la seule loi de
+    // `packages/shared/utils/reading-modes.ts` SANS fichier de vecteurs
+    // (`fixtures/reading-modes/` portait accent, assist-tier, bridge,
+    // focus-curve, orchestrator, scroll-activity, sections, sort — et rien
+    // pour les capacités ; `orchestrator.vectors.json` n'en porte que comme
+    // ENTRÉE figée). L'amendement S1 lui en donne un :
+    // `capabilities.vectors.json`, généré en EXÉCUTANT la loi TS (C-023) et
+    // rejoué ici. Même dossier de ressources que les vecteurs d'orchestrateur
+    // (`MeeshyTests.resources` → `../../packages/shared/fixtures`,
+    // `type: folder`) : AUCUNE modification de `project.yml` n'est nécessaire,
+    // le dossier entier étant déjà embarqué.
+
+    private struct CapabilitiesVectorCase: Decodable {
+        let label: String
+        let input: CapabilitiesVectorInput
+        let expected: VectorCapabilities
+
+        enum CodingKeys: String, CodingKey {
+            case label = "_label"
+            case input
+            case expected
+        }
+    }
+
+    private struct CapabilitiesVectorInput: Decodable {
+        let identity: VectorIdentity
+        let isFlagEnabled: Bool
+        /// Optionnel côté TS (`isRiverFlagEnabled?: boolean`, absent ⇒ `false`).
+        let isRiverFlagEnabled: Bool?
+        let conversationType: String
+        /// `null` en JSON ⇒ `nil` : compte d'actifs INCONNU (amendement S1),
+        /// jamais « zéro ».
+        let activeParticipantCount: Int?
+    }
+
+    private struct VectorIdentity: Decodable {
+        let isAnonymous: Bool
+    }
+
+    private static func loadCapabilitiesVectors() throws -> [CapabilitiesVectorCase] {
+        guard let url = Bundle(for: OrchestratorVectorTests.self).url(
+            forResource: "capabilities.vectors",
+            withExtension: "json",
+            subdirectory: "fixtures/reading-modes"
+        ) else {
+            XCTFail("""
+                capabilities.vectors.json introuvable dans le bundle de tests sous \
+                `fixtures/reading-modes/`. Le dossier `../../packages/shared/fixtures` est déjà \
+                embarqué (type: folder) pour orchestrator.vectors.json — un fichier manquant \
+                signale une fixture non commitée, pas un câblage à refaire.
+                """)
+            return []
+        }
+        let data = try Data(contentsOf: url)
+        let cases = try JSONDecoder().decode([CapabilitiesVectorCase].self, from: data)
+        XCTAssertFalse(
+            cases.isEmpty,
+            "ZÉRO cas chargé — une boucle `for` sur un tableau vide passe sans rien prouver (leçon 257)."
+        )
+        return cases
+    }
+
+    func test_resolveCapabilities_matchesAllVectors() throws {
+        let cases = try Self.loadCapabilitiesVectors()
+
+        for vector in cases {
+            let input = ReadingModeOrchestrator.ResolveCapabilitiesInput(
+                identity: ReadingModeOrchestrator.ReadingModeIdentity(
+                    isAnonymous: vector.input.identity.isAnonymous
+                ),
+                isFlagEnabled: vector.input.isFlagEnabled,
+                isRiverFlagEnabled: vector.input.isRiverFlagEnabled ?? false,
+                conversationType: try conversationType(vector.input.conversationType, label: vector.label),
+                activeParticipantCount: vector.input.activeParticipantCount
+            )
+
+            let actual = ReadingModeOrchestrator.resolveCapabilities(input)
+            let expected = try capabilities(vector.expected, label: vector.label)
+
+            XCTAssertEqual(actual.availableModes, expected.availableModes, "availableModes — cas '\(vector.label)'")
+            XCTAssertEqual(actual.riverEligible, expected.riverEligible, "riverEligible — cas '\(vector.label)'")
+            XCTAssertEqual(
+                actual.riverEligibilityReason, expected.riverEligibilityReason,
+                "riverEligibilityReason — cas '\(vector.label)'"
+            )
+        }
+    }
+
+    /// Le jeu de vecteurs doit EXERCER les trois raisons ET porter au moins un
+    /// compte inconnu — sinon un fichier amputé passerait au vert sans plus
+    /// rien prouver de l'amendement (leçon 257 : un vert silencieux est un
+    /// faux vert).
+    func test_capabilitiesVectors_exerciseAllThreeRiverReasons_andAnUnknownCount() throws {
+        let cases = try Self.loadCapabilitiesVectors()
+
+        let reasons = Set(cases.map(\.expected.riverEligibilityReason.riverReason))
+        XCTAssertEqual(
+            reasons, ["neverEligible", "belowThreshold", "eligible"],
+            "Les trois raisons de l'amendement S1 doivent toutes être couvertes par les vecteurs."
+        )
+
+        let unknownCount = cases.filter { $0.input.activeParticipantCount == nil }
+        XCTAssertFalse(unknownCount.isEmpty, "Aucun cas à compte INCONNU — la moitié de l'amendement n'est pas prouvée.")
+        for vector in unknownCount {
+            XCTAssertNil(
+                vector.expected.riverEligibilityReason.current,
+                "Un compte inconnu ne doit JAMAIS ressortir en nombre — cas '\(vector.label)'."
+            )
+            XCTAssertFalse(vector.expected.riverEligible, "Un compte inconnu ne rend jamais éligible — cas '\(vector.label)'.")
+        }
+
+        let directHighCount = cases.filter {
+            $0.input.conversationType == "direct" && ($0.input.activeParticipantCount ?? 0) >= 5
+        }
+        XCTAssertFalse(
+            directHighCount.isEmpty,
+            "Aucun cas `direct` AU-DESSUS du seuil — sans lui, `neverEligible` pourrait n'être " +
+            "qu'un synonyme de « sous le seuil » (leçon 266)."
+        )
+        for vector in directHighCount {
+            XCTAssertEqual(
+                vector.expected.riverEligibilityReason.riverReason, "neverEligible",
+                "Le compte ne renverse jamais `direct` — cas '\(vector.label)'."
+            )
         }
     }
 }
