@@ -646,3 +646,28 @@ Append-only log of gotchas and decisions that save time next run.
   timeout. Injecting a scheduler remains the more thorough option but is no longer required to close
   this. **What must NOT happen is another constant bump** — this entry and the one above it are two
   independent falsifications of that move.
+
+- **Correction to the entry above — the discriminant is not "writes vs doesn't write", and the fix
+  it proposed would not have worked.** (2026-08-16, third occurrence: `ThemeStoreTest`, run
+  31950584151, two failures at `:87` and `:106`.) The previous entry proposed "await the store's
+  first emission before writing". That is wrong: `preferences`/`themeMode` is a `StateFlow` seeded
+  with a default, so `first()` returns that seed **synchronously** without the upstream ever having
+  run — it would have awaited nothing and fixed nothing. Do not apply it.
+  The correct discriminant, which fits all five observed failures:
+  - Failing assertions are always `first { predicate }` where the predicate can only be satisfied by
+    a **real upstream emission**, so the `stateIn` sharing coroutine must actually get scheduled on
+    `Dispatchers.IO`. Under runner contention it may not, within any wall-clock bound.
+  - The never-failing `dataStore_defaultsToTheDefaultBlockOnEmptyStore` asserts a value **equal to
+    the seeded default**, so its `first()` completes from the seed and never needs the upstream at
+    all. It is structurally immune, not lucky.
+  - `ThemeStoreTest.kt:106` proves test *names* mislead here: it failed inside
+    `dataStore_hydratesAlreadyPersistedChoiceOnConstruction`, but on that test's **setup** line
+    (`writer.setThemeMode(…)` then `first { it == LIGHT }`), not on the hydration assertion it is
+    named for. Always read the failing *line*, not the test name, before theorising about shape.
+  So the only real fix remains removing wall-clock scheduling from these assertions — inject the
+  dispatcher/scope so the test drives a controlled scheduler. **That work is deliberately NOT done
+  here**: this container cannot run Gradle at all (no Android SDK, `dl.google.com` denied), and
+  `ROUTINE.md §CI reality` forbids writing unverified Kotlin on the strength of a build you could
+  not run. Attempting it blind on four files this slice does not own would be exactly that.
+  Meanwhile: `rerun-failed-jobs` is **403 for this token on `android.yml` too** (an earlier entry
+  recorded it working there — that no longer holds), so the only available retry is a fresh push.
