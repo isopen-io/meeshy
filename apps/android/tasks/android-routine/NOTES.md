@@ -700,3 +700,34 @@ Append-only log of gotchas and decisions that save time next run.
     far, never about correctness.*
   If a DataStore test flakes again after this, it is a **new** mechanism — go read the failing
   line, and do not reach for a constant.
+
+- **A deferred follow-up list left by the previous slice beats a fresh candidate hunt — and it is
+  the routine's own standing instruction.** (2026-08-16, `reels-realtime-room`.) The prior slice
+  (`post-detail-realtime-room`) closed one screen and wrote down, by name, the three iOS call sites
+  it had *not* wired (`ReelsViewModel`, `StoryViewerView`, `FeedCommentsSheet`). Picking the first
+  of those cost zero discovery time and needed no re-proof of *whether* a gap existed — only of
+  *how bad* it was. That re-proof paid off anyway: the gap turned out to be **strictly worse** on
+  the reel viewer than on post detail, for a reason the prior slice could not have known without
+  reading `getReels`. Post detail half-worked by incidental fallback (comments dual-broadcast to
+  friend feed rooms); the reels thread is ranked by **affinity** and deliberately serves non-followed
+  authors, so no friend feed room exists to fall back to. **Generalises: when a slice defers work,
+  name the call sites in `feature-parity.md`. The next run then starts from a proven gap instead of
+  a grep — but still re-proves the *severity*, because deferral notes record what the previous run
+  knew, not what the code says.**
+
+- **The gateway's source comments name their intended clients — read them before porting a room.**
+  (2026-08-16, same slice.) `SocialEventsHandler.commentBroadcastRooms`'s doc comment says outright
+  that `ROOMS.post` is « où se trouvent les viewers du détail / **reel viewer** qui ne sont PAS amis
+  de l'auteur ». That single line is a complete specification of which Android screens owe a
+  `post:join`, and it was already in the tree while three of them were missing it. **Generalises:
+  when wiring a client to a room, grep the gateway for the room constant and read the surrounding
+  prose — the server often already documents the full intended membership, which turns "which
+  screens need this?" from a judgment call into a lookup.**
+
+- **Key a `LaunchedEffect` on identity, not on the state object that carries it.** (2026-08-16,
+  same slice.) The obvious wiring — `LaunchedEffect(pagerState, state.reels) { snapshotFlow { … } }`
+  — restarts on *every* optimistic like, because `updateReel` rebuilds the list and `state.reels` is
+  a new instance each time. Keying on `state.reels.map { it.id }` restarts it exactly when the
+  thread changes, since `List<String>` compares structurally. **Generalises: before keying an effect
+  on a piece of UI state, ask what else mutates that object. Anything driven by an optimistic update
+  is a fresh instance on every user tap.**

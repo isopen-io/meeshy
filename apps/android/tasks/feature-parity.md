@@ -3948,6 +3948,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`SocialSocketManagerTest` ×2 for join/leave; `PostDetailViewModelTest` ×7 for the join call,
       the blank-route no-op, viewer-own like/unlike, another-user's-like count-only, cross-post
       isolation, and refresh dropping the overlay).
+- [x] Reel-viewer room real-time subscriptions — closed 2026-08-16 (slice `reels-realtime-room`),
+      the first of the three follow-ups the line above deliberately deferred. `ReelsViewModel` had
+      NO realtime handling of any kind: it never joined a post room, and its like counter only ever
+      moved through `toggleLike`'s own optimistic arithmetic. That gap bites hardest precisely here
+      — `getReels` ranks by *affinity* and serves reels from authors the viewer does not follow, so
+      the friend-feed-room fallback that half-saved post detail does not exist for a reel; the
+      gateway's own `commentBroadcastRooms` doc comment even names the « reel viewer » as the
+      intended occupant of `ROOMS.post`. `ReelsViewModel.setCurrentReel(reelId)` now moves the
+      subscription with the pager (leave the reel scrolled away from, join the one landed on —
+      mirror of iOS `ReelsViewModel.currentId`'s `didSet`), idempotent and blank-safe, with
+      `onCleared()` leaving the last room. `post:liked`/`post:unliked` resync the named reel's
+      `likeCount` to the gateway's ABSOLUTE count (healing optimistic drift) and move `isLiked`
+      only for the viewer's own id — the same `mine: Boolean?` convention as post detail and the
+      feed. `ReelsScreen` drives it from `snapshotFlow { pagerState.currentPage }` keyed on the
+      reel *ids* (structural equality) rather than on `state.reels`, which is a fresh list on every
+      optimistic like. +12 tests — the reels module's first test file (join on settle, leave-then-
+      join on page change, no re-join on re-settle, blank/null id never joins, null after a join
+      still leaves, viewer-own like/unlike, another user's like count-only, optimistic-drift
+      healing, cross-reel isolation, out-of-thread inertness, negative-count clamp, anonymous
+      viewer). **Still open** (the remaining two of the three): `StoryViewerViewModel` and the feed
+      comments sheet, each with its own current-item lifecycle.
 - [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap

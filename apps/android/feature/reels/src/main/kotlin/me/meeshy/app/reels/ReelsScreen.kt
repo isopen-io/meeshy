@@ -31,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -98,6 +100,16 @@ fun ReelsScreen(
 
             else -> {
                 val pagerState = rememberPagerState(pageCount = { state.reels.size })
+                // Le reel visible possede la post room : c'est l'abonnement qui rend
+                // `post:liked`/`post:unliked` livrables pour un reel dont on ne suit pas
+                // l'auteur. Keye sur les ids (egalite structurelle) et non sur `state.reels`,
+                // qui est une nouvelle liste a chaque like optimiste.
+                val reelIds = state.reels.map { it.id }
+                LaunchedEffect(pagerState, reelIds) {
+                    snapshotFlow { pagerState.currentPage }
+                        .distinctUntilChanged()
+                        .collect { page -> viewModel.setCurrentReel(reelIds.getOrNull(page)) }
+                }
                 VerticalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
