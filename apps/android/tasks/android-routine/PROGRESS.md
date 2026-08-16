@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Conversation "delete for everyone" (creator-only) shipped** (slice
+> `conversation-delete-for-all`) — closes `feature-parity.md`'s "Leave / archive / delete-for-me /
+> delete-for-all conversation" item; re-proved against real code before starting (per convention):
+> `leave`/`deleteForMe`/`setArchivedOptimistic` were already live, `delete-for-all` was the one
+> genuine gap (verified by grepping the gateway for a matching route and finding none under that
+> name — the real endpoint is the plain creator-gated `DELETE /conversations/:id` in
+> `routes/conversations/core.ts`, ported from iOS's `ConversationSettingsView.deleteConversationForAll`
+> → `ConversationService.delete(conversationId:)`).
+>
+> **REST + repository + ViewModel**, mirroring the `leave`/`deleteForMe` shape exactly:
+> `ConversationApi.deleteForAll` (`@DELETE("conversations/{id}")`) → `ConversationRepository.
+> deleteForAll` → `ConversationListViewModel.deleteConversationForAll`. Gated client-side (server
+> already enforces creator-only) via a new pure `ApiConversation.currentUserRole(currentUserId):
+> MemberRole` extension (`:core:model`) — looks up the caller's own `ApiParticipant.role` in the
+> conversation's roster, defaulting to `MEMBER` when absent, so no separate member-list fetch is
+> needed to show/hide the menu item.
+>
+> **Real-time purge for every participant, not just the actor** — the genuinely new piece beyond a
+> plain REST port: the gateway broadcasts `conversation:closed` (not `conversation:deleted`, which
+> is `delete-for-me`-only and scoped to the caller's own devices) to the WHOLE roster. Android had
+> zero handling of this event before this slice, even though iOS already wires it
+> (`MessageSocketManager.conversationClosed` in `packages/MeeshySDK`). Added: `ConversationClosedSocketEvent`
+> (`:core:model`, mirrors `ConversationDeletedSocketEvent`'s shape), a new `MessageSocketManager.
+> conversationClosed` flow (`listen("conversation:closed", ...)`, same pattern as the 27 other
+> listened events), `ConversationPurge.onConversationClosed` (pure, mirrors `onConversationDeleted`),
+> and a `ConversationListViewModel` subscription purging + refreshing on receipt — without this,
+> shipping the REST call alone would have been a dead end for every participant EXCEPT the actor
+> (and even the actor's other devices).
+>
+> **New UI**: a third context-menu action "Delete for everyone", shown only when `isCreator`, with
+> its own confirmation dialog (same shape as leave/delete-for-me's). Strings added in all 4 locales
+> (en/fr/es/pt, matching the existing translation-complete convention for this screen).
+>
+> **+13 tests**: 4 `ConversationCurrentUserRoleTest` (creator/member/absent-user/not-in-roster), 2
+> `ConversationPurgeTest` (`onConversationClosed` id-vs-blank), 4 `ConversationListViewModelTest`
+> (`deleteConversationForAll` success/failure + `conversationClosed` purge/blank-inert — mirrors the
+> existing `conversationDeleted` pair), 2 `ConversationRepositoryTest` (`deleteForAll` forwards
+> id/folds failure), plus the 4 `ConversationApi` test fakes (`FakeConversationApi`/
+> `RecordingSettingsApi`/`RecordingLeaveApi`/`RecordingDeleteForMeApi`) each updated with the new
+> interface method and a new `RecordingDeleteForAllApi` added, mirroring `RecordingDeleteForMeApi`.
+>
+> **No coverage floor lowered**: all new pure logic (`currentUserRole`, `onConversationClosed`) has
+> dedicated tests; the new `@Composable` menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 48s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=conversation-delete-for-all`.
+
 > On 2026-08-16 **`feature:feed`'s `ComposerLanguagePickerDialog` migrated to the shared
 > `LanguagePickerDialog`** (slice `feed-composer-language-picker-shared`) — the explicit follow-up
 > left open by the prior slice (`sdk-ui-language-picker-dialog`, PR #3070): the third and last of

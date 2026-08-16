@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import org.junit.Test
@@ -20,6 +21,24 @@ class ConversationPurgeTest {
     fun a_deleted_event_with_a_blank_id_is_inert() {
         val id = ConversationPurge.onConversationDeleted(
             ConversationDeletedSocketEvent(conversationId = "   "),
+        )
+
+        assertThat(id).isNull()
+    }
+
+    @Test
+    fun a_closed_conversation_yields_its_id_to_purge() {
+        val id = ConversationPurge.onConversationClosed(
+            ConversationClosedSocketEvent(conversationId = "c1", closedBy = "creator-1"),
+        )
+
+        assertThat(id).isEqualTo("c1")
+    }
+
+    @Test
+    fun a_closed_event_with_a_blank_id_is_inert() {
+        val id = ConversationPurge.onConversationClosed(
+            ConversationClosedSocketEvent(conversationId = "   ", closedBy = "creator-1"),
         )
 
         assertThat(id).isNull()

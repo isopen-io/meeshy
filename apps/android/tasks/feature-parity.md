@@ -2709,7 +2709,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       lock, closing the cross-account leak the foundation slice deferred. Still needed: PIN entry
       UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
       flow itself. Box stays unchecked until those land.
-- [ ] Leave / archive / delete-for-me / delete-for-all conversation
+- [x] Leave / archive / delete-for-me / delete-for-all conversation — all four verified shipped: leave/delete-for-me/archive already live (earlier slices), delete-for-all closes the gap (`conversation-delete-for-all`, 2026-08-16)
       — leave, archive, and delete-for-me are wired (`conversation-leave` PR #3055 +
       `conversation-delete-for-me` PR #3057, 2026-08-16: two context-menu items, each behind its
       own confirmation dialog, both reusing the existing `ConversationPurge` socket-driven removal
