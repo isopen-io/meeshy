@@ -89,6 +89,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const CALL_ID = '507f1f77bcf86cd799439021';
@@ -344,6 +345,46 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
       CALL_EVENTS.ERROR,
       expect.objectContaining({ code: 'NOT_A_PARTICIPANT' })
     );
+  });
+
+  it('forceCleanupParticipationAfterLeaveFailure emits PARTICIPANT_LEFT with userId, mirroring broadcastParticipantLeftResult (Vague 133)', async () => {
+    // Vague 132 added `userId` to broadcastParticipantLeftResult's own emit
+    // (this file's harness doesn't cover the payload shape, only cache
+    // timing) but left this sibling fallback — reached when leaveCall
+    // itself throws (DB blip, validation failure) — on the old shape.
+    // Every client that resolves PARTICIPANT_LEFT identity by `userId`
+    // (VideoCallInterface.handleParticipantLeft, useRemoteCallAlerts)
+    // silently no-ops specifically on this path, leaving the other
+    // participants with a stale tile/zombie RTCPeerConnection.
+    const { handler, handlers, io } = makeHarness();
+    await primeCache(handlers);
+    // makePrisma()'s mock has no `$transaction` — stub it the same way the
+    // Vague 50 test above does, so the leftAt-write branch actually runs
+    // instead of throwing before reaching the emit below.
+    (handler as any).prisma.$transaction = jest.fn<any>().mockResolvedValue(1);
+
+    await handler.forceCleanupParticipationAfterLeaveFailure({
+      io: io as any,
+      participation: {
+        id: 'cp-a',
+        participantId: 'pa',
+        callSessionId: CALL_ID,
+        callSession: { mode: 'p2p', conversationId: CONV_ID, status: 'active' }
+      } as any,
+      userId: USER_A,
+      leaveError: new Error('db blip')
+    });
+
+    const emitMock = (io.to(ROOMS.call(CALL_ID)) as any).emit as jest.Mock<any>;
+    const participantLeftCall = emitMock.mock.calls.find(
+      ([event]: any[]) => event === CALL_EVENTS.PARTICIPANT_LEFT
+    );
+    expect(participantLeftCall).toBeDefined();
+    expect(participantLeftCall![1]).toMatchObject({
+      callId: CALL_ID,
+      participantId: 'cp-a',
+      userId: USER_A
+    });
   });
 
   it('a stale-cache signal from a just-left sender is rejected (fresh read forced), not relayed', async () => {

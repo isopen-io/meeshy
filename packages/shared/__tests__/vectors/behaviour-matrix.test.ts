@@ -174,14 +174,39 @@ const DEFAULT_EXCLUDED_DIRS: ReadonlySet<string> = new Set([
 
 const REFERENCE_PATTERN = /behaviour-matrix:([A-Za-z0-9]+)/g;
 
+// Le fichier de la garde LUI-MÊME (ce fichier) — son chemin absolu, calculé
+// une fois. Ses fixtures de démonstration ci-dessus (ZZ01..ZZ05, dans les
+// `describe('scanBehaviourMatrixCoverage — mécanique de scan …')`) posent le
+// motif `behaviour-matrix:ZZ0x` en DUR, dans des chaînes de caractères
+// littérales — jamais écrites sur disque (elles vivent dans des répertoires
+// temporaires créés puis détruits par CHAQUE test via `mkdtempSync`/
+// `rmSync`). Sans cette exclusion, un balayage de `REPO_ROOT` qui inclurait
+// ce fichier-ci trouverait quand même ZZ01..ZZ05 dans SON PROPRE texte
+// source (les littéraux `"// behaviour-matrix:ZZ01 — …"` etc., ci-dessus) et
+// les compterait comme des ids « couverts » — un faux positif qui n'a rien à
+// voir avec `declaredIds` (L01..L17/F01..F15) mais qui, plus grave, ne fait
+// JAMAIS échouer la garde d'ensemble : ces ids ZZ0x ne sont pas dans
+// `behaviour-matrix.json`, donc ils rentreraient dans `extra` — CE QUE LA
+// GARDE EST CENSÉE DÉTECTER. Autrement dit, la garde continuerait à
+// détecter son propre bruit de fixture, indéfiniment, même une fois les 32
+// ids réels tous couverts par de vrais tests — un rouge permanent qui
+// masquerait le signal réel. La correction n'exclut QUE ce fichier précis
+// (jamais un répertoire entier, jamais une exclusion par nom générique) :
+// tout autre fichier du dépôt, y compris d'autres fichiers de test, reste
+// balayé normalement.
+const SELF_TEST_FILE_PATH = fileURLToPath(import.meta.url);
+
 type ScanOptions = {
   readonly excludedDirs?: ReadonlySet<string>;
+  readonly excludedFiles?: ReadonlySet<string>;
 };
 
 /**
  * Parcourt récursivement `rootDir` et collecte tous les ids référencés via
  * le motif `behaviour-matrix:<id>`, tous fichiers confondus (hors
- * répertoires exclus). Retourne l'ensemble des ids trouvés — dédupliqués,
+ * répertoires exclus ET hors fichiers exclus — voir `excludedFiles`, qui
+ * n'exclut par défaut QUE ce fichier de garde lui-même,
+ * `SELF_TEST_FILE_PATH`). Retourne l'ensemble des ids trouvés — dédupliqués,
  * sans distinction de casse sur l'id lui-même (l'id est pris tel quel).
  *
  * Ne lève pas si `rootDir` n'existe pas ou est vide : retourne un ensemble
@@ -190,6 +215,7 @@ type ScanOptions = {
  */
 function scanBehaviourMatrixCoverage(rootDir: string, options: ScanOptions = {}): ReadonlySet<string> {
   const excludedDirs = options.excludedDirs ?? DEFAULT_EXCLUDED_DIRS;
+  const excludedFiles = options.excludedFiles ?? new Set([SELF_TEST_FILE_PATH]);
   const covered = new Set<string>();
 
   const walk = (dir: string): void => {
@@ -209,6 +235,8 @@ function scanBehaviourMatrixCoverage(rootDir: string, options: ScanOptions = {})
       if (!entry.isFile()) continue;
 
       const path = join(dir, entry.name);
+      if (excludedFiles.has(path)) continue; // le fichier de la garde lui-même — voir SELF_TEST_FILE_PATH
+
       let content: string;
       try {
         content = readFileSync(path, 'utf-8');
@@ -287,6 +315,32 @@ describe('scanBehaviourMatrixCoverage — mécanique de scan (fixture temporaire
     }
   });
 
+  it('exclut le fichier de la garde lui-même du balayage — ses fixtures internes ne se comptent jamais comme couvertes', () => {
+    // Rejoue le bug réel corrigé ici : AVANT ce correctif, un balayage de
+    // REPO_ROOT trouvait ZZ01..ZZ05 dans le texte SOURCE de ce fichier de
+    // garde (les littéraux `writeFileSync(..., "// behaviour-matrix:ZZ01…")`
+    // ci-dessus) et les comptait comme « couverts » — un faux positif dans
+    // `extra`, jamais résolu, qui aurait gardé `describe.skip` inarmable
+    // même à couverture complète des 32 ids réels. Le fichier « self » ici
+    // simule ce fichier de garde (littéral `behaviour-matrix:ZZ99` en dur,
+    // exactement comme ZZ01..ZZ05 le sont plus haut) ; le fichier « other »
+    // simule un VRAI test ailleurs dans le dépôt. L'exclusion ne retire QUE
+    // « self », jamais « other ».
+    const root = mkdtempSync(join(tmpdir(), 'meeshy-behaviour-matrix-scan-'));
+    try {
+      const selfPath = join(root, 'behaviour-matrix.test.ts');
+      writeFileSync(selfPath, '// behaviour-matrix:ZZ99 (fixture auto-référente, comme ZZ01..ZZ05 dans ce fichier de garde)\n');
+      const otherPath = join(root, 'real-suite.test.ts');
+      writeFileSync(otherPath, '// behaviour-matrix:ZZ98 — un test réel, ailleurs\n');
+
+      const covered = scanBehaviourMatrixCoverage(root, { excludedFiles: new Set([selfPath]) });
+
+      expect(covered).toEqual(new Set(['ZZ98']));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('retourne un ensemble VIDE (jamais une erreur) sur un répertoire racine sans aucune référence', () => {
     const root = mkdtempSync(join(tmpdir(), 'meeshy-behaviour-matrix-scan-'));
     try {
@@ -307,22 +361,33 @@ describe('scanBehaviourMatrixCoverage — mécanique de scan (fixture temporaire
 // ───────────────────────────────────────────────────────────────────────
 // LA GARDE D'ENSEMBLE — déclarés == couverts (leçon 257).
 //
-// CONTRAT D'ARMEMENT (décision documentée ici, pas seulement dans le
-// commit) : à la date d'écriture (2026-08-15, vague V1, tâche C-027),
-// AUCUN test d'AUCUNE plateforme ne référence encore un id
-// `behaviour-matrix:*` — les vagues V2 (miroirs Swift), V3 (iOS), V4 (web)
-// et V5 (gateway/Rivière) sont celles qui écriront ces références au fil
-// de l'implémentation de chaque comportement.
+// ARMÉE À LA PORTE V1 (REV-3, blocker B1, 2026-08-16). Le contrat
+// d'armement ci-dessous (écrit le 2026-08-15) posait deux conditions :
+//   1. armement PROGRESSIF dès le premier id couvert — franchi ;
+//   2. BLOQUANTE à la Porte V1 (fin de vague V3, revue REV-3) — CETTE
+//      porte. Les 32 ids (L01..L17, F01..F15) sont désormais référencés
+//      par un test RÉEL d'au moins une plateforme (iOS — voir le mapping
+//      complet dans le rapport de la tâche REV-3/B1) : `describe.skip` est
+//      retiré, la garde est ACTIVE et BLOQUANTE. Un id qui retomberait à
+//      découvert après ce commit EST une régression — la garde échoue la
+//      build, comme prévu par le critère d'armement ci-dessous.
 //
-// Si cette garde tournait ACTIVE dès maintenant, elle serait rouge en
-// permanence pendant tout V2→V4 (32 ids déclarés, 0 couverts) — un rouge
-// permanent n'est PAS un signal, c'est du bruit que l'équipe apprend à
-// ignorer, ce qui est pire que l'absence de garde. Elle est donc écrite
+// CONTRAT D'ARMEMENT ORIGINAL (conservé pour mémoire — décision documentée
+// ici, pas seulement dans le commit) : à la date d'écriture (2026-08-15,
+// vague V1, tâche C-027), AUCUN test d'AUCUNE plateforme ne référençait
+// encore un id `behaviour-matrix:*` — les vagues V2 (miroirs Swift), V3
+// (iOS), V4 (web) et V5 (gateway/Rivière) sont celles qui écriraient ces
+// références au fil de l'implémentation de chaque comportement.
+//
+// Si cette garde avait tourné ACTIVE dès l'écriture, elle aurait été rouge
+// en permanence pendant tout V2→V4 (32 ids déclarés, 0 couverts) — un
+// rouge permanent n'est PAS un signal, c'est du bruit que l'équipe apprend
+// à ignorer, ce qui est pire que l'absence de garde. Elle a donc été écrite
 // intégralement (mécanique réelle, ci-dessus, déjà testée) mais démontée
 // via `describe.skip`, avec ce commentaire contractuel comme seule preuve
-// de son existence tant qu'elle ne tourne pas.
+// de son existence tant qu'elle ne tournait pas.
 //
-// CRITÈRE D'ARMEMENT — qui doit la retourner à `describe` (active) :
+// CRITÈRE D'ARMEMENT — qui devait la retourner à `describe` (active) :
 //   1. au moins UN test d'UNE plateforme référence un id `behaviour-matrix:*`
 //      (armement PROGRESSIF possible dès le premier id couvert : à ce
 //      moment la garde devient utile — elle empêche une régression sur
@@ -334,11 +399,12 @@ describe('scanBehaviourMatrixCoverage — mécanique de scan (fixture temporaire
 //      la totalité des comportements iOS de la matrice doit être couverte,
 //      et web/gateway suivent aux portes V2/V3 sans qu'un id retombe à
 //      découvert.
-// Jusqu'à la Porte V1, un id manquant est un TRAVAIL RESTANT connu (les
-// vagues ne sont pas closes) — pas une régression. Après la Porte V1, un
-// id manquant EST une régression : la garde doit alors échouer la build.
+// Jusqu'à la Porte V1, un id manquant était un TRAVAIL RESTANT connu (les
+// vagues n'étaient pas closes) — pas une régression. Après la Porte V1
+// (maintenant), un id manquant EST une régression : la garde échoue la
+// build.
 // ───────────────────────────────────────────────────────────────────────
-describe.skip('behaviour-matrix — garde d\'ensemble déclarés == couverts (DÉSARMÉE — voir contrat d\'armement ci-dessus, arme à la Porte V1)', () => {
+describe('behaviour-matrix — garde d\'ensemble déclarés == couverts (ARMÉE à la Porte V1, REV-3/B1 — bloquante)', () => {
   it('chaque id déclaré dans behaviour-matrix.json est référencé par au moins un test du dépôt', () => {
     const matrix = loadBehaviourMatrix();
     const declaredIds = new Set(matrix.map((entry) => entry.id));

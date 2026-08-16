@@ -209,6 +209,19 @@ final class PeekViewModelTests: XCTestCase {
     /// Conséquence produit : sous Lentille ON, le troisième point d'entrée
     /// du menu de mode (« trois points d'entrée, une préférence ») existe
     /// désormais sur les DEUX chemins d'appui long, iOS 26+ compris.
+    // behaviour-matrix:L12 — « les deux chemins de long press … sont
+    // conservés à l'identique, le preview devenant LentillePeekView … » :
+    // ce témoin verrouille le chemin natif iOS 26+ ;
+    // test_peekView_isMountedOnce_behindTheFlag_withConversationPreviewViewAsTheOffFallback
+    // (au-dessus) verrouille le chemin < iOS 26. Les timings/cotes gelés
+    // (spring 0.55/0.25, zone d'exclusion avatar 70 pt) sont verrouillés par
+    // test_modeFiles_neverRedefineTheFrozenPressBounceSpring et
+    // test_modeFiles_neverHardcodeTheAvatarExclusionZoneAsALiteral
+    // ci-dessous ; le sous-menu « Mode de lecture » par
+    // ModeMenuModelTests.test_readingModeSubmenu_isMountedOnce_afterMarkRead_behindTheFlag ;
+    // le `.onDrag` réservé au chemin natif est une propriété PRÉ-EXISTANTE,
+    // inchangée, déjà verrouillée par
+    // ConversationMenuSystemDesignGuardTests (hors périmètre Lentille).
     func test_nativeContextMenuPreviewPath_mountsLentillePeekView_behindTheFlag_gapClosed() throws {
         let rowsRaw = try String(
             contentsOf: Self.iosRoot.appendingPathComponent(

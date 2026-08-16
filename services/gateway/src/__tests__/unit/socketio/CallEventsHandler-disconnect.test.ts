@@ -701,6 +701,39 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    // Vague 132 — this was the only PARTICIPANT_LEFT emit site missing
+    // `userId` (call:leave and the REST leave/kick route already set it).
+    // A client tracking per-participant state keyed by `userId` (e.g.
+    // useRemoteCallAlerts' screen-capturing Set) could never clear a
+    // registered peer's entry when they disconnect and their grace window
+    // expires — the departing user's identity is already resolved into scope
+    // as `userId`, no extra lookup required to fill it in.
+    it('includes the departing user\'s userId on the PARTICIPANT_LEFT payload', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        expect.objectContaining({ callId: CALL_ID, userId: USER_ID })
+      );
+    });
+
     // -----------------------------------------------------------------------
     // Regression: this happy path (leaveCall succeeds) previously let
     // CallService default the end reason to `completed` — indistinguishable
