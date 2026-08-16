@@ -27,6 +27,22 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         )
     }
 
+    /// Jumeau RENOMMABLE : `merging` ignore le `title` d'un payload visant une
+    /// conversation `.direct` (son titre client est le nom du participant, cf.
+    /// `ConversationStoreTests.test_merging_directConversation_neverTakesTheRawTitle`).
+    /// Un test dont le sujet est « le pont transmet bien le renommage » doit
+    /// donc partir d'une conversation qui accepte d'être renommée, sinon il
+    /// mesure la garde au lieu du pont.
+    private func makeGroupConv(id: String) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id, identifier: id, type: .group,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(version: 1)
+        )
+    }
+
     @MainActor
     private struct BridgeEnv {
         let bridge: ConversationStoreSocketBridge
@@ -245,7 +261,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
     func test_conversationUpdated_metadataTitle_applied() async {
         let store = makeStore()
-        await store.hydrate(makeConv(id: "c1"))
+        await store.hydrate(makeGroupConv(id: "c1"))
         let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
 
         env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "c1", title: "New Group Name"))
