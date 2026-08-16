@@ -13,13 +13,18 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -135,6 +140,61 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun deleteForAll(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.deleteForAll(id) }
+
+    /**
+     * One cursor page of [id]'s member roster, optionally filtered server-side by
+     * [search]. Online-only — the members sheet consumes the [NetworkResult]
+     * directly. The cursor-shaped wire envelope is adapted onto the shared
+     * [apiCall] error handling here so transport/HTTP/parse failures all fold into
+     * a [NetworkResult.Failure] exactly like every other call.
+     */
+    suspend fun participants(
+        id: String,
+        search: String? = null,
+        cursor: String? = null,
+        limit: Int = PARTICIPANTS_PAGE_SIZE,
+    ): NetworkResult<MemberRosterPage> =
+        apiCall {
+            val response = conversationApi.participants(
+                id = id,
+                search = search?.takeIf { it.isNotBlank() },
+                limit = limit,
+                cursor = cursor,
+            )
+            ApiResponse(
+                success = response.success,
+                data = MemberRosterPage(
+                    members = response.data,
+                    nextCursor = response.pagination?.nextCursor,
+                    hasMore = response.pagination?.hasMore ?: false,
+                    totalCount = response.pagination?.totalCount,
+                ),
+            )
+        }
+
+    /**
+     * Promotes or demotes [userId] in [id] (server-enforced creator/admin-only —
+     * the client only gates the affordance via [me.meeshy.sdk.model.MemberModeration]).
+     * The gateway broadcasts `participant:role-updated` to the whole roster, so
+     * every other viewer's sheet follows without a refetch.
+     */
+    suspend fun updateParticipantRole(
+        id: String,
+        userId: String,
+        role: MemberRole,
+    ): NetworkResult<Unit> =
+        apiCallUnit {
+            conversationApi.updateParticipantRole(id, userId, ParticipantRoleUpdate(role.wireValue))
+        }
+
+    /**
+     * Removes [userId] from [id] (destructive, confirmed by the caller UI;
+     * server-enforced admin/moderator-only). The gateway broadcasts
+     * `conversation:participant-left` so the removed member's own devices drop the
+     * conversation through the existing [ConversationPurge] path.
+     */
+    suspend fun removeParticipant(id: String, userId: String): NetworkResult<Unit> =
+        apiCallUnit { conversationApi.removeParticipant(id, userId) }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
@@ -326,5 +386,14 @@ class ConversationRepository @Inject constructor(
             ),
         )
         return true
+    }
+
+    companion object {
+        /**
+         * Members fetched per roster page. The gateway defaults to 20 and caps at
+         * 100; 30 fills a phone screen with headroom so the first "load more" only
+         * fires on a genuinely long roster.
+         */
+        const val PARTICIPANTS_PAGE_SIZE: Int = 30
     }
 }

@@ -159,4 +159,26 @@
     <string name="conversation_settings_slow_mode_off">Desactivado</string>
     <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
     <string name="chat_create_share_link">Crear enlace de invitación</string>
+    <string name="conversation_members_title">Miembros (%1$d)</string>
+    <string name="conversation_members_open">Miembros</string>
+    <string name="conversation_members_search_hint">Buscar miembros</string>
+    <string name="conversation_members_empty">No se encontraron miembros</string>
+    <string name="conversation_members_error">No se pudieron cargar los miembros</string>
+    <string name="conversation_members_retry">Reintentar</string>
+    <string name="conversation_members_you">%1$s (tú)</string>
+    <string name="conversation_members_actions">Acciones para %1$s</string>
+    <string name="conversation_members_action_failed">Acción rechazada</string>
+    <string name="conversation_members_promote_moderator">Ascender a moderador</string>
+    <string name="conversation_members_promote_admin">Ascender a administrador</string>
+    <string name="conversation_members_demote_moderator">Bajar a moderador</string>
+    <string name="conversation_members_demote_member">Bajar a miembro</string>
+    <string name="conversation_members_remove">Quitar de la conversación</string>
+    <string name="conversation_members_remove_title">¿Quitar a este miembro?</string>
+    <string name="conversation_members_remove_message">%1$s perderá el acceso a esta conversación.</string>
+    <string name="conversation_members_remove_confirm">Quitar</string>
+    <string name="conversation_members_remove_cancel">Cancelar</string>
+    <string name="conversation_members_role_creator">Creador</string>
+    <string name="conversation_members_role_admin">Administrador</string>
+    <string name="conversation_members_role_moderator">Moderador</string>
+    <string name="conversation_members_role_member">Miembro</string>
 </resources>
