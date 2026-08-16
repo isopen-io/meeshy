@@ -484,6 +484,69 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `setReactionOptimistic sets the cached favorite reaction and queues a snapshot carrying it`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setReactionOptimistic("c1", "⭐️")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.reaction).isEqualTo("⭐️")
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.reaction).isEqualTo("⭐️")
+    }
+
+    @Test
+    fun `setReactionOptimistic is a no-op when the reaction is unchanged`() = runTest {
+        val starred = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(reaction = "⭐️"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(starred))))
+        repo.refresh()
+
+        val applied = repo.setReactionOptimistic("c1", "⭐️")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
+    fun `setReactionOptimistic clearing to null sends an explicit empty string, not a dropped null`() = runTest {
+        val starred = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(reaction = "⭐️"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(starred))))
+        repo.refresh()
+
+        val applied = repo.setReactionOptimistic("c1", null)
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.reaction).isEmpty()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        // Must be a real "" in the JSON, not a Kotlin null the shared explicitNulls=false
+        // encoder would silently drop — that would leave the server-side reaction untouched.
+        assertThat(payload.reaction).isEqualTo("")
+        assertThat(row.payload).contains("\"reaction\":\"\"")
+    }
+
+    @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "down")))
 

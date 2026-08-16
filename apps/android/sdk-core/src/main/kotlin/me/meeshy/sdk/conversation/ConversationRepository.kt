@@ -255,6 +255,17 @@ class ConversationRepository @Inject constructor(
     }
 
     /**
+     * Optimistic favorite-reaction toggle (drives the [ConversationFilter.FAVORITES]
+     * tab). A `null` [emoji] clears the favorite and is stored as an explicit empty
+     * string — same `explicitNulls = false` rationale as [setCustomNameOptimistic] —
+     * which [ConversationFilters] already treats the same as absent.
+     */
+    suspend fun setReactionOptimistic(id: String, emoji: String?): Boolean {
+        val value = emoji.orEmpty()
+        return updatePreferencesOptimistic(id) { it.copy(reaction = value) }
+    }
+
+    /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
      * cached preferences mutate instantly (the filter re-derives the visible
      * list) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation joins the
@@ -294,6 +305,7 @@ class ConversationRepository @Inject constructor(
                         mentionsOnly = snapshot.mentionsOnly,
                         categoryId = snapshot.categoryId,
                         customName = snapshot.customName,
+                        reaction = snapshot.reaction,
                     ),
                 ),
             ),

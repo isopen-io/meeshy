@@ -816,6 +816,34 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun setReaction_forwards_the_emoji_to_the_repository() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setReactionOptimistic("c1", "⭐️") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.setReaction("c1", "⭐️")
+        advanceUntilIdle()
+
+        coVerify { repo.setReactionOptimistic("c1", "⭐️") }
+    }
+
+    @Test
+    fun setReaction_forwards_null_to_clear_the_favorite() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setReactionOptimistic("c1", null) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.setReaction("c1", null)
+        advanceUntilIdle()
+
+        coVerify { repo.setReactionOptimistic("c1", null) }
+    }
+
+    @Test
     fun leaveConversation_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
