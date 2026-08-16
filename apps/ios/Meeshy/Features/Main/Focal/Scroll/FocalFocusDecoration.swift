@@ -34,6 +34,14 @@ import MeeshyUI
 @MainActor
 final class FocalFocusDecoration {
 
+    /// **L'interrupteur du cadre de focus.** `false` ⇒ aucune décoration
+    /// dessinée autour de la rangée élue (essai visuel en cours). Repasser à
+    /// `true` rétablit anneau + halo + teinte tels quels.
+    ///
+    /// Ne touche PAS le flash d'atterrissage de recherche (§4.7), qui est un
+    /// signal transitoire d'une autre nature et reste actif.
+    static let drawsFocusCard = false
+
     private static let cardLayerName = "focal.focus.card"
     private static let haloLayerName = "focal.focus.halo"
     private static let flashLayerName = "focal.focus.flash"
@@ -70,6 +78,27 @@ final class FocalFocusDecoration {
     /// coûte moins qu'un cycle création/destruction à chaque va-et-vient.
     func update(cell: UICollectionViewCell, isFocused: Bool, accentHex: String?, isDark: Bool) {
         guard isFocused else {
+            if let existing = cards.object(forKey: cell) {
+                withoutImplicitAnimations { existing.opacity = 0 }
+            }
+            if let existing = halos.object(forKey: cell) {
+                withoutImplicitAnimations { existing.opacity = 0 }
+            }
+            return
+        }
+
+        // ── CADRE DÉSACTIVÉ (essai visuel en cours) ──────────────────────
+        // Demande explicite : « enlève les bordures du Focal pour le moment,
+        // voir ». Rien n'est dessiné — ni anneau, ni halo, ni fond. La
+        // rangée élue reste parfaitement identifiable sans eux : elle est la
+        // seule à l'échelle pleine (le pass de perspective réduit et estompe
+        // ses voisines), la seule à porter un avatar de 34, un nom agrandi,
+        // sa date complète et sa barre de contrôles.
+        //
+        // Un seul interrupteur, pour rétablir en une ligne. Tout le reste du
+        // fichier — mémoïsation des couleurs, layers réutilisés, discipline
+        // « aucune allocation / aucune animation implicite » — est INTACT.
+        guard Self.drawsFocusCard else {
             if let existing = cards.object(forKey: cell) {
                 withoutImplicitAnimations { existing.opacity = 0 }
             }
