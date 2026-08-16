@@ -529,7 +529,20 @@ public actor ConversationStore {
                 changed = conv.clearLastMessage() || changed
             } else {
                 if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
-                if case .replaced(.some(let id)) = event.lastMessage { conv.lastMessageId = id; changed = true }
+                // Nommer un AUTRE message, c'est cesser de décrire le
+                // précédent. Le payload recalculé ne porte que l'identité, le
+                // texte et le Prisme : l'auteur, les pièces jointes et les
+                // drapeaux éphémères de l'ancien message survivraient à un
+                // simple `conv.lastMessageId = id`, et la ligne décrirait un
+                // mélange des deux (« Vue unique » sur un texte neuf, la
+                // vignette d'une photo supprimée sous l'aperçu de son
+                // remplaçant). `adoptLastMessage` les remet à neutre — et se
+                // tait quand l'identité ne change pas, c'est-à-dire à l'ÉDITION
+                // et à la TRADUCTION, où ils restent vrais.
+                //
+                // Posé AVANT les champs ci-dessous, qui reposent ce que ce
+                // payload-ci porte vraiment.
+                if case .replaced(.some(let id)) = event.lastMessage { conv.adoptLastMessage(id: id); changed = true }
                 if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
                 // préfère la traduction à l'aperçu brut, donc poser l'un sans

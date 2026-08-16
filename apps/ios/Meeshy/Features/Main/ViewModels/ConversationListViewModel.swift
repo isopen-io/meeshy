@@ -1049,7 +1049,18 @@ class ConversationListViewModel: ObservableObject {
                     }
                 } else {
                     if case .replaced(.some(let msgId)) = event.lastMessage {
-                        self.conversations[index].lastMessageId = msgId
+                        // Nommer un AUTRE message, c'est cesser de décrire le
+                        // précédent. Ce payload-ci ne porte que l'identité, le
+                        // texte et le Prisme — jamais l'auteur, les pièces
+                        // jointes ni les drapeaux éphémères, que
+                        // `emitConversationPreviewUpdate` ne lit même pas. Sans
+                        // ce geste, une suppression pour tous du dernier
+                        // message laissait la ligne rendre l'aperçu du
+                        // remplaçant sous la vignette, l'auteur et le « Vue
+                        // unique » du message supprimé. Muet quand l'identité
+                        // ne change pas : à l'édition et à la traduction, ces
+                        // champs restent vrais.
+                        self.conversations[index].adoptLastMessage(id: msgId)
                         // Écrite AVEC l'id (chemin message-driven) et jamais
                         // seule : `nil` efface la pastille du message précédent
                         // quand un texte le remplace au même horodatage.
