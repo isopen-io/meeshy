@@ -1028,10 +1028,13 @@ export class CallEventsHandler {
   }
 
   /**
-   * §4.6 — drop every buffered signal for a call (negotiation complete or
-   * terminated). Entries are keyed `${callId}:${to}` (one per recipient, see
-   * `bufferOffer`), so — like `clearQualityDegradedStreaks` — this sweeps all
-   * matching keys rather than a single one.
+   * §4.6 — drop EVERY buffered signal for a call. Entries are keyed
+   * `${callId}:${to}` (one per recipient, see `bufferOffer`), so this sweeps
+   * all matching keys rather than a single one — correct ONLY when the call
+   * itself is ending for EVERYONE (every recipient's slot is equally moot).
+   * A per-participant leave on a call that CONTINUES for others must use
+   * `clearBufferedOfferFor` instead — see its doc comment for the group-call
+   * bug this split fixes.
    */
   private clearBufferedOffer(callId: string): void {
     const prefix = `${callId}:`;
@@ -1039,6 +1042,35 @@ export class CallEventsHandler {
       if (key.startsWith(prefix)) {
         this.bufferedOffers.delete(key);
       }
+    }
+  }
+
+  /**
+   * Drop only the buffered signal slot(s) addressed to ONE specific
+   * participant — by both identity spaces, since `signal.to` (and therefore
+   * the map key) may be keyed by either a `User.id` or a `Participant.id`
+   * depending on which the sender resolved (mirrors `bufferedOfferFor`'s own
+   * dual-key lookup).
+   *
+   * Group-call bug this fixes (calling-stack audit 2026-08-16): the buffer
+   * is deliberately per-RECIPIENT (`bufferOffer`'s own doc comment — an
+   * offer buffered for one participant and another buffered for a second
+   * participant on the SAME call are independent slots). But every "a
+   * participant left" call site used to clear via `clearBufferedOffer`
+   * (whole-call sweep) regardless of whether the call was ending for
+   * everyone or continuing for the rest — correct for a 1:1 call (the only
+   * shape that existed when §4.6 was written) but wrong the moment a GROUP
+   * call continues past one participant's leave: participant D leaving
+   * wiped a still-pending buffered offer meant for a totally unrelated,
+   * still-active participant C (e.g. C's socket hadn't (re)joined the call
+   * room yet), permanently starving C's mesh connection to whoever sent it —
+   * `bufferedOfferFor` would find nothing on C's eventual `call:join` and
+   * never replay it.
+   */
+  private clearBufferedOfferFor(callId: string, ...participantIdentities: readonly (string | null | undefined)[]): void {
+    for (const id of participantIdentities) {
+      if (!id) continue;
+      this.bufferedOffers.delete(`${callId}:${id}`);
     }
   }
 
@@ -2846,8 +2878,15 @@ export class CallEventsHandler {
 
         // Phase 1 fix P2 — caller cancel or callee reject ends ringing
         this.callService.clearRingingTimeout(data.callId);
-        // §4.6 — drop any buffered offer for this call (a participant left).
-        this.clearBufferedOffer(data.callId);
+        // §4.6 — drop only THIS leaver's own buffered slot (calling-stack
+        // audit 2026-08-16 — see clearBufferedOfferFor's doc comment). A
+        // group call keeps running for whoever remains; a sibling pair's
+        // still-pending buffered offer (e.g. a slow joiner not yet in the
+        // room) must survive this one participant's leave. The rare case
+        // where this leave actually ends the call for everyone self-heals
+        // via the periodic TTL sweep (60s) — see the constructor's own
+        // comment on that sweep.
+        this.clearBufferedOfferFor(data.callId, userId, leaveParticipantId);
 
         // Prepare event data BEFORE leaving room
         const leftEvent: CallParticipantLeftEvent = {
@@ -3078,8 +3117,10 @@ export class CallEventsHandler {
               // still-armed ringing timer or buffered offer for this callId
               // lingers in memory until its own unrelated sweep/timeout,
               // instead of being released the moment the leave is known.
+              // Leaver-scoped (calling-stack audit 2026-08-16), same fix as
+              // `call:leave` — see `clearBufferedOfferFor`'s doc comment.
               this.callService.clearRingingTimeout(call.id);
-              this.clearBufferedOffer(call.id);
+              this.clearBufferedOfferFor(call.id, userId, cleanupParticipantId);
 
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
@@ -3665,7 +3706,12 @@ export class CallEventsHandler {
         if (willContinueAsGroupLeave && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
           this.invalidateSignalSession(data.callId);
           this.callService.clearRingingTimeout(data.callId);
-          this.clearBufferedOffer(data.callId);
+          // Leaver-scoped (calling-stack audit 2026-08-16) — mirrors
+          // `call:leave`'s own fix (see `clearBufferedOfferFor`'s doc
+          // comment): the call continues for the other participants, whose
+          // own buffered offers (e.g. a slow joiner not yet in the room)
+          // must survive this one participant hanging up on themselves.
+          this.clearBufferedOfferFor(data.callId, userId, endParticipantId);
           await socket.leave(ROOMS.call(data.callId));
           ack?.({ success: true });
           logger.info('✅ Socket: call:end treated as a leave — group call continues for other participants', {
