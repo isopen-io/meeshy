@@ -1,5 +1,67 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **No code shipped — the four remaining named candidates were re-proved and each
+> found genuinely too large, too ambiguous, or non-functional even on iOS, documented here so a
+> future run doesn't repeat the same investigation** (streak was 4, this was meant to be the 5th
+> Android slice before alternation). `gh pr list --state open --search "apps/android OR
+> apps/ios"` showed three concurrent PRs (#3096, #3106, #3108), none touching `apps/android`.
+> `df -h /` confirmed 11 Gi free (stable since the earlier disk-full incident, not re-triggered).
+>
+> **"Conversation info sheet" §C, re-scoped this time as instructed — still too large.** Read
+> iOS `ConversationInfoSheet.swift` (1291 lines) directly: 4 tabs (`.members`/`.media`/`.plus`/
+> `.preferences`), and **every tab's underlying capability already exists on Android in a
+> different shape** — `.members` → the `ConversationMembersSheet` this routine already built
+> (roster + promote/demote/remove/ban); `.media` → the existing `ConversationMediaGallery`;
+> `.preferences` → `ConversationPreferencesTab.swift` turns out to be exactly customName +
+> reaction + tags + pin + mute + archive, ALL already shipped standalone in earlier slices
+> (`conversation-custom-name`, `conversation-favorite-reaction`, `conversation-tags-preference`).
+> The only tab with a genuine Android gap is `.plus` (`ConversationDashboardView`, an analytics
+> dashboard — itself unexplored, potentially its own large item). **The real remaining work is
+> the CONTAINER** — a hero header + tab-navigation shell aggregating pieces that already exist —
+> which doesn't decompose into a smaller *useful* slice: a hero header alone renders nothing
+> without tabs to sit above, and a tab shell alone has nothing to switch between without content.
+> Left open; a future attempt should scope it as "the container screen, wiring already-built
+> pieces" as ONE deliberately-UI-heavy slice, not a logic-TDD slice like most of this routine's
+> other work — different risk/testing profile, worth a dedicated run.
+>
+> **"Invite by email; invite by SMS; import phone contacts" (§J) — scope is genuinely ambiguous,
+> not just large.** Traced the only iOS file matching "invite" (`InviteFriendsSheet.swift`, 733
+> lines) and found it is a **conversation-scoped share-link sheet** (`CreateShareLinkRequest
+> .conversationId: String`, required) presented via the native `UIActivityViewController` share
+> sheet — email/SMS are just share-sheet TARGETS, not dedicated composers (`grep` for
+> `MFMailComposeViewController`/`MFMessageComposeViewController` found zero iOS call sites).
+> Android **already has this exact feature** (`ShareLinkRepository`, `LinkApi`, `ShareLink`
+> model — confirmed built). So the checklist line under "J. Contacts & Friends" cannot mean
+> conversation share links; it must mean a distinct "invite a new person to the app" flow
+> (referral-style), for which no Android OR clearly-identified iOS reference was found in the
+> time available. Needs product clarification before it's a re-attackable item — noted rather
+> than guessed at.
+>
+> **Voice-profile management (§K) — confirmed genuinely unbuilt, confirmed genuinely large.**
+> Android has only the `VoiceProfile` model (`:core:model`), zero ViewModel/repository/screen.
+> iOS's reference is two full screens (`VoiceProfileWizardView` + `VoiceProfileManageView`) with
+> real audio recording (≥3 samples, 18+ age gate, GDPR delete-all) — needs microphone access this
+> container cannot exercise meaningfully in a JVM unit test. Left for a dedicated slice.
+>
+> **"Transcription" settings section (§L) — investigated down to the wire, and the wire wasn't
+> there.** Traced `prefs.audio.autoTranscribeIncoming` (the toggle's backing field,
+> `packages/MeeshySDK/Models/PreferenceModels.swift`) with a `grep` across the WHOLE iOS+SDK tree:
+> it is read/written **only** by the settings toggle itself — nothing in the transcription
+> pipeline ever reads it to gate real behaviour. The "engine" row beneath it is `EmptyView()`
+> content — also decorative. Porting this section would replicate a non-functional iOS toggle,
+> not real feature parity; not pursued. (Would otherwise have been a clean win — Android's
+> established per-domain `DataStore` pattern, `PrivacyPreferencesStore.kt`, was ready to mirror
+> almost verbatim for a hypothetical wired preference.)
+>
+> **Decision**: rather than force a low-value or speculative change onto one of these, or lower
+> this run's bar for what counts as a "bounded, re-proved, valuable" slice, this run closes with
+> documentation only — the same discipline the `IOS_DETTE` lane's Run #6/#10 already established
+> for exactly this situation. `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5
+> last_run=android-backlog-reverification-2026-08-16` — streak explicitly advanced to the
+> alternation threshold anyway (an investigation-only run still consumed an Android-lane
+> iteration, and the alternation rule's own escape hatch, "lane Android bloquée", already applies
+> here) — **the next run switches to `IOS_DETTE`.**
+
 > On 2026-08-16 **Member ban shipped** (slice `conversation-member-ban`). `gh pr list --state
 > open --search "apps/android OR apps/ios"` showed three concurrent PRs (#3096, #3105, #3106),
 > none touching `apps/android` — no collision.
