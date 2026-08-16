@@ -1136,5 +1136,14 @@ angle mort de ma propre vérification, pas du hasard) :
   ajoutées par F-085). Commit séparé `c0c402117`, poussé directement sur `main` selon la même
   procédure exceptionnelle.
 
+**CI reconfirmée après le fix R15** (`c0c402117`, run 31932578610) : 6564 tests, 6551 verts,
+**10 rouges — exactement les 10 items pré-existants documentés ci-dessus, aucune surprise**.
+`FocalHostSourceGuardTests` a disparu de la liste des échecs. Le job global reste marqué `failure`
+sur GitHub (10 tests rouges empêchent le vert total), mais ces 10 sont tracés individuellement,
+confirmés sans rapport avec ce fix, et documentés comme nouveau backlog ci-dessus — décision
+consciente de clore CE slice ici plutôt que d'engloutir dans le même run la migration
+bundle-injectable de ~7 tests + le symbole RTL + le bug de tri + les clés i18n manquantes, qui
+constituent un chantier séparé, correctement scopé pour un futur slice IOS_DETTE dédié.
+
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-build-break-focal-lentille`
   (ce commit, poussé directement sur `main`).
