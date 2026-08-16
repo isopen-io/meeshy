@@ -78,10 +78,15 @@
 > PR #3082, whose own re-proof corrected this run's inherited claim that iOS had no reaction UI); on-device transcription for the Feed audio attachment (still the standing
 > candidate, needs its own foundation).
 >
-> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=6 last_run=conversation-members-roster`
-> — the streak was already at 5 when this run merged (a PARALLEL run shipped
-> `conversation-favorite-reaction`, PR #3082, while this slice sat in CI), so it stands at 6
-> and the `android_streak >= 5` rule holds: **the next run bascules to `IOS_DETTE`**.
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=conversation-members-roster`.
+> **The cursor moved twice under this run while it sat in CI** — a caution worth recording: it read
+> `streak=4` when the slice was chosen, a parallel run took it to 5 (`conversation-favorite-reaction`,
+> PR #3082), and then an `IOS_DETTE` run (`ios-debt-backlog-reverification-2026-08-16`) performed the
+> `>= 5` bascule and reset it to **0**. So the bascule this entry originally predicted has already
+> happened, by another run, and this slice lands as the FIRST Android run of the new streak — 1, not
+> 6. **Read `tasks/lane-cursor.md` at merge time, never from the value you read at slice-selection
+> time**: on a repo with concurrent routine runs the cursor is live state, and a long CI wait is
+> easily long enough for another lane to claim the bascule.
 
 > On 2026-08-16 **Per-conversation favorite reaction shipped, fixing a genuinely dead filter tab**
 > (slice `conversation-favorite-reaction`) — re-proved against real code before starting: the prior
