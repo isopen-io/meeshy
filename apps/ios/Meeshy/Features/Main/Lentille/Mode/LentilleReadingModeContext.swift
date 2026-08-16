@@ -49,16 +49,21 @@ nonisolated enum LentilleReadingModeContext {
     /// conversation — la présence par membre n'est chargée qu'à l'ouverture
     /// d'une conversation, et le décompte serveur
     /// (`activeParticipantCount`) est un livrable de la vague gateway (V5,
-    /// G-123, hors périmètre LWS-8). En attendant, `0` : une valeur RÉELLE
-    /// (jamais un texte fabriqué), qui ne peut FAUSSER l'éligibilité dans
-    /// AUCUN sens — le seuil est `>= 5` (`ReadingModeOrchestrator
-    /// .riverEligibilityThreshold`), donc `0` ne peut jamais rendre
-    /// éligible une conversation qui ne l'est pas : le risque est
-    /// uniquement un faux NÉGATIF temporaire, jamais un faux positif.
+    /// G-123, hors périmètre LWS-8).
+    ///
+    /// REV-3/B3 : ce compte vaut désormais `nil` — INCONNU — là où il valait
+    /// `0`. Le `0` était défendu comme « une valeur RÉELLE qui ne peut fausser
+    /// l'éligibilité dans aucun sens », et c'était vrai de l'ÉLIGIBILITÉ (le
+    /// seuil est `>= 5`, un faux négatif au pire). Mais ce n'était pas vrai du
+    /// TEXTE : la raison grisée rendait « s'ouvrira à 5 personnes actives —
+    /// 0 aujourd'hui » sur des conversations pleines de monde. Zéro n'était
+    /// pas mesuré, il était fabriqué. `nil` le dit, et l'amendement S1 donne
+    /// au libellé la forme qui va avec (le seuil seul, sans compte inventé).
     /// À remplacer par le champ serveur dès G-123 livré (extension de
-    /// `Conversation`, hors ce fichier).
-    static func activeParticipantCount(for conversation: Conversation) -> Int {
-        0
+    /// `Conversation`, hors ce fichier) — et ce jour-là, seul le corps de
+    /// cette fonction change.
+    static func activeParticipantCount(for conversation: Conversation) -> Int? {
+        nil
     }
 
     // MARK: - Entrées de la loi
