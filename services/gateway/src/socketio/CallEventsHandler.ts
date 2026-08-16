@@ -1236,6 +1236,30 @@ export class CallEventsHandler {
     userId: string,
     callId: string
   ): Promise<{ participantId: string; userId: string } | null> {
+    const resolved = await this.resolveActiveCallParticipantDetailed(userId, callId);
+    if (!resolved) return null;
+    return { participantId: resolved.participantId, userId: resolved.userId };
+  }
+
+  /**
+   * Same resolution as `resolveActiveCallParticipant`, but also surfaces the
+   * call-type/roster context needed by `call:end` to tell a genuine
+   * end-for-everyone apart from a group-call participant merely hanging up
+   * on themselves (calling-stack audit 2026-08-16) — computed from the SAME
+   * `getCallSession` read every other call site here already pays for, so
+   * exposing it costs no extra query for the 9+ existing callers that only
+   * destructure `{ participantId, userId }`.
+   */
+  private async resolveActiveCallParticipantDetailed(
+    userId: string,
+    callId: string
+  ): Promise<{
+    participantId: string;
+    userId: string;
+    mode: Awaited<ReturnType<CallService['getCallSession']>>['mode'];
+    isDirectCall: boolean;
+    hasOtherActiveParticipants: boolean;
+  } | null> {
     try {
       const callSession = await this.callService.getCallSession(callId);
       const activeParticipant = callSession.participants.find(
@@ -1244,7 +1268,12 @@ export class CallEventsHandler {
       if (!activeParticipant) return null;
       return {
         participantId: activeParticipant.participantId,
-        userId: activeParticipant.participant?.userId ?? activeParticipant.participantId
+        userId: activeParticipant.participant?.userId ?? activeParticipant.participantId,
+        mode: callSession.mode,
+        isDirectCall: callSession.conversation?.type === 'direct',
+        hasOtherActiveParticipants: callSession.participants.some(
+          (p) => !p.leftAt && p.id !== activeParticipant.id
+        )
       };
     } catch (error) {
       // A genuine "not a participant" resolves via the `.find()` above
@@ -3487,7 +3516,8 @@ export class CallEventsHandler {
         // left behind in the call room by a reconnect race) is still a
         // conversation member, so the weaker check kept authorizing exactly
         // the fast-path broadcast this comment describes guarding against.
-        let endParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        const endParticipantDetail = await this.resolveActiveCallParticipantDetailed(userId, data.callId);
+        let endParticipantId = endParticipantDetail?.participantId ?? null;
         // Decline-before-join fix (2026-08-14): a callee who declines while
         // still ringing has no CallParticipant row yet (`call:join` is the
         // only path that creates one for a callee) — the check above
@@ -3501,6 +3531,19 @@ export class CallEventsHandler {
         if (preJoinDecline) {
           endParticipantId = preJoinDecline;
         }
+        // Group hang-up (calling-stack audit 2026-08-16) — an ACTIVE
+        // participant (already in the call room) hanging up on a GROUP call
+        // that still has other active participants must only remove
+        // THEMSELVES, mirroring CallService.endCall()'s own group/direct
+        // split (see its doc comment). Computed from the same read
+        // `resolveActiveCallParticipantDetailed` already made above — no
+        // extra query — so both the optimistic fast-path broadcast below
+        // AND the post-`endCall()` branch agree on the same call-shape
+        // snapshot.
+        const willContinueAsGroupLeave = !preJoinDecline
+          && !!endParticipantDetail
+          && !endParticipantDetail.isDirectCall
+          && endParticipantDetail.hasOtherActiveParticipants;
         if (!endParticipantId) {
           // Failing here means `userId` has no active CallParticipant row
           // for THIS call — either no conversation membership at all, or a
@@ -3530,19 +3573,33 @@ export class CallEventsHandler {
         // audience élargie conversation + user rooms) suit — les clients
         // dédupliquent sur leur état terminal.
         if (socket.rooms.has(ROOMS.call(data.callId))) {
-          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, {
-            callId: data.callId,
-            duration: 0,
-            endedBy: userId,
-            // Must go through the same normalization as the authoritative
-            // broadcast below (endCall() → resolveEndReason()): `data.reason`
-            // is raw client input, gated only by the schema's `[a-z_]+`
-            // charset whitelist, not membership in the CallEndReason enum. A
-            // raw cast here could broadcast a value ("busy", "declined", ...)
-            // the authoritative broadcast a few lines later would normalize
-            // to `completed` — the two would disagree.
-            reason: this.callService.resolveEndReason(data.reason)
-          } as CallEndedEvent);
+          if (willContinueAsGroupLeave) {
+            // Group call, other participants remain — broadcast the same
+            // PARTICIPANT_LEFT the call:leave handler sends, not ENDED. The
+            // authoritative endCall()→leaveCall() delegation below performs
+            // the actual DB/state cleanup; this is purely the instant,
+            // in-memory notification for the room.
+            socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.PARTICIPANT_LEFT, {
+              callId: data.callId,
+              participantId: endParticipantId,
+              userId,
+              mode: endParticipantDetail!.mode
+            } as CallParticipantLeftEvent);
+          } else {
+            socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, {
+              callId: data.callId,
+              duration: 0,
+              endedBy: userId,
+              // Must go through the same normalization as the authoritative
+              // broadcast below (endCall() → resolveEndReason()): `data.reason`
+              // is raw client input, gated only by the schema's `[a-z_]+`
+              // charset whitelist, not membership in the CallEndReason enum. A
+              // raw cast here could broadcast a value ("busy", "declined", ...)
+              // the authoritative broadcast a few lines later would normalize
+              // to `completed` — the two would disagree.
+              reason: this.callService.resolveEndReason(data.reason)
+            } as CallEndedEvent);
+          }
         }
 
         const callSession = await this.callService.endCall(
@@ -3562,6 +3619,30 @@ export class CallEventsHandler {
           ack?.({ success: true });
           logger.info('Pre-join decline acknowledged — group call continues for other invitees', {
             callId: data.callId, declinedBy: userId
+          });
+          return;
+        }
+
+        // Group hang-up (calling-stack audit 2026-08-16) — mirrors the
+        // preJoinDecline branch above. `endCall()` delegated to
+        // `leaveCall()` (see its doc comment) because other participants
+        // were still active when we snapshotted the call; re-check the
+        // AUTHORITATIVE post-transaction status rather than trusting the
+        // pre-call `willContinueAsGroupLeave` flag alone — a race where every
+        // other participant also left between our snapshot and the write
+        // must still fall through to the normal call:ended path below.
+        // Cleanup here mirrors call:leave's own non-terminal branch exactly
+        // (this participant's socket only — not the whole room; no
+        // call:ended broadcast, no summary, no missed-call notification):
+        // the PARTICIPANT_LEFT the fast path already sent covers the room.
+        if (willContinueAsGroupLeave && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
+          this.invalidateSignalSession(data.callId);
+          this.callService.clearRingingTimeout(data.callId);
+          this.clearBufferedOffer(data.callId);
+          await socket.leave(ROOMS.call(data.callId));
+          ack?.({ success: true });
+          logger.info('✅ Socket: call:end treated as a leave — group call continues for other participants', {
+            callId: data.callId, userId
           });
           return;
         }

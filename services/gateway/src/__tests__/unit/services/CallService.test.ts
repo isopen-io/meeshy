@@ -1352,6 +1352,128 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
+    describe('group call hang-up (calling-stack audit 2026-08-16)', () => {
+      // endCall() force-ended the ENTIRE CallSession for every participant
+      // regardless of call type — correct for a direct (1:1) call (spec C4:
+      // any active participant may end it) but wrong for a GROUP call, where
+      // one participant hanging up must only remove THEMSELVES. iOS's only
+      // hang-up path always calls call:end (never call:leave), making this
+      // concretely reachable: any group-call participant's "hang up" button
+      // silently ended the call for every other participant still on it.
+
+      it('treats a hang-up as a leave — NOT an end-for-everyone — when other participants are still active in a GROUP call', async () => {
+        const ender = createMockParticipant({ id: 'p-ender', participantId: 'participant-123', userId: 'user-123' });
+        const other1 = createMockParticipant({
+          id: 'p-other1', participantId: 'participant-456', userId: 'user-456', role: ParticipantRole.participant
+        });
+        const other2 = createMockParticipant({
+          id: 'p-other2', participantId: 'participant-789', userId: 'user-789', role: ParticipantRole.participant
+        });
+        const mockCall = createMockCallSession({
+          status: CallStatus.active,
+          answeredAt: new Date(),
+          participants: [ender, other1, other2]
+        });
+
+        mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
+        mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation({ type: 'group' }));
+        mockPrisma.callParticipant.findFirst.mockResolvedValue(ender);
+        mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+        mockPrisma.callParticipant.update.mockResolvedValue(undefined);
+
+        await callService.endCall('call-123', 'user-123', 'participant-123');
+
+        // Only the ender's OWN row is stamped left...
+        expect(mockPrisma.callParticipant.update).toHaveBeenCalledWith({
+          where: { id: ender.id },
+          data: { leftAt: expect.any(Date) }
+        });
+        // ...the other two participants' rows and the CallSession itself are
+        // untouched — the call keeps running for them.
+        expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
+        expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('still ends the call for everyone when the ender is the LAST active participant of a group call', async () => {
+        const ender = createMockParticipant({ id: 'p-ender', participantId: 'participant-123', userId: 'user-123' });
+        const alreadyLeft = createMockParticipant({
+          id: 'p-gone', participantId: 'participant-456', userId: 'user-456', leftAt: new Date()
+        });
+        const mockCall = createMockCallSession({
+          status: CallStatus.active,
+          answeredAt: new Date(),
+          participants: [ender, alreadyLeft]
+        });
+
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+        mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation({ type: 'group' }));
+        mockPrisma.$transaction.mockResolvedValue(undefined);
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce({
+          ...mockCall,
+          status: CallStatus.ended,
+          endedAt: new Date(),
+          participants: [
+            { ...ender, leftAt: new Date(), user: createMockUser() },
+            { ...alreadyLeft, user: createMockUser({ id: 'user-456' }) }
+          ],
+          initiator: createMockUser(),
+          conversation: createMockConversation({ type: 'group' })
+        });
+
+        const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+        // No other ACTIVE participant remains (the sole other row already
+        // left) — this falls through to endCall()'s own "end for everyone"
+        // path rather than the leave-only delegation, so the CallSession
+        // itself is terminated, exactly like the pre-existing single-
+        // participant case above.
+        expect(result.status).toBe(CallStatus.ended);
+      });
+
+      it('still ends the call for both parties on a DIRECT call even though another participant remains active (spec C4, unaffected by this fix)', async () => {
+        const ender = createMockParticipant({ id: 'p-ender', participantId: 'participant-123', userId: 'user-123' });
+        const other = createMockParticipant({
+          id: 'p-other', participantId: 'participant-456', userId: 'user-456', role: ParticipantRole.participant
+        });
+        const mockCall = createMockCallSession({
+          status: CallStatus.active,
+          answeredAt: new Date(),
+          participants: [ender, other]
+        });
+        const endedCall = {
+          ...mockCall,
+          status: CallStatus.ended,
+          endedAt: new Date(),
+          participants: [
+            { ...ender, leftAt: new Date(), user: createMockUser() },
+            { ...other, leftAt: new Date(), user: createMockUser({ id: 'user-456' }) }
+          ],
+          initiator: createMockUser(),
+          conversation: createMockConversation()
+        };
+
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+        mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation({ type: 'direct' }));
+        mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+        mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+        mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+        const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+        expect(result.status).toBe(CallStatus.ended);
+        // Direct call ends via endCall()'s OWN path (not leaveCall
+        // delegation), which stamps EVERY active participant's leftAt via a
+        // single updateMany — the other party is notified, not silently left
+        // "in call" waiting for the leaver to also hang up.
+        expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ callSessionId: 'call-123' })
+          })
+        );
+      });
+    });
+
     it('should throw error for anonymous users (CVE-004)', async () => {
       await expect(
         callService.endCall('call-123', 'anon-123', 'participant-anon', true)
@@ -1660,6 +1782,12 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      // Direct (1:1) call — endCall()'s group/direct check (calling-stack
+      // audit 2026-08-16) must NOT redirect this to leaveCall()'s "other
+      // participants remain" branch, or the rejected/missed assertions below
+      // (which target the ENTIRE session, not just this reporter's own row)
+      // would never run.
+      mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation());
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
       mockPrisma.callSession.update.mockResolvedValue(undefined);
       mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
@@ -1705,6 +1833,9 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      // Direct (1:1) call — see the sibling CALLEE-rejects test above for why
+      // this must be mocked explicitly (calling-stack audit 2026-08-16).
+      mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation());
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
       mockPrisma.callSession.update.mockResolvedValue(undefined);
       mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
