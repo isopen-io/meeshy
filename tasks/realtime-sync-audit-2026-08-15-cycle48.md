@@ -123,7 +123,7 @@ propres témoins, pas un ajout en marge d'un correctif gateway.
       la remise à zéro d'une catégorie ne touche que la sienne ; aucune ligne
       créée pour un compte qui n'en a pas
 - [x] `bunx tsc --noEmit` gateway : 0
-- [x] Suite gateway complète verte — 729 suites / 17 812 témoins
+- [x] Suite gateway complète verte après intégration de `main` — 730 suites / 17 818 témoins
 - [x] CHANGELOG + ADR `services/gateway/decisions.md` + leçon 205
 
 ## 10. Le même motif ailleurs — cherché, rien trouvé
