@@ -34,6 +34,10 @@ struct ConversationActiveMember: Identifiable { // internal for cross-file exten
 
 struct ConversationOverlayState {
     var overlayMessage: Message? = nil
+    /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
+    /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
+    /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
+    var overlayFocalPreview: FocalLongPressPreview? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
@@ -1461,7 +1465,7 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId in
+                onLongPress: { messageId, focalPreview in
                     // Preserve l'overlay menu existant (MessageOverlayMenu panel).
                     // L'infrastructure frame-tracking + LayoutEngine reste en place
                     // et sera utilisée ensuite pour lifter la bulle dans le flow
@@ -1475,6 +1479,10 @@ struct ConversationView: View {
                     if msg.callSummary != nil {
                         overlayState.callDetailMessage = msg
                     } else if msg.messageSource != .system {
+                        // Focal : l'aperçu élevé = pixels de la cellule vivante
+                        // (aucun second chemin de rendu). Bulles : nil → le
+                        // ThemedMessageBubble historique de l'overlay.
+                        overlayState.overlayFocalPreview = focalPreview
                         overlayState.overlayMessage = msg
                         overlayState.showOverlayMenu = true
                     }
@@ -2165,7 +2173,12 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
-                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
+                // Focal : la frame vient de la capture du contrôleur (le
+                // frame-tracker ne suit que les bulles) ; l'aperçu élevé est
+                // alors l'image de la cellule vivante.
+                messageBubbleFrame: overlayState.overlayFocalPreview?.frameInWindow
+                    ?? frameTracker.frame(for: msg.id) ?? .zero,
+                focalPreviewImage: overlayState.overlayFocalPreview?.image,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,

@@ -10,6 +10,12 @@ struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
     let messageBubbleFrame: CGRect
+    /// Focal : les PIXELS de la cellule vivante, capturés au moment du geste
+    /// (`MessageListViewController.focalOverlayPreview`). Quand présent,
+    /// l'aperçu élevé rend cette image au lieu de reconstruire un
+    /// `ThemedMessageBubble` — aucun second chemin de rendu, toute évolution
+    /// de `FocalRow` se propage ici par construction. `nil` en mode bulles.
+    var focalPreviewImage: UIImage? = nil
     @Binding var isPresented: Bool
     var canDelete: Bool = false
     var canEdit: Bool = false
@@ -345,32 +351,41 @@ struct MessageOverlayMenu: View {
                     // dimensions scaled informe le layout SwiftUI de la taille
                     // visible — la position du cluster (action bar / emoji
                     // bar) reste cohérente.
-                    ThemedMessageBubble(
-                        message: message,
-                        contactColor: contactColor,
-                        isDirect: isDirect,
-                        isDark: isDark,
-                        transcription: transcription,
-                        translatedAudios: translatedAudios,
-                        textTranslations: textTranslations,
-                        preferredTranslation: preferredTranslation,
-                        showAvatar: !isDirect,
-                        isLastInGroup: true,
-                        isLastReceivedMessage: true,
-                        isLastSentMessage: true,
-                        mentionDisplayNames: mentionDisplayNames,
-                        currentUserId: currentUserId,
-                        userLanguages: (
-                            regional: userRegionalLanguage,
-                            custom: userCustomDestinationLanguage
-                        )
-                    )
-                    // Gate Equatable (H3) : pendant le drag 60 fps
-                    // (`clusterDragOffset`) le body du GeometryReader se
-                    // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
-                    // re-rendrait à chaque frame. Ses inputs sont stables
-                    // pendant le drag → EquatableView saute son body.
-                    .equatable()
+                    Group {
+                        if let focalPreviewImage {
+                            // Focal : l'aperçu EST la cellule vivante — ses
+                            // pixels, capturés au geste. Pas de second rendu.
+                            Image(uiImage: focalPreviewImage)
+                                .resizable()
+                        } else {
+                            ThemedMessageBubble(
+                                message: message,
+                                contactColor: contactColor,
+                                isDirect: isDirect,
+                                isDark: isDark,
+                                transcription: transcription,
+                                translatedAudios: translatedAudios,
+                                textTranslations: textTranslations,
+                                preferredTranslation: preferredTranslation,
+                                showAvatar: !isDirect,
+                                isLastInGroup: true,
+                                isLastReceivedMessage: true,
+                                isLastSentMessage: true,
+                                mentionDisplayNames: mentionDisplayNames,
+                                currentUserId: currentUserId,
+                                userLanguages: (
+                                    regional: userRegionalLanguage,
+                                    custom: userCustomDestinationLanguage
+                                )
+                            )
+                            // Gate Equatable (H3) : pendant le drag 60 fps
+                            // (`clusterDragOffset`) le body du GeometryReader se
+                            // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                            // re-rendrait à chaque frame. Ses inputs sont stables
+                            // pendant le drag → EquatableView saute son body.
+                            .equatable()
+                        }
+                    }
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
                     .frame(width: nlBubbleW, height: nlBubbleH)
