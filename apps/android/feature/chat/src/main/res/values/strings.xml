@@ -159,4 +159,26 @@
     <string name="conversation_settings_slow_mode_off">Off</string>
     <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
     <string name="chat_create_share_link">Create share link</string>
+    <string name="conversation_members_title">Members (%1$d)</string>
+    <string name="conversation_members_open">Members</string>
+    <string name="conversation_members_search_hint">Search members</string>
+    <string name="conversation_members_empty">No members found</string>
+    <string name="conversation_members_error">Members could not be loaded</string>
+    <string name="conversation_members_retry">Retry</string>
+    <string name="conversation_members_you">%1$s (you)</string>
+    <string name="conversation_members_actions">Actions for %1$s</string>
+    <string name="conversation_members_action_failed">Action refused</string>
+    <string name="conversation_members_promote_moderator">Promote to moderator</string>
+    <string name="conversation_members_promote_admin">Promote to admin</string>
+    <string name="conversation_members_demote_moderator">Demote to moderator</string>
+    <string name="conversation_members_demote_member">Demote to member</string>
+    <string name="conversation_members_remove">Remove from conversation</string>
+    <string name="conversation_members_remove_title">Remove this member?</string>
+    <string name="conversation_members_remove_message">%1$s will lose access to this conversation.</string>
+    <string name="conversation_members_remove_confirm">Remove</string>
+    <string name="conversation_members_remove_cancel">Cancel</string>
+    <string name="conversation_members_role_creator">Creator</string>
+    <string name="conversation_members_role_admin">Admin</string>
+    <string name="conversation_members_role_moderator">Moderator</string>
+    <string name="conversation_members_role_member">Member</string>
 </resources>
