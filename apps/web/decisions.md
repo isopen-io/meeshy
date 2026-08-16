@@ -236,3 +236,42 @@ OUVERTE ; le trou est précisément l'app fermée, que seul le rattrapage voit).
 
 **Cons**: reste la borne d'origine — une conversation HARD-supprimée en base ne laisse de trace dans
 aucun des deux canaux, et attend toujours la réconciliation complète.
+
+## 2026-08-16: `conversation:updated` — la ligne de liste adopte le message que le payload NOMME
+
+**Décision**: le patch socket de la liste passe par `mergeConversationUpdate(conversation, raw)`,
+qui décide de `conversation.lastMessage` à partir de l'IDENTITÉ portée par `lastMessageId` :
+absente ⇒ ne rien toucher ; nulle ⇒ vider la ligne ; égale à celle du cache ⇒ réécrire le TEXTE et
+rien d'autre ; différente ⇒ composer un message NEUTRE depuis le seul payload. Les cinq champs du
+groupe d'aperçu (`lastMessageId`, `lastMessagePreview`, `senderId`, `location`,
+`previewRecalculated`) sont CONSOMMÉS par cette fusion et n'entrent plus dans le cache.
+
+**Pourquoi**: la ligne rend l'objet `conversation.lastMessage`, mais la carte du Prisme
+(`lastMessageTranslations`) vit au niveau CONVERSATION — le gateway l'y pose, sa forme compacte
+`{ langue: aperçu }` n'étant pas celle de `Message.translations`. Les deux moitiés de la ligne
+étaient donc écrites par des chemins différents, et sur les deux chemins où le payload nomme un
+AUTRE message — masquage personnel, suppression pour tous d'une conversation non ouverte — seule la
+carte était mise à jour. Le résolveur PRÉFÉRANT la traduction à l'aperçu brut, la ligne rendait le
+texte du remplaçant sous l'auteur, l'heure et la vignette du message parti.
+
+**Trois points de conception**:
+- **Neutre, pas hérité.** Le payload ne porte ni l'objet `sender` ni les pièces jointes ; les
+  conserver EST le mélange qu'on ferme. Une ligne incomplète (pas de préfixe d'auteur —
+  `getSenderName` rend `null` sans `sender`) se corrige au prochain `GET /conversations` ; une ligne
+  fausse ne se corrige jamais, rien ne signalant l'incohérence.
+- **La borne fait le correctif.** Identité INCHANGÉE ⇒ on ne touche qu'au texte. C'est le chemin le
+  plus fréquenté du service : `message:new` pose l'objet complet dans la room de conversation et le
+  `conversation:updated` jumeau arrive juste derrière avec le même id. Sans cette borne, chaque
+  message reçu dépouillerait sa propre ligne.
+- **Pas d'horodatage lisible ⇒ on ne compose rien.** La ligne rend `lastMessage.createdAt` ; une
+  date fabriquée y afficherait « Invalid Date ». Le cas ne se produit pas en nominal (les deux
+  émetteurs portent toujours `lastMessageAt` avec un id plein) — la garde borne le dégradé.
+
+**Alternatives rejetées**: faire lire `lastMessagePreview` à la ligne en repli de l'objet (déplace la
+décision dans le rendu et laisse deux sources de vérité pour un même texte) ; porter sur le fil les
+six champs manquants (pastille, drapeaux éphémères, nom d'auteur) — chiffré au cycle 52 : la
+jointure `attachments` tomberait sur le chemin du fan-out des traductions, le plus chaud du service.
+
+**Cons**: entre l'événement et la prochaine synchro, une ligne dont l'identité vient de changer perd
+son préfixe d'auteur et sa pastille de pièce jointe. C'est le compromis assumé — jumeau de
+`LastMessageFacet` côté iOS.

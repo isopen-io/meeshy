@@ -17,7 +17,8 @@
  * que le doc-comment du normaliseur reproche déjà aux dates.
  */
 
-import { normalizeConversationPatch } from '../use-socket-cache-sync';
+import { mergeConversationUpdate, normalizeConversationPatch } from '../use-socket-cache-sync';
+import type { Conversation } from '@meeshy/shared/types';
 
 describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
   it('carries the reader-scoped translations map into the patch', () => {
@@ -81,22 +82,23 @@ describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
   // périmer le second sans le premier laissait le texte affiché intact, et la
   // ligne montrait indéfiniment ce que le lecteur venait de masquer.
   describe('quand le serveur dit qu il ne reste aucun message visible', () => {
+    // La décision vit désormais dans `mergeConversationUpdate` : distinguer
+    // « plus aucun message visible » de « un AUTRE message » demande de savoir
+    // lequel la ligne décrit déjà, que le normaliseur ne voit pas. Le geste
+    // épinglé ici est le même — c'est l'objet que la ligne rend qui est vidé,
+    // pas seulement l'aperçu scalaire que personne ne lit.
     it('voids the object the row actually renders', () => {
-      const patch = normalizeConversationPatch({
-        lastMessageAt: null,
-        lastMessageId: null,
-        lastMessagePreview: null,
-        lastMessageTranslations: null,
-        previewRecalculated: true,
-      });
+      const merged = mergeConversationUpdate(
+        { id: 'c1', lastMessage: { id: 'msg-only', content: 'le seul message' } } as unknown as Conversation,
+        {
+          lastMessageAt: null,
+          lastMessageId: null,
+          lastMessagePreview: null,
+          lastMessageTranslations: null,
+          previewRecalculated: true,
+        }
+      );
 
-      expect('lastMessage' in patch).toBe(true);
-      expect(patch.lastMessage).toBeUndefined();
-
-      const merged = {
-        ...{ lastMessage: { id: 'msg-only', content: 'le seul message' } },
-        ...patch,
-      };
       expect(merged.lastMessage).toBeUndefined();
     });
 
@@ -117,7 +119,8 @@ describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
       expect('lastMessage' in patch).toBe(false);
       // L'id est un SIGNAL, pas une donnée du cache : `Conversation` (web) ne le
       // déclare pas et personne ne le lit. Le recopier n'ajoutait qu'un champ
-      // fantôme sur chaque ligne.
+      // fantôme sur chaque ligne. C'est la FUSION qui le lit désormais — ce
+      // qu'elle en fait est épinglé dans `merge-conversation-update.test.ts`.
       expect('lastMessageId' in patch).toBe(false);
     });
 
