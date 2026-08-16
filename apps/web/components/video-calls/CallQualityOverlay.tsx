@@ -25,8 +25,16 @@ export interface CallQualityOverlayProps {
   remoteQualityDegraded?: boolean;
   /** The peer is capturing the call screen (`call:screen-capture-alert`). */
   remoteScreenCapturing?: boolean;
-  /** Interpolated into the remote-alert labels ({name} placeholder). */
-  participantName?: string;
+  /**
+   * Interpolated into `remoteAlerts.qualityDegraded` ({name} placeholder).
+   * Vague 131 — kept SEPARATE from `screenCapturingParticipantName`: in a
+   * group call the degraded peer and the capturing peer can be two different
+   * people, so a single shared name prop could only ever label one of them
+   * correctly.
+   */
+  qualityDegradedParticipantName?: string;
+  /** Interpolated into `remoteAlerts.screenCapturing` ({name} placeholder). */
+  screenCapturingParticipantName?: string;
 }
 
 export const CallQualityOverlay = memo(function CallQualityOverlay({
@@ -36,7 +44,8 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
   userWantsVideo = false,
   remoteQualityDegraded = false,
   remoteScreenCapturing = false,
-  participantName = '',
+  qualityDegradedParticipantName = '',
+  screenCapturingParticipantName = '',
 }: CallQualityOverlayProps) {
   const { t } = useI18n('calls');
 
@@ -56,8 +65,8 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
         <div
           role="status"
           data-testid="remote-quality-indicator"
-          title={t('remoteAlerts.qualityDegraded').replace('{name}', participantName)}
-          aria-label={t('remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          title={t('remoteAlerts.qualityDegraded').replace('{name}', qualityDegradedParticipantName)}
+          aria-label={t('remoteAlerts.qualityDegraded').replace('{name}', qualityDegradedParticipantName)}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/90 text-white shadow"
         >
           <WifiLow className="h-4 w-4" aria-hidden="true" />
@@ -69,7 +78,7 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
           data-testid="screen-capture-pill"
           className="rounded-full bg-red-600/90 px-3 py-1 text-xs font-medium text-white shadow"
         >
-          {t('remoteAlerts.screenCapturing').replace('{name}', participantName)}
+          {t('remoteAlerts.screenCapturing').replace('{name}', screenCapturingParticipantName)}
         </div>
       )}
     </div>
