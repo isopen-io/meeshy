@@ -42,7 +42,9 @@ describe('E2E: Preferences Security', () => {
     userPreferences: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
+      // La remise à zéro passe par `updateMany` (cycle 48).
+      updateMany: jest.fn()
     },
     userConversationCategory: {
       findMany: jest.fn(),
@@ -129,10 +131,7 @@ describe('E2E: Preferences Security', () => {
     });
 
     it('should only delete preferences for authenticated user', async () => {
-      mockPrisma.userPreferences.update.mockResolvedValue({
-        userId,
-        privacy: null
-      });
+      mockPrisma.userPreferences.updateMany.mockResolvedValue({ count: 1 });
 
       const response = await authenticatedApp.inject({
         method: 'DELETE',
@@ -140,7 +139,7 @@ describe('E2E: Preferences Security', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockPrisma.userPreferences.update).toHaveBeenCalledWith(
+      expect(mockPrisma.userPreferences.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { userId }
         })
