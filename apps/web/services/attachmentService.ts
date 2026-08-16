@@ -10,7 +10,7 @@ import {
   getSizeLimit,
   getAttachmentType,
   isAcceptedMimeType,
-  MAX_FILES_PER_MESSAGE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   type AttachmentType
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
@@ -296,8 +296,8 @@ export class AttachmentService {
   static validateFiles(files: File[]): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    if (files.length > MAX_FILES_PER_MESSAGE) {
-      errors.push(`Maximum ${MAX_FILES_PER_MESSAGE} files allowed. You selected ${files.length}.`);
+    if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      errors.push(`Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed. You selected ${files.length}.`);
     }
 
     files.forEach((file) => {

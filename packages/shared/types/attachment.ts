@@ -395,7 +395,25 @@ export const UPLOAD_LIMITS = {
   CODE: 2147483648, // 2GB
 } as const;
 
-export const MAX_FILES_PER_MESSAGE = 30;
+/**
+ * Plafond du nombre de pièces jointes portées par UN message — source de
+ * vérité unique pour le gateway (validator, schéma socket, schéma REST) et
+ * pour les clients.
+ *
+ * Un envoi = un message (norme SOTA 2026-08-16, cf.
+ * `docs/superpowers/specs/2026-08-16-sota-message-attachment-normalization-design.md`) :
+ * ce nombre borne donc une sélection de composer entière, pas un lot d'upload.
+ *
+ * Il a remplacé cinq valeurs contradictoires qui coexistaient (10 côté
+ * `MessageValidator`, 30 ici, 50 côté composer web, 100 côté schéma socket,
+ * 199 côté composer iOS). Le composer iOS étant déjà passé à 199 le
+ * 2026-08-14, le cap serveur de 10 rejetait en pratique tout envoi iOS de
+ * plus de dix pièces.
+ *
+ * Swift ne peut pas importer cette constante : `ConversationComposerState.maxMediaSelection`
+ * la duplique et le test `attachment.test.ts` fige la valeur des deux côtés.
+ */
+export const MAX_ATTACHMENTS_PER_MESSAGE = 199;
 
 export const MAX_CONCURRENT_UPLOADS = 3;
 

@@ -10,7 +10,7 @@ import {
   getSizeLimit,
   formatFileSize,
   UPLOAD_LIMITS,
-  MAX_FILES_PER_MESSAGE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_CONCURRENT_UPLOADS,
   TUS_CHUNK_SIZE,
   SMALL_FILE_THRESHOLD,
@@ -21,7 +21,10 @@ describe('UPLOAD_LIMITS constants', () => {
   it('IMAGE is 4GB', () => expect(UPLOAD_LIMITS.IMAGE).toBe(4294967296));
   it('TEXT is 2GB', () => expect(UPLOAD_LIMITS.TEXT).toBe(2147483648));
   it('CODE is 2GB', () => expect(UPLOAD_LIMITS.CODE).toBe(2147483648));
-  it('MAX_FILES_PER_MESSAGE is 30', () => expect(MAX_FILES_PER_MESSAGE).toBe(30));
+  // Plafond unique d'un message (SOTA 2026-08-16). La valeur est dupliquée
+  // dans `ConversationComposerState.maxMediaSelection` (Swift ne peut pas
+  // importer ce module) : toute évolution touche les deux sites.
+  it('MAX_ATTACHMENTS_PER_MESSAGE is 199', () => expect(MAX_ATTACHMENTS_PER_MESSAGE).toBe(199));
   it('MAX_CONCURRENT_UPLOADS is 3', () => expect(MAX_CONCURRENT_UPLOADS).toBe(3));
   it('TUS_CHUNK_SIZE is 10MB', () => expect(TUS_CHUNK_SIZE).toBe(10 * 1024 * 1024));
   it('SMALL_FILE_THRESHOLD is 50MB', () => expect(SMALL_FILE_THRESHOLD).toBe(50 * 1024 * 1024));

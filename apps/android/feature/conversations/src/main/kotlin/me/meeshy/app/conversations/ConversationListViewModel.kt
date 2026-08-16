@@ -343,6 +343,15 @@ class ConversationListViewModel @Inject constructor(
     }
 
     /**
+     * Sets or clears (`emoji = null`) the conversation's favorite-reaction
+     * emoji (context-menu "Favorite", parity iOS `setFavoriteReaction`) — the
+     * write side of the [me.meeshy.sdk.model.ConversationFilter.FAVORITES] tab.
+     */
+    fun setReaction(id: String, emoji: String?) {
+        runPrefMutation { repository.setReactionOptimistic(id, emoji) }
+    }
+
+    /**
      * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
      * No optimistic local removal: the socket-driven purge path
      * (`ConversationPurge.onParticipantLeft`) drops the row once the server

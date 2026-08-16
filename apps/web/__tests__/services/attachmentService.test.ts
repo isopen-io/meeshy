@@ -1,6 +1,6 @@
 import { AttachmentService } from '@/services/attachmentService';
 import {
-  MAX_FILES_PER_MESSAGE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   getSizeLimit,
   getAttachmentType,
   formatFileSize,
@@ -20,7 +20,7 @@ jest.mock('@meeshy/shared/types/attachment', () => ({
   getAttachmentType: jest.fn(() => 'document'),
   formatFileSize: jest.fn((bytes: number) => `${bytes} bytes`),
   isAcceptedMimeType: jest.fn(() => true),
-  MAX_FILES_PER_MESSAGE: 30,
+  MAX_ATTACHMENTS_PER_MESSAGE: 199,
   MAX_CONCURRENT_UPLOADS: 3,
   SMALL_FILE_THRESHOLD: 50 * 1024 * 1024,
   TUS_CHUNK_SIZE: 10 * 1024 * 1024,
@@ -146,14 +146,22 @@ describe('AttachmentService', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('returns error when files exceed MAX_FILES_PER_MESSAGE', () => {
-      const files = Array.from({ length: 31 }, (_, i) =>
+    it('returns error when files exceed MAX_ATTACHMENTS_PER_MESSAGE', () => {
+      const files = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE + 1 }, (_, i) =>
         makeFile(`file${i}.jpg`, 100)
       );
       const result = AttachmentService.validateFiles(files);
       expect(result.valid).toBe(false);
       expect(result.errors.some((e) => e.includes('Maximum'))).toBe(true);
-      expect(result.errors.some((e) => e.includes('30'))).toBe(true);
+      expect(result.errors.some((e) => e.includes(String(MAX_ATTACHMENTS_PER_MESSAGE)))).toBe(true);
+    });
+
+    it('accepts a full composer selection at the shared cap', () => {
+      const files = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE }, (_, i) =>
+        makeFile(`file${i}.jpg`, 100)
+      );
+      const result = AttachmentService.validateFiles(files);
+      expect(result.valid).toBe(true);
     });
 
     it('collects per-file errors from validateFile', () => {

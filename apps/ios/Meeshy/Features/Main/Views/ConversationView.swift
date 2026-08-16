@@ -129,6 +129,12 @@ struct ConversationComposerState {
     /// ne multiplie pas les bulles, elle lève juste la contrainte de saisie.
     /// L'envoi lui-même est borné par la concurrence d'upload, pas par ce
     /// nombre (cf. `TusUploadManager.maxConcurrent`).
+    ///
+    /// Cette dernière phrase n'est vraie que depuis le 2026-08-16 : la boucle
+    /// d'upload attendait chaque fichier avant de lancer le suivant, donc le
+    /// pool de l'acteur ne dépassait jamais un actif et 199 photos partaient
+    /// l'une après l'autre. `sendMessageWithAttachments` confie désormais le
+    /// groupe entier au manager, qui borne réellement.
     static let maxMediaSelection = 199
 
     var showOptions = false

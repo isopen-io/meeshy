@@ -2703,9 +2703,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       explicit empty string on clear — the pre-existing `explicitNulls = false` JSON config only drops
       Kotlin `null`, never `""`) + `ConversationPrefsPayload.customName`/`OutboxFlushWorker` threading
       through to `ConversationPreferencesUpdate` + a "Rename conversation" context-menu action/dialog.
-      Reaction emoji and tags still unwired — the model fields (`ApiConversationPreferences.reaction`,
-      `UserConversationPreferences.tags`) exist but nothing reads/writes them from the UI yet on either
-      platform (iOS has no real UI for `reaction` either). Box stays unchecked until those land.
+      **Reaction emoji wired 2026-08-16** (slice `conversation-favorite-reaction`) — correction to the
+      note above: iOS DOES have real UI for this (`ConversationListView+Overlays`'s "Favori" submenu,
+      a fixed 8-emoji set ⭐️❤️🔥💎🎯✨🏆💡 + "Retirer le favori", `ConversationPreferencesTab`'s own
+      "Reaction" row is a second entry point to the SAME field). It also drives
+      `ConversationFilter.FAVORITES`, which was a confirmed dead end on Android (the tab existed,
+      `ConversationFilters` already gated on `prefs?.reaction != null`, but nothing ever wrote it).
+      `ConversationRepository.setReactionOptimistic` mirrors `setCustomNameOptimistic`'s explicit-
+      empty-string-on-clear trick; `ConversationFilters.FAVORITES` fixed to `isNullOrBlank()` so the
+      clear sentinel doesn't itself count as a favorite. Only `tags` remains unwired — the
+      `UserConversationPreferences.tags` field exists but nothing reads/writes it from the UI on
+      either platform. Box stays unchecked until that lands too.
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN

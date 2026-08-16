@@ -25,6 +25,7 @@ import type {
   MessageRequest,
   MessageValidationResult
 } from '@meeshy/shared/types';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
 import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -80,11 +81,16 @@ export class MessageValidator {
     }
 
     // Validation des pièces jointes
+    // Ce cap est le SEUL qui s'applique aux deux transports (REST et socket
+    // convergent ici via `MessagingService.handleMessage`). Il vaut donc le
+    // plafond produit, et se lit dans `@meeshy/shared` — figé en dur à 10, il
+    // rejetait tout envoi iOS de plus de dix pièces depuis que le composer y
+    // est passé à 199.
     const attachmentCount = (request.attachments?.length || 0) + (request.attachmentIds?.length || 0);
-    if (attachmentCount > 10) {
+    if (attachmentCount > MAX_ATTACHMENTS_PER_MESSAGE) {
       errors.push({
         field: 'attachments',
-        message: 'Maximum 10 attachments per message',
+        message: `Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`,
         code: 'TOO_MANY_ATTACHMENTS'
       });
     }
