@@ -1011,7 +1011,11 @@ class ConversationListViewModel: ObservableObject {
                     self.bumpToTop(
                         conversationId: event.conversationId,
                         facet: LastMessageFacet(
-                            id: event.lastMessageId,
+                            // `…IdValue` : cette branche décrit un message NEUF
+                            // (`newLastAt` a AVANCÉ), donc « clé absente » et
+                            // « plus aucun message » y sont hors sujet — un
+                            // vidage n'avance jamais d'horodatage.
+                            id: event.lastMessageIdValue,
                             preview: event.lastMessagePreview,
                             senderName: resolvedSenderName,
                             at: newLastAt,
@@ -1023,8 +1027,28 @@ class ConversationListViewModel: ObservableObject {
                             location: event.location
                         )
                     )
+                } else if case .replaced(.none) = event.lastMessage {
+                    // « Plus AUCUN message visible ici » : le lecteur vient de
+                    // masquer POUR LUI le dernier qui lui restait. Tout le
+                    // groupe d'aperçu arrive à `null`, et les `if let` de la
+                    // branche suivante le jetteraient champ par champ — la
+                    // ligne garderait l'aperçu de ce qui vient de disparaître,
+                    // et pour toujours : plus rien ne bougera dans cette
+                    // conversation pour le faire remplacer.
+                    //
+                    // Le vidage passe par le geste CENTRAL du modèle : la ligne
+                    // dit plus que son texte (pièce jointe, expéditeur, épingle
+                    // de position, « Message expiré »), et n'en effacer qu'une
+                    // partie laisserait le reste décrire le message masqué.
+                    //
+                    // `lastMessageAt` reste en place — voir `clearLastMessage` :
+                    // c'est le rang GLOBAL de la ligne, qu'un masquage personnel
+                    // ne change pour personne.
+                    if self.conversations[index].clearLastMessage() {
+                        self.schedulePersist()
+                    }
                 } else {
-                    if let msgId = event.lastMessageId {
+                    if case .replaced(.some(let msgId)) = event.lastMessage {
                         self.conversations[index].lastMessageId = msgId
                         // Écrite AVEC l'id (chemin message-driven) et jamais
                         // seule : `nil` efface la pastille du message précédent

@@ -627,6 +627,30 @@ public enum LastMessagePreviewTranslations: Sendable, Hashable {
     case replaced([String: String])
 }
 
+/// Tri-état de l'IDENTITÉ du dernier message de la ligne de liste, portée par
+/// `conversation:updated`.
+///
+/// Même raison d'être que `LastMessagePreviewTranslations`, appliquée au champ
+/// qui NOMME le message : `Optional` confond « la clé était ABSENTE » (un
+/// renommage, un changement d'avatar — cet événement ne parle pas du dernier
+/// message) et « la clé valait `null` » (le serveur DIT que ce lecteur n'a plus
+/// AUCUN message visible ici).
+///
+/// Le second cas n'est pas théorique : un lecteur qui masque pour lui-même —
+/// suppression pour soi, purge d'historique — le dernier message qui lui restait
+/// vide sa propre vue sans rien changer pour les autres.
+/// `emitConversationPreviewUpdate` lui sert alors un payload dont TOUT le groupe
+/// d'aperçu vaut `null`. Lu à travers des `Optional`, ce payload ne dit rien du
+/// tout : chaque `if let` le jette, et la ligne de liste continue d'afficher
+/// l'aperçu de ce que le lecteur vient de masquer — définitivement, puisque plus
+/// rien ne bougera dans cette conversation.
+public enum LastMessageIdentity: Sendable, Hashable {
+    /// Clé absente : cet événement ne parle pas du dernier message.
+    case unchanged
+    /// Clé présente. `nil` = plus AUCUN message visible pour ce lecteur.
+    case replaced(String?)
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -644,10 +668,15 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
-    /// Populated by the message-driven `CONVERSATION_UPDATED` path
-    /// (`MessageHandler.ts`) so the client can update the conversation row's
-    /// preview without a separate fetch.
-    public let lastMessageId: String?
+    /// Le message que cette ligne de liste doit désormais désigner. Tri-état —
+    /// voir `LastMessageIdentity` : `.unchanged` (clé absente) et
+    /// `.replaced(nil)` (« plus aucun message visible ici ») demandent des
+    /// actions opposées, et `String?` les confondait.
+    ///
+    /// Renseigné par le chemin message-driven (`MessageHandler.ts`) pour que le
+    /// client mette à jour l'aperçu sans requête séparée, et par
+    /// `emitConversationPreviewUpdate` sur les recalculs.
+    public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
     /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
     /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
@@ -709,7 +738,14 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
-        lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
+        // `contains`, comme pour la carte du Prisme juste en dessous et pour la
+        // même raison : c'est la PRÉSENCE de la clé qui sépare « cet événement
+        // ne parle pas du dernier message » de « il n'y en a plus aucun ».
+        if container.contains(.lastMessageId) {
+            lastMessage = .replaced(try container.decodeIfPresent(String.self, forKey: .lastMessageId))
+        } else {
+            lastMessage = .unchanged
+        }
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
         // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
         // distingue « cet événement ne parle pas d'aperçu » de « la carte est
@@ -740,7 +776,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds: Int? = nil,
         autoTranslateEnabled: Bool? = nil,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
@@ -760,7 +796,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.slowModeSeconds = slowModeSeconds
         self.autoTranslateEnabled = autoTranslateEnabled
         self.lastMessageAt = lastMessageAt
-        self.lastMessageId = lastMessageId
+        self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
@@ -769,6 +805,17 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
         self.previewRecalculated = previewRecalculated
+    }
+
+    /// L'id porté, `nil` quand la clé était absente OU nulle.
+    ///
+    /// Réservé aux appelants pour qui les deux se valent — typiquement la
+    /// construction d'une facette décrivant un message NEUF, chemin qu'un
+    /// vidage n'atteint jamais (il n'avance aucun horodatage). Partout où le
+    /// vidage compte, c'est `lastMessage` qu'il faut lire.
+    public var lastMessageIdValue: String? {
+        guard case .replaced(let id) = lastMessage else { return nil }
+        return id
     }
 }
 

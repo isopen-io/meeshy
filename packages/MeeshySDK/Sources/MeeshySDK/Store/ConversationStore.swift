@@ -452,6 +452,11 @@ public actor ConversationStore {
     /// personnel du dernier message visible). Sans cette exception, le groupe
     /// entier était jeté sur ces deux chemins nominaux.
     ///
+    /// Un cran au-delà du recul : `lastMessage == .replaced(nil)` dit qu'il n'y
+    /// a plus AUCUN message visible pour ce lecteur, et vide le groupe entier
+    /// (`MeeshyConversation.clearLastMessage`) au lieu de l'appliquer champ par
+    /// champ — un payload tout en `null` ne survit à aucun `if let`.
+    ///
     /// Fields unrelated to message ordering (e.g. `title`) are still applied
     /// regardless. No-op for an unknown conversation (the next list refresh
     /// will catch up).
@@ -506,18 +511,34 @@ public actor ConversationStore {
         // atterrit derrière un message plus neuf — est déjà tenu côté serveur
         // par la borne `onlyIfLatestIs`, qui abandonne le fan-out.
         if lastMessageIsCurrent || event.previewRecalculated {
-            if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
-            if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
-            if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
-            // Le Prisme fait partie du MÊME groupe monotone : le résolveur
-            // préfère la traduction à l'aperçu brut, donc poser l'un sans
-            // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
-            // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
-            // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
-            if case .replaced(let map) = event.lastMessageTranslations {
-                conv.lastMessageTranslations = map.isEmpty ? nil : map
-                conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
-                changed = true
+            // « Ce lecteur n'a plus AUCUN message visible ici » — il vient de
+            // masquer POUR LUI le dernier qui lui restait. Le serveur l'énonce
+            // en posant tout le groupe à `null`, et cette branche doit sortir en
+            // premier : lu par les `if let` d'en dessous, ce payload ne dit
+            // RIEN (chaque champ est jeté un par un), et la ligne garde l'aperçu
+            // de ce qui vient de disparaître — définitivement, puisque plus rien
+            // ne bougera dans cette conversation.
+            //
+            // Le fait est porté par l'IDENTITÉ du message et par elle seule :
+            // c'est le seul champ du groupe dont l'ABSENCE (métadonnées) et la
+            // NULLITÉ (plus rien) se distinguent sur le fil. `lastMessageAt`
+            // nul, lui, décrit aussi bien un renommage.
+            if case .replaced(.none) = event.lastMessage {
+                changed = conv.clearLastMessage() || changed
+            } else {
+                if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
+                if case .replaced(.some(let id)) = event.lastMessage { conv.lastMessageId = id; changed = true }
+                if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+                // Le Prisme fait partie du MÊME groupe monotone : le résolveur
+                // préfère la traduction à l'aperçu brut, donc poser l'un sans
+                // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+                // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
+                // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
+                if case .replaced(let map) = event.lastMessageTranslations {
+                    conv.lastMessageTranslations = map.isEmpty ? nil : map
+                    conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
+                    changed = true
+                }
             }
         }
         if let v = event.title { conv.title = v; changed = true }
@@ -898,7 +919,10 @@ public struct ConversationDeletedEvent: Sendable, Hashable {
 public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let conversationId: String
     public let lastMessageAt: Date?
-    public let lastMessageId: String?
+    /// Identité du dernier message. Tri-état — voir `LastMessageIdentity` :
+    /// `.unchanged` (clé absente) et `.replaced(nil)` (« plus aucun message
+    /// visible pour ce lecteur ») ne sont pas le même ordre.
+    public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
     /// Prisme de la ligne de liste. Tri-état — voir
     /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
@@ -922,7 +946,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public init(
         conversationId: String,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
@@ -938,7 +962,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     ) {
         self.conversationId = conversationId
         self.lastMessageAt = lastMessageAt
-        self.lastMessageId = lastMessageId
+        self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage

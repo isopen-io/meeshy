@@ -1146,9 +1146,19 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         let row = cached.first(where: { $0.id == "c-del-solo" })
-        XCTAssertEqual(row?.lastMessagePreview, "",
-                       "deleting the only message must clear the stale deleted text from the row")
+        // `nil` et non `""` : le vidage passe par le geste CENTRAL du modèle
+        // (`clearLastMessage`), le même qu'applique la fusion socket quand le
+        // SERVEUR annonce « plus aucun message visible ». Les deux rendent
+        // identiquement côté ligne (`resolvedLastMessagePreview` → `nil`, et la
+        // vue teste déjà `!isEmpty`), mais le geste unique emporte AUSSI la
+        // pastille de pièce jointe, l'épingle de position et les drapeaux
+        // éphémères — que le vidage à la main laissait décrire le message
+        // supprimé.
+        XCTAssertNil(row?.lastMessagePreview,
+                     "deleting the only message must clear the stale deleted text from the row")
         XCTAssertNil(row?.lastMessageId)
+        XCTAssertNil(row?.lastMessageLocation)
+        XCTAssertTrue(row?.lastMessageAttachments.isEmpty ?? false)
     }
 
     /// Deleting a call-summary message (the socket-confirmed, authoritative
