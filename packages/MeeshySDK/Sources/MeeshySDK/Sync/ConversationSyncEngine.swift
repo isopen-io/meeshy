@@ -1329,8 +1329,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     // The deleted message was the conversation's ONLY message — there
                     // is no survivor to surface. Clear the stale preview so the list
                     // row stops showing the deleted message's text (displayed ≠ real).
-                    updated[idx].lastMessagePreview = ""
-                    updated[idx].lastMessageId = nil
+                    //
+                    // Même geste que celui qu'applique `ConversationStore.merging`
+                    // quand le SERVEUR annonce « plus aucun message visible »
+                    // (`LastMessageIdentity.replaced(nil)`) : c'est le même fait,
+                    // découvert localement au lieu d'être reçu. Le vidage à la main
+                    // qui vivait ici ne touchait que le texte et l'id, laissant la
+                    // pastille de pièce jointe, l'épingle de position et le libellé
+                    // « Message expiré » décrire le message supprimé.
+                    updated[idx].clearLastMessage()
                 }
             }
             return updated
