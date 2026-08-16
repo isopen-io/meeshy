@@ -107,6 +107,21 @@ nonisolated enum FocalPassConstants {
     /// TODO CONTRACTUEL : `thread.focusBand.landingTolerance` absent du token.
     static let landingTolerance: CGFloat = 8
 
+    // MARK: - Atterrissage d'élection (§4.7bis — zone d'activation sans conflit)
+
+    /// Dégagement entre le bord BAS visuel du message élu et le haut du
+    /// composeur, une fois le défilement posé. C'est la définition de la
+    /// zone d'activation demandée : « plus du tout en conflit avec la zone
+    /// de saisie » — l'élu atterrit ENTIER au-dessus du composeur, ses
+    /// contrôles de bord compris.
+    ///
+    /// Sémantiquement distinct de `bandGap` (position de la LIGNE de focus)
+    /// et de `landingTolerance` (tolérance de mesure §WS-6) : celui-ci borne
+    /// un BORD de cellule, pas un centre.
+    ///
+    /// TODO CONTRACTUEL : `thread.focusBand.settleGap` absent du token.
+    static let settleGap: CGFloat = 12
+
     // MARK: - Flash d'atterrissage (§4.7)
 
     /// Cadences du flash de recherche. Reprises **verbatim** du `flashCell`

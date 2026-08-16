@@ -40,6 +40,10 @@ data class ConversationPreferencesUpdate(
 @Serializable
 data class ParticipantRoleUpdate(val role: String)
 
+/** Body of `POST /conversations/{id}/participants` (add a member). */
+@Serializable
+data class AddParticipantRequest(val userId: String)
+
 interface ConversationApi {
     @GET("conversations")
     suspend fun list(
@@ -153,5 +157,16 @@ interface ConversationApi {
     suspend fun removeParticipant(
         @Path("id") id: String,
         @Path("userId") userId: String,
+    ): ApiResponse<Unit>
+
+    /**
+     * Adds a member to the conversation (gateway "requires admin/moderator role" —
+     * the client only gates the affordance, the server remains the authority).
+     * Mirror of iOS `AddParticipantSheet.addParticipant`.
+     */
+    @POST("conversations/{id}/participants")
+    suspend fun addParticipant(
+        @Path("id") id: String,
+        @Body body: AddParticipantRequest,
     ): ApiResponse<Unit>
 }

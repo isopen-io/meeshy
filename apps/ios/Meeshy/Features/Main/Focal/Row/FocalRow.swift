@@ -163,7 +163,19 @@ struct FocalRow: View {
             // contenu. En focus, elles MIGRENT dans la barre de base, où elles
             // ouvrent la rangée « posé → (+) → à poser » : deux jeux de
             // pilules à l'écran pour le même message se contrediraient.
-            if !input.isFocused {
+            //
+            // `.hidden()` et non un `if` : la HAUTEUR doit rester identique
+            // dans les deux états. C'était le dernier canal de hauteur
+            // dépendant de l'élection (les autres — pastille, indent, barre —
+            // ont tous une réserve constante) : démonter la rangée faisait
+            // varier la cellule de ~27 pt au basculement d'élu, et la
+            // reconfiguration d'arrêt (§4.6) faisait sauter toute la liste.
+            // `.hidden()` préserve l'espace de layout, coupe le rendu ET les
+            // touches — la réserve est EXACTE par construction, quel que soit
+            // le nombre de pilules.
+            if input.isFocused {
+                reactionsSection.hidden()
+            } else {
                 reactionsSection
             }
 

@@ -34,6 +34,12 @@ final class MessageDayStickyState: ObservableObject {
     /// bande de la pill — et l'utilisateur vient de demander à voir les
     /// détails de la conversation, pas la date du haut de l'écran.
     @Published var isHeaderExpanded: Bool = false
+    /// Focal + défilement actif : la pilule fait partie du chrome escamoté
+    /// pendant le mouvement (chaque rangée révèle déjà son heure, la date de
+    /// tête est du bruit). Posée par `MessageListViewController.
+    /// setScrollingActive` — jamais en mode bulles, qui garde le
+    /// comportement historique.
+    @Published var isSuppressed: Bool = false
 }
 
 /// Overlay SwiftUI piné au top du collectionView : affiche le séparateur
@@ -44,7 +50,7 @@ struct MessageDayStickyOverlay: View {
 
     var body: some View {
         Group {
-            if let label = state.label, !state.isHeaderExpanded {
+            if let label = state.label, !state.isHeaderExpanded, !state.isSuppressed {
                 MessageDaySeparator(label: label, isDark: state.isDark)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
@@ -53,6 +59,7 @@ struct MessageDayStickyOverlay: View {
         }
         .animation(.easeInOut(duration: 0.18), value: state.label)
         .animation(.easeInOut(duration: 0.18), value: state.isHeaderExpanded)
+        .animation(.easeInOut(duration: 0.18), value: state.isSuppressed)
         .allowsHitTesting(false)
     }
 }

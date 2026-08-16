@@ -1329,7 +1329,11 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16,
+                // Le représentable court désormais jusqu'au bord BAS physique
+                // (`ignoresSafeArea` bas, cf. plus bas) : la bande safe area
+                // qu'il traverse s'ajoute à la réserve du composeur pour que
+                // le repos du fil ne bouge pas d'un point.
+                bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 // 0 en preview : la vue y est hébergée dans une `.sheet` à
                 // détentes, dont le bord haut est déjà sous la status bar —
                 // réserver la bande îlot y décalerait le flux dans le vide.
@@ -1569,7 +1573,16 @@ struct ConversationView: View {
             // inset (`applyTopInset`), le contenu ne fait qu'y transiter au
             // défilement. Le header flottant, lui, reste dans la safe area
             // (zIndex 100, au-dessus).
-            .ignoresSafeArea(.container, edges: .top)
+            //
+            // MÊME règle au bord BAS (retour user 2026-08-16, capture device) :
+            // borné à la safe area basse, le représentable coupait les
+            // messages ~34 pt AVANT le bord physique — visible dès que le
+            // chrome s'escamote au défilement (Focal) : le fil doit sortir de
+            // l'écran par le bord, exactement comme en haut. La réserve du
+            // composeur est portée par `bottomInset` (le contrôleur la
+            // compose dans `contentInset.top`), compensée de
+            // `safeAreaBottom` au site d'appel — le repos est inchangé.
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
 
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par
@@ -1645,7 +1658,7 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
+            if (!scrollState.isNearBottom || viewModel.isSearchingQuotedMessage) && !hidesComposerChromeForScroll {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
                     .zIndex(60)
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
@@ -1694,6 +1707,12 @@ struct ConversationView: View {
                 )
             }
             .zIndex(50)
+            // Chrome escamoté pendant le défilement Focal : pur `opacity` —
+            // le composeur garde sa hauteur mesurée (aucun inset ne bouge,
+            // donc aucun re-scaling du fil), il ne fait que s'effacer. Les
+            // touches passent au fil pendant l'escamotage.
+            .opacity(hidesComposerChromeForScroll ? 0 : 1)
+            .allowsHitTesting(!hidesComposerChromeForScroll)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
@@ -1790,6 +1809,43 @@ struct ConversationView: View {
             usesFlatRow: readingModeController.mode.usesFlatRow,
             isScrollingList: scrollState.isScrollingActiveList,
             isSearchOpen: headerState.showSearch
+        )
+    }
+
+    /// **En Focal, le défilement escamote TOUT le chrome** — composeur et
+    /// bouton de retour au bas compris, en plus du header (`hidesEntireHeader`)
+    /// et de la pilule de jour (côté hôte, `MessageDayStickyState.isSuppressed`).
+    /// Le fil occupe l'écran entier le temps du mouvement ; tout revient dès
+    /// la pose — après l'atterrissage d'élection (§4.7bis), qui garantit que
+    /// l'élu n'est plus jamais recouvert par la zone de saisie.
+    ///
+    /// Une saisie ACTIVE échappe à la règle : panneau emoji ouvert ou
+    /// suggestions de mention affichées, le composeur est l'outil en main —
+    /// on ne retire pas l'outil en main. Pur `opacity` : aucun inset ne
+    /// bouge, donc aucune re-mise à l'échelle du fil.
+    static func hidesComposerChrome(
+        usesFlatRow: Bool,
+        isScrollingList: Bool,
+        isSearchOpen: Bool,
+        isEmojiPanelOpen: Bool,
+        hasMentionSuggestions: Bool
+    ) -> Bool {
+        hidesEntireHeader(
+            usesFlatRow: usesFlatRow,
+            isScrollingList: isScrollingList,
+            isSearchOpen: isSearchOpen
+        )
+            && !isEmojiPanelOpen
+            && !hasMentionSuggestions
+    }
+
+    private var hidesComposerChromeForScroll: Bool {
+        Self.hidesComposerChrome(
+            usesFlatRow: readingModeController.mode.usesFlatRow,
+            isScrollingList: scrollState.isScrollingActiveList,
+            isSearchOpen: headerState.showSearch,
+            isEmojiPanelOpen: composerState.showTextEmojiPicker,
+            hasMentionSuggestions: viewModel.activeMentionQuery != nil
         )
     }
 

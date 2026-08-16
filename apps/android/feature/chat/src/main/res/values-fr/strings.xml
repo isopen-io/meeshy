@@ -181,4 +181,13 @@
     <string name="conversation_members_role_admin">Admin</string>
     <string name="conversation_members_role_moderator">Modérateur</string>
     <string name="conversation_members_role_member">Membre</string>
+    <string name="conversation_members_add">Ajouter</string>
+    <string name="conversation_members_add_a11y">Ajouter un membre</string>
+    <string name="add_participant_title">Ajouter un membre</string>
+    <string name="add_participant_close">Fermer</string>
+    <string name="add_participant_search_hint">Rechercher par nom ou @pseudo</string>
+    <string name="add_participant_prompt">Recherchez par nom ou @pseudo</string>
+    <string name="add_participant_no_results">Aucun utilisateur trouvé</string>
+    <string name="add_participant_member_badge">Membre</string>
+    <string name="add_participant_add_button">Ajouter</string>
 </resources>

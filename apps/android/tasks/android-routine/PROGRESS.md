@@ -1,5 +1,64 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **"Add member" shipped, closing the last open gap in conversation member
+> moderation** (slice `add-participant-sheet`). `gh pr list --state open --search "apps/android
+> OR apps/ios"` showed one concurrent PR (#3096, realtime/gateway+iOS+web) not touching
+> `apps/android` — no collision. With all three room-join follow-ups closed by the previous run,
+> re-proved the two candidates that PROGRESS.md itself had named as still-open: "Conversation
+> info sheet" §C (a large multi-tab containing screen — deferred, too big for one slice without
+> its own decomposition) and "Add member" (named by `conversation-members-roster` as its own
+> follow-up, already scoped to one concrete iOS reference file) — chose the latter.
+>
+> **Re-proved the gap and the exact shape before writing anything.** `ConversationApi`/
+> `ConversationRepository` had `participants`/`updateParticipantRole`/`removeParticipant` but no
+> `addParticipant` — confirmed by reading the interface directly, not assuming from the checklist
+> line. Read the gateway route (`routes/conversations/participants.ts`, `POST
+> /conversations/:id/participants`, body `{userId}`, `addMemberRoles =
+> ['creator','admin','moderator']`) and the iOS reference (`AddParticipantSheet.swift`) directly
+> rather than trusting the feature-parity paraphrase — confirmed the exact search shape (debounced,
+> `/users/search?q=&limit=20`, 2-char floor), the add flow (`POST .../participants` with
+> `{userId}`, track added ids locally, `onAdded()` callback to refresh the caller), and the
+> visibility gate (`ParticipantsView.canManageMembers = isAdmin || isModerator`, `isAdmin` itself
+> `hasMinimumRole(.admin)` — so moderator-or-above, matching the gateway's own role list exactly).
+>
+> **Reused existing infrastructure rather than reinventing it**: `UserRepository.searchUsers`
+> (built in an earlier `user-search-pagination` slice) needed no changes: the debounce/floor
+> shape is a direct copy of `NewConversationViewModel`'s already-established pattern, and
+> `MemberRole.hasMinimumRole` (already existed, named identically to the iOS reference) is the
+> visibility gate — zero new pure-logic types were needed beyond the two DTOs
+> (`AddParticipantRequest`, `AddParticipantRow`/`AddParticipantUiState`).
+>
+> **The "Add" button per row is deliberately not multi-select** (unlike `NewConversationViewModel`,
+> which IS multi-select for starting a group) — matches iOS exactly: each tap fires its own
+> request immediately, tracked per-user (`isAdding`/`isMember`) so a double-tap mid-flight is a
+> no-op and a refusal rolls that one row back to offering the button again with the server's
+> message surfaced, without disturbing any other row's state.
+>
+> **+8 tests**: `ConversationRepositoryTest` ×2 (forwards ids, folds a refusal into a Failure —
+> same shape as the existing `removeParticipant`/`updateParticipantRole` pairs);
+> `AddParticipantViewModelTest` ×6 (debounced search populates rows, a sub-floor query never hits
+> the network, an existing member is flagged and never offered the button, a successful add marks
+> the row a member and fires `onAdded`, a refused add rolls back and surfaces the error, a repeat
+> tap while the first call is in flight is a no-op).
+>
+> **Verified**: Android SDK available in this container — `./apps/android/meeshy.sh check`
+> (assembleDebug + testDebugUnitTest, all modules) run before any push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time (see the recurring note on this pattern in
+> the `reels-realtime-room` entry further below) → unchanged from before this PR's CI wait
+> (`streak=2`), so this run advances it cleanly to `lane=ANDROID android_streak=3
+> last_run=add-participant-sheet`.
+>
+> **`Test shared` failed on this PR's CI too — 3rd consecutive Android run** — same root cause
+> as the previous two: `focus-curve.test.ts` (Focal curve-math), confirmed broken on `main`'s own
+> CI across multiple consecutive commits during this PR's wait (`d87f59b34`, `0612c8caac`, both
+> `conclusion: failure`) — an actively-in-progress concurrent Focal tuning session (the numeric
+> assertion targets themselves kept shifting between runs), not a one-off regression. Landed for
+> real between this PR opening and merging (`packages/shared/utils/focus-curve.ts` touched again
+> by the merge of PR #3102). `Android` (the actual merge gate) was green all three times — noting
+> this explicitly a third time in case the pattern is worth a future dedicated look (e.g. should
+> `Test shared` even run on an `apps/android`-only diff at all?), not because it blocked anything.
+
 > On 2026-08-16 **Story-viewer realtime room shipped — the last of three deferred room-join
 > follow-ups, all now closed** (slice `story-viewer-realtime-room`). `gh pr list --state open
 > --search "apps/android OR apps/ios"` showed one concurrent PR (#3096, realtime/gateway+iOS+web)

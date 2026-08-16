@@ -129,9 +129,12 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // §4.3 — Échelle / opacité : DÉLÉGUÉES au miroir gelé, jamais recalculées
     // =========================================================================
 
-    /// La courbe ne se réécrit JAMAIS : pour une même distance, le transform
+    /// L'ÉCHELLE ne se réécrit JAMAIS : pour une même distance, le transform
     /// du pass doit rendre exactement `FocalFocusCurve.focusCurve(_, .thread)`.
-    func test_transform_delegatesScaleAndAlphaToTheFrozenCurve() {
+    /// L'ALPHA, lui, n'est PLUS un effet de distance — décision produit
+    /// 2026-08-16 (« enlever l'effet transparent sur les bulles ») : il reste
+    /// au plafond quelle que soit la distance.
+    func test_transform_delegatesScaleToTheFrozenCurve_alphaStaysAtCeiling() {
         for distance in [CGFloat(0), 60, 190, 379, 380, 900] {
             let expected = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
             let transform = geometry.transform(
@@ -146,8 +149,8 @@ final class FocalScrollPassGeometryTests: XCTestCase {
                 "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'échelle du miroir GELÉ FocalFocusCurve.focusCurve(.thread) — aucune constante recopiée"
             )
             XCTAssertEqual(
-                transform.alpha, expected.alpha, accuracy: Self.epsilon,
-                "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'alpha du miroir GELÉ FocalFocusCurve.focusCurve(.thread)"
+                transform.alpha, FocalPassConstants.opaqueAlphaCeiling, accuracy: Self.epsilon,
+                "décision produit 2026-08-16 : AUCUN fondu de distance — la profondeur est portée par l'échelle seule, l'alpha reste au plafond (d=\(distance))"
             )
         }
     }
@@ -166,9 +169,9 @@ final class FocalScrollPassGeometryTests: XCTestCase {
             isRightToLeft: false,
             alphaCeiling: FocalPassConstants.opaqueAlphaCeiling
         )
-        XCTAssertEqual(transform.alpha, thread.alpha, accuracy: Self.epsilon,
+        XCTAssertEqual(transform.scale, thread.scale, accuracy: Self.epsilon,
                        "FocalPerspectiveGeometry doit consommer le variant .thread de FocalFocusCurve")
-        XCTAssertNotEqual(transform.alpha, list.alpha, accuracy: Self.epsilon,
+        XCTAssertNotEqual(transform.scale, list.scale, accuracy: Self.epsilon,
                           "le pass du FIL ne doit jamais consommer le variant .list (courbe de la Lentille)")
     }
 
@@ -291,22 +294,19 @@ final class FocalScrollPassGeometryTests: XCTestCase {
                        "§4.4 : le plafond d'alpha ne touche JAMAIS l'échelle")
     }
 
-    /// Loin au-dessus de la bande, c'est la courbe qui gagne (elle passe sous
-    /// le plafond) — `min`, pas « la valeur optimiste toujours ».
-    func test_alphaCeiling_farFromBand_curveWinsOverCeiling() {
-        let distance: CGFloat = 380
-        let curveAlpha = FocalFocusCurve.focusCurve(distance: distance, variant: .thread).alpha
+    /// Loin au-dessus de la bande, le plafond reste la SEULE loi d'alpha —
+    /// décision produit 2026-08-16 : la distance n'estompe plus rien, une
+    /// rangée optimiste reste à 0,7 (état d'envoi), une confirmée à 1.
+    func test_alphaCeiling_farFromBand_ceilingStillHolds() {
         let transform = geometry.transform(
-            distance: distance,
+            distance: 380,
             cellSize: CGSize(width: 320, height: 100),
             horizontalAnchor: .leading,
             isRightToLeft: false,
             alphaCeiling: FocalPassConstants.optimisticAlphaCeiling
         )
-        XCTAssertLessThan(curveAlpha, FocalPassConstants.optimisticAlphaCeiling,
-                          "pré-condition : à saturation la courbe du fil descend sous le plafond optimiste")
-        XCTAssertEqual(transform.alpha, curveAlpha, accuracy: Self.epsilon,
-                       "§4.4 : alpha = min(plafond, courbe) — le plafond ne doit jamais RELEVER une rangée estompée")
+        XCTAssertEqual(transform.alpha, FocalPassConstants.optimisticAlphaCeiling, accuracy: Self.epsilon,
+                       "décision produit 2026-08-16 : loin de la bande, l'alpha reste au plafond — plus aucun fondu de distance")
     }
 
     /// Le plafond par défaut (rangée confirmée) est l'opacité pleine.
@@ -545,6 +545,59 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     }
 
     // =========================================================================
+    // §4.7bis — Atterrissage d'élection (zone d'activation sans conflit)
+    // =========================================================================
+
+    /// Un élu dont le bord bas visuel passe sous le composeur est ramené à
+    /// `gap` points au-dessus : `offset = minY − bottomClearance − gap`.
+    /// Vérification : H=800, inset.top=180, gap=12, minY=1140, offset=1000
+    /// ⇒ visualBottom = 800 − (1140−1000) = 660 > 800−180−12 = 608 ⇒ cible 948.
+    func test_settleOffset_straddlingElected_landsAboveTheComposer() throws {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 1140, currentOffsetY: 1000, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(offset), 948, accuracy: Self.epsilon,
+            "§4.7bis : l'élu qui chevauche le composeur atterrit bord bas à `gap` du haut du composeur — offset = minY − bottomClearance − gap"
+        )
+    }
+
+    /// Élu déjà au clair (bord bas au-dessus du composeur + gap) : AUCUN
+    /// mouvement — le nudge ne doit jamais se faire sentir quand tout va bien.
+    func test_settleOffset_electedAlreadyClear_returnsNil() {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 1200, currentOffsetY: 1000, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertNil(offset, "§4.7bis : un élu déjà entièrement au-dessus du composeur ne déclenche aucun nudge")
+    }
+
+    /// Au bas du fil (offset = −inset.top), le message le plus récent frôle
+    /// toujours le composeur par construction : le clamp rend le déplacement
+    /// nul et le fil ne bouge pas.
+    func test_settleOffset_atConversationBottom_clampNeutralizesTheNudge() {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 0, currentOffsetY: -180, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertNil(offset, "§4.7bis : au bas du fil, le clamp à −bottomClearance neutralise le nudge — on ne repousse jamais le dernier message")
+    }
+
+    /// La cible est bornée à la plage réellement défilable, comme
+    /// `landingContentOffsetY` (§4.7).
+    func test_settleOffset_clampsToTheScrollableRange() throws {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 400, currentOffsetY: 290, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 100, contentHeight: 900, gap: 12
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(offset), 200, accuracy: Self.epsilon,
+            "§4.7bis : la cible est bornée à contentSize.height − H + headClearance (900 − 800 + 100 = 200)"
+        )
+    }
+
+    // =========================================================================
     // §4.8 — Les SIX sites d'appel, en DONNÉES (leçon 257)
     // =========================================================================
 
@@ -688,8 +741,8 @@ final class FocalScrollPassWriteTests: XCTestCase {
                        "FocalScrollPass.apply doit écrire l'échelle de FocalFocusCurve.focusCurve(.thread) dans m11")
         XCTAssertEqual(target.layer.transform.m22, expected.scale, accuracy: 0.0001,
                        "FocalScrollPass.apply doit écrire la même échelle en Y (échelle pure, symétrique en signe — elle traverse l'inversion parentale, §4.3)")
-        XCTAssertEqual(target.alpha, expected.alpha, accuracy: 0.0001,
-                       "FocalScrollPass.apply doit écrire l'alpha de la courbe gelée")
+        XCTAssertEqual(target.alpha, 1, accuracy: 0.0001,
+                       "décision produit 2026-08-16 : plus aucun fondu de distance — l'alpha d'une rangée confirmée reste 1, seule l'échelle porte la profondeur")
         XCTAssertEqual(
             target.layer.transform.m42,
             -(target.bounds.height / 2) * (1 - expected.scale),
@@ -756,6 +809,33 @@ final class FocalScrollPassWriteTests: XCTestCase {
         let focused = pass.apply(to: collectionView) { _ in FocalScrollPass.CellDescriptor.ineligible }
         XCTAssertNil(focused, "§4.8 : une cellule sans localId ne peut pas être élue — aucune carte de focus sur un séparateur de jour")
         XCTAssertNil(pass.focusedLocalId, "FocalScrollPass.focusedLocalId doit rester nil quand aucun candidat n'est éligible")
+    }
+
+    // MARK: - §4.7bis — Élection épinglée pendant l'atterrissage
+
+    /// L'épingle fige l'élection sur un candidat VISIBLE, même si un autre est
+    /// plus proche de la bande — le nudge déplace la liste, pas le choix du
+    /// lecteur.
+    func test_apply_pinnedFocus_overridesTheElection() throws {
+        let pass = makePass()
+        let free = try XCTUnwrap(pass.apply(to: collectionView, describe: Self.describeAll))
+
+        let other = free == "m2" ? "m3" : "m2"
+        pass.pinnedFocusLocalId = other
+        let pinned = pass.apply(to: collectionView, describe: Self.describeAll)
+
+        XCTAssertEqual(pinned, other, "§4.7bis : l'épingle fige l'élection le temps de l'atterrissage")
+    }
+
+    /// Une épingle sur un id qui n'est plus à l'écran (recyclage pendant
+    /// l'animation) n'immobilise rien : l'élection normale reprend.
+    func test_apply_pinnedFocusOffScreen_electionResumes() {
+        let pass = makePass()
+        pass.pinnedFocusLocalId = "fantome-hors-ecran"
+        let elected = pass.apply(to: collectionView, describe: Self.describeAll)
+
+        XCTAssertNotEqual(elected, "fantome-hors-ecran", "§4.7bis : une épingle sur un fantôme n'immobilise rien")
+        XCTAssertNotNil(elected, "§4.7bis : l'élection normale reprend quand l'épinglé a quitté l'écran")
     }
 
     // MARK: - Élection sur la vraie géométrie

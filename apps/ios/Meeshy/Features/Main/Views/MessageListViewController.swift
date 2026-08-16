@@ -469,8 +469,12 @@ final class MessageListViewController: UIViewController {
     /// `.ineligible` (`localId == nil`) : remis à l'identité, jamais mis à
     /// l'échelle (§4.8, R3).
     private func focalDescriptor(at indexPath: IndexPath) -> FocalScrollPass.CellDescriptor {
-        guard let item = dataSource?.itemIdentifier(for: indexPath),
-              case .message(let localId) = item,
+        guard let item = dataSource?.itemIdentifier(for: indexPath) else { return .ineligible }
+        return focalCellDescriptor(for: item)
+    }
+
+    private func focalCellDescriptor(for item: MessageListItem) -> FocalScrollPass.CellDescriptor {
+        guard case .message(let localId) = item,
               let record = store.message(for: localId)
         else {
             return .ineligible
@@ -480,6 +484,29 @@ final class MessageListViewController: UIViewController {
             localId: localId,
             alphaCeiling: isOptimistic ? FocalPassConstants.optimisticAlphaCeiling : FocalPassConstants.opaqueAlphaCeiling
         )
+    }
+
+    /// R2bis — la première ligne des QUATRE registrations, à la place du
+    /// `reset` inconditionnel d'origine.
+    ///
+    /// La registration se ré-exécute dans DEUX situations qu'un seul geste ne
+    /// distingue pas : le RECYCLAGE (cellule sortie d'écran réutilisée — le
+    /// reset est obligatoire, l'occupant précédent lègue sinon son transform)
+    /// et la RECONFIGURATION EN PLACE d'une cellule À L'ÉCRAN
+    /// (`reconfigureItems` : accusés, réactions, bursts de traduction). Reset
+    /// inconditionnel, une cellule visible reconfigurée repartait à l'échelle
+    /// 1 / opacité 1 jusqu'au prochain `didScroll` — qui, au REPOS, peut ne
+    /// jamais venir : un accusé de lecture suffisait à faire surgir une
+    /// rangée pleine taille au milieu de la perspective. `superview != nil`
+    /// discrimine : une cellule en place garde sa perspective, recalculée
+    /// immédiatement.
+    private func primeFocalCell(_ cell: UICollectionViewCell, item: MessageListItem) {
+        guard readingMode != .bubbles else { return }
+        guard cell.superview != nil, collectionView != nil else {
+            focalPass.reset(cell)
+            return
+        }
+        focalPass.apply(to: cell, in: collectionView, descriptor: focalCellDescriptor(for: item))
     }
 
     /// Sites 1/3/4/5 (§4.8) — toutes les cellules visibles. SOUS DRAPEAU :
@@ -541,7 +568,29 @@ final class MessageListViewController: UIViewController {
     private func setScrollingActive(_ active: Bool) {
         guard store.isUserScrolling != active else { return }
         store.isUserScrolling = active
+        // Focal : la pilule de jour fait partie du chrome escamoté pendant le
+        // mouvement — « faire disparaître les contenus inutiles pendant le
+        // défilement ». Elle revient à la pose, comme le header et le
+        // composeur. Bulles : comportement historique, la pilule suit le
+        // défilement.
+        stickyDayState.isSuppressed = active && readingMode != .bubbles
         onScrollingActiveChanged?(active)
+    }
+
+    /// Atterrissage d'élection (§4.7bis) en cours — `setContentOffset`
+    /// animé posé à l'arrêt du geste pour dégager l'élu du composeur. Tient
+    /// le chrome escamoté (`setScrollingActive(true)`) jusqu'à la pose.
+    private var isFocalSettleNudgeInFlight = false
+
+    /// §4.7ter — un `reconfigureItems` global est arrivé PENDANT le geste et
+    /// a été retenu (re-mesurer des cellules visibles en plein défilement
+    /// décale tout ce qui est au-dessus d'elles). Rejoué à la pose.
+    private var hasDeferredGlobalReconfigure = false
+
+    private func flushDeferredReconfigureAtSettle() {
+        guard hasDeferredGlobalReconfigure else { return }
+        hasDeferredGlobalReconfigure = false
+        applySnapshot(animated: false)
     }
 
     /// Dernier item de tête pour lequel la sticky pill a été calculée. Permet
@@ -892,7 +941,7 @@ final class MessageListViewController: UIViewController {
         // donc bas visuel). Pas un overlay : un message reçu en direct
         // s'insère au-dessus et remonte la conversation. La bulle anime
         // ses points en autonomie ; le contre-flip annule la transform.
-        let typingRegistration = UICollectionView.CellRegistration<FocalPerspectiveCell, MessageListItem> { [weak self] cell, _, _ in
+        let typingRegistration = UICollectionView.CellRegistration<FocalPerspectiveCell, MessageListItem> { [weak self] cell, _, item in
             guard let self else {
                 cell.contentConfiguration = nil
                 return
@@ -901,7 +950,7 @@ final class MessageListViewController: UIViewController {
             // n'existe ⇒ aucun `prepareForReuse` — sans ce reset, une
             // cellule recyclée hérite du transform/décoration de son
             // occupant précédent. SOUS DRAPEAU : `.bubbles` ⇒ zéro appel.
-            if self.readingMode != .bubbles { self.focalPass.reset(cell) }
+            self.primeFocalCell(cell, item: item)
             let typingNames = self.conversationViewModel?.typingUsernames ?? []
             let typingAccent = self.accentColor
             let typingDark = self.isDark
@@ -926,7 +975,7 @@ final class MessageListViewController: UIViewController {
             }
             // R2 (§4.8, « hors sites ») — même raison que la registration
             // typing ci-dessus.
-            if self.readingMode != .bubbles { self.focalPass.reset(cell) }
+            self.primeFocalCell(cell, item: item)
             let label = MessageDayLabel.label(
                 for: dayStart,
                 now: Date(),
@@ -965,7 +1014,7 @@ final class MessageListViewController: UIViewController {
             }
             // R2 (§4.8, « hors sites ») — même raison que les deux
             // registrations ci-dessus.
-            if self.readingMode != .bubbles { self.focalPass.reset(cell) }
+            self.primeFocalCell(cell, item: item)
             let name = self.conversationViewModel?.currentConversationName ?? ""
             let dark = self.isDark
             cell.contentConfiguration = UIHostingConfiguration {
@@ -983,7 +1032,7 @@ final class MessageListViewController: UIViewController {
             }
             // R2 (§4.8, « hors sites ») — même raison que les deux
             // registrations ci-dessus.
-            if self.readingMode != .bubbles { self.focalPass.reset(cell) }
+            self.primeFocalCell(cell, item: item)
             let _spState = PerfSignpost.signposter.beginInterval("cellConfig")
             defer { PerfSignpost.signposter.endInterval("cellConfig", _spState) }
 
@@ -1503,7 +1552,24 @@ final class MessageListViewController: UIViewController {
         // apply). Inserted items are configured fresh anyway, so excluding them
         // here is both correct and sufficient.
         let previousItems = Set(dataSource.snapshot().itemIdentifiers)
-        let itemsToReconfigure = items.filter { previousItems.contains($0) }
+        var itemsToReconfigure = items.filter { previousItems.contains($0) }
+        // §4.7ter — en Focal, AUCUN reconfigure global pendant le geste.
+        //
+        // Reconfigurer une cellule VISIBLE en plein défilement la fait
+        // re-mesurer (UIHostingConfiguration neuve) : un texte traduit qui
+        // change de nombre de lignes, une image qui vient de charger, et
+        // toutes les cellules d'index supérieur se décalent d'un coup —
+        // c'est l'un des « sauts d'échelle » mesurés (chasse Fable
+        // 2026-08-16, cause n°2 confirmée). Les INSERTIONS restent
+        // appliquées immédiatement (la pagination doit matérialiser ses
+        // cellules avant que le doigt n'atteigne le bord) — elles
+        // n'affectent que le bout non visible du fil. Le reconfigure, lui,
+        // attend la pose : `flushDeferredReconfigureAtSettle`.
+        if readingMode != .bubbles, !itemsToReconfigure.isEmpty,
+           collectionView.isDragging || collectionView.isDecelerating || isFocalSettleNudgeInFlight {
+            hasDeferredGlobalReconfigure = true
+            itemsToReconfigure = []
+        }
         if !itemsToReconfigure.isEmpty {
             snapshot.reconfigureItems(itemsToReconfigure)
         }
@@ -2156,7 +2222,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         let contentHeight = scrollView.contentSize.height
         let frameHeight = scrollView.frame.height
 
-        setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
+        setScrollingActive(scrollView.isDragging || scrollView.isDecelerating || isFocalSettleNudgeInFlight)
 
         // FocalPassCallSite.scrollViewDidScroll — site 1 (§4.8), le cas
         // nominal. Pur compositor (transform/alpha seuls) : AUCUN
@@ -2219,14 +2285,81 @@ extension MessageListViewController: UICollectionViewDelegate {
     // the end of the momentum phase otherwise.
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            setScrollingActive(false)
-            reconfigureFocusTypographyAtScrollStop()
+            settleFocalElection()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        settleFocalElection()
+    }
+
+    // MARK: - §4.7bis — Atterrissage d'élection (zone d'activation sans conflit)
+
+    /// À l'arrêt du geste : si l'élu chevauche le composeur, un léger
+    /// `setContentOffset` animé le dégage ENTIÈREMENT au-dessus (bord bas à
+    /// `settleGap` du haut du composeur) avant que le chrome ne revienne et
+    /// que §4.6 ne magnifie. L'élection est ÉPINGLÉE le temps de
+    /// l'animation — le nudge déplace la liste, pas le choix du lecteur.
+    ///
+    /// Sinon (élu déjà au clair, ou pas d'élu) : pose immédiate — chrome et
+    /// typographie tout de suite, comme avant.
+    private func settleFocalElection() {
+        if readingMode == .focal,
+           let elected = focalPass.focusedLocalId,
+           let target = focalSettleNudgeOffsetY(electedLocalId: elected) {
+            focalPass.pinnedFocusLocalId = elected
+            isFocalSettleNudgeInFlight = true
+            collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: true)
+            return
+        }
         setScrollingActive(false)
         reconfigureFocusTypographyAtScrollStop()
+        flushDeferredReconfigureAtSettle()
+    }
+
+    /// Fin de l'animation du nudge — ne se déclenche QUE pour
+    /// `setContentOffset(animated:)`, jamais pour un geste. Les scrolls
+    /// programmatiques d'atterrissage (`scrollToMessage…`) passent aussi par
+    /// ici : la garde les laisse indemnes.
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard isFocalSettleNudgeInFlight else { return }
+        isFocalSettleNudgeInFlight = false
+        focalPass.pinnedFocusLocalId = nil
+        // FocalPassCallSite.programmaticScrollCompletion — même règle que
+        // les deux `scrollToMessage…` : un défilement programmatique ne
+        // déclenche pas fiablement `didScroll` sur sa dernière frame.
+        applyFocalPassIfEnabled()
+        setScrollingActive(false)
+        reconfigureFocusTypographyAtScrollStop()
+        flushDeferredReconfigureAtSettle()
+    }
+
+    /// Le doigt reprend la main pendant l'atterrissage : UIKit annule
+    /// l'animation et `scrollViewDidEndScrollingAnimation` ne viendra
+    /// JAMAIS. Sans cette levée, le chrome resterait escamoté pour toujours.
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard isFocalSettleNudgeInFlight else { return }
+        isFocalSettleNudgeInFlight = false
+        focalPass.pinnedFocusLocalId = nil
+    }
+
+    /// Offset cible du nudge, ou `nil` si l'élu est déjà au clair. La boîte
+    /// de la cellule vient des `layoutAttributes` (jamais `cell.frame`, qui
+    /// intègre le transform de perspective).
+    private func focalSettleNudgeOffsetY(electedLocalId: String) -> CGFloat? {
+        guard let dataSource,
+              let indexPath = dataSource.indexPath(for: .message(localId: electedLocalId)),
+              let attributes = collectionView.layoutAttributesForItem(at: indexPath)
+        else { return nil }
+        return focalPass.geometry.settleContentOffsetY(
+            cellMinY: attributes.frame.minY,
+            currentOffsetY: collectionView.contentOffset.y,
+            viewportHeight: collectionView.bounds.height,
+            bottomClearance: collectionView.contentInset.top,
+            headClearance: collectionView.contentInset.bottom,
+            contentHeight: collectionView.contentSize.height,
+            gap: FocalPassConstants.settleGap
+        )
     }
 
     // MARK: - §4.6 — Typographie 15→16, uniquement à l'ARRÊT du défilement
