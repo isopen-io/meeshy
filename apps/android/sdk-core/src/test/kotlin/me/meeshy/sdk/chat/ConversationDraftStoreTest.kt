@@ -1,29 +1,27 @@
 package me.meeshy.sdk.chat
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.testing.TestDataStores
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 
 /**
  * The per-conversation draft persistence seam (feature-parity §C "Draft
  * auto-save/restore"). [InMemoryConversationDraftStore] is the volatile store used
  * by tests/previews; [DataStoreConversationDraftStore] is the durable one that
  * survives process death. Both are asserted through the public save/load/clear API.
+ *
+ * The durable cases run on [TestDataStores] — an inline, deterministic scheduler —
+ * so none of them depends on a real thread pool getting CPU.
  */
 class ConversationDraftStoreTest {
 
@@ -32,8 +30,10 @@ class ConversationDraftStoreTest {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }
 
-    private fun newDataStore(scope: CoroutineScope, file: File): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create(scope = scope) { file }
+    private val dataStores = TestDataStores()
+
+    @After
+    fun tearDown() = dataStores.close()
 
     private fun draft(id: String, text: String) =
         ConversationDraft(conversationId = id, text = text, updatedAt = "2026-07-07T12:00:00Z")
@@ -143,46 +143,36 @@ class ConversationDraftStoreTest {
     // ---- DataStoreConversationDraftStore (durable) ----
 
     @Test
-    fun dataStore_load_returns_null_when_no_draft_was_saved() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d1.preferences_pb")), json)
+    fun dataStore_load_returns_null_when_no_draft_was_saved() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d1.preferences_pb")), json)
 
         assertThat(store.load("c1")).isNull()
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_save_then_load_round_trips_the_draft() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d2.preferences_pb")), json)
+    fun dataStore_save_then_load_round_trips_the_draft() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d2.preferences_pb")), json)
 
         store.save(draft("c1", "unsent thought"))
 
         assertThat(store.load("c1")).isEqualTo(draft("c1", "unsent thought"))
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_a_freshly_constructed_store_reads_the_persisted_draft() = runBlocking {
+    fun dataStore_a_freshly_constructed_store_reads_the_persisted_draft() = runTest(dataStores.dispatcher) {
         // A new wrapper over the already-persisted backing reads the draft rather
         // than caching per-instance — the "survives process death" guarantee.
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val backing = newDataStore(scope, tmp.newFile("d3.preferences_pb"))
+        val backing = dataStores.preferences(tmp.newFile("d3.preferences_pb"))
         DataStoreConversationDraftStore(backing, json).save(draft("c1", "persisted"))
 
         val reopened = DataStoreConversationDraftStore(backing, json)
 
         assertThat(reopened.load("c1")?.text).isEqualTo("persisted")
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_round_trips_the_reply_reference_alongside_the_text() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d6.preferences_pb")), json)
+    fun dataStore_round_trips_the_reply_reference_alongside_the_text() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d6.preferences_pb")), json)
         val replyDraft = ConversationDraft(
             conversationId = "c1",
             text = "re: salut",
@@ -193,14 +183,11 @@ class ConversationDraftStoreTest {
         store.save(replyDraft)
 
         assertThat(store.load("c1")).isEqualTo(replyDraft)
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_clear_removes_only_the_targeted_conversation() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d4.preferences_pb")), json)
+    fun dataStore_clear_removes_only_the_targeted_conversation() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d4.preferences_pb")), json)
         store.save(draft("c1", "one"))
         store.save(draft("c2", "two"))
 
@@ -208,14 +195,11 @@ class ConversationDraftStoreTest {
 
         assertThat(store.load("c1")).isNull()
         assertThat(store.load("c2")?.text).isEqualTo("two")
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_clearAll_removesEveryDraft() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d9.preferences_pb")), json)
+    fun dataStore_clearAll_removesEveryDraft() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d9.preferences_pb")), json)
         store.save(draft("c1", "one"))
         store.save(draft("c2", "two"))
 
@@ -224,27 +208,20 @@ class ConversationDraftStoreTest {
         assertThat(store.observeAll().first()).isEmpty()
         assertThat(store.load("c1")).isNull()
         assertThat(store.load("c2")).isNull()
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_decodes_a_corrupt_payload_as_a_cache_miss_instead_of_crashing() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val file = tmp.newFile("d5.preferences_pb")
-        val backing = newDataStore(scope, file)
+    fun dataStore_decodes_a_corrupt_payload_as_a_cache_miss_instead_of_crashing() = runTest(dataStores.dispatcher) {
+        val backing = dataStores.preferences(tmp.newFile("d5.preferences_pb"))
         backing.edit { prefs -> prefs[stringPreferencesKey("draft:c1")] = "{ this is not json" }
         val store = DataStoreConversationDraftStore(backing, json)
 
         assertThat(store.load("c1")).isNull()
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_observeAll_returns_every_persisted_draft_keyed_by_conversation() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreConversationDraftStore(newDataStore(scope, tmp.newFile("d7.preferences_pb")), json)
+    fun dataStore_observeAll_returns_every_persisted_draft_keyed_by_conversation() = runTest(dataStores.dispatcher) {
+        val store = DataStoreConversationDraftStore(dataStores.preferences(tmp.newFile("d7.preferences_pb")), json)
         store.save(draft("c1", "one"))
         store.save(draft("c2", "two"))
 
@@ -253,14 +230,11 @@ class ConversationDraftStoreTest {
         assertThat(all.keys).containsExactly("c1", "c2")
         assertThat(all.getValue("c1").text).isEqualTo("one")
         assertThat(all.getValue("c2").text).isEqualTo("two")
-
-        scope.cancel()
     }
 
     @Test
-    fun dataStore_observeAll_omits_a_corrupt_entry_instead_of_crashing() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val backing = newDataStore(scope, tmp.newFile("d8.preferences_pb"))
+    fun dataStore_observeAll_omits_a_corrupt_entry_instead_of_crashing() = runTest(dataStores.dispatcher) {
+        val backing = dataStores.preferences(tmp.newFile("d8.preferences_pb"))
         backing.edit { prefs ->
             prefs[stringPreferencesKey("draft:c1")] = json.encodeToString(
                 ConversationDraft.serializer(),
@@ -273,7 +247,5 @@ class ConversationDraftStoreTest {
         val all = store.observeAll().first()
 
         assertThat(all.keys).containsExactly("c1")
-
-        scope.cancel()
     }
 }

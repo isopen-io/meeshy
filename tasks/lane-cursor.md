@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=reels-realtime-room
+lane=ANDROID android_streak=7 last_run=reels-realtime-room

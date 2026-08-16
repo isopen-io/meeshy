@@ -119,12 +119,15 @@ final class LentilleStickyHeaderInsetSourceGuardTests: XCTestCase {
             XCTFail("le corps de LentilleStickyHeaderInsetModifier doit contenir une branche `else` explicite (R-a : la branche OFF, pas un simple early-return).")
             return
         }
+        // Le caractère qui suit immédiatement `} else {` est le retour à la
+        // ligne lui-même : le témoin cherche donc la PREMIÈRE ligne non vide
+        // après l'accolade (leçon du run #99 — l'ancienne délimitation lisait
+        // la ligne vide et comparait « » à « content »).
         let afterElse = bodyText[elseRange.upperBound...]
-        guard let lineEnd = afterElse.firstIndex(of: "\n") else {
-            XCTFail("impossible de délimiter la ligne suivant `} else {`.")
-            return
-        }
-        let elseLine = afterElse[afterElse.startIndex..<lineEnd].trimmingCharacters(in: .whitespaces)
+        let elseLine = afterElse
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
         XCTAssertEqual(
             elseLine, "content",
             "la branche `else` de `LentilleStickyHeaderInsetModifier.body(content:)` doit être " +

@@ -672,6 +672,35 @@ Append-only log of gotchas and decisions that save time next run.
   Meanwhile: `rerun-failed-jobs` is **403 for this token on `android.yml` too** (an earlier entry
   recorded it working there — that no longer holds), so the only available retry is a fresh push.
 
+- **The DataStore flake is CLOSED at its mechanism — and the three entries above are the record of
+  why every cheaper attempt failed.** (2026-08-16, slice `datastore-test-deterministic-scheduler`.)
+  The chain reads: bump `5_000` → `15_000` (falsified: a file always at 15 s flaked); "await the
+  first emission before writing" (falsified before it shipped: `stateIn` is seeded, so `first()`
+  returns the seed synchronously and awaits nothing); "the discriminant is writes-vs-doesn't-write"
+  (falsified: `ThemeStoreTest:106` failed on a *setup* line inside a test named for hydration).
+  What survived all three is the plainest reading: `first { predicate }` over
+  `stateIn(scope, Eagerly, DEFAULT)` cannot complete until the sharing coroutine is **scheduled**,
+  and `Dispatchers.IO` on a runner hosting the whole monorepo matrix offers no bound on when that
+  happens. A timeout does not bound an unbounded wait; it only names the price of losing the bet.
+  **The fix is `UnconfinedTestDispatcher`** (test-only `me.meeshy.sdk.testing.TestDataStores`):
+  the write actor and the collector run inline on the test thread, so there is no scheduling to
+  starve. All 19 `withTimeout` occurrences deleted; `runTest`'s 60 s net replaces them.
+  Two design points worth keeping, because both are ways this could have gone wrong instead:
+  - **The store scope must not be the `TestScope`.** `TestDataStores.scope` carries its own
+    unparented `SupervisorJob`. The DataStore actor and the `stateIn` collector never complete by
+    construction; as children of the test coroutine they would make `runTest` wait for them at
+    teardown and time out. Off-scope, `runTest` has no relationship to them. (The widely-copied
+    Now-in-Android recipe puts the DataStore *on* the `TestScope` — it gets away with it because
+    nothing there is `stateIn(…, Eagerly)`. Do not copy it verbatim into a codebase that is.)
+  - **Sweep by exposure, not by observed failures.** Eight files drive a real DataStore; only four
+    had ever flaked. The two with no timeout at all (`ConversationDraftStoreTest`,
+    `AnonymousSessionStoreTest`) were the worst of the set, not the best — same exposure, hang
+    instead of failure as the symptom. Fixing only the observed four would have re-enacted the
+    exact inference these three entries falsified: *"never flaked" is a statement about load so
+    far, never about correctness.*
+  If a DataStore test flakes again after this, it is a **new** mechanism — go read the failing
+  line, and do not reach for a constant.
+
 - **A deferred follow-up list left by the previous slice beats a fresh candidate hunt — and it is
   the routine's own standing instruction.** (2026-08-16, `reels-realtime-room`.) The prior slice
   (`post-detail-realtime-room`) closed one screen and wrote down, by name, the three iOS call sites

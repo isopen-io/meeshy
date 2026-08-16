@@ -69,13 +69,22 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
     func test_none_ofTheFourSites_reconstructTheRawNotificationNameLiteral() throws {
         for source in try sources() {
             let stripped = AppSourceGuard.stripComments(source.code)
-            let count = occurrences(of: "Notification.Name(\"openMyStories\")", in: stripped)
+            // La déclaration du domicile (`static let openMyStories = …`,
+            // RootView.swift) est le SEUL usage légitime du motif : retirée
+            // avant comptage — le témoin suivant garantit par ailleurs
+            // qu'elle existe exactement une fois (leçon du run #99 : ce
+            // témoin comptait sa propre déclaration comme une violation).
+            let withoutDeclaration = stripped.replacingOccurrences(
+                of: "static let openMyStories = Notification.Name(\"openMyStories\")",
+                with: ""
+            )
+            let count = occurrences(of: "Notification.Name(\"openMyStories\")", in: withoutDeclaration)
             XCTAssertEqual(
                 count, 0,
                 "\(source.name) contient \(count) occurrence(s) de " +
-                "`Notification.Name(\"openMyStories\")` — le littéral doit passer EXCLUSIVEMENT " +
-                "par la constante partagée `.openMyStories` (extension déclarée dans " +
-                "`RootView.swift`), jamais recopié en dur (garde R-j)."
+                "`Notification.Name(\"openMyStories\")` hors déclaration du domicile — le " +
+                "littéral doit passer EXCLUSIVEMENT par la constante partagée `.openMyStories` " +
+                "(extension déclarée dans `RootView.swift`), jamais recopié en dur (garde R-j)."
             )
         }
     }

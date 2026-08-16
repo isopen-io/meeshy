@@ -64,6 +64,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ZmqTranslationClient } from '../../../services/zmq-translation';
@@ -163,6 +164,53 @@ function makeFakeZmqClient(taskId = 'task-xyz') {
   const emitter = new EventEmitter() as EventEmitter & { translateText: jest.MockedFunction<any> };
   emitter.translateText = jest.fn<any>().mockResolvedValue(taskId);
   return emitter as unknown as ZmqTranslationClient;
+}
+
+/** Same fake, but `translateText` resolves to a taskId derived from the
+ * target language — needed to disambiguate `onResult` for tests that
+ * exercise MORE THAN ONE target language on the same segment. */
+function makeMultiLanguageFakeZmqClient() {
+  const emitter = new EventEmitter() as EventEmitter & { translateText: jest.MockedFunction<any> };
+  emitter.translateText = jest.fn<any>().mockImplementation(
+    async (_text: string, _source: string, targetLanguage: string) => `task-${targetLanguage}`
+  );
+  return emitter as unknown as ZmqTranslationClient;
+}
+
+/**
+ * A room-aware socket double: `to(room)` accumulates the addressed rooms
+ * (chained `.to().to()...` collapses to ONE recorded emission, mirroring
+ * Socket.IO's own at-most-once delivery), and `.emit()` records the rooms
+ * alongside the event/payload so a test can assert exactly who received it.
+ */
+function makeRoomAwareSocket() {
+  const handlers: Record<string, (...args: any[]) => any> = {};
+  const emissions: Array<{ rooms: string[]; event: string; payload: any }> = [];
+  const toSpy = jest.fn<any>();
+  function broadcastOperator(rooms: string[]) {
+    return {
+      to: (room: string) => {
+        toSpy(room);
+        return broadcastOperator([...rooms, room]);
+      },
+      emit: (event: string, payload: unknown) => {
+        emissions.push({ rooms, event, payload });
+      },
+    };
+  }
+  const socket = {
+    id: 'socket-test-1',
+    on: jest.fn((event: string, fn: (...args: any[]) => any) => {
+      handlers[event] = fn;
+    }),
+    emit: jest.fn(),
+    to: jest.fn((room: string) => {
+      toSpy(room);
+      return broadcastOperator([room]);
+    }),
+    data: {},
+  };
+  return { socket, handlers, emissions, toSpy };
 }
 
 describe('CallEventsHandler — call:transcription-segment ZMQ translation', () => {
@@ -432,5 +480,78 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       targetLanguage: 'es',
     });
     await segmentPromise;
+  });
+
+  describe('group call, 3+ distinct languages — per-language targeting (Prisme cross-contamination guard)', () => {
+    const EN_LISTENER_ID = 'user-en-listener';
+    const ES_LISTENER_ID = 'user-es-listener';
+
+    function setupThreeWayCall() {
+      const prisma = makePrisma();
+      (prisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { participant: { userId: SPEAKER_ID, user: { systemLanguage: 'fr' } } },
+        { participant: { userId: EN_LISTENER_ID, user: { systemLanguage: 'en' } } },
+        { participant: { userId: ES_LISTENER_ID, user: { systemLanguage: 'es' } } },
+      ]);
+      const { socket, handlers, emissions } = makeRoomAwareSocket();
+      const zmqClient = makeMultiLanguageFakeZmqClient();
+      const emitter = zmqClient as unknown as EventEmitter;
+
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setZmqClient(zmqClient);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+      return { emitter, emissions, segmentPromise };
+    }
+
+    async function resolveBothLanguages(emitter: EventEmitter, segmentPromise: Promise<void>) {
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+
+      emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+        taskId: 'task-en',
+        result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+        targetLanguage: 'en',
+      });
+      emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+        taskId: 'task-es',
+        result: { translatedText: 'Hola mundo', messageId: MESSAGE_ID },
+        targetLanguage: 'es',
+      });
+      await segmentPromise;
+    }
+
+    it('sends the English translation ONLY to the English listener\'s personal room, never the call room', async () => {
+      const { emitter, emissions, segmentPromise } = setupThreeWayCall();
+      await resolveBothLanguages(emitter, segmentPromise);
+
+      const englishEmission = emissions.find((e) => e.payload.segment.translatedText === 'Hello world');
+      expect(englishEmission).toBeDefined();
+      expect(englishEmission!.rooms).toEqual([ROOMS.user(EN_LISTENER_ID)]);
+      expect(englishEmission!.rooms).not.toContain(ROOMS.call(VALID_CALL_ID));
+      expect(englishEmission!.rooms).not.toContain(ROOMS.user(ES_LISTENER_ID));
+    });
+
+    it('sends the Spanish translation ONLY to the Spanish listener\'s personal room, never the call room', async () => {
+      const { emitter, emissions, segmentPromise } = setupThreeWayCall();
+      await resolveBothLanguages(emitter, segmentPromise);
+
+      const spanishEmission = emissions.find((e) => e.payload.segment.translatedText === 'Hola mundo');
+      expect(spanishEmission).toBeDefined();
+      expect(spanishEmission!.rooms).toEqual([ROOMS.user(ES_LISTENER_ID)]);
+      expect(spanishEmission!.rooms).not.toContain(ROOMS.call(VALID_CALL_ID));
+      expect(spanishEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
+    });
+
+    it('emits exactly two segments total — one per distinct target language, never a call-room broadcast', async () => {
+      const { emitter, emissions, segmentPromise } = setupThreeWayCall();
+      await resolveBothLanguages(emitter, segmentPromise);
+
+      expect(emissions).toHaveLength(2);
+      expect(emissions.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
+    });
   });
 });
