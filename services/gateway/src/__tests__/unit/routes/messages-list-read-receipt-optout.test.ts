@@ -73,6 +73,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 
 import { registerMessagesRoutes } from '../../../routes/conversations/messages';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -187,10 +188,16 @@ async function buildApp(optedOutUserIds: string[]): Promise<FastifyInstance> {
         },
       ]),
     },
-    userPreference: {
+    // Cf. `services/preferences/privacy-storage.ts` : l'application n'écrit que
+    // le document JSON. Un double qui n'exprimerait l'opt-out que par les
+    // lignes héritées testerait un chemin que plus aucun client n'emprunte.
+    userPreferences: {
       findMany: jest.fn().mockResolvedValue(
-        optedOutUserIds.map((userId) => ({ userId }))
+        optedOutUserIds.map((userId) => ({ userId, privacy: { showReadReceipts: false } }))
       ),
+    },
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   };
 
@@ -233,7 +240,7 @@ describe("GET /conversations/:id/messages — l'opt-out d'accusés de lecture", 
     mockCanAccessConversation.mockResolvedValue(true);
     // Le cache d'opt-out a la portée du PROCESSUS : une entrée laissée par un
     // test fausserait le suivant.
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
   });
 
   it('compte les deux destinataires quand personne ne s\'est retiré', async () => {

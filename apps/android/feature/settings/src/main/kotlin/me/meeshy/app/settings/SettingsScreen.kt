@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -45,7 +44,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -87,6 +85,8 @@ import me.meeshy.sdk.model.NotificationCategory
 import me.meeshy.sdk.model.NotificationType
 import me.meeshy.sdk.model.NotificationTypeCatalog
 import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.ui.component.LanguagePickerDialog
+import me.meeshy.ui.component.LanguagePickerOption
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -469,51 +469,25 @@ private fun InterfaceLanguageDialog(
     onSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_display_language)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                LanguageOptionRow(
-                    label = systemLabel,
-                    isSelected = selected == null,
-                    onClick = { onSelect(null) },
-                )
-                AppLanguage.supportedLanguages.forEach { language ->
-                    LanguageOptionRow(
-                        label = "${language.flag}  ${language.nativeName}",
-                        isSelected = selected == language.code,
-                        onClick = { onSelect(language.code) },
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.settings_language_dialog_close))
-            }
-        },
-    )
-}
-
-@Composable
-private fun LanguageOptionRow(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.RadioButton }
-            .padding(vertical = MeeshySpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = isSelected, onClick = onClick)
-        Spacer(Modifier.width(MeeshySpacing.sm))
-        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+    val options = buildList {
+        add(LanguagePickerOption(code = null, label = systemLabel, isSelected = selected == null))
+        AppLanguage.supportedLanguages.forEach { language ->
+            add(
+                LanguagePickerOption(
+                    code = language.code,
+                    label = "${language.flag}  ${language.nativeName}",
+                    isSelected = selected == language.code,
+                ),
+            )
+        }
     }
+    LanguagePickerDialog(
+        titleText = stringResource(R.string.settings_display_language),
+        options = options,
+        onSelect = onSelect,
+        onDismiss = onDismiss,
+        dismissButtonLabel = stringResource(R.string.settings_language_dialog_close),
+    )
 }
 
 @Composable
@@ -560,51 +534,18 @@ private fun RegionalLanguageDialog(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_regional_language)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    placeholder = { Text(stringResource(R.string.settings_regional_language_search)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = MeeshySpacing.xs),
-                )
-                if (options.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.settings_regional_language_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                        modifier = Modifier.padding(vertical = MeeshySpacing.sm),
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        options.forEach { option ->
-                            LanguageOptionRow(
-                                label = "${option.flag}  ${option.nativeName}",
-                                isSelected = option.isSelected,
-                                onClick = { onSelect(option.code) },
-                            )
-                        }
-                    }
-                }
-            }
+    LanguagePickerDialog(
+        titleText = stringResource(R.string.settings_regional_language),
+        options = options.map {
+            LanguagePickerOption(code = it.code, label = "${it.flag}  ${it.nativeName}", isSelected = it.isSelected)
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.settings_language_dialog_close))
-            }
-        },
+        onSelect = { code -> code?.let(onSelect) },
+        onDismiss = onDismiss,
+        dismissButtonLabel = stringResource(R.string.settings_language_dialog_close),
+        searchQuery = query,
+        onSearchQueryChange = onQueryChange,
+        searchPlaceholder = stringResource(R.string.settings_regional_language_search),
+        emptyStateText = stringResource(R.string.settings_regional_language_empty),
     )
 }
 

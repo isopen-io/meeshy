@@ -6,7 +6,7 @@ import Foundation
 /// `assist:*` n'existe pas côté serveur (§0, écart #10 — « zéro occurrence
 /// dans le dépôt »), toute surface agent qui en dépend reste du code MORT
 /// ET ASSUMÉ, jamais un faux-semblant.
-public final class NullAgentAssistProvider: AgentAssistProviding {
+nonisolated public final class NullAgentAssistProvider: AgentAssistProviding, @unchecked Sendable {
     public init() {}
 
     public func bridge(for conversationId: String) async -> AgentBridgeLine? { nil }

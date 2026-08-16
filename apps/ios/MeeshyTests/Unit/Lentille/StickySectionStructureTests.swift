@@ -161,6 +161,9 @@ final class StickySectionStructureTests: XCTestCase {
 
     // MARK: - Travail 1-2 — rangs en contenu, sticker en header
 
+    // behaviour-matrix:L16 — volet structurel (sticker au slot `header:`
+    // d'une `Section`, condition nécessaire pour que VoiceOver le lise comme
+    // un en-tête de section).
     /// `behaviour-matrix.json` L16 : « … et lit les stickers comme des
     /// en-têtes de section » (VoiceOver). Cette lecture n'est correcte QUE si
     /// le sticker occupe réellement le slot `header:` d'une `Section` — la
@@ -360,11 +363,48 @@ final class StickySectionStructureTests: XCTestCase {
     /// Les libellés décidés par LWS-6/I-062, tels qu'ils s'affichent : le
     /// sticker crie (`§4.3` « majuscules »), la donnée non.
     func test_lentilleSectionIdentity_stickerTitles() {
-        XCTAssertEqual(LentilleSticker.displayTitle(LentilleSectionIdentity.live.name), "EN DIRECT")
-        XCTAssertEqual(LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .today).name), "AUJOURD'HUI")
-        XCTAssertEqual(LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .yesterday).name), "HIER")
-        XCTAssertEqual(LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .thisWeek).name), "CETTE SEMAINE")
-        XCTAssertEqual(LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .older).name), "PLUS ANCIEN")
+        // Le nom de section résout par catalogue (`String(localized:defaultValue:bundle:)`,
+        // même patron que `A11yLabelComposerTests`/`CallsViewModelTests`) — sous
+        // la locale `en` du CI il rend l'anglais, plus le repli `defaultValue`
+        // français. Ce que verrouille CE témoin n'est pas la langue mais la
+        // TRANSFORMATION du sticker (`§4.3` « majuscules ») : quelle que soit la
+        // résolution, `displayTitle` doit être son `.uppercased()`.
+        XCTAssertEqual(
+            LentilleSticker.displayTitle(LentilleSectionIdentity.live.name),
+            LentilleSectionIdentity.live.name.uppercased()
+        )
+        XCTAssertEqual(
+            LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .today).name),
+            LentilleSectionIdentity.section(for: .today).name.uppercased()
+        )
+        XCTAssertEqual(
+            LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .yesterday).name),
+            LentilleSectionIdentity.section(for: .yesterday).name.uppercased()
+        )
+        XCTAssertEqual(
+            LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .thisWeek).name),
+            LentilleSectionIdentity.section(for: .thisWeek).name.uppercased()
+        )
+        XCTAssertEqual(
+            LentilleSticker.displayTitle(LentilleSectionIdentity.section(for: .older).name),
+            LentilleSectionIdentity.section(for: .older).name.uppercased()
+        )
+
+        // Discrimination (leçon 264/266) : la transformation seule ne prouve
+        // rien si les cinq identités partagent un nom — la loi ci-dessus
+        // passerait même sur cinq chaînes vides. Les cinq clés du catalogue
+        // doivent rester des libellés DISTINCTS, quelle que soit la locale.
+        let names = [
+            LentilleSectionIdentity.live.name,
+            LentilleSectionIdentity.section(for: .today).name,
+            LentilleSectionIdentity.section(for: .yesterday).name,
+            LentilleSectionIdentity.section(for: .thisWeek).name,
+            LentilleSectionIdentity.section(for: .older).name
+        ]
+        XCTAssertEqual(
+            Set(names).count, names.count,
+            "Les cinq sections doivent porter cinq libellés distincts, en toute locale."
+        )
     }
 
     // MARK: - Greffe I-060 : le repli sur « other » est levé

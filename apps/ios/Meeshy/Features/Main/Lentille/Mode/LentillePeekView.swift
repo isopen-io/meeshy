@@ -39,9 +39,7 @@ nonisolated struct LentillePeekViewModel: Equatable {
         )
         return LentillePeekViewModel(
             title: conversation.displayName,
-            previewText: conversation.resolvedLastMessagePreview(preferredLanguages: preferredLanguages)
-                ?? conversation.lastMessagePreview
-                ?? "",
+            previewText: conversation.resolvedLastMessagePreview(preferredLanguages: preferredLanguages) ?? "",
             modeMenu: LentilleModeMenuModel.build(capabilities: capabilities, currentPreference: preference)
         )
     }

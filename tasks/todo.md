@@ -657,3 +657,143 @@ héritée ne tenait pas, le tableau des trois sites (opt-in / recopié / servi),
 piège qui survit au correctif, les trois options écartées, et la piste du
 cycle 44 : établir si `showReadReceipts` gouverne les `received` avant de
 retourner le gate d'écriture des deux émetteurs socket.
+
+# Cycle 45 — la question ouverte depuis le cycle 43 avait sa réponse écrite dans le dépôt
+
+## Constat
+
+- [x] Question héritée TRANCHÉE : `showReadReceipts` gouverne la DIVULGATION,
+      pas l'enregistrement — la règle est écrite deux fois dans le dépôt
+      (doc de `broadcastReadStatus`, doc de `POST …/delivery-receipt`)
+- [x] Défaut livré : les deux émetteurs SOCKET gataient l'ÉCRITURE
+      (`autoDeliverToOnlineRecipients` filtrait avant `markMessagesAsReceived`,
+      `_emitDeliveryForDrainedMessages` sortait sur la préférence), là où les
+      trois portes REST enregistrent toujours et ne taisent que la diffusion
+- [x] L'ÉTAT dépendait donc du transport, sur le chemin NOMINAL (auto-livraison)
+- [x] Le gate d'écriture ne protégeait rien : `_loadReadReceiptOptOuts` retire
+      l'opt-out des CINQ lecteurs de statut quoi qu'il y ait en base
+- [x] Coût réel : `showReadReceipts` est RÉVERSIBLE — à la réactivation
+      l'arriéré ressort « jamais livré » et les coches de l'expéditeur
+      régressent de ✓✓ à ✓ sur tout l'historique
+
+## Correctifs
+
+- [x] Gate déplacé de l'écriture vers la diffusion, aux deux sites
+- [x] `firstAcker` choisi parmi les destinataires marqués QUI PARTAGENT leurs
+      accusés — le déplacement naïf aurait nommé un opt-out dans le payload
+- [x] Doc des deux méthodes + `socketio/README.md` (qui déclarait l'écart
+      « connu et non tranché ») alignés
+
+## Gates
+
+- [x] 3 RED discriminants vus rouges avant correctif
+- [x] 2 gardes de non-régression vertes d'emblée (aucune diffusion quand tous
+      les destinataires en ligne ont coupé, ni au drain d'un lecteur opt-out)
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte
+- [x] CHANGELOG + journal d'audit (cycle45) + leçon 282
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle45.md` — les deux citations qui
+tranchent la question, le tableau des cinq portes, pourquoi un gate d'écriture
+qui double un gate de lecture ne fait que détruire, le piège de l'acteur nommé,
+les deux options écartées, et la piste du cycle 46 : `_loadReadReceiptOptOuts`
+ignore les participants sans `userId` — établir si une session anonyme peut
+atteindre `PATCH /me/preferences/privacy` avant de conclure.
+
+# Cycle 46 — l'écran Confidentialité écrivait dans un tiroir que le serveur n'ouvrait pas
+
+## Constat
+
+- [x] Question héritée du cycle 45 TRANCHÉE : `PATCH /me/preferences/privacy`
+      est INATTEIGNABLE pour une session anonyme (`allowAnonymous: false`,
+      `routes/me/preferences/index.ts`) — la piste se referme sans correctif
+- [x] Défaut trouvé en l'établissant : les deux moitiés du chemin visent des
+      tables DIFFÉRENTES. L'app écrit `UserPreferences.privacy` (document JSON) ;
+      les six portes de diffusion lisent `UserPreference` (clé/valeur héritée)
+- [x] Le seul écrivain du rangement lu, `PreferencesService.updatePrivacyPreferences`,
+      n'a AUCUN appelant — fichier intégralement orphelin
+- [x] Portée : `showReadReceipts`, `showOnlineStatus`, `showLastSeen`,
+      `showTypingIndicator` — QUATRE préférences inertes côté serveur
+- [x] Invisible par somme de trois causes : le `GET` relit le document (l'écran
+      dit vrai), le défaut vaut `true` (aucun symptôme), les doubles ne
+      modélisaient qu'un rangement (3e cycle consécutif sur ce motif)
+
+## Correctifs
+
+- [x] Résolveur unique `services/preferences/privacy-storage.ts` : document
+      d'abord, lignes héritées seulement pour les utilisateurs sans document
+- [x] Les DEUX lecteurs y passent — `PrivacyPreferencesService` cesse de
+      réimplémenter la règle, `_loadReadReceiptOptOuts` aussi
+- [x] `buildPreferences` réduit à `{ ...défauts, ...stocké }`
+- [x] `PreferencesService.updatePrivacyPreferences` nommé en commentaire comme
+      non branché et à ne pas rebrancher tel quel
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges avant correctif
+- [x] Gardes de non-régression dans les deux sens (document prime / lignes
+      héritées servies en son absence / `{}` ne fait pas taire le repli)
+- [x] Doubles corrigés pour modéliser les DEUX rangements
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle46) + leçon 283
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle46.md` — le tableau des deux
+rangements, les trois causes d'invisibilité, pourquoi le repli hérité est
+conservé, les trois options écartées, et les pistes du cycle 47 : supprimer le
+`PreferencesService` orphelin, invalider les caches à l'écriture (un réglage met
+aujourd'hui jusqu'à 5 min à prendre effet), et verrouiller `allowAnonymous: false`
+par un témoin.
+
+# Cycle 47 — le réglage était pris, et six caches continuaient de diffuser l'ancien
+
+## Constat
+
+- [x] Dette du cycle 46 reprise — mais son analyse était fausse sur le point
+      décisif : il n'y a pas DEUX caches à purger, il y en avait **SIX**
+- [x] Cinq d'entre eux sont le MÊME code : `PrivacyPreferencesService` déclarait
+      sa mémoire en champ d'INSTANCE, et le service est construit cinq fois
+      (gestionnaire Socket.IO, singleton de présence, 3 plugins de routes)
+- [x] Le sixième : `BoundedTtlCache` statique de `MessageReadStatusService`
+- [x] `invalidateCache` existait SANS aucun appelant — le brancher aurait purgé
+      1 copie sur 6, rendant la fraîcheur NON DÉTERMINISTE selon la porte
+- [x] Cinq `setInterval` capturant `this` + cinq `Map` non bornées, pour une
+      donnée qu'un `BoundedTtlCache` expire seul
+
+## Correctifs
+
+- [x] `services/preferences/privacy-cache.ts` — la mémoïsation descend au niveau
+      MODULE, à côté du résolveur du cycle 46
+- [x] Les DEUX familles de lecteurs y passent ; `PrivacyPreferencesService` perd
+      `Map`, TTL, `setInterval` et ses deux méthodes de fetch
+- [x] `invalidatePrivacyPreferences(userId)` = point d'entrée unique, appelé par
+      `PUT`/`PATCH`/`DELETE /me/preferences/privacy` + `DELETE /me/preferences`
+- [x] Aucun câblage : la route importe une fonction, pas une instance
+- [x] Statique `readReceiptOptOutCache` retirée (pas maquillée en façade) ;
+      5 suites appellent `clearPrivacyPreferencesCache()`
+
+## Gates
+
+- [x] 4 RED discriminants + 6 témoins de route vus rouges avant correctif
+- [x] Gardes : purge ciblée (n'affecte pas les autres users), échec jamais
+      mémoïsé, entrée périmée relâchée à la lecture, autre catégorie ne purge
+      pas, écriture en échec ne purge pas
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte — 730 suites / 17 826 témoins
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle47) + leçon 203
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle47.md` — le tableau des six
+mémoires, pourquoi le correctif « évident » était un piège (une purge partielle
+rend la fraîcheur non déterministe et se lit comme une garantie), la règle
+générale (« la mémoire d'une donnée vit à la portée de la donnée, pas à celle de
+son lecteur »), la borne multi-processus assumée, les deux options écartées, et
+les pistes du cycle 48 : `DELETE /me/preferences/:category` n'émet aucun
+`preferences:updated` (staleness CLIENT, symétrique de celle-ci), la suppression
+du `PreferencesService` orphelin, et le verrou par témoin sur
+`allowAnonymous: false`.

@@ -244,6 +244,17 @@ public data class ConversationPrefsPayload(
      * server-side — the gateway leaves an omitted `categoryId` untouched.
      */
     val categoryId: String? = null,
+    /**
+     * The conversation's per-user nickname — `null` here means "unrelated
+     * snapshot, leave the name untouched" (same `explicitNulls = false`
+     * omission trick as [categoryId]). Clearing an EXISTING name is therefore
+     * NEVER represented as `null`: [ConversationRepository.setCustomNameOptimistic]
+     * stores an explicit empty string, which serializes as `"customName":""`
+     * (empty string is not null — the encoder does not drop it) and reaches
+     * the gateway as a real clear. The read side already treats a blank name
+     * the same as absent ([ApiConversation.displayTitle]/[ConversationFilter]).
+     */
+    val customName: String? = null,
 )
 
 /**

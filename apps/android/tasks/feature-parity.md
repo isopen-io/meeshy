@@ -2698,9 +2698,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
       — pin/category/mute/**mentions-only** are wired (slice `conversation-mentions-only-preference`,
       2026-08-15, PR #3054: `setMentionsOnlyOptimistic`/`toggleMentionsOnly` + a context-menu toggle,
-      shown only while not muted). Custom name, reaction emoji, and tags still unwired — the model
-      fields (`ApiConversationPreferences.customName/reaction`, `UserConversationPreferences.tags`)
-      exist but nothing reads/writes them from the UI yet. Box stays unchecked until those land.
+      shown only while not muted). **Custom name wired 2026-08-16** (slice `conversation-custom-name`):
+      `ConversationRepository.setCustomNameOptimistic` (stores `name.trim()` verbatim, including an
+      explicit empty string on clear — the pre-existing `explicitNulls = false` JSON config only drops
+      Kotlin `null`, never `""`) + `ConversationPrefsPayload.customName`/`OutboxFlushWorker` threading
+      through to `ConversationPreferencesUpdate` + a "Rename conversation" context-menu action/dialog.
+      Reaction emoji and tags still unwired — the model fields (`ApiConversationPreferences.reaction`,
+      `UserConversationPreferences.tags`) exist but nothing reads/writes them from the UI yet on either
+      platform (iOS has no real UI for `reaction` either). Box stays unchecked until those land.
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
@@ -2709,7 +2714,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       lock, closing the cross-account leak the foundation slice deferred. Still needed: PIN entry
       UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
       flow itself. Box stays unchecked until those land.
-- [ ] Leave / archive / delete-for-me / delete-for-all conversation
+- [x] Leave / archive / delete-for-me / delete-for-all conversation — all four verified shipped: leave/delete-for-me/archive already live (earlier slices), delete-for-all closes the gap (`conversation-delete-for-all`, 2026-08-16)
       — leave, archive, and delete-for-me are wired (`conversation-leave` PR #3055 +
       `conversation-delete-for-me` PR #3057, 2026-08-16: two context-menu items, each behind its
       own confirmation dialog, both reusing the existing `ConversationPurge` socket-driven removal

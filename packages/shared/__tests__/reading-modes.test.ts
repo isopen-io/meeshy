@@ -22,7 +22,11 @@ const hoursAgo = (h: number) => NOW - h * 60 * 60 * 1000;
 const baseCapabilities: ReadingModeCapabilities = {
   availableModes: ['focal', 'script', 'summary'],
   riverEligible: false,
-  riverEligibilityReason: { threshold: RIVER_ELIGIBILITY_THRESHOLD, current: 1 },
+  riverEligibilityReason: {
+    threshold: RIVER_ELIGIBILITY_THRESHOLD,
+    current: 1,
+    riverReason: 'belowThreshold',
+  },
 };
 
 /** Le catalogue d'un invité : le Résumé Vivant y est absent (403 sur `/analysis`). */
@@ -35,7 +39,11 @@ const anonymousCapabilities: ReadingModeCapabilities = {
 const riverCapabilities: ReadingModeCapabilities = {
   availableModes: ['focal', 'script', 'summary', 'river'],
   riverEligible: true,
-  riverEligibilityReason: { threshold: RIVER_ELIGIBILITY_THRESHOLD, current: 8 },
+  riverEligibilityReason: {
+    threshold: RIVER_ELIGIBILITY_THRESHOLD,
+    current: 8,
+    riverReason: 'eligible',
+  },
 };
 
 // =============================================================================
@@ -508,7 +516,11 @@ describe('resolveCapabilities — amendement R : la Rivière devient sélectionn
       activeParticipantCount: 4,
     });
     expect(capabilities.availableModes).not.toContain('river');
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 4 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 4,
+      riverReason: 'belowThreshold',
+    });
   });
 
   it("drapeau Rivière ON en 'direct' → river hors catalogue (jamais en 1:1), raison servie", () => {
@@ -521,7 +533,11 @@ describe('resolveCapabilities — amendement R : la Rivière devient sélectionn
     });
     expect(capabilities.availableModes).not.toContain('river');
     expect(capabilities.riverEligible).toBe(false);
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 12 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 12,
+      riverReason: 'neverEligible',
+    });
   });
 
   it("drapeau Lentille ÉTEINT : river n'entre pas au catalogue même avec son propre drapeau ON", () => {
@@ -534,7 +550,11 @@ describe('resolveCapabilities — amendement R : la Rivière devient sélectionn
     });
     expect(capabilities.availableModes).toEqual(['bubbles']);
     expect(capabilities.riverEligible).toBe(true);
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 10 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 10,
+      riverReason: 'eligible',
+    });
   });
 
   it('isRiverFlagEnabled est OPTIONNEL et vaut false par défaut', () => {
@@ -566,7 +586,11 @@ describe("resolveCapabilities — éligibilité Rivière (≥ 5 actifs, jamais e
       activeParticipantCount: 4,
     });
     expect(capabilities.riverEligible).toBe(false);
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 4 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 4,
+      riverReason: 'belowThreshold',
+    });
   });
 
   it('5 actifs en groupe → éligible', () => {
@@ -577,7 +601,11 @@ describe("resolveCapabilities — éligibilité Rivière (≥ 5 actifs, jamais e
       activeParticipantCount: 5,
     });
     expect(capabilities.riverEligible).toBe(true);
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 5 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 5,
+      riverReason: 'eligible',
+    });
   });
 
   it("5 actifs en 'direct' → inéligible malgré le seuil atteint (jamais en direct)", () => {
@@ -588,11 +616,140 @@ describe("resolveCapabilities — éligibilité Rivière (≥ 5 actifs, jamais e
       activeParticipantCount: 5,
     });
     expect(capabilities.riverEligible).toBe(false);
-    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 5 });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: 5,
+      riverReason: 'neverEligible',
+    });
   });
 
   it('RIVER_ELIGIBILITY_THRESHOLD exporté vaut 5', () => {
     expect(RIVER_ELIGIBILITY_THRESHOLD).toBe(5);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AMENDEMENT S1 (REV-3/B3) — raison Rivière honnête
+// -----------------------------------------------------------------------------
+
+describe("resolveCapabilities — amendement S1 : « jamais » n'est pas « pas encore »", () => {
+  it("'direct' rend `neverEligible`, JAMAIS `belowThreshold`", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'direct',
+      activeParticipantCount: 2,
+    });
+    expect(capabilities.riverEligibilityReason.riverReason).toBe('neverEligible');
+  });
+
+  it("un compte ÉLEVÉ ne renverse pas 'direct' — la porte n'existe pas, elle n'est pas fermée", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'direct',
+      activeParticipantCount: 99,
+    });
+    expect(capabilities.riverEligible).toBe(false);
+    expect(capabilities.riverEligibilityReason.riverReason).toBe('neverEligible');
+    // Discrimination : le MÊME compte sur un groupe ouvre la porte. Sans ce
+    // contraste, `neverEligible` pourrait n'être qu'un synonyme de « fermé ».
+    expect(
+      resolveCapabilities({
+        identity: { isAnonymous: false },
+        isFlagEnabled: true,
+        isRiverFlagEnabled: true,
+        conversationType: 'group',
+        activeParticipantCount: 99,
+      }).riverEligibilityReason.riverReason,
+    ).toBe('eligible');
+  });
+
+  it('un groupe sous le seuil reste `belowThreshold` — la porte existe, elle attend', () => {
+    expect(
+      resolveCapabilities({
+        identity: { isAnonymous: false },
+        isFlagEnabled: true,
+        isRiverFlagEnabled: true,
+        conversationType: 'group',
+        activeParticipantCount: 4,
+      }).riverEligibilityReason.riverReason,
+    ).toBe('belowThreshold');
+  });
+
+  it('le seuil franchi rend `eligible`', () => {
+    expect(
+      resolveCapabilities({
+        identity: { isAnonymous: false },
+        isFlagEnabled: true,
+        isRiverFlagEnabled: true,
+        conversationType: 'group',
+        activeParticipantCount: RIVER_ELIGIBILITY_THRESHOLD,
+      }).riverEligibilityReason.riverReason,
+    ).toBe('eligible');
+  });
+});
+
+describe("resolveCapabilities — amendement S1 : un compte inconnu ne devient pas zéro", () => {
+  it('activeParticipantCount: null → la raison ne porte AUCUN compte (`current: null`)', () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: null,
+    });
+    expect(capabilities.riverEligibilityReason).toEqual({
+      threshold: 5,
+      current: null,
+      riverReason: 'belowThreshold',
+    });
+  });
+
+  it("« inconnu » et « zéro » sont DEUX raisons différentes — c'est tout l'objet de l'amendement", () => {
+    const unknown = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: null,
+    }).riverEligibilityReason;
+    const zero = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 0,
+    }).riverEligibilityReason;
+
+    expect(unknown.current).toBeNull();
+    expect(zero.current).toBe(0);
+    expect(unknown).not.toEqual(zero);
+  });
+
+  it('un compte inconnu ne rend JAMAIS éligible — faux négatif toléré, faux positif interdit', () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: null,
+    });
+    expect(capabilities.riverEligible).toBe(false);
+    expect(capabilities.availableModes).not.toContain('river');
+  });
+
+  it("rétro-compatibilité : un appelant qui passe un NOMBRE obtient exactement l'ancien comportement", () => {
+    const capabilities = resolveCapabilities({
+      identity: { isAnonymous: false },
+      isFlagEnabled: true,
+      isRiverFlagEnabled: true,
+      conversationType: 'group',
+      activeParticipantCount: 10,
+    });
+    expect(capabilities.riverEligible).toBe(true);
+    expect(capabilities.availableModes).toContain('river');
+    expect(capabilities.riverEligibilityReason.current).toBe(10);
   });
 });
 

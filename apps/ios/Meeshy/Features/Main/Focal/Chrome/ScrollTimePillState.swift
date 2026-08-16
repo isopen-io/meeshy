@@ -9,6 +9,17 @@ import MeeshySDK
 /// section de la Lentille consomment la MÊME machine et la MÊME constante
 /// `lingerMs`).
 ///
+/// **Unités — MILLISECONDES.** Ce pilote ne convertit RIEN : le `at` reçu
+/// est transmis tel quel à la loi, qui le compare à `lingerMs = 900`. Tout
+/// appelant DOIT donc injecter des millisecondes — c'est déjà le cas des
+/// deux peaux réelles (`MessageListViewController.nowMs()` =
+/// `timeIntervalSince1970 * 1000`, pour `.scrolled` comme pour `.tick` ;
+/// `SectionScrollPillHost.timestamp()` côté Lentille). Injecter des
+/// SECONDES (un `TimeInterval` brut, ou un `lingerMs / 1000`) élargirait la
+/// fenêtre d'un facteur 1 000 et la pilule ne s'effacerait plus jamais.
+/// `ScrollTimePillStateTests.test_lingerBoundary_isMeasuredInMilliseconds`
+/// monte la garde à ±1 ms de la borne.
+///
 /// **Écart assumé vs contrat §3.9** (F-081, RE-PREUVE) : le contrat esquisse
 /// un `ScrollTimePillLaw.Event` PROPRE (`.opened`/`.scrolled`/`.tick`/
 /// `.headerExpanded`) et une `fadeDuration` sur la loi elle-même. La loi

@@ -105,10 +105,43 @@ final class FocalAudioRoutingTests: XCTestCase {
         XCTAssertEqual(FocalAudioRouting.mode(for: content), .hostsReply)
     }
 
+    /// Le `.audio` PUR + texte N'EST PAS un caption — c'est
+    /// `.soleWithFooter`, exactement comme la bulle.
+    ///
+    /// `BubbleContent.hasTextOrNonMediaContent` (`BubbleContent.swift:207-215`,
+    /// PUBLIQUE et partagée par les deux implémentations) renvoie
+    /// délibérément `false` pour « audio-only with transcription text » : sur
+    /// un message dont les pièces jointes sont le cas `.audio` PUR, le texte
+    /// EST la transcription du vocal, et le widget audio la rend lui-même —
+    /// aucune bulle texte séparée. Il s'ensuit, côté bulle, que
+    /// `audioIsSoleContent` (`BubbleStandardLayout.swift:278`) est VRAI et
+    /// `audioHostsCaption` (`:301`) FAUX : le footer est injecté dans le
+    /// widget, `embedsCaption` reste `false`.
+    ///
+    /// La parité du fil (le comportement bulle fait foi) impose donc
+    /// `.soleWithFooter` ici. `audioHostsCaption` sert les cas où le
+    /// texte/lieu/pièce non-média N'EST PAS une transcription — voir le test
+    /// suivant.
+    func test_pureAudioWithText_isSoleWithFooter_notCaption_bubbleParity() {
+        let content = makeContent(text: "un mot", attachments: .audio([audioAttachment(id: "a1")]))
+        XCTAssertEqual(
+            FocalAudioRouting.mode(for: content), .soleWithFooter,
+            "parité bulle : `.audio` pur + texte ⇒ audioIsSoleContent, jamais audioHostsCaption"
+        )
+    }
+
     // MARK: - .hostsCaption
 
-    func test_audioWithText_noReply_noVisual_isHostsCaption() {
-        let content = makeContent(text: "un mot", attachments: .audio([audioAttachment(id: "a1")]))
+    /// Le cas caption RÉEL : audio + texte dans un `.mixed` SANS visuel.
+    /// `.mixed` n'est pas le cas `.audio` pur, donc l'exclusion
+    /// « audio-only with transcription text » ne s'applique pas :
+    /// `hasTextOrNonMediaContent` est vrai, `audioHostsCaption` l'est aussi
+    /// (pas de reply, pas de pièce jointe visuelle) et le texte devient la
+    /// légende rendue DANS le `playerBackground`.
+    func test_mixedAudioWithText_noVisual_noReply_isHostsCaption() {
+        let content = makeContent(text: "un mot", attachments: .mixed(
+            visual: [], audio: [audioAttachment(id: "a1")], nonMedia: []
+        ))
         XCTAssertEqual(FocalAudioRouting.mode(for: content), .hostsCaption)
     }
 

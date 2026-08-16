@@ -13,6 +13,7 @@
  */
 
 import { MessageReadStatusService, buildCursorFreshnessGuard } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // Mock the NotificationService import (used dynamically in markMessagesAsRead)
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -60,6 +61,9 @@ const mockPrisma: any = {
   userPreference: {
     findMany: jest.fn()
   },
+  userPreferences: {
+    findMany: jest.fn()
+  },
   messageAttachment: {
     findUnique: jest.fn(),
     update: jest.fn()
@@ -104,7 +108,7 @@ describe('MessageReadStatusService', () => {
     (MessageReadStatusService as any).recentActionCache.clear();
     // Idem pour le cache d'opt-out « accusés de lecture » : sa portée est le
     // processus, une entrée laissée par un test fausserait le suivant.
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
 
     // `clearAllMocks` efface les APPELS, pas les implémentations : un
     // `mockRejectedValue` posé par un test survit à tous les suivants. Sans
@@ -135,8 +139,12 @@ describe('MessageReadStatusService', () => {
     // Default: no per-participant media consumption rows (getMessageReadStatus).
     // Individual tests override this to exercise the attachmentConsumption path.
     mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
-    // Default: personne n'a désactivé ses accusés de lecture.
+    // Default: personne n'a désactivé ses accusés de lecture — ni dans le
+    // document JSON qu'écrit l'application, ni dans les lignes clé/valeur
+    // héritées. Les DEUX rangements doivent être modélisés : un double qui
+    // n'en connaît qu'un ne peut pas voir lequel des deux la porte consulte.
     mockPrisma.userPreference.findMany.mockResolvedValue([]);
+    mockPrisma.userPreferences.findMany.mockResolvedValue([]);
 
     // Create service instance with mock Prisma
     service = new MessageReadStatusService(mockPrisma as any);
@@ -2942,7 +2950,9 @@ describe('MessageReadStatusService', () => {
           readAt: new Date('2025-01-01T10:05:00Z')
         }
       ]);
-      mockPrisma.userPreference.findMany.mockResolvedValue([{ userId: 'u-optout' }]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(
+        [{ userId: 'u-optout', key: 'show-read-receipts', value: 'false' }]
+      );
 
       const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
 
@@ -5242,7 +5252,18 @@ describe('MessageReadStatusService', () => {
   // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
   // ───────────────────────────────────────────────────────────────────────────
   describe('showReadReceipts — exclusion du participant opt-out', () => {
-    const optOutRows = (userId: string) => [{ userId }];
+    // Forme HÉRITÉE : les lignes clé/valeur de `/user-preferences/privacy`,
+    // endpoint retiré en janvier 2026. Ces témoins gardent le repli vivant —
+    // un opt-out posé pendant cette fenêtre doit rester honoré.
+    const optOutRows = (userId: string) => [
+      { userId, key: 'show-read-receipts', value: 'false' },
+    ];
+
+    // Forme VIVANTE : le document JSON qu'écrit `PATCH /me/preferences/privacy`,
+    // seule porte que le web et iOS appellent.
+    const optOutDocument = (userId: string) => [
+      { userId, privacy: { showReadReceipts: false } },
+    ];
 
     it('getMessageReadStatus: excluded from readCount AND totalMembers', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
@@ -5362,6 +5383,56 @@ describe('MessageReadStatusService', () => {
       await service.getLatestMessageSummary(testConversationId);
 
       expect(mockPrisma.userPreference.findMany.mock.calls.length).toBe(afterFirst);
+    });
+
+    it('honore un opt-out posé par l’application (document JSON), pas seulement les lignes héritées', async () => {
+      // LE défaut du cycle 46 : la porte ne lisait que les lignes clé/valeur,
+      // que plus aucun chemin vivant n'écrit. L'utilisateur coupait ses accusés
+      // dans l'écran Confidentialité, le réglage revenait bien à l'affichage
+      // (le `GET` relit le même document), et le serveur continuait de diffuser.
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-p'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-doc-optout', userId: 'u-doc-optout' },
+        { id: 'p-doc-normal', userId: 'u-doc-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-doc-optout', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p-doc-normal', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+      ]);
+      mockPrisma.userPreferences.findMany.mockResolvedValue(optOutDocument('u-doc-optout'));
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(1);
+      expect(result.readCount).toBe(0);
+    });
+
+    it('le document JSON prime sur une ligne héritée qui le contredit', async () => {
+      // Le repli hérité ne doit jamais rouvrir ce qu'un réglage COURANT a fermé,
+      // ni fermer ce qu'il a rouvert : une personne qui avait coupé ses accusés
+      // en janvier puis les a rétablis reste visible.
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-p'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-reopened', userId: 'u-reopened' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-reopened', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-reopened'));
+      mockPrisma.userPreferences.findMany.mockResolvedValue([
+        { userId: 'u-reopened', privacy: { showReadReceipts: true } }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(1);
+      expect(result.readCount).toBe(1);
     });
 
     it('an anonymous participant has no stored preference and stays visible', async () => {

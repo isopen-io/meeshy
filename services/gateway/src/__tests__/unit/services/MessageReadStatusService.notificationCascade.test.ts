@@ -32,6 +32,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import {
   setSharedNotificationService,
   getSharedNotificationService,
@@ -67,6 +68,9 @@ const mockPrisma: any = {
     findFirst: jest.fn<any>(),
     findMany: jest.fn<any>(),
   },
+  userPreferences: {
+    findMany: jest.fn()
+  },
   userPreference: {
     findMany: jest.fn<any>(),
   },
@@ -79,7 +83,7 @@ describe('MessageReadStatusService — cascade notifications indépendante du cu
   beforeEach(() => {
     jest.clearAllMocks();
     (MessageReadStatusService as any).recentActionCache.clear();
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
 
     service = new MessageReadStatusService(mockPrisma);
 
@@ -94,6 +98,7 @@ describe('MessageReadStatusService — cascade notifications indépendante du cu
     mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
     mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.userPreference.findMany.mockResolvedValue([]);
+    mockPrisma.userPreferences.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {

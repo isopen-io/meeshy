@@ -93,7 +93,7 @@ final class MessageListViewControllerTests: XCTestCase {
     private func makeSeededStore() async throws -> MessageStore {
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
-        try pool.write { db in
+        try await pool.write { db in
             let record = MessageRecord(
                 localId: "m1", serverId: "server_m1",
                 conversationId: "c1", senderId: "user_other",

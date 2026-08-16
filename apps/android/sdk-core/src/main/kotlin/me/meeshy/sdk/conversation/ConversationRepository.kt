@@ -126,6 +126,17 @@ class ConversationRepository @Inject constructor(
         apiCall { conversationApi.deleteForMe(id) }
 
     /**
+     * Ends [id] for EVERY participant (destructive, confirmed by the caller UI;
+     * server-enforced creator-only — the client only gates the affordance). No
+     * local cache mutation here: the gateway broadcasts `conversation:closed` to
+     * every participant's devices, including the closer's own, and
+     * [ConversationPurge.onConversationClosed] ([me.meeshy.app.conversations])
+     * drops the row once that event round-trips — same shape as [deleteForMe].
+     */
+    suspend fun deleteForAll(id: String): NetworkResult<Unit> =
+        apiCall { conversationApi.deleteForAll(id) }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or
@@ -231,6 +242,19 @@ class ConversationRepository @Inject constructor(
         updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
 
     /**
+     * Optimistic per-conversation nickname (rename). Trims [name] and stores it
+     * verbatim — including an empty string when the user clears the field — so
+     * the outbox snapshot carries an explicit clear rather than a `null` the
+     * `explicitNulls = false` encoder would silently drop. The read side
+     * ([ApiConversation.displayTitle], `ConversationFilter`) already treats a
+     * blank `customName` the same as absent.
+     */
+    suspend fun setCustomNameOptimistic(id: String, name: String): Boolean {
+        val trimmed = name.trim()
+        return updatePreferencesOptimistic(id) { it.copy(customName = trimmed) }
+    }
+
+    /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
      * cached preferences mutate instantly (the filter re-derives the visible
      * list) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation joins the
@@ -269,6 +293,7 @@ class ConversationRepository @Inject constructor(
                         isArchived = snapshot.isArchived,
                         mentionsOnly = snapshot.mentionsOnly,
                         categoryId = snapshot.categoryId,
+                        customName = snapshot.customName,
                     ),
                 ),
             ),

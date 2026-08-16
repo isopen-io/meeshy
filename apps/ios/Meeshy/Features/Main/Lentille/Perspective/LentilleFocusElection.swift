@@ -23,7 +23,7 @@ import MeeshyUI
 /// Seuls les rangs RÉELLEMENT montés s'y inscrivent : le `LazyVStack` de la
 /// liste n'en matérialise qu'une poignée à la fois, et `onDisappear` les
 /// retire. Le registre ne grandit donc pas avec le compte de conversations.
-final class LentilleFocusCandidateRegistry {
+nonisolated final class LentilleFocusCandidateRegistry {
 
     private(set) var midYById: [String: CGFloat] = [:]
 

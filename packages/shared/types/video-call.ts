@@ -520,7 +520,17 @@ export interface CallQualityFeedbackEvent {
 
 export interface CallScreenCaptureEvent {
   readonly callId: string
-  readonly participantId: string
+  readonly participantId: string      // Database Participant ID (legacy)
+  /**
+   * The reporting participant's User ID — falls back to `participantId` for
+   * an anonymous guest (no User row). Added Vague 132: a call-wide roster
+   * entry's own identity (`CallParticipant.userId`, see
+   * `toCallParticipantResponse`) is keyed by `userId`, never by
+   * `participantId` alone for a registered user — without this field a
+   * client resolving "who is this alert about" against its roster can never
+   * match a registered peer.
+   */
+  readonly userId?: string
   readonly isCapturing: boolean
 }
 
@@ -661,7 +671,9 @@ export interface CallMissedEvent {
  */
 export interface CallQualityAlertEvent {
   readonly callId: string;
-  readonly participantId: string;
+  readonly participantId: string;     // Database Participant ID (legacy)
+  /** See `CallScreenCaptureEvent.userId` — same rationale, added Vague 132. */
+  readonly userId?: string;
   readonly metric: 'rtt' | 'packetLoss' | 'bitrate' | 'jitter';
   readonly value: number;
   readonly threshold: number;

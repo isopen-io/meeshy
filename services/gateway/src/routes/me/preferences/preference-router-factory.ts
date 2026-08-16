@@ -10,6 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
+import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
 import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 
 type PreferenceCategory =
@@ -40,6 +41,20 @@ export function createPreferenceRouter<T>(
 
     const isEmpty = (obj: any): boolean => {
       return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
+    };
+
+    /**
+     * Six portes de diffusion mémoïsent la confidentialité pendant cinq minutes
+     * (`services/preferences/privacy-cache`). Sans cette purge, couper ses
+     * accusés de lecture ne prenait effet qu'après ce délai — le serveur
+     * continuait de diffuser ce que l'utilisateur venait de demander de taire,
+     * l'écran lui confirmant l'inverse.
+     *
+     * Seule la confidentialité a une mémoire côté serveur : les autres
+     * catégories ne sont relues que par le `GET` de cette même porte.
+     */
+    const invalidateServerCache = (userId: string) => {
+      if (category === 'privacy') invalidatePrivacyPreferences(userId);
     };
 
     const emitPreferencesUpdated = (userId: string) => {
@@ -194,6 +209,7 @@ export function createPreferenceRouter<T>(
             },
           });
 
+          invalidateServerCache(userId);
           emitPreferencesUpdated(userId);
 
           return sendSuccess(reply, (updated as any)[category] as T);
@@ -308,6 +324,7 @@ export function createPreferenceRouter<T>(
             },
           });
 
+          invalidateServerCache(userId);
           emitPreferencesUpdated(userId);
 
           return sendSuccess(reply, (updated as any)[category] as T);
@@ -357,6 +374,8 @@ export function createPreferenceRouter<T>(
             where: { userId },
             data: { [category]: null }
           });
+
+          invalidateServerCache(userId);
 
           return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {

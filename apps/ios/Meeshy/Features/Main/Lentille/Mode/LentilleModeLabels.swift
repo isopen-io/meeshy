@@ -88,16 +88,48 @@ nonisolated enum LentilleModeLabels {
 
     // MARK: - Raison Rivière — seuils VIVANTS, jamais un texte fixe
 
-    /// « s'ouvrira à 5 personnes actives — 3 aujourd'hui » — composée depuis
-    /// `RiverEligibilityReason` (miroir gelé), jamais une chaîne statique :
-    /// `threshold` et `current` viennent de `resolveCapabilities`, appelée
-    /// avec les données RÉELLES de la conversation à chaque rendu.
+    /// Trois formes, jamais une seule formule (AMENDEMENT S1, REV-3/B3) —
+    /// composées depuis `RiverEligibilityReason` (miroir gelé), jamais une
+    /// chaîne statique : `threshold`, `current` et `riverReason` viennent de
+    /// `resolveCapabilities`, appelée avec les données RÉELLES de la
+    /// conversation à chaque rendu.
+    ///
+    /// 1. `.neverEligible` (conversation `direct`) ⇒ « jamais en conversation
+    ///    directe ». L'ancienne formule unique promettait « s'ouvrira à 5
+    ///    personnes actives — N aujourd'hui » à un duo qui n'atteindra JAMAIS
+    ///    5 : une porte annoncée qui n'existe pas.
+    /// 2. Compte INCONNU (`current == nil`) ⇒ le seuil SEUL, « s'ouvrira à 5
+    ///    personnes actives ». Aucun « 0 aujourd'hui » fabriqué : le compte
+    ///    d'actifs par conversation n'est pas encore une donnée client (G-123).
+    /// 3. Compte connu ⇒ la formule à deux nombres, INCHANGÉE.
+    ///
+    /// `.eligible` retombe sur la même branche numérique que
+    /// `.belowThreshold` : en V3 l'entrée Rivière reste grisée même jugée
+    /// éligible (drapeau `riviere_mode` absent, R-133), et sa raison affichée
+    /// est alors la même formule vivante qu'avant l'amendement.
     static func riverReason(_ reason: ReadingModeOrchestrator.RiverEligibilityReason) -> String {
+        if reason.riverReason == .neverEligible {
+            return String(
+                localized: "lentille.mode.river.never",
+                defaultValue: "jamais en conversation directe",
+                bundle: .main
+            )
+        }
+
+        guard let current = reason.current else {
+            let thresholdOnly = String(
+                localized: "lentille.mode.river.threshold_only",
+                defaultValue: "s'ouvrira à %d personnes actives",
+                bundle: .main
+            )
+            return String(format: thresholdOnly, reason.threshold)
+        }
+
         let format = String(
             localized: "lentille.mode.river.reason",
             defaultValue: "s'ouvrira à %d personnes actives — %d aujourd'hui",
             bundle: .main
         )
-        return String(format: format, reason.threshold, reason.current)
+        return String(format: format, reason.threshold, current)
     }
 }

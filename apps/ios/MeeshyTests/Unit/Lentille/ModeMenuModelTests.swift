@@ -6,11 +6,15 @@ import XCTest
 ///
 /// **Suite COMPLÉTÉE par I-073.** I-072 verrouillait ce que la mission
 /// nommait explicitement — Rivière grisée + sa raison réelle sur des seuils
-/// VIVANTS, et la structure des cinq entrées. **I-073 ajoute** : le témoin
-/// (défaut réel documenté, non corrigé — la loi vit dans le miroir gelé
-/// `ReadingModeOrchestrator`, hors `Lentille/Mode|Perspective`) qui verrouille
-/// qu'une conversation `.direct` reçoit la MÊME formule numérique que
-/// n'importe quel groupe sous seuil, plutôt qu'un message dédié.
+/// VIVANTS, et la structure des cinq entrées. **I-073 ajoutait** le témoin du
+/// défaut réel documenté, non corrigé : une conversation `.direct` recevait la
+/// MÊME formule numérique que n'importe quel groupe sous seuil, faute d'un
+/// amendement à la loi gelée S1.
+///
+/// **REV-3/B3 corrige ce défaut** (amendement S1 autorisé par la porte) : la
+/// raison Rivière se trifurque — « jamais » (`direct`), « seuil seul » (compte
+/// inconnu), « seuil et compte » (nominal). Les deux témoins concernés
+/// verrouillent désormais le comportement CORRIGÉ, plus le défaut.
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1591`) : `ModeMenuModelTests`, phase 1 (nom repris
@@ -23,7 +27,10 @@ final class ModeMenuModelTests: XCTestCase {
         isAnonymous: Bool = false,
         isFlagEnabled: Bool = true,
         conversationType: ReadingModeOrchestrator.ConversationType = .group,
-        activeParticipantCount: Int = 0
+        /// `nil` = compte d'actifs INCONNU (amendement S1, REV-3/B3) — la
+        /// valeur que `LentilleReadingModeContext.activeParticipantCount` rend
+        /// désormais en production, là où elle fabriquait un `0`.
+        activeParticipantCount: Int? = 0
     ) -> ReadingModeOrchestrator.ReadingModeCapabilities {
         ReadingModeOrchestrator.resolveCapabilities(
             ReadingModeOrchestrator.ResolveCapabilitiesInput(
@@ -100,11 +107,31 @@ final class ModeMenuModelTests: XCTestCase {
         let reasonThree = try XCTUnwrap(try entry(.riviere, in: modelThree).disabledReason)
         let reasonZero = try XCTUnwrap(try entry(.riviere, in: modelZero).disabledReason)
 
+        // Valeur attendue composée par le MÊME format que la production
+        // (`LentilleModeLabels.riverReason`, clé `lentille.mode.river.reason`),
+        // résolu par catalogue au moment du test (même patron que
+        // `A11yLabelComposerTests`/`CallsViewModelTests`) — sous la locale
+        // `en` du CI il rend l'anglais, plus le repli `defaultValue` français.
+        // La langue est donc libre ; ce qui reste verrouillé (leçon 264/266)
+        // est que les DEUX nombres vivants (seuil, compte réel) apparaissent
+        // dans la chaîne rendue.
+        let format = String(
+            localized: "lentille.mode.river.reason",
+            defaultValue: "s'ouvrira à %d personnes actives — %d aujourd'hui",
+            bundle: .main
+        )
+        let expectedReasonThree = String(format: format, ReadingModeOrchestrator.riverEligibilityThreshold, 3)
         XCTAssertEqual(
             reasonThree,
-            "s'ouvrira à \(ReadingModeOrchestrator.riverEligibilityThreshold) personnes actives — 3 aujourd'hui",
-            "Exemple du contrat, mot pour mot (avec le seuil du miroir, jamais « 5 » écrit " +
-            "en dur ici) : « s'ouvrira à 5 personnes actives — 3 aujourd'hui »."
+            expectedReasonThree,
+            "Composée depuis le MÊME format que la production, avec le seuil du miroir " +
+            "(jamais « 5 » écrit en dur ici) et le compte réel (3)."
+        )
+        XCTAssertTrue(
+            reasonThree.contains("\(ReadingModeOrchestrator.riverEligibilityThreshold)")
+                && reasonThree.contains("3"),
+            "Les DEUX seuils vivants (le plancher et le compte réel) doivent apparaître " +
+            "dans la raison rendue, quelle que soit la langue résolue."
         )
         XCTAssertNotEqual(
             reasonThree, reasonZero,
@@ -115,43 +142,108 @@ final class ModeMenuModelTests: XCTestCase {
         )
     }
 
-    /// I-073 — DÉFAUT RÉEL DOCUMENTÉ, NON CORRIGÉ (hors périmètre LWS-8 :
-    /// la loi vit dans le miroir GELÉ `ReadingModeOrchestrator.resolveCapabilities`,
-    /// `Focal/Core/`, propriété M-042 — pas `Lentille/Mode/`).
+    /// I-073 signalait ici un DÉFAUT RÉEL, documenté et NON corrigé : sur une
+    /// conversation `.direct`, la raison Rivière rendait la MÊME formule
+    /// numérique que sur un groupe sous seuil — « s'ouvrira à 5 personnes
+    /// actives — N aujourd'hui » — alors que `riverEligible` exclut `direct`
+    /// STRUCTURELLEMENT, quel que soit N. Le texte promettait une porte qui ne
+    /// s'ouvrirait JAMAIS. La correction vivait dans la loi PARTAGÉE gelée S1,
+    /// hors des dossiers que LWS-8 possède : elle a donc attendu son
+    /// amendement.
     ///
-    /// Ce témoin verrouille le comportement RÉEL d'aujourd'hui plutôt qu'un
-    /// oubli : sur une conversation `.direct`, la raison Rivière reste la
-    /// MÊME formule numérique que sur un groupe — « s'ouvrira à 5 personnes
-    /// actives — N aujourd'hui » — alors que `riverEligible` EXCLUT les
-    /// conversations directes STRUCTURELLEMENT
-    /// (`conversationType != .direct`), quel que soit `N`. Amener une
-    /// conversation directe à 5 participants actifs est de toute façon
-    /// impossible (elle n'a que deux), mais le TEXTE promet une porte qui
-    /// s'ouvrira "à 5" alors qu'elle ne s'ouvrira JAMAIS pour ce type de
-    /// conversation — un texte du type « jamais disponible en conversation
-    /// directe » serait honnête là où le comptage ne l'est qu'à moitié.
-    /// `resolveCapabilities` (`ReadingModeOrchestrator.swift`) ET son miroir
-    /// TypeScript (`packages/shared/utils/reading-modes.ts`) composent la
-    /// MÊME `RiverEligibilityReason(threshold:current:)` sans branche sur
-    /// `conversationType` — ce n'est donc pas une divergence iOS↔loi
-    /// (auquel cas la garde source trivial l'aurait autorisée à corriger),
-    /// c'est un trait de la loi PARTAGÉE, gelée S1, hors des deux dossiers
-    /// que possède LWS-8 (`Lentille/Perspective/`, `Lentille/Mode/`).
-    func test_riviere_reasonOnADirectConversation_staysTheSameNumericFormula_neverADedicatedMessage() throws {
+    /// REV-3/B3 l'apporte : `riverReason == .neverEligible` ⇒ une clé i18n
+    /// DÉDIÉE (`lentille.mode.river.never`), sans le moindre nombre. Ce témoin
+    /// verrouille désormais le comportement CORRIGÉ.
+    ///
+    /// Résolution locale-agnostique : la valeur attendue est composée par le
+    /// MÊME `String(localized:defaultValue:bundle:)` que la production (patron
+    /// du dépôt, cf. `A11yLabelComposerTests`) — sous la locale `en` du CI elle
+    /// rend l'anglais, en `fr` le français ; ce qui est verrouillé est
+    /// l'IDENTITÉ de la clé résolue, jamais une langue.
+    func test_riviere_reasonOnADirectConversation_saysNever_withoutAnyFabricatedNumber() throws {
         let directCaps = capabilities(conversationType: .direct, activeParticipantCount: 3)
         XCTAssertFalse(directCaps.riverEligible, "Prérequis : `direct` reste structurellement inéligible.")
+        XCTAssertEqual(
+            directCaps.riverEligibilityReason.riverReason, .neverEligible,
+            "Prérequis : la loi amendée doit qualifier `direct` de « jamais éligible »."
+        )
 
         let model = LentilleModeMenuModel.build(capabilities: directCaps, currentPreference: .auto)
         let reason = try XCTUnwrap(try entry(.riviere, in: model).disabledReason)
 
+        let expected = String(
+            localized: "lentille.mode.river.never",
+            defaultValue: "jamais en conversation directe",
+            bundle: .main
+        )
+        XCTAssertEqual(
+            reason, expected,
+            "Une conversation directe doit dire « jamais », pas « pas encore » : la Rivière " +
+            "n'y a pas de porte fermée, elle n'y a pas de porte."
+        )
+        XCTAssertFalse(
+            reason.contains(where: \.isNumber),
+            "Aucun nombre ne doit survivre dans la raison « jamais » — ni le seuil (qui ne " +
+            "sera jamais atteint ici), ni un compte courant (qui ne changerait rien). " +
+            "Rendu : « \(reason) »."
+        )
+
+        // Discrimination (leçon 266) : le MÊME compte sur un GROUPE rend
+        // l'autre libellé. Sans ce contraste, un libellé « jamais » servi
+        // partout passerait ce témoin au vert.
+        let groupCaps = capabilities(conversationType: .group, activeParticipantCount: 3)
+        let groupReason = try XCTUnwrap(
+            try entry(.riviere, in: LentilleModeMenuModel.build(capabilities: groupCaps, currentPreference: .auto))
+                .disabledReason
+        )
+        XCTAssertNotEqual(
+            reason, groupReason,
+            "« jamais en conversation directe » et « s'ouvrira à 5 — 3 aujourd'hui » sont deux " +
+            "phrases différentes ; les confondre était précisément le défaut corrigé."
+        )
+    }
+
+    /// AMENDEMENT S1 (REV-3/B3) — compte d'actifs INCONNU : la raison cite le
+    /// SEUIL et se tait sur le reste. C'est la contrepartie du passage de
+    /// `LentilleReadingModeContext.activeParticipantCount` à `nil` : sans cette
+    /// forme, l'app affichait « — 0 aujourd'hui » sur des conversations pleines
+    /// de monde, un chiffre que personne n'avait mesuré.
+    func test_riviere_reasonWithAnUnknownCount_citesTheThresholdOnly_neverAFabricatedZero() throws {
+        let unknownCaps = capabilities(conversationType: .group, activeParticipantCount: nil)
+        XCTAssertNil(
+            unknownCaps.riverEligibilityReason.current,
+            "Prérequis : un compte inconnu doit rester inconnu à la sortie de la loi."
+        )
+
+        let model = LentilleModeMenuModel.build(capabilities: unknownCaps, currentPreference: .auto)
+        let reason = try XCTUnwrap(try entry(.riviere, in: model).disabledReason)
+
+        let format = String(
+            localized: "lentille.mode.river.threshold_only",
+            defaultValue: "s'ouvrira à %d personnes actives",
+            bundle: .main
+        )
         XCTAssertEqual(
             reason,
-            "s'ouvrira à \(ReadingModeOrchestrator.riverEligibilityThreshold) personnes actives — 3 aujourd'hui",
-            "Comportement RÉEL, verrouillé : la raison d'une conversation directe est " +
-            "composée par la MÊME formule qu'un groupe sous le seuil — le miroir gelé ne " +
-            "distingue pas « inéligible par nature » de « inéligible par manque de " +
-            "participants ». Rapporté comme défaut réel non trivial (mission I-073) : " +
-            "SANS correction, la loi vivant hors `Lentille/Mode|Perspective`."
+            String(format: format, ReadingModeOrchestrator.riverEligibilityThreshold),
+            "Compte inconnu ⇒ le seuil SEUL, composé par le même format que la production."
+        )
+        XCTAssertTrue(
+            reason.contains("\(ReadingModeOrchestrator.riverEligibilityThreshold)"),
+            "Le seuil vivant doit rester visible — il est, lui, une valeur RÉELLE."
+        )
+
+        // Discrimination : « inconnu » et « zéro » ne doivent PAS rendre la
+        // même phrase — c'est tout l'objet de l'amendement.
+        let zeroCaps = capabilities(conversationType: .group, activeParticipantCount: 0)
+        let zeroReason = try XCTUnwrap(
+            try entry(.riviere, in: LentilleModeMenuModel.build(capabilities: zeroCaps, currentPreference: .auto))
+                .disabledReason
+        )
+        XCTAssertNotEqual(
+            reason, zeroReason,
+            "Un compte INCONNU et un compte MESURÉ à zéro sont deux états différents ; " +
+            "les afficher pareil est exactement le « 0 aujourd'hui » fabriqué que B3 retire."
         )
     }
 

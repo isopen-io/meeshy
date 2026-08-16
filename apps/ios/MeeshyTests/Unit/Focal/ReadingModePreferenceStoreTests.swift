@@ -127,7 +127,7 @@ final class ReadingModePreferenceStoreTests: XCTestCase {
             store.noteOpened("c1", scope: scope, at: date)
 
             XCTAssertEqual(
-                store.lastOpenedAt(for: "c1", scope: scope)?.timeIntervalSince1970,
+                store.lastOpenedAt(for: "c1", scope: scope)?.timeIntervalSince1970 ?? -1,
                 date.timeIntervalSince1970,
                 accuracy: 0.001
             )

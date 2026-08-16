@@ -122,7 +122,7 @@ final class A11yLabelComposerTests: XCTestCase {
     }
 
     func test_compose_receivedMessage_omitsDeliveryStatusSegment() {
-        let content = makeContent(isMe: false, senderName: "Ali", text: "Salut", deliveryStatus: nil)
+        let content = makeContent(isMe: false, senderName: "Ali", text: "Bonjour", deliveryStatus: nil)
         XCTAssertFalse(MessageAccessibilityLabelComposer.compose(content).contains("lu"))
     }
 
@@ -142,7 +142,7 @@ final class A11yLabelComposerTests: XCTestCase {
 
     func test_compose_replyWithExcerpt_includesAuthorAndExcerpt() {
         let reference = ReplyReference(authorName: "Sami", previewText: "à quelle heure ?")
-        let content = makeContent(reply: BubbleContent.Reply(reference: reference, isStory: false), text: "18h")
+        let content = makeContent(text: "18h", reply: BubbleContent.Reply(reference: reference, isStory: false))
         let composed = MessageAccessibilityLabelComposer.compose(content)
 
         XCTAssertTrue(composed.contains("Sami"))
@@ -152,7 +152,7 @@ final class A11yLabelComposerTests: XCTestCase {
     func test_compose_replyToSelf_usesYouLabel() {
         let expected = String(localized: "a11y.bubble.replyTo.you", bundle: .main)
         let reference = ReplyReference(authorName: "Ali", previewText: "ok", isMe: true)
-        let content = makeContent(reply: BubbleContent.Reply(reference: reference, isStory: false), text: "18h")
+        let content = makeContent(text: "18h", reply: BubbleContent.Reply(reference: reference, isStory: false))
 
         XCTAssertTrue(MessageAccessibilityLabelComposer.compose(content).contains(expected))
     }

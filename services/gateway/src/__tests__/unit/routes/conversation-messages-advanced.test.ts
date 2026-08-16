@@ -161,6 +161,7 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -195,6 +196,9 @@ const makePrisma = (): any => ({
     findMany: jest.fn().mockResolvedValue([]),
   },
   messageStatusEntry: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
+  userPreferences: {
     findMany: jest.fn().mockResolvedValue([]),
   },
   userPreference: {
@@ -3002,7 +3006,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         // Le cache d'opt-out a la portée du PROCESSUS : sans ce nettoyage, le
         // premier test (personne de retiré) le remplit et les suivants lisent
         // sa réponse périmée au lieu du double.
-        (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+        clearPrivacyPreferencesCache();
       });
 
       const entryFor = (participantId: string, userId: string, displayName: string, username: string) => ({
@@ -3051,9 +3055,12 @@ describe('registerMessagesAdvancedRoutes', () => {
           { messageId: MSG_ID, participantId: OPEN_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
           { messageId: MSG_ID, participantId: SILENT_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
         ]);
-        prisma.userPreference.findMany.mockResolvedValue(
-          optedOutUserIds.map((userId) => ({ userId }))
+        // L'opt-out passe par le document JSON, seul rangement que
+        // `PATCH /me/preferences/privacy` écrive.
+        prisma.userPreferences.findMany.mockResolvedValue(
+          optedOutUserIds.map((userId) => ({ userId, privacy: { showReadReceipts: false } }))
         );
+        prisma.userPreference.findMany.mockResolvedValue([]);
       };
 
       it('ne sert plus les colonnes mortes : le résumé vient du comptage réel', async () => {

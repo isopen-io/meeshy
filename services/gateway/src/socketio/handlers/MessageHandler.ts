@@ -1579,8 +1579,9 @@ export class MessageHandler {
 
   /**
    * Marque un message comme "delivered" pour chaque destinataire en ligne
-   * (ayant une socket active), respecte la préférence `showReadReceipts` de
-   * chaque destinataire, puis émet UN seul `read-status:updated` consolidé
+   * (ayant une socket active) — sans exception, la préférence
+   * `showReadReceipts` ne gouvernant que la DIFFUSION — puis émet, au nom d'un
+   * destinataire qui partage bien ses accusés, UN seul `read-status:updated` consolidé
    * vers la conversation room et chaque user room afin que l'expéditeur
    * voie passer son indicateur à "delivered" sans devoir attendre une
    * action manuelle du destinataire.
@@ -1626,31 +1627,54 @@ export class MessageHandler {
     const preferences = await this.privacyPreferencesService.getPreferencesForUsers(
       onlineRecipients.map((r) => ({ id: this._presenceKey(r), isAnonymous: !r.userId }))
     );
-    const allowedRecipients = onlineRecipients.filter((r) => {
-      const key = this._presenceKey(r);
-      return preferences.get(key)?.showReadReceipts;
-    });
 
+    // La préférence décide de la DIFFUSION, jamais de l'ENREGISTREMENT. C'est la
+    // règle que `broadcastReadStatus` porte en toutes lettres et que les trois
+    // portes REST appliquent (`mark-as-received`, `delivery-receipt`,
+    // `mark-read`) : « le curseur est avancé par l'appelant avant d'arriver
+    // ici ». Filtrer AVANT l'écriture faisait dépendre l'ÉTAT du transport — le
+    // même message, livré au même destinataire, laissait une trace par REST et
+    // aucune par socket.
+    //
+    // Ce que ça coûtait : `showReadReceipts` est un réglage RÉVERSIBLE, et le
+    // gate qui protège vraiment est à la LECTURE (`_loadReadReceiptOptOuts`
+    // filtre l'opt-out sur les cinq sites qui servent un statut). Le jour où ce
+    // destinataire ré-active la préférence, il cesse d'être filtré et son
+    // arriéré ressort « jamais livré » : les coches de l'expéditeur régressent
+    // de ✓✓ à ✓ sur tout l'historique reçu pendant l'opt-out, jusqu'à ce que le
+    // destinataire rouvre chaque conversation. Rien de tout cela n'arrive sur la
+    // moitié REST du même trafic.
     const results = await Promise.allSettled(
-      allowedRecipients.map((r) =>
+      onlineRecipients.map((r) =>
         this.readStatusService.markMessagesAsReceived(r.id, conversationId, message.id)
       )
     );
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         handlerLogger.warn('auto-deliver markAsReceived failed', {
-          participantId: allowedRecipients[index].id,
+          participantId: onlineRecipients[index].id,
           error: result.reason
         });
       }
     });
 
-    const firstAckerIndex = results.findIndex((r) => r.status === 'fulfilled');
+    // L'acteur NOMMÉ par l'accusé doit, lui, partager les siens : diffuser au nom
+    // d'un opt-out publierait précisément ce qu'il a demandé de taire. Le
+    // `summary` qui l'accompagne applique déjà le même retrait côté service.
+    const firstAckerIndex = results.findIndex(
+      (result, index) =>
+        result.status === 'fulfilled' &&
+        preferences.get(this._presenceKey(onlineRecipients[index]))?.showReadReceipts === true
+    );
     if (firstAckerIndex === -1) {
-      handlerLogger.debug('auto-deliver skipped — no receipts marked', { conversationId, didMarkAny: false });
+      handlerLogger.debug('auto-deliver receipt not broadcast', {
+        conversationId,
+        marked: results.filter((r) => r.status === 'fulfilled').length,
+        onlineRecipients: onlineRecipients.length
+      });
       return;
     }
-    const firstAcker = allowedRecipients[firstAckerIndex];
+    const firstAcker = onlineRecipients[firstAckerIndex];
 
     const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
 

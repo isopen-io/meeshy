@@ -1,5 +1,186 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Per-conversation custom name (rename) shipped** (slice
+> `conversation-custom-name`) — advances `feature-parity.md`'s "Per-conversation preferences: custom
+> name, reaction emoji, pin, category, tags, mute, mentions-only" line (still unchecked: reaction
+> emoji and tags remain genuinely open on both platforms). Re-proved against real code before
+> starting: `ApiConversationPreferences.customName`/`ConversationPreferencesUpdate.customName` were
+> already modeled on the wire, but `ConversationPrefsPayload` (the outbox-lane snapshot payload)
+> only carried `isPinned`/`isMuted`/`isArchived`/`mentionsOnly`/`categoryId` — `customName` never
+> reached `OutboxFlushWorker`'s `ConversationPreferencesUpdate(...)` construction, so setting it
+> locally would never have reached the server.
+>
+> **Clear-semantics gap resolved, not blocked**: an earlier finding this session flagged that
+> `MeeshyApi.json`'s app-wide `explicitNulls = false` makes a Kotlin `null` field indistinguishable
+> from "untouched" on the wire, which looked like it would make clearing an existing name
+> inexpressible. Re-traced the actual read path and found `ConversationFilter.kt:69`
+> (`resolvedPreferences?.customName?.takeIf { it.isNotBlank() }`) and `ApiConversation.displayTitle`
+> (`ConversationAccent.kt:34`, same blank-check) already treat a blank `customName` the same as
+> absent — so the write side never needs Kotlin `null` for "clear": `setCustomNameOptimistic` stores
+> `name.trim()` verbatim, including an explicit `""` on clear, which the encoder does NOT drop
+> (`explicitNulls` only suppresses actual `null`, not empty strings) and the gateway's
+> `data.customName !== undefined` patch guard applies as a real clear.
+>
+> **Repository → outbox → flush pipeline**: `ConversationRepository.setCustomNameOptimistic(id, name)`
+> (mirrors `setCategoryOptimistic`'s shape via the existing `updatePreferencesOptimistic` private
+> helper) → `ConversationPrefsPayload.customName` (new field, doc-commented with the same
+> null-vs-empty-string trick already documented on `categoryId`) → `OutboxFlushWorker`'s
+> `UPDATE_CONVERSATION_PREFS` sender now threads `prefs.customName` into
+> `ConversationPreferencesUpdate(...)`. Every prefs snapshot (pin/mute/archive/mentions/category)
+> now also carries whatever `customName` happens to be cached, matching the established
+> full-snapshot design already used for the other fields (not a per-field diff).
+>
+> **ViewModel + UI**: `ConversationListViewModel.setCustomName(id, name)` (via the existing
+> `runPrefMutation` helper, same shape as `toggleMentionsOnly`). New context-menu action "Rename
+> conversation" (between Archive and the category picker) opens an `AlertDialog` with a single-line
+> `TextField` pre-filled with the conversation's current custom name (empty if none — placeholder
+> shows the resolved display title), Save/Cancel. Strings added in all 4 locales (en/fr/es/pt).
+>
+> **+4 tests**: 3 `ConversationRepositoryTest` (sets+queues a snapshot carrying the trimmed name,
+> no-op when unchanged, clearing to blank sends an explicit `"customName":""` — asserts the raw
+> JSON payload string to prove the value isn't silently dropped by the `explicitNulls=false`
+> encoder), 1 `ConversationListViewModelTest` (`setCustomName` forwards the trimmed name to the
+> repository). The new context-menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 25s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=conversation-custom-name`.
+
+> On 2026-08-16 **Conversation "delete for everyone" (creator-only) shipped** (slice
+> `conversation-delete-for-all`) — closes `feature-parity.md`'s "Leave / archive / delete-for-me /
+> delete-for-all conversation" item; re-proved against real code before starting (per convention):
+> `leave`/`deleteForMe`/`setArchivedOptimistic` were already live, `delete-for-all` was the one
+> genuine gap (verified by grepping the gateway for a matching route and finding none under that
+> name — the real endpoint is the plain creator-gated `DELETE /conversations/:id` in
+> `routes/conversations/core.ts`, ported from iOS's `ConversationSettingsView.deleteConversationForAll`
+> → `ConversationService.delete(conversationId:)`).
+>
+> **REST + repository + ViewModel**, mirroring the `leave`/`deleteForMe` shape exactly:
+> `ConversationApi.deleteForAll` (`@DELETE("conversations/{id}")`) → `ConversationRepository.
+> deleteForAll` → `ConversationListViewModel.deleteConversationForAll`. Gated client-side (server
+> already enforces creator-only) via a new pure `ApiConversation.currentUserRole(currentUserId):
+> MemberRole` extension (`:core:model`) — looks up the caller's own `ApiParticipant.role` in the
+> conversation's roster, defaulting to `MEMBER` when absent, so no separate member-list fetch is
+> needed to show/hide the menu item.
+>
+> **Real-time purge for every participant, not just the actor** — the genuinely new piece beyond a
+> plain REST port: the gateway broadcasts `conversation:closed` (not `conversation:deleted`, which
+> is `delete-for-me`-only and scoped to the caller's own devices) to the WHOLE roster. Android had
+> zero handling of this event before this slice, even though iOS already wires it
+> (`MessageSocketManager.conversationClosed` in `packages/MeeshySDK`). Added: `ConversationClosedSocketEvent`
+> (`:core:model`, mirrors `ConversationDeletedSocketEvent`'s shape), a new `MessageSocketManager.
+> conversationClosed` flow (`listen("conversation:closed", ...)`, same pattern as the 27 other
+> listened events), `ConversationPurge.onConversationClosed` (pure, mirrors `onConversationDeleted`),
+> and a `ConversationListViewModel` subscription purging + refreshing on receipt — without this,
+> shipping the REST call alone would have been a dead end for every participant EXCEPT the actor
+> (and even the actor's other devices).
+>
+> **New UI**: a third context-menu action "Delete for everyone", shown only when `isCreator`, with
+> its own confirmation dialog (same shape as leave/delete-for-me's). Strings added in all 4 locales
+> (en/fr/es/pt, matching the existing translation-complete convention for this screen).
+>
+> **+13 tests**: 4 `ConversationCurrentUserRoleTest` (creator/member/absent-user/not-in-roster), 2
+> `ConversationPurgeTest` (`onConversationClosed` id-vs-blank), 4 `ConversationListViewModelTest`
+> (`deleteConversationForAll` success/failure + `conversationClosed` purge/blank-inert — mirrors the
+> existing `conversationDeleted` pair), 2 `ConversationRepositoryTest` (`deleteForAll` forwards
+> id/folds failure), plus the 4 `ConversationApi` test fakes (`FakeConversationApi`/
+> `RecordingSettingsApi`/`RecordingLeaveApi`/`RecordingDeleteForMeApi`) each updated with the new
+> interface method and a new `RecordingDeleteForAllApi` added, mirroring `RecordingDeleteForMeApi`.
+>
+> **No coverage floor lowered**: all new pure logic (`currentUserRole`, `onConversationClosed`) has
+> dedicated tests; the new `@Composable` menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 48s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=conversation-delete-for-all`.
+
+> On 2026-08-16 **`feature:feed`'s `ComposerLanguagePickerDialog` migrated to the shared
+> `LanguagePickerDialog`** (slice `feed-composer-language-picker-shared`) — the explicit follow-up
+> left open by the prior slice (`sdk-ui-language-picker-dialog`, PR #3070): the third and last of
+> the three near-identical picker dialogs. `FeedComposerSheet.kt`'s own doc comment already said
+> this dialog "mirrors `SettingsScreen`'s own `RegionalLanguageDialog` shape" — re-proved against
+> the real code before starting: same `AlertDialog` + search field + scrollable radio-row-list
+> shape, differing only in trivial layout details (a `Spacer` vs a `Text` start-padding for the
+> row's inter-element gap — visually identical) and a case-insensitive `isSelected` match
+> (`info.code.equals(currentCode, ignoreCase = true)`, vs the Settings pickers' exact match) —
+> preserved verbatim by computing `isSelected` at the call site before handing options to the
+> shared component, which stays agnostic of how a caller decides selection.
+>
+> **Behaviour-preserving, no new pure logic**: `ComposerLanguagePickerDialog` now builds a
+> `List<LanguagePickerOption>` from `LanguageStepSelection.filter(query)` (already-tested pure
+> catalogue/filter core, unchanged) and delegates rendering to `:sdk-ui`'s `LanguagePickerDialog`.
+> The original had no empty-state text for a no-match search (unlike the regional picker) — not
+> introduced here either (`emptyStateText` left unset, matching the shared component's designed
+> fallback of an empty scrollable column, byte-for-byte the prior behaviour). Seven now-genuinely-
+> unused imports removed from `FeedComposerSheet.kt` (`AlertDialog`, `RadioButton`,
+> `heightIn`, `verticalScroll`, the `Search` icon, `Role`, `role`) — each checked file-wide for
+> remaining uses before removal (`rememberScrollState`/`Icon`/`OutlinedTextField`/`semantics`/
+> `contentDescription` all still used elsewhere in this large composer file and correctly kept).
+>
+> **All three near-identical language-picker dialogs are now unified** on the one `:sdk-ui`
+> component (Settings' interface + regional pickers from the prior slice, Feed's composer picker
+> this slice) — the standing candidate from the routine's backlog is fully closed.
+>
+> **No new tests**: `@Composable` UI glue exempt (`TDD-COVERAGE.md`); the logic this dialog renders
+> (`LanguageStepSelection.filter`) already has its own tests, unchanged and still green.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 12s (incremental, most
+> modules unaffected), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=feed-composer-language-picker-shared`.
+
+> On 2026-08-16 **Shared `LanguagePickerDialog` extracted to `:sdk-ui`** (slice
+> `sdk-ui-language-picker-dialog`) — first ANDROID slice after the IOS_DETTE bascule (streak
+> reset to 0 following the critical Focal/Lentille iOS build-break fix, see
+> `tasks/ios-debt-routine-progress.md`). Picked from the standing candidate noted in the prior
+> ANDROID run's log ("a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker UIs now
+> exist)") — re-proved against real code before starting (per convention): `feature:settings`'s
+> `InterfaceLanguageDialog` and `RegionalLanguageDialog` (`SettingsScreen.kt`) both hand-rolled the
+> same `AlertDialog` + scrollable radio-row-list shape, sharing the private `LanguageOptionRow`
+> between them; `feature:feed`'s `ComposerLanguagePickerDialog` is the confirmed third
+> near-identical dialog (its own doc comment explicitly says it "mirrors `SettingsScreen`'s own
+> `RegionalLanguageDialog` shape") but is **deliberately left untouched this slice** — migrating
+> three call sites across three feature modules in one pass was judged oversized for "one slice";
+> the Settings pair (same file, same module, easiest safe first step) proves the shared component
+> out with a real production consumer, and Feed's dialog is a natural, well-scoped follow-up.
+>
+> **New `LanguagePickerDialog` + `LanguagePickerOption`** (`:sdk-ui/component/`), matching the
+> established SDK-purity convention already set by `LanguageQuickStrip`/`LanguageQuickOption` in
+> the same package: opaque parameters only (a pre-formatted `label: String`, a nullable `code:
+> String?` so a "use device default" sentinel option needs no SDK-side special-casing, and
+> `isSelected: Boolean`), zero knowledge of `AppLanguage`/`RegionalLanguageOption`/any app model.
+> Search is opt-in (`searchQuery`/`onSearchQueryChange` both nullable — omitted ⇒ plain list,
+> present ⇒ search field + empty-state text), matching the real split between the two migrated
+> call sites. Filtering itself stays exactly where it already lived (`RegionalLanguageSelection`,
+> app-side pure object) — the SDK component never decides "how to filter", only renders whatever
+> `options` it is handed, per the grain test.
+>
+> **Behaviour-preserving refactor, no new pure logic** — the two call sites now build a
+> `List<LanguagePickerOption>` from the exact same source data (`AppLanguage.supportedLanguages` +
+> a synthetic system option; `RegionalLanguageSelection.build(...).options` mapped 1:1) and pass it
+> to the shared dialog; `RegionalLanguageDialog`'s `onSelect: (String) -> Unit` is bridged to the
+> SDK's nullable `(String?) -> Unit` via `{ code -> code?.let(onSelect) }` (regional options never
+> carry a null code in practice, so this is a safe, non-lossy bridge). `LanguageOptionRow` retired
+> (its only two callers are gone). Two now-genuinely-unused imports removed (`RadioButton`,
+> `heightIn`) — every other import touched by the diff was checked for remaining uses elsewhere in
+> the (large, multi-section) `SettingsScreen.kt` file before removal, not assumed unused.
+>
+> **No new tests**: `@Composable` UI functions are exempt from the coverage rubric
+> (`TDD-COVERAGE.md`) and this slice adds no new pure logic — the existing `SettingsViewModel`/
+> `RegionalLanguageSelection` tests already cover 100% of the logic the dialog renders, and stay
+> green unchanged (the refactor only moves *how* the same data gets drawn).
+>
+> **Verified**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** in 49s, all existing
+> tests green, zero regressions. Reviewer (`REVIEWER.md`) self-run: **PASS** — diff is exactly 2
+> files, both under `apps/android` (`git diff --stat main...HEAD`); SDK purity confirmed (opaque
+> parameters, no singleton/domain-model coupling); SSOT respected (reuses
+> `AppLanguage`/`RegionalLanguageSelection`, zero re-implementation); no coverage floor lowered, no
+> test weakened.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=sdk-ui-language-picker-dialog`.
+
 > On 2026-08-16 **DataStore-Flow test timeout flake fixed** (slice `datastore-test-timeout-flake`,
 > PR #3058, merged `88997097c`) — this session's 5th ANDROID slice in a row, closing out the
 > streak before the streak≥5 bascule to IOS_DETTE. Escalated from "flag as systemic" (prior run's

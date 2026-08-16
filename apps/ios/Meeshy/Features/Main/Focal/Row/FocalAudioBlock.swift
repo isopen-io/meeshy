@@ -7,7 +7,7 @@ import MeeshyUI
 /// Les 4 modes de rendu audio du contrat §WS-3 (+ `.none`/`.standalone`,
 /// résidus structurels — voir doc de `FocalAudioRouting.mode(for:)`).
 /// `.none` = aucune pièce jointe audio dans `content`.
-nonisolated public enum FocalAudioMode: Equatable {
+nonisolated enum FocalAudioMode: Equatable {
     case none
     /// `content.attachments == .audio(items)` pur, `items.count > 1`.
     case carousel
@@ -37,13 +37,13 @@ nonisolated public enum FocalAudioMode: Equatable {
 /// ici à l'identique à partir de l'API PUBLIQUE de `BubbleContent`
 /// (`isEmojiOnly`, `hasTextOrNonMediaContent`, `reply`, `audioHostsReply`,
 /// `visualHostsReply`) — même logique, sans dépendre d'un type `private`.
-nonisolated public enum FocalAudioRouting {
+nonisolated enum FocalAudioRouting {
 
     /// Pièces jointes audio de `content`, quel que soit le cas
     /// (`.audio`/`.mixed`) — miroir de `audioAttachments` côté
     /// `BubbleStandardLayout` (calculé depuis `message.attachments` là-bas ;
     /// ici depuis `content.attachments`, la même source une fois résolue).
-    public static func audioAttachments(in content: BubbleContent) -> [MessageAttachment] {
+    static func audioAttachments(in content: BubbleContent) -> [MessageAttachment] {
         switch content.attachments {
         case .audio(let items): return items
         case .mixed(_, let audio, _): return audio
@@ -51,7 +51,7 @@ nonisolated public enum FocalAudioRouting {
         }
     }
 
-    public static func visualAttachments(in content: BubbleContent) -> [MessageAttachment] {
+    static func visualAttachments(in content: BubbleContent) -> [MessageAttachment] {
         switch content.attachments {
         case .visualGrid(let items): return items
         case .mixed(let visual, _, _): return visual
@@ -59,7 +59,7 @@ nonisolated public enum FocalAudioRouting {
         }
     }
 
-    public static func mode(for content: BubbleContent) -> FocalAudioMode {
+    static func mode(for content: BubbleContent) -> FocalAudioMode {
         let audios = audioAttachments(in: content)
         guard !audios.isEmpty else { return .none }
 
@@ -70,7 +70,18 @@ nonisolated public enum FocalAudioRouting {
             return .carousel
         }
 
-        // Miroir de `audioIsSoleContent` (`private`, `:278`).
+        // Miroir de `audioIsSoleContent` (`private`, `:278`). Le
+        // `&& !audioAttachments.isEmpty` de l'original est déjà garanti par
+        // le `guard` ci-dessus.
+        //
+        // ATTENTION — le `.audio` PUR + texte tombe ICI, pas dans
+        // `.hostsCaption` : `BubbleContent.hasTextOrNonMediaContent`
+        // (`BubbleContent.swift:207-215`) renvoie délibérément `false` quand
+        // du texte accompagne le cas `.audio` PUR (« audio-only with
+        // transcription text » — le texte EST la transcription, le widget la
+        // rend lui-même). C'est le comportement de la bulle, donc c'est le
+        // nôtre : ne PAS « corriger » cet ordre en croyant récupérer un
+        // caption perdu.
         let isSoleContent = !content.isEmojiOnly
             && !content.hasTextOrNonMediaContent
             && content.reply == nil
@@ -78,7 +89,9 @@ nonisolated public enum FocalAudioRouting {
 
         if content.audioHostsReply { return .hostsReply }
 
-        // Miroir de `audioHostsCaption` (`private`, `:301`).
+        // Miroir de `audioHostsCaption` (`private`, `:301`) — atteint quand
+        // le texte/lieu/pièce non-média n'est PAS une transcription : cas
+        // `.mixed` sans visuel, ou `.audio` + `location`.
         let hostsCaption = !content.audioHostsReply
             && !content.visualHostsReply
             && content.hasTextOrNonMediaContent

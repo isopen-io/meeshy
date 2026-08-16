@@ -186,10 +186,35 @@ export function toBridgeSuggestedMode(decision: OrchestratorDecision): 'focal' |
 /** Seuil de participants actifs à partir duquel la Rivière gagne son procès. */
 export const RIVER_ELIGIBILITY_THRESHOLD = 5;
 
+/**
+ * POURQUOI la Rivière est fermée (ou ouverte) — discriminant AMENDEMENT S1
+ * (REV-3/B3). Sans lui, le libellé grisé ne savait dire qu'une chose : « elle
+ * s'ouvrira à 5 personnes actives », y compris sur une conversation `direct`
+ * où elle ne s'ouvrira JAMAIS (l'éligibilité exclut `direct`
+ * STRUCTURELLEMENT, quel que soit le compte — un duo n'atteindra jamais 5).
+ * Promettre une porte qui n'existe pas est une donnée fabriquée comme une
+ * autre.
+ *
+ * - `neverEligible` — la conversation est `direct` : aucun compte ne l'ouvrira.
+ * - `belowThreshold` — type éligible, mais le seuil n'est pas atteint (ou le
+ *   compte est INCONNU, cf. `current: null`).
+ * - `eligible` — le seuil est franchi ; la porte est ouverte par la loi
+ *   (le drapeau `riviere_mode` reste, lui, une décision séparée).
+ */
+export type RiverEligibilityReasonKind = 'neverEligible' | 'belowThreshold' | 'eligible';
+
 /** Raison structurée pour le libellé grisé (« s'ouvrira à 5 personnes actives — N aujourd'hui »). */
 export type RiverEligibilityReason = {
   readonly threshold: number;
-  readonly current: number;
+  /**
+   * `null` = compte de participants actifs INCONNU — pas « zéro ». Aucune
+   * surface client n'expose aujourd'hui de décompte d'actifs par conversation
+   * (livrable gateway G-123) : rendre `0` faisait AFFICHER « 0 aujourd'hui »,
+   * un chiffre fabriqué. Le libellé doit alors se taire sur le compte plutôt
+   * que d'en inventer un.
+   */
+  readonly current: number | null;
+  readonly riverReason: RiverEligibilityReasonKind;
 };
 
 export type ReadingModeIdentity = {
@@ -223,7 +248,15 @@ export type ResolveCapabilitiesInput = {
    */
   readonly isRiverFlagEnabled?: boolean;
   readonly conversationType: ConversationType;
-  readonly activeParticipantCount: number;
+  /**
+   * `null` = INCONNU (amendement S1, REV-3/B3). Rétro-compatible : un appelant
+   * qui connaît le compte passe toujours un nombre, et la loi se comporte
+   * exactement comme avant. Un appelant qui ne le connaît PAS doit désormais
+   * le DIRE — il n'a plus à choisir entre mentir (`0`) et ne pas appeler la
+   * loi. Un compte inconnu ne rend jamais éligible : le risque reste un faux
+   * négatif temporaire, jamais un faux positif.
+   */
+  readonly activeParticipantCount: number | null;
 };
 
 /**
@@ -260,17 +293,45 @@ const FLAG_DISABLED_AVAILABLE_MODES: readonly ConversationReadingMode[] = ['bubb
  * l'unique porte.
  *
  * `riverEligibilityReason` est servie dans TOUS les cas — y compris drapeau
- * éteint et conversation inéligible : c'est elle qui alimente le libellé grisé
- * (« s'ouvrira à 5 personnes actives — N aujourd'hui »).
+ * éteint et conversation inéligible : c'est elle qui alimente le libellé grisé.
+ *
+ * AMENDEMENT S1 (REV-3/B3) — la raison se TRIFURQUE, et le compte devient
+ * faillible. Trois formes, trois textes :
+ *   - `neverEligible` (conversation `direct`) ⇒ « jamais en conversation
+ *     directe ». L'ancienne raison unique promettait « s'ouvrira à 5 personnes
+ *     actives — N aujourd'hui » à un duo qui n'atteindra jamais 5 : une porte
+ *     annoncée qui n'existe pas.
+ *   - `belowThreshold` avec `current: number` ⇒ la formule à deux nombres,
+ *     inchangée.
+ *   - `belowThreshold` avec `current: null` ⇒ le seuil SEUL. Le compte d'actifs
+ *     n'est pas encore une donnée client (G-123) ; l'appelant qui l'ignore
+ *     passe `null` au lieu d'un `0` fabriqué, et le libellé se tait sur le
+ *     nombre au lieu d'afficher « 0 aujourd'hui ».
  */
 export function resolveCapabilities(input: ResolveCapabilitiesInput): ReadingModeCapabilities {
+  const activeParticipantCount = input.activeParticipantCount;
+  const isNeverEligible = input.conversationType === 'direct';
+  const riverEligible =
+    !isNeverEligible &&
+    activeParticipantCount !== null &&
+    activeParticipantCount >= RIVER_ELIGIBILITY_THRESHOLD;
+
+  /**
+   * AMENDEMENT S1 (REV-3/B3) : trois raisons, jamais une seule formule.
+   * `direct` d'abord — c'est la seule branche que le compte ne peut PAS
+   * renverser, et la seule à laquelle « s'ouvrira à 5 » mentait.
+   */
+  const riverReason: RiverEligibilityReasonKind = isNeverEligible
+    ? 'neverEligible'
+    : riverEligible
+      ? 'eligible'
+      : 'belowThreshold';
+
   const riverEligibilityReason: RiverEligibilityReason = {
     threshold: RIVER_ELIGIBILITY_THRESHOLD,
-    current: input.activeParticipantCount,
+    current: activeParticipantCount,
+    riverReason,
   };
-  const riverEligible =
-    input.activeParticipantCount >= RIVER_ELIGIBILITY_THRESHOLD &&
-    input.conversationType !== 'direct';
 
   if (!input.isFlagEnabled) {
     return { availableModes: FLAG_DISABLED_AVAILABLE_MODES, riverEligible, riverEligibilityReason };

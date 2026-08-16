@@ -60,14 +60,25 @@ final class ConversationViewLoadingPhaseSourceGuardTests: XCTestCase {
             XCTFail("bodyContent not found in ConversationView.swift — file changed shape.")
             return
         }
-        XCTAssertFalse(
-            body.contains("viewModel.isLoadingInitial"),
-            "bodyContent's cold-start skeleton overlay must stop reading the raw isLoadingInitial " +
-            "boolean — use the canonical ConversationLoadingPhase projection instead."
-        )
         XCTAssertTrue(
             body.contains("viewModel.paginationPhase.isBlockingSpinnerNeeded"),
             "bodyContent's cold-start skeleton overlay must gate on paginationPhase.isBlockingSpinnerNeeded."
+        )
+        // Scoped to the skeleton's own `if` block (not all of `bodyContent`):
+        // WS-7 (F-086) added an unrelated, legitimate `viewModel.isLoadingInitial`
+        // read elsewhere in this same @ViewBuilder for `hasReachedOldest` pagination
+        // boundary detection — a whole-body scan would flag that too.
+        guard let skeletonBlock = DeclarationBodyScanner.body(
+            containing: "if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty",
+            in: stripped
+        ) else {
+            XCTFail("cold-start skeleton if-block not found in ConversationView.swift — file changed shape.")
+            return
+        }
+        XCTAssertFalse(
+            skeletonBlock.contains("viewModel.isLoadingInitial"),
+            "bodyContent's cold-start skeleton overlay must stop reading the raw isLoadingInitial " +
+            "boolean — use the canonical ConversationLoadingPhase projection instead."
         )
     }
 

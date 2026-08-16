@@ -172,6 +172,7 @@ function buildHarness(): Harness {
     conversationReadCursor: { findMany: jest.fn().mockResolvedValue([]) },
     messageStatusEntry: { findMany: jest.fn().mockResolvedValue([]) },
     userPreference: { findMany: jest.fn().mockResolvedValue([]) },
+    userPreferences: { findMany: jest.fn().mockResolvedValue([]) },
   };
 
   const optionalAuth = async (req: any) => {

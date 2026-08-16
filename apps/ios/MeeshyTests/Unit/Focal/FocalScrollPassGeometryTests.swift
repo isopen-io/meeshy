@@ -636,7 +636,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
         return pass
     }
 
-    private func describeAll(_ indexPath: IndexPath) -> FocalScrollPass.CellDescriptor {
+    private static func describeAll(_ indexPath: IndexPath) -> FocalScrollPass.CellDescriptor {
         FocalScrollPass.CellDescriptor(localId: "m\(indexPath.item)")
     }
 
@@ -653,7 +653,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
     /// a `scale == 1` et `alpha == alphaCeiling` — la zone nette existe ».
     func test_apply_cellBelowTheBand_staysCrisp() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
 
         let bottom = try cell(0)
         XCTAssertTrue(
@@ -667,7 +667,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
     /// estompée, avec exactement les valeurs de la courbe gelée.
     func test_apply_cellFarAboveTheBand_matchesTheFrozenCurve() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
 
         let geometry = FocalPerspectiveGeometry.standard
         let viewport = collectionView.bounds.height
@@ -704,12 +704,12 @@ final class FocalScrollPassWriteTests: XCTestCase {
     /// `cell.center`/`cell.bounds`.
     func test_apply_isIdempotent_acrossRepeatedCalls() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
         let first = try cell(8).layer.transform
         let firstAlpha = try cell(8).alpha
 
-        pass.apply(to: collectionView, describe: describeAll)
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
 
         XCTAssertTrue(
             CATransform3DEqualToTransform(try cell(8).layer.transform, first),
@@ -750,7 +750,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
 
     func test_apply_electsTheRowClosestToTheFocusLine() throws {
         let pass = makePass()
-        let focused = pass.apply(to: collectionView, describe: describeAll)
+        let focused = pass.apply(to: collectionView, describe: Self.describeAll)
 
         let geometry = FocalPerspectiveGeometry.standard
         let viewport = collectionView.bounds.height
@@ -800,7 +800,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
     func test_apply_reduceMotion_writesNoTransformButKeepsTheElection() throws {
         let pass = FocalScrollPass()
         pass.rendering = .flat
-        let focused = pass.apply(to: collectionView, describe: describeAll)
+        let focused = pass.apply(to: collectionView, describe: Self.describeAll)
 
         XCTAssertNotNil(focused, "§4.9 : Reduce Motion CONSERVE l'élection — la surbrillance survit, l'animation non")
         for index in [0, 4, 8] {
@@ -817,11 +817,11 @@ final class FocalScrollPassWriteTests: XCTestCase {
     /// tout à l'identité, plus aucun focus (§4.8 site 6).
     func test_apply_whenOff_resetsEverythingAndDropsTheFocus() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
         XCTAssertNotNil(pass.focusedLocalId, "pré-condition : un focus est élu en mode Focal")
 
         pass.rendering = .off
-        let focused = pass.apply(to: collectionView, describe: describeAll)
+        let focused = pass.apply(to: collectionView, describe: Self.describeAll)
 
         XCTAssertNil(focused, "§4.8 site 6 : passer en Script doit remettre tout à l'identité et abandonner le focus")
         XCTAssertNil(pass.focusedLocalId, "FocalScrollPass.focusedLocalId doit retomber à nil quand le pass s'éteint")
@@ -838,7 +838,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
 
     func test_reset_returnsARecycledCellToIdentity() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
 
         let recycled = try cell(8)
         XCTAssertFalse(CATransform3DIsIdentity(recycled.layer.transform), "pré-condition : la cellule 8 porte un transform")
@@ -853,7 +853,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
 
     func test_resetAll_clearsEveryVisibleCell() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
         pass.resetAll(in: collectionView)
 
         for cell in collectionView.visibleCells {
@@ -873,7 +873,7 @@ final class FocalScrollPassWriteTests: XCTestCase {
     /// et ne doit surtout pas ré-élire le focus sur ce candidat unique.
     func test_applySingleCell_writesItsTransformWithoutStealingTheFocus() throws {
         let pass = makePass()
-        pass.apply(to: collectionView, describe: describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
         let electedBefore = pass.focusedLocalId
 
         let incoming = try cell(9)

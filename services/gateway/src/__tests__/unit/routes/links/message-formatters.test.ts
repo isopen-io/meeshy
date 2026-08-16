@@ -99,9 +99,20 @@ describe('formatMessageWithUnifiedSender', () => {
     expect(Array.isArray(result.translations)).toBe(true);
   });
 
-  it('passes status to result', () => {
+  // Symétrique du témoin `statusEntries` sur `formatLinkMessageWithDetails`
+  // ci-dessous, et dernier reste du même défaut. `getConversationMessages` —
+  // seule source de ce formateur — ne charge que `sender` : `status` valait
+  // TOUJOURS `[]`, et `messageSchema` ne le déclarant pas,
+  // `fast-json-stringify` le retirait juste après. Construit, jamais rempli,
+  // jamais servi.
+  //
+  // Ne plus le recopier retire du même geste le champ mort ET le piège :
+  // `status` est un ACCUSÉ NOMINATIF, et le déclarer au schéma pour « réparer »
+  // son absence le publierait sans le gate `showReadReceipts` qu'appliquent les
+  // cinq lecteurs de `MessageReadStatusService`.
+  it("ne recopie pas les accusés nominatifs que le schéma de sortie ne déclare pas", () => {
     const result = formatMessageWithUnifiedSender(makeMessage({ status: [{ userId: 'u1', status: 'read' }] }));
-    expect(result.status).toHaveLength(1);
+    expect(result).not.toHaveProperty('status');
   });
 });
 
