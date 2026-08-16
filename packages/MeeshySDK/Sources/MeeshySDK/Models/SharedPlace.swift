@@ -5,7 +5,10 @@ import CoreLocation
 /// retour. Un seul type pour les quatre surfaces (message, commentaire, post,
 /// story) : les rendus divergeaient auparavant parce que chacune reconstruisait
 /// sa propre notion de « position ».
-public struct SharedPlace: Codable, Equatable, Sendable {
+/// `Hashable` : le type voyage dans `ConversationUpdatedStoreEvent`, valeur
+/// `Hashable` par contrat de son store. Conformance synthétisée — tous les
+/// membres le sont déjà, et `==` ne change pas de sens.
+public struct SharedPlace: Codable, Hashable, Sendable {
     public let latitude: Double
     public let longitude: Double
     /// Nom du POI ou du lieu. `nil` pour un point posé à la main dont le

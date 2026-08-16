@@ -95,6 +95,29 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         )
     }
 
+    /// Le chemin qui PERSISTE, et donc celui qui rendait l'écart visible :
+    /// `applyingConversationUpdate` écrit le cache disque puis rediffuse la
+    /// liste par `conversationsDidChange`, que l'écran consomme en remplaçant
+    /// ses lignes. Une épingle posée à l'écran mais absente d'ici disparaissait
+    /// dans la seconde, et ne revenait qu'au prochain `GET /conversations`.
+    func test_applyingConversationUpdate_locationOfTheNewLastMessage_isPersisted() {
+        let row = TestFactories.makeConversation(id: "c1", lastMessageAt: Date(timeIntervalSince1970: 100))
+
+        let merged = ConversationSyncEngine.applyingConversationUpdate(
+            ConversationUpdatedStoreEvent(
+                conversationId: "c1",
+                lastMessageAt: Date(timeIntervalSince1970: 200),
+                lastMessage: .replaced("msg-lieu"),
+                lastMessagePreview: "",
+                location: SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+            ),
+            to: [row]
+        )
+
+        XCTAssertEqual(merged?.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "la délégation à ConversationStore.merging doit porter l'épingle jusqu'au cache")
+    }
+
     func test_applyingConversationUpdate_newerLastMessageAt_resortsList() {
         let older = TestFactories.makeConversation(id: "c1", lastMessageAt: Date(timeIntervalSince1970: 100))
         let newer = TestFactories.makeConversation(id: "c2", lastMessageAt: Date(timeIntervalSince1970: 200))

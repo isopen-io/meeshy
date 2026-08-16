@@ -137,6 +137,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         title: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
@@ -145,9 +146,35 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             lastMessageAt: lastMessageAt,
             lastMessage: lastMessage,
             lastMessagePreview: lastMessagePreview,
+            location: location,
             updatedAt: "2024-01-01T00:00:00.000Z",
             previewRecalculated: previewRecalculated
         )
+    }
+
+    /// Un champ DÉCODÉ mais jamais recopié par `mapConversationUpdated` est
+    /// exactement aussi inerte qu'un champ absent — et c'est par là que
+    /// `location` manquait au store, donc au cache disque, alors que
+    /// `ConversationUpdatedEvent` la décodait déjà et que l'écran la lisait.
+    /// Un test de `merging` seul ne peut pas voir cette moitié du chemin.
+    func test_conversationUpdated_location_forwardedThroughTheBridge() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))  // lastMessageAt = t0
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_002_000),
+            lastMessage: .replaced("msg-lieu"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        ))
+
+        let applied = await waitUntil {
+            (await store.conversation(id: "c1"))?.lastMessageLocation?.name == "Tour Eiffel"
+        }
+        XCTAssertTrue(applied,
+                      "le pont doit transmettre `location` — sans quoi le cache disque ne l'a jamais")
     }
 
     // MARK: conversation:updated

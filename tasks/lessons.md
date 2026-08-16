@@ -9036,3 +9036,42 @@ objet ⇒ inchangé ⇒ conserver. Autre objet ⇒ inconnu ⇒ remettre à neutr
 le même raisonnement que le tri-état de la leçon 208, un cran plus haut : là il
 fallait distinguer absence et nullité D'UN champ, ici il faut distinguer ce
 qu'un champ absent dit selon que l'objet décrit a changé ou non.
+
+## Leçon 212 — deux sessions de la MÊME routine prennent la même piste le même jour ; le `git fetch` qui l'aurait montré doit venir AVANT l'instruction, pas avant le merge (2026-08-16, routine realtime, cycle 53)
+
+**Le constat.** Le cycle 52 a été instruit, écrit, testé et poussé DEUX fois, en
+parallèle, par deux sessions de cette routine. Même piste (le legs n°2 du cycle
+51), même diagnostic, mêmes trois sites, même borne d'identité, jusqu'au nom du
+geste — `adoptLastMessage(id:)` d'un côté, `adoptLastMessageIdentity(_:)` de
+l'autre. La collision n'a été vue qu'au `git fetch origin main` final, quand
+l'une des deux PR attendait sa CI et que l'autre venait d'atterrir.
+
+**Pourquoi le protocole ne l'a pas attrapée.** La routine dit « avant de débuter
+un développement, te baser sur le précédent développement de ta routine », et
+c'est exactement ce que les deux sessions ont fait : elles ont lu le dernier
+journal de cycle, et y ont trouvé la MÊME liste de pistes classées par
+importance. *Un legs de fin de cycle bien écrit est un aimant : plus il désigne
+clairement la piste suivante, plus deux instructions indépendantes convergent
+dessus.* La qualité du legs augmente la probabilité de collision, elle ne la
+réduit pas.
+
+**Le `fetch` était au mauvais endroit.** Il a bien eu lieu — la routine l'exige
+« quand tu FINIS » — mais à ce moment-là tout le travail était déjà écrit. Une
+piste choisie sur un `main` de plusieurs heures est une piste choisie sur un
+état périmé : la fenêtre à surveiller n'est pas celle du merge, c'est celle du
+CHOIX.
+
+**La règle.** `git fetch origin main` **avant de choisir la piste**, et pas
+seulement avant de merger. Puis, sur les commits neufs, chercher le sujet qu'on
+s'apprête à prendre — par le message de commit, pas par le diff. Le signal est
+bon marché : `git log --oneline origin/main -20` suffisait ici, le titre du
+commit portait le mot pour mot. Rien de plus lourd n'est justifié : ce contrôle
+coûte une commande et évite un cycle entier.
+
+**Le corollaire sur la suite.** Quand la collision est constatée, ne PAS
+défendre son propre diff : celui qui est sur `main` a gagné, point. Rebaser sur
+`main` et ne garder que ce qui MANQUE au correctif atterri — ici, la plomberie
+`location` que #3105 ne portait pas, et que son propre geste rendait justement
+nécessaire. Le travail dupliqué se jette sans cérémonie ; la part additive se
+livre, et elle est d'autant plus facile à instruire que le diagnostic est
+désormais confirmé deux fois indépendamment.

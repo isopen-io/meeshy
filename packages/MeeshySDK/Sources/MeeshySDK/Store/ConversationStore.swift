@@ -542,7 +542,21 @@ public actor ConversationStore {
                 //
                 // Posé AVANT les champs ci-dessous, qui reposent ce que ce
                 // payload-ci porte vraiment.
-                if case .replaced(.some(let id)) = event.lastMessage { conv.adoptLastMessage(id: id); changed = true }
+                if case .replaced(.some(let id)) = event.lastMessage {
+                    conv.adoptLastMessage(id: id)
+                    // `location` est le SEUL champ que `adoptLastMessage` remet à
+                    // neutre et que ce payload porte pourtant : le serveur la hisse
+                    // quand le nouveau dernier message est géolocalisé. Sans cette
+                    // ligne, le geste ne fait que RETIRER l'épingle — et ce store
+                    // écrit le cache disque, dont la relecture repose sa version sur
+                    // l'écran. La pastille d'un lieu reçu sur le fil disparaissait
+                    // donc dans la seconde, alors que l'écran venait de la poser.
+                    //
+                    // Écrite AVEC l'identité et jamais seule : `nil` est ici la bonne
+                    // valeur (le remplaçant n'a pas de position), pas une absence.
+                    conv.lastMessageLocation = event.location
+                    changed = true
+                }
                 if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
                 // préfère la traduction à l'aperçu brut, donc poser l'un sans
@@ -965,6 +979,13 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// ordre, et c'est la seule façon de rendre une édition applicable.
     public let lastMessageTranslations: LastMessagePreviewTranslations
     public let lastMessageOriginalLanguage: String?
+    /// Position du dernier message, hissée par le serveur quand celui-ci est
+    /// géolocalisé. Membre du groupe d'aperçu au même titre que les autres, et
+    /// absent de ce type jusqu'ici : `adoptLastMessage` remet l'épingle à neutre
+    /// dès que l'identité change, mais le store n'avait alors aucun moyen de
+    /// reposer celle du NOUVEAU message. Seul l'écran lisait `event.location`,
+    /// et la relecture du cache — que ce store alimente — l'écrasait.
+    public let location: SharedPlace?
     /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
     /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
     /// de RECULER dans le temps — voir `merging(_:with:)`.
@@ -985,6 +1006,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false,
         title: String? = nil,
         avatar: String? = nil,
@@ -1001,6 +1023,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.location = location
         self.previewRecalculated = previewRecalculated
         self.title = title
         self.avatar = avatar

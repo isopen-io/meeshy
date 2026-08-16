@@ -1177,6 +1177,93 @@ final class ConversationStoreTests: XCTestCase {
                      "le second n'a plus rien à vider — il ne doit pas republier la ligne")
     }
 
+    // MARK: - L'épingle du NOUVEAU dernier message, pas seulement le retrait de l'ancienne
+    //
+    // `location` est le seul champ que `adoptLastMessage` remet à neutre et que
+    // le payload porte pourtant : le serveur la hisse quand le nouveau dernier
+    // message est géolocalisé (`emitConversationPreviewUpdate` comme
+    // `MessageHandler`). Sans elle sur `ConversationUpdatedStoreEvent`, le geste
+    // ne savait que RETIRER — et ce store écrit le cache disque, dont la
+    // relecture repose sa version sur l'écran.
+
+    /// Un lieu partagé devient le dernier message : la ligne doit porter son
+    /// épingle. Sans ce chemin, seul l'écran la posait, et le cache la reprenait.
+    func test_applyConversationUpdated_newLastMessageWithLocation_carriesThePin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        conv.lastMessageId = "msg-texte"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_001_000),
+            lastMessage: .replaced("msg-lieu"),
+            // Un message position-seule a un aperçu VIDE : c'est l'épingle qui
+            // permet à la ligne de composer son libellé.
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-lieu")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "la ligne doit porter l'épingle du message qu'elle décrit désormais")
+    }
+
+    /// La contre-épreuve : un texte qui remplace un lieu doit EFFACER l'épingle.
+    /// Le payload tait alors `location`, et ce silence est la bonne valeur —
+    /// `adoptLastMessage` l'a déjà retirée, rien ne doit la remettre.
+    func test_applyConversationUpdated_newLastMessageWithoutLocation_clearsThePin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        conv.lastMessageId = "msg-lieu"
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_001_000),
+            lastMessage: .replaced("msg-texte"),
+            lastMessagePreview: "à tout de suite"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertNil(after.lastMessageLocation,
+                     "une épingle sous un texte décrirait la position d'un autre message")
+    }
+
+    /// Une ÉDITION garde le même id : `adoptLastMessage` se tait, et l'épingle
+    /// doit survivre. Le serveur la rejoue dans le payload (le message est
+    /// toujours géolocalisé), donc la reposer est idempotent — mais ce témoin
+    /// existe pour qu'un futur « ne poser `location` que sur un id NEUF » ne
+    /// passe pas au vert en dépouillant une légende corrigée de son épingle.
+    func test_applyConversationUpdated_editOfALocationMessage_keepsThePin() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-lieu"
+        conv.lastMessagePreview = "on est là"
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: t0,
+            lastMessage: .replaced("msg-lieu"),
+            lastMessagePreview: "on est là, viens",
+            lastMessageTranslations: .replaced([:]),
+            location: SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel"),
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessagePreview, "on est là, viens")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel")
+    }
+
     // MARK: - `title` sur un DM — le titre de la base n'est pas celui de la ligne
 
     /// Le titre client d'un DM est le nom du participant d'en face
