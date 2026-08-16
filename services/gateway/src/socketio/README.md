@@ -464,6 +464,57 @@ sans compte qui ne comparerait que `userId` ne pourrait jamais reconnaitre ses
 propres autres appareils, maintenant que ce champ vaut legitimement `null` pour
 lui. Une seule regle d'identite d'acteur dans tout le systeme, pas deux.
 
+#### Un champ scope sur l'acteur ne s'adresse pas a l'eventail
+
+Reconnaitre l'acteur est une chose ; **lui adresser ce qui ne regarde que lui en
+est une autre**, et c'est la moitie qui manquait. `lastReadAt` et `unreadCount`
+ne decrivent pas la conversation mais UNE personne : de combien elle est en
+retard sur ce fil, et quand elle l'a rattrape. Ils partaient pourtant dans
+l'eventail, donc chaque pair recevait l'arriere de celui qui venait de lire.
+
+Le raisonnement qui l'interdit etait deja ecrit dans le code — mais applique a
+une seule des deux branches. Le commentaire du `type: 'received'` justifie
+l'ABSENCE de ces champs en partie parce qu'ils « divulgueraient inutilement
+l'arriere de l'acteur a tous les pairs de la room ». La phrase vaut mot pour mot
+pour le `type: 'read'`, ou ils SONT diffuses a toute la conversation.
+
+La forme retenue, sur les deux routes qui emettent l'evenement :
+
+```ts
+emitToConversationParticipants({
+  io, conversationId, participants, events,
+  payload: peerPayload,                                   // sans les deux champs
+  exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null,
+});
+if (actorReadSync) {
+  const actorPayload = { ...peerPayload, ...actorReadSync };
+  io.to(ROOMS.user(personalRoomKey)).emit(...)            // la version complete
+}
+```
+
+Trois points qui ne se devinent pas :
+
+1. **`exceptRoom` n'est pas decoratif.** Retirer la room personnelle de l'acteur
+   de la chaine ne suffit pas : la room de conversation est chainee aussi, et
+   elle tient ses sockets des qu'il a le fil ouvert. Sans `.except()`, il
+   recevrait la copie des pairs EN PLUS de la sienne — la garantie « une seule
+   copie par socket » tombe, sur l'evenement precisement ou les deux copies
+   different.
+2. **L'exclusion est conditionnee a `actorReadSync`.** Sur un `received` les deux
+   payloads seraient identiques : exclure l'acteur lui couterait l'evenement
+   sans rien proteger.
+3. **Aucun client ne perd rien.** Les appareils de l'acteur recoivent toujours
+   les deux champs, par la room que toute session rejoint a l'authentification.
+   Le seul consommateur qui les lit (`ConversationStoreSocketBridge`, iOS)
+   conditionne deja leur usage a « l'acteur, c'est moi » ; web et Android ne les
+   declarent meme pas. **Un pair ne les recevait que pour les jeter.**
+
+La lecon generale : la preference d'accuses de lecture qui autorise cette
+diffusion consent a « j'ai lu ton message », pas a la publication d'un arriere.
+Un champ scope sur une personne se verifie a l'ADRESSAGE, pas seulement a la
+lecture — « le client saura l'ignorer » n'est pas une reponse a « pourquoi le
+recoit-il ».
+
 ---
 
 ## L'apercu de la ligne de liste — qui l'emet, et A QUEL INSTANT

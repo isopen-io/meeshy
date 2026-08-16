@@ -207,6 +207,13 @@ data class ReadStatusUpdatedEvent(
     val updatedAt: String? = null,
     val summary: ReadStatusSummary = ReadStatusSummary(),
 )
+// Ce miroir ne déclare volontairement NI `lastReadAt` NI `unreadCount`. Ces
+// deux champs du contrat décrivent l'ACTEUR (sa frontière de lecture, son
+// arriéré), pas la conversation, et le serveur ne les met que dans la copie
+// adressée à la room personnelle de l'acteur — la copie de l'éventail, celle
+// qui porte les coches à tous les pairs, ne les porte pas. Les ajouter ici
+// suppose donc d'écouter l'événement sur `user:<userId ?: participantId>` et
+// de vérifier « l'acteur, c'est moi » avant d'y toucher.
 
 /** Social socket events — mirrors iOS SocialSocketManager payloads. */
 

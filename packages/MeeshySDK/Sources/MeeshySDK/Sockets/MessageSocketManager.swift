@@ -498,9 +498,21 @@ public struct ReadStatusUpdateEvent: Decodable, Sendable {
     /// personal room. This client has no accountless session, so it matches on
     /// `userId` only — the second branch stays unused here, and
     /// `ConversationStoreSocketBridge` is correct as written.
+    ///
+    /// **Delivered ONLY in the copy addressed to the actor.** This field and
+    /// `unreadCount` describe a person, not the conversation — how far behind
+    /// they are on this thread, and when they last caught up. The gateway
+    /// therefore emits a `read` TWICE: one copy without them to the
+    /// conversation fan-out, one complete copy to the actor's personal room
+    /// (`user:<userId ?? participantId>`), which the fan-out excludes so no
+    /// socket receives both. Nothing changes for this client: a device of the
+    /// actor still joins that room at authentication and still receives the
+    /// pair. A device that is NOT the actor now simply never sees the values
+    /// its `event.userId == me` gate was already discarding.
     public let lastReadAt: Date?
     /// Server-authoritative unread count for the ACTOR after the action.
-    /// Same `userId ?? participantId` scoping as `lastReadAt`. `nil` from a
+    /// Same `userId ?? participantId` scoping as `lastReadAt`, and the same
+    /// addressing scope: the actor's copy, never the fan-out. `nil` from a
     /// pre-rollout gateway.
     public let unreadCount: Int?
 

@@ -992,13 +992,31 @@ export interface ReadStatusUpdatedEventData {
    * (`MessageHandler._autoDeliverToOnlineRecipients`), which carries only the
    * aggregate `summary` for sender checkmarks. Travels paired with
    * `unreadCount`: a consumer applies them together or not at all.
+   *
+   * **Et présent seulement dans la copie ADRESSÉE À L'ACTEUR.** Ces deux champs
+   * ne décrivent pas la conversation mais UNE personne : à quel point elle est
+   * en retard sur ce fil, et quand elle l'a rattrapé pour la dernière fois. Le
+   * serveur émet donc l'événement DEUX fois sur un `read` — une copie sans ces
+   * champs à l'éventail de la conversation, une copie complète à la seule room
+   * personnelle de l'acteur (`ROOMS.user(userId ?? participantId)`), dont
+   * l'éventail est alors exclu pour qu'aucun socket ne reçoive les deux. Un
+   * pair ne les recevait de toute façon que pour les jeter, puisque le seul
+   * consommateur qui les lit conditionne leur usage à « l'acteur, c'est moi » ;
+   * et la préférence d'accusés de lecture qui autorise la diffusion consent à
+   * « j'ai lu ton message », pas à la publication d'un arriéré.
+   *
+   * Rien à changer côté client : un appareil de l'acteur les reçoit toujours,
+   * par le canal que ses sessions rejoignent à l'authentification. Un client
+   * qui les lirait SANS vérifier l'identité de l'acteur, en revanche, cessera
+   * de voir passer l'arriéré des autres — c'était le défaut, pas le contrat.
    */
   readonly lastReadAt?: Date | null;
   /**
    * Server-authoritative unread count for the ACTOR in this conversation
    * after the read/receive action. Same `userId ?? participantId` scoping and
    * same present-on-dedicated-routes / absent-on-auto-deliver semantics as
-   * `lastReadAt`; applied as-is by the actor's devices when accepted.
+   * `lastReadAt`; applied as-is by the actor's devices when accepted. Même
+   * portée d'adressage : la copie de l'acteur, jamais l'éventail.
    */
   readonly unreadCount?: number;
 }

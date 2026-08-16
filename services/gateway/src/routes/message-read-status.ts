@@ -540,6 +540,14 @@ async function broadcastReadStatusUpdate(
   // use it for checkmarks) and omits these per-user fields — which the client
   // would drop anyway, and which would needlessly disclose the actor's backlog
   // to every peer in the room.
+  //
+  // That last clause is the reason they no longer ride the fan-out on a 'read'
+  // either: it is the same disclosure, and it was made to the whole
+  // conversation. `unreadCount` says how far behind the actor is on this
+  // thread and `lastReadAt` says when they last caught up — neither describes
+  // the conversation, and the read-receipt preference that gates this
+  // broadcast consents to "I read your message", not to publishing a backlog.
+  // The two fields are addressed to the actor's own devices below.
   const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
     args.type === 'read'
       ? Promise.all([
@@ -568,14 +576,15 @@ async function broadcastReadStatusUpdate(
     actorReadSyncP
   ]);
 
-  const payload: ReadStatusUpdatedEventData = {
+  // Ce que TOUTE la conversation peut savoir : qui a lu, et où en est le
+  // résumé des coches. Rien qui décrive l'arriéré personnel de l'acteur.
+  const peerPayload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
     userId: args.actorUserId,
     type: args.type,
     updatedAt: new Date(),
-    summary,
-    ...(actorReadSync ?? {})
+    summary
   };
 
   const io = socketIOManager.getIO();
@@ -583,13 +592,29 @@ async function broadcastReadStatusUpdate(
   // Single chained fan-out — see `emitToConversationParticipants`. The loop this
   // replaces skipped every participant without a `User` row, so an anonymous
   // participant never learned that a peer had read anything.
+  //
+  // L'acteur en est retiré (`exceptRoom`) UNIQUEMENT quand il a une version à
+  // lui à recevoir : sur un 'received', `actorReadSync` est absent, les deux
+  // payloads seraient identiques, et l'exclure lui coûterait l'événement.
   emitToConversationParticipants({
     io,
     conversationId: args.conversationId,
     participants: activeParticipants,
     events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-    payload
+    payload: peerPayload,
+    exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null
   });
+
+  // La version de l'acteur, dans sa seule room personnelle — celle que toutes
+  // ses sessions ont rejointe à l'authentification (`AuthHandler`), compte ou
+  // pas. Elle porte les deux champs en plus, sous les DEUX noms d'événement,
+  // pour qu'un client migré comme un client historique recale son curseur.
+  if (actorReadSync) {
+    const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
+    const actorRoom = io.to(ROOMS.user(personalRoomKey));
+    actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+    actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+  }
 
   if (args.type === 'read') {
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
