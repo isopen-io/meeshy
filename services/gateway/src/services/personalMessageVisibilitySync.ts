@@ -18,11 +18,16 @@
  * online, and the `hidden` tombstone stream of `GET /sync` for the ones that
  * were not.
  *
- * Every write here owes three things that only work as a set:
+ * Every write here owes four things that only work as a set:
  *   1. persist the row(s);
  *   2. retract the notification that still holds a COPY of the excerpt (a read
  *      filter never reaches it — see `retractHiddenMessageNotifications`);
- *   3. broadcast to `user:{id}` so the other devices converge.
+ *   3. broadcast to `user:{id}` so the other devices converge;
+ *   4. refresh the author's own conversation LIST ROW — the fourth was missing
+ *      for the same reason as the third, one screen further out. `hidden-for-me`
+ *      retracts the bubble in the thread; the list row carries its own preview,
+ *      whose replacement only the server can compute (see
+ *      `personalPreviewRefresh`).
  *
  * Keeping them in one module is what stops a fourth writer from honouring only
  * part of the contract, exactly as `conversationPreferencesSync` does for
@@ -30,9 +35,10 @@
  *
  * Failure postures, deliberately different per step:
  *   - the PERSIST is the product: it propagates, and the caller answers 500;
- *   - the RETRACTION and the BROADCAST are side channels: they are logged and
- *     swallowed, because a hiding that succeeded must not be reported as failed
- *     (the user would retry a gesture that already took effect).
+ *   - the RETRACTION, the BROADCAST and the LIST-ROW REFRESH are side channels:
+ *     they are logged and swallowed, because a hiding that succeeded must not be
+ *     reported as failed (the user would retry a gesture that already took
+ *     effect).
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -44,6 +50,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { retractNotificationsForHiddenMessages } from './messaging/retractHiddenMessageNotifications';
+import { refreshPersonalConversationPreview } from './messaging/personalPreviewRefresh';
 import { logger } from '../utils/logger';
 
 export interface HideMessagesForUserParams {
@@ -98,6 +105,13 @@ export async function hideMessagesForUser(
     hiddenAt: new Date().toISOString(),
   };
   broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, payload);
+
+  // Le fil sait ; la ligne de liste, non. Elle porte son propre aperçu, et le
+  // remplaçant d'un dernier message masqué n'est pas calculable côté client.
+  await refreshPersonalConversationPreview(fastify, {
+    userId,
+    conversationIds: messages.map((m) => m.conversationId),
+  });
 }
 
 export interface RestoreMessageForUserParams {
@@ -128,4 +142,11 @@ export async function restoreMessageForUser(
     restoredAt: new Date().toISOString(),
   };
   broadcastToUser(fastify, userId, SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME, payload);
+
+  // Symétrique du masquage : rendre un message peut lui rendre aussi la place
+  // de dernier message visible de ce lecteur.
+  await refreshPersonalConversationPreview(fastify, {
+    userId,
+    conversationIds: [message.conversationId],
+  });
 }

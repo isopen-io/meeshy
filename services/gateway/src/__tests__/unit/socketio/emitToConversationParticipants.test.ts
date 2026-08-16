@@ -15,10 +15,13 @@ import {
 
 function makeEmitter() {
   const emit = jest.fn();
-  const to = jest.fn(function chain() {
-    return { to, emit };
+  const except = jest.fn(function chain() {
+    return { to, except, emit };
   });
-  return { io: { to } as never, to, emit };
+  const to = jest.fn(function chain() {
+    return { to, except, emit };
+  });
+  return { io: { to } as never, to, except, emit };
 }
 
 const conversationId = 'c_1';
@@ -112,6 +115,76 @@ describe('emitToConversationParticipants', () => {
 
     expect(to).toHaveBeenCalledWith('conversation:c_1');
     expect(emit).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * `exceptRoom` — la moitié qui permet à un émetteur de servir DEUX payloads
+   * sans jamais en livrer deux au même socket.
+   *
+   * Un accusé de lecture porte, pour l'acteur seul, sa frontière de lecture et
+   * son arriéré (`lastReadAt`/`unreadCount`). Les pairs n'en ont aucun usage et
+   * ne doivent pas les recevoir. Retirer l'acteur de l'ÉVENTAIL est la seule
+   * façon de lui envoyer ensuite la version complète dans sa room personnelle
+   * sans qu'il reçoive l'événement deux fois — la room de conversation
+   * l'atteindrait sinon quand il regarde le fil.
+   */
+  describe('exceptRoom', () => {
+    it('drops the excluded room from the chain AND hands it to except()', () => {
+      const { io, to, except } = makeEmitter();
+
+      emitToConversationParticipants({
+        io,
+        conversationId,
+        participants: [
+          { id: 'p_actor', userId: 'u_actor' },
+          { id: 'p_peer', userId: 'u_peer' },
+        ],
+        events: ['read-status:updated'],
+        payload: {},
+        exceptRoom: 'user:u_actor',
+      });
+
+      expect(to.mock.calls.map((c) => c[0])).toEqual([
+        'conversation:c_1',
+        'user:u_peer',
+      ]);
+      // Chaîner la room de conversation sans l'exclusion laisserait l'acteur
+      // recevoir la copie destinée aux pairs dès qu'il a le fil ouvert.
+      expect(except).toHaveBeenCalledWith('user:u_actor');
+    });
+
+    it('excludes the actor even when they are the only participant left in the room', () => {
+      const { io, to, except, emit } = makeEmitter();
+
+      const rooms = emitToConversationParticipants({
+        io,
+        conversationId,
+        participants: [{ id: 'p_actor', userId: null }],
+        events: ['read-status:updated'],
+        payload: {},
+        exceptRoom: 'user:p_actor',
+      });
+
+      expect(rooms).toEqual(['conversation:c_1']);
+      expect(to.mock.calls.map((c) => c[0])).toEqual(['conversation:c_1']);
+      expect(except).toHaveBeenCalledWith('user:p_actor');
+      expect(emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the chain untouched when no room is excluded', () => {
+      const { io, except } = makeEmitter();
+
+      const rooms = emitToConversationParticipants({
+        io,
+        conversationId,
+        participants: [{ id: 'p_1', userId: 'u_1' }],
+        events: ['read-status:updated'],
+        payload: {},
+      });
+
+      expect(rooms).toEqual(['conversation:c_1', 'user:u_1']);
+      expect(except).not.toHaveBeenCalled();
+    });
   });
 
   it('is a no-op when the server is not up yet', () => {

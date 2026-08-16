@@ -523,3 +523,40 @@ Append-only log of gotchas and decisions that save time next run.
   is a discovery signal, not a scope estimate — read what the REFERENCE implementation (here, iOS's
   `DeepLinkRouter.resolveTrackedLink`) actually does with the value before promising a mechanical
   fix, especially when the first two instances of a pattern were unusually simple.**
+- **`androidx.security.crypto`'s `EncryptedSharedPreferences`/`MasterKey` cannot be unit-tested via
+  Robolectric in this project's setup — `MasterKey.Builder` needs the `AndroidKeyStore` security
+  provider, which Robolectric's JVM does not supply, so any test touching it fails with
+  `NoSuchAlgorithmException`/`KeyStoreException`** (`conversation-lock-store-foundation`,
+  2026-08-15, confirmed live in CI, not assumed). This retroactively explains why `EncryptedTokenStore`
+  — already shipped, already relied on in production — has zero dedicated tests: not an oversight,
+  a standing constraint of this test setup. **Generalises: before writing a Robolectric test for
+  ANY class touching `androidx.security.crypto`, check whether an existing class using the exact
+  same primitive already has (or conspicuously lacks) a test — an absent test next to a shipped,
+  trusted implementation is itself a signal, not just missing coverage.** Keep the behavioural
+  contract testable by isolating it into a plain-Kotlin interface + in-memory implementation (no
+  Android dependency) that the real, Keystore-backed class structurally mirrors — the contract gets
+  full JVM test coverage even though the real storage layer can't be exercised here.
+- **A DataStore/coroutine `TimeoutCancellationException` flake hit two DIFFERENT, unrelated tests
+  across two consecutive CI runs of the same PR** (`ThemeStoreTest`, then
+  `MediaDownloadPreferencesStoreTest`, both `dataStore_set*_isReflectedInTheFlow` —
+  `conversation-lock-store-foundation`, 2026-08-15). Neither test was anywhere near the PR's actual
+  diff, and the PR's own new tests were green both times — a strong pre-existing-infra-flake signal
+  (same shape as the earlier-documented `ci.yml` Python/CPython-fetch flakiness). `gh run rerun
+  <run-id> --failed` resolved it on the first retry. **Generalises: `gh run rerun --failed` is worth
+  trying before assuming it is blocked — an earlier lesson documented `rerun-failed-jobs` as 403 for
+  the bot on a DIFFERENT workflow (`ci.yml` on a gateway PR); it worked fine here on `android.yml`.
+  Don't let one documented 403 generalise to "reruns never work" without re-checking.**
+  **CLOSED, root-caused, and fixed** (`datastore-test-timeout-flake`, PR #3058, 2026-08-16, after 2
+  more occurrences brought the total to 4/4 PRs touching Android this session): `git log -p` on the
+  two files that never flaked (`MediaDownloadPreferencesStoreTest`/`PrivacyPreferencesStoreTest`)
+  showed they were authored from day one with `withTimeout(15_000)` for the identical
+  real-DataStore-Flow-collection pattern (`runBlocking`, real wall-clock time), while the 4 files
+  that DID flake (`ThemeStoreTest`, `CategorySnapshotStoreTest`, `NotificationPreferencesStoreTest`,
+  `InterfaceLanguageStoreTest`) all used the tighter `withTimeout(5_000)`. Bumped all 19 occurrences
+  to `15_000` to match the already-proven value. CI on the fix's own PR ran the full matrix clean on
+  the first attempt (no Android retry needed) — first live signal it addresses the mechanism, not
+  just a coincidence of timing. **Generalises: when the SAME class of flake recurs 3+ times with the
+  same exception signature, check whether a sibling file already solved it with a different constant
+  before reaching for a rerun again — `git log -p` on the never-flaky siblings is a cheap, decisive
+  check that turns "known flake, keep rerunning" into "known fix, already proven elsewhere in this
+  exact codebase."**

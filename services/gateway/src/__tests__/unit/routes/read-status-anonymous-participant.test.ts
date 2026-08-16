@@ -258,3 +258,227 @@ describe('read-status routes — un participant sans compte', () => {
     expect(mockShouldShowReadReceipts).toHaveBeenCalledWith(REGISTERED_USER_ID, false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMMENT l'événement NOMME cet acteur sans compte
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Les tests ci-dessus verrouillent que l'invité PASSE. Ceux-ci verrouillent ce
+// que le serveur DIT de lui en le diffusant.
+//
+// `read-status:updated` nomme l'acteur par deux champs qui ne disent pas la
+// même chose. `participantId` porte sa ligne `Participant` ; `userId` porte sa
+// ligne `User` — et un invité de lien n'en a pas. Le contrat le dit aux trois
+// bouts de la chaîne, dans les mêmes termes :
+//
+//   • `ReadStatusUpdatedEventData.userId` (packages/shared) — « `User.id` de
+//     l'acteur, ou `null` quand c'est un participant ANONYME »
+//   • `ReadStatusUpdateEvent.userId` (iOS, MessageSocketManager.swift) — `String?`
+//   • `ReadStatusUpdatedEvent.userId` (Android, SocketEvents.kt) — `String? = null`
+//
+// `broadcastReadStatusUpdate` recevait UN `userId: string` et le servait à DEUX
+// rôles opposés : le champ du contrat, et la CLÉ DE ROOM du badge — laquelle
+// vaut `userId ?? participantId` (`participantUserRoomTargets`, et
+// `AuthHandler` qui fait rejoindre `ROOMS.user(Participant.id)` aux sockets
+// anonymes). C'est la forme ROOM qui gagnait, donc le champ partait en portant
+// un `Participant.id`.
+//
+// Les émetteurs SOCKET du MÊME événement nommaient déjà cet acteur `null` —
+// `ConversationHandler._resyncReadStatusToSocket` (qui prend un
+// `registeredUserId: string | null` distinct de `participantRowId`, et dont le
+// commentaire dit exactement pourquoi), `MessageHandler.autoDeliverToOnlineRecipients`,
+// et le drain. Le même invité, dans la même conversation, était donc nommé de
+// deux façons selon le transport qui parlait.
+
+type CapturedEmit = {
+  readonly rooms: readonly string[];
+  readonly excepts: readonly string[];
+  readonly event: string;
+  readonly payload: any;
+};
+
+describe('read-status:updated — comment l\'événement nomme un acteur sans compte', () => {
+  let socketApp: FastifyInstance;
+  const emits: CapturedEmit[] = [];
+
+  // Double de room CHAÎNÉE : `io.to(a).to(b).emit(e, p)` est la forme réelle
+  // d'`emitToConversationParticipants`. Capturer la chaîne entière (et pas le
+  // dernier `.to()`) est ce qui rend la clé de room observable.
+  const chain = (rooms: readonly string[], excepts: readonly string[] = []): any => ({
+    to: (room: string) => chain([...rooms, room], excepts),
+    // L'exclusion est RETENUE, pas avalee : c'est elle qui garantit que
+    // l'acteur ne recoit pas DEUX copies d'un evenement dont une seule porte
+    // ses champs prives.
+    except: (room: string) => chain(rooms, [...excepts, room]),
+    emit: (event: string, payload: unknown) => {
+      emits.push({ rooms, excepts, event, payload });
+      return true;
+    }
+  });
+  const io = { to: (room: string) => chain([room]) };
+
+  const payloadOf = (event: string) => emits.find((e) => e.event === event)?.payload;
+  const roomsOf = (event: string) => emits.find((e) => e.event === event)?.rooms ?? [];
+
+  beforeAll(async () => {
+    socketApp = Fastify({ logger: false });
+    socketApp.decorate('prisma', mockPrisma);
+    socketApp.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io }) });
+    await socketApp.register(messageReadStatusRoutes);
+    await socketApp.ready();
+  });
+
+  afterAll(async () => {
+    await socketApp.close();
+  });
+
+  beforeEach(() => {
+    emits.length = 0;
+    participantFindFirst.mockClear();
+    mockResolveConversationId.mockReset().mockResolvedValue(CONVERSATION_ID);
+    // Diffusion AUTORISÉE : c'est la branche qui construit le payload.
+    mockShouldShowReadReceipts.mockReset().mockResolvedValue(true);
+    mockGetUnreadCount.mockReset().mockResolvedValue(UNREAD_COUNT);
+    mockMarkMessagesAsRead.mockReset().mockResolvedValue(0);
+    mockMarkMessagesAsReceived.mockReset().mockResolvedValue(undefined);
+    mockGetLatestMessageSummary.mockReset().mockResolvedValue({
+      totalMembers: 2, deliveredCount: 1, readCount: 1
+    });
+    mockPrisma.message.findUnique.mockReset().mockResolvedValue({
+      id: MESSAGE_ID, conversationId: CONVERSATION_ID, senderId: REGISTERED_PARTICIPANT_ID, deletedAt: null
+    });
+    mockPrisma.participant.findMany.mockReset().mockResolvedValue([
+      { id: ANONYMOUS_PARTICIPANT_ID, userId: null },
+      { id: REGISTERED_PARTICIPANT_ID, userId: REGISTERED_USER_ID }
+    ]);
+    mockPrisma.conversationReadCursor.findUnique.mockReset().mockResolvedValue(null);
+    mockAuthContext.current = anonymousContext();
+  });
+
+  it('mark-as-read ne nomme PAS l\'invité par un User.id qu\'il n\'a pas', async () => {
+    const response = await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = payloadOf('read-status:updated');
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBeNull();
+    // L'identité n'est pas perdue : elle est là où le contrat la place pour un
+    // participant sans ligne `User`.
+    expect(payload.participantId).toBe(ANONYMOUS_PARTICIPANT_ID);
+  });
+
+  it('le nom canonique de l\'événement porte la même identité que l\'historique', async () => {
+    await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    // Les deux noms voyagent en parallèle et transportent LE MÊME objet — un
+    // client migré n'écoute plus que le second.
+    expect(payloadOf('message:read-status-updated')).toBe(payloadOf('read-status:updated'));
+  });
+
+  it('mark-as-received nomme l\'invité de la même façon', async () => {
+    const response = await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-received`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = payloadOf('read-status:updated');
+    expect(payload).toBeDefined();
+    expect(payload.type).toBe('received');
+    expect(payload.userId).toBeNull();
+    expect(payload.participantId).toBe(ANONYMOUS_PARTICIPANT_ID);
+  });
+
+  it('delivery-receipt nomme l\'invité de la même façon', async () => {
+    const response = await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/messages/${MESSAGE_ID}/delivery-receipt`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = payloadOf('read-status:updated');
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBeNull();
+    expect(payload.participantId).toBe(ANONYMOUS_PARTICIPANT_ID);
+  });
+
+  // ANTI-SUR-CORRECTION. Nuller le CHAMP ne doit pas nuller la CLÉ DE ROOM :
+  // `ROOMS.user(Participant.id)` est celle qu'`AuthHandler` fait rejoindre aux
+  // sockets anonymes, et la seule par laquelle le badge d'un invité revient à
+  // zéro. Un correctif qui propagerait le `null` jusque-là émettrait vers
+  // `user:null` et collerait définitivement le badge de tous les invités.
+  it('le badge de l\'invité reste adressé à SA room personnelle', async () => {
+    await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    expect(roomsOf('conversation:unread-updated')).toEqual([`user:${ANONYMOUS_PARTICIPANT_ID}`]);
+    for (const captured of emits) {
+      expect(captured.rooms).not.toContain('user:null');
+      expect(captured.rooms).not.toContain('user:undefined');
+    }
+  });
+
+  // L'autre moitié de l'anti-sur-correction : personne n'est laissé de côté,
+  // celui sans compte étant joint par son `Participant.id`.
+  //
+  // Les deux ne sont plus atteints par la MÊME chaîne, et c'est voulu : ici
+  // l'invité est l'ACTEUR, donc l'éventail l'exclut pour qu'il reçoive à part
+  // la version portant sa frontière de lecture et son arriéré — deux mesures de
+  // sa personne, que le pair enregistré n'a pas à recevoir. L'union des chaînes
+  // reste ce que ce témoin garde : aucune room ne disparaît.
+  it('personne n\'est laissé de côté : le pair enregistré par l\'éventail, l\'acteur sans compte par sa room', async () => {
+    await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    const readStatusEmits = emits.filter((emit) => emit.event === 'read-status:updated');
+    const allRooms = readStatusEmits.flatMap((emit) => emit.rooms);
+    expect(allRooms).toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+    expect(allRooms).toContain(`user:${REGISTERED_USER_ID}`);
+
+    // L'éventail — la chaîne de plus d'une room — porte le pair, pas l'acteur.
+    const fanOut = readStatusEmits.filter((emit) => emit.rooms.length > 1);
+    expect(fanOut).not.toHaveLength(0);
+    for (const emit of fanOut) {
+      expect(emit.rooms).toContain(`user:${REGISTERED_USER_ID}`);
+      expect(emit.rooms).not.toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+      expect(emit.excepts).toContain(`user:${ANONYMOUS_PARTICIPANT_ID}`);
+      expect(emit.payload).not.toHaveProperty('unreadCount');
+    }
+
+    // La chaîne d'une seule room est celle de l'acteur, et elle porte les deux
+    // champs qui ne regardent que lui.
+    const actorEmit = readStatusEmits.find(
+      (emit) => emit.rooms.length === 1 && emit.rooms[0] === `user:${ANONYMOUS_PARTICIPANT_ID}`
+    );
+    expect(actorEmit).toBeDefined();
+    expect(actorEmit!.payload).toHaveProperty('unreadCount');
+  });
+
+  // NON-RÉGRESSION : l'acteur AVEC compte continue de se nommer par son
+  // `User.id`. C'est la moitié du contrat qui porte la synchro multi-appareils
+  // du curseur de lecture, et que ce correctif ne touche pas.
+  it('un acteur AVEC compte porte toujours son User.id', async () => {
+    mockAuthContext.current = registeredContext();
+
+    await socketApp.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    const payload = payloadOf('read-status:updated');
+    expect(payload).toBeDefined();
+    expect(payload.userId).toBe(REGISTERED_USER_ID);
+    expect(payload.participantId).toBe(REGISTERED_PARTICIPANT_ID);
+    expect(roomsOf('conversation:unread-updated')).toEqual([`user:${REGISTERED_USER_ID}`]);
+  });
+});

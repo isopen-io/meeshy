@@ -539,13 +539,15 @@ fileprivate struct BubbleGridImageView: View {
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
 
+    @Environment(\.displayScale) private var displayScale: CGFloat
+
     var body: some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
 
         // 5.2 — choisir la plus petite variante `>= largeur d'affichage en px`
         // (atome pur SDK). Sans variante (image chiffrée) → `originalFull`.
-        let targetWidthPx = Int((cellPointWidth * UIScreen.main.scale).rounded())
+        let targetWidthPx = Int((cellPointWidth * displayScale).rounded())
         let selectedFull: String? = originalFull.map { orig in
             ImageVariantSelector.bestImageURL(
                 variants: attachment.imageVariants ?? [],

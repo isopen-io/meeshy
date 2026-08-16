@@ -200,10 +200,15 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
   let app2: FastifyInstance;
   let mockEmit2: jest.Mock;
   let mockTo2: jest.Mock;
+  let mockExcept2: jest.Mock;
 
   beforeAll(async () => {
     mockEmit2 = jest.fn();
-    mockTo2 = jest.fn().mockReturnValue({ emit: mockEmit2 });
+    // Chaine complete : `to` ET `except`. La diffusion d'un accuse de LECTURE
+    // retire l'acteur de l'eventail, parce qu'il recoit a part une version du
+    // payload enrichie de sa frontiere de lecture et de son arriere.
+    mockExcept2 = jest.fn(() => ({ to: mockTo2, except: mockExcept2, emit: mockEmit2 }));
+    mockTo2 = jest.fn(() => ({ to: mockTo2, except: mockExcept2, emit: mockEmit2 }));
     app2 = Fastify({ logger: false });
     app2.decorate('prisma', mockPrisma);
     app2.decorate('socketIOHandler', {
@@ -222,7 +227,8 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
   beforeEach(() => {
     jest.clearAllMocks();
     (MessageReadStatusService as any).recentActionCache.clear();
-    mockTo2.mockReturnValue({ emit: mockEmit2 });
+    mockTo2.mockImplementation(() => ({ to: mockTo2, except: mockExcept2, emit: mockEmit2 }));
+    mockExcept2.mockImplementation(() => ({ to: mockTo2, except: mockExcept2, emit: mockEmit2 }));
 
     mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockResolvedValue(true);

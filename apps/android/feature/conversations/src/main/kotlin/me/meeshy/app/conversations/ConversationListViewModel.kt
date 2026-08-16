@@ -17,6 +17,7 @@ import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
@@ -79,6 +80,15 @@ data class ConversationListUiState(
      * no REST-fetched fallback to fall back to, unlike the Contacts roster.
      */
     val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
+    /**
+     * Live mirror of [me.meeshy.sdk.lock.ConversationLockStore.lockedConversationIdsFlow] —
+     * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
+     * lock/unlock re-evaluates every row (see `ConversationListView+Rows.swift`'s
+     * `ConversationRowItem.==`, which compares swipe-action icons for exactly this reason).
+     * Data plumbing only: UI wiring (hiding content, swapping the swipe action, the PIN entry
+     * flow) is a deliberately deferred follow-up — see NOTES.md/PROGRESS.md for this slice.
+     */
+    val lockedConversationIds: Set<String> = emptySet(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
@@ -118,6 +128,7 @@ class ConversationListViewModel @Inject constructor(
     categorySocketManager: CategorySocketManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
+    private val lockStore: ConversationLockStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -167,6 +178,12 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             draftStore.observeAll().collect { drafts ->
                 _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
+            lockStore.lockedConversationIdsFlow.collect { ids ->
+                _state.update { it.copy(lockedConversationIds = ids) }
             }
         }
 
@@ -307,6 +324,43 @@ class ConversationListViewModel @Inject constructor(
     fun toggleArchive(id: String) {
         val archived = prefsOf(id)?.isArchived ?: false
         runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
+    }
+
+    /** Toggles the mentions-only notification state of a conversation (context menu). */
+    fun toggleMentionsOnly(id: String) {
+        val mentionsOnly = prefsOf(id)?.mentionsOnly ?: false
+        runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
+    }
+
+    /**
+     * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
+     * No optimistic local removal: the socket-driven purge path
+     * (`ConversationPurge.onParticipantLeft`) drops the row once the server
+     * confirms and broadcasts the event back to this device.
+     */
+    fun leaveConversation(id: String) {
+        viewModelScope.launch {
+            when (val result = repository.leave(id)) {
+                is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /**
+     * Permanently hides [id] for this user only (context menu, gated by a
+     * confirmation dialog in the caller UI). No optimistic local removal: the
+     * socket-driven purge path (`ConversationPurge.onConversationDeleted`)
+     * drops the row once the server confirms and broadcasts the event back to
+     * this account's devices.
+     */
+    fun deleteConversationForMe(id: String) {
+        viewModelScope.launch {
+            when (val result = repository.deleteForMe(id)) {
+                is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
     }
 
     /** Marks a conversation read from the list (swipe action). */

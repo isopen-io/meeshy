@@ -86,7 +86,26 @@ list_skin_files() {
     -not -name '*test*.ts' \
     -not -name '*test*.tsx' \
     -not -name '*Tests.swift' \
-    -not -name 'LentilleMetrics.swift'
+    -not -name 'LentilleMetrics.swift' \
+    -not -name 'FocalPassConstants.swift'
+}
+# FocalPassConstants.swift : même statut que LentilleMetrics.swift — domicile
+# DOCUMENTÉ des constantes hors-token de la passe (chaque entrée y porte son
+# TODO contractuel, cf. F-084). L'exclure ici est ce qui permet d'interdire
+# ces valeurs partout AILLEURS dans la peau.
+
+# Recherche d'un littéral en JETON, commentaires exclus — pas en sous-chaîne.
+# Deux faux positifs réels ont motivé ce durcissement (V3, F-090) :
+#   indigo900        → matchait '900' en sous-chaîne nue
+#   /// doc « 0.82 » → un commentaire CITANT la loi gelée matchait comme du code
+# Le strip `s@//.*$@@` préserve le compte de lignes (les numéros restent vrais).
+# La frontière ERE interdit chiffre/lettre/underscore/point autour du jeton :
+# '45' ne matche plus dans '0.45' ni dans 'I-045', '900' plus dans 'indigo900'.
+scan_hard_literal() {
+  local literal="$1" f="$2"
+  local esc="${literal//./\\.}"
+  sed 's@//.*$@@' "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" \
+    | sed "s@^@$f:@" || true
 }
 
 run_self_test() {
@@ -112,7 +131,7 @@ EOF
   local test_leaked=0
   local f
   for f in "${files[@]}"; do
-    if grep -q -- "520" "$f"; then
+    if [ -n "$(scan_hard_literal "520" "$f")" ]; then
       detected=0
     fi
     case "$f" in
@@ -160,7 +179,12 @@ for literal in "${HARD_LITERALS[@]}"; do
     mapfile -t files < <(list_skin_files "$dir")
     [ "${#files[@]}" -eq 0 ] && continue
 
-    matches=$(grep -n -- "$literal" "${files[@]}" 2>/dev/null || true)
+    matches=""
+    for f in "${files[@]}"; do
+      m=$(scan_hard_literal "$literal" "$f")
+      [ -n "$m" ] && matches="${matches}${m}"$'\n'
+    done
+    matches="${matches%$'\n'}"
 
     if [ -n "$matches" ]; then
       echo -e "${RED}✗ Hard literal '$literal' found in skin files:${NC}"

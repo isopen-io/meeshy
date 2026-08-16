@@ -372,16 +372,33 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    /// Le corps d'un membre de la pill, borné à la DÉCLARATION SUIVANTE.
+    ///
+    /// Ces trois gardes découpaient une fenêtre de 1000 caractères après la
+    /// déclaration. Les commentaires de contraste WCAG ajoutés dans
+    /// `muteButton`/`speakerButton` (« errorSoft, pas error : #F87171 ne tient
+    /// pas le 3:1 » / « indigo200, pas indigo400 ») et la longueur des
+    /// `defaultValue` français ont fini par pousser `.accessibilityHint(`
+    /// au-delà de la fenêtre — 1044 pour mute, 1101 pour speaker — alors que
+    /// le hint est bel et bien là. Un garde d'accessibilité qui casse parce
+    /// qu'on a documenté un choix de couleur mesure la mauvaise chose : la
+    /// portée d'une propriété est sa déclaration suivante, pas un nombre
+    /// d'octets.
+    private func pillMemberBody(_ source: String, _ declaration: String) -> String? {
+        guard let range = source.range(of: declaration) else { return nil }
+        let end = source.range(of: "\n    private ", range: range.upperBound ..< source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[range.lowerBound ..< end])
+    }
+
     func test_hangupButton_hasAccessibilityHint() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var hangupButton") else {
+        guard let vicinity = pillMemberBody(source, "private var hangupButton") else {
             XCTFail("FloatingCallPillView must define hangupButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound..<end])
         XCTAssertTrue(
-            vicinity.contains(".accessibilityHint("),
+            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.end.hint"),
             "The hang-up button must carry an accessibility hint — CallView's endCallButton " +
             "already has one (call.end.hint); the pill's hangup button is the same action and " +
             "must not regress behind it for VoiceOver users."
@@ -393,12 +410,10 @@ final class FloatingCallPillViewTests: XCTestCase {
         // unlike hangupButton, VoiceOver users got no indication of what muting
         // means for the other party from the label alone.
         let source = try pillSource()
-        guard let range = source.range(of: "private var muteButton") else {
+        guard let vicinity = pillMemberBody(source, "private var muteButton") else {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound..<end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.mute.hint"),
             "The mute button must carry an accessibility hint, sharing the call.control.mute.hint " +
@@ -408,12 +423,10 @@ final class FloatingCallPillViewTests: XCTestCase {
 
     func test_speakerButton_hasAccessibilityHint() throws {
         let source = try pillSource()
-        guard let range = source.range(of: "private var speakerButton") else {
+        guard let vicinity = pillMemberBody(source, "private var speakerButton") else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound..<end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.speaker.hint"),
             "The speaker button must carry an accessibility hint, sharing the call.control.speaker.hint " +

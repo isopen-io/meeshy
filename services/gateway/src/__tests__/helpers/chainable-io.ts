@@ -20,22 +20,27 @@ import { jest } from '@jest/globals';
  * plutôt qu'en réécrivant le `.to` d'un double existant.
  */
 export function makeChainableIO(options: { sockets?: Array<{ leave: (room: string) => void }> } = {}) {
-  const sent: Array<{ rooms: string[]; event: string; payload: unknown }> = [];
+  const sent: Array<{ rooms: string[]; excepts: string[]; event: string; payload: unknown }> = [];
   const leave = jest.fn<any>();
   const fetchSockets = jest.fn<any>().mockResolvedValue(options.sockets ?? [{ leave }]);
   const emit = jest.fn<any>();
 
-  const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
-    except: () => chain(rooms),
+  // `except` est RETENU, pas avalé. Un double qui rendait `chain(rooms)` tel
+  // quel décrivait une diffusion sans exclusion — or l'exclusion est
+  // exactement ce qui garantit qu'un socket ne reçoit pas DEUX copies d'un
+  // événement dont une seule porte les champs privés de l'acteur.
+  const chain = (rooms: string[], excepts: string[]): any => ({
+    to: (room: string) => chain([...rooms, room], excepts),
+    except: (room: string | string[]) =>
+      chain(rooms, [...excepts, ...(Array.isArray(room) ? room : [room])]),
     emit: (event: string, payload: unknown) => {
-      sent.push({ rooms, event, payload });
+      sent.push({ rooms, excepts, event, payload });
       emit(event, payload);
     },
   });
 
   const io = {
-    to: jest.fn<any>((room: string) => chain([room])),
+    to: jest.fn<any>((room: string) => chain([room], [])),
     in: jest.fn<any>().mockReturnValue({ fetchSockets }),
     _emit: emit,
     _leave: leave,
@@ -43,8 +48,12 @@ export function makeChainableIO(options: { sockets?: Array<{ leave: (room: strin
     _sent: sent,
     /** Toutes les rooms des chaînes qui ont émis cet événement. */
     _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
+    /** Toutes les rooms EXCLUES des chaînes qui ont émis cet événement. */
+    _exceptsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.excepts),
     /** Le payload de la première émission de cet événement. */
     _payloadFor: (event: string) => sent.find((s) => s.event === event)?.payload as any,
+    /** Toutes les émissions de cet événement, chaîne comprise. */
+    _sendsFor: (event: string) => sent.filter((s) => s.event === event),
     /** Index de l'émission dans l'ordre global — pour prouver un ORDRE. */
     _indexOf: (event: string) => sent.findIndex((s) => s.event === event)
   };

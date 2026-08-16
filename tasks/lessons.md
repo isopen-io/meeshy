@@ -7815,7 +7815,315 @@ chaque fois la suite était VERTE parce qu'elle comptait les appels ou lisait un
 valeur dérivée. Le test qui aurait vu celui-ci ne demande rien de plus que : *que
 contient la ligne qu'on vient de demander à écrire ?*
 
-## Leçon 270 — un plafond qu'on lève réveille chaque scalaire qui présumait qu'il n'y avait qu'un seul pair (cycle 36, routine appels, Vague 129)
+## Leçon 270 — un test d'égalité littérale dit moins que le commentaire posé au-dessus de lui (2026-08-15, routine temps réel, cycle 36)
+
+**Le défaut.** L'accusé de remise du drain filtrait
+`(entry.eventType ?? 'new') === 'new'`, sous un commentaire qui énonçait la BONNE
+règle — « seuls les VRAIS nouveaux messages » — et une justification qui ne
+nommait que `edited`/`deleted`, les deux seules familles existant le jour où la
+ligne a été écrite. `link-message` est arrivée plus tard. C'est une CRÉATION,
+rejouée sous `message:new` autant que sous `link:message:new` ; l'égalité
+littérale la lisait comme une mutation, et le message d'un invité de lien
+n'accusait jamais réception au rejeu.
+
+**Pourquoi c'était invisible.** Le commentaire et le code ne disaient pas la même
+chose, mais rien ne les confrontait : un commentaire décrit une INTENTION, une
+égalité teste une VALEUR, et l'écart entre les deux ne grandit qu'au moment où
+quelqu'un ajoute une valeur — c'est-à-dire loin du commentaire, dans un autre
+fichier, pour une autre raison. La suite était verte parce qu'elle testait les
+familles nommées dans la justification, jamais celle qui n'existait pas encore.
+
+**La règle.** *Quand un filtre trie une UNION, il doit énumérer, pas comparer.*
+Une égalité littérale (`=== 'new'`) répond `false` par défaut à tout ce qu'elle ne
+connaît pas : la famille suivante hérite du silence, et le silence a l'air d'une
+décision. Un prédicat nommé, vivant en face du vocabulaire qu'il interroge, force
+la question à être posée à chaque ajout. Le corollaire porte sur le TEST : la
+seule garde qui tienne est une table EXHAUSTIVE sur l'union
+(`Record<NonNullable<T['eventType']>, boolean>`), qui ne compile pas tant que la
+nouvelle famille n'a pas sa réponse. Un compte d'entrées ne garde rien — il se met
+à jour tout seul sous les doigts de celui qui ajoute la famille.
+
+**Le signal qu'on aurait pu lire plus tôt, et qui vaut plus que le défaut.** La
+justification du champ, dans le type, affirmait « no delivery receipt — the
+share-link send path creates no read-status rows ». **Elle était fausse au commit
+qui l'écrivait** : le même commit branchait `autoDeliverToOnlineRecipients` sur ce
+même chemin, dont le cœur est `markMessagesAsReceived`. Une justification écrite
+dans le même souffle que le code qui la contredit ne se relit jamais — elle a
+l'air fraîche. *L'âge d'une note ne dit rien de sa véracité ; seule la relecture
+du code cité le dit* (leçon 2 du run #2 IOS_DETTE, ré-attestée ici sur une note
+vieille de zéro jour). Et le contre-indice était à portée : le fan-out du même
+accusé porte un correctif dédié pour adresser les pairs SANS COMPTE « parce que
+c'est peut-être l'AUTEUR qui attend son tic ». *Un effort fait pour servir un
+acteur, à un cran donné, est la preuve qu'il doit être servi aux crans
+au-dessus* — celui-ci était annulé par un filtre que l'entrée n'atteignait jamais.
+
+**Le discriminant qui interdit la sur-correction.** Élargir aux arrivées ne doit
+rien élargir d'autre : les huit familles de mutation restent muettes, parce que
+leur accuser réception affirmerait une remise qui n'a pas eu lieu — et pour
+`deleted`, celle d'un message qui n'existe plus. Le témoin qui l'exige s'écrit ;
+il ne se déduit pas du prédicat.
+
+Parente des leçons 256 (une audience ajoutée doit hériter des bornes de sa
+voisine) et 264 (« qui l'appelle ? »), vue depuis l'autre bout : ici la famille
+nouvelle n'a pas hérité des TRAITEMENTS EN AVAL de la famille dont elle est le
+jumeau.
+
+## Leçon 271 — une contrainte d'implémentation écrite comme une règle produit devient indélogeable (2026-08-15, routine temps réel, cycle 37)
+
+**Le défaut.** Le drain sautait l'accusé de remise pour tout lecteur sans compte,
+sur un `return` commenté « delivery receipts require a registered userId
+(participant lookup is keyed on Participant.userId, null for anonymous) ». La
+première moitié de la phrase est une RÈGLE — « il faut un compte pour mériter un
+accusé ». La seconde est un FAIT sur la requête d'alors — `row.userId === userId`
+ne matche aucune ligne pour ce lecteur. Le fait était vrai ; la règle qu'il
+justifiait était fausse, et l'auteur du message, lui, avait bel et bien droit à
+sa double coche.
+
+**Pourquoi c'était indélogeable.** Le `return` vivait un cran AU-DESSUS de la
+requête qu'il décrivait. Tant qu'il tenait, il n'y avait plus rien à corriger en
+aval : l'unité défectueuse n'était jamais atteinte, donc jamais exercée, donc
+jamais suspecte. *Un garde placé au-dessus du code qui le motive supprime la
+preuve de sa propre obsolescence* — corriger la requête n'aurait rien changé, et
+personne ne corrige une requête que rien n'appelle.
+
+**La règle.** *Une limite d'implémentation se commente à l'endroit qu'elle
+limite, jamais à l'entrée.* Écrite à l'entrée, elle se lit comme une décision
+produit et survit à la disparition de sa cause. Le test de relecture est
+mécanique : la phrase dit-elle ce que le code NE PEUT PAS faire, ou ce que le
+produit NE DOIT PAS faire ? Ici « lookup is keyed on Participant.userId » est du
+premier type — il décrit une ligne de `select`, pas un droit.
+
+**Le corollaire sur l'incertitude.** Le cycle 36 avait relevé ce gap et l'avait
+différé, jugeant que trancher la forme du payload « sans pouvoir exercer les
+décodeurs iOS/Android mélangerait un correctif prouvé avec un pari ». Le pari
+n'existait pas : le type partagé énonçait déjà `userId: string | null` avec le
+cas anonyme NOMMÉ, les deux décodeurs le déclaraient déjà optionnel, et le jumeau
+EN LIGNE de l'unité (`autoDeliverToOnlineRecipients`) émettait déjà cette forme
+en production. *Une incertitude sur un contrat se lève en LISANT le contrat et
+ses consommateurs, pas en attendant de pouvoir les exécuter.* Un doute qui n'a
+pas été confronté aux fichiers coûte un cycle entier — et, ici, il s'est
+retrouvé à protéger le défaut qu'il avait lui-même identifié.
+
+**Le discriminant qui interdit la sur-correction.** Le lecteur se reconnaît par
+`row.id` s'il est anonyme, par `row.userId` sinon — jamais par les deux. La forme
+tolérante qui vient naturellement (`row.id === key || row.userId === key`) passe
+tous les témoins sauf un, et fait accuser réception à un inscrit au nom d'un
+participant sans compte dont l'id coïncide. Ce témoin-là s'écrit ; il ne se
+déduit d'aucun autre. Même famille que la leçon 270 : *le cas qu'un prédicat
+tolérant absorbe en silence est celui qu'aucune assertion existante ne regarde.*
+
+## Leçon 272 — une variable qui sert deux rôles est juste tant que les deux coïncident, et fausse exactement là où ils divergent (2026-08-15, routine temps réel, cycle 38)
+
+**Le fait.** `broadcastReadStatusUpdate` recevait un `userId: string` et le
+servait à deux endroits : `payload.userId` (le champ du contrat, « `User.id` de
+l'acteur, `null` s'il est anonyme ») et `ROOMS.user(userId)` (la clé de la room
+personnelle, qui vaut `userId ?? Participant.id`). Pour un acteur AVEC compte,
+les deux rôles veulent la MÊME valeur. Pour un invité de lien, ils en veulent
+deux différentes — `null` d'un côté, `Participant.id` de l'autre. Une seule
+variable ne pouvait pas satisfaire les deux, et c'est la forme ROOM qui gagnait :
+le champ du contrat partait en portant un `Participant.id`.
+
+**Pourquoi c'est invisible.** La coïncidence couvre la population majoritaire.
+Tout test écrit avec un acteur enregistré passe, quelle que soit la variable
+choisie — les deux rôles rendent le même littéral. Le défaut n'a de témoin que
+dans la population où les rôles divergent, et c'est précisément la population
+qu'on pense à tester en dernier. *Une conflation ne se voit pas dans le cas
+général : elle se voit dans le cas où les deux sens du mot cessent de désigner
+la même chose.*
+
+**Le signal à chercher.** Pas « ce champ a-t-il la bonne valeur ? » mais
+**« combien de questions différentes cette variable répond-elle ? »**. Ici :
+« qui est l'acteur ? » et « à quelle room dois-je écrire ? ». Deux questions,
+un identifiant — et le nom `userId` ne trahissait rien parce qu'il est juste
+pour l'une des deux. Le test de relecture : énumérer les usages d'un paramètre
+et demander, pour chacun, quelle valeur il voudrait sur la population marginale.
+Deux réponses différentes = deux paramètres.
+
+**Le correctif structurel, pas cosmétique.** Renommer `userId` en
+`actorUserId: string | null` n'est pas de l'habillage : le type interdit
+désormais de fournir `authContext.userId` par recopie, et le nom dit lequel des
+deux rôles il sert. La clé de room se dérive à l'INTÉRIEUR de l'unité
+(`actorUserId ?? participantId`), là où la règle vit déjà pour tout le monde
+(`participantUserRoomTargets`). Un correctif qui se serait contenté de nuller le
+champ au site d'appel aurait laissé la signature capable de reproduire la faute.
+
+**La garde qui doit s'écrire en même temps.** « Ce champ doit être nullable »
+mène naturellement à nuller la variable — donc aussi la clé de room, donc à
+émettre vers `user:null`, donc à coller le badge de tous les invités pour
+toujours. *Quand un correctif consiste à nuller une valeur partagée, le témoin
+qui interdit au `null` de se propager au SECOND rôle vaut autant que celui qui
+l'exige sur le premier.* Il ne se déduit d'aucun autre, et il est vert avant
+comme après — ce qui le rend facile à ne pas écrire.
+
+**Le corollaire documentaire.** La ligne de `services/gateway/CLAUDE.md` qui
+décrivait ce champ (« `user.id or sessionToken` ») était fausse sur les deux
+moitiés, et c'est elle qu'aurait lue quiconque cherchait à savoir ce que
+`authContext.userId` porte. *Une conflation d'identités survit dans le code
+aussi longtemps que la doc qui la décrit reste approximative* — corriger l'une
+sans l'autre garantit le retour de la faute au prochain appelant.
+
+---
+
+## Leçon 273 — deux sessions de la même routine peuvent instruire le même défaut en parallèle (2026-08-15, routine temps réel, cycle 39)
+
+**Le constat.** La piste laissée en clôture du cycle 37 a été reprise par DEUX
+sessions, à une heure d'intervalle, sans que ni l'une ni l'autre ne le sache.
+Même défaut, mêmes 5 témoins rouges, mêmes gardes anti-sur-correction, et jusqu'au
+même nom de fichier d'audit (`…-cycle38.md`). L'une a mergé (PR #3052) ; l'autre
+a ouvert sa PR une heure trop tard, sur un défaut déjà réparé.
+
+**La cause.** Une piste écrite dans `tasks/` est lisible par tous et
+réservable par personne. La session B a lu `main` au DÉMARRAGE — la branche était
+alors identique à `origin/main` — puis a travaillé pendant une heure sans le
+relire. Entre les deux, le correctif de la session A est entré.
+
+**La règle qui en sort.** `git fetch` au démarrage ne dit rien sur un cycle qui
+dure plus longtemps qu'un cycle voisin. **Refaire la lecture AVANT d'ouvrir la
+PR, et sur les FICHIERS visés, pas seulement sur le graphe des commits** — un
+`git log origin/main -- <les 2 fichiers que je modifie>` aurait rendu le doublon
+visible en une commande, là où `git rev-list --count` ne montrait que « 2 commits
+d'avance » d'apparence anodine (c'étaient des commits Android).
+
+**Ce qu'il ne faut PAS en conclure.** Que le travail était perdu. Le correctif
+oui — mais l'instruire une seconde fois de façon indépendante a produit quelque
+chose que la première passe n'avait pas : le **bout resté ouvert**. En rendant
+`payload.userId` nul pour un invité, le correctif A a rendu inapplicable, pour
+cette population, le contrat qui disait comment revendiquer `lastReadAt` /
+`unreadCount`. Une relecture qui cherche « ce défaut est-il réparé ? » répond oui
+et s'arrête ; une seconde instruction complète, elle, arrive sur ce bord et le
+voit. *Un doublon n'est stérile que si on le jette en entier.*
+
+**Le corollaire sur le sunk cost, et il compte autant.** Ce cycle avait produit
+une unité nommée, testée, défendable — `resolveBroadcastActor` — pour une règle
+que `main` écrit désormais à la main sur 4 sites, ce que le README du dépôt
+interdit pour la règle SŒUR. Elle a quand même été RETIRÉE : la session A avait
+typé le paramètre `actorUserId: string | null`, et **ce type ferme le trou que
+l'unité aurait fermé**. Extraire un ternaire d'une ligne de code mergé une heure
+plus tôt, commenté à chaque site, c'est du brassage pour un gain déjà acquis
+autrement. *Une duplication n'est pas un défaut en soi : elle l'est quand elle
+laisse passer l'erreur qu'elle répète.* Livrer le travail parce qu'il existe est
+la mauvaise raison de le livrer.
+
+## Leçon 274 — une règle peut avoir tous ses consommateurs et aucun déclencheur, et c'est la forme la plus difficile à voir (2026-08-15, routine temps réel, cycle 40)
+
+**Le fait.** Le masquage personnel (« supprimer pour moi », « effacer
+l'historique ») était appliqué sur les quatre surfaces qui LISENT, y compris la
+plus récente et la plus subtile — le fan-out temps réel de l'aperçu de ligne de
+liste, avec son module dédié, ses tests, et un en-tête qui décrit exactement le
+défaut qu'il corrige. Il manquait la seule chose qu'aucune relecture du module ne
+peut révéler : **le geste qui crée le masquage ne l'appelait pas**. Ses trois
+appelants étaient l'édition, la suppression pour tous, la traduction qui
+atterrit. La ligne de liste se corrigeait donc à toute mutation SAUF à celle qui
+la rend fausse.
+
+**Pourquoi c'est invisible.** Une règle sans implémentation se voit (il n'y a
+rien à lire). Une règle avec une implémentation FAUSSE se voit (un test la
+prend). Une règle juste, testée, soignée, et branchée à trois appelants sur
+quatre ne se voit pas : tout audit qui demande « le masquage personnel est-il
+appliqué à l'aperçu ? » tombe sur le module, lit son en-tête, et conclut oui.
+*La question qui démasque n'est jamais « cette règle est-elle juste ? » mais
+« quels gestes la déclenchent — et lesquels devraient ? ».* Même famille que la
+leçon du canal d'annonces (`checkPermissions` juste, testé, et sans un seul
+appelant de production), à ceci près qu'ici il y avait des appelants : juste pas
+celui-là. La variante partielle est plus dure que la variante totale, parce
+qu'un `grep` des appelants rend une liste non vide.
+
+**Le signal à chercher.** Énumérer les ÉCRIVAINS d'un état, pas les lecteurs.
+Ici : quatre routes écrivent une des deux tables de masquage, zéro
+rafraîchissait la ligne. Le tableau écrivains × obligations est ce qui rend le
+trou visible ; la lecture du module ne le rendra jamais.
+
+**Le double de test qui garantissait le silence.** Les deux suites couvrant ces
+routes déclaraient un prisma incomplet (`participant.findMany` absent). Or
+l'émetteur d'aperçu est un canal best-effort qui AVALE ses propres pannes : un
+double incomplet le rend muet, et un témoin écrit dessus reste vert sur une
+version qui n'appelle rien. *Face à un collaborateur qui avale ses erreurs, un
+double incomplet ne distingue pas « n'a pas été appelé » de « a échoué en
+silence » — et c'est très exactement la distinction que le témoin existe pour
+faire.* Compléter le double fait partie du correctif, pas de l'hygiène.
+
+**La garde d'audience qui doit s'écrire en même temps.** Rafraîchir la ligne au
+moment du masquage tente le fan-out complet — c'est ce que fait déjà la fonction
+appelée. Mais un masquage personnel ne change la ligne QUE de son auteur : le
+dernier message global n'a pas bougé d'un octet, donc chaque autre participant
+recevrait un payload identique à l'octet près, un événement chacun, par geste.
+La borne d'audience n'est pas une optimisation ajoutée après coup ; elle est ce
+qui distingue « corriger une ligne » de « re-diffuser une conversation ».
+
+**Le corollaire, et la moitié qu'on ne livre pas.** Un correctif serveur peut
+être juste et rester INERTE chez un client. Ici iOS jette tout aperçu dont le
+`lastMessageAt` recule (garde monotone conçue contre le désordre) — ce qui frappe
+déjà, avant ce cycle, la suppression POUR TOUS du dernier message. Deux réflexes
+à refuser : renoncer au correctif serveur (sans l'événement, même un client qui
+l'accepterait n'aurait rien à appliquer), et retirer `lastMessageAt` du payload
+pour passer sous la garde (on remplacerait un aperçu périmé par un TRI périmé).
+*Quand la moitié client n'est pas livrable depuis l'environnement courant, la
+livrer quand même par un contournement de payload est le pire des trois choix :
+il rend le symptôme invisible et laisse la cause côté client, où plus personne ne
+la cherchera.*
+
+## Leçon 275 — une règle de confidentialité écrite dans un commentaire ne s'applique qu'aux branches où quelqu'un a pensé à la relire (2026-08-16, routine temps réel, cycle 41)
+
+**Le fait.** `broadcastReadStatusUpdate` construit son payload en deux branches.
+Sur `type: 'received'`, un commentaire de six lignes justifie l'ABSENCE de
+`lastReadAt`/`unreadCount`, en partie parce qu'ils « would needlessly disclose
+the actor's backlog to every peer in the room ». Sur `type: 'read'`, quinze
+lignes plus bas, les deux champs partent dans l'éventail — vers toute la
+conversation. La règle n'était ni absente, ni contestée, ni oubliée : elle était
+**écrite, admise, et appliquée à une seule des deux branches**.
+
+**Pourquoi ça survit.** Un commentaire qui justifie une absence est attaché au
+CAS qui l'a motivé, jamais à la propriété qu'il énonce. Celui-ci décrivait
+correctement pourquoi un `received` n'a pas ces champs ; personne n'a eu à
+relire la phrase en se demandant de quoi d'autre elle était vraie. Le
+raisonnement ne se propage pas tout seul d'une branche à sa sœur — et il se
+propage d'autant moins que le fichier donne l'impression d'avoir déjà tranché la
+question.
+
+**La règle qui en sort.** Quand un commentaire justifie qu'un champ ne parte
+PAS, le lire comme une propriété et non comme une note locale : *de quels autres
+chemins cette phrase est-elle vraie ?* Si la réponse est « du chemin d'à côté »,
+le commentaire ne documente pas une décision, il documente un défaut à moitié
+corrigé.
+
+**Le corollaire d'adressage, plus général que ce cycle.** Un champ scopé sur une
+personne se vérifie à l'**ADRESSAGE**, pas seulement à la lecture. Ici les trois
+clients étaient irréprochables — le seul qui lit ces champs les conditionne à
+« l'acteur, c'est moi » — et c'est précisément ce qui a laissé la fuite vivre :
+*puisque le client sait l'ignorer, personne ne s'est demandé pourquoi il le
+recevait.* « Le consommateur filtre » répond à « est-ce que ça casse ? », jamais
+à « est-ce que ça part ? ». Une donnée qui traverse le réseau vers quelqu'un qui
+va la jeter n'est pas neutre : c'est une divulgation dont le seul effet est
+d'être une divulgation.
+
+**Le piège technique à ne pas rejouer.** Retirer le destinataire privilégié de
+la liste de rooms ne le retire PAS de la diffusion : la room de conversation est
+chaînée à côté et le tient dès qu'il regarde le fil. Sans `.except()`, servir
+deux payloads à deux audiences en livre deux au même socket — et la garantie
+« une copie par socket » tombe exactement sur l'événement où les deux copies
+diffèrent, donc là où elle protégeait quelque chose. *Deux audiences pour un
+événement, c'est une exclusion, pas deux emits.*
+
+**Ce qui a été écarté, et pourquoi ça compte.** Un canal existait déjà pour
+porter ces champs à la bonne room (`conversation:unread-updated`, qui va à
+l'acteur seul et porte déjà `unreadCount`). Il a été écarté parce qu'il imposait
+une migration iOS pendant laquelle la synchro multi-appareils aurait régressé.
+*Une correction de confidentialité qui casse une fonctionnalité en attendant
+trois releases clientes n'est pas une correction, c'est un échange* — et un
+échange se propose, il ne se décide pas dans un cycle de routine.
+
+**§ coordination — ce que la leçon 273 ne couvrait pas.** Elle prescrivait de
+relire `main` sur les **fichiers visés** avant d'ouvrir la PR. Appliquée ici, elle
+a fonctionné : aucune collision de code, les deux sessions simultanées touchaient
+des fichiers disjoints. Elle a pourtant laissé passer une collision — sur les
+**compteurs partagés** : numéro de cycle et numéro de leçon, qui n'appartiennent
+à aucun fichier visé et que rien ne réserve. La session voisine avait elle-même
+déjà renuméroté 39 → 40 pour cette raison exacte, une heure plus tôt. *Un
+compteur global est un fichier visé par tout le monde* : la relecture d'avant-PR
+doit inclure `tasks/lessons.md` et le glob des journaux d'audit, même quand le
+correctif n'y touche pas — sinon le numéro est choisi au démarrage et défendu
+jusqu'au conflit.
+## Leçon 276 — un plafond qu'on lève réveille chaque scalaire qui présumait qu'il n'y avait qu'un seul pair (cycle 36, routine appels, Vague 129)
 
 **Le défaut.** `useRemoteCallAlerts` recevait `call:screen-capture-alert`
 — un événement PAR PARTICIPANT, avec un `participantId` explicite sur son

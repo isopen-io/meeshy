@@ -256,19 +256,35 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_lastError_surfacesAsToast_andClosesTranscriptPanel() throws {
-        // A start failure (permission denied, no on-device recognizer for the
-        // user's language — never falls back to Apple's server-side
-        // recognizer, privacy decision — or an AVAudioEngine failure) used to
-        // leave the transcript panel open and silently empty, with zero user
-        // feedback — user-reported 2026-07-11 "on dirait que la transcription
-        // ne fonctionne pas" (observed on Mac).
+    /// A start failure (permission denied, no on-device recognizer for the
+    /// user's language — never falls back to Apple's server-side recognizer,
+    /// privacy decision — or an AVAudioEngine failure) used to leave the
+    /// transcript panel open and silently empty, with zero user feedback —
+    /// user-reported 2026-07-11 "on dirait que la transcription ne fonctionne
+    /// pas" (observed on Mac). Le toast reste la réponse à ce signalement.
+    ///
+    /// Ce que le spec 2026-08-13 (« Cycle de vie du panneau », itération 2) a
+    /// CHANGÉ : l'échec du moteur LOCAL ne ferme plus le panneau. La réception
+    /// des segments du pair est désormais gâtée sur la visibilité du panneau
+    /// (`isShowingOverlay`, gardes dans `CallManager`) — le fermer ici
+    /// couperait aussi le flux du correspondant, alors que seule MA
+    /// transcription a échoué. Le panneau reste donc ouvert en RÉCEPTION
+    /// SEULE. Ce garde protège maintenant les deux moitiés de cette décision :
+    /// le toast part, le panneau ne se ferme pas — et il reste FERMABLE, via
+    /// la branche dédiée d'`advanceCaptionsMode` (sans elle, le cycle
+    /// .off→.translated relancerait le démarrage en boucle et le panneau
+    /// serait infermable).
+    func test_lastError_surfacesAsToast_andKeepsTranscriptPanelOpenForReceiveOnly() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
         guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
             XCTFail("CallView must observe transcriptionService.lastError")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 500, limitedBy: view.endIndex) ?? view.endIndex
+        // Borné à l'accolade fermante du handler (indentation 8) plutôt qu'à
+        // une fenêtre d'octets : l'assertion négative ci-dessous n'a de sens
+        // que si la découpe s'arrête vraiment à la fin du closure.
+        let end = view.range(of: "\n        }", range: range.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))"),
@@ -276,9 +292,31 @@ final class CallHangupFastPathTests: XCTestCase {
             "(FeedbackToastManager, not NotificationToastManager — this is feedback on a " +
             "user-initiated tap, not a network-originated event)."
         )
+        XCTAssertFalse(
+            body.contains("showTranscript = false") || body.contains("isShowingOverlay = false"),
+            "A failed LOCAL engine must NOT close the transcript panel: reception of the " +
+            "peer's segments is gated on the panel being visible (spec 2026-08-13), so " +
+            "closing it here would also cut the interlocutor's stream — the panel stays " +
+            "open in receive-only mode."
+        )
+
+        // Contrepartie indissociable : le panneau resté ouvert doit rester
+        // fermable. captionsMode est .off (isTranscribing == false) alors que
+        // le panneau est visible — sans cette branche, le cycle repartirait
+        // sur .translated et retenterait le démarrage indéfiniment.
+        guard let cycleRange = view.range(of: "private func advanceCaptionsMode() {") else {
+            XCTFail("CallView must define advanceCaptionsMode()")
+            return
+        }
+        let cycleEnd = view.range(of: "\n    }", range: cycleRange.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
+        let cycleBody = String(view[cycleRange.lowerBound ..< cycleEnd])
         XCTAssertTrue(
-            body.contains("showTranscript = false") && body.contains("transcriptionService.isShowingOverlay = false"),
-            "A failed start must close the transcript panel, not leave it open and empty."
+            cycleBody.contains("if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {"),
+            "advanceCaptionsMode must carry the receive-only escape hatch — panel open while " +
+            "captionsMode is .off after a start failure: the next tap CLOSES it (unsubscribing " +
+            "from reception) instead of re-entering the start loop, which would make the panel " +
+            "impossible to close."
         )
     }
 
@@ -309,14 +347,24 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
+    /// Le corps de `transcriptSegmentRow(_:)`, borné à son accolade fermante
+    /// (indentation 4) au lieu d'une fenêtre de 2000 caractères. Le spec
+    /// 2026-08-13 a allongé la ligne de journal (nom + heure + badge de
+    /// langue) et le corps dépasse désormais cette fenêtre : les gardes
+    /// mesuraient une portée qui n'était plus celle de la fonction.
+    private func transcriptSegmentRowBody(_ view: String) -> String? {
+        guard let decl = view.range(of: "func transcriptSegmentRow(") else { return nil }
+        let end = view.range(of: "\n    }", range: decl.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
+        return String(view[decl.lowerBound ..< end])
+    }
+
     func test_transcriptSegmentRow_usesPrimarySecondaryColorsPerSpeaker() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("MeeshyColors.indigo400"),
             "transcriptSegmentRow must color the local speaker (\"Moi\") with MeeshyColors.indigo400 " +
@@ -329,18 +377,31 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
+    /// Le nom du locuteur reste du TEXTE VISIBLE, pas seulement une pastille
+    /// colorée (demande utilisateur 2026-07-11) ni seulement un label
+    /// VoiceOver. Le spec 2026-08-13 a fusionné nom et heure dans une seule
+    /// ligne de journal `displayName (heure)` : `Text(speakerName)` est devenu
+    /// `Text("\(speakerName) (\(timeLabel))")`. La garantie tient toujours,
+    /// l'expression a changé — le garde suit l'expression nouvelle.
     func test_transcriptSegmentRow_showsSpeakerNameAsVisibleText() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("Text(speakerName)"),
-            "transcriptSegmentRow must render the speaker's name as its own visible Text, " +
+            body.contains("Text(\"\\(speakerName)"),
+            "transcriptSegmentRow must render the speaker's name inside a visible Text, " +
             "not just a colored dot — user-requested 2026-07-11."
+        )
+        // Discriminant : `speakerName` est aussi interpolé dans
+        // `.accessibilityLabel`. Sans cette assertion, un rendu qui
+        // n'exposerait le nom qu'à VoiceOver satisferait le garde ci-dessus si
+        // l'ordre des deux occurrences venait à changer.
+        XCTAssertTrue(
+            body.contains(".accessibilityLabel(\"\\(speakerName)"),
+            "the combined row must ALSO announce the speaker to VoiceOver — visible text and " +
+            "accessibility label are two distinct requirements, neither substitutes for the other."
         )
     }
 
@@ -350,18 +411,47 @@ final class CallHangupFastPathTests: XCTestCase {
             XCTFail("CallView must define advanceCaptionsMode()")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 900, limitedBy: view.endIndex) ?? view.endIndex
+        // Borné à l'accolade fermante de la fonction, commentaires retirés.
+        // La fenêtre de 900 caractères qu'utilisait ce garde a été mangée par
+        // le commentaire de douze lignes qui documente la branche d'échappement
+        // « réception seule » (spec 2026-08-13) : le `switch` tombait hors
+        // fenêtre alors qu'il n'avait pas bougé.
+        let end = view.range(of: "\n    }", range: range.upperBound ..< view.endIndex)?.upperBound
+            ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+
+        guard
+            let translatedRange = body.range(of: "case .translated:"),
+            let originalRange = body.range(of: "case .original:"),
+            let offRange = body.range(of: "case .off:")
+        else {
+            XCTFail("advanceCaptionsMode must switch over the 3 captions modes")
+            return
+        }
+        // Assertions PAR BRANCHE : chercher les jetons dans le corps entier
+        // laisserait la branche .off — qui appelle elle aussi
+        // toggleTranscription() — satisfaire le garde de la branche
+        // .translated.
+        let translatedBranch = String(body[translatedRange.upperBound ..< originalRange.lowerBound])
+        let originalBranch = String(body[originalRange.upperBound ..< offRange.lowerBound])
+
         XCTAssertTrue(
-            body.contains("case .translated:") && body.contains("callManager.toggleTranscription()"),
+            translatedBranch.contains("callManager.toggleTranscription()"),
             "advanceCaptionsMode's .translated branch must call callManager.toggleTranscription() " +
             "— this is the entry point that actually starts transcription."
         )
         XCTAssertTrue(
-            body.contains("case .original:") && body.contains("showOriginalText = true"),
-            "advanceCaptionsMode's .original branch must flip showOriginalText without " +
-            "calling toggleTranscription() again — transcription keeps running, only the " +
-            "display flag changes."
+            originalBranch.contains("showOriginalText = true"),
+            "advanceCaptionsMode's .original branch must flip showOriginalText."
+        )
+        XCTAssertFalse(
+            originalBranch.contains("toggleTranscription"),
+            "advanceCaptionsMode's .original branch must NOT call toggleTranscription() again — " +
+            "transcription keeps running, only the display flag changes; toggling here would " +
+            "stop the engine one third of the way round the cycle."
         )
     }
 
@@ -415,27 +505,47 @@ final class CallHangupFastPathTests: XCTestCase {
         _ = range
     }
 
-    func test_transcriptSegmentRow_showsElapsedTimeSinceCallStart() throws {
-        // User-requested 2026-07-11: each line carries a small "since call
-        // start" timestamp, derived from capturedAt (wall clock) against
-        // callManager.callStartDate — never from startTime/endTime (those are
-        // ASR-buffer-relative, see TranscriptionSegment.capturedAt).
+    /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
+    /// — JAMAIS de `startTime`/`endTime`, qui sont relatifs au buffer ASR
+    /// (voir le doc comment de `TranscriptionSegment.capturedAt`). C'est la
+    /// moitié portante de la demande utilisateur 2026-07-11 et elle est
+    /// intacte.
+    ///
+    /// Ce qui a changé : l'heure affichée n'est plus l'ÉCOULÉ depuis le début
+    /// de l'appel (`capturedAt.timeIntervalSince(callManager.callStartDate)`
+    /// mis en forme par `CallManager.formatDuration`) mais l'HORLOGE MURALE de
+    /// capture — spec 2026-08-13, tableau « Composants modifiés » : « ligne
+    /// `displayName (heure)` (horloge murale, plus l'écoulé) », objectif §1
+    /// « ordonnées par l'horloge murale de CAPTURE », décision §3
+    /// « `capturedAtMs` est la clé d'ordre du journal ». Un écoulé n'a plus de
+    /// sens dans un journal fusionné entre appareils : `callStartDate` est
+    /// local à CE device (il est même nil avant l'établissement média), alors
+    /// que `capturedAt` est estampillé par le device du LOCUTEUR et transporté
+    /// par le wire — c'est la seule référence commune aux deux côtés de
+    /// l'appel.
+    func test_transcriptSegmentRow_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "func transcriptSegmentRow(") else {
+        guard let body = transcriptSegmentRowBody(view) else {
             XCTFail("CallView must define transcriptSegmentRow(_:)")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 2000, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("segment.capturedAt.timeIntervalSince(callManager.callStartDate"),
-            "transcriptSegmentRow must compute elapsed time from segment.capturedAt against " +
-            "callManager.callStartDate, not from the ASR-relative startTime/endTime."
+            body.contains("let timeLabel = segment.capturedAt.formatted("),
+            "transcriptSegmentRow must derive its timestamp from segment.capturedAt — the wall " +
+            "clock stamped by the SPEAKER's device and carried over the wire, the only reference " +
+            "both sides of the call share (callStartDate is local to this device, and nil before " +
+            "media is established)."
         )
         XCTAssertTrue(
-            body.contains("CallManager.formatDuration"),
-            "transcriptSegmentRow must reuse CallManager.formatDuration for the elapsed-time label " +
-            "instead of a new formatter."
+            body.contains("(\\(timeLabel))"),
+            "the resolved timeLabel must actually reach the rendered journal line — computing it " +
+            "and not displaying it would satisfy the assertion above while showing nothing."
+        )
+        XCTAssertFalse(
+            body.contains("segment.startTime") || body.contains("segment.endTime"),
+            "transcriptSegmentRow must NEVER timestamp a line from startTime/endTime: those are " +
+            "ASR-buffer-relative (see TranscriptionSegment.capturedAt's own doc comment), so they " +
+            "drift with every recognizer restart and mean nothing to the peer."
         )
     }
 
@@ -454,19 +564,62 @@ final class CallHangupFastPathTests: XCTestCase {
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
 
-    func test_showTranscript_autoRevealsOnFirstPassiveSegment_notOnlyLocalToggle() throws {
+    /// Transparence du consentement : un appareil ne doit JAMAIS accumuler en
+    /// silence les paroles de l'autre participant sans rien afficher.
+    ///
+    /// Cette garantie était d'abord tenue par une AUTO-RÉVÉLATION du panneau
+    /// au premier segment reçu (spec 2026-07-11 §4). Le spec 2026-08-13
+    /// (« Cycle de vie du panneau », itération 2 §1) l'a RETIRÉE au profit
+    /// d'un mécanisme plus fort, à la source : la réception elle-même est liée
+    /// au panneau — « Panneau caché ⇒ désabonnement des canaux de réception ET
+    /// d'émission […] L'auto-révélation du panneau au premier segment reçu
+    /// (spec 2026-07-11 §4) est RETIRÉE — panneau caché ⇒ plus aucun segment
+    /// ne peut arriver, la règle n'a plus d'objet. »
+    ///
+    /// Le garde suit la garantie, pas sa vieille forme : il vérifie désormais
+    /// que les DEUX points d'entrée de réception de `CallManager` (le sink
+    /// socket `callTranslatedSegmentReceived` et le routage data channel
+    /// `.transcriptEntry`) refusent tout segment panneau fermé. Un seul des
+    /// deux gardé laisserait le trou ouvert sur l'autre transport.
+    func test_passiveSegments_neverAccumulateWhileTranscriptPanelHidden() throws {
+        // L'ancienne forme ne doit pas revenir sans que ce garde soit revu :
+        // ré-ouvrir le panneau tout seul, alors que rien ne peut plus arriver
+        // panneau fermé, ne ferait qu'afficher un panneau vide.
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.segments.isEmpty)") else {
-            XCTFail("CallView must observe transcriptionService.segments.isEmpty to auto-reveal the panel")
+        XCTAssertFalse(
+            view.contains("adaptiveOnChange(of: transcriptionService.segments.isEmpty)"),
+            "The 2026-07-11 auto-reveal observer was retired by spec 2026-08-13 — reception is " +
+            "now gated on the panel being visible, so nothing can arrive while it is hidden."
+        )
+
+        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
+
+        guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
+            XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
             return
         }
-        let end = view.index(range.lowerBound, offsetBy: 400, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound..<end])
+        let socketEnd = manager.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< manager.endIndex)?
+            .upperBound ?? manager.endIndex
+        let socketSink = String(manager[socketRange.lowerBound ..< socketEnd])
         XCTAssertTrue(
-            body.contains("showTranscript = true"),
-            "The panel must become visible the first time segments arrive, even if the local " +
-            "captionsCycleButton was never tapped — closes the consent-transparency gap where a " +
-            "device silently accumulates the other participant's words with nothing shown."
+            socketSink.contains(gate),
+            "The relayed (server) reception path must drop segments while the transcript panel " +
+            "is hidden — otherwise the device silently accumulates the other participant's " +
+            "words with nothing shown, the exact consent-transparency gap this guard exists for."
+        )
+
+        guard let channelRange = manager.range(of: "case .transcriptEntry(let entry):") else {
+            XCTFail("CallManager must route the data channel's .transcriptEntry case")
+            return
+        }
+        let channelEnd = manager.range(of: "case .ignored:", range: channelRange.upperBound ..< manager.endIndex)?
+            .lowerBound ?? manager.endIndex
+        let channelRoute = String(manager[channelRange.lowerBound ..< channelEnd])
+        XCTAssertTrue(
+            channelRoute.contains(gate),
+            "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
+            "sink — gating only one transport leaves the peer's words flowing in over the other."
         )
     }
 }

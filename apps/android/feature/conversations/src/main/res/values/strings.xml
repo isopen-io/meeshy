@@ -41,6 +41,8 @@
     <string name="conversations_action_unpin">Unpin</string>
     <string name="conversations_action_mute">Mute</string>
     <string name="conversations_action_unmute">Unmute</string>
+    <string name="conversations_action_mentions_only">Mentions only</string>
+    <string name="conversations_action_all_notifications">All notifications</string>
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_unarchive">Unarchive</string>
     <string name="conversations_action_mark_read">Mark as read</string>
@@ -49,6 +51,15 @@
     <string name="conversations_category_search_hint">Search or create a category…</string>
     <string name="conversations_action_create_category">Create \"%1$s\"</string>
     <string name="conversations_action_discard_draft">Discard draft</string>
+    <string name="conversations_action_leave">Leave conversation</string>
+    <string name="conversations_leave_confirm_title">Leave conversation?</string>
+    <string name="conversations_leave_confirm_message">You will leave \"%1$s\". You won\'t receive new messages from this conversation.</string>
+    <string name="conversations_leave_confirm_button">Leave</string>
+    <string name="conversations_leave_cancel_button">Cancel</string>
+    <string name="conversations_action_delete_for_me">Delete for me</string>
+    <string name="conversations_delete_for_me_confirm_title">Delete conversation?</string>
+    <string name="conversations_delete_for_me_confirm_message">\"%1$s\" will be permanently deleted from your devices only. Other participants keep it.</string>
+    <string name="conversations_delete_for_me_confirm_button">Delete</string>
     <string name="conversations_action_more">More actions</string>
     <string name="conversations_badge_pinned">Pinned</string>
     <string name="conversations_badge_muted">Muted</string>

@@ -134,6 +134,9 @@ function makeSocketMocks() {
   const emitMock = jest.fn();
   const ioChain: any = { emit: emitMock };
   ioChain.to = jest.fn(() => ioChain);
+  // `except` clot la chaine : la diffusion d'un accuse de LECTURE en retire
+  // l'acteur, qui recoit a part une version enrichie de son arriere.
+  ioChain.except = jest.fn(() => ioChain);
   const io = { to: jest.fn(() => ioChain) };
   const socketIOHandler = { getManager: () => ({ getIO: () => io }) };
   return { emitMock, ioChain, io, socketIOHandler };

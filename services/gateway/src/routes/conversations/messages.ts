@@ -353,6 +353,26 @@ export function registerMessagesRoutes(
       if (!socketIOManager) return;
       const io = socketIOManager.getIO();
 
+      // DEUX identités, deux rôles — et une seule variable les servait.
+      //
+      // `actorUserId` est le champ du CONTRAT : « `User.id` de l'acteur, ou
+      // `null` quand c'est un participant ANONYME », dans ces termes aux trois
+      // bouts de la chaîne (`ReadStatusUpdatedEventData` dans packages/shared,
+      // `ReadStatusUpdateEvent` sur iOS, `ReadStatusUpdatedEvent` sur Android).
+      // Un invité de lien n'a pas de ligne `User`, et `authContext.userId`
+      // porte alors son `Participant.id` (`middleware/auth.ts`).
+      //
+      // `personalRoomKey` est la CLÉ DE ROOM, qui vaut `userId ?? id` — même
+      // règle que `participantUserRoomTargets`, parce qu'un participant sans
+      // compte a bien une room personnelle et qu'`AuthHandler` la lui fait
+      // rejoindre sous son `Participant.id`.
+      //
+      // Les deux valaient `userId` brut, donc c'est la forme ROOM qui gagnait :
+      // le champ partait en portant un `Participant.id` pendant que les
+      // émetteurs SOCKET du même événement émettaient déjà `null`.
+      const actorUserId = isAnonymous ? null : userId;
+      const personalRoomKey = actorUserId ?? participantId;
+
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
@@ -389,7 +409,7 @@ export function registerMessagesRoutes(
       // would wrongly clear the reader's badge across ALL their devices.
       const emitUnreadUpdate = () => {
         if (!actorReadSync) return;
-        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount: actorReadSync.unreadCount,
         });
@@ -416,23 +436,42 @@ export function registerMessagesRoutes(
         })
       ]);
 
-      const payload: ReadStatusUpdatedEventData = {
+      // Ce que TOUTE la conversation peut savoir — jumeau du découpage posé
+      // dans `broadcastReadStatusUpdate` (message-read-status.ts) : le résumé
+      // des coches décrit la conversation, `lastReadAt` et `unreadCount`
+      // décrivent l'ACTEUR. Les seconds n'empruntent plus l'éventail : ils
+      // disent de combien l'acteur est en retard sur ce fil, et la préférence
+      // d'accusés de lecture qui autorise cette diffusion consent à « j'ai lu
+      // ton message », pas à la publication d'un arriéré.
+      const peerPayload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId,
-        userId,
+        userId: actorUserId,
         type,
         updatedAt: new Date(),
-        summary,
-        ...(actorReadSync ?? {})
+        summary
       };
 
+      // L'acteur n'est retiré de l'éventail que lorsqu'il a une version à lui à
+      // recevoir : sur un 'received', les deux payloads seraient identiques et
+      // l'exclure lui coûterait l'événement.
       emitToConversationParticipants({
         io,
         conversationId,
         participants: activeParticipants,
         events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-        payload
+        payload: peerPayload,
+        exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null
       });
+
+      // La version de l'acteur, dans sa seule room personnelle — celle que
+      // toutes ses sessions ont rejointe à l'authentification, compte ou pas.
+      if (actorReadSync) {
+        const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
+        const actorRoom = io.to(ROOMS.user(personalRoomKey));
+        actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+        actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+      }
 
       emitUnreadUpdate();
     } catch (error) {

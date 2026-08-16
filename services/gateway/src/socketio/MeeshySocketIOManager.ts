@@ -81,6 +81,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
@@ -578,15 +579,23 @@ export class MeeshySocketIOManager {
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
       userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
 
-      // Delivery receipts require a registered userId (participant lookup is
-      // keyed on Participant.userId, null for anonymous) — skip for anonymous.
-      if (isAnonymous) return;
-
       // Emit delivery receipts to senders so their checkmarks advance from
       // "sent" (single tick) to "delivered" (double tick) as soon as the
       // messages land on the recipient's device — matching WhatsApp / iMessage
       // behaviour instead of waiting for the user to open the conversation.
-      this._emitDeliveryForDrainedMessages(userId, pending).catch(err => {
+      //
+      // `isAnonymous` voyage AVEC la clé, il n'est pas redécouvert en aval :
+      // c'est lui qui dit sous quelle colonne retrouver le lecteur (`userId`
+      // pour un inscrit, `Participant.id` pour un invité de lien). Un `return`
+      // se tenait ici pour les lecteurs sans compte, sur la justification
+      // « participant lookup is keyed on Participant.userId, null for
+      // anonymous » — vraie de la REQUÊTE d'alors, jamais du droit de l'auteur
+      // à voir sa coche avancer. Le lecteur sans compte est la population
+      // DOMINANTE d'une conversation ouverte par lien de partage : l'auteur y
+      // restait sur un tic unique jusqu'à ce que quelqu'un OUVRE la
+      // conversation, c'est-à-dire exactement l'attente que cette unité existe
+      // pour supprimer.
+      this._emitDeliveryForDrainedMessages(userId, pending, isAnonymous).catch(err => {
         logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
       });
     } catch (error) {
@@ -599,36 +608,60 @@ export class MeeshySocketIOManager {
    * messages as "received" on their behalf and broadcast `read-status:updated`
    * to the conversation rooms so senders see the delivery checkmark advance.
    *
-   * Respects the user's `showReadReceipts` privacy preference.
+   * Respects the reader's `showReadReceipts` privacy preference.
    * Batches the participant lookup across all affected conversations in a
    * single Prisma query to minimise round-trips on the reconnect path.
+   *
+   * `readerKey` porte la CLÉ DE FILE, pas un `User.id` : c'est `userId` pour un
+   * inscrit et `Participant.id` pour un invité de lien partagé — la convention
+   * exacte qu'`enqueueForOfflineParticipants` applique en enfilant
+   * (`p.userId ?? p.id`), et que `_dropEndedMemberships` lit déjà sous les deux
+   * colonnes. Le paramètre porte ce nom-là parce que le supposer utilisateur
+   * est PRÉCISÉMENT ce qui a fait sauter l'accusé pour la moitié anonyme.
    */
   private async _emitDeliveryForDrainedMessages(
-    userId: string,
-    pending: QueuedMessagePayload[]
+    readerKey: string,
+    pending: QueuedMessagePayload[],
+    isAnonymous: boolean
   ): Promise<void> {
-    // Delivery receipts only make sense for actual new messages — an edited
-    // or deleted entry replays its own event (see `_drainedEventName`) but
-    // was never awaiting a "delivered" checkmark in the first place.
-    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
-    if (newEntries.length === 0) return;
+    // Delivery receipts only make sense for entries that announce a message
+    // ARRIVING — a mutation entry (edit, delete, reaction, pin, attachment
+    // enrichment, translation) replays its own event (see `_drainedEventName`)
+    // but was never awaiting a "delivered" checkmark in the first place.
+    //
+    // Le prédicat est NOMMÉ et vit avec le vocabulaire (`queuedMessageArrival`)
+    // plutôt qu'écrit ici en égalité littérale : la forme `=== 'new'` disait
+    // moins que le commentaire au-dessus d'elle, et `link-message` — une
+    // création, rejouée sous `message:new` comme la nominale — est tombée dans
+    // l'écart. Cf. la doc du module pour ce que ça coûtait à l'auteur.
+    const arrivals = pending.filter((entry) => announcesMessageArrival(entry.eventType));
+    if (arrivals.length === 0) return;
 
     // Check privacy preference first — single cheap cached call.
+    //
+    // Les préférences se lisent sous la MÊME clé que la file, avec la nature du
+    // lecteur — même idiome qu'`autoDeliverToOnlineRecipients`. Déclarer
+    // inscrit un lecteur sans compte enverrait un `Participant.id` à
+    // `fetchManyFromDatabase` comme s'il s'agissait d'un `User.id` : une
+    // requête payée pour rien, dont le résultat vide serait mis en cache sous
+    // un id qui n'est pas un utilisateur, et dont l'absence de
+    // `showReadReceipts` re-supprimerait l'accusé juste en dessous.
+    // `getPreferencesForUsers` sert les anonymes par les défauts, sans base.
     const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
-      { id: userId, isAnonymous: false },
+      { id: readerKey, isAnonymous },
     ]);
-    if (!prefMap.get(userId)?.showReadReceipts) return;
+    if (!prefMap.get(readerKey)?.showReadReceipts) return;
 
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
     const convLatest = new Map<string, string>();
-    for (const entry of newEntries) {
+    for (const entry of arrivals) {
       convLatest.set(entry.conversationId, entry.messageId);
     }
 
     // Batch-resolve ALL active participants for the affected conversations in a
-    // single query. We need two things from it: (a) the reconnecting user's own
-    // participantId per conversation (to mark received), and (b) every
+    // single query. We need two things from it: (a) the reconnecting reader's own
+    // participant row per conversation (to mark received), and (b) every
     // participant's userId, so the receipt fans out to each sender's user room —
     // a sender who left the conversation view (socket dropped `conversation:<id>`
     // but stays in `user:<id>`) must still see their checkmark advance.
@@ -637,8 +670,14 @@ export class MeeshySocketIOManager {
       select: { id: true, userId: true, conversationId: true },
     });
 
-    // conversationId → the reconnecting user's participantId (drives markReceived)
-    const ownParticipant = new Map<string, string>();
+    // conversationId → the reconnecting reader's OWN row (drives markReceived
+    // and the actor identity of the payload).
+    //
+    // La colonne interrogée suit la nature du lecteur, et le branchement reste
+    // STRICT dans les deux sens : un `row.id === readerKey || row.userId ===
+    // readerKey` adopterait, pour un inscrit, la ligne d'un participant SANS
+    // COMPTE dont l'id coïncide — accusant réception au nom d'un tiers.
+    const ownParticipant = new Map<string, ParticipantRoomTarget>();
     // conversationId → every participant, room-addressable (drives the fanout).
     // Accountless rows are KEPT: `emitToConversationParticipants` names their
     // room after `Participant.id`. Filtering on `userId` here left an anonymous
@@ -646,24 +685,34 @@ export class MeeshySocketIOManager {
     // message they sent never reached the only room they are in.
     const convParticipants = new Map<string, ParticipantRoomTarget[]>();
     for (const row of participantRows) {
-      if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
+      const isOwnRow = isAnonymous ? row.id === readerKey : row.userId === readerKey;
+      if (isOwnRow) ownParticipant.set(row.conversationId, { id: row.id, userId: row.userId });
       const list = convParticipants.get(row.conversationId) ?? [];
       list.push({ id: row.id, userId: row.userId });
       convParticipants.set(row.conversationId, list);
     }
 
     await Promise.allSettled(
-      [...ownParticipant].map(async ([conversationId, participantId]) => {
+      [...ownParticipant].map(async ([conversationId, own]) => {
         const latestMessageId = convLatest.get(conversationId);
         if (!latestMessageId) return;
 
-        await this.readStatusService.markMessagesAsReceived(participantId, conversationId, latestMessageId);
+        await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId);
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
         const drainPayload = {
           conversationId,
-          participantId,
-          userId,
+          participantId: own.id,
+          // `User.id` de l'ACTEUR, `null` s'il n'en a pas — ce que le type
+          // énonce (`ReadStatusUpdatedEventData.userId: string | null`), ce que
+          // les décodeurs acceptent déjà (iOS `String?`, Android `String? =
+          // null`) et ce que le jumeau en ligne émet déjà (`firstAcker.userId`).
+          // Y mettre `readerKey` remplirait le champ d'un `Participant.id` qu'un
+          // consommateur comparant à sa propre identité pour synchroniser son
+          // curseur lirait comme un `User.id` — la seule forme qui puisse
+          // mentir. Pour un inscrit, `own.userId` VAUT `readerKey` : c'est par
+          // lui que la ligne a été reconnue.
+          userId: own.userId,
           type: 'received' as const,
           updatedAt: new Date(),
           summary,
@@ -683,7 +732,7 @@ export class MeeshySocketIOManager {
           events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
           payload: drainPayload,
         });
-        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms });
+        logger.debug('drain delivery receipt emitted', { readerKey, isAnonymous, conversationId, latestMessageId, rooms });
       })
     );
   }
@@ -706,7 +755,8 @@ export class MeeshySocketIOManager {
    * distinct eventTypes so a pin-then-unpin keeps both entries in enqueue
    * order, while a repeated same-direction toggle supersedes in place. Pin
    * entries never bear a delivery receipt (`_emitDeliveryForDrainedMessages`
-   * already filters to `eventType === 'new'`).
+   * keeps only the entries `announcesMessageArrival` admits, and a pin is a
+   * mutation of a message already arrived).
    */
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;

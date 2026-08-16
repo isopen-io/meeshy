@@ -156,6 +156,15 @@ public final class ConversationStoreSocketBridge {
             // additionally gate on identity: only the actor's own devices may
             // advance the cursor. The store's monotone `lastReadAt` guard then
             // drops anything not strictly newer than the local cursor.
+            //
+            // Le serveur a depuis resserré l'ADRESSAGE de son côté : la copie
+            // de l'éventail ne porte plus ces deux champs, seule celle envoyée
+            // à la room personnelle de l'acteur les porte. Les deux gardes
+            // ci-dessous restent nécessaires — un pair reçoit toujours
+            // l'événement (les coches en dépendent), il n'en reçoit plus
+            // l'arriéré — et elles sont ce qui rend la bascule serveur
+            // indolore : ce qui disparaît du payload d'un pair est exactement
+            // ce que ce `guard` jetait déjà.
             guard event.type == "read",
                   let lastReadAt = event.lastReadAt,
                   let unreadCount = event.unreadCount else { return }

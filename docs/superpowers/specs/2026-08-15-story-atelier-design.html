@@ -1,0 +1,1526 @@
+<title>Story Atelier</title>
+<style>
+  :root {
+    --bg: #F5F7F8;
+    --ink: #16232A;
+    --muted: #5A6B74;
+    --card: #FFFFFF;
+    --line: #D8E0E3;
+    --accent: #0E7C86;
+    --accent-soft: #E0F0F1;
+    --warn: #C2410C;
+    --warn-soft: #FCEEE4;
+    --good: #2B8A3E;
+    --good-soft: #E6F4EA;
+    --frame: #16232A;
+    --frame-ink: #F5F7F8;
+    --code-bg: #EDF1F2;
+    --shadow: 0 1px 2px rgba(22,35,42,.06), 0 8px 24px rgba(22,35,42,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F1619;
+      --ink: #E8EEF0;
+      --muted: #93A6AE;
+      --card: #162126;
+      --line: #24343B;
+      --accent: #3FBFCB;
+      --accent-soft: #123237;
+      --warn: #F08C4A;
+      --warn-soft: #33200F;
+      --good: #69DB7C;
+      --good-soft: #12301A;
+      --frame: #0A0F11;
+      --frame-ink: #E8EEF0;
+      --code-bg: #1C2A30;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F1619;
+    --ink: #E8EEF0;
+    --muted: #93A6AE;
+    --card: #162126;
+    --line: #24343B;
+    --accent: #3FBFCB;
+    --accent-soft: #123237;
+    --warn: #F08C4A;
+    --warn-soft: #33200F;
+    --good: #69DB7C;
+    --good-soft: #12301A;
+    --frame: #0A0F11;
+    --frame-ink: #E8EEF0;
+    --code-bg: #1C2A30;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px 96px; }
+
+  h1, h2, h3 {
+    font-family: Charter, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    font-weight: 600;
+    text-wrap: balance;
+    margin: 0;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .86em;
+  }
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: .1em .35em;
+    word-break: break-word;
+  }
+  p { margin: 0 0 1em; max-width: 68ch; }
+  .muted { color: var(--muted); }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  section { margin-top: 72px; }
+  section > h2 { font-size: 30px; margin-bottom: 8px; }
+  .lede { font-size: 17px; color: var(--muted); max-width: 62ch; }
+
+  /* ---------- Hero ---------- */
+  header.hero {
+    padding: 72px 0 16px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: center;
+  }
+  .hero h1 { font-size: clamp(38px, 6vw, 58px); line-height: 1.05; }
+  .hero .sub { font-size: 18px; color: var(--muted); margin-top: 16px; max-width: 54ch; }
+  .hero-slides { display: flex; align-items: flex-end; }
+  .hero-slides .slide {
+    width: 74px; aspect-ratio: 9 / 16;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--card);
+    box-shadow: var(--shadow);
+  }
+  .hero-slides .slide + .slide { margin-left: -34px; }
+  .hero-slides .slide:nth-child(2) { transform: translateY(-14px) rotate(2deg); }
+  .hero-slides .slide:nth-child(3) {
+    transform: translateY(-28px) rotate(5deg);
+    background: linear-gradient(160deg, var(--accent) 0%, var(--accent-soft) 130%);
+    border-color: var(--accent);
+  }
+  @media (max-width: 700px) { .hero-slides { display: none; } header.hero { grid-template-columns: 1fr; } }
+
+  /* ---------- Stats ---------- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-top: 36px;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .stat .n {
+    font-family: Charter, "Iowan Old Style", Georgia, serif;
+    font-size: 34px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .stat .l { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .stat.warn .n { color: var(--warn); }
+  .stat.good .n { color: var(--good); }
+
+  /* ---------- Compare diagram ---------- */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 28px;
+  }
+  @media (max-width: 780px) { .compare { grid-template-columns: 1fr; } }
+  .col {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .col h3 { font-size: 17px; margin-bottom: 4px; }
+  .col .tag {
+    display: inline-block;
+    font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    border-radius: 99px; padding: 3px 10px; margin-bottom: 12px;
+  }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .tag.good { background: var(--good-soft); color: var(--good); }
+  .blocks { display: flex; flex-direction: column; gap: 8px; }
+  .block {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 13.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .block .count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .block.hot { border-color: var(--warn); background: var(--warn-soft); }
+  .block.hot .count { color: var(--warn); font-weight: 700; }
+  .block.core { border-color: var(--accent); background: var(--accent-soft); }
+  .block.core .count { color: var(--accent); font-weight: 700; }
+
+  /* ---------- Findings ---------- */
+  .findings { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+  .finding {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--warn);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .finding h3 { font-size: 16px; margin-bottom: 6px; }
+  .finding p { font-size: 14.5px; margin: 0; color: var(--muted); max-width: none; }
+  .finding .where { display: block; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+
+  /* ---------- Principles ---------- */
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 24px; }
+  .principle {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .principle h3 { font-size: 16px; color: var(--accent); margin-bottom: 8px; }
+  .principle p { font-size: 14.5px; margin: 0; max-width: none; }
+
+  /* ---------- Phone frames (les 5 vues) ---------- */
+  .views {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px;
+    margin-top: 28px;
+  }
+  .phone {
+    background: var(--frame);
+    color: var(--frame-ink);
+    border-radius: 22px;
+    padding: 14px 14px 16px;
+    min-height: 340px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+  }
+  .phone .notch {
+    width: 44px; height: 5px; border-radius: 99px;
+    background: var(--frame-ink); opacity: .25;
+    margin: 0 auto 14px;
+  }
+  .phone .num {
+    font-family: Charter, Georgia, serif;
+    font-size: 13px; color: var(--accent); font-weight: 700;
+    letter-spacing: .08em;
+  }
+  .phone h3 { font-size: 19px; margin: 2px 0 8px; color: var(--frame-ink); }
+  .phone p { font-size: 13px; line-height: 1.5; opacity: .82; margin: 0 0 10px; max-width: none; }
+  .phone .replaces {
+    margin-top: auto;
+    font-size: 11.5px;
+    border-top: 1px solid rgba(147,166,174,.3);
+    padding-top: 10px;
+    opacity: .75;
+  }
+  .phone .replaces strong { color: var(--accent); font-weight: 700; }
+
+  /* ---------- Maquettes en situation ---------- */
+  .scenario {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 40px;
+    align-items: center;
+    margin-top: 52px;
+  }
+  @media (max-width: 780px) { .scenario { grid-template-columns: 1fr; } }
+  .notes .s-num { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: var(--accent); text-transform: uppercase; }
+  .notes h3 { font-size: 20px; margin: 4px 0 8px; }
+  .notes p { font-size: 14.5px; color: var(--muted); margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip {
+    font-size: 11.5px; font-weight: 600;
+    border: 1px solid var(--line); border-radius: 99px;
+    padding: 4px 11px; color: var(--muted);
+  }
+  .chip.a { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* Les maquettes dépeignent l'écran du composer : monde visuel unique, couleurs explicites */
+  .mock {
+    width: 272px; margin: 0 auto;
+    border-radius: 34px;
+    background: #06090B;
+    border: 1px solid #223039;
+    padding: 10px;
+    color: #EAF2F4;
+    box-shadow: var(--shadow);
+    font-size: 11px; line-height: 1.35;
+  }
+  .m-screen { border-radius: 24px; overflow: hidden; background: #0C1417; display: flex; flex-direction: column; }
+  .m-canvas { position: relative; aspect-ratio: 9 / 12; display: flex; align-items: center; justify-content: center; }
+  .m-top {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+    display: flex; align-items: center; gap: 7px;
+    padding: 10px 12px; font-size: 11px;
+  }
+  .m-top .sp { flex: 1; }
+  .m-cta {
+    background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.28);
+    border-radius: 99px; padding: 3px 10px;
+  }
+  .m-cta.strong { background: #2FB9C6; border-color: #2FB9C6; color: #04252A; font-weight: 700; }
+  .m-el { position: absolute; padding: 6px 10px; border-radius: 8px; font-weight: 700; z-index: 2; }
+  .m-el.sel { outline: 1.5px dashed rgba(255,255,255,.85); }
+  .m-el .h {
+    position: absolute; width: 7px; height: 7px; border-radius: 50%;
+    background: #fff; border: 1.5px solid #2FB9C6;
+  }
+  .m-el .h.tl { top: -4px; left: -4px; } .m-el .h.tr { top: -4px; right: -4px; }
+  .m-el .h.bl { bottom: -4px; left: -4px; } .m-el .h.br { bottom: -4px; right: -4px; }
+  .m-pill {
+    position: absolute; z-index: 2;
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(0,0,0,.48); border-radius: 99px;
+    padding: 4px 9px; font-size: 10px;
+  }
+  .m-guide { position: absolute; top: 12%; bottom: 12%; left: 50%; width: 1px; background: rgba(47,185,198,.8); z-index: 1; }
+  .m-dock {
+    background: #0E191E; border-top: 1px solid #1D2C33;
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .dk-title {
+    font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: #7FA1AB; display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .m-tools { display: flex; justify-content: space-between; }
+  .m-tool {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: #132228; border: 1px solid #1D2C33;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .m-tool.on { background: #123237; border-color: #2FB9C6; color: #2FB9C6; }
+  .m-seg { display: flex; background: #132228; border-radius: 9px; padding: 3px; gap: 3px; }
+  .m-seg b { flex: 1; text-align: center; padding: 4px 0; border-radius: 7px; font-weight: 600; }
+  .m-seg b.on { background: #2FB9C6; color: #04252A; }
+  .m-swatches { display: flex; justify-content: space-between; }
+  .sw { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); }
+  .sw.on { border-color: #fff; }
+  .m-slider { display: flex; align-items: center; gap: 8px; }
+  .sl-track { flex: 1; height: 3px; border-radius: 99px; background: #1D2C33; position: relative; }
+  .sl-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: #2FB9C6; }
+  .sl-thumb {
+    position: absolute; top: 50%; transform: translate(-50%,-50%);
+    width: 11px; height: 11px; border-radius: 50%; background: #fff;
+  }
+  .m-wave { display: flex; align-items: center; gap: 2px; height: 22px; flex: 1; }
+  .m-wave span { width: 2.5px; border-radius: 2px; background: #2FB9C6; }
+  .m-wave.dim span { background: #3A4E56; }
+  .m-row { display: flex; align-items: center; gap: 8px; }
+  .m-sndrow {
+    display: flex; align-items: center; gap: 9px;
+    background: #101E24; border: 1px solid #1D2C33; border-radius: 10px; padding: 7px 9px;
+  }
+  .m-sndrow.on { border-color: #2FB9C6; background: #123237; }
+  .m-sndrow .t { min-width: 78px; }
+  .m-sndrow .d { color: #7FA1AB; font-size: 9.5px; }
+  .m-strip { position: relative; display: flex; height: 30px; border-radius: 8px; overflow: hidden; }
+  .m-strip i { flex: 1; }
+  .m-strip .hd { position: absolute; top: 0; bottom: 0; width: 9px; background: #2FB9C6; z-index: 2; }
+  .m-strip .hd::before { content: ""; position: absolute; inset: 9px 3px; border-radius: 2px; background: #04252A; }
+  .m-strip .hd.l { left: 6%; border-radius: 6px 0 0 6px; }
+  .m-strip .hd.r { right: 12%; border-radius: 0 6px 6px 0; }
+  .m-strip .dimzone { position: absolute; top: 0; bottom: 0; background: rgba(6,9,11,.65); z-index: 1; }
+  .m-tl { position: relative; display: flex; flex-direction: column; gap: 6px; }
+  .m-ruler { display: flex; justify-content: space-between; font-size: 9px; color: #7FA1AB; padding-left: 50px; }
+  .m-trk { display: grid; grid-template-columns: 44px 1fr; gap: 6px; align-items: center; }
+  .m-trk .lbl { font-size: 9.5px; color: #9DB6BE; }
+  .lane { position: relative; height: 15px; background: #101E24; border-radius: 4px; }
+  .clipx { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
+  .kf {
+    position: absolute; width: 6px; height: 6px; top: 50%;
+    transform: translate(-50%,-50%) rotate(45deg);
+    background: #fff; z-index: 2;
+  }
+  .ph { position: absolute; top: 12px; bottom: 0; left: 46%; width: 1.5px; background: #fff; z-index: 3; }
+  .ph::before {
+    content: ""; position: absolute; top: -5px; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #fff;
+  }
+  .m-progress { position: absolute; top: 7px; left: 10px; right: 10px; display: flex; gap: 3px; z-index: 3; }
+  .m-progress i { flex: 1; height: 2.5px; border-radius: 99px; background: rgba(255,255,255,.32); }
+  .m-progress i.done { background: #fff; }
+  .m-progress i.half { background: linear-gradient(90deg, #fff 55%, rgba(255,255,255,.32) 55%); }
+  .m-author {
+    position: absolute; top: 16px; left: 10px; right: 10px; z-index: 3;
+    display: flex; align-items: center; gap: 7px; font-size: 10.5px;
+  }
+  .m-author .av {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid #fff;
+    background: linear-gradient(140deg, #2FB9C6, #7A5FB5);
+  }
+  .m-author .ago { color: rgba(255,255,255,.7); }
+  .m-banner {
+    position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 3;
+    background: rgba(0,0,0,.55); border: 1px solid rgba(47,185,198,.7); color: #9FE3EA;
+    border-radius: 99px; padding: 3px 11px; font-size: 9.5px; white-space: nowrap;
+  }
+  .m-tr {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; color: rgba(255,255,255,.8);
+    background: rgba(0,0,0,.42); border-radius: 99px; padding: 2.5px 8px;
+  }
+  .m-reply { display: flex; align-items: center; gap: 8px; }
+  .m-reply .rin {
+    flex: 1; border: 1px solid rgba(255,255,255,.3); border-radius: 99px;
+    padding: 6px 10px; color: rgba(255,255,255,.55); font-size: 10.5px;
+  }
+  .rec {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #E5484D; border: 3px solid rgba(255,255,255,.85);
+    margin: 0 auto;
+  }
+  .m-btn {
+    flex: 1; text-align: center; padding: 6px 0; border-radius: 9px;
+    background: #132228; border: 1px solid #1D2C33;
+  }
+  .m-btn.strong { background: #2FB9C6; border-color: #2FB9C6; color: #04252A; font-weight: 700; }
+  .m-feed { padding: 12px 8px 10px; background: #0C1417; }
+  .m-feedcard { background: #101B21; border: 1px solid #1D2C33; border-radius: 14px; overflow: hidden; }
+  .m-fc-head { display: flex; align-items: center; gap: 7px; padding: 8px 10px; font-size: 10.5px; }
+  .fav { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #2FB9C6; background: linear-gradient(140deg, #2E8371, #2FB9C6); }
+  .m-fc-canvas { position: relative; aspect-ratio: 4 / 5; }
+  .m-fc-body { padding: 8px 10px 4px; font-size: 10.5px; line-height: 1.45; }
+  .m-fc-actions { display: flex; gap: 14px; align-items: center; padding: 6px 10px 9px; font-size: 11px; }
+  .m-rail { position: absolute; right: 8px; bottom: 14px; display: flex; flex-direction: column; gap: 10px; text-align: center; z-index: 2; font-size: 9px; }
+  .m-rail b { display: block; font-size: 15px; font-weight: 400; }
+  .m-txtfield { background: #101E24; border: 1px solid #1D2C33; border-radius: 10px; padding: 8px 10px; font-size: 10.5px; line-height: 1.45; }
+  .m-fontrow { display: flex; gap: 7px; }
+  .m-font {
+    flex: 1; text-align: center; padding: 6px 4px; border-radius: 9px;
+    background: #132228; border: 1px solid #1D2C33; font-size: 11px;
+  }
+  .m-font.on { border-color: #2FB9C6; color: #2FB9C6; }
+
+  /* ---------- L'acquis préservé ---------- */
+  .keeps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin-top: 24px; }
+  .keep {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 16px; display: flex; gap: 11px; align-items: flex-start;
+  }
+  .keep .tick { color: var(--good); font-weight: 700; line-height: 1.5; }
+  .keep b { display: block; font-size: 14px; }
+  .keep p { font-size: 13px; color: var(--muted); margin: 2px 0 0; max-width: none; }
+  .parity {
+    margin-top: 28px;
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 14px; padding: 20px 24px;
+  }
+  .parity h3 { font-size: 19px; margin-bottom: 6px; }
+  .parity > p { font-size: 14.5px; color: var(--muted); }
+  .parity table { margin-top: 12px; }
+  .parity td.ok { color: var(--good); font-weight: 700; }
+  .parity tr.diff td { color: var(--warn); font-weight: 600; }
+
+  /* Feuille de commentaires (maquette engagement) */
+  .m-sheet {
+    background: #0E191E; border-top: 1px solid #1D2C33;
+    border-radius: 16px 16px 0 0; padding: 8px 12px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .m-grab { width: 34px; height: 4px; border-radius: 99px; background: #3A4E56; margin: 0 auto; }
+  .m-reacts { display: flex; gap: 7px; }
+  .m-react { background: #132228; border: 1px solid #1D2C33; border-radius: 99px; padding: 3px 9px; font-size: 10px; }
+  .m-react.on { border-color: #2FB9C6; background: #123237; }
+  .m-com { display: flex; gap: 8px; font-size: 10px; }
+  .m-com .cav { width: 18px; height: 18px; border-radius: 50%; flex: none; margin-top: 2px; }
+  .m-com .bub { background: #132228; border-radius: 10px; padding: 6px 9px; line-height: 1.4; }
+  .m-com .meta { color: #7FA1AB; font-size: 9px; margin-top: 2px; }
+
+  /* ---------- Un seul atelier ---------- */
+  .uniflow { margin-top: 28px; display: flex; flex-direction: column; align-items: center; }
+  .uf-src { background: var(--card); border: 1.5px solid var(--accent); border-radius: 14px; padding: 14px 26px; text-align: center; font-weight: 600; box-shadow: var(--shadow); }
+  .uf-src span { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .uf-stem { width: 1.5px; height: 24px; background: var(--line); }
+  .uf-outs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }
+  @media (max-width: 700px) { .uf-outs { grid-template-columns: 1fr; } }
+  .uf-out { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .uf-out b { display: block; color: var(--accent); font-size: 11.5px; letter-spacing: .1em; margin-bottom: 4px; }
+
+  /* ---------- Carte des features & cas complexes ---------- */
+  .zone-label { font-weight: 700; color: var(--accent); white-space: nowrap; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .cases { display: flex; flex-direction: column; gap: 14px; margin-top: 26px; }
+  .case { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .case h4 {
+    font-family: Charter, "Iowan Old Style", Georgia, serif;
+    font-size: 17.5px; font-weight: 600; margin: 0 0 12px;
+  }
+  .case .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .case .opts { grid-template-columns: 1fr; } }
+  .opt { border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+  .opt b { display: block; color: var(--accent); font-size: 11px; letter-spacing: .1em; margin-bottom: 4px; }
+  .reco { margin-top: 12px; font-size: 13.5px; }
+  .reco b { color: var(--good); }
+  .m-slide { width: 26px; height: 40px; border-radius: 6px; background: #132228; border: 1px solid #1D2C33; flex: none; }
+  .m-slide.on { border-color: #2FB9C6; }
+
+  /* ---------- Machine à états du Dock ---------- */
+  .dockstates { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 12px; margin-top: 22px; }
+  .dstate {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; font-size: 13px; color: var(--muted); line-height: 1.5;
+  }
+  .dstate b { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 2px; }
+  .dstate .h {
+    display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+    color: var(--accent); background: var(--accent-soft); border-radius: 99px;
+    padding: 2px 9px; margin-bottom: 8px;
+  }
+  .dstate .go { display: block; margin-top: 8px; font-size: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .dstate .go em { font-style: normal; color: var(--accent); font-weight: 600; }
+
+  /* ---------- Code / contract ---------- */
+  pre.contract {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 20px 0 0;
+  }
+  pre.contract .k { color: var(--accent); font-weight: 600; }
+  pre.contract .c { color: var(--muted); }
+
+  /* ---------- Tables ---------- */
+  .tablewrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+  td .down { color: var(--good); font-weight: 700; }
+
+  /* ---------- Phases ---------- */
+  .phases { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
+  .phase {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .phase:last-child { border-bottom: none; }
+  .phase .dot {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    font-weight: 700; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: Charter, Georgia, serif;
+  }
+  .phase h3 { font-size: 16px; margin-bottom: 4px; }
+  .phase p { font-size: 14.5px; color: var(--muted); margin: 0; max-width: none; }
+
+  footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <p class="eyebrow">Meeshy · Design de refonte · Atelier de publication</p>
+    <h1>Story Atelier</h1>
+    <p class="sub">Aujourd'hui, la même fonctionnalité produit coûte <strong>1 vue sur le web</strong> et <strong>≈ 85 vues sur iOS</strong> — et quatre composeurs se partagent la publication. Ce design reconstruit tout sur <strong>5 vues</strong> pilotées par l'usage : le même atelier publie <strong>stories, posts et réels</strong> d'un seul geste.</p>
+  </div>
+  <div class="hero-slides" aria-hidden="true">
+    <div class="slide"></div><div class="slide"></div><div class="slide"></div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat warn"><div class="n">48 908</div><div class="l">lignes dans <span class="mono">MeeshyUI/Story</span> (iOS)</div></div>
+  <div class="stat warn"><div class="n">86 : 1</div><div class="l">ratio de code composition iOS / web</div></div>
+  <div class="stat warn"><div class="n">15</div><div class="l">présentations modales atteignables depuis le composer iOS</div></div>
+  <div class="stat warn"><div class="n">4 → 1</div><div class="l">composeurs parallèles (story, post, audio, unifié mort) fusionnés en un atelier</div></div>
+  <div class="stat good"><div class="n">5</div><div class="l">vues cibles, identiques web &amp; iOS — pour stories, posts et réels</div></div>
+</div>
+
+<section>
+  <p class="eyebrow">01 · État des lieux</p>
+  <h2>Deux mondes, zéro contrat</h2>
+  <p class="lede">Il n'existe aucun modèle <code>Story</code> en base : une story est un <code>Post</code> de type <code>STORY</code> portant un blob JSON <code>storyEffects</code> validé en <code>passthrough()</code> (seule limite : 256&nbsp;Ko). Le serveur n'ayant jamais refusé un blob mal formé, les deux clients ont divergé sans qu'aucune erreur ne remonte.</p>
+
+  <div class="compare">
+    <div class="col">
+      <span class="tag warn">Web — sous-construit</span>
+      <h3>1 modal, 571 lignes</h3>
+      <div class="blocks">
+        <div class="block"><span><span class="mono">StoryComposer.tsx</span> — texte + fond + style</span><span class="count">571 l.</span></div>
+        <div class="block hot"><span>Upload via <span class="mono">/attachments/upload</span> → les médias ne sont jamais rattachés au Post</span><span class="count">bug</span></div>
+        <div class="block hot"><span>Écrit <span class="mono">backgroundColor</span> (alias legacy) → fond perdu chez un lecteur iOS</span><span class="count">bug</span></div>
+        <div class="block"><span>Multi-slides, brouillons, aperçu, édition, archive, offline</span><span class="count">absents</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <span class="tag warn">iOS — sur-construit</span>
+      <h3>≈ 85 vues, 48 908 lignes</h3>
+      <div class="blocks">
+        <div class="block hot"><span>Timeline seule</span><span class="count">32 vues</span></div>
+        <div class="block hot"><span>Outil texte : 4 vues · Outil dessin : 4 vues (miroirs exacts)</span><span class="count">8 vues</span></div>
+        <div class="block"><span>Vue racine éclatée en 9 fichiers, ViewModel en 14</span><span class="count">7 284 l.</span></div>
+        <div class="block"><span>Canvas UIKit : 15 fichiers + 6 layers</span><span class="count">21 fichiers</span></div>
+        <div class="block hot"><span>Outil <span class="mono">filters</span> déclaré mais inatteignable · cascade morte dans <span class="mono">UnifiedPostComposer</span></span><span class="count">code mort</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">02 · Diagnostic</p>
+  <h2>Pourquoi 85 vues ?</h2>
+  <p class="lede">Trois causes racines, toutes structurelles — aucune n'est un accident d'implémentation.</p>
+  <div class="findings">
+    <div class="finding">
+      <h3>Chaque capacité a engendré ses propres écrans</h3>
+      <p>Un outil = une toolbar + une topbar + des bulles flottantes + un panneau d'options. Le quatuor texte est le miroir exact du quatuor dessin. La timeline a reproduit le motif à l'échelle : container, tracks, overlays, inspecteurs — 32 vues pour un seul outil.</p>
+      <span class="where mono">MeeshyUI/Story/Timeline/Views · StoryTextEdit* · StoryDrawing*</span>
+    </div>
+    <div class="finding">
+      <h3>Le serveur accepte tout, donc rien ne converge</h3>
+      <p><code>StoryEffectsSchema</code> est en <code>passthrough()</code> : dessins, keyframes, transitions et clés inconnues passent sans validation. La doc du schéma Prisma décrit un format obsolète. Résultat : le web écrit des clés que iOS ne lit pas, et inversement.</p>
+      <span class="where mono">services/gateway/src/routes/posts/types.ts:159-176 · schema.prisma:3040-3055</span>
+    </div>
+    <div class="finding">
+      <h3>Deux contrats de publication, sept portes d'entrée</h3>
+      <p>Création : file offline, retour toujours <code>true</code>. Édition : en ligne uniquement, composer laissé ouvert hors-ligne. Sept sites distincts posent <code>showStoryComposer = true</code>, deux façades montent le même composer avec des callbacks différents.</p>
+      <span class="where mono">StoryTrayActions.swift:156 · StoryTrayView.swift:19 + 7 sites</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">03 · Principes</p>
+  <h2>Les outils sont des données, pas des vues</h2>
+  <div class="principles">
+    <div class="principle">
+      <h3>Tout est un StoryElement</h3>
+      <p>Média, texte, sticker, audio, lieu, trait de dessin : un seul type <code>{ kind, transform, timing, payload }</code>. Un registre de renderers (un par <code>kind</code>) remplace les 6 layers du canvas et les branches par type.</p>
+    </div>
+    <div class="principle">
+      <h3>Le lecteur EST l'aperçu</h3>
+      <p>Composer et lecteur partagent le même registre de rendu. L'aperçu devient le lecteur en mode preview — WYSIWYG garanti par construction, zéro vue dédiée.</p>
+    </div>
+    <div class="principle">
+      <h3>Panneaux générés, pas dessinés</h3>
+      <p>Un <code>ToolDescriptor { icône, contrôles[] }</code> décrit chaque outil ; le Dock génère son panneau depuis des contrôles typés (slider, couleur, segmenté, liste). Ajouter « filtres » = ajouter un descripteur — un outil ne peut plus être « déclaré mais inatteignable ».</p>
+    </div>
+    <div class="principle">
+      <h3>Piloté par l'usage réel</h3>
+      <p>L'immense majorité des stories est photo/vidéo + texte + audio. Ce chemin tient sur le canvas seul, sans modal. La timeline, les keyframes et les transitions restent disponibles — repliées dans le Dock comme inspecteur avancé, plus comme monde parallèle.</p>
+    </div>
+    <div class="principle">
+      <h3>Une porte, un contrat</h3>
+      <p>Un seul point de montage racine, une seule intention d'ouverture <code>(create | edit | draft)</code>. Publication et édition passent par la même file offline — le contrat asymétrique disparaît.</p>
+    </div>
+    <div class="principle">
+      <h3>Le format est une propriété</h3>
+      <p>Story, post, réel : le même atelier, la même barre de publication, la même file. <code>type</code> ne change que la destination (tray ou feed), le TTL (20 h ou permanent) et l'endroit où vit le texte — jamais l'outil.</p>
+    </div>
+    <div class="principle">
+      <h3>Le schéma est le produit</h3>
+      <p><code>storyEffects v2</code> : schéma Zod strict dans <code>packages/shared</code>, types Swift générés depuis la même source. Le serveur refuse l'inconnu ; les plateformes ne peuvent plus diverger en silence.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">04 · Architecture cible</p>
+  <h2>Cinq vues, identiques sur web et iOS</h2>
+  <p class="lede">Chaque vue a une responsabilité unique. Tout ce qui varie — types d'éléments, outils, contrôles — est de la donnée interprétée par ces cinq surfaces. Et parce que le format n'est qu'une propriété, ces cinq surfaces publient aussi bien une story qu'un post ou un réel.</p>
+
+  <div class="views">
+    <div class="phone">
+      <div class="notch"></div>
+      <span class="num">VUE 1</span>
+      <h3>Canvas</h3>
+      <p>La surface unique d'édition et de lecture. Rend une liste de <code>StoryElement</code> via le registre. Gestes de manipulation directe, guides, slides en pagination horizontale.</p>
+      <div class="replaces">Remplace <strong>21 fichiers</strong> canvas + 6 layers + SlideStrip + l'aperçu dédié</div>
+    </div>
+    <div class="phone">
+      <div class="notch"></div>
+      <span class="num">VUE 2</span>
+      <h3>Dock</h3>
+      <p>L'unique panneau contextuel. Se reconfigure selon la sélection : outil actif, inspecteur d'élément, ou timeline repliée en mode avancé. Contenu généré depuis les <code>ToolDescriptor</code>.</p>
+      <div class="replaces">Remplace <strong>~48 vues</strong> : timeline (32), quatuors texte/dessin (8), rail FAB, panneaux d'outils</div>
+    </div>
+    <div class="phone">
+      <div class="notch"></div>
+      <span class="num">VUE 3</span>
+      <h3>Amorce</h3>
+      <p>L'état vide du canvas : caméra, galerie, texte, dernière capture. C'est un état du Canvas, pas un écran — zéro navigation avant de créer.</p>
+      <div class="replaces">Remplace les amorces page blanche + 4 des 15 modales d'entrée média</div>
+    </div>
+    <div class="phone">
+      <div class="notch"></div>
+      <span class="num">VUE 4</span>
+      <h3>Barre de publication</h3>
+      <p>Format (Story · Post · Réel), audience avec picker EXCEPT/ONLY inline, aperçu (le lecteur en mode preview), publier. Toujours via la file offline, création comme édition.</p>
+      <div class="replaces">Remplace TopBar + menu visibilité + sheet audience + contrat de publish asymétrique</div>
+    </div>
+    <div class="phone">
+      <div class="notch"></div>
+      <span class="num">VUE 5</span>
+      <h3>Étagère</h3>
+      <p>Une seule liste d'états : stories publiées, brouillons, file d'envoi, archive. Tap = reprendre là où on en était. Fusionne tray « Moi », Mes stories et brouillons.</p>
+      <div class="replaces">Remplace MyStoriesView (1 041 l.) + 5 cellules + les 7 sites d'ouverture du composer</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:22px;margin-top:56px">La mécanique du Dock — où et quand chaque configuration apparaît</h3>
+  <p class="lede" style="margin-top:8px">Le Dock ne présente jamais une sheet : il change de hauteur. Quatre états, trois hauteurs fixes, une seule règle de sortie (tap sur le fond = retour au repos). Le clavier est la seule chose qui monte par-dessus — pour le texte, et le panneau de style s'y accroche.</p>
+
+  <div class="dockstates">
+    <div class="dstate">
+      <b>1 · Rangée</b><span class="h">repos · ~72 pt</span>
+      La rangée d'outils générée depuis <code>composerOrder</code>. C'est l'état par défaut, et celui où on revient toujours.
+      <span class="go"><em>tap outil</em> → Panneau · <em>tap élément</em> → Inspecteur · <em>poignée ↑ ou ⏱</em> → Déplié</span>
+    </div>
+    <div class="dstate">
+      <b>2 · Panneau</b><span class="h">création · ~220 pt</span>
+      Les contrôles de l'outil actif, générés depuis son descripteur. Pour le texte : accroché au-dessus du clavier pendant l'édition inline.
+      <span class="go"><em>OK / tap fond</em> → Rangée · l'élément créé reste sélectionné → Inspecteur</span>
+    </div>
+    <div class="dstate">
+      <b>3 · Inspecteur</b><span class="h">sélection · ~220 pt</span>
+      Les mêmes contrôles, préremplis avec le payload de l'élément touché — surmontés de la <strong>barre d'élément</strong> commune : dupliquer · ordre z · timing · supprimer.
+      <span class="go"><em>tap fond</em> → Rangée · <em>double-tap texte</em> → ré-édition inline</span>
+    </div>
+    <div class="dstate">
+      <b>4 · Déplié</b><span class="h">immersif · ~55 %</span>
+      Pour ce qui exige de la surface : grille de stickers, carte du lieu, timeline. Le canvas reste visible et vivant au-dessus.
+      <span class="go"><em>choix fait / poignée ↓</em> → retour à l'état précédent</span>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Configuration</th><th>Moment d'apparition</th><th>État du Dock</th><th>Contrôles générés</th><th>Remplace</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Texte — nouveau</strong></td><td>Tap <span class="mono">Aa</span> (ou amorce « Texte ») : l'élément naît au centre, clavier levé, édition inline sur le canvas</td><td>Panneau, au-dessus du clavier</td><td>sous-onglets : Style · Police &amp; graisse · Cadre &amp; bordure · Langue (+ taille, alignement, nuancier)</td><td class="muted">StoryTextEditorView + StoryTextEditToolbar + StoryTextEditTopBar</td></tr>
+        <tr><td><strong>Texte — existant</strong></td><td>Tap = sélection ; double-tap = ré-édition inline</td><td>Inspecteur</td><td>mêmes contrôles préremplis + barre d'élément</td><td class="muted">TextEditFloatingBubbles + TextEditToolOptions</td></tr>
+        <tr><td><strong>Dessin</strong></td><td>Tap <span class="mono">✏️</span> : le canvas capture les traits, tout le reste se fige</td><td>Panneau</td><td>pinceau (segmenté) · épaisseur + aperçu de pointe · nuancier · gomme · annuler — appliqués au prochain trait</td><td class="muted">StoryDrawingToolbar + DrawingEditFloatingBubbles + DrawingEditToolOptions</td></tr>
+        <tr><td><strong>Traits existants</strong></td><td>Tap sur un trait hors mode dessin</td><td>Inspecteur</td><td>liste des traits (contrôle <span class="mono">list</span>) · couleur/épaisseur du trait</td><td class="muted">DrawingStrokeList</td></tr>
+        <tr><td><strong>Stickers</strong></td><td>Tap <span class="mono">☺</span> : le Dock se déplie ; tap un sticker = posé au centre, le Dock se replie, l'élément est sélectionné</td><td>Déplié (mi-hauteur)</td><td>grille (contrôle <span class="mono">grid</span>) : recherche + catégories, alimentée par un provider</td><td class="muted">StickerPickerView (sheet)</td></tr>
+        <tr><td><strong>Son de fond</strong></td><td>Tap <span class="mono">♫</span></td><td>Panneau</td><td>onglets Bibliothèque / Fichier / Micro · liste + fenêtre d'extrait sur l'onde</td><td class="muted">SoundLibraryPicker + fileImporter (sheets)</td></tr>
+        <tr><td><strong>Enregistreur vocal</strong></td><td>Onglet Micro du panneau son</td><td>Panneau</td><td>vumètre · timer · reprendre / valider</td><td class="muted">UnifiedAudioRecorderSheet</td></tr>
+        <tr><td><strong>Média sélectionné</strong></td><td>Tap photo / vidéo</td><td>Inspecteur</td><td>trim (bande) · volume · fondus · remplacer</td><td class="muted">MeeshyVideo/ImageEditorView (cas courant)</td></tr>
+        <tr><td><strong>Lieu</strong></td><td>Tap <span class="mono">📍</span></td><td>Déplié (mi-hauteur)</td><td>carte + recherche — le provider app-side injecté est conservé</td><td class="muted">LocationPicker (sheet)</td></tr>
+        <tr><td><strong>Timeline</strong></td><td>Poignée du Dock glissée vers le haut, ou bouton ⏱</td><td>Déplié (grand)</td><td>pistes · clips · keyframes · transitions</td><td class="muted">32 vues Timeline</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:18px;max-width:68ch">Deux conséquences structurantes. D'abord, <strong>la « vue sticker » n'existe plus comme vue</strong> : c'est un contrôle <code>grid</code> du Dock, alimenté par un provider — comme la carte du lieu ou la bibliothèque de sons. Ensuite, la <strong>barre d'élément</strong> (dupliquer, ordre z, timing, supprimer) est écrite une fois et sert tous les <code>kind</code> — là où aujourd'hui chaque outil réinvente ses bulles flottantes. Les 15 présentations modales actuelles se réduisent aux 3 que le système impose : caméra, galerie photo, pickers système.</p>
+</section>
+
+<section>
+  <p class="eyebrow">05 · Un seul atelier</p>
+  <h2>Story, post, réel : le même geste de publication</h2>
+  <p class="lede">La base de données l'affirme déjà — <code>PostType {POST, REEL, STORY, STATUS}</code> sur un seul modèle <code>Post</code>, blob de canvas compris. Seuls les clients maintiennent quatre composeurs parallèles : <code>StoryComposer</code>, <code>PostComposer</code> (même bug d'upload), <code>AudioPostComposer</code>, et la tentative morte <code>UnifiedPostComposer</code>. L'atelier achève ce que le serveur a commencé.</p>
+
+  <div class="uniflow">
+    <div class="uf-src">L'Atelier — les 5 mêmes vues<span>un canvas, un dock, une barre de publication, une file offline</span></div>
+    <div class="uf-stem"></div>
+    <div class="uf-outs">
+      <div class="uf-out"><b>TYPE : STORY</b>Tray · visible 20 h puis archivée · les textes sont des éléments du canvas, traduits objet par objet · même surface sociale que REEL — seule la fenêtre diffère</div>
+      <div class="uf-out"><b>TYPE : POST</b>Feed · permanent · le texte principal EST <code>Post.content</code> (indexé, pipeline <code>translatePost</code>) · le canvas s'anime dans la carte, exactement comme une story</div>
+      <div class="uf-out"><b>TYPE : REEL</b>Feed vidéo · plein écran · le même canvas en vidéo-first, overlays en éléments · qualification serveur inchangée (REEL → POST si non qualifiant)</div>
+    </div>
+  </div>
+
+  <p style="margin-top:26px">Deux règles suffisent à tenir l'unification — et ce sont des règles produit, pas des règles techniques :</p>
+  <div class="principles">
+    <div class="principle">
+      <h3>Le texte du post EST le content</h3>
+      <p>En mode Post, le bloc de texte principal saisi dans l'atelier ne devient pas un élément de canvas : il voyage en <code>Post.content</code> — sélectionnable, indexé, traduit par le pipeline <code>translatePost</code> existant, affiché en texte natif dans le feed avec l'indicateur discret du Prisme. Les textes posés <em>sur</em> le canvas restent des éléments de composition.</p>
+    </div>
+    <div class="principle">
+      <h3>Le canvas voyage avec le post</h3>
+      <p>Photos, vidéos, textes décoratifs, sons, stickers, dessins partent dans le même blob v2, quel que soit le format. Le feed les rend via le <strong>CanvasPlayer</strong> — le registre du Reader embarqué dans la carte : lecture automatique en sourdine, boucle, tap pour passer en plein écran immersif. Composer un post riche, c'est composer une story qui ne s'efface pas.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">06 · Intégration des features</p>
+  <h2>Cinquante-six features, six destinations</h2>
+  <p class="lede">Inventaire exhaustif des six surfaces de création existantes (StoryComposer, PostComposer, AudioPostComposer, FeedComposerSheet, composer inline, StatusComposer) : <strong>39 features de création</strong> — auxquelles s'ajoutent les <strong>17 actions de lecture et d'auteur</strong> (répondre, réagir, republier, sauvegarder, transférer…). Chacune reçoit UNE destination dans l'atelier — et les features cassées sont réparées par le passage au contrat, pas répliquées : médias des posts web jamais rattachés (donc <em>aucun réel web n'a jamais existé</em>), chemins iOS inline qui perdent audience et lieu, <code>PostMedia.order</code> jamais écrit, <code>originalLanguage</code> jamais envoyée par le web.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Destination</th><th>Feature existante</th><th>Aujourd'hui → dans l'atelier</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="6" class="zone-label">Barre de publication</td><td>Visibilité 6 niveaux + picker EXCEPT/ONLY</td><td>web complet, iOS ne transmet pas <code>visibilityUserIds</code> → transmis via <code>PublishIntent</code>, parité totale</td></tr>
+        <tr><td>Langue de publication (<code>originalLanguage</code>)</td><td>jamais envoyée web, sélecteur drapeau iOS → champ prérempli par détection, héritée par les objets texte (cas C6)</td></tr>
+        <tr><td>Qualification réel</td><td>règle partagée <code>reel-composition</code> → affichée en direct dans le sélecteur de format ; dégradation serveur inchangée</td></tr>
+        <tr><td>Repost / quote</td><td>route <code>/repost</code> sans audience → <code>repostOfId</code> dans le PublishIntent, audience comprise (cas C4)</td></tr>
+        <tr><td>Lieu métadonnée + découvrabilité</td><td>lieu iOS seulement (fuyant sur 3 chemins), <code>discoverabilityPrecision</code> sans client → panneau lieu + toggle « À proximité » (cas C5)</td></tr>
+        <tr><td>Communauté (<code>communityId</code>)</td><td>serveur seul → option d'audience quand les communautés s'activent</td></tr>
+        <tr><td rowspan="6" class="zone-label">Dock</td><td>Texte du post + compteur 5 000</td><td>compteur web au-delà de 4 500 seulement, iOS sans limite (400 serveur) → compteur partagé, limite depuis shared</td></tr>
+        <tr><td>Mentions @ · hashtags #</td><td>extraction serveur seule, zéro autocomplétion → autocomplétion du champ content, réutilisée des commentaires/messages (cas C1)</td></tr>
+        <tr><td>Médias : galerie, caméra, fichiers, drop/paste</td><td>wire web cassé (<code>MessageAttachment</code>) → TUS partout ; éditeurs image/vidéo atteignables depuis l'Inspecteur (« Retouches avancées »)</td></tr>
+        <tr><td>Audio : micro + fichier + bibliothèque</td><td>3 chemins iOS divergents, web micro seul → les 3 onglets du panneau son (cas C2)</td></tr>
+        <tr><td>Transcription live (Web Speech / SFSpeech)</td><td>vivante → onglet Micro, <code>mobileTranscription</code> conservée, repli Whisper inchangé</td></tr>
+        <tr><td><code>allowSoundExtraction</code></td><td>déclaré, jamais envoyé → toggle « Autoriser la réutilisation du son » dans l'inspecteur vidéo/audio</td></tr>
+        <tr><td rowspan="3" class="zone-label">Canvas</td><td>Slides ↔ carrousel</td><td><code>PostMedia.order</code> jamais écrit (tri de lecture sur une constante) → 1 slide = 1 carte, ordre écrit à la publication (cas C3)</td></tr>
+        <tr><td>Son emprunté (<code>soundId</code>)</td><td><code>createBorrowedSoundPost</code> isolé iOS → élément audio standard du canvas, tous formats</td></tr>
+        <tr><td>Tous les objets story (texte, dessin, stickers, pastille lieu, transitions)</td><td>→ les mêmes éléments servent post et réel, rendus par le CanvasPlayer</td></tr>
+        <tr><td rowspan="3" class="zone-label">Amorce</td><td>Caméra / galerie / texte / dernière capture</td><td>amorces page blanche iOS → état vide du Canvas, zéro navigation</td></tr>
+        <tr><td>Audio express</td><td>AudioPostComposer (modal) → raccourci micro : enregistrer, publier direct (cas C2, option B)</td></tr>
+        <tr><td>Humeur (STATUS)</td><td>StatusComposer → raccourci express distinct, même verbe de publication serveur</td></tr>
+        <tr><td rowspan="3" class="zone-label">Étagère</td><td>Brouillons + outbox durable</td><td>iOS seulement (et reprise de brouillon coincé) → moteur commun, le web en profite enfin</td></tr>
+        <tr><td>Publication hors-ligne</td><td>l'audio iOS n'est pas couvert → tout passe par la file unique, tous formats</td></tr>
+        <tr><td>Édition publiée (texte, langue, type, médias ±, lieu)</td><td>web limité à texte/visibilité, <code>UpdatePost.mediaIds</code> mort des deux côtés → l'intent <code>edit</code> rouvre l'atelier complet (cas C7)</td></tr>
+        <tr><td rowspan="1" class="zone-label">Serveur (auto)</td><td>Extraction mentions/hashtags · liens tracés <code>/l/</code> · Whisper · <code>hasAnyContentCarrier</code> · idempotence · rate limit · dégradation REEL→POST</td><td>inchangés — l'atelier s'appuie dessus, ne les duplique jamais</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:16px;max-width:68ch" class="muted">Inexistantes partout (ni client ni serveur) : sondages, programmation, alt text média, désactivation des commentaires. Hors périmètre — mais l'architecture les accueillera comme un contrôle de Dock ou un champ de <code>PublishIntent</code>, jamais comme une vue nouvelle.</p>
+
+  <h3 style="font-size:22px;margin-top:44px">Après la publication : répondre, republier, sauvegarder…</h3>
+  <p class="lede" style="margin-top:8px">Les actions de lecture gardent le rail figé du Reader (invariant préservé) ; le détail descend dans la feuille d'engagement ; les actions d'auteur hors lecture vivent dans l'Étagère ; le reste dans le menu « … ». Quatre surfaces, aucune nouvelle — et tout vaut pour les trois formats.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Action</th><th>Qui</th><th>Où dans l'atelier</th><th>Aujourd'hui</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Réagir</strong> (tap ❤️, long-press → scrub emoji)</td><td>lecteur</td><td>Rail du Reader — geste et plan figé conservés ; compteurs dans la feuille d'engagement</td><td class="muted">StoryActionSidebarView + EmojiReactionPicker</td></tr>
+        <tr><td><strong>Répondre</strong> (→ conversation privée)</td><td>lecteur</td><td>Rail + feuille (« Répondre à… ») ; <code>ReplyContext.story</code> conservé, étendu à post/réel</td><td class="muted">rail story uniquement</td></tr>
+        <tr><td><strong>Envoyer / transférer</strong> vers des conversations</td><td>lecteur · auteur</td><td>Rail (✈️) ; côté auteur, aussi depuis la carte d'Étagère (sheet de forward existante)</td><td class="muted">rail + MyStoriesView</td></tr>
+        <tr><td><strong>Repost / quote</strong></td><td>lecteur (contenu public)</td><td>Rail → Barre de publication (<code>PublishIntent</code>, cas C4)</td><td class="muted">route /repost sans audience</td></tr>
+        <tr><td><strong>Commentaires</strong></td><td>lecteur</td><td>Feuille d'engagement (S12) — thread commun aux 3 formats, traduit par le Prisme</td><td class="muted">rail (si count &gt; 0) + overlay</td></tr>
+        <tr><td><strong>Vues</strong> (compteur + liste)</td><td>auteur</td><td>Rail (👁) + feuille ; <code>storyViews</code> inchangé</td><td class="muted">rail auteur + sheet viewers</td></tr>
+        <tr><td><strong>Sauvegarder</strong> (photo / vidéo)</td><td>auteur</td><td>Rail (⤓ + anneau de progression conservé) + carte d'Étagère — cas C8</td><td class="muted">StoryVideoExportService, StoryPhotoSaveService</td></tr>
+        <tr><td><strong>Partager</strong> (share sheet système)</td><td>auteur</td><td>Rail</td><td class="muted">StoryExportRailButtons</td></tr>
+        <tr><td><strong>Muet / son</strong></td><td>lecteur</td><td>Rail + mute per-piste sur les chips audio (conservé)</td><td class="muted">rail + StoryReaderAudioMuteRegistry</td></tr>
+        <tr><td><strong>Traductions</strong> (langues + Original)</td><td>lecteur</td><td>Rail « Abc » + barre de langues isomorphe (préservés) + geste « maintenir le texte » (rupture §07)</td><td class="muted">StoryLanguageQuickBar</td></tr>
+        <tr><td><strong>Transcription audio</strong></td><td>lecteur</td><td>Menu « … » — bascule conservée telle quelle</td><td class="muted">menu … du reader</td></tr>
+        <tr><td><strong>Signaler</strong></td><td>lecteur</td><td>Menu « … »</td><td class="muted">menu …</td></tr>
+        <tr><td><strong>Modifier</strong></td><td>auteur</td><td>Menu « … » et carte d'Étagère → intent <code>edit</code> (cas C7) ; reset d'engagement inchangé</td><td class="muted">StoryEditSession + EditPostSheet</td></tr>
+        <tr><td><strong>Republier</strong> (story expirée → rejoue 20 h)</td><td>auteur</td><td>Carte archivée de l'Étagère (« Republier ») + notification d'expiration → même intent ; <strong>premier client web</strong> de <code>/republish</code></td><td class="muted">MyStoriesView + StoryExpiredContent (iOS seul)</td></tr>
+        <tr><td><strong>Supprimer</strong></td><td>auteur</td><td>Menu « … » + carte d'Étagère ; <code>story:deleted</code> / <code>post:deleted</code> inchangés</td><td class="muted">MyStoriesDeleteConfirmation</td></tr>
+        <tr><td><strong>Changer l'audience</strong> après publication</td><td>auteur</td><td>Menu de carte d'Étagère → <code>PUT /posts/:id</code> (visibility) — même picker que la Barre</td><td class="muted">sheet audience de MyStoriesView</td></tr>
+        <tr><td><strong>Épingler au profil</strong></td><td>auteur</td><td>Menu de carte d'Étagère → route <code>/pin</code> existante</td><td class="muted">route seule, UI profil</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:22px;margin-top:44px">Les huit cas complexes — deux options chacun</h3>
+
+  <div class="cases">
+    <div class="case">
+      <h4>C1 · Mentions &amp; hashtags</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — champ content seulement</b>Autocomplétion dans le champ texte des modes Post/Réel, en réutilisant le contrôleur des commentaires/messages. Sur le canvas, <code>@</code> reste du texte décoratif ; l'extraction serveur (<code>resolvePostMentions</code>, <code>extractHashtags</code>) fait foi.</div>
+        <div class="opt"><b>Option B — élément « mention » de canvas</b>Un vrai élément à payload <code>{ userId }</code> : tap dans le Reader ouvre le profil, y compris en story. Nécessite une extension du contrat (kind sticker, payload mention) et un rendu interactif.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A en phase 5 (zéro contrat nouveau), B ensuite comme extension du kind <code>sticker</code> — les deux sont compatibles, B n'invalide rien de A.</p>
+    </div>
+    <div class="case">
+      <h4>C2 · L'audio express (vocal rapide)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — tout par le canvas</b>L'audio est toujours un élément audio-first du canvas (cover auto façon <code>ReelAudioBackdrop</code>). Un seul chemin — mais deux taps de plus pour le vocal du quotidien.</div>
+        <div class="opt"><b>Option B — raccourci d'Amorce</b>Bouton micro dans l'Amorce : enregistrer → publier direct. L'atelier fabrique le canvas minimal en coulisse et émet le <em>même</em> <code>PublishIntent</code> — aucun chemin de publication séparé.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B par-dessus A. Le raccourci produit le même objet que le chemin long — les trois chemins de publication audio iOS divergents meurent, la friction du vocal rapide reste nulle.</p>
+    </div>
+    <div class="case">
+      <h4>C3 · Slides story ↔ carrousel post</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — 1 slide = 1 carte</b>En mode Post, le SlideStrip devient le carrousel : l'ordre des slides EST l'ordre des cartes, <code>PostMedia.order</code> est enfin écrit à la publication, le feed pagine le CanvasPlayer avec des points.</div>
+        <div class="opt"><b>Option B — pas de slides en Post</b>Un seul canvas + grille de médias ordonnée manuellement dans le Dock ; le carrousel du feed est une liste de médias nus, sans composition par carte.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A — un seul modèle mental (le même SlideStrip partout), et le comportement de B reste atteignable en n'utilisant qu'une slide. Corrige au passage le tri de lecture qui ment.</p>
+    </div>
+    <div class="case">
+      <h4>C4 · Repost &amp; quote</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — repost = PublishIntent</b><code>repostOfId</code> passe par la Barre de publication : audience, langue et texte de quote au même endroit que tout le reste. La route <code>/repost</code> côté client disparaît — le serveur résout déjà <code>repostOfId</code> au create (<code>PostService.ts:173-190</code>).</div>
+        <div class="opt"><b>Option B — route dédiée conservée</b>Garder <code>/repost</code> et enfin envoyer <code>RepostSchema.visibility</code> (le champ existe, aucun chemin feed ne le remplit). Correctif minimal, unification différée.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A — c'est l'esprit « un seul verbe ». B est le correctif d'attente acceptable si la phase 5 est découpée.</p>
+    </div>
+    <div class="case">
+      <h4>C5 · Le lieu (pastille vs métadonnée)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — deux lieux indépendants</b>La pastille de canvas (élément) et la métadonnée de publication (<code>metadata.location</code>) se posent séparément. Flexible, mais deux vérités possibles pour un même post.</div>
+        <div class="opt"><b>Option B — une source, deux rendus</b>Un seul lieu choisi dans le panneau : métadonnée toujours, pastille optionnelle « Afficher sur le canvas ». La découvrabilité (<code>geoPoint</code>, premier client de <code>discoverabilityPrecision</code>) est un toggle du même panneau.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B — une seule source de vérité, et la fuite iOS (lieu perdu sur les chemins inline) devient structurellement impossible.</p>
+    </div>
+    <div class="case">
+      <h4>C6 · La langue (publication vs objet)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — par objet seulement</b>Comme la story aujourd'hui : chaque texte déclare sa langue, le <code>content</code> prend <code>detectLanguage</code>. Simple, mais le web continue de publier sans langue fiable.</div>
+        <div class="opt"><b>Option B — héritage + surcharge</b>Langue de publication dans la Barre (préremplie par détection, envoyée comme <code>originalLanguage</code> — corrige le web) ; chaque objet texte hérite, surcharge possible via l'onglet Langue (S3c).</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B — le Prisme reçoit enfin une langue fiable sur tous les formats, et le cas multilingue par objet reste entier.</p>
+    </div>
+    <div class="case">
+      <h4>C7 · L'édition d'un post publié</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — l'atelier complet</b>L'intent <code>edit</code> rouvre l'atelier : tout est éditable (médias ±, lieu tri-état, type, langue), <code>UpdatePost.mediaIds</code> devient enfin vivant, le reset d'engagement (<code>contentEditedAt</code>) s'applique.</div>
+        <div class="opt"><b>Option B — édition légère + escalade</b>Un inline rapide (texte, visibilité) dans le feed, et « Ouvrir dans l'atelier » pour le reste. Deux surfaces, mais le correctif rapide reste à un tap.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> A comme socle (une porte), B comme raccourci de menu contextuel — même endpoint, pas de logique dupliquée.</p>
+    </div>
+    <div class="case">
+      <h4>C8 · Sauvegarder / exporter (photo &amp; vidéo)</h4>
+      <div class="opts">
+        <div class="opt"><b>Option A — l'export est un rendu</b>Le CanvasPlayer rend hors écran vers un writer vidéo (AVAssetWriter / WebCodecs). Un seul moteur : ce qui est exporté est exactement ce que le lecteur voit, et l'export devient possible sur le web. Le pipeline dédié meurt.</div>
+        <div class="opt"><b>Option B — pipeline dédié conservé</b><code>StoryVideoExportService</code>, <code>StoryPhotoSaveService</code> et <code>TimelineExportPreflightSheet</code> restent tels quels, rebranchés sur le modèle v2. Zéro risque, export iOS seulement, anneau de progression du rail inchangé.</div>
+      </div>
+      <p class="reco"><b>Recommandation :</b> B pendant les phases 2 à 5 — c'est l'acquis, on ne casse pas un export qui marche. A en cible une fois le registre stabilisé : l'export redevient « un rendu », le pipeline séparé disparaît en phase 6.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">07 · L'acquis préservé</p>
+  <h2>La rupture porte sur les vues, jamais sur les fondations</h2>
+  <p class="lede">Rompre avec les 85 vues et le <code>passthrough()</code>, oui — mais tout ce que le système fait déjà bien reste en place, tel quel, sous l'atelier. Ce ne sont pas des concessions au legacy : ce sont les acquis qui rendent la refonte possible.</p>
+
+  <div class="keeps">
+    <div class="keep"><span class="tick">✓</span><div><b>Traduction pilotée par l'audience</b><p><code>triggerStoryTextTranslation</code> cible les langues des destinataires réels (pas 5 langues fixes), fusionne dans les objets texte, diffuse <code>story:translation-updated</code>. Le Prisme Linguistique intact.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Pipeline audio 3 étages</b><p>Whisper → NLLB → TTS, transcription mobile prioritaire, repli serveur. L'enregistreur du Dock s'y branche sans le toucher.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>File offline + brouillons iOS</b><p><code>StoryPublishQueue</code> (778 l.) et <code>StoryDraftStore</code> (1 024 l.) deviennent les moteurs de l'Étagère — inchangés, enfin exposés partout, y compris pour l'édition.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Visibilité 6 niveaux + broadcast filtré</b><p>PUBLIC → ONLY, picker EXCEPT/ONLY, et le correctif de fuite du fan-out (<code>broadcastStoryCreated</code>) restent la référence.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Éphémère sans destruction</b><p>Masquée après 20 h, jamais supprimée : archive auteur, republication (<code>POST /republish</code>), repost. L'atelier ne fait que donner enfin un client web à ces routes.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Édition = « redevenue non-vue »</b><p><code>contentEditedAt</code> → reset d'engagement diffusé via <code>story:updated</code>. Le comportement produit le plus fin du domaine, conservé à l'identique.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Uploads TUS + propriété des médias</b><p><code>/uploads</code> + <code>claimableMediaWhere</code> : le bon pipeline existe déjà — la refonte le généralise au web au lieu de le remplacer.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Le moteur de gestes du canvas iOS</b><p>La manipulation directe (drag, pinch, rotation, guides, édition inline) est la partie réussie des 48 900 lignes. Elle devient le socle du Canvas — repliée derrière son API, pas réécrite.</p></div></div>
+    <div class="keep"><span class="tick">✓</span><div><b>Idempotence &amp; sons de bibliothèque</b><p><code>clientMutationId</code> + <code>withMutationLog</code> contre les doubles publications ; capture et attribution des sons empruntés (<code>captureSounds</code>) inchangées.</p></div></div>
+  </div>
+
+  <p style="margin-top:32px;max-width:68ch">L'audit du lecteur iOS (en-tête, crédit sonore, durées, progression, rail d'actions, traduction) tranche surface par surface : à gauche les conventions déjà justes — elles passent dans l'atelier telles quelles ; à droite les endroits où iOS se contredit lui-même — c'est là, et seulement là, que la rupture réduit la friction.</p>
+  <div class="compare">
+    <div class="col">
+      <span class="tag good">Préservé tel quel — conventions ancrées</span>
+      <h3>Le lecteur iOS a déjà raison</h3>
+      <div class="blocks">
+        <div class="block"><span><code>computedTotalDuration()</code>, unique autorité de durée — barre de progression, auto-avance du canvas et export restent en phase</span></div>
+        <div class="block"><span><code>AudioChipDisplay.resolve</code> — <code>soundId</code> = emprunt → marquee « titre · @pseudo · M:SS » ; piste propre → sinusoïde</span></div>
+        <div class="block"><span>Rail droit au plan figé à l'entrée du slide — aucun bouton n'apparaît en cours de lecture (invariant produit)</span></div>
+        <div class="block"><span>Barre de langues isomorphe à la barre de réactions — même chrome, mêmes chips, même geste de scrub</span></div>
+        <div class="block"><span>Traduction invisible : rendu natif, badge de code langue discret, jamais de bannière</span></div>
+        <div class="block"><span>Atomes animés autonomes (marquee, décompte, sinusoïde) — l'animation vit dans son propre TimelineView, le header ne se re-rend pas</span></div>
+        <div class="block"><span>Hold 0,45 s + slop 24 px · barres segmentées 3 pt, gradient sur le segment courant · horodatage compact « 2h / 3j »</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <span class="tag warn">Ruptures assumées — là où iOS se contredit</span>
+      <h3>Six frictions à résoudre</h3>
+      <div class="blocks">
+        <div class="block hot"><span>Le réel refabrique son crédit sonore à la main (<code>borrowedSoundLabel</code>, pill statique) → l'atome partagé partout, décompte compris : « Aïcha · ♫ Nuits d'été · 0:15 »</span></div>
+        <div class="block hot"><span>Le crédit d'en-tête ignore les sons foreground (fond uniquement) → le résolveur considère toutes les pistes : plus d'attribution manquée</span></div>
+        <div class="block"><span>Deux échelles temporelles (« 2h » au reader et au feed, « il y a 3 jours » dans Mes stories) → la compacte partout</span></div>
+        <div class="block"><span>Retour à l'original atteignable seulement via le picker → geste direct « maintenir le texte », aligné sur la bulle de conversation</span></div>
+        <div class="block"><span>Badge langue à l'opposé du contenu traduit (rail bas-droite vs texte haut-gauche) → le signal rejoint l'en-tête</span></div>
+        <div class="block"><span>Rail à 8 entrées au bord du scroll sur les petits écrans → la feuille d'engagement (S12) absorbe commentaires et réactions détaillées</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="parity">
+    <h3>Une story = un réel temporaire</h3>
+    <p>C'est déjà vrai en base — une story EST un <code>Post</code> — mais les clients ne l'honorent pas. Le design l'érige en règle : une story publiée porte <strong>toute</strong> la surface sociale d'un réel, servie par les mêmes endpoints et le même Prisme. L'unique écart est la fenêtre de visibilité.</p>
+    <div class="tablewrap" style="margin-top:14px">
+      <table>
+        <thead><tr><th>Surface sociale</th><th>Réel</th><th>Story</th></tr></thead>
+        <tbody>
+          <tr><td>Commentaires (thread complet, traduits par le Prisme)</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+          <tr><td>Réactions comptées, ajout / retrait en temps réel</td><td class="ok">✓</td><td class="ok">✓ <span class="muted mono">story:reacted</span></td></tr>
+          <tr><td>Réponse privée → ouvre la conversation</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+          <tr><td>Transfert &amp; repost</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+          <tr><td>Traductions multi-langues, exploration de l'original</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+          <tr><td>Liste des vues (auteur)</td><td class="ok">✓</td><td class="ok">✓ <span class="muted mono">storyViews</span></td></tr>
+          <tr><td>Édition après publication (reset d'engagement)</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+          <tr class="diff"><td>Fenêtre de visibilité</td><td>permanente</td><td>20 h, puis archive — l'engagement reste consultable</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">08 · En situation</p>
+  <h2>Dix-huit moments, toujours les deux mêmes surfaces</h2>
+  <p class="lede">Photo, vidéo, timeline, texte (typographie, cadre, langue), pinceau, son, voix, aperçu, lecture, engagement — puis post et réel : aucun de ces moments n'ouvre un écran nouveau. Le Canvas reste la scène ; le Dock se reconfigure depuis un descripteur. Les maquettes ci-dessous sont l'application littérale des 5 vues.</p>
+
+  <!-- S1 — Photo -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#F2A65A 0%,#B4536B 55%,#3E2A56 100%)">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-guide"></div>
+        <div class="m-el sel" style="top:44%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4)">Golden hour ✨<b class="h tl"></b><b class="h tr"></b><b class="h bl"></b><b class="h br"></b></div>
+        <div class="m-pill" style="bottom:12px;left:12px">📍 Alfama, Lisbonne</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Outils</span><span>Ajuster le fond ↔</span></div>
+        <div class="m-tools">
+          <div class="m-tool on">Aa</div><div class="m-tool">✏️</div><div class="m-tool">♫</div>
+          <div class="m-tool">☺</div><div class="m-tool">📍</div><div class="m-tool">⋯</div>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S1 · Image</span>
+      <h3>Photo + texte — le chemin à 95 %</h3>
+      <p>Depuis l'Amorce, la photo devient l'élément fond du Canvas. Le texte se pose et se manipule directement sur la scène — poignées, guide d'alignement magnétique, pastille de lieu. Le Dock reste en mode « outils » : une seule rangée, générée depuis <code>composerOrder</code>. Rien ne s'ouvre par-dessus.</p>
+      <div class="chips"><span class="chip a">Canvas</span><span class="chip a">Dock · rangée d'outils</span><span class="chip">0 modal</span><span class="chip">remplace le rail FAB + amorces</span></div>
+    </div>
+  </div>
+
+  <!-- S2 — Vidéo -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(180deg,#12455A 0%,#1B6E7A 60%,#0D2B36 100%)">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:16px">▶</div>
+        <div class="m-pill" style="top:44px;right:12px">12,4 s</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Vidéo — rogner</span><span>volume 70 %</span></div>
+        <div class="m-strip">
+          <i style="background:#155A6B"></i><i style="background:#1B6E7A"></i><i style="background:#2A8391"></i><i style="background:#1B6E7A"></i><i style="background:#155A6B"></i><i style="background:#123F4E"></i>
+          <span class="dimzone" style="left:0;width:6%"></span><span class="dimzone" style="right:0;width:12%"></span>
+          <span class="hd l"></span><span class="hd r"></span>
+        </div>
+        <div class="m-slider"><span>🔊</span><div class="sl-track"><span class="sl-fill" style="width:70%"></span><span class="sl-thumb" style="left:70%"></span></div></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S2 · Vidéo</span>
+      <h3>Rogner et doser, sans quitter la scène</h3>
+      <p>Sélectionner la vidéo bascule le Dock en inspecteur : bande de trim à poignées, volume, fondu. Ce sont les champs du contrat — <code>startTime</code>, <code>duration</code>, <code>volume</code>, <code>fadeIn/Out</code> — exposés tels quels. L'éditeur vidéo modal ne subsiste que pour les retouches lourdes (recadrage image par image).</p>
+      <div class="chips"><span class="chip a">Dock · inspecteur média</span><span class="chip">contrôles = Timing du contrat</span><span class="chip">remplace MeeshyVideoEditorView (cas courant)</span></div>
+    </div>
+  </div>
+
+  <!-- S3 — Texte -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(170deg,#3E2A56 0%,#6B3560 60%,#22172E 100%)">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">OK</span></div>
+        <div class="m-el" style="top:42%;left:50%;transform:translateX(-50%);font-size:15px;background:rgba(0,0,0,.28);white-space:nowrap">On se retrouve où ?<span style="opacity:.85;font-weight:400">|</span></div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Texte — style</span><span>⇄ traduit pour l'audience</span></div>
+        <div class="m-seg"><b>Aa</b><b class="on">Ne</b><b>Tt</b><b>Hh</b></div>
+        <div class="m-swatches">
+          <span class="sw on" style="background:#FFFFFF"></span><span class="sw" style="background:#F2A65A"></span><span class="sw" style="background:#E5484D"></span>
+          <span class="sw" style="background:#2FB9C6"></span><span class="sw" style="background:#7A5FB5"></span><span class="sw" style="background:#16232A"></span>
+        </div>
+        <div class="m-slider"><span>Aa</span><div class="sl-track"><span class="sl-fill" style="width:45%"></span><span class="sl-thumb" style="left:45%"></span></div><span style="font-size:13px">Aa</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S3 · Texte</span>
+      <h3>Édition en place, panneau généré</h3>
+      <p>Le texte s'édite là où il s'affiche — pas de plein écran dédié. Le panneau (styles, couleurs, taille, alignement) est <em>généré</em> depuis le descripteur de l'outil : les 4 vues actuelles (toolbar, topbar, bulles, options) deviennent une liste de contrôles typés. Chaque objet texte porte ses <code>translations</code> : le Prisme Linguistique servira chaque lecteur dans sa langue.</p>
+      <div class="chips"><span class="chip a">Dock · panneau généré</span><span class="chip">remplace 4 vues texte + 4 vues dessin</span><span class="chip">Prisme : traductions par objet</span></div>
+    </div>
+  </div>
+
+  <!-- S3b — Texte : typographie -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(170deg,#3E2A56 0%,#6B3560 60%,#22172E 100%);aspect-ratio:9/8">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">OK</span></div>
+        <div class="m-el sel" style="top:38%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.28);font-size:15px;font-weight:800;white-space:nowrap">On se retrouve où ?<b class="h tl"></b><b class="h tr"></b><b class="h bl"></b><b class="h br"></b></div>
+      </div>
+      <div class="m-dock">
+        <div class="m-seg" style="font-size:10px"><b>Style</b><b class="on">Police</b><b>Cadre</b><b>Langue</b></div>
+        <div class="m-fontrow">
+          <span class="m-font on" style="font-family:system-ui">Inter</span>
+          <span class="m-font" style="font-family:Georgia,serif">Charter</span>
+          <span class="m-font" style="font-family:ui-monospace,monospace">Mono</span>
+          <span class="m-font" style="font-family:cursive">Script</span>
+        </div>
+        <div class="m-seg"><b style="font-weight:300">Léger</b><b style="font-weight:400">Normal</b><b class="on" style="font-weight:700">Gras</b><b style="font-weight:900">Noir</b></div>
+        <div class="m-slider"><span style="font-size:9px">Aa</span><div class="sl-track"><span class="sl-fill" style="width:55%"></span><span class="sl-thumb" style="left:55%"></span></div><span style="font-size:13px">Aa</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S3b · Typographie</span>
+      <h3>Police et graisse : dans le panneau, en direct</h3>
+      <p>Le panneau texte est en <strong>sous-onglets</strong> générés depuis le descripteur (contrôle <code>tabs</code>) : Style · Police · Cadre · Langue. Ici l'onglet Police : les familles en rangée — chaque chip rendue dans sa propre police —, la graisse en segmenté (Léger → Noir), la taille au slider. Chaque réglage s'applique <em>en direct</em> sur l'élément sélectionné du canvas. <strong>Moment :</strong> pendant l'édition inline (clavier levé) à la création, ou depuis l'Inspecteur pour un texte existant — jamais un écran dédié.</p>
+      <div class="chips"><span class="chip a">Panneau · onglet Police</span><span class="chip">application en direct</span><span class="chip">descripteur : contrôle tabs</span></div>
+    </div>
+  </div>
+
+  <!-- S3c — Texte : cadre, bordure, langue -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(170deg,#3E2A56 0%,#6B3560 60%,#22172E 100%);aspect-ratio:9/7">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">OK</span></div>
+        <div class="m-el sel" style="top:36%;left:50%;transform:translateX(-50%);background:rgba(255,255,255,.92);color:#22172E;border:2px solid #F2A65A;border-radius:10px;font-size:13px;white-space:nowrap">On se retrouve où ?<b class="h tl"></b><b class="h tr"></b><b class="h bl"></b><b class="h br"></b></div>
+      </div>
+      <div class="m-dock">
+        <div class="m-seg" style="font-size:10px"><b>Style</b><b>Police</b><b class="on">Cadre</b><b>Langue</b></div>
+        <div class="m-fontrow">
+          <span class="m-font">Aa</span>
+          <span class="m-font" style="background:rgba(255,255,255,.18)">Aa</span>
+          <span class="m-font on" style="background:#EAF2F4;color:#22172E">Aa</span>
+          <span class="m-font" style="background:transparent;box-shadow:inset 0 0 0 1.5px #EAF2F4">Aa</span>
+        </div>
+        <div class="m-slider"><span style="font-size:9px">Bord</span><div class="sl-track"><span class="sl-fill" style="width:40%"></span><span class="sl-thumb" style="left:40%"></span></div><span class="sw" style="width:15px;height:15px;background:#F2A65A;border-color:#fff"></span></div>
+        <div class="dk-title" style="margin-top:2px"><span>Langue de ce texte</span><span>onglet Langue</span></div>
+        <div class="m-row" style="gap:6px"><span class="m-react on">🇫🇷 FR</span><span class="m-react">EN</span><span class="m-react">ES</span><span class="m-react">＋</span><span style="flex:1"></span><span style="font-size:8.5px;opacity:.55">langue d'origine</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S3c · Cadre &amp; langue</span>
+      <h3>Cadre, bordure — et la langue du texte, déclarée là où on écrit</h3>
+      <p>Onglet Cadre : le fond du texte en quatre états (aucun · voile · plein · contour), l'épaisseur de bordure au slider, la couleur prise dans le nuancier courant — le canvas montre le résultat en direct. Onglet Langue : chaque objet texte <strong>déclare sa langue d'origine</strong>, préremplie par détection (<code>detectLanguage</code>) ; c'est elle qui alimente les traductions audience-driven du Prisme (le champ <code>translations</code> de l'objet). <strong>Moment :</strong> un tap d'onglet dans le même panneau — zéro navigation, zéro sheet.</p>
+      <div class="chips"><span class="chip a">Panneau · onglets Cadre / Langue</span><span class="chip">langue d'origine par objet</span><span class="chip">→ traductions Prisme</span></div>
+    </div>
+  </div>
+
+  <!-- S3d — Dessin : pinceau -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#1A222D 0%,#242038 100%);aspect-ratio:9/8">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta strong">OK</span></div>
+        <svg viewBox="0 0 240 140" style="width:88%;height:auto" aria-hidden="true">
+          <path d="M18 112 Q 62 18, 120 74 T 224 44" fill="none" stroke="#F2A65A" stroke-width="7" stroke-linecap="round"/>
+          <path d="M30 128 Q 90 96, 150 118 T 226 100" fill="none" stroke="#2FB9C6" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+        </svg>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Dessin — pinceau</span><span>2 traits · ↶</span></div>
+        <div class="m-seg"><b class="on">Feutre</b><b>Néon</b><b>Marqueur</b><b>Gomme</b></div>
+        <div class="m-slider"><span style="width:6px;height:6px;border-radius:50%;background:#fff;flex:none"></span><div class="sl-track"><span class="sl-fill" style="width:60%"></span><span class="sl-thumb" style="left:60%"></span></div><span style="width:14px;height:14px;border-radius:50%;background:#F2A65A;flex:none"></span></div>
+        <div class="m-swatches">
+          <span class="sw on" style="background:#F2A65A"></span><span class="sw" style="background:#FFFFFF"></span><span class="sw" style="background:#E5484D"></span>
+          <span class="sw" style="background:#2FB9C6"></span><span class="sw" style="background:#7A5FB5"></span><span class="sw" style="background:#16232A"></span>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S3d · Pinceau</span>
+      <h3>Le pinceau se règle sans quitter le tracé</h3>
+      <p>Tap <span class="mono">✏️</span> : le canvas passe en capture de traits et ce panneau <strong>reste ouvert tant que le mode dessin est actif</strong>. Pinceau (Feutre · Néon · Marqueur · Gomme), épaisseur avec <em>aperçu de pointe vivant</em> (la pastille à droite du slider grossit avec le réglage), couleur au nuancier : chaque réglage s'applique au <strong>prochain trait</strong>, sans interrompre le geste. Annulation trait par trait depuis le titre. <strong>Moment de la retouche :</strong> un trait déjà posé se retouche via l'Inspecteur (tap dessus hors mode dessin → liste des traits, couleur, épaisseur).</p>
+      <div class="chips"><span class="chip a">Panneau · mode dessin actif</span><span class="chip">réglages → prochain trait</span><span class="chip">retouche via Inspecteur (liste)</span></div>
+    </div>
+  </div>
+
+  <!-- S4 — Son de fond -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#4A5568 0%,#2D3748 60%,#171E28 100%)">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-pill" style="top:44px;left:12px">♫ Nuits d'été · 0:15</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Son de fond — bibliothèque</span><span>extrait 15 s</span></div>
+        <div class="m-sndrow on"><span class="t">Nuits d'été</span>
+          <div class="m-wave"><span style="height:6px"></span><span style="height:11px"></span><span style="height:16px"></span><span style="height:9px"></span><span style="height:18px"></span><span style="height:13px"></span><span style="height:7px"></span><span style="height:15px"></span><span style="height:19px"></span><span style="height:10px"></span><span style="height:6px"></span><span style="height:13px"></span><span style="height:17px"></span><span style="height:8px"></span></div>
+          <span class="d">1:42</span></div>
+        <div class="m-sndrow"><span class="t">Café Kinshasa</span>
+          <div class="m-wave dim"><span style="height:9px"></span><span style="height:14px"></span><span style="height:7px"></span><span style="height:16px"></span><span style="height:11px"></span><span style="height:5px"></span><span style="height:13px"></span><span style="height:17px"></span><span style="height:8px"></span><span style="height:12px"></span><span style="height:15px"></span><span style="height:6px"></span><span style="height:10px"></span><span style="height:14px"></span></div>
+          <span class="d">2:08</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S4 · Son de fond</span>
+      <h3>Emprunter un son, choisir sa fenêtre</h3>
+      <p>La bibliothèque de sons vit dans le Dock — liste, recherche, fenêtre d'extrait glissée sur la forme d'onde. Le choix produit un élément <code>audio</code> avec <code>soundId</code> : la capture de sons du serveur (<code>captureSounds</code>) et l'attribution restent inchangées. La pastille sur le Canvas rend le son visible, déplaçable, supprimable comme n'importe quel élément.</p>
+      <div class="chips"><span class="chip a">Dock · bibliothèque</span><span class="chip">élément audio du contrat (soundId)</span><span class="chip">remplace SoundLibraryPicker en sheet</span></div>
+    </div>
+  </div>
+
+  <!-- S5 — Enregistrement vocal -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#2A3441 0%,#1A222D 100%)">
+        <div class="m-top"><span>✕</span><span class="sp"></span></div>
+        <div style="text-align:center">
+          <div style="font-size:20px;font-variant-numeric:tabular-nums;font-weight:700">0:07</div>
+          <div style="opacity:.6;font-size:10px">Enregistrement…</div>
+        </div>
+      </div>
+      <div class="m-dock">
+        <div class="m-row" style="justify-content:center">
+          <div class="m-wave" style="flex:0 1 auto"><span style="height:5px;background:#E5484D"></span><span style="height:12px;background:#E5484D"></span><span style="height:18px;background:#E5484D"></span><span style="height:9px;background:#E5484D"></span><span style="height:20px;background:#E5484D"></span><span style="height:14px;background:#E5484D"></span><span style="height:7px;background:#E5484D"></span><span style="height:16px;background:#E5484D"></span><span style="height:11px;background:#E5484D"></span><span style="height:19px;background:#E5484D"></span><span style="height:8px;background:#E5484D"></span><span style="height:13px;background:#E5484D"></span></div>
+        </div>
+        <div class="rec"></div>
+        <div class="m-row"><span class="m-btn">Reprendre</span><span class="m-btn strong">Valider</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S5 · Voix</span>
+      <h3>Enregistrer, puis laisser le pipeline parler</h3>
+      <p>L'enregistreur est un mode du Dock, pas une sheet. « Valider » crée un élément <code>audio</code> uploadé en TUS (<code>uploadcontext: story</code>) — puis le pipeline serveur existant prend le relais : transcription Whisper, traduction NLLB, TTS. La voix suit le Prisme comme le texte : chaque lecteur l'entendra ou la lira dans sa langue.</p>
+      <div class="chips"><span class="chip a">Dock · enregistreur</span><span class="chip">pipeline audio 3 étages inchangé</span><span class="chip">remplace UnifiedAudioRecorderSheet</span></div>
+    </div>
+  </div>
+
+  <!-- S6 — Timeline -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#F2A65A 0%,#B4536B 55%,#3E2A56 100%);aspect-ratio:9/7.5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-el" style="bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4);font-size:10px">Golden hour ✨</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Timeline — avancé</span><span>5,7 s / 12,4 s</span></div>
+        <div class="m-tl">
+          <div class="m-ruler"><span>0 s</span><span>4 s</span><span>8 s</span><span>12 s</span></div>
+          <div class="m-trk"><span class="lbl">Fond</span><div class="lane"><span class="clipx" style="left:0;right:0;background:#155A6B"></span></div></div>
+          <div class="m-trk"><span class="lbl">Vidéo</span><div class="lane"><span class="clipx" style="left:0;width:78%;background:#2A8391"></span></div></div>
+          <div class="m-trk"><span class="lbl">Texte 1</span><div class="lane"><span class="clipx" style="left:16%;width:48%;background:#7A5FB5"></span></div></div>
+          <div class="m-trk"><span class="lbl">Voix</span><div class="lane"><span class="clipx" style="left:8%;width:70%;background:#B4536B"></span><span class="kf" style="left:20%"></span><span class="kf" style="left:44%"></span><span class="kf" style="left:66%"></span></div></div>
+          <span class="ph"></span>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S6 · Timeline</span>
+      <h3>L'inspecteur avancé, plus un monde parallèle</h3>
+      <p>La timeline actuelle pèse <strong>32 vues</strong> — un composer dans le composer. Ici, c'est le Dock déplié en mode avancé : une piste par élément porteur de temps, drag pour déplacer, poignées pour trimmer, points blancs pour les keyframes de volume. Le Canvas reste visible et joue sous la tête de lecture : la scène et le temps ne sont plus deux écrans.</p>
+      <div class="chips"><span class="chip a">Dock · déplié</span><span class="chip a">Canvas · lecture sous playhead</span><span class="chip">remplace 32 vues timeline</span></div>
+    </div>
+  </div>
+
+  <!-- S7 — Aperçu -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#F2A65A 0%,#B4536B 55%,#3E2A56 100%);aspect-ratio:9/13.5">
+        <div class="m-progress"><i class="done"></i><i class="half"></i><i></i></div>
+        <div class="m-author"><span class="av"></span><span>Moi</span><span class="ago">maintenant</span></div>
+        <div class="m-banner">Mode aperçu — rien n'est publié</div>
+        <div class="m-el" style="top:48%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4)">Golden hour ✨</div>
+        <div class="m-pill" style="bottom:12px;left:12px">📍 Alfama, Lisbonne</div>
+      </div>
+      <div class="m-dock">
+        <div class="m-row"><span class="m-btn">Audience : Amis ▾</span><span class="m-btn strong">Publier</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S7 · Aperçu</span>
+      <h3>Le lecteur, en répétition générale</h3>
+      <p>« Aperçu » ne pousse pas une vue dédiée : c'est le Reader lui-même, nourri par le même registre de rendu que le Canvas, avec la Barre de publication par-dessus. Ce que l'auteur voit ici est <em>par construction</em> ce que l'audience verra — slides, transitions, timing compris. Publier part toujours dans la file offline.</p>
+      <div class="chips"><span class="chip a">Reader en mode preview</span><span class="chip a">Barre de publication</span><span class="chip">0 vue dédiée</span></div>
+    </div>
+  </div>
+
+  <!-- S8 — Reader -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#F2A65A 0%,#B4536B 55%,#3E2A56 100%);aspect-ratio:9/13.5">
+        <div class="m-progress"><i class="done"></i><i class="half"></i><i></i></div>
+        <div class="m-author"><span class="av"></span><span>Nadia</span><span class="ago">🕐 2h</span></div>
+        <div style="position:absolute;top:46%;left:50%;transform:translateX(-50%);text-align:center;z-index:2">
+          <div class="m-el" style="position:static;display:inline-block;background:rgba(0,0,0,.4)">Bonjour de Lisbonne ☀️</div>
+          <div style="margin-top:7px"><span class="m-tr">⇄ traduit de l'anglais · maintenir pour l'original</span></div>
+        </div>
+        <div class="m-pill" style="bottom:12px;left:12px">📍 Alfama, Lisbonne</div>
+      </div>
+      <div class="m-dock">
+        <div class="m-reply"><span class="rin">Répondre à Nadia…</span><span style="font-size:14px">❤️</span><span style="font-size:14px">🔥</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S8 · Reader</span>
+      <h3>La lecture, servie par le Prisme</h3>
+      <p>Le Reader rend la même liste d'éléments que le composer — c'est le même code. Le texte s'affiche dans la langue du lecteur via <code>translations</code> et <code>resolveUserLanguage()</code>, avec l'indicateur discret du Prisme : maintenir pour voir l'original. Tap gauche/droite pour naviguer, la vue part dans <code>storyViews</code>, la réponse ouvre la conversation. Zéro divergence possible entre ce que l'un compose et ce que l'autre lit.</p>
+      <div class="chips"><span class="chip a">Reader = registre partagé</span><span class="chip">Prisme Linguistique</span><span class="chip">story:viewed · réactions · réponse</span></div>
+    </div>
+  </div>
+
+  <!-- S9 — Post (composer) -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%);aspect-ratio:9/8.5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-el" style="top:34%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35)">Carnet de voyage 🧭</div>
+        <div class="m-pill" style="bottom:10px;right:10px">♫ Nuits d'été</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Texte du post → content</span><span>⇄ translatePost</span></div>
+        <div class="m-txtfield">Trois jours à Lisbonne — le carnet complet, quartier par quartier. 🇵🇹</div>
+        <div class="m-seg"><b>Story</b><b class="on">Post</b><b>Réel</b></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S9 · Post</span>
+      <h3>Le même atelier, le texte à sa vraie place</h3>
+      <p>Un switch dans la Barre de publication et l'atelier compose un post : le champ de texte principal n'est <em>pas</em> un élément du canvas — il voyage en <code>Post.content</code>, indexé et traduit par le pipeline <code>translatePost</code> existant. Le canvas au-dessus (photo, titre décoratif, son) part dans le même blob v2. Zéro outil nouveau, zéro écran nouveau : composer un post, c'est composer une story avec un texte natif en plus.</p>
+      <div class="chips"><span class="chip a">Barre · format Post</span><span class="chip">content = texte du post</span><span class="chip">remplace PostComposer + AudioPostComposer</span></div>
+    </div>
+  </div>
+
+  <!-- S10 — Post dans le feed -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-feed">
+        <div class="m-feedcard">
+          <div class="m-fc-head"><span class="fav"></span><span><b>Jules</b> · 3h</span></div>
+          <div class="m-fc-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%)">
+            <div class="m-el" style="top:32%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35);font-size:10px">Carnet de voyage 🧭</div>
+            <div class="m-pill" style="bottom:8px;left:8px">▶ canvas · boucle</div>
+            <div class="m-pill" style="bottom:8px;right:8px">🔇</div>
+          </div>
+          <div class="m-fc-body">Trois jours à Lisbonne — le carnet complet, quartier par quartier. 🇵🇹 <span class="m-tr">⇄ traduit</span></div>
+          <div class="m-fc-actions"><span>❤️ 128</span><span>💬 24</span><span>↗</span><span style="flex:1"></span><span style="font-size:9px;opacity:.6">tap = plein écran</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S10 · Feed</span>
+      <h3>Le canvas animé dans la carte — exactement comme une story</h3>
+      <p>Dans le feed, la carte de post embarque le <strong>CanvasPlayer</strong> : le même registre de rendu que le Reader et le Canvas du composer, en lecture automatique, en boucle, sons coupés jusqu'au tap. Un tap ouvre le plein écran immersif — le Reader, littéralement, sur un post permanent. Le texte du post reste du texte natif sous le canvas : sélectionnable, indexé, servi dans la langue du lecteur par le Prisme.</p>
+      <div class="chips"><span class="chip a">CanvasPlayer = Reader embarqué</span><span class="chip">autoplay muet · boucle</span><span class="chip">tap → immersif</span></div>
+    </div>
+  </div>
+
+  <!-- S11 — Réel -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(180deg,#242038 0%,#4A2B4E 55%,#171226 100%);aspect-ratio:9/15">
+        <div class="m-author"><span class="av" style="background:linear-gradient(140deg,#B4536B,#7A5FB5)"></span><span>Aïcha</span><span class="ago">·</span><span>♫ Nuits d'été</span><span class="ago" style="font-variant-numeric:tabular-nums">· 0:15</span></div>
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:16px">▶</div>
+        <div class="m-el" style="top:22%;left:14px;background:rgba(0,0,0,.35);font-size:10px">Recette express ⏱ 45 s</div>
+        <div class="m-rail"><span><b>❤️</b>12,4k</span><span><b>💬</b>214</span><span><b>↗</b></span></div>
+        <div style="position:absolute;left:10px;right:56px;bottom:12px;z-index:2;font-size:10px">
+          <div>Pastéis maison, la vraie technique 🥧 <span class="m-tr">⇄ traduit</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S11 · Réel</span>
+      <h3>Le canvas en vidéo-first, le crédit sonore unifié</h3>
+      <p>Un réel, c'est le même canvas où la vidéo est l'élément fond : titres, sons empruntés et stickers sont des éléments en surimpression, posés avec les mêmes gestes qu'en story. L'en-tête suit la convention du lecteur de story : <strong>Aïcha · ♫ Nuits d'été · 0:15</strong> — le marquee de <code>AudioChipDisplay.resolve</code> avec son décompte <code>M:SS</code> (arrondi au plafond, chiffres tabulaires, l'atome <code>AudioChipRemainingTimeText</code> existant). C'est une rupture assumée : le lecteur de réels actuel refabrique ce crédit à la main en pill statique (<code>borrowedSoundLabel</code>) — deux rendus pour un seul concept. La qualification serveur ne bouge pas : un réel non qualifiant redevient un post (<code>PostService.ts:203-225</code>).</p>
+      <div class="chips"><span class="chip a">Canvas · vidéo-first</span><span class="chip a">crédit = AudioChipDisplay partagé + décompte</span><span class="chip">overlays = éléments du contrat</span><span class="chip">dégradation REEL → POST inchangée</span></div>
+    </div>
+  </div>
+
+  <!-- S12 — Engagement en story -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(165deg,#F2A65A 0%,#B4536B 55%,#3E2A56 100%);aspect-ratio:9/6.5">
+        <div class="m-progress"><i class="done"></i><i class="half"></i><i></i></div>
+        <div class="m-author"><span class="av"></span><span>Nadia</span><span class="ago">🕐 2h</span></div>
+        <div class="m-el" style="bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4);font-size:10px;white-space:nowrap">Bonjour de Lisbonne ☀️</div>
+      </div>
+      <div class="m-sheet">
+        <div class="m-grab"></div>
+        <div class="dk-title"><span>Commentaires · 24</span><span>👁 47 vues</span></div>
+        <div class="m-reacts"><span class="m-react on">❤️ 12</span><span class="m-react">🔥 5</span><span class="m-react">😂 3</span><span class="m-react">＋</span></div>
+        <div class="m-com"><span class="cav" style="background:linear-gradient(140deg,#2E8371,#2FB9C6)"></span><div><div class="bub">Cette lumière est incroyable !!</div><div class="meta">Jules · il y a 1 h · ⇄ traduit de l'espagnol</div></div></div>
+        <div class="m-com"><span class="cav" style="background:linear-gradient(140deg,#B4536B,#7A5FB5)"></span><div><div class="bub">On y retourne quand tu veux 😍</div><div class="meta">Aïcha · il y a 40 min</div></div></div>
+        <div class="m-reply"><span class="rin">Commenter en français…</span><span style="font-size:13px">➤</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S12 · Engagement</span>
+      <h3>Une story vit comme un réel — commentaires, réactions, réponses</h3>
+      <p>La story publiée porte toute la surface sociale, servie par les mêmes endpoints que les posts et réels — c'est le même <code>Post</code>. Le thread de commentaires est le composant commun aux trois formats, chaque commentaire traduit par le Prisme dans la langue du lecteur ; les réactions se comptent et se propagent via <code>story:reacted</code> ; « Répondre » ouvre la conversation privée ; l'auteur voit ses vues. À 20 h, la story quitte le tray pour l'archive — et tout cet engagement reste consultable dans l'Étagère.</p>
+      <div class="chips"><span class="chip a">1 couche d'engagement · 3 formats</span><span class="chip">commentaires traduits (Prisme)</span><span class="chip">réponse → conversation</span><span class="chip">archive : rien n'est perdu</span></div>
+    </div>
+  </div>
+
+  <!-- S13 — Métadonnées de publication -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%);aspect-ratio:9/5.5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span></div>
+        <div class="m-el" style="top:40%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35);font-size:10px">Carnet de voyage 🧭</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Publication</span><span>compo qualifie Réel ✓</span></div>
+        <div class="m-seg"><b>Story</b><b class="on">Post</b><b>Réel</b></div>
+        <div class="m-row" style="gap:6px"><span class="m-react on">👁 Amis · sauf 2</span><span class="m-react">🌐 FR ▾</span><span class="m-react">📍 Lisbonne ✓</span></div>
+        <div class="m-row" style="gap:6px"><span class="m-react">◎ À proximité : quartier</span><span style="flex:1"></span><span class="m-btn strong" style="flex:0 0 auto;padding:6px 16px">Publier</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S13 · Métadonnées</span>
+      <h3>L'étage des métadonnées, au moment de publier</h3>
+      <p>Tout ce qui décrit la publication — et non la scène — vit dans la Barre : audience avec EXCEPT/ONLY (enfin transmise par iOS : <code>visibilityUserIds</code> existe dans le struct mais n'est jamais envoyé aujourd'hui), langue de publication (préremplie par détection, <code>originalLanguage</code> enfin envoyée par le web, héritée par les textes — C6-B), lieu-métadonnée avec « Afficher sur le canvas » (C5-B) et découvrabilité « À proximité » — premier client de <code>discoverabilityPrecision</code>. Le sélecteur de format annonce la qualification réel en direct.</p>
+      <div class="chips"><span class="chip a">Barre de publication</span><span class="chip">C5-B · C6-B appliquées</span><span class="chip">corrige 3 fuites iOS/web</span></div>
+    </div>
+  </div>
+
+  <!-- S14 — Mentions & hashtags -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#1D5C50 0%,#2E8371 55%,#123A33 100%);aspect-ratio:9/5">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span></div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Texte du post → content</span><span>4 812 / 5 000</span></div>
+        <div class="m-txtfield">Trois jours à Lisbonne avec <span style="color:#2FB9C6">@ju</span><span style="opacity:.8">|</span></div>
+        <div class="m-sndrow on"><span class="cav" style="width:18px;height:18px;border-radius:50%;background:linear-gradient(140deg,#2E8371,#2FB9C6);flex:none"></span><span class="t">@jules</span><span class="d">suivi mutuel</span></div>
+        <div class="m-sndrow"><span class="cav" style="width:18px;height:18px;border-radius:50%;background:linear-gradient(140deg,#B4536B,#7A5FB5);flex:none"></span><span class="t">@julien_m</span><span class="d">ami</span></div>
+        <div class="m-row" style="gap:6px"><span class="m-react">#lisbonne</span><span class="m-react">#voyage</span></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S14 · Mentions</span>
+      <h3>@ et # : l'autocomplétion rejoint enfin le composer</h3>
+      <p>Aujourd'hui l'extraction est serveur-seule (<code>resolvePostMentions</code>, <code>extractHashtags</code>) et aucun composer de post n'autocomplète — alors que les commentaires et messages le font. L'atelier réutilise ce contrôleur existant dans le champ content (C1-A) : suggestions de mentions au fil de la frappe, hashtags proposés. Le compteur 5 000 partagé apparaît (iOS n'a aujourd'hui ni limite ni compteur — un post de 5 001 caractères meurt en 400 serveur). Sur le canvas, <code>@</code> reste décoratif ; l'élément mention tappable est l'extension C1-B.</p>
+      <div class="chips"><span class="chip a">Dock · champ content</span><span class="chip">C1-A · contrôleur réutilisé</span><span class="chip">compteur partagé (fix iOS)</span></div>
+    </div>
+  </div>
+
+  <!-- S15 — Carrousel -->
+  <div class="scenario">
+    <div class="mock"><div class="m-screen">
+      <div class="m-canvas" style="background:linear-gradient(160deg,#B4536B 0%,#7A5FB5 60%,#3E2A56 100%);aspect-ratio:9/8">
+        <div class="m-top"><span>✕</span><span class="sp"></span><span class="m-cta">Aperçu</span><span class="m-cta strong">Publier</span></div>
+        <div class="m-pill" style="top:44px;right:12px">carte 2 / 3</div>
+        <div class="m-el" style="bottom:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.35);font-size:10px">Alfama, ruelles ⛵</div>
+      </div>
+      <div class="m-dock">
+        <div class="dk-title"><span>Carrousel · 3 cartes</span><span>ordre = ordre des slides</span></div>
+        <div class="m-row" style="gap:6px;justify-content:center">
+          <span class="m-slide"></span><span class="m-slide on"></span><span class="m-slide"></span>
+          <span class="m-slide" style="display:flex;align-items:center;justify-content:center;color:#2FB9C6">＋</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <span class="s-num">S15 · Carrousel</span>
+      <h3>Les slides deviennent le carrousel — et l'ordre cesse de mentir</h3>
+      <p>En mode Post, le SlideStrip est le carrousel : 1 slide = 1 carte composée (C3-A), réordonnables par drag. À la publication, <code>PostMedia.order</code> est écrit à l'index — aujourd'hui il n'est <em>jamais</em> écrit, et le tri de lecture <code>orderBy: order</code> trie une constante 0. Dans le feed, le CanvasPlayer pagine les cartes avec des points ; en plein écran, la navigation par tap est celle du Reader de story.</p>
+      <div class="chips"><span class="chip a">Canvas · SlideStrip = carrousel</span><span class="chip">C3-A · PostMedia.order écrit</span><span class="chip">feed : pagination à points</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">09 · Le contrat partagé</p>
+  <h2><span class="mono">canvas v2</span> — une source, tous formats</h2>
+  <p class="lede">Le schéma vit dans <code>packages/shared</code>, seul endroit autorisé à le définir. Le gateway le valide en mode strict, le web l'importe, le Swift est généré depuis lui. Story, post ou réel : le canvas est le même objet (stocké dans la colonne <code>Post.storyEffects</code> existante).</p>
+
+  <pre class="contract"><span class="c">// packages/shared/schemas/canvas.ts — source de vérité unique</span>
+<span class="k">const</span> StoryElement = z.object({
+  id:        z.string(),
+  kind:      z.enum([<span class="k">'media'</span>, <span class="k">'text'</span>, <span class="k">'sticker'</span>, <span class="k">'audio'</span>, <span class="k">'location'</span>, <span class="k">'drawing'</span>]),
+  transform: Transform,          <span class="c">// x, y, scale, rotation, z</span>
+  timing:    Timing.optional(),  <span class="c">// startTime, duration, fadeIn, fadeOut</span>
+  payload:   z.discriminatedUnion(<span class="k">'kind'</span>, [MediaPayload, TextPayload, …]),
+})
+
+<span class="k">const</span> CanvasV2 = z.object({
+  v:          z.literal(2),
+  background: Background,        <span class="c">// clé canonique — l'alias backgroundColor meurt ici</span>
+  aspect:     z.enum([<span class="k">'9:16'</span>, <span class="k">'16:9'</span>]),
+  elements:   z.array(StoryElement).max(80),
+  transitions: Transitions.optional(),
+}).strict()                      <span class="c">// fini le passthrough : l'inconnu est refusé</span></pre>
+
+  <pre class="contract"><span class="c">// La publication — un seul verbe, le format est un champ</span>
+<span class="k">const</span> PublishIntent = z.object({
+  type:     z.enum([<span class="k">'STORY'</span>, <span class="k">'POST'</span>, <span class="k">'REEL'</span>]),
+  content:  z.string().max(5000).optional(), <span class="c">// POST/REEL : le texte natif → pipeline translatePost</span>
+  canvas:   CanvasV2.optional(),             <span class="c">// le même canvas animé, quel que soit le format</span>
+  audience: Audience,                        <span class="c">// STORY → FRIENDS par défaut, POST → PUBLIC</span>
+})
+<span class="c">// STORY : content est composé depuis les textes du canvas (index de recherche)</span>
+<span class="c">// POST  : content EST le texte du post ; le canvas s'anime dans la carte du feed</span>
+<span class="c">// REEL  : canvas vidéo-first ; la qualification serveur décide, comme aujourd'hui</span></pre>
+
+  <p style="margin-top:18px">Corrections embarquées par le passage au contrat, côté web : upload via <code>POST /uploads</code> (TUS, <code>uploadcontext: story</code>) pour que <code>PostService.createPost</code> puisse réellement rattacher les <code>PostMedia</code> ; clé <code>background</code> canonique ; TTL optimiste aligné sur les <strong>20 h</strong> serveur ; et enfin des clients pour <code>GET /posts/stories/mine</code>, <code>PUT /posts/:id</code> et <code>POST /posts/:id/republish</code>, aujourd'hui sans aucun consommateur web.</p>
+</section>
+
+<section>
+  <p class="eyebrow">10 · Impact</p>
+  <h2>Avant / après</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Surface</th><th>Aujourd'hui</th><th>Cible</th><th>Δ</th></tr></thead>
+      <tbody>
+        <tr><td>Vues de composition iOS</td><td class="num">≈ 85</td><td class="num">5 + 6 renderers + descripteurs</td><td class="num"><span class="down">−87 %</span></td></tr>
+        <tr><td>Vues de composition web</td><td class="num">1 (incomplète)</td><td class="num">les 5 mêmes</td><td class="num">parité</td></tr>
+        <tr><td>Composeurs parallèles (par client)</td><td class="num">4 (story, post, audio, unifié mort)</td><td class="num">1 atelier</td><td class="num"><span class="down">−3</span></td></tr>
+        <tr><td>Formats servis par l'atelier</td><td class="num">stories seulement</td><td class="num">stories · posts · réels</td><td class="num"><span class="down">unifié</span></td></tr>
+        <tr><td>Surface sociale des stories</td><td class="num">partielle, divergente par client</td><td class="num">identique aux réels (seul écart : 20 h)</td><td class="num"><span class="down">parité</span></td></tr>
+        <tr><td>Présentations modales depuis le composer</td><td class="num">15</td><td class="num">3 (caméra, galerie, pickers système)</td><td class="num"><span class="down">−12</span></td></tr>
+        <tr><td>Contrats de publication</td><td class="num">2 (asymétriques)</td><td class="num">1 (file offline partout)</td><td class="num"><span class="down">−1</span></td></tr>
+        <tr><td>Validation serveur du blob</td><td class="num">passthrough 256 Ko</td><td class="num">Zod strict versionné</td><td class="num"><span class="down">contrat</span></td></tr>
+        <tr><td>Sites d'ouverture du composer</td><td class="num">7+</td><td class="num">1 intention typée</td><td class="num"><span class="down">−6</span></td></tr>
+        <tr><td>Aperçu avant publication</td><td class="num">vue dédiée (iOS) / absent (web)</td><td class="num">le lecteur, en mode preview</td><td class="num"><span class="down">0 vue</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">11 · Chemin de migration</p>
+  <h2>Six phases, chacune livrable seule</h2>
+  <div class="phases">
+    <div class="phase"><div class="dot">1</div><div>
+      <h3>Contrat</h3>
+      <p><code>storyEffects v2</code> strict dans <code>packages/shared</code> (le serveur accepte v1 et v2 pendant la transition). Fix immédiats web : pipeline TUS, clé <code>background</code>, TTL 20 h. C'est la phase qui corrige les bugs de production.</p>
+    </div></div>
+    <div class="phase"><div class="dot">2</div><div>
+      <h3>Noyau</h3>
+      <p>Registre <code>StoryElement</code> + Canvas unifié, branché d'abord côté lecture. Le lecteur devenant le moteur de rendu unique, l'aperçu WYSIWYG tombe gratuitement.</p>
+    </div></div>
+    <div class="phase"><div class="dot">3</div><div>
+      <h3>Dock</h3>
+      <p>Migration outil par outil vers les <code>ToolDescriptor</code> : texte, dessin, audio, puis timeline repliée en inspecteur avancé. Chaque outil migré supprime son quatuor de vues.</p>
+    </div></div>
+    <div class="phase"><div class="dot">4</div><div>
+      <h3>Étagère &amp; publication</h3>
+      <p>Fusion tray / Mes stories / brouillons, porte d'entrée unique à intention typée, file offline pour l'édition comme pour la création — <code>StoryPublishQueue</code> et <code>StoryDraftStore</code> restent les moteurs, inchangés. Le web gagne brouillons, édition et archive en implémentant les 5 mêmes vues. La feuille d'engagement (commentaires, réactions, réponse) devient le composant commun aux trois formats.</p>
+    </div></div>
+    <div class="phase"><div class="dot">5</div><div>
+      <h3>Un seul atelier</h3>
+      <p>Le sélecteur de format arrive dans la Barre de publication : <code>PostComposer</code> et <code>AudioPostComposer</code> migrent sur l'atelier, le texte principal voyage en <code>Post.content</code> (pipeline <code>translatePost</code> intact), le feed rend le canvas animé via le CanvasPlayer, les réels suivent en vidéo-first. C'est la phase qui tient la promesse « publier posts et stories de la même manière ».</p>
+    </div></div>
+    <div class="phase"><div class="dot">6</div><div>
+      <h3>Démolition</h3>
+      <p>Suppression du code mort déjà identifié (<code>UnifiedPostComposer</code> et sa cascade, outil <code>filters</code> orphelin, <code>StoryModels.swift</code> dupliqué), retrait des composeurs legacy et du support v1, mise à jour de la doc Prisma.</p>
+    </div></div>
+  </div>
+</section>
+
+<footer>
+  Story Atelier · l'atelier unifié de publication Meeshy — stories, posts, réels · fondé sur l'audit du code aux chemins cités (gateway, apps/web, apps/ios, MeeshySDK) · août 2026
+</footer>
+
+</div>

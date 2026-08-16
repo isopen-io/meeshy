@@ -261,13 +261,21 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         isAnonymous
       );
 
+      // L'identité de CONTRAT de l'acteur, distincte de la clé de room que le
+      // fan-out utilise : un invité de lien n'a pas de ligne `User`, et
+      // `authContext.userId` porte alors son `Participant.id`
+      // (`middleware/auth.ts`). Le laisser passer tel quel faisait mentir un
+      // champ que iOS, Android et `packages/shared` déclarent tous les trois
+      // nullable pour exactement ce cas.
+      const actorUserId = isAnonymous ? null : userId;
+
       if (shouldShowReadReceipts) {
         // READ_STATUS_UPDATED (peer disclosure) + CONVERSATION_UNREAD_UPDATED (badge reset)
         try {
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
             participantId: membership.id,
-            userId,
+            actorUserId,
             type: 'read'
           });
         } catch (socketError) {
@@ -283,7 +291,9 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         const manager = fastify.socketIOHandler?.getManager?.();
         if (manager) {
           const remainingUnread = await readStatusService.getUnreadCount(membership.id, conversationId);
-          manager.getIO().to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          // Même règle de clé de room que `broadcastReadStatusUpdate` : la room
+          // personnelle d'un participant est nommée `userId ?? Participant.id`.
+          manager.getIO().to(ROOMS.user(actorUserId ?? membership.id)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
             conversationId,
             unreadCount: remainingUnread,
           });
@@ -350,7 +360,9 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
             participantId: membership.id,
-            userId,
+            // Voir `mark-as-read` : un invité de lien n'a pas de `User.id`, et
+            // le champ du contrat est nullable exactement pour lui.
+            actorUserId: isAnonymous ? null : userId,
             type: 'received'
           });
         } catch (socketError) {
@@ -446,7 +458,9 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
             participantId: membership.id,
-            userId,
+            // Voir `mark-as-read` : un invité de lien n'a pas de `User.id`, et
+            // le champ du contrat est nullable exactement pour lui.
+            actorUserId: isAnonymous ? null : userId,
             type: 'received'
           });
         } catch (socketError) {
@@ -485,7 +499,24 @@ async function broadcastReadStatusUpdate(
   args: {
     conversationId: string;
     participantId: string;
-    userId: string;
+    /**
+     * `User.id` de l'acteur, ou `null` s'il n'a pas de ligne `User` (invité de
+     * lien partagé). C'est le champ du CONTRAT, et il est nullable aux trois
+     * bouts de la chaîne dans les mêmes termes — `ReadStatusUpdatedEventData`
+     * (packages/shared), `ReadStatusUpdateEvent` (iOS), `ReadStatusUpdatedEvent`
+     * (Android).
+     *
+     * Il ne nomme PAS la room personnelle : celle-là vaut `actorUserId ??
+     * participantId` (voir `personalRoomKey` plus bas). Les deux rôles ont
+     * longtemps partagé UNE seule variable `userId: string`, et c'est la forme
+     * ROOM qui gagnait — le champ partait donc en portant un `Participant.id`
+     * pour un invité, pendant que les émetteurs SOCKET du même événement
+     * (`ConversationHandler._resyncReadStatusToSocket`,
+     * `MessageHandler.autoDeliverToOnlineRecipients`, le drain) émettaient
+     * déjà `null`. Le même invité était nommé de deux façons selon le
+     * transport qui parlait.
+     */
+    actorUserId: string | null;
     type: 'read' | 'received';
   }
 ): Promise<void> {
@@ -493,7 +524,15 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  // Read frontier + unread count of the ACTOR (args.userId), scoped to their
+  // La CLÉ DE ROOM, l'autre rôle — et la même règle que partout ailleurs
+  // (`participantUserRoomTargets`) : un participant sans `User` a bien une room
+  // personnelle, nommée d'après son `Participant.id`, et `AuthHandler` la fait
+  // rejoindre aux sockets anonymes précisément pour ça. Nuller le champ du
+  // contrat ne doit jamais nuller cette clé : `ROOMS.user(null)` collerait
+  // définitivement le badge de tous les invités.
+  const personalRoomKey = args.actorUserId ?? args.participantId;
+
+  // Read frontier + unread count of the ACTOR (args.actorUserId), scoped to their
   // participant row, let the actor's OTHER devices sync their own read cursor
   // without a refetch (multi-device read sync). They travel ONLY on a 'read':
   // that is the sole action advancing the read cursor. A 'received' (delivery)
@@ -501,6 +540,14 @@ async function broadcastReadStatusUpdate(
   // use it for checkmarks) and omits these per-user fields — which the client
   // would drop anyway, and which would needlessly disclose the actor's backlog
   // to every peer in the room.
+  //
+  // That last clause is the reason they no longer ride the fan-out on a 'read'
+  // either: it is the same disclosure, and it was made to the whole
+  // conversation. `unreadCount` says how far behind the actor is on this
+  // thread and `lastReadAt` says when they last caught up — neither describes
+  // the conversation, and the read-receipt preference that gates this
+  // broadcast consents to "I read your message", not to publishing a backlog.
+  // The two fields are addressed to the actor's own devices below.
   const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
     args.type === 'read'
       ? Promise.all([
@@ -529,14 +576,15 @@ async function broadcastReadStatusUpdate(
     actorReadSyncP
   ]);
 
-  const payload: ReadStatusUpdatedEventData = {
+  // Ce que TOUTE la conversation peut savoir : qui a lu, et où en est le
+  // résumé des coches. Rien qui décrive l'arriéré personnel de l'acteur.
+  const peerPayload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
-    userId: args.userId,
+    userId: args.actorUserId,
     type: args.type,
     updatedAt: new Date(),
-    summary,
-    ...(actorReadSync ?? {})
+    summary
   };
 
   const io = socketIOManager.getIO();
@@ -544,16 +592,32 @@ async function broadcastReadStatusUpdate(
   // Single chained fan-out — see `emitToConversationParticipants`. The loop this
   // replaces skipped every participant without a `User` row, so an anonymous
   // participant never learned that a peer had read anything.
+  //
+  // L'acteur en est retiré (`exceptRoom`) UNIQUEMENT quand il a une version à
+  // lui à recevoir : sur un 'received', `actorReadSync` est absent, les deux
+  // payloads seraient identiques, et l'exclure lui coûterait l'événement.
   emitToConversationParticipants({
     io,
     conversationId: args.conversationId,
     participants: activeParticipants,
     events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-    payload
+    payload: peerPayload,
+    exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null
   });
 
+  // La version de l'acteur, dans sa seule room personnelle — celle que toutes
+  // ses sessions ont rejointe à l'authentification (`AuthHandler`), compte ou
+  // pas. Elle porte les deux champs en plus, sous les DEUX noms d'événement,
+  // pour qu'un client migré comme un client historique recale son curseur.
+  if (actorReadSync) {
+    const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
+    const actorRoom = io.to(ROOMS.user(personalRoomKey));
+    actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+    actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+  }
+
   if (args.type === 'read') {
-    io.to(ROOMS.user(args.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+    io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
       conversationId: args.conversationId,
       unreadCount: actorReadSync?.unreadCount ?? 0,
     });
