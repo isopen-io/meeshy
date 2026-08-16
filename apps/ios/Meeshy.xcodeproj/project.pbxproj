@@ -527,6 +527,7 @@
 		74E2A29E0CAD6844008FC5B4 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D46E931BC529CDB77411E0 /* LocallyHiddenMessagesStore.swift */; };
 		7500629594A9BAB2959B25AB /* TextPostCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF585165D595DDCE8F5952A6 /* TextPostCell.swift */; };
 		75482E5C0C478CE7FFE7146F /* AnonymousSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B816E2DC249CF23249FD302 /* AnonymousSessionStoreTests.swift */; };
+		762E6D2F6A2AA39E17A0A51C /* FocalPerspectiveCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D6AC4F073F26AF0B51E266 /* FocalPerspectiveCell.swift */; };
 		7663948910009C6FA02732AB /* MyStoriesTabResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB8424852F43DD94575723 /* MyStoriesTabResolverTests.swift */; };
 		76D870A3159DD0437EBDB359 /* MockConversationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF935FD061577F5143449DD /* MockConversationService.swift */; };
 		7795C8FF341501BFC7AC2B3F /* SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC806A085948A69ACA059A4B /* SyncPill.swift */; };
@@ -1050,6 +1051,7 @@
 		E73446347A846896FB33E567 /* FeedPostsMapSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE462721F93B89D0781CAF88 /* FeedPostsMapSourceGuardTests.swift */; };
 		E768B86DEC0FE988692E6E76 /* ThemedBackButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD04554E079BCF486746DF23 /* ThemedBackButtonTests.swift */; };
 		E7905D40A4F0D0E43483A712 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E27D2A01C79DD5B45F3051B /* ReportUserView.swift */; };
+		E796D950ABAF66C6B758BC75 /* FocalPerspectiveCellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D36D71B049181C3C947B71DB /* FocalPerspectiveCellTests.swift */; };
 		E79CD2BCBE9AFC6F2A9F843B /* MockTwoFactorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C917CC032F4520D0A9DBC81D /* MockTwoFactorService.swift */; };
 		E7C774938CFDB258EF9A8C64 /* LocalizationCatalogGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E04DB373DABE459D2CEE566 /* LocalizationCatalogGuardTests.swift */; };
 		E7D56E1E0D4C77A410B912D0 /* CallViewLayoutGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40EF22CA40AFFE889C7FB08 /* CallViewLayoutGuardTests.swift */; };
@@ -1479,6 +1481,7 @@
 		39C2176ACE0513A8483B1DC7 /* SkeletonLinkRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonLinkRow.swift; sourceTree = "<group>"; };
 		39CCC66403299EC38C8E2C9E /* MyStoriesDeleteConfirmationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesDeleteConfirmationTests.swift; sourceTree = "<group>"; };
 		39D092ECE24FB44A3D3D3F0A /* DeleteAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAccountView.swift; sourceTree = "<group>"; };
+		39D6AC4F073F26AF0B51E266 /* FocalPerspectiveCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalPerspectiveCell.swift; sourceTree = "<group>"; };
 		3A2AF3F8064D43789A7B9275 /* ReelsPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsPlayerView.swift; sourceTree = "<group>"; };
 		3A467B9E5562251A7F64121C /* ConversationListViewPresenceRefreshWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewPresenceRefreshWiringTests.swift; sourceTree = "<group>"; };
 		3A74E91D296BB496A84E713C /* StoryLanguageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryLanguageDetailView.swift; sourceTree = "<group>"; };
@@ -2152,6 +2155,7 @@
 		D2E9D9F147489D464DA6B635 /* MockMessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMessageService.swift; sourceTree = "<group>"; };
 		D3397276448BC17060DDA394 /* ConversationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModel.swift; sourceTree = "<group>"; };
 		D35A1CF474626049B75448AD /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		D36D71B049181C3C947B71DB /* FocalPerspectiveCellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalPerspectiveCellTests.swift; sourceTree = "<group>"; };
 		D3B21AD4D56D5322C647D94F /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
 		D3BACB1E81334F63A1993DC3 /* AttachmentDownloaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloaderTests.swift; sourceTree = "<group>"; };
 		D3E73812F65144FE11128B68 /* ShareConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareConversationStoreTests.swift; sourceTree = "<group>"; };
@@ -2889,6 +2893,7 @@
 				A34481B62B2796B229584280 /* FocalMetricsTests.swift */,
 				A943BD3D722BA39D725DD34A /* FocalNoBubbleSourceGuardTests.swift */,
 				90DBF8CF66BF8D1A0E2F67CD /* FocalPaletteContrastTests.swift */,
+				D36D71B049181C3C947B71DB /* FocalPerspectiveCellTests.swift */,
 				C4B3AF5BF0BDE03C89C3968C /* FocalRealtimeMatrixTests.swift */,
 				2363C7DFDC933C371C43E5A7 /* FocalRichBlockEquatableTests.swift */,
 				F5A9EF9D648F653B418CDBFD /* FocalRowInputEquatableTests.swift */,
@@ -4095,6 +4100,7 @@
 			children = (
 				BC08FF2421AFEEA4B866CBD2 /* FocalFocusDecoration.swift */,
 				88D552751EB8C528D18E28CB /* FocalPassConstants.swift */,
+				39D6AC4F073F26AF0B51E266 /* FocalPerspectiveCell.swift */,
 				95ABE71C34812EE65C55224A /* FocalPerspectiveGeometry.swift */,
 				2D4690D767004145BB3087C7 /* FocalScrollPass.swift */,
 			);
@@ -4601,6 +4607,7 @@
 				66EFC9CC426ECB98E2B1E625 /* FocalMetaRow.swift in Sources */,
 				5AC99133327A2C1F548ECF5C /* FocalMetrics.swift in Sources */,
 				92D2C7C90E3E7867C65435AC /* FocalPassConstants.swift in Sources */,
+				762E6D2F6A2AA39E17A0A51C /* FocalPerspectiveCell.swift in Sources */,
 				2569EF41C1BA78A920484575 /* FocalPerspectiveGeometry.swift in Sources */,
 				0B3941C65DC36A5FEE41844F /* FocalQuotedReplyView.swift in Sources */,
 				6EF984AD7EFEB12C81A67F82 /* FocalRow.swift in Sources */,
@@ -5141,6 +5148,7 @@
 				B054A7C4E23B7B221D135881 /* FocalMetricsTests.swift in Sources */,
 				1772F4927FE5D9CBBC9E77DD /* FocalNoBubbleSourceGuardTests.swift in Sources */,
 				0EA5B0001D3F6FB063C40602 /* FocalPaletteContrastTests.swift in Sources */,
+				E796D950ABAF66C6B758BC75 /* FocalPerspectiveCellTests.swift in Sources */,
 				05EA071A5B46B46B8D2AD74A /* FocalRealtimeMatrixTests.swift in Sources */,
 				AA821A6DF3987A73681B7B6A /* FocalRichBlockEquatableTests.swift in Sources */,
 				BCA24D4BD2588EDC41F72331 /* FocalRowInputEquatableTests.swift in Sources */,

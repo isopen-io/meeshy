@@ -721,9 +721,17 @@ final class FocalScrollPassWriteTests: XCTestCase {
 
     // MARK: - Filtrage des cellules non éligibles (§4.8)
 
-    /// `localId == nil` (jour, typing, début de conversation) : remise à
-    /// l'identité, JAMAIS mise à l'échelle, même très loin de la bande.
-    func test_apply_ineligibleCells_areResetToIdentity() throws {
+    /// `localId == nil` (jour, typing, début de conversation) : la cellule
+    /// SUIT la perspective comme n'importe quelle rangée — elle ne fait que
+    /// rester hors de l'élection.
+    ///
+    /// Règle reprise de la maquette de référence, dont le sélecteur balaie
+    /// `.msg, .daysep, .pont, .agent` et n'élit que parmi `.msg`
+    /// (`docs/design/2026-08-15-conversation-modes-verdict.html`). L'ancienne
+    /// version de ce test exigeait l'identité : à l'écran, les pastilles de
+    /// date flottaient alors en taille et opacité pleines par-dessus un texte
+    /// réduit, et se chevauchaient entre elles.
+    func test_apply_ineligibleCells_followThePerspectiveLikeAnyRow() throws {
         let pass = makePass()
         pass.apply(to: collectionView) { indexPath in
             indexPath.item == 8
@@ -732,11 +740,15 @@ final class FocalScrollPassWriteTests: XCTestCase {
         }
 
         let dayHeader = try cell(8)
-        XCTAssertTrue(
-            CATransform3DIsIdentity(dayHeader.layer.transform),
-            "§4.8 : une cellule .dayHeader/.typingIndicator/.conversationStart (localId nil) est remise à l'identité, jamais mise à l'échelle"
+        let neighbour = try cell(7)
+        XCTAssertEqual(
+            dayHeader.layer.transform.m11, neighbour.layer.transform.m11, accuracy: 0.05,
+            "un séparateur de jour doit être mis à l'échelle comme la rangée voisine — sinon il flotte en taille pleine par-dessus un texte réduit"
         )
-        XCTAssertEqual(dayHeader.alpha, 1, accuracy: 0.0001, "§4.8 : une cellule non éligible reste pleinement opaque")
+        XCTAssertEqual(
+            dayHeader.alpha, neighbour.alpha, accuracy: 0.05,
+            "un séparateur de jour doit s'estomper comme la rangée voisine"
+        )
     }
 
     func test_apply_ineligibleCells_neverWinTheFocus() {

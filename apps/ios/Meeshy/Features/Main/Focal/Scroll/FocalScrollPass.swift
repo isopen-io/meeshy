@@ -258,18 +258,28 @@ final class FocalScrollPass {
                 )
             )
 
-            guard let localId = descriptor.localId else {
-                // §4.8 : jour / typing / début de conversation — identité, jamais d'échelle.
-                write(.identity, to: cell)
-                continue
-            }
-
             let visual = geometry.visualMidY(
                 contentMidY: cell.center.y,
                 contentOffsetY: offsetY,
                 viewportHeight: viewport
             )
-            candidates.append(FocalFocusCurve.RowCandidate(id: localId, midY: visual))
+
+            // Séparateur de jour, frappe, début de conversation : ils SUIVENT
+            // la perspective comme tout le reste, mais ne concourent jamais à
+            // l'élection.
+            //
+            // La maquette de référence est explicite — son sélecteur balaie
+            // `.msg, .daysep, .pont, .agent` et n'élit que parmi `.msg`
+            // (`docs/design/2026-08-15-conversation-modes-verdict.html`,
+            // `perspective(scr)`). L'ancienne règle §4.8 les remettait à
+            // l'identité : sur l'enregistrement d'écran, les pastilles de date
+            // flottaient donc en taille et opacité pleines PAR-DESSUS un texte
+            // réduit à 60 %, et deux d'entre elles se chevauchaient au même
+            // endroit. Une graduation qui s'arrête aux messages n'est pas une
+            // graduation : l'œil lit la profondeur sur la scène entière.
+            if let localId = descriptor.localId {
+                candidates.append(FocalFocusCurve.RowCandidate(id: localId, midY: visual))
+            }
 
             write(
                 transform(
@@ -373,12 +383,6 @@ final class FocalScrollPass {
         let viewport = collectionView.bounds.height
         guard viewport > 0 else { return }
 
-        guard let localId = descriptor.localId else {
-            write(.identity, to: cell)
-            decoration.update(cell: cell, isFocused: false, accentHex: accentHex, isDark: isDark)
-            return
-        }
-
         let focusY = geometry.focusY(
             viewportHeight: viewport,
             bottomClearance: collectionView.contentInset.top
@@ -404,7 +408,8 @@ final class FocalScrollPass {
         decoration.update(
             cell: cell,
             isFocused: descriptor.allowsFocusCard
-                && localId == focusedLocalId
+                && descriptor.localId != nil
+                && descriptor.localId == focusedLocalId
                 && isFullyVisible(cell, in: collectionView),
             accentHex: accentHex,
             isDark: isDark
@@ -419,8 +424,7 @@ final class FocalScrollPass {
     /// `MessageListViewController`, donc aucun `prepareForReuse` ne peut le
     /// faire à notre place.
     func reset(_ cell: UICollectionViewCell) {
-        cell.layer.transform = CATransform3DIdentity
-        cell.alpha = 1
+        write(.identity, to: cell)
         decoration.clear(cell)
     }
 
@@ -532,7 +536,19 @@ final class FocalScrollPass {
     /// exprimée dans l'espace de CONTENU.
     ///
     /// `anchorPoint` n'est JAMAIS touché (§4.3, écart #2).
+    ///
+    /// **La consigne est CONFIÉE à la cellule quand celle-ci sait la reposer.**
+    /// `FocalPerspectiveCell` la réécrit après chaque `apply(_:)` de layout —
+    /// seul moyen de survivre à l'effacement décrit dans la doc d'`apply`, que
+    /// les six sites d'appel ne peuvent pas rattraper (l'effacement suit la
+    /// re-mesure, pas un événement). L'écriture directe reste le repli pour
+    /// toute cellule d'un autre type : le pass n'exige aucune sous-classe pour
+    /// fonctionner, elle ne fait que le rendre STABLE.
     private func write(_ transform: FocalCellTransform, to cell: UICollectionViewCell) {
+        if let perspectiveCell = cell as? FocalPerspectiveCell {
+            perspectiveCell.writeFocalTransform(transform)
+            return
+        }
         var matrix = CATransform3DMakeScale(transform.scale, transform.scale, 1)
         matrix.m41 = transform.translation.width
         matrix.m42 = transform.translation.height
