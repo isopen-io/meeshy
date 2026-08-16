@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Modèles PURS du Résumé Vivant (contrat Focal §3.7) — digest déterministe,
 /// épisodes, entrées de la Rampe. Fichiers déclarés « non-loi » par
