@@ -672,7 +672,17 @@ toutes :
 Les emetteurs SOCKET du meme evenement — `MessageHandler.autoDeliverToOnlineRecipients`
 et le drain hors ligne de `MeeshySocketIOManager` — n'empruntent PAS cette unite :
 ils diffusent un `received` collectif, pour plusieurs destinataires a la fois, et
-ne consultent aucune preference. L'ecart est connu et non tranche.
+la liste des participants leur est deja acquise, la ou l'unite la re-interroge
+pour construire son eventail. La brancher ajouterait une requete par message sur
+le chemin d'envoi le plus chaud du systeme. **Ils tiennent donc la propriete 1
+par alignement et non par appel** (cycle 45) : la preference y decide de la
+DIFFUSION seule, l'etat de livraison est ecrit dans tous les cas. Les deux ont
+gate l'ECRITURE jusqu'au cycle 45, ce qui faisait dependre l'etat du transport —
+`showReadReceipts` etant reversible et le gate reel etant a la lecture
+(`_loadReadReceiptOptOuts`, cinq lecteurs), l'arriere ressortait « jamais livre »
+des la reactivation. Corollaire propre a ces deux sites : la diffusion NOMME un
+acteur, qui doit lui-meme partager ses accuses — le `firstAcker` se choisit parmi
+les destinataires marques, pas parmi les premiers venus.
 
 ---
 
