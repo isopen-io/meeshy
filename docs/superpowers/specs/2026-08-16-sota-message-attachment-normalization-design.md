@@ -77,7 +77,7 @@ Consommateurs (remplacement, pas d'alias) :
 - iOS : `ConversationComposerState.maxMediaSelection = 199` reste, avec commentaire pointant la constante shared (Swift ne peut pas l'importer ; test de garde côté gateway, cf. §10).
 - `MAX_FILES_PER_MESSAGE = 30` : supprimé (tous usages migrés).
 
-Garde-fou complémentaire (anti-abus, le plafond de comptage ne suffit plus à 199) : à la validation d'envoi, somme des `fileSize` des pièces référencées ≤ `MAX_MESSAGE_ATTACHMENTS_TOTAL_BYTES = 8 GiB` — calculable sans requête supplémentaire sur le chemin socket (le handler charge déjà chaque pièce pour vérifier `uploadedBy`).
+**Garde-fou en octets : écarté (révision du 2026-08-16, à l'implémentation de P0).** Le design initial prévoyait un plafond `somme(fileSize) ≤ 8 GiB` à la validation d'envoi. Il ne protège rien : les fichiers sont **déjà uploadés et écrits sur disque** quand le message part (upload-first, §« Envoi »), et `message:new` ne transporte que des **métadonnées** (URL, thumbHash, dimensions), jamais les octets — la taille cumulée n'influence donc ni la consommation disque, ni le poids du payload. Il rejetterait en revanche des envois qui passent aujourd'hui (le cap de 10 pièces × 4 GiB autorise déjà 40 GiB), pour un bénéfice nul. La vraie amplification à 199 est ailleurs et reste traitée en P1 : la concurrence du dispatch audio (D8) et les N lectures d'attachments du handler socket. Si un plafond de poids par message devient un besoin **produit**, il se posera à l'**upload**, où les octets se dépensent.
 
 ### D3 — Ordre explicite
 
@@ -232,7 +232,7 @@ Réception : `message:new` inchangé dans sa structure, enrichi des champs D4 da
 
 | Phase | Contenu | Dépendances |
 |---|---|---|
-| **P0 — hotfix plafonds** (immédiat, PR isolée) | D2 seul : constante shared 199, `MessageValidator` 10→199 + garde 8 GiB, socket schema 100→199, REST `maxItems`, web 50→199. **Débloque le plafond iOS 199 déjà shippé.** | aucune |
+| **P0 — hotfix plafonds** ✅ **livré 2026-08-16** | D2 seul : constante shared `MAX_ATTACHMENTS_PER_MESSAGE = 199`, `MessageValidator` 10→199, socket schema 100→199, REST `maxItems` (tableau non borné auparavant), web 30/50→199. Garde en octets écarté (cf. D2). **Débloque le plafond iOS 199 déjà shippé.** | aucune |
 | **P1 — backend normalisé** | D3 (order), D4 côté serveur (write/read/PATCH), D5, D6, D8 (bench payload + audio borné) | P0 |
 | **P2 — web** | payload enrichi, captions UI composer + rendu + édition, écho optimiste, fix progress | P1 |
 | **P3 — iOS** | D1 (planner unifié), décodage + rendu captions, UI légende par chip | P1 (P2 non bloquant) |
@@ -242,7 +242,7 @@ Chaque phase est indépendamment shippable et rétrocompatible.
 
 ## 9. Plan de tests (TDD — RED d'abord)
 
-- **P0** : validator accepte 199 / rejette 200 ; rejette somme > 8 GiB ; socket schema idem ; test de garde « constante unique » (grep interdit `> 10`, `MAX_ATTACHMENT_IDS`, `MAX_FILES_PER_MESSAGE`).
+- **P0** ✅ : validator accepte 199 / rejette 200 (+ témoin « sélection iOS pleine ») ; socket schema idem ; `AttachmentService.validateFiles` web idem ; la constante shared est figée à 199 côté test (miroir de `maxMediaSelection` Swift).
 - **P1** : liaison écrit `order` = index et caption/alt/title ; re-read trié ; sérialiseur émet les 5 champs (socket ET chemin REST — test d'égalité de forme entre les deux broadcasts) ; PATCH owner-only + delta émis ; upload `metadata_<i>.caption` persisté ; `messageType` client ignoré ; bench payload 199 pièces < 512 KB.
 - **P2** : composer 199 fichiers → un seul emit, refs ordonnées ; caption saisie → payload ; rendu ordonné ; progress par fichier (bug corrigé) ; optimistic avec médias.
 - **P3** : `MultiAttachmentSendPlannerTests` : « 3 photos + 2 vocaux + texte → 1 message, content = texte, 5 pièces ordonnées » ; décodage `APIMessageAttachment.caption` ; `mediaCaptionMap` priorité caption > content ; `meeshy.sh test` vert.

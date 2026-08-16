@@ -111,6 +111,7 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -801,8 +802,8 @@ describe('MessagingService', () => {
       expect(response.error).toContain('Anonymous display name');
     });
 
-    it('should reject more than 10 attachments', async () => {
-      const attachments = Array.from({ length: 11 }, (_, i) => ({
+    it(`should reject more than ${MAX_ATTACHMENTS_PER_MESSAGE} attachments`, async () => {
+      const attachments = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE + 1 }, (_, i) => ({
         id: `att${i}`,
         type: 'image' as const,
         url: `https://example.com/image${i}.jpg`
@@ -820,7 +821,7 @@ describe('MessagingService', () => {
       );
 
       expect(response.success).toBe(false);
-      expect(response.error).toContain('10');
+      expect(response.error).toContain(String(MAX_ATTACHMENTS_PER_MESSAGE));
     });
   });
 

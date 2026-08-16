@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
 const mongoId = z
   .string()
@@ -14,9 +15,11 @@ const clientMessageIdSchema = z
 // use a generous ceiling here that only blocks truly abusive payloads.
 const MAX_CONTENT_BYTES = 100_000;
 
-// Maximum attachment IDs per message — mirrors MessageValidator.ts (regular conversations: 100).
+// Maximum attachment IDs per message — imported from `@meeshy/shared` so the
+// schema, `MessageValidator` and the REST body schema partagent UNE valeur.
 // Enforced at schema level to reject bulk-fake-attachment DoS before DB lookups start.
-const MAX_ATTACHMENT_IDS = 100;
+// (This comment used to claim it mirrored MessageValidator "(regular conversations: 100)";
+// the validator actually capped at 10, so the two gates disagreed by an order of magnitude.)
 
 export const SocketMessageSendSchema = z.object({
   conversationId: z.string().min(1).max(255),
@@ -52,7 +55,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   conversationId: z.string().min(1).max(255),
   content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
-  attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENT_IDS),
+  attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENTS_PER_MESSAGE),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,

@@ -11,7 +11,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { AttachmentService } from '@/services/attachmentService';
 import { compressMultipleFiles, needsCompression } from '@/utils/media-compression';
-import { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { UploadedAttachmentResponse, MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
 interface CompressionProgress {
   progress: number;
@@ -91,7 +91,10 @@ interface UseAttachmentUploadReturn {
 }
 
 // Constantes
-const MAX_ATTACHMENTS_DEFAULT = 50;
+// Plafond partagé (199) — un composer plein doit franchir le validator et les
+// deux schémas du gateway, qui lisent la même constante. Une valeur locale de
+// 50 bornait le web sous le plafond produit sans que rien ne le signale.
+const MAX_ATTACHMENTS_DEFAULT = MAX_ATTACHMENTS_PER_MESSAGE;
 const MEDIA_DURATION_EXTRACTION_TIMEOUT_MS = 4000;
 
 type AttachmentSelectionMetadata = Record<string, unknown> & { duration?: number };
