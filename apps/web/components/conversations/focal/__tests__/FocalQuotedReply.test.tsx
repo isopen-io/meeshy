@@ -11,6 +11,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FocalQuotedReply } from '../FocalQuotedReply';
 import { resolveFocalAuthorAccent } from '../focal-row-utils';
+import { hexToRgb, contrastRatio } from '../../lentille/lentille-contrast';
 import type { Message } from '@meeshy/shared/types';
 
 function makeQuoted(): Message {
@@ -57,5 +58,33 @@ describe('FocalQuotedReply — filet 2.5 couleur de l\'auteur cité (§4.3)', ()
     render(<FocalQuotedReply quoted={makeQuoted()} preferredLanguages={['en']} onJumpToMessage={onJumpToMessage} />);
     fireEvent.click(screen.getByTestId('focal-quoted-reply'));
     expect(onJumpToMessage).toHaveBeenCalledWith('q1');
+  });
+});
+
+describe('FocalQuotedReply — contraste AA du nom de l\'auteur cité (WF-112)', () => {
+  it("le texte du nom passe ≥ 4.5:1 contre le fond blanc — l'accent BRUT seul ne le garantirait pas forcément", () => {
+    render(<FocalQuotedReply quoted={makeQuoted()} preferredLanguages={['en']} />);
+    const nameSpan = screen.getByTestId('focal-quoted-reply').querySelector('span');
+    const color = (nameSpan as HTMLElement).style.color;
+    expect(color).not.toBe('');
+
+    // jsdom rend `style.color` en `rgb(r, g, b)` — reconverti pour réutiliser
+    // exactement les fonctions de `lentille-contrast.ts` (patron WL-102).
+    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).not.toBeNull();
+    const [, r, g, b] = match!;
+    const textRgb = { r: Number(r), g: Number(g), b: Number(b) };
+
+    const WHITE = hexToRgb('#FFFFFF');
+    expect(contrastRatio(textRgb, WHITE)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('le filet (bordure gauche, non textuel) garde l\'accent BRUT — identité visuelle, pas de contrainte de contraste textuel', () => {
+    const quoted = makeQuoted();
+    render(<FocalQuotedReply quoted={quoted} preferredLanguages={['en']} />);
+    const accent = resolveFocalAuthorAccent('Bob');
+    expect(screen.getByTestId('focal-quoted-reply')).toHaveStyle({
+      borderLeft: `var(--lentille-thread-quote-border-size) solid ${accent}`,
+    });
   });
 });

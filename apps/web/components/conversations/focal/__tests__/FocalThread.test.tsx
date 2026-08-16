@@ -1,6 +1,6 @@
 /**
- * WF-110/111 — `FocalThread`, l'arbre vivant du fil (ordonnancement +
- * densité + perspective/pilule).
+ * WF-110/111/112 — `FocalThread`, l'arbre vivant du fil (ordonnancement +
+ * densité + perspective/pilule + capsule date).
  */
 import React, { createRef } from 'react';
 import { render, screen } from '@testing-library/react';
@@ -62,6 +62,21 @@ describe('FocalThread — topologie (ordre ascendant, ancien en haut)', () => {
 
     const rows = screen.getAllByTestId('focal-row');
     expect(rows.map((r) => r.getAttribute('data-message-id'))).toEqual(['m1', 'm2']);
+  });
+});
+
+describe('FocalThread — capsule date sticky (WF-112)', () => {
+  it('insère une capsule au premier message et à chaque frontière de jour', () => {
+    const m1 = makeMessage('m1', { createdAt: new Date('2026-08-11T10:00:00'), timestamp: new Date('2026-08-11T10:00:00') });
+    const m2 = makeMessage('m2', { createdAt: new Date('2026-08-11T12:00:00'), timestamp: new Date('2026-08-11T12:00:00') });
+    const m3 = makeMessage('m3', { createdAt: new Date('2026-08-12T09:00:00'), timestamp: new Date('2026-08-12T09:00:00') });
+    const containerRef = createRef<HTMLDivElement>();
+
+    render(
+      <FocalThread messages={[m3, m2, m1]} currentUser={currentUser} scrollContainerRef={containerRef} />
+    );
+
+    expect(screen.getAllByTestId('focal-date-capsule')).toHaveLength(2);
   });
 });
 

@@ -12,16 +12,24 @@
  * `resolveFocalMessageText` — même Prisme que le reste du fil (F06 : « la
  * résolution Prisme reste inchangée »).
  *
- * FocalRow en dépend dès WF-110 (une rangée avec `replyTo` doit pouvoir se
- * rendre) — la garantie de contraste AA du texte (§WF-112/WF-113) arrive
- * dans un commit ultérieur sur ce même fichier.
+ * Contraste AA (WF-112) : `resolveFocalAuthorAccent` (39 couleurs vibrantes
+ * possibles, `conversation-colors.ts`) ne garantit RIEN seul — MÊME
+ * diagnostic que l'en-tête de `lentille-contrast.ts` (WL-102) pour le pont
+ * ✦. Le nom de l'auteur cité, du TEXTE, passe donc par
+ * `resolveBridgeTintColor` (RÉUTILISÉ VERBATIM, pas réimplémenté) pour
+ * garantir ≥ 4,5:1 contre le fond du thème. Le FILET (bordure gauche, non
+ * textuel) garde l'accent BRUT — la couleur d'identité que le contrat
+ * demande explicitement (« filet couleur de l'auteur cité »), un filet de
+ * 2,5 px n'étant pas du texte au sens de WCAG 1.4.3.
  */
 'use client';
 
 import { cn } from '@/lib/utils';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import type { Message } from '@meeshy/shared/types';
+import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { resolveFocalAuthorAccent, resolveFocalMessageText } from './focal-row-utils';
+import { resolveBridgeTintColor } from '../lentille/lentille-contrast';
 
 export interface FocalQuotedReplyProps {
   readonly quoted: Message;
@@ -30,8 +38,10 @@ export interface FocalQuotedReplyProps {
 }
 
 export function FocalQuotedReply({ quoted, preferredLanguages, onJumpToMessage }: FocalQuotedReplyProps) {
+  const theme = useResolvedTheme();
   const authorName = getUserDisplayName(quoted.sender, '');
   const accent = resolveFocalAuthorAccent(authorName || quoted.senderId);
+  const textColor = resolveBridgeTintColor(accent, theme);
   const text = resolveFocalMessageText(quoted, preferredLanguages) ?? quoted.content;
 
   return (
@@ -47,7 +57,7 @@ export function FocalQuotedReply({ quoted, preferredLanguages, onJumpToMessage }
         borderLeft: `var(--lentille-thread-quote-border-size) solid ${accent}`,
       }}
     >
-      <span className="font-medium mr-1" style={{ color: accent }}>
+      <span className="font-medium mr-1" style={{ color: textColor }}>
         {authorName}
       </span>
       {text}
