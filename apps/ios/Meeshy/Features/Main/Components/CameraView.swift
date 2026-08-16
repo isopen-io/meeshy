@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -390,8 +391,14 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
 
-        guard let audioDevice = AVCaptureDevice.default(for: .audio),
-              let audioInput = try? AVCaptureDeviceInput(device: audioDevice) else { return }
+        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
+        let audioInput: AVCaptureDeviceInput
+        do {
+            audioInput = try AVCaptureDeviceInput(device: audioDevice)
+        } catch {
+            Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         session.beginConfiguration()
         if session.canAddInput(audioInput) {
             session.addInput(audioInput)
@@ -404,9 +411,15 @@ final class CameraModel: NSObject, ObservableObject {
         session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.filter { $0.device.hasMediaType(.video) }
             .forEach { session.removeInput($0) }
 
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input) else { return }
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else { return }
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: device)
+        } catch {
+            Logger.media.error("Failed to create video capture input: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        guard session.canAddInput(input) else { return }
 
         session.addInput(input)
         currentDevice = device
@@ -498,7 +511,9 @@ final class CameraModel: NSObject, ObservableObject {
             isRecordingVideo = false
             recordingTimer?.invalidate()
             recordingTimer = nil
-            for segment in recordedSegmentURLs { try? FileManager.default.removeItem(at: segment) }
+            for segment in recordedSegmentURLs {
+                FileManager.default.removeItemLogging(at: segment, context: "discarded recording segment", logger: .media)
+            }
             recordedSegmentURLs = []
             return
         }
@@ -542,7 +557,7 @@ final class CameraModel: NSObject, ObservableObject {
         Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
-                try? FileManager.default.removeItem(at: segment)
+                FileManager.default.removeItemLogging(at: segment, context: "merged recording segment", logger: .media)
             }
         }
     }
@@ -592,13 +607,28 @@ final class CameraModel: NSObject, ObservableObject {
         var cursor = CMTime.zero
         for url in urls {
             let asset = AVURLAsset(url: url)
-            guard let duration = try? await asset.load(.duration), duration.isValid, duration > .zero else { continue }
-            let range = CMTimeRange(start: .zero, duration: duration)
-            if let assetVideoTrack = try? await asset.loadTracks(withMediaType: .video).first {
-                try? videoTrack.insertTimeRange(range, of: assetVideoTrack, at: cursor)
+            let duration: CMTime
+            do {
+                duration = try await asset.load(.duration)
+            } catch {
+                Logger.media.error("Failed to load duration for a recording segment, skipping it: \(error.localizedDescription, privacy: .public)")
+                continue
             }
-            if let assetAudioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
-                try? audioTrack.insertTimeRange(range, of: assetAudioTrack, at: cursor)
+            guard duration.isValid, duration > .zero else { continue }
+            let range = CMTimeRange(start: .zero, duration: duration)
+            do {
+                if let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first {
+                    try videoTrack.insertTimeRange(range, of: assetVideoTrack, at: cursor)
+                }
+            } catch {
+                Logger.media.error("Failed to insert the video track of a recording segment: \(error.localizedDescription, privacy: .public)")
+            }
+            do {
+                if let assetAudioTrack = try await asset.loadTracks(withMediaType: .audio).first {
+                    try audioTrack.insertTimeRange(range, of: assetAudioTrack, at: cursor)
+                }
+            } catch {
+                Logger.media.error("Failed to insert the audio track of a recording segment: \(error.localizedDescription, privacy: .public)")
             }
             cursor = cursor + duration
         }
