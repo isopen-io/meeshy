@@ -34,6 +34,16 @@ import Combine
 /// tuait donc le processus. Un relais qui ne porte qu'un `CGFloat` n'a rien à
 /// démonter sur le main actor : le saut d'exécuteur ne protégeait rien et ne
 /// coûtait qu'un crash.
+///
+/// **Ce relais TRANSPORTE, il ne décide jamais QUAND** (réserve R-g,
+/// `tasks/lentille-workshop-execution.md` §8). Il publie chaque écriture, sans
+/// fenêtre, sans pas minimal en points, sans coalescence — et c'est ce qui
+/// permet à l'élection de la focus card de la Lentille
+/// (`LentilleFocusElectionHost`) de suivre le défilement à la cadence de
+/// l'affichage, comme son contrat l'exige, en s'abonnant à ce relais plutôt
+/// qu'en ouvrant un second observateur de défilement. Y ajouter un écrémage
+/// « pour économiser » redéfinirait silencieusement cette cadence pour TOUS les
+/// abonnés à la fois. Gardé par `LentilleFocusElectionCadenceTests`.
 nonisolated public final class ScrollOffsetRelay: ObservableObject {
     /// `willSet { objectWillChange.send() }` PLUTÔT que `@Published` : le
     /// compilateur refuse `nonisolated` sur une propriété enveloppée
