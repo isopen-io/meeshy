@@ -439,3 +439,73 @@ Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le tableau de la
 collision entre les deux sessions, pourquoi le doublon n'était pas stérile, et
 l'enseignement de coordination : relire `main` sur les FICHIERS visés avant
 d'ouvrir la PR, pas seulement au démarrage.
+# Cycle 40 — la règle du masquage personnel avait trois consommateurs et zéro déclencheur
+
+Routine « amélioration continue temps réel ». Le cycle 38 a fait dire la vérité
+au champ `userId` de `read-status:updated` et a désigné iOS comme suite ; le
+cycle 39, mené EN PARALLÈLE par une autre session, a tranché le contrat de
+reconnaissance de l'acteur (PR #3056). Cet
+environnement est Linux **sans toolchain Swift** (borne déjà énoncée au cycle
+36) : la piste iOS reste ouverte, ce cycle prend une famille testable ici et
+rapporte les constats iOS mesurés au passage.
+
+## Constat
+
+**D1 — masquer le dernier message ne rafraîchissait pas la ligne de liste.**
+
+Le masquage personnel est appliqué sur TOUTES les surfaces de lecture
+(`resolveVisibleLastMessages`, `personalHistoryFilter`,
+`resolvePersonalPreviewOverrides`). La dernière — la moitié TEMPS RÉEL, installée
+pour qu'un lecteur ne se voie pas repousser dans sa ligne de liste ce qu'il vient
+d'en retirer — n'a jamais eu pour appelant le geste qui CRÉE le masquage. Ses
+trois déclencheurs sont l'édition, la suppression pour tous, la traduction qui
+atterrit.
+
+Conséquence : la bulle disparaît du fil (`message:hidden-for-me`), la ligne de
+liste garde l'aperçu masqué jusqu'à une mutation sans rapport — indéfiniment si
+rien d'autre ne bouge. Et le client ne peut pas s'en tirer seul : le remplaçant
+est le dernier message encore visible POUR CE LECTEUR, que seul le serveur sait
+rendre.
+
+Quatre écrivains concernés : `delete-for-me` (unitaire, lot), `restore-for-me`,
+`clear-history`.
+
+## Correctifs
+
+- [x] `PreviewUpdateScope.onlyForReaderUserId` — troisième borne du fan-out
+      (après l'INSTANT et la LANGUE : l'AUDIENCE), posée AVANT la sonde de
+      masquage et avant la boucle, parce qu'elle borne les deux
+- [x] `services/messaging/personalPreviewRefresh.ts` — déclencheur unique,
+      coalesce par conversation (un lot va jusqu'à 100 ids, plusieurs
+      conversations, une ligne se recalcule une fois)
+- [x] Câblé aux quatre écrivains ; l'en-tête de `personalMessageVisibilitySync`
+      passe de trois obligations à quatre
+- [x] Posture best-effort inchangée : un recalcul impossible ne fait pas échouer
+      un masquage qui a pris effet
+- [x] Deux harnais de test complétés (prisma double muet ⇒ témoin vert sur une
+      version qui n'appelle rien)
+- [x] Aucun changement de contrat, aucun changement client
+
+## Gates
+
+- [x] 11 RED discriminants vus rouges avant correctif (3 borne d'audience,
+      4 contrat de service, 4 câblage des routes), puis restaurés
+- [x] 5 non-régressions vertes d'emblée, dont les gardes anti-sur-correction
+- [x] `tsc --noEmit` gateway : 13 erreurs pré-existantes, identiques avec et
+      sans ce diff (mesuré par `git stash`)
+- [x] Suite gateway complète : **724 suites / 17748 tests verts** (321 s)
+- [x] CHANGELOG + journal d'audit (cycle40)
+
+## Limite énoncée
+
+Effectif sur **web** ; **inerte sur iOS**, où `ConversationStore.merging` jette
+tout groupe d'aperçu dont le `lastMessageAt` recule. Ce trou pré-existe ce cycle
+(il vaut déjà pour la suppression POUR TOUS du dernier message) et se corrige
+côté client, avec un discriminant « périmé » vs « recalculé ». Détail et pistes :
+`tasks/realtime-sync-audit-2026-08-15-cycle40.md` § Constats iOS.
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle40.md` — le constat, les quatre
+écrivains, le correctif en deux pièces, les deux constats iOS mesurés et non
+livrés, et les trois surfaces balayées trouvées correctes à ne pas ré-instruire.
