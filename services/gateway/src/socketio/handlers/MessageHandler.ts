@@ -498,9 +498,12 @@ export class MessageHandler {
 
       const attachmentService = this.attachmentService;
 
-      const attachments = await Promise.all(
-        validated.attachmentIds.map((attachmentId: string) => attachmentService.getAttachment(attachmentId))
-      );
+      // UNE requête pour les N pièces (cf. `getAttachmentsByIds`) : le
+      // `Promise.all` de `findUnique` qui vivait ici ouvrait autant de
+      // requêtes MongoDB que de pièces jointes — jusqu'à 199 par envoi.
+      // Le tableau reste aligné sur `attachmentIds`, donc `invalidIndex`
+      // ci-dessous continue de nommer la pièce fautive.
+      const attachments = await attachmentService.getAttachmentsByIds(validated.attachmentIds);
       const invalidIndex = attachments.findIndex(
         (attachment) => !attachment || attachment.uploadedBy !== (userId || participantId)
       );

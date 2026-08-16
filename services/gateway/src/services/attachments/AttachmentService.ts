@@ -172,15 +172,34 @@ export class AttachmentService {
     });
   }
 
-  async getAttachment(attachmentId: string): Promise<Attachment | null> {
-    const attachment = await this.prisma.messageAttachment.findUnique({
-      where: { id: attachmentId },
-    });
-
-    if (!attachment) {
-      return null;
-    }
-
+  private toAttachment(attachment: {
+    id: string;
+    messageId: string | null;
+    fileName: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+    fileUrl: string;
+    thumbnailUrl: string | null;
+    width: number | null;
+    height: number | null;
+    duration: number | null;
+    bitrate: number | null;
+    sampleRate: number | null;
+    codec: string | null;
+    channels: number | null;
+    uploadedBy: string;
+    isAnonymous: boolean;
+    createdAt: Date;
+    isForwarded: boolean | null;
+    isViewOnce: boolean | null;
+    viewOnceCount: number | null;
+    isBlurred: boolean | null;
+    viewedCount: number | null;
+    downloadedCount: number | null;
+    consumedCount: number | null;
+    isEncrypted: boolean | null;
+  }): Attachment {
     return {
       id: attachment.id,
       messageId: attachment.messageId,
@@ -209,6 +228,44 @@ export class AttachmentService {
       consumedCount: attachment.consumedCount ?? 0,
       isEncrypted: attachment.isEncrypted ?? false,
     };
+  }
+
+  async getAttachment(attachmentId: string): Promise<Attachment | null> {
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+    });
+
+    if (!attachment) {
+      return null;
+    }
+
+    return this.toAttachment(attachment);
+  }
+
+  /**
+   * Charge N pièces jointes en UNE requête, rendues dans l'ordre des ids
+   * demandés (`null` pour un id introuvable, afin que l'appelant puisse
+   * nommer l'index fautif).
+   *
+   * Le chemin d'envoi validait chaque pièce par un `findUnique` dans un
+   * `Promise.all` : à 199 pièces (`MAX_ATTACHMENTS_PER_MESSAGE`), un seul
+   * événement socket ouvrait 199 requêtes concurrentes vers MongoDB. Un
+   * `findMany` rend le coût constant — un aller-retour, quel que soit le
+   * nombre de pièces.
+   *
+   * Les doublons d'ids sont tolérés : chacun retrouve la même ligne.
+   */
+  async getAttachmentsByIds(attachmentIds: readonly string[]): Promise<Array<Attachment | null>> {
+    if (attachmentIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.prisma.messageAttachment.findMany({
+      where: { id: { in: [...new Set(attachmentIds)] } },
+    });
+
+    const byId = new Map(rows.map((row) => [row.id, this.toAttachment(row)]));
+    return attachmentIds.map((id) => byId.get(id) ?? null);
   }
 
   async getAttachmentWithMetadata(attachmentId: string): Promise<any | null> {

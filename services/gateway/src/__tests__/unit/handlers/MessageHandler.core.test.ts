@@ -292,9 +292,15 @@ function makeMockMessagingService(msgOverride: object = {}) {
 }
 
 function makeMockAttachmentService(attachments: any[] = []) {
+  const getAttachment = jest.fn(async (id: string) =>
+    attachments.find((a) => a.id === id) ?? null
+  );
   return {
-    getAttachment: jest.fn(async (id: string) =>
-      attachments.find((a) => a.id === id) ?? null
+    getAttachment,
+    // Cf. `AttachmentService.getAttachmentsByIds` : une seule requête pour les
+    // N pièces, rendues dans l'ordre des ids demandés.
+    getAttachmentsByIds: jest.fn(async (ids: readonly string[]) =>
+      Promise.all(ids.map((id) => getAttachment(id)))
     ),
   };
 }
@@ -914,7 +920,10 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
 
-    const attachmentService = { getAttachment: jest.fn(async () => null) };
+    const attachmentService = {
+      getAttachment: jest.fn(async () => null),
+      getAttachmentsByIds: jest.fn(async (ids: readonly string[]) => ids.map(() => null)),
+    };
 
     const { handler } = makeHandler({
       connectedUsers: connectedUsers as any,
@@ -968,6 +977,7 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
 
     const attachmentService = {
       getAttachment: jest.fn(async () => { throw new Error('Storage failure'); }),
+      getAttachmentsByIds: jest.fn(async () => { throw new Error('Storage failure'); }),
     };
 
     const { handler, stats } = makeHandler({

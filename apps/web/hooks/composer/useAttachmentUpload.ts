@@ -11,7 +11,12 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { AttachmentService } from '@/services/attachmentService';
 import { compressMultipleFiles, needsCompression } from '@/utils/media-compression';
-import { UploadedAttachmentResponse, MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import {
+  UploadedAttachmentResponse,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_CONCURRENT_UPLOADS,
+} from '@meeshy/shared/types/attachment';
+import { mapWithConcurrency, chunk } from '@meeshy/shared/utils/concurrency';
 
 interface CompressionProgress {
   progress: number;
@@ -99,6 +104,30 @@ const MEDIA_DURATION_EXTRACTION_TIMEOUT_MS = 4000;
 
 type AttachmentSelectionMetadata = Record<string, unknown> & { duration?: number };
 type AttachmentSelectionMetadataList = Array<AttachmentSelectionMetadata | undefined>;
+
+/** Clé i18n du conseil « réduisez le nombre de pièces jointes ». */
+const REDUCE_HINT_KEY = 'attachmentUploadFailure.reduceCount';
+
+/**
+ * Complète un message d'échec d'envoi par un conseil actionnable : réduire le
+ * nombre de pièces jointes et réessayer. Un échec sur un envoi de 150 pièces
+ * n'a pas le même remède qu'un échec sur une pièce isolée — le dire évite à
+ * l'utilisateur de rejouer à l'identique le même envoi trop lourd.
+ *
+ * Silencieux sur un envoi d'une seule pièce (réduire n'y veut rien dire), et
+ * silencieux si `t` est l'identité (défaut du hook, hors contexte i18n) —
+ * sinon la clé brute s'afficherait à l'utilisateur.
+ */
+export function withReduceAttachmentsHint(
+  message: string,
+  attachmentCount: number,
+  t: (key: string, options?: any) => string
+): string {
+  if (attachmentCount < 2) return message;
+  const hint = t(REDUCE_HINT_KEY, { count: attachmentCount });
+  if (!hint || hint === REDUCE_HINT_KEY) return message;
+  return `${message} ${hint}`;
+}
 
 function isDurationEligibleFile(file: File): boolean {
   return file.type.startsWith('video/') || file.type.startsWith('audio/');
@@ -289,77 +318,108 @@ export function useAttachmentUpload({
     lastNotifiedIdsStringRef.current = attachmentIdsString;
   }, [attachmentIdsString, onAttachmentsChange]);
 
-  // Upload en batches
+  // Upload en lots PARALLÈLES bornés.
+  //
+  // Les lots partaient en séquence : 199 fichiers = 20 requêtes l'une après
+  // l'autre, chacune attendant la précédente. `MAX_CONCURRENT_UPLOADS` lots
+  // volent désormais ensemble (le même plafond que le service TUS), ce qui
+  // divise l'attente sans ouvrir 20 connexions d'un coup.
   const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: AttachmentSelectionMetadataList) => {
     const totalFiles = files.length;
-    const totalBatches = Math.ceil(totalFiles / batchSize);
+    const batches = chunk(files, batchSize).map((batchFiles, batchIndex) => {
+      const start = batchIndex * batchSize;
+      return {
+        files: batchFiles,
+        start,
+        metadata: additionalMetadata?.slice(start, start + batchFiles.length),
+      };
+    });
 
     setBatchProgress({
       current: 0,
       total: totalFiles,
       currentBatch: 0,
-      totalBatches,
+      totalBatches: batches.length,
     });
 
+    let completedBatches = 0;
     let uploadedCount = 0;
-    const allUploadedAttachments: UploadedAttachmentResponse[] = [];
 
-    for (let i = 0; i < totalBatches; i++) {
-      const start = i * batchSize;
-      const end = Math.min(start + batchSize, totalFiles);
-      const batch = files.slice(start, end);
-      const batchMetadata = additionalMetadata?.slice(start, end);
+    const perBatchAttachments = await mapWithConcurrency(
+      batches,
+      MAX_CONCURRENT_UPLOADS,
+      async (batch, batchIndex) => {
+        try {
+          const response = await AttachmentService.uploadFiles(
+            batch.files,
+            token,
+            batch.metadata,
+            (percentage) => {
+              // La progression d'un lot vaut pour CHAQUE fichier qu'il porte :
+              // une requête multipart n'expose pas de granularité par fichier.
+              // Ce callback indexait par numéro de LOT alors que la pastille de
+              // chaque vignette lit `uploadProgress[indexDuFichier]` — seule la
+              // première vignette bougeait, les autres restaient vides.
+              setUploadProgress(prev => {
+                const next = { ...prev };
+                for (let offset = 0; offset < batch.files.length; offset++) {
+                  next[batch.start + offset] = percentage;
+                }
+                return next;
+              });
+            }
+          );
 
-      setBatchProgress(prev => ({
-        ...prev,
-        currentBatch: i + 1,
-      }));
+          const attachments = response.attachments || (response as any).data?.attachments;
+          const succeededAttachments = response.success && attachments ? attachments : [];
 
-      try {
-        const response = await AttachmentService.uploadFiles(
-          batch,
-          token,
-          batchMetadata,
-          (percentage, loaded, total) => {
-            setUploadProgress(prev => ({ ...prev, [i]: percentage }));
+          // La route répond toujours success:true (sendSuccess) même quand
+          // UploadProcessor.uploadMultiple a avalé des échecs par fichier et
+          // renvoyé un tableau plus court — response.success seul ne le
+          // détecte pas. Réconcilier par nom pour purger précisément les
+          // fichiers de CE lot qui n'ont pas d'attachment correspondant.
+          const failedFiles = reconcileUploadFailures(batch.files, succeededAttachments);
+          if (failedFiles.length > 0) {
+            console.warn(`⚠️ Batch ${batchIndex + 1}: ${failedFiles.length}/${batch.files.length} fichier(s) non uploadé(s) (réponse serveur incomplète)`, response);
+            const message = withReduceAttachmentsHint(
+              `${failedFiles.length} fichier(s) sur ${batch.files.length} n'ont pas pu être uploadé(s).`,
+              totalFiles,
+              t
+            );
+            setUploadError(message);
+            onUploadError?.(message);
+            setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
           }
-        );
 
-        const attachments = response.attachments || (response as any).data?.attachments;
-        const succeededAttachments = response.success && attachments ? attachments : [];
-        if (succeededAttachments.length > 0) {
-          allUploadedAttachments.push(...succeededAttachments);
-        }
-
-        // La route répond toujours success:true (sendSuccess) même quand
-        // UploadProcessor.uploadMultiple a avalé des échecs par fichier et
-        // renvoyé un tableau plus court — response.success seul ne le
-        // détecte pas. Réconcilier par nom pour purger précisément les
-        // fichiers de CE lot qui n'ont pas d'attachment correspondant.
-        const failedFiles = reconcileUploadFailures(batch, succeededAttachments);
-        if (failedFiles.length > 0) {
-          console.warn(`⚠️ Batch ${i + 1}: ${failedFiles.length}/${batch.length} fichier(s) non uploadé(s) (réponse serveur incomplète)`, response);
-          const message = `${failedFiles.length} fichier(s) sur ${batch.length} n'ont pas pu être uploadé(s).`;
+          return succeededAttachments;
+        } catch (error) {
+          console.error(`❌ Batch ${batchIndex + 1} upload error:`, error);
+          const message = withReduceAttachmentsHint(
+            error instanceof Error ? error.message : 'Upload failed. Please try again.',
+            totalFiles,
+            t
+          );
           setUploadError(message);
           onUploadError?.(message);
-          setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
+          setSelectedFiles(prev => prev.filter((f) => !batch.files.includes(f)));
+          return [] as UploadedAttachmentResponse[];
+        } finally {
+          // Les lots s'achèvent dans le désordre : compter les achèvements,
+          // jamais l'index du lot courant.
+          completedBatches += 1;
+          uploadedCount += batch.files.length;
+          setBatchProgress(prev => ({
+            ...prev,
+            current: uploadedCount,
+            currentBatch: completedBatches,
+          }));
         }
-      } catch (error) {
-        console.error(`❌ Batch ${i + 1} upload error:`, error);
-        const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
-        setUploadError(message);
-        onUploadError?.(message);
-        setSelectedFiles(prev => prev.filter((f) => !batch.includes(f)));
       }
+    );
 
-      uploadedCount += batch.length;
-      setBatchProgress(prev => ({
-        ...prev,
-        current: uploadedCount,
-      }));
-    }
-
-    // Update uploaded attachments
+    // `mapWithConcurrency` rend les résultats dans l'ordre des lots : les
+    // pièces restent dans l'ordre de sélection malgré le parallélisme.
+    const allUploadedAttachments = perBatchAttachments.flat();
     if (allUploadedAttachments.length > 0) {
       setUploadedAttachments(prev => [...prev, ...allUploadedAttachments]);
     }
@@ -371,7 +431,7 @@ export function useAttachmentUpload({
       currentBatch: 0,
       totalBatches: 0,
     });
-  }, [batchSize, token, onUploadError]);
+  }, [batchSize, token, onUploadError, t]);
 
   // Ajouter des fichiers
   const handleFilesSelected = useCallback(async (files: File[], additionalMetadata?: any) => {
@@ -499,7 +559,15 @@ export function useAttachmentUpload({
           token,
           metadataForUpload,
           (percentage, loaded, total) => {
-            setUploadProgress(prev => ({ ...prev, 0: percentage }));
+            // Même correction que sur le chemin multi-lot : la progression
+            // vaut pour chaque vignette de la requête, pas seulement l'index 0.
+            setUploadProgress(prev => {
+              const next = { ...prev };
+              for (let index = 0; index < uniqueFiles.length; index++) {
+                next[index] = percentage;
+              }
+              return next;
+            });
             if (percentage % 25 === 0) {
               const totalSizeMB = total / (1024 * 1024);
               if (totalSizeMB > 50) {
@@ -526,9 +594,13 @@ export function useAttachmentUpload({
         const failedFiles = reconcileUploadFailures(uniqueFiles, succeededAttachments);
         if (failedFiles.length > 0) {
           console.warn('⚠️ Upload partiellement ou totalement échoué côté serveur:', response);
-          const message = uniqueFiles.length === 1
-            ? 'Upload failed. Please try again.'
-            : `${failedFiles.length} fichier(s) sur ${uniqueFiles.length} n'ont pas pu être uploadé(s).`;
+          const message = withReduceAttachmentsHint(
+            uniqueFiles.length === 1
+              ? 'Upload failed. Please try again.'
+              : `${failedFiles.length} fichier(s) sur ${uniqueFiles.length} n'ont pas pu être uploadé(s).`,
+            uniqueFiles.length,
+            t
+          );
           toast.error(message);
           setUploadError(message);
           onUploadError?.(message);
@@ -537,12 +609,16 @@ export function useAttachmentUpload({
       }
     } catch (error) {
       console.error('❌ Upload error:', error);
-      const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
-      if (error instanceof Error) {
-        toast.error(`Upload failed: ${error.message}`);
-      } else {
-        toast.error('Upload failed. Please try again.');
-      }
+      const message = withReduceAttachmentsHint(
+        error instanceof Error ? error.message : 'Upload failed. Please try again.',
+        uniqueFiles.length,
+        t
+      );
+      toast.error(
+        error instanceof Error
+          ? withReduceAttachmentsHint(`Upload failed: ${error.message}`, uniqueFiles.length, t)
+          : message
+      );
       setUploadError(message);
       onUploadError?.(message);
       // Symétrie avec handleCreateTextAttachment: purger les fichiers de CETTE

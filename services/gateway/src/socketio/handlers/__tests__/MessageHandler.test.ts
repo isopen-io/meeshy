@@ -192,7 +192,17 @@ function makeNotificationService() {
 }
 
 function makeAttachmentService() {
-  return { getAttachment: jest.fn() as jest.Mock<any> };
+  const getAttachment = jest.fn() as jest.Mock<any>;
+  return {
+    getAttachment,
+    // Le handler charge les N pièces d'un envoi en UNE requête
+    // (`getAttachmentsByIds`). Le double la dérive de `getAttachment` : le
+    // lot rend exactement ce que rendraient les lectures unitaires, dans
+    // l'ordre des ids — c'est le contrat du vrai service.
+    getAttachmentsByIds: jest.fn(async (ids: readonly string[]) =>
+      Promise.all(ids.map((id) => getAttachment(id)))
+    ) as jest.Mock<any>,
+  };
 }
 
 function makeReadStatusService() {
