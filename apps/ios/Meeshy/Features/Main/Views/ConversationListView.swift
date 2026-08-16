@@ -1195,7 +1195,7 @@ struct ConversationListView: View {
             // MÊME porte que la tuile « Stories » du profil
             // (`ProfileUserPostsList`) : un listener unique par racine, jamais
             // une sheet de plus montée par cet écran.
-            NotificationCenter.default.post(name: Notification.Name("openMyStories"), object: nil)
+            NotificationCenter.default.post(name: .openMyStories, object: nil)
         case .createStory:
             storyViewModel.showStoryComposer = true
         }
