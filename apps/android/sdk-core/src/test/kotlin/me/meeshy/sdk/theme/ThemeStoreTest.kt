@@ -22,6 +22,14 @@ import java.io.File
  * The theme persistence seam (feature-parity §L). [InMemoryThemeStore] is the
  * volatile store used by tests/previews; [DataStoreThemeStore] is the durable
  * DataStore-backed one that survives process death and hydrates on construction.
+ *
+ * `withTimeout(15_000)` on real DataStore-Flow collection (`runBlocking`, real
+ * wall-clock time — not `runTest`'s virtual clock): `5_000` flaked repeatedly
+ * under CI-runner disk-I/O load (`TimeoutCancellationException`, no relation to
+ * the diff under test each time). `15_000` matches the value
+ * [me.meeshy.sdk.media.MediaDownloadPreferencesStoreTest]/
+ * [me.meeshy.sdk.privacy.PrivacyPreferencesStoreTest] already use without
+ * incident — never observed to flake at that threshold in this session.
  */
 class ThemeStoreTest {
 
@@ -63,7 +71,7 @@ class ThemeStoreTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val store = DataStoreThemeStore(newDataStore(scope, tmp.newFile("empty.preferences_pb")), scope)
         try {
-            val value = withTimeout(5_000) { store.themeMode.first() }
+            val value = withTimeout(15_000) { store.themeMode.first() }
             assertThat(value).isEqualTo(AppThemeMode.AUTO)
         } finally {
             scope.cancel()
@@ -76,7 +84,7 @@ class ThemeStoreTest {
         val store = DataStoreThemeStore(newDataStore(scope, tmp.newFile("set.preferences_pb")), scope)
         try {
             store.setThemeMode(AppThemeMode.DARK)
-            val value = withTimeout(5_000) { store.themeMode.first { it == AppThemeMode.DARK } }
+            val value = withTimeout(15_000) { store.themeMode.first { it == AppThemeMode.DARK } }
             assertThat(value).isEqualTo(AppThemeMode.DARK)
         } finally {
             scope.cancel()
@@ -95,10 +103,10 @@ class ThemeStoreTest {
         try {
             val writer = DataStoreThemeStore(dataStore, scope)
             writer.setThemeMode(AppThemeMode.LIGHT)
-            withTimeout(5_000) { writer.themeMode.first { it == AppThemeMode.LIGHT } }
+            withTimeout(15_000) { writer.themeMode.first { it == AppThemeMode.LIGHT } }
 
             val fresh = DataStoreThemeStore(dataStore, scope)
-            val value = withTimeout(5_000) { fresh.themeMode.first { it == AppThemeMode.LIGHT } }
+            val value = withTimeout(15_000) { fresh.themeMode.first { it == AppThemeMode.LIGHT } }
             assertThat(value).isEqualTo(AppThemeMode.LIGHT)
         } finally {
             scope.cancel()

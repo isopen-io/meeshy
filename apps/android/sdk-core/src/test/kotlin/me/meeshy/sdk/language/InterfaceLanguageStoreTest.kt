@@ -26,6 +26,14 @@ import java.io.File
  * the pure codec so a corrupt/legacy persisted token degrades to "System" (`null`) not a crash.
  *
  * `null` is the "follow the device locale" (System) preference throughout.
+ *
+ * `withTimeout(15_000)` on real DataStore-Flow collection (`runBlocking`, real
+ * wall-clock time — not `runTest`'s virtual clock): `5_000` flaked repeatedly
+ * under CI-runner disk-I/O load (`TimeoutCancellationException`, no relation to
+ * the diff under test each time). `15_000` matches the value
+ * [me.meeshy.sdk.media.MediaDownloadPreferencesStoreTest]/
+ * [me.meeshy.sdk.privacy.PrivacyPreferencesStoreTest] already use without
+ * incident — never observed to flake at that threshold in this session.
  */
 class InterfaceLanguageStoreTest {
 
@@ -82,7 +90,7 @@ class InterfaceLanguageStoreTest {
             newDataStore(scope, tmp.newFile("empty.preferences_pb")), scope,
         )
         try {
-            val value = withTimeout(5_000) { store.languageCode.first() }
+            val value = withTimeout(15_000) { store.languageCode.first() }
             assertThat(value).isNull()
         } finally {
             scope.cancel()
@@ -97,7 +105,7 @@ class InterfaceLanguageStoreTest {
         )
         try {
             store.setLanguageCode("ar")
-            val value = withTimeout(5_000) { store.languageCode.first { it == "ar" } }
+            val value = withTimeout(15_000) { store.languageCode.first { it == "ar" } }
             assertThat(value).isEqualTo("ar")
         } finally {
             scope.cancel()
@@ -115,10 +123,10 @@ class InterfaceLanguageStoreTest {
         try {
             val writer = DataStoreInterfaceLanguageStore(dataStore, scope)
             writer.setLanguageCode("es")
-            withTimeout(5_000) { writer.languageCode.first { it == "es" } }
+            withTimeout(15_000) { writer.languageCode.first { it == "es" } }
 
             val fresh = DataStoreInterfaceLanguageStore(dataStore, scope)
-            val value = withTimeout(5_000) { fresh.languageCode.first { it == "es" } }
+            val value = withTimeout(15_000) { fresh.languageCode.first { it == "es" } }
             assertThat(value).isEqualTo("es")
         } finally {
             scope.cancel()
@@ -134,7 +142,7 @@ class InterfaceLanguageStoreTest {
         try {
             dataStore.edit { it[stringPreferencesKey("interface_language")] = "klingon" }
             val store = DataStoreInterfaceLanguageStore(dataStore, scope)
-            val value = withTimeout(5_000) { store.languageCode.first() }
+            val value = withTimeout(15_000) { store.languageCode.first() }
             assertThat(value).isNull()
         } finally {
             scope.cancel()

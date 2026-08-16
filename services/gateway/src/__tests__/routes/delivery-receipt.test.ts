@@ -63,6 +63,9 @@ const mockPrisma: any = {
 const emitMock = jest.fn();
 const ioChain: any = {};
 ioChain.to = jest.fn(() => ioChain);
+// `except` clot la chaine : la diffusion d'un accuse de LECTURE en retire
+// l'acteur, qui recoit a part une version enrichie de son arriere.
+ioChain.except = jest.fn(() => ioChain);
 ioChain.emit = emitMock;
 const io = { to: jest.fn(() => ioChain) };
 const socketIOHandler = { getManager: () => ({ getIO: () => io }) };
@@ -155,20 +158,43 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     });
 
     expect(response.statusCode).toBe(200);
-    // 3 events: READ_STATUS_UPDATED + dual-emitted MESSAGE_READ_STATUS_UPDATED
-    // (senders' checkmarks) + CONVERSATION_UNREAD_UPDATED (reader's own badge reset).
-    expect(emitMock).toHaveBeenCalledTimes(3);
-    const [eventName, payload] = emitMock.mock.calls[0];
-    expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
-    expect(payload.type).toBe('read');
-    // A 'read' carries the per-actor multi-device sync fields.
-    expect(payload.lastReadAt).toEqual(frontier);
-    expect(payload.unreadCount).toBe(3);
-    const [dualEventName, dualPayload] = emitMock.mock.calls[1];
-    expect(dualEventName).toBe(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED);
-    expect(dualPayload).toEqual(payload);
-    // Badge reset event goes to the reader's user room.
-    const [badgeEvent, badgePayload] = emitMock.mock.calls[2];
+    // 5 events, et c'est le DÉCOUPAGE qui compte : un `read` a deux audiences,
+    // donc deux payloads. L'éventail porte aux pairs ce qui décrit la
+    // conversation (le résumé des coches) ; la room personnelle de l'acteur
+    // porte en plus ce qui ne décrit que LUI — sa frontière de lecture et son
+    // arriéré. Puis la remise à zéro du badge, sur son canal dédié.
+    expect(emitMock).toHaveBeenCalledTimes(5);
+
+    // [0][1] — l'éventail, sous les deux noms d'événement.
+    for (const index of [0, 1] as const) {
+      const [eventName, payload] = emitMock.mock.calls[index];
+      expect(eventName).toBe(
+        index === 0 ? SERVER_EVENTS.READ_STATUS_UPDATED : SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED
+      );
+      expect(payload.type).toBe('read');
+      expect(payload.lastReadAt).toBeUndefined();
+      expect(payload.unreadCount).toBeUndefined();
+    }
+
+    // [2][3] — la copie de l'acteur, les deux champs en plus, mêmes deux noms.
+    for (const index of [2, 3] as const) {
+      const [eventName, payload] = emitMock.mock.calls[index];
+      expect(eventName).toBe(
+        index === 2 ? SERVER_EVENTS.READ_STATUS_UPDATED : SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED
+      );
+      expect(payload.type).toBe('read');
+      expect(payload.lastReadAt).toEqual(frontier);
+      expect(payload.unreadCount).toBe(3);
+    }
+    // Les deux copies ne diffèrent QUE par ces deux champs.
+    expect({ ...emitMock.mock.calls[2][1], lastReadAt: undefined, unreadCount: undefined }).toEqual({
+      ...emitMock.mock.calls[0][1], lastReadAt: undefined, unreadCount: undefined
+    });
+    // Et l'éventail a bien retiré l'acteur, sans quoi il recevrait les deux.
+    expect(ioChain.except).toHaveBeenCalled();
+
+    // [4] — Badge reset event goes to the reader's user room.
+    const [badgeEvent, badgePayload] = emitMock.mock.calls[4];
     expect(badgeEvent).toBe(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
     expect(badgePayload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: 3 });
   });

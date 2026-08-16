@@ -396,3 +396,169 @@ cycle 39 : elle porte sur **iOS**, pas sur le gateway — donner au SDK une
 identité d'acteur courant qui couvre la session anonyme
 (`AuthManager.currentUser` reste nil pour un invité), puis aligner les 3 gardes
 dessus.
+
+# Cycle 39 — le doublon, et le bout qu'il a rendu visible
+
+## Constat
+
+- [x] La piste du cycle 37 a été instruite **deux fois en parallèle** par deux
+      sessions de la même routine, sans coordination possible
+- [x] La PR #3052 (session A) a mergé à 21:06 ; ce cycle a ouvert sa PR une heure
+      trop tard, sur un défaut déjà réparé — même diagnostic, mêmes 5 RED, même
+      nom de fichier d'audit
+- [x] Le correctif de ce cycle a donc été **jeté**, pas redéposé
+
+## Le bout resté ouvert (livré)
+
+- [x] En rendant `payload.userId` légitimement `null` pour un invité, #3052 a
+      rendu inapplicable pour cette population le seul contrat qui disait comment
+      revendiquer `lastReadAt`/`unreadCount`
+- [x] L'identité qui convient voyage DÉJÀ dans le payload : `participantId`
+- [x] L'acteur se reconnaît par `userId ?? participantId` — la même règle que
+      celle qui nomme sa room personnelle
+- [x] Contrat partagé + miroir iOS + KDoc Android (absent jusqu'ici) + README
+      socketio § seconde moitié de la règle
+- [x] Zéro changement de code d'exécution, zéro migration client
+
+## Écarté délibérément
+
+- [x] `resolveBroadcastActor` — construit, testé, puis retiré : le type
+      `actorUserId: string | null` de #3052 ferme déjà le trou que l'unité aurait
+      fermé (leçon 273)
+
+## Gates
+
+- [x] Aucun fichier `.ts` d'exécution touché
+- [x] `tsc --noEmit` gateway : 0
+- [x] Suite gateway complète sur la base à jour : 724 suites / 17 732 tests verts (inchangé)
+- [x] CHANGELOG + journal d'audit (cycle 39) + leçon 273
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle39.md` — le tableau de la
+collision entre les deux sessions, pourquoi le doublon n'était pas stérile, et
+l'enseignement de coordination : relire `main` sur les FICHIERS visés avant
+d'ouvrir la PR, pas seulement au démarrage.
+
+# Cycle 40 — la règle du masquage personnel avait trois consommateurs et zéro déclencheur
+
+Routine « amélioration continue temps réel ». Le cycle 38 a fait dire la vérité
+au champ `userId` de `read-status:updated` et a désigné iOS comme suite ; le
+cycle 39, mené EN PARALLÈLE par une autre session, a tranché le contrat de
+reconnaissance de l'acteur (PR #3056). Cet
+environnement est Linux **sans toolchain Swift** (borne déjà énoncée au cycle
+36) : la piste iOS reste ouverte, ce cycle prend une famille testable ici et
+rapporte les constats iOS mesurés au passage.
+
+## Constat
+
+**D1 — masquer le dernier message ne rafraîchissait pas la ligne de liste.**
+
+Le masquage personnel est appliqué sur TOUTES les surfaces de lecture
+(`resolveVisibleLastMessages`, `personalHistoryFilter`,
+`resolvePersonalPreviewOverrides`). La dernière — la moitié TEMPS RÉEL, installée
+pour qu'un lecteur ne se voie pas repousser dans sa ligne de liste ce qu'il vient
+d'en retirer — n'a jamais eu pour appelant le geste qui CRÉE le masquage. Ses
+trois déclencheurs sont l'édition, la suppression pour tous, la traduction qui
+atterrit.
+
+Conséquence : la bulle disparaît du fil (`message:hidden-for-me`), la ligne de
+liste garde l'aperçu masqué jusqu'à une mutation sans rapport — indéfiniment si
+rien d'autre ne bouge. Et le client ne peut pas s'en tirer seul : le remplaçant
+est le dernier message encore visible POUR CE LECTEUR, que seul le serveur sait
+rendre.
+
+Quatre écrivains concernés : `delete-for-me` (unitaire, lot), `restore-for-me`,
+`clear-history`.
+
+## Correctifs
+
+- [x] `PreviewUpdateScope.onlyForReaderUserId` — troisième borne du fan-out
+      (après l'INSTANT et la LANGUE : l'AUDIENCE), posée AVANT la sonde de
+      masquage et avant la boucle, parce qu'elle borne les deux
+- [x] `services/messaging/personalPreviewRefresh.ts` — déclencheur unique,
+      coalesce par conversation (un lot va jusqu'à 100 ids, plusieurs
+      conversations, une ligne se recalcule une fois)
+- [x] Câblé aux quatre écrivains ; l'en-tête de `personalMessageVisibilitySync`
+      passe de trois obligations à quatre
+- [x] Posture best-effort inchangée : un recalcul impossible ne fait pas échouer
+      un masquage qui a pris effet
+- [x] Deux harnais de test complétés (prisma double muet ⇒ témoin vert sur une
+      version qui n'appelle rien)
+- [x] Aucun changement de contrat, aucun changement client
+
+## Gates
+
+- [x] 11 RED discriminants vus rouges avant correctif (3 borne d'audience,
+      4 contrat de service, 4 câblage des routes), puis restaurés
+- [x] 5 non-régressions vertes d'emblée, dont les gardes anti-sur-correction
+- [x] `tsc --noEmit` gateway : 13 erreurs pré-existantes, identiques avec et
+      sans ce diff (mesuré par `git stash`)
+- [x] Suite gateway complète : **724 suites / 17748 tests verts** (321 s)
+- [x] CHANGELOG + journal d'audit (cycle40)
+
+## Limite énoncée
+
+Effectif sur **web** ; **inerte sur iOS**, où `ConversationStore.merging` jette
+tout groupe d'aperçu dont le `lastMessageAt` recule. Ce trou pré-existe ce cycle
+(il vaut déjà pour la suppression POUR TOUS du dernier message) et se corrige
+côté client, avec un discriminant « périmé » vs « recalculé ». Détail et pistes :
+`tasks/realtime-sync-audit-2026-08-15-cycle40.md` § Constats iOS.
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle40.md` — le constat, les quatre
+écrivains, le correctif en deux pièces, les deux constats iOS mesurés et non
+livrés, et les trois surfaces balayées trouvées correctes à ne pas ré-instruire.
+
+# Cycle 41 — la règle était écrite, et appliquée à une seule des deux branches
+
+Piste ouverte au cycle 38, reconduite au cycle 39, instruite ici.
+
+## Constat
+
+- [x] `lastReadAt`/`unreadCount` décrivent l'ACTEUR (sa frontière de lecture,
+      son arriéré sur ce fil), pas la conversation — et partaient dans
+      l'ÉVENTAIL sur un `type: 'read'`
+- [x] Chaque pair recevait donc l'arriéré de lecture de celui qui venait de lire
+- [x] Le raisonnement qui l'interdit était DÉJÀ écrit 15 lignes plus haut, sur
+      la branche `received` : « would needlessly disclose the actor's backlog to
+      every peer in the room »
+- [x] Second angle, le consentement : `shouldShowReadReceipts` consent à « j'ai
+      lu ton message », pas à publier un arriéré — l'utilisateur qui ACTIVAIT
+      ses accusés était celui qui divulguait le plus
+- [x] 2 sites atteints (`message-read-status.ts`, `conversations/messages.ts`) ;
+      les 4 autres émetteurs de l'événement vérifiés indemnes, avec la raison
+
+## Correctifs
+
+- [x] Deux payloads pour deux audiences : l'éventail perd les deux champs, la
+      version complète part dans `ROOMS.user(userId ?? participantId)`
+- [x] `exceptRoom` ajouté à `emitToConversationParticipants` — retirer la room
+      personnelle ne suffit pas, la room de conversation tient l'acteur dès
+      qu'il a le fil ouvert
+- [x] Exclusion conditionnée à la présence des champs : sur un `received` elle
+      coûterait l'événement à l'acteur sans rien protéger
+- [x] Invariant vérifié aux deux bouts d'`AuthHandler` : toute session rejoint
+      sa room personnelle AVANT toute room de conversation
+- [x] 3 consommateurs relus DANS LE CODE avant de restreindre le payload —
+      aucun ne change de comportement
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges (4 site 1, 2 site 2)
+- [x] 3 non-régressions vertes d'emblée, dont 2 gardes anti-sur-correction
+- [x] 1 double `io` préexistant complété (`except` manquait), pas un correctif régressant
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : voir § Validation de l'audit
+- [x] CHANGELOG + journal d'audit (cycle40) + leçon 275 + contrat partagé +
+      miroirs iOS/SDK/Android + README socketio
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle41.md` — le tableau des 6
+émetteurs, celui des 3 consommateurs, pourquoi `exceptRoom` n'est pas décoratif,
+les deux options écartées (porter les champs par `conversation:unread-updated` ;
+retirer la room de conversation de l'éventail), et la piste du cycle 42 :
+`routes/messages.ts` émet un `read` qui ne synchronise AUCUN appareil de
+l'acteur — le symétrique de cette fuite, pas une fuite.

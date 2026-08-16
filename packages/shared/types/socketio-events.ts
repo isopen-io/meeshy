@@ -963,13 +963,28 @@ export interface ReadStatusUpdatedEventData {
   readonly updatedAt: Date;
   readonly summary: ReadStatusSummary;
   /**
-   * Read frontier of `userId` (the actor) AT broadcast time, read from
-   * `ConversationReadCursor.lastReadAt`. Scoped to `userId`: it lets that
-   * user's OTHER devices sync their own read cursor (multi-device read
-   * sync). Recipients whose id differs from `userId` MUST ignore it — a
-   * peer reading does not move your own cursor. Read receipts are monotone,
-   * so a client applies it only when strictly newer than its local cursor.
-   * `null` when the actor has no read cursor yet.
+   * Read frontier of the ACTOR at broadcast time, read from
+   * `ConversationReadCursor.lastReadAt`. It lets the actor's OTHER devices sync
+   * their own read cursor (multi-device read sync); a peer reading does not
+   * move your own cursor, so a recipient who is not the actor MUST ignore it.
+   * Read receipts are monotone, so a client applies it only when strictly newer
+   * than its local cursor. `null` when the actor has no read cursor yet.
+   *
+   * **Qui est « l'acteur » : `userId ?? participantId`, dans cet ordre.**
+   * `userId` seul ne suffit plus depuis qu'il vaut légitimement `null` pour un
+   * invité de lien partagé : un client sans compte qui ne comparerait que ce
+   * champ ne pourrait JAMAIS reconnaître ses propres autres appareils, et
+   * perdrait la synchro de curseur que ces deux champs existent pour porter.
+   * `participantId` est la ligne d'appartenance de l'acteur — non nulle pour
+   * TOUTE la population, et partagée par tous les appareils d'une même identité
+   * (une seule ligne `Participant` par couple conversation/identité, pour un
+   * inscrit comme pour un invité).
+   *
+   * C'est la MÊME règle que celle qui nomme la room personnelle
+   * (`personalRoomKey`, `ROOMS.user(userId ?? id)`) — une seule règle
+   * d'identité d'acteur dans tout le système, pas deux. Un client à compte
+   * compare son `User.id` et n'a RIEN à changer : la seconde branche ne
+   * s'ouvre que là où la première est nulle.
    *
    * Present ONLY on `type: 'read'` broadcasts — the sole action that advances
    * a read cursor. ABSENT (`undefined`) on `type: 'received'` (delivery never
@@ -977,13 +992,31 @@ export interface ReadStatusUpdatedEventData {
    * (`MessageHandler._autoDeliverToOnlineRecipients`), which carries only the
    * aggregate `summary` for sender checkmarks. Travels paired with
    * `unreadCount`: a consumer applies them together or not at all.
+   *
+   * **Et présent seulement dans la copie ADRESSÉE À L'ACTEUR.** Ces deux champs
+   * ne décrivent pas la conversation mais UNE personne : à quel point elle est
+   * en retard sur ce fil, et quand elle l'a rattrapé pour la dernière fois. Le
+   * serveur émet donc l'événement DEUX fois sur un `read` — une copie sans ces
+   * champs à l'éventail de la conversation, une copie complète à la seule room
+   * personnelle de l'acteur (`ROOMS.user(userId ?? participantId)`), dont
+   * l'éventail est alors exclu pour qu'aucun socket ne reçoive les deux. Un
+   * pair ne les recevait de toute façon que pour les jeter, puisque le seul
+   * consommateur qui les lit conditionne leur usage à « l'acteur, c'est moi » ;
+   * et la préférence d'accusés de lecture qui autorise la diffusion consent à
+   * « j'ai lu ton message », pas à la publication d'un arriéré.
+   *
+   * Rien à changer côté client : un appareil de l'acteur les reçoit toujours,
+   * par le canal que ses sessions rejoignent à l'authentification. Un client
+   * qui les lirait SANS vérifier l'identité de l'acteur, en revanche, cessera
+   * de voir passer l'arriéré des autres — c'était le défaut, pas le contrat.
    */
   readonly lastReadAt?: Date | null;
   /**
-   * Server-authoritative unread count for `userId` in this conversation
-   * after the read/receive action. Same `userId` scoping and same
-   * present-on-dedicated-routes / absent-on-auto-deliver semantics as
-   * `lastReadAt`; applied as-is by the actor's devices when accepted.
+   * Server-authoritative unread count for the ACTOR in this conversation
+   * after the read/receive action. Same `userId ?? participantId` scoping and
+   * same present-on-dedicated-routes / absent-on-auto-deliver semantics as
+   * `lastReadAt`; applied as-is by the actor's devices when accepted. Même
+   * portée d'adressage : la copie de l'acteur, jamais l'éventail.
    */
   readonly unreadCount?: number;
 }

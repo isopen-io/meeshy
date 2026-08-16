@@ -19,6 +19,7 @@ import {
   hideMessagesForUser,
   restoreMessageForUser,
 } from '../services/personalMessageVisibilitySync';
+import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -277,6 +278,16 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           userId,
           conversationId,
           before: clearDate,
+        });
+
+        // Troisième écrivain du masquage personnel, même dette : effacer
+        // l'historique laissait la ligne de liste afficher le dernier message
+        // d'avant la coupure. `clearHistoryBefore` est l'une des deux tables que
+        // `resolvePersonalPreviewOverrides` lit — il ne lui manquait, ici aussi,
+        // que le déclencheur.
+        await refreshPersonalConversationPreview(fastify, {
+          userId,
+          conversationIds: [conversationId],
         });
 
         logger.info('History cleared', { conversationId });

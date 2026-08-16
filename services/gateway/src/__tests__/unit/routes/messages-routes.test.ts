@@ -295,7 +295,11 @@ const createMockFastify = () => {
   // Chainable, like Socket.IO's real `BroadcastOperator`: the receipt fan-out
   // chains one `.to()` per participant room so a socket in several of them gets
   // a single copy.
-  const mockTo: jest.Mock = jest.fn(() => ({ to: mockTo, emit: mockEmit }));
+  // `except` fait partie de la même chaîne : la diffusion d'un accusé de
+  // LECTURE en retire l'acteur, parce qu'il reçoit à part une version du
+  // payload enrichie de son arriéré personnel.
+  const mockExcept: jest.Mock = jest.fn(() => ({ to: mockTo, except: mockExcept, emit: mockEmit }));
+  const mockTo: jest.Mock = jest.fn(() => ({ to: mockTo, except: mockExcept, emit: mockEmit }));
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, enqueueOfflineMessageMutation: mockEnqueueOfflineMutation });
@@ -319,6 +323,7 @@ const createMockFastify = () => {
     _routes: routes,
     _routeOpts: routeOpts,
     _mockTo: mockTo,
+    _mockExcept: mockExcept,
     _mockEmit: mockEmit,
     _mockGetManager: mockGetManager,
     _mockEnqueueOfflineMutation: mockEnqueueOfflineMutation,
@@ -2776,6 +2781,51 @@ describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverag
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 4 });
   });
 
+  // L'arriéré de l'acteur ne concerne QUE l'acteur — jumeau exact du contrôle
+  // posé sur l'autre route qui diffuse le même événement (voir
+  // `read-status-actor-backlog-scope.test.ts`). `lastReadAt` dit quand l'acteur
+  // a rattrapé son retard et `unreadCount` combien il lui en reste : deux
+  // mesures de SA personne, que l'éventail servait à toute la conversation
+  // alors que le seul consommateur qui les lit conditionne leur usage à
+  // « l'acteur, c'est moi ».
+  it('l\'éventail ne porte NI lastReadAt NI unreadCount', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
+    mockGetUnreadCount.mockResolvedValue(4);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    const fanOut = fastify._mockEmit.mock.calls.filter(
+      (call: any[]) => call[0] === 'read-status:updated' && !('unreadCount' in (call[1] ?? {}))
+    );
+    expect(fanOut).not.toHaveLength(0);
+    for (const [, payload] of fanOut) {
+      expect(payload).not.toHaveProperty('lastReadAt');
+      expect(payload).not.toHaveProperty('unreadCount');
+      expect(payload).toMatchObject({ type: 'read' });
+    }
+  });
+
+  it('la room personnelle de l\'acteur reçoit, elle, les deux champs — et l\'éventail l\'exclut', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    prisma.participant.findMany.mockResolvedValue([{ id: PART_ID, userId: OTHER_USER_ID }]);
+    mockGetUnreadCount.mockResolvedValue(4);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'read-status:updated',
+      expect.objectContaining({ type: 'read', unreadCount: 4 })
+    );
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'message:read-status-updated',
+      expect.objectContaining({ type: 'read', unreadCount: 4 })
+    );
+    // Sans l'exclusion, la room de conversation livrerait à l'acteur une
+    // SECONDE copie du même événement, amputée de ses deux champs.
+    expect(fastify._mockExcept).toHaveBeenCalledWith(`user:${USER_ID}`);
+  });
+
   // The receipt is a side channel: the read itself is already committed when it
   // runs, so a broken emitter must not turn a successful mark-read into a 500.
   it('a broadcast failure is swallowed and the response still succeeds', async () => {
@@ -2859,6 +2909,9 @@ describe('broadcastReadStatus — branch coverage', () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
     const chainableEmitter: any = { emit: jest.fn() };
     chainableEmitter.to = jest.fn().mockReturnValue(chainableEmitter);
+    // `except` clôt la chaîne de l'éventail : l'acteur en est retiré pour
+    // recevoir à part sa version enrichie de l'arriéré.
+    chainableEmitter.except = jest.fn().mockReturnValue(chainableEmitter);
     const mockIO2 = { to: jest.fn().mockReturnValue(chainableEmitter) };
     fastify.socketIOHandler.getManager = jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(mockIO2) });
     prisma.participant.findMany.mockResolvedValue([
