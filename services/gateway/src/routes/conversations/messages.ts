@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
+import { broadcastReadStatus } from '../../socketio/broadcastReadStatus';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
@@ -50,7 +50,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFo
 import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
-import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
@@ -340,145 +340,6 @@ export function registerMessagesRoutes(
     return messagingService;
   }
 
-  async function broadcastReadStatus(
-    userId: string,
-    participantId: string,
-    conversationId: string,
-    type: 'read' | 'received',
-    isAnonymous: boolean
-  ): Promise<void> {
-    try {
-      if (!socketIOHandler) return;
-      const socketIOManager = socketIOHandler.getManager?.();
-      if (!socketIOManager) return;
-      const io = socketIOManager.getIO();
-
-      // DEUX identités, deux rôles — et une seule variable les servait.
-      //
-      // `actorUserId` est le champ du CONTRAT : « `User.id` de l'acteur, ou
-      // `null` quand c'est un participant ANONYME », dans ces termes aux trois
-      // bouts de la chaîne (`ReadStatusUpdatedEventData` dans packages/shared,
-      // `ReadStatusUpdateEvent` sur iOS, `ReadStatusUpdatedEvent` sur Android).
-      // Un invité de lien n'a pas de ligne `User`, et `authContext.userId`
-      // porte alors son `Participant.id` (`middleware/auth.ts`).
-      //
-      // `personalRoomKey` est la CLÉ DE ROOM, qui vaut `userId ?? id` — même
-      // règle que `participantUserRoomTargets`, parce qu'un participant sans
-      // compte a bien une room personnelle et qu'`AuthHandler` la lui fait
-      // rejoindre sous son `Participant.id`.
-      //
-      // Les deux valaient `userId` brut, donc c'est la forme ROOM qui gagnait :
-      // le champ partait en portant un `Participant.id` pendant que les
-      // émetteurs SOCKET du même événement émettaient déjà `null`.
-      const actorUserId = isAnonymous ? null : userId;
-      const personalRoomKey = actorUserId ?? participantId;
-
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-      const readStatusService = new MessageReadStatusService(prisma);
-
-      // Read frontier + remaining unread of the ACTOR, resolved once and used
-      // twice: they ride the read-status broadcast below (multi-device read
-      // sync) AND drive the badge reset. Both travel ONLY on a 'read' — the
-      // sole action that advances a read cursor; a 'received' never moves
-      // `lastReadAt`. Mirrors `broadcastReadStatus` in message-read-status.ts,
-      // the twin route: `ReadStatusUpdatedEventData` declares the two as a pair
-      // and consumers apply them together or not at all, so a broadcast missing
-      // them is silently dropped rather than partially applied. iOS posts every
-      // read to THIS route, so omitting them here kept its multi-device read
-      // sync from ever starting.
-      const actorReadSync = type === 'read'
-        ? await Promise.all([
-            prisma.conversationReadCursor.findUnique({
-              where: {
-                conversation_participant_cursor: { participantId, conversationId }
-              },
-              select: { lastReadAt: true }
-            }),
-            readStatusService.getUnreadCount(participantId, conversationId)
-          ]).then(([cursor, unreadCount]) => ({
-            lastReadAt: cursor?.lastReadAt ?? null,
-            unreadCount
-          }))
-        : undefined;
-
-      // Badge reset is internal multi-device sync, not a peer disclosure — it
-      // fires on BOTH privacy branches. Emit the REAL post-mark remaining
-      // unread (mirrors message-read-status.ts:560-565), never a hardcoded 0:
-      // an exact/partial read advances the cursor only over the contiguous
-      // read prefix, so messages can legitimately remain unread. A hardcoded 0
-      // would wrongly clear the reader's badge across ALL their devices.
-      const emitUnreadUpdate = () => {
-        if (!actorReadSync) return;
-        io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-          conversationId,
-          unreadCount: actorReadSync.unreadCount,
-        });
-      };
-
-      const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
-
-      if (!shouldBroadcast) {
-        emitUnreadUpdate();
-        return;
-      }
-
-      // Fetch the summary and the list of active participants' userIds in parallel.
-      // We emit to BOTH the conversation room AND each registered participant's
-      // user room so that message authors receive receipt updates even when they
-      // have navigated away from the conversation view (and thus left the
-      // conversation room). Socket.IO deduplicates delivery per socket when
-      // multiple rooms are chained via `.to(room1).to(room2).emit(...)`.
-      const [summary, activeParticipants] = await Promise.all([
-        readStatusService.getLatestMessageSummary(conversationId),
-        prisma.participant.findMany({
-          where: { conversationId, isActive: true },
-          select: { id: true, userId: true }
-        })
-      ]);
-
-      // Ce que TOUTE la conversation peut savoir — jumeau du découpage posé
-      // dans `broadcastReadStatusUpdate` (message-read-status.ts) : le résumé
-      // des coches décrit la conversation, `lastReadAt` et `unreadCount`
-      // décrivent l'ACTEUR. Les seconds n'empruntent plus l'éventail : ils
-      // disent de combien l'acteur est en retard sur ce fil, et la préférence
-      // d'accusés de lecture qui autorise cette diffusion consent à « j'ai lu
-      // ton message », pas à la publication d'un arriéré.
-      const peerPayload: ReadStatusUpdatedEventData = {
-        conversationId,
-        participantId,
-        userId: actorUserId,
-        type,
-        updatedAt: new Date(),
-        summary
-      };
-
-      // L'acteur n'est retiré de l'éventail que lorsqu'il a une version à lui à
-      // recevoir : sur un 'received', les deux payloads seraient identiques et
-      // l'exclure lui coûterait l'événement.
-      emitToConversationParticipants({
-        io,
-        conversationId,
-        participants: activeParticipants,
-        events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
-        payload: peerPayload,
-        exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null
-      });
-
-      // La version de l'acteur, dans sa seule room personnelle — celle que
-      // toutes ses sessions ont rejointe à l'authentification, compte ou pas.
-      if (actorReadSync) {
-        const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
-        const actorRoom = io.to(ROOMS.user(personalRoomKey));
-        actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
-        actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
-      }
-
-      emitUnreadUpdate();
-    } catch (error) {
-      logger.error('Error broadcasting read status:', error);
-    }
-  }
-
   fastify.get<{
     Params: ConversationParams;
     Querystring: MessagesQuery;
@@ -504,7 +365,7 @@ export function registerMessagesRoutes(
           around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
-          include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
+          include_status: { type: 'string', enum: ['true', 'false'], description: 'Accepté pour compatibilité, sans effet. Les accusés NOMINATIFS par participant ne sont pas servis par cette liste — `messageSchema` ne les déclare pas, donc fast-json-stringify les a toujours retirés, et les charger revenait à payer une relation par page pour un tableau jeté. Les coches se peignent avec les compteurs agrégés déjà présents sur chaque message (deliveredCount / readCount / recipientCount), qui appliquent le gate showReadReceipts. Pour le détail nominatif, utiliser GET /conversations/:id/statuses, qui applique ce même gate.' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
           languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' }
         }
@@ -581,7 +442,6 @@ export function registerMessagesRoutes(
         around,
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
-        include_status: includeStatusStr = 'false',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
       } = request.query;
@@ -591,7 +451,6 @@ export function registerMessagesRoutes(
       // Parser les paramètres optionnels d'inclusion
       const includeReactions = includeReactionsStr === 'true';
       const includeTranslations = includeTranslationsStr === 'true';
-      const includeStatus = includeStatusStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
 
       // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
@@ -902,26 +761,6 @@ export function registerMessagesRoutes(
             createdAt: 'desc'
           },
           take: 20
-        };
-      }
-
-      if (includeStatus) {
-        // Charger les statusEntries détaillés (par utilisateur)
-        messageSelect.statusEntries = {
-          select: {
-            id: true,
-            userId: true,
-            participantId: true,
-            deliveredAt: true,
-            receivedAt: true,
-            readAt: true,
-            readDurationMs: true,
-            readDevice: true,
-            viewedOnceAt: true,
-            revealedAt: true,
-            createdAt: true,
-            updatedAt: true
-          }
         };
       }
 
@@ -1323,9 +1162,6 @@ export function registerMessagesRoutes(
         if (includeReactions && message.reactions) {
           mappedMessage.reactions = message.reactions;
         }
-        if (includeStatus && message.statusEntries) {
-          mappedMessage.statusEntries = message.statusEntries;
-        }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
@@ -1715,7 +1551,24 @@ export function registerMessagesRoutes(
             }
           : undefined
       );
-      await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
+      // La troisième copie de ce fan-out vivait ici, en fermeture, et avait
+      // dérivé comme les autres. Une seule forme désormais : c'est elle qui
+      // consulte la préférence d'accusés, découpe le payload des pairs de celui
+      // de l'acteur, et recale le badge sur les DEUX branches de la préférence.
+      try {
+        await broadcastReadStatus(
+          { io: socketIOHandler?.getManager?.()?.getIO(), prisma, readStatusService, privacyPreferencesService },
+          {
+            conversationId,
+            participantId: currentParticipant.id,
+            userId,
+            isAnonymous: authRequest.authContext.type === 'anonymous',
+            type: 'read'
+          }
+        );
+      } catch (error) {
+        logger.error('Error broadcasting read status:', error);
+      }
 
       return sendSuccess(reply, { markedCount: reportedMessageIds ? frozenCount : unreadCount });
 
@@ -2036,7 +1889,20 @@ export function registerMessagesRoutes(
 
       const unreadCount = await readStatusService.getUnreadCount(membership.id, conversationId);
       await readStatusService.markMessagesAsRead(membership.id, conversationId);
-      await broadcastReadStatus(userId, membership.id, conversationId, 'read', (request as UnifiedAuthRequest).authContext.type === 'anonymous');
+      try {
+        await broadcastReadStatus(
+          { io: socketIOHandler?.getManager?.()?.getIO(), prisma, readStatusService, privacyPreferencesService },
+          {
+            conversationId,
+            participantId: membership.id,
+            userId,
+            isAnonymous: (request as UnifiedAuthRequest).authContext.type === 'anonymous',
+            type: 'read'
+          }
+        );
+      } catch (error) {
+        logger.error('Error broadcasting read status:', error);
+      }
 
       return sendSuccess(reply, { markedCount: unreadCount });
     } catch (error) {

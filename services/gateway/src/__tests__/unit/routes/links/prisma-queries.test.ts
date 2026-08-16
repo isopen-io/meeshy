@@ -233,7 +233,10 @@ describe('getConversationMessages', () => {
     });
   });
 
-  it('includes sender and statusEntries in the query', async () => {
+  // `statusEntries` était chargé ici SANS aucun lecteur : le formateur de ce
+  // chemin (`formatMessageWithUnifiedSender`) ne les recopie même pas. Une
+  // relation payée à chaque page de lien partagé, jetée avant la sérialisation.
+  it('includes sender — but not the statusEntries nobody reads', async () => {
     const prisma = makeMockPrisma();
     const findMany = prisma.message.findMany as jest.Mock;
     findMany.mockResolvedValue([]);
@@ -243,7 +246,7 @@ describe('getConversationMessages', () => {
     const call = findMany.mock.calls[0][0] as Record<string, unknown>;
     const include = call.include as Record<string, unknown>;
     expect(include).toHaveProperty('sender');
-    expect(include).toHaveProperty('statusEntries');
+    expect(include).not.toHaveProperty('statusEntries');
   });
 
   it('does NOT include attachments, replyTo, or reactions', async () => {
@@ -317,7 +320,11 @@ describe('getConversationMessagesWithDetails', () => {
     });
   });
 
-  it('includes sender, attachments, replyTo, statusEntries and reactions', async () => {
+  // Ici le formateur les recopiait bien (`formatMessageWithSeparateSenders`),
+  // mais `messageSchema` (routes/links/types.ts) ne les déclare pas :
+  // `fast-json-stringify` retirait le tableau juste après. Chargé, recopié,
+  // jeté — sur CHAQUE page de messages d'un lien partagé, sans opt-in.
+  it('includes sender, attachments, replyTo and reactions — but not statusEntries', async () => {
     const prisma = makeMockPrisma();
     const findMany = prisma.message.findMany as jest.Mock;
     findMany.mockResolvedValue([]);
@@ -329,8 +336,8 @@ describe('getConversationMessagesWithDetails', () => {
     expect(include).toHaveProperty('sender');
     expect(include).toHaveProperty('attachments');
     expect(include).toHaveProperty('replyTo');
-    expect(include).toHaveProperty('statusEntries');
     expect(include).toHaveProperty('reactions');
+    expect(include).not.toHaveProperty('statusEntries');
   });
 
   it('replyTo includes nested sender, attachments and reactions', async () => {

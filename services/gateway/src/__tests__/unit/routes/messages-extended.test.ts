@@ -86,9 +86,18 @@ const mockMarkImageAsViewed = jest.fn().mockResolvedValue(undefined);
 const mockMarkAttachmentAsDownloaded = jest.fn().mockResolvedValue(undefined);
 
 const mockRecordMessageLanguageView = jest.fn().mockResolvedValue(undefined);
+const mockGetUnreadCount = jest.fn().mockResolvedValue(3);
+
+const mockShouldShowReadReceipts = jest.fn().mockResolvedValue(true);
+jest.mock('../../../services/PrivacyPreferencesService', () => ({
+  PrivacyPreferencesService: jest.fn().mockImplementation(() => ({
+    shouldShowReadReceipts: (...args: any[]) => mockShouldShowReadReceipts(...args),
+  })),
+}));
 
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
+    getUnreadCount: (...args: any[]) => mockGetUnreadCount(...args),
     markMessagesAsRead: (...args: any[]) => mockMarkMessagesAsRead(...args),
     recordMessageLanguageView: (...args: any[]) => mockRecordMessageLanguageView(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
@@ -166,9 +175,15 @@ function makeMockSocketIO() {
   // les rooms personnelles sur l'objet rendu. Sans cela, aucune assertion ne
   // peut voir la room d'un participant.
   const rooms: string[] = [];
-  const chained: { emit: jest.Mock; to: jest.Mock } = {
+  const excepts: string[] = [];
+  const chained: { emit: jest.Mock; to: jest.Mock; except: jest.Mock } = {
     emit: mockEmit,
     to: jest.fn((room: string) => { rooms.push(room); return chained; }),
+    // `except` manquait à ce double, et le fan-out des accusés de lecture
+    // l'appelle depuis que l'acteur est retiré de l'éventail : sans lui, la
+    // chaîne jetait un TypeError avalé par le try/catch de la route, et aucune
+    // émission n'était observable. C'est le double qui était incomplet.
+    except: jest.fn((room: string) => { excepts.push(room); return chained; }),
   };
   const mockTo = jest.fn((room: string) => { rooms.push(room); return chained; });
   const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
@@ -176,6 +191,7 @@ function makeMockSocketIO() {
     mockEmit,
     mockTo,
     rooms,
+    excepts,
     mockEnqueueOfflineMutation,
     manager: {
       getIO: () => ({ to: mockTo }),
@@ -227,6 +243,9 @@ async function buildApp(opts: {
     },
     trackingLink: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    conversationReadCursor: {
+      findUnique: jest.fn().mockResolvedValue({ lastReadAt: new Date('2026-08-16T09:00:00Z') }),
     },
   });
 
@@ -476,6 +495,11 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
   // dernière encore adressée par `userId` seul : l'expéditeur sans compte du
   // message qu'on vient de lire n'apprenait jamais qu'il avait été lu, sa bulle
   // restant sur un tic « envoyé » indéfiniment.
+  //
+  // L'éventail ne nomme plus la room de l'ACTEUR : elle en est retirée, et il
+  // reçoit à la place une copie ciblée portant sa frontière de lecture et son
+  // arriéré — deux champs qui décrivent une personne, pas la conversation. Sa
+  // room reste donc nommée, mais par une autre chaîne, plus bas.
   it('adresse un participant sans compte par son participant id', async () => {
     (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
     (app as any).prisma.participant.findMany.mockResolvedValueOnce([
@@ -490,11 +514,8 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(rooms).toEqual([
-      `conversation:${CONV_ID}`,
-      `user:${USER_ID}`,
-      'user:part-anonyme',
-    ]);
+    expect(rooms).toContain(`conversation:${CONV_ID}`);
+    expect(rooms).toContain('user:part-anonyme');
   });
 });
 
