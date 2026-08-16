@@ -385,6 +385,49 @@ nouveau). Suite gateway complète : 720 suites / 17626 tests verts.
 | Appel lié à une conversation de groupe | ✅ serveur OK (`initiateCall` accepte `group`) ; ❌ bloqué par les gates UI web/iOS |
 | Rejoindre un appel en cours | ✅ mécanique complète (bulle live, banner, REST, buffered offers, cold-rehydration) ; ❌ bouton désactivé en groupe ; ❌ cap 2 |
 | Y être ajouté | ✅ = être membre de la conversation (flux existant) + fan-out ring à tous les membres ; rien à construire de plus |
-| Quitter sans terminer l'appel | ✅ serveur (`leaveCall` groupe continue) ; ❌ clients traitent tout départ comme fin d'appel |
+| Quitter sans terminer l'appel | ✅ serveur (`leaveCall` groupe continue **et, depuis 2026-08-16, `endCall` aussi**) ; ❌ clients traitent tout départ comme fin d'appel |
 | Revenir à tout moment | ✅ serveur (nouvelle ligne `CallParticipant`) ; ❌ aucun client ne propose le re-join après départ volontaire |
 | 3+ flux média simultanés | ❌ cap serveur 2 ; ✅ moteur web N-pairs (corrigé Vague 126 — était une étoile, pas un maillage : les non-initiateurs ne s'offraient jamais entre eux) ; ❌ iOS/Android mono-PC (probablement même bug, non vérifié — toolchains hors d'atteinte) ; ❌ pas de SFU |
+
+## Mise à jour 2026-08-16 — bug racine serveur corrigé : `endCall()` tuait l'appel de groupe pour tout le monde
+
+En creusant le reste de la stack d'appel (routine calling), un bug DISTINCT de
+tous les items W/I ci-dessus, côté serveur : `CallService.endCall()`
+force-terminait la session ENTIÈRE pour tous les participants, sans jamais
+regarder `conversation.type` ni le nombre de participants actifs restants —
+contrairement à `leaveCall()`, qui distingue déjà correctement `isDirectCall`/
+`isLastParticipant` depuis le fix CALL-FIX 2026-06-06. Le commentaire de
+`endCall()` lui-même le documentait comme dette : `// SFU (Phase 2): TODO
+restrict to initiator/moderator once group calls exist` — sauf que les appels
+de groupe existent déjà (mesh), ce TODO n'a simplement jamais été traité.
+
+Concrètement atteignable : le SEUL chemin de raccroché iOS (bouton rouge
+CallKit, raccroché in-app) appelle `emitCallEndReliably` → `call:end` —
+jamais `call:leave`, alors que `MessageSocketManager.emitCallLeave` existe et
+est câblé de bout en bout (testé par un garde dédié
+`CallEmitSourceGuardTests`) mais n'est invoqué nulle part côté app. Donc tout
+participant d'un appel de groupe qui raccroche tuait silencieusement l'appel
+pour tous les autres — socket `call:end` (fast-path + chemin autoritatif) ET
+REST `DELETE /calls/:callId`.
+
+**Fix** — `endCall()` délègue désormais à `leaveCall()` (même distinction
+`isDirectCall`/participants actifs restants) quand c'est un appel de GROUPE
+avec d'autres participants actifs ; ne force la fin QUE pour un appel direct
+ou quand le partant est le dernier actif. Handler socket `call:end` : le
+fast-path optimiste émet `PARTICIPANT_LEFT` (pas `ENDED`) dans ce cas, et la
+branche post-`endCall()` reproduit le traitement non-terminal de
+`call:leave` (sortie de SA SEULE room, pas de `call:ended`/résumé/notif
+manqué). Route REST `DELETE /calls/:callId` : diffuse `PARTICIPANT_LEFT` via
+le même `broadcastParticipantLeft` câblé pour la route sœur leave/kick
+(fix 2026-08-15), en miroir.
+
+Ne construit PAS le multi-PC iOS (I1-I7, toujours le plus gros chantier) —
+c'est un bug serveur pur qui aurait aussi cassé un futur client iOS
+multi-pair naïvement câblé sur `call:end` pour son bouton raccrocher.
+
+Tests : `CallService.test.ts` (3 cas — groupe continue, dernier actif ferme
+toujours, direct inchangé), `CallEventsHandler.test.ts` (2 cas — fast-path
+`PARTICIPANT_LEFT`, ack + nettoyage partiel), `calls-routes.test.ts` (2 cas —
+broadcast REST, no-op défensif). Tous vérifiés ROUGE sans le fix serveur,
+VERT avec. Suites `CallService`/`CallEventsHandler`/`calls-routes` complètes
+vertes, `tsc --noEmit` propre.

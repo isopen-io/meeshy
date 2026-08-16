@@ -1719,6 +1719,68 @@ describe('CallEventsHandler', () => {
       );
     });
 
+    // Group hang-up (calling-stack audit 2026-08-16) — endCall() used to
+    // force-end the ENTIRE session for every participant regardless of call
+    // type. iOS's only hang-up path always fires call:end (never call:leave),
+    // so any group-call participant's "hang up" silently killed the call for
+    // every OTHER active participant still on it.
+    describe('group hang-up — other active participants remain', () => {
+      it('fast-path broadcasts call:participant-left, NOT call:ended', async () => {
+        mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({
+          conversation: { type: 'group' },
+          participants: [
+            makeParticipant(),
+            makeParticipant({ id: 'p-other', participantId: 'p-other', participant: { userId: 'user-other', displayName: 'Other', user: {} } }),
+          ],
+        }));
+        mockCallServiceEndCall.mockResolvedValue(makeCallSession({ status: 'active' }));
+
+        const { handler, io } = buildHandler();
+        const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+        const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+        const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+        handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+        expect(roomEmit).toHaveBeenCalledWith(
+          'call:participant-left',
+          expect.objectContaining({ callId: CALL_ID, participantId: PARTICIPANT_ID, userId: USER_ID })
+        );
+        expect(roomEmit).not.toHaveBeenCalledWith('call:ended', expect.anything());
+      });
+
+      it('acks success, leaves only the ender\'s own socket, and skips call:ended/summary/missed-call entirely when the session comes back non-terminal', async () => {
+        mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({
+          conversation: { type: 'group' },
+          participants: [
+            makeParticipant(),
+            makeParticipant({ id: 'p-other', participantId: 'p-other', participant: { userId: 'user-other', displayName: 'Other', user: {} } }),
+          ],
+        }));
+        // endCall() delegated to leaveCall(): the call keeps running.
+        mockCallServiceEndCall.mockResolvedValue(makeCallSession({ status: 'active' }));
+
+        const { socket, io } = setupWithSocket();
+        (socket as any).rooms = new Set([SOCKET_ID, `call:${CALL_ID}`]);
+        const fetchSockets = jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]);
+        io.in.mockReturnValue({ fetchSockets });
+
+        const ack = jest.fn();
+        await socket._trigger('call:end', validData, ack);
+
+        expect(ack).toHaveBeenCalledWith({ success: true });
+        expect(socket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
+        // No "remove every socket in the room" sweep — the call is still live.
+        expect(fetchSockets).not.toHaveBeenCalled();
+        // No call:ended fan-out and no summary/missed-call notification.
+        expect(io._roomEmit).not.toHaveBeenCalledWith('call:ended', expect.anything());
+        expect(mockCallServiceCreateCallSummaryMessage).not.toHaveBeenCalled();
+        expect(mockCallServiceMarkCallAsMissed).not.toHaveBeenCalled();
+      });
+    });
+
     it('ack(false) and emits error when endCall throws', async () => {
       mockCallServiceEndCall.mockRejectedValue(new Error('END_CALL_FAIL: permission denied'));
       const { socket } = setupWithSocket();
@@ -3746,6 +3808,12 @@ describe('CallEventsHandler', () => {
     it('defaults endReason to completed when callSession.endReason is null', async () => {
       const callSession = makeCallSession({ endReason: null as any, duration: 30 });
       mockCallServiceEndCall.mockResolvedValue(callSession);
+      // Single active participant (this ender, alone) — makes the authorized
+      // ender resolution AND the group-vs-direct check (calling-stack audit
+      // 2026-08-16) deterministic instead of depending on whatever session
+      // shape a PRECEDING test left behind on the shared mock (clearAllMocks
+      // in beforeEach clears call history, not resolved values).
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [makeParticipant()] }));
 
       const { socket, io } = setupWithSocket();
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });

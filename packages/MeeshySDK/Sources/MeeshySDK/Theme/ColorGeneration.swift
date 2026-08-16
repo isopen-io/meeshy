@@ -307,22 +307,65 @@ public struct DynamicColorGenerator {
         shiftHue(hex: hex, degrees: degrees)
     }
 
+    // La rotation de teinte passait par un aller-retour `UIColor` (`getHue` →
+    // `UIColor(hue:…)` → `getRed`), dont la précision interne diverge du calcul
+    // de référence de `packages/shared/utils/conversation-colors.ts` sur les cas
+    // frontière de troncature : pour le vecteur gelé `demo-ar` (accent, canal G),
+    // le domicile obtient 131.99… et UIKit 132.00… — un canal d'écart entre web
+    // et iOS pour la même conversation. Les formules ci-dessous reproduisent le
+    // domicile opération par opération, en `Double` IEEE 754 : `Int(…)` est la
+    // même troncature que `Math.trunc`, `truncatingRemainder` le même reste que
+    // le `%` JS. `adaptedColor` (adaptation clair/sombre, hors vecteurs de loi)
+    // garde son chemin UIColor.
+
+    private static func rgbToHSV(_ rgb: (r: Int, g: Int, b: Int)) -> (h: Double, s: Double, v: Double) {
+        let r = Double(rgb.r) / 255
+        let g = Double(rgb.g) / 255
+        let b = Double(rgb.b) / 255
+        let maxC = max(r, g, b)
+        let minC = min(r, g, b)
+        let delta = maxC - minC
+
+        var h: Double
+        if delta == 0 {
+            h = 0
+        } else if maxC == r {
+            h = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6)
+        } else if maxC == g {
+            h = 60 * ((b - r) / delta + 2)
+        } else {
+            h = 60 * ((r - g) / delta + 4)
+        }
+        if h < 0 { h += 360 }
+
+        return (h: h / 360, s: maxC == 0 ? 0 : delta / maxC, v: maxC)
+    }
+
+    private static func hsvToRGB(h hNorm: Double, s: Double, v: Double) -> (r: Int, g: Int, b: Int) {
+        let h = hNorm * 360
+        let c = v * s
+        let x = c * (1 - abs((h / 60).truncatingRemainder(dividingBy: 2) - 1))
+        let m = v - c
+
+        let r1: Double, g1: Double, b1: Double
+        if h < 60 { r1 = c; g1 = x; b1 = 0 }
+        else if h < 120 { r1 = x; g1 = c; b1 = 0 }
+        else if h < 180 { r1 = 0; g1 = c; b1 = x }
+        else if h < 240 { r1 = 0; g1 = x; b1 = c }
+        else if h < 300 { r1 = x; g1 = 0; b1 = c }
+        else { r1 = c; g1 = 0; b1 = x }
+
+        return (r: Int((r1 + m) * 255), g: Int((g1 + m) * 255), b: Int((b1 + m) * 255))
+    }
+
     private static func shiftHue(hex: String, degrees: Double) -> String {
-        let rgb = hexToRGB(hex)
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-
-        let color = UIColor(red: CGFloat(rgb.r)/255, green: CGFloat(rgb.g)/255, blue: CGFloat(rgb.b)/255, alpha: 1)
-        color.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-
-        h += CGFloat(degrees) / 360.0
+        let hsv = rgbToHSV(hexToRGB(hex))
+        var h = hsv.h + degrees / 360.0
         if h > 1 { h -= 1 }
         if h < 0 { h += 1 }
 
-        let newColor = UIColor(hue: h, saturation: s, brightness: b, alpha: 1)
-        var r: CGFloat = 0, g: CGFloat = 0, bl: CGFloat = 0
-        newColor.getRed(&r, green: &g, blue: &bl, alpha: &a)
-
-        return String(format: "%02X%02X%02X", Int(r*255), Int(g*255), Int(bl*255))
+        let rgb = hsvToRGB(h: h, s: hsv.s, v: hsv.v)
+        return String(format: "%02X%02X%02X", rgb.r, rgb.g, rgb.b)
     }
 }
 

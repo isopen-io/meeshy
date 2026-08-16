@@ -727,6 +727,60 @@ describe('callRoutes', () => {
 
       expect(reply._body?.error).toBe('Failed to end call');
     });
+
+    // Group hang-up via REST (calling-stack audit 2026-08-16) — mirrors the
+    // sibling leave route's own PARTICIPANT_LEFT fix (2026-08-15). endCall()
+    // now delegates to leaveCall() when a GROUP call still has other active
+    // participants (see CallService.endCall()'s doc comment), so this route
+    // must broadcast the same PARTICIPANT_LEFT the leave route does — not
+    // just rely on broadcastCallEndedIfTerminal, which is a no-op for a
+    // non-terminal (still-live) session.
+    describe('PARTICIPANT_LEFT broadcast (parité socket call:end, group hang-up)', () => {
+      it('broadcasts PARTICIPANT_LEFT using the ender\'s OWN CallParticipant row id from the pre-end snapshot', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        // endCall() delegated to leaveCall(): the call keeps running
+        // (non-terminal) — broadcastCallEndedIfTerminal is a no-op here.
+        const session = makeCallSession({
+          status: 'active',
+          endedAt: null,
+          mode: 'p2p',
+          participants: [{ id: 'ender-row-id', participantId: PART_ID, leftAt: null }],
+        });
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockEndCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID } });
+        await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).toHaveBeenCalledWith(
+          CALL_ID,
+          'ender-row-id',
+          USER_ID,
+          'p2p'
+        );
+      });
+
+      it('does not broadcast when no matching pre-end participant row is found (defensive no-op)', async () => {
+        const membership = makeMembership();
+        const { routes, reply } = setup({
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+        // `participants: []` (default makeCallSession) — no row matches.
+        const session = makeCallSession();
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockEndCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({ params: { callId: CALL_ID } });
+        await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+
+        expect(mockBroadcastParticipantLeft).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
