@@ -729,4 +729,50 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(try decoder.decode(ParticipantLeftEvent.self, from: left).memberCount)
         XCTAssertNil(try decoder.decode(ParticipantUnbannedEvent.self, from: unbanned).memberCount)
     }
+
+    // MARK: - MessageHiddenForMeEvent
+
+    func test_messageHiddenForMeEvent_decodesBatchAcrossConversations() throws {
+        let json = """
+        {
+            "userId": "u1",
+            "messages": [
+                {"messageId": "m1", "conversationId": "c1"},
+                {"messageId": "m2", "conversationId": "c2"}
+            ],
+            "hiddenAt": "2026-08-16T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageHiddenForMeEvent.self, from: json)
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.messages, [
+            PersonalMessageVisibilityRef(messageId: "m1", conversationId: "c1"),
+            PersonalMessageVisibilityRef(messageId: "m2", conversationId: "c2"),
+        ])
+        XCTAssertEqual(event.hiddenAt, "2026-08-16T10:00:00.000Z")
+    }
+
+    /// La route unitaire émet une liste d'UN élément — les clients n'ont qu'une
+    /// forme à traiter, jamais deux.
+    func test_messageHiddenForMeEvent_singleMessageIsStillAList() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}], "hiddenAt": "2026-08-16T10:00:00.000Z"}
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(MessageHiddenForMeEvent.self, from: json).messages.count, 1)
+    }
+
+    /// `hiddenAt` n'arbitre rien (le masquage est un fait par-lecteur, sans
+    /// concurrence à départager) : son absence ne doit pas faire échouer le
+    /// décodage et perdre le retrait.
+    func test_messageHiddenForMeEvent_absentHiddenAt_decodesAsNil() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}]}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageHiddenForMeEvent.self, from: json)
+        XCTAssertNil(event.hiddenAt)
+        XCTAssertEqual(event.messages.first?.messageId, "m1")
+    }
 }
