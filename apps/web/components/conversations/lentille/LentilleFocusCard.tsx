@@ -52,9 +52,9 @@
  */
 'use client';
 
-import { Bot, Globe, Megaphone, User, Users, UsersRound } from 'lucide-react';
+import { Globe, Megaphone, User, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Conversation } from '@meeshy/shared/types';
+import type { Conversation, ConversationType } from '@meeshy/shared/types';
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { OrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import { notchText } from './lentille-mode-labels';
@@ -75,19 +75,23 @@ export interface LentilleFocusCardProps {
 
 /**
  * Icône du chip de type — mêmes familles que le badge historique iOS
- * (`person.2`/`person.3`/`megaphone`/`sparkles`/`globe`), en lucide. Le type
- * `direct` n'a pas de chip du tout (voir le rendu) : sa présence est déjà
- * dite par l'avatar unique.
+ * (`person.2`/`megaphone`/`globe`), en lucide.
+ *
+ * RE-PREUVE (§0) : le `ConversationType` du WEB
+ * (`packages/shared/types/conversation.ts`) compte CINQ cas — `direct |
+ * group | public | global | broadcast` — là où le SDK iOS en porte huit
+ * (`community`, `channel`, `bot` en plus). Cette table couvre donc
+ * exhaustivement le catalogue web, sans inventer d'entrées pour des types
+ * que ce modèle ne connaît pas. `direct` n'affiche aucun chip (voir le
+ * rendu) : sa nature est déjà dite par l'avatar unique — l'icône n'est là
+ * que pour rester exhaustif sur l'union.
  */
-const TYPE_ICON: Readonly<Record<string, typeof Users>> = {
+const TYPE_ICON: Readonly<Record<ConversationType, typeof Users>> = {
+  direct: User,
   group: Users,
-  community: UsersRound,
-  channel: Megaphone,
-  bot: Bot,
   public: Globe,
   global: Globe,
-  broadcast: Globe,
-  direct: User,
+  broadcast: Megaphone,
 };
 
 export function LentilleFocusCard({

@@ -25,12 +25,16 @@ jest.mock('@/stores/conversation-ui-store', () => ({
   useConversationUIStore: (selector: any) => selector({ draftMessages: {} }),
 }));
 
+const rowElections: unknown[] = [];
 jest.mock('../LentilleRow', () => ({
-  LentilleRow: ({ conversation, onClick }: any) => (
-    <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
-      {conversation.title}
-    </div>
-  ),
+  LentilleRow: ({ conversation, onClick, election }: any) => {
+    rowElections.push(election);
+    return (
+      <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
+        {conversation.title}
+      </div>
+    );
+  },
 }));
 
 import { LentilleConversationListMount } from '../LentilleConversationListMount';
@@ -122,6 +126,30 @@ describe('LentilleConversationListMount', () => {
   it('masque le rail vivants quand aucune conversation live (section `live` absente)', () => {
     render(<LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} />);
     expect(screen.queryByTestId('lentille-lives-rail')).not.toBeInTheDocument();
+  });
+
+  /**
+   * WL-108 — l'élection est passée aux rangs, et elle est STABLE : c'est
+   * cette stabilité qui garantit qu'aucun rang ne se re-rend parce que le
+   * magasin de l'élu a « changé » (il ne change jamais d'identité ; seul son
+   * contenu bouge, et chaque rang s'y abonne pour SON booléen).
+   */
+  it("transmet le magasin d'élection à chaque rang, avec une référence STABLE", () => {
+    rowElections.length = 0;
+    const { rerender } = render(
+      <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a'), conv('b')]} />
+    );
+
+    expect(rowElections).toHaveLength(2);
+    expect(rowElections[0]).toBeDefined();
+    // Les deux rangs partagent LE MÊME magasin — un élu global, pas un par rang.
+    expect(rowElections[0]).toBe(rowElections[1]);
+
+    const before = rowElections[0];
+    rerender(
+      <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a'), conv('b')]} />
+    );
+    expect(rowElections[rowElections.length - 1]).toBe(before);
   });
 
   it('fonctionne sans currentUserId (garde défensive)', () => {

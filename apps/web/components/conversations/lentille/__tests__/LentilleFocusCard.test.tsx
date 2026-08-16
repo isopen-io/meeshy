@@ -193,7 +193,7 @@ describe('LentilleFocusCard', () => {
     });
 
     it("omet le compte quand il ne dit rien (memberCount ≤ 1)", () => {
-      render(<LentilleFocusCard {...baseProps} conversation={conv({ type: 'channel', memberCount: 1 })} />);
+      render(<LentilleFocusCard {...baseProps} conversation={conv({ type: 'broadcast', memberCount: 1 })} />);
       expect(screen.getByTestId('lentille-focus-card-type-chip')).toBeInTheDocument();
       expect(screen.queryByTestId('lentille-focus-card-member-count')).not.toBeInTheDocument();
     });

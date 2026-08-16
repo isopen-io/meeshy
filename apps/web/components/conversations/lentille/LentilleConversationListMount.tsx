@@ -7,7 +7,9 @@
  * défilement (`SectionScrollPill`, pilotée par `useScrollActivity` —
  * `scrollActivityLaw` partagée), rail vivants (`LivesRail`), squelette
  * (`LentilleSkeletonRow`, affiché uniquement cache vide), perspective de
- * liste (`useLentillePerspective` — `focusCurve('list', …)` partagée).
+ * liste (`useLentillePerspective` — `focusCurve('list', …)` partagée) et
+ * ÉLECTION de la focus card (WL-108, `electFocusRow` — même hook, même
+ * passe rAF, aucun observateur de défilement supplémentaire).
  *
  * Ce composant n'est monté QUE sous drapeau Lentille actif (mux
  * `next/dynamic` de `ConversationList.tsx`, WL-101) — aucun `useQuery` ici
@@ -129,7 +131,11 @@ export function LentilleConversationListMount({
   // WL-104 — UN SEUL requestAnimationFrame sur le conteneur de défilement,
   // qui écrit opacity/transform sur le wrapper interne de chaque rang
   // (`focusCurve('list', …)`, jamais recopiée).
-  const { registerRow } = useLentillePerspective({ containerRef: scrollContainerRef });
+  // WL-108 — `election` est un magasin à RÉFÉRENCE STABLE : le passer à
+  // chaque rang ne provoque aucun re-rendu, et l'élu ne vit JAMAIS dans
+  // l'état de ce composant (sinon les vingt rangs se re-rendraient à chaque
+  // rang franchi — voir `lentille-focus-election.ts`).
+  const { registerRow, election } = useLentillePerspective({ containerRef: scrollContainerRef });
 
   const updateActiveSection = useCallback(
     (root: HTMLElement) => {
@@ -206,6 +212,7 @@ export function LentilleConversationListMount({
                   bridge={resolveRowBridge(conversation, bridgesByConversation)}
                   t={t}
                   perspectiveRef={registerRow(conversation.id)}
+                  election={election}
                 />
               ))}
             </div>

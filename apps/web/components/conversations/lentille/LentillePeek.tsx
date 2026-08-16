@@ -7,8 +7,10 @@
  * `.contextMenu`/`RowPressBounceModifier` (déjà couvert) ; ce fichier est la
  * couverture WEB du même id de matrice, jamais un id nouveau.
  *
- * DEUX des trois chemins d'entrée du menu de mode vivent ICI (contrat
- * LWS-11) :
+ * LES TROIS chemins d'entrée du menu de mode vivent ICI depuis WL-108
+ * (contrat LWS-11 — « trois points d'entrée, UNE préférence »), et
+ * partagent LITTÉRALEMENT LA MÊME instance de `ReadingModeMenu`, donc le
+ * même état d'ouverture, les mêmes capacités et le même `onSelect` :
  *   1. Le ⋮ au survol — RE-PROUVÉ ABSENT du rang Lentille avant ce commit
  *      (`LentilleRow.tsx`, WL-102..105, ne montait aucun menu d'actions ;
  *      `ConversationItemActions.tsx`, le dropdown ⋮ historique, n'est câblé
@@ -22,9 +24,21 @@
  *   2. L'aperçu — clic droit ET appui long pointer 420 ms, annulé par un
  *      déplacement du pointeur ou un scroll de plus de quelques pixels.
  *
- * Le 3ᵉ chemin (l'encoche de la focus card) est ABSENT côté web : WL-102..104
- * n'ont livré aucune focus card ni élection (re-prouvé — voir
- * `ReadingModeMenu.tsx`). Rien n'est simulé à sa place.
+ *   3. L'encoche de la focus card (WL-108) — rendue seulement quand ce rang
+ *      est l'ÉLU (`useLentillePerspective`/`LentilleFocusElection`) ou le rang
+ *      sélectionné (behaviour-matrix:L11). Elle n'ouvre pas un second menu :
+ *      elle bascule `peekOpen`, exactement comme le clic droit.
+ *
+ * ISOLATION DU PLAN DE PEINTURE (WL-108). Le fond de la focus card est un
+ * frère `position: absolute` en `z-index: -1` — c'est ce qui le fait peindre
+ * DERRIÈRE le contenu en flux du rang (avatar, nom, ligne 2) plutôt que
+ * par-dessus. Pour que ce `-1` reste CONFINÉ à ce wrapper, celui-ci doit
+ * créer un contexte d'empilement : `isolation: isolate` le garantit à toute
+ * frame, y compris AVANT la première passe de perspective (une fois que
+ * celle-ci écrit `opacity`/`transform`, ces propriétés en créeraient un
+ * d'elles-mêmes — mais compter là-dessus rendrait le rendu initial différent
+ * du rendu animé, et sous `prefers-reduced-motion` elles ne sont JAMAIS
+ * écrites).
  *
  * TAP COURT JAMAIS INTERCEPTÉ : ce wrapper n'attache AUCUN `onClick` propre
  * — un tap/clic qui ne déclenche ni le seuil de 420 ms ni le clic droit
@@ -44,7 +58,8 @@
  * `apps/web/stores/reading-mode-preference-store.ts` (WL-106, optimiste
  * versionnée, rollback sur échec — voir sa docstring pour le découplage
  * réseau E9/G-121). UNE préférence, écrite par LES DEUX chemins de ce
- * fichier via LA MÊME instance de `ReadingModeMenu`.
+ * fichier via LA MÊME instance de `ReadingModeMenu` — WL-108 y branche le
+ * troisième (l'encoche) sans en créer une seconde.
  *
  * @see tasks/lentille-implementation-contract.md LWS-11
  */
@@ -55,9 +70,11 @@ import { MoreVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Conversation } from '@meeshy/shared/types';
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
-import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
+import { resolveCapabilities, resolveOrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import { isCurrentUserAnonymous } from '@/utils/auth';
+import { useReducedMotion } from '@/hooks/use-accessibility';
 import { useReadingModePreference, useReadingModePreferenceActions } from '@/stores/reading-mode-preference-store';
+import { LentilleFocusCard } from './LentilleFocusCard';
 import { ReadingModeMenu } from './ReadingModeMenu';
 import type { LentilleRowTranslate } from './LentilleRow';
 
@@ -83,6 +100,36 @@ export interface LentillePeekProps {
   readonly activeParticipantCount?: number | null;
   /** Drapeau `riviere_mode` — aucun résolveur web n'existe encore ; `false` documenté par défaut. */
   readonly isRiverFlagEnabled?: boolean;
+  /**
+   * Ce rang porte-t-il la focus card ? (WL-108) — vrai pour l'ÉLU de
+   * `LentilleFocusElection` et pour le rang sélectionné (L11). `false` par
+   * défaut : une `LentilleRow` rendue hors liste n'a pas de carte.
+   */
+  readonly isFocused?: boolean;
+}
+
+/**
+ * ÉCART CONTRAT↔CODE, signalé et non contourné (même classe que le
+ * `activeParticipantCount: null` d'iOS) : le modèle `Conversation` du web ne
+ * porte AUCUNE date de dernière lecture — re-prouvé, `packages/shared/types/
+ * conversation.ts` n'expose `lastReadAt` que sur `ConversationReadCursor`, et
+ * `apps/web/lib/conversations/delta-sync.ts` le dit noir sur blanc (« une
+ * frontière LOCALE que le modèle web ne porte pas »). iOS lit
+ * `conversation.userState.lastReadAt` (`LentilleReadingModeContext.swift`).
+ *
+ * Lu ici DÉFENSIVEMENT — exactement le patron de `resolveRowBridge`
+ * (`LentilleConversationListMount.tsx`) pour le champ `bridge` : le jour où
+ * le payload le porte, la valeur arrive sans qu'aucune signature ne change ;
+ * d'ici là, `null`, que la loi traite comme une absence (documenté dans
+ * `resolveOrchestratorDecision`). CONSÉQUENCE HONNÊTE, à porter en revue
+ * REV-4 : `null` n'est PAS neutre pour cette loi — au-delà du plancher de
+ * non-lus de la branche d'absence, l'encoche annoncera « AUTO · Résumé » là
+ * où iOS, qui connaît la date, annoncerait « AUTO · Focal ». Aucune décision
+ * de LECTURE n'en dépend aujourd'hui (le mux de fil web est un autre
+ * chantier) : seul le LIBELLÉ prédictif est concerné.
+ */
+function resolveLastOpenedAt(conversation: Conversation): Date | null {
+  return (conversation as { lastReadAt?: Date }).lastReadAt ?? null;
 }
 
 export function LentillePeek({
@@ -95,6 +142,7 @@ export function LentillePeek({
   'data-testid': dataTestId,
   activeParticipantCount = null,
   isRiverFlagEnabled = false,
+  isFocused = false,
 }: LentillePeekProps) {
   const [peekOpen, setPeekOpen] = useState(false);
   const suppressNextClickRef = useRef(false);
@@ -104,6 +152,14 @@ export function LentillePeek({
 
   const currentPreference = useReadingModePreference(conversation.id);
   const { setReadingMode } = useReadingModePreferenceActions();
+  const reducedMotion = useReducedMotion();
+
+  // `now` FIGÉ au montage (jamais un `new Date()` de rendu) : sans cela, la
+  // décision affichée dépendrait de l'instant du rendu, donc changerait au
+  // gré de re-rendus sans rapport — et le libellé de l'encoche cesserait
+  // d'être une fonction de ses seules entrées. Même discipline que le `now`
+  // injecté de `LentilleReadingModeContext.decision` côté iOS.
+  const now = useMemo(() => new Date(), []);
 
   const capabilities = useMemo(
     () =>
@@ -117,6 +173,28 @@ export function LentillePeek({
         isRiverFlagEnabled,
       }),
     [conversation.type, activeParticipantCount, isRiverFlagEnabled]
+  );
+
+  /**
+   * La décision de l'orchestrateur pour CETTE conversation — calculée
+   * SEULEMENT pour le rang qui porte la carte : la liste en monte vingt, et
+   * dix-neuf n'ont aucun libellé à afficher.
+   */
+  const decision = useMemo(
+    () =>
+      isFocused
+        ? resolveOrchestratorDecision({
+            unreadCount: conversation.unreadCount ?? 0,
+            lastOpenedAt: resolveLastOpenedAt(conversation),
+            now,
+            stickyChoice: currentPreference,
+            capabilities,
+            // Ce composant n'est monté que sous drapeau Lentille actif — même
+            // constat que pour `resolveCapabilities` ci-dessus.
+            isFlagEnabled: true,
+          })
+        : null,
+    [isFocused, conversation, now, currentPreference, capabilities]
   );
 
   const detachScrollCancel = useCallback(() => {
@@ -223,7 +301,10 @@ export function LentillePeek({
       ref={wrapperRef}
       data-testid={dataTestId ?? 'lentille-peek'}
       className={cn('relative', className)}
-      style={style}
+      // `isolation: isolate` — voir « ISOLATION DU PLAN DE PEINTURE » en tête
+      // de fichier. Étalé APRÈS `style` pour que le wrapper reste maître de
+      // son propre plan quoi que l'appelant passe.
+      style={{ ...style, isolation: 'isolate' }}
       onContextMenu={handleContextMenu}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -233,6 +314,19 @@ export function LentillePeek({
       onClickCapture={handleClickCapture}
     >
       {children}
+
+      {isFocused && decision && (
+        <LentilleFocusCard
+          conversation={conversation}
+          preference={currentPreference}
+          decision={decision}
+          t={t}
+          reducedMotion={reducedMotion}
+          // Troisième point d'entrée — la MÊME instance de menu que le ⋮ et
+          // l'aperçu, donc la MÊME préférence (contrat LWS-8/LWS-11).
+          onNotchTap={() => openPeek(false)}
+        />
+      )}
 
       <ReadingModeMenu
         trigger={

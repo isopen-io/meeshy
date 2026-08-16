@@ -256,3 +256,69 @@ describe('LentillePeek — appui long 420 ms + clic droit, tap court jamais inte
     jest.useRealTimers();
   });
 });
+
+/**
+ * WL-108 (LWS-8/LWS-11) — le TROISIÈME point d'entrée : l'encoche de la focus
+ * card, montée par ce même wrapper, sur la MÊME instance de `ReadingModeMenu`
+ * que le ⋮ et l'aperçu. « Trois points d'entrée, UNE préférence » cesse
+ * d'être une intention pour devenir une propriété de structure : il n'existe
+ * qu'un menu, donc qu'un `onSelect`, donc qu'un écrivain.
+ */
+describe('LentillePeek — focus card et encoche (WL-108)', () => {
+  it("ne rend AUCUNE carte tant que ce rang n'est pas l'élu", () => {
+    renderInsideRow(jest.fn());
+    expect(screen.queryByTestId('lentille-focus-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lentille-focus-card-notch')).not.toBeInTheDocument();
+  });
+
+  it('rend la carte et son encoche sur le rang élu', () => {
+    renderInsideRow(jest.fn(), { isFocused: true });
+    expect(screen.getByTestId('lentille-focus-card')).toBeInTheDocument();
+    expect(screen.getByTestId('lentille-focus-card-notch')).toBeInTheDocument();
+  });
+
+  it("l'encoche ouvre LE MÊME menu que le clic droit et le ⋮ (une instance, pas trois)", () => {
+    renderInsideRow(jest.fn(), { isFocused: true });
+    expect(screen.queryByTestId('lentille-peek-menu')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('lentille-focus-card-notch'));
+
+    expect(screen.getByTestId('lentille-peek-menu')).toBeInTheDocument();
+    // Un SEUL menu monté — l'encoche n'en a pas créé un second à côté.
+    expect(screen.getAllByTestId('lentille-peek-menu')).toHaveLength(1);
+  });
+
+  it("écrit dans le MÊME magasin de préférence depuis l'encoche que depuis l'aperçu", () => {
+    renderInsideRow(jest.fn(), { isFocused: true });
+
+    fireEvent.click(screen.getByTestId('lentille-focus-card-notch'));
+    fireEvent.click(screen.getByTestId('reading-mode-item-focal'));
+
+    expect(setReadingModeMock).toHaveBeenCalledTimes(1);
+    expect(setReadingModeMock).toHaveBeenCalledWith('conv-1', 'focal');
+  });
+
+  it("le clic sur l'encoche n'ouvre PAS la conversation (le rang reste un `role=button`)", () => {
+    const onRowClick = jest.fn();
+    renderInsideRow(onRowClick, { isFocused: true });
+
+    fireEvent.click(screen.getByTestId('lentille-focus-card-notch'));
+
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it("isole son plan de peinture : le fond en `z-index: -1` ne fuit pas hors du rang", () => {
+    renderInsideRow(jest.fn(), { isFocused: true });
+    expect(screen.getByTestId('peek-wrapper').style.isolation).toBe('isolate');
+    expect(screen.getByTestId('lentille-focus-card').style.zIndex).toBe('-1');
+  });
+
+  it("préférence `auto` ⇒ l'encoche annonce la DÉCISION à venir, jamais « Auto » tout court", () => {
+    renderInsideRow(jest.fn(), { isFocused: true });
+    // `t` de ce fichier rend la clé : la clé du badge composé, pas celle du
+    // nom `auto`. C'est la preuve que le libellé passe par `notchText`.
+    expect(screen.getByTestId('lentille-focus-card-notch')).toHaveTextContent(
+      'lentille.modes.autoBadge'
+    );
+  });
+});

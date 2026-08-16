@@ -5,14 +5,12 @@
  * partagée par les trois chemins d'entrée du contrat (encoche de la focus
  * card, ⋮, aperçu) — ce composant est le POINT UNIQUE de rendu de la liste
  * et d'écriture ; chaque chemin ne fait que le MONTER avec un `trigger`
- * différent (`LentillePeek.tsx` en monte deux : le déclencheur ⋮ au survol
- * et le peek clic-droit/appui-long). L'encoche de focus card n'existe pas
- * sur le web — WL-102..104 n'ont livré aucune focus card (re-prouvé :
- * `apps/web/components/conversations/lentille/` ne contient ni
- * `FocusCard.tsx` ni dossier `Mode/` ; `useLentillePerspective` ne fait
- * qu'écrire opacity/transform, aucune élection). Le troisième chemin est
- * donc absent CÔTÉ WEB tant que ce travail n'est pas fait — documenté,
- * jamais simulé.
+ * différent. `LentillePeek.tsx` monte les TROIS depuis WL-108, sur UNE
+ * SEULE instance de ce composant : le déclencheur ⋮ au survol, le peek
+ * clic-droit/appui-long, et l'encoche de `LentilleFocusCard` sur le rang
+ * élu. (Historique, pour qui lit un `git blame` : jusqu'à WL-108 le web
+ * n'avait ni focus card ni élection — le troisième chemin était documenté
+ * comme absent plutôt que simulé. Il ne l'est plus.)
  *
  * RIVIÈRE TOUJOURS PRÉSENTE (contrat LWS-11) : rendue même quand
  * `capabilities.availableModes` ne la contient pas (drapeau `riviere_mode`

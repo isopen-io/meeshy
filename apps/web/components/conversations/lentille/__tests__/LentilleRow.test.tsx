@@ -8,7 +8,7 @@
  * behaviour-matrix:L01 — typing force le dot vert, ligne 2 « X écrit… ».
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
@@ -49,6 +49,7 @@ jest.mock('@/hooks/use-i18n', () => ({
 }));
 
 import { LentilleRow } from '../LentilleRow';
+import { LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
 
 const makeUser = (overrides: Partial<User> = {}): User =>
   ({
@@ -272,5 +273,68 @@ describe('LentilleRow — présence (behaviour-matrix:L10)', () => {
       />
     );
     expect(screen.getAllByTestId('online-indicator').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * WL-108 (LWS-8) — la carte de focus sur le rang.
+ *
+ * behaviour-matrix:L11 — « la sélection … devient le style de la focus card
+ * persistant sur le rang sélectionné » : côté web, DEUX sources désignent le
+ * porteur de la carte (l'élection pendant le défilement, la sélection en
+ * permanence) pour UN seul style.
+ */
+describe('LentilleRow — focus card (WL-108)', () => {
+  const renderRow = (props: Partial<React.ComponentProps<typeof LentilleRow>> = {}) =>
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onClick={jest.fn()}
+        t={t}
+        {...props}
+      />
+    );
+
+  it("ne porte aucune carte sans élection ni sélection — le rang reste PLAT (LWS-7)", () => {
+    renderRow();
+    expect(screen.queryByTestId('lentille-focus-card')).not.toBeInTheDocument();
+  });
+
+  it("porte la carte quand l'élection le désigne", () => {
+    const election = new LentilleFocusElection();
+    renderRow({ election });
+    expect(screen.queryByTestId('lentille-focus-card')).not.toBeInTheDocument();
+
+    act(() => election.adopt('conv-1'));
+    expect(screen.getByTestId('lentille-focus-card')).toBeInTheDocument();
+
+    // Un autre rang élu ⇒ celui-ci RETIRE sa carte.
+    act(() => election.adopt('conv-2'));
+    expect(screen.queryByTestId('lentille-focus-card')).not.toBeInTheDocument();
+  });
+
+  it('behaviour-matrix:L11 — le rang SÉLECTIONNÉ porte la carte en permanence', () => {
+    renderRow({ isSelected: true });
+    expect(screen.getByTestId('lentille-focus-card')).toBeInTheDocument();
+  });
+
+  it("la carte ne change PAS la hauteur du rang (zéro relayout, §4.1/§4.2)", () => {
+    const { unmount } = renderRow();
+    const plain = screen.getByTestId('lentille-row').style.height;
+    unmount();
+
+    renderRow({ isSelected: true });
+    expect(screen.getByTestId('lentille-row').style.height).toBe(plain);
+    expect(plain).toBe('var(--lentille-list-row-height)');
+  });
+
+  it("l'accent de la carte est celui DU RANG — une seule variable, jamais deux teintes", () => {
+    renderRow({ isSelected: true });
+    // `--row-accent` est posée par la racine du rang ; la carte s'y réfère
+    // sans jamais recalculer sa propre couleur.
+    expect(screen.getByTestId('lentille-focus-card').style.boxShadow).toContain('var(--row-accent)');
+    expect(screen.getByTestId('lentille-row').getAttribute('style')).toContain('--row-accent');
   });
 });

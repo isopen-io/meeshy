@@ -49,6 +49,7 @@ import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } fro
 import { LentilleBridgeLine } from './LentilleBridgeLine';
 import { LentillePeek } from './LentillePeek';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
+import { useIsFocusedRow, type LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
 
 export interface LentilleRowDraft {
   readonly content: string;
@@ -74,6 +75,14 @@ export interface LentilleRowProps {
    * sans perspective.
    */
   readonly perspectiveRef?: (el: HTMLDivElement | null) => void;
+  /**
+   * Magasin de l'élu (WL-108, `useLentillePerspective`). Le rang s'y abonne
+   * pour SON booléen — pas pour l'identifiant élu : c'est ce qui évite de
+   * re-rendre vingt rangs à chaque rang franchi (voir la docstring de
+   * `lentille-focus-election.ts`). Optionnel : un rang rendu hors de la liste
+   * (test, aperçu) n'a pas d'élection et ne porte donc pas de carte.
+   */
+  readonly election?: LentilleFocusElection;
 }
 
 /** Sélection déterministe du typeur affiché (L01) : ordre alphabétique du nom, pas l'ordre d'arrivée socket. */
@@ -94,7 +103,13 @@ export const LentilleRow = memo(function LentilleRow({
   bridge,
   t,
   perspectiveRef,
+  election,
 }: LentilleRowProps) {
+  // behaviour-matrix:L11 — « la sélection … devient le style de la focus card
+  // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
+  // le défilement ET reste sur le rang ouvert. Deux sources, un seul style.
+  const isElected = useIsFocusedRow(election, conversation.id);
+  const showsFocusCard = isElected || isSelected;
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser),
     [
@@ -211,6 +226,7 @@ export const LentilleRow = memo(function LentilleRow({
         conversation={conversation}
         t={t}
         wrapperRef={perspectiveRef}
+        isFocused={showsFocusCard}
         data-testid="lentille-row-perspective-wrapper"
         className="flex items-center gap-3 h-full w-full"
         style={{
