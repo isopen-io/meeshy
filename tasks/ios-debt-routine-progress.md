@@ -1338,3 +1338,84 @@ MeeshyUI/` — ce fichier app-side n'était couvert par AUCUNE garde.
   avait déjà avancé à `android_streak=7 last_run=reels-realtime-room` via une session Android
   concurrente pendant que cette PR attendait sa CI — lu FRAIS au merge (pas à la sélection du slice),
   conformément au principe établi ; ce run écrase avec la valeur de reset standard post-IOS_DETTE.
+
+### 2026-08-17 — Run #12 (`CameraView.swift` — 9 sites `try?` → `do/catch` + `Logger.media`, PR #3109 mergée `6d81a727b`)
+
+Contexte : `tasks/lane-cursor.md` à `lane=ANDROID android_streak=5
+last_run=android-backlog-reverification-2026-08-16` — règle d'alternance déclenchée (le run Android
+précédent n'avait livré aucun code, mais avait délibérément porté le streak au seuil pour forcer la
+bascule — voir `apps/android/tasks/android-routine/PROGRESS.md`). `gh pr list --state open --search
+"apps/android OR apps/ios"` → 3 PR concurrentes (#3096, #3106, #3108), aucune touchant un fichier de
+ce diff.
+
+**RE-PROUVÉ tout le backlog avant de choisir — les items 1-6 restent dans l'état documenté par le
+Run #11** (item 4 `DispatchQueue.main.async` toujours fermé run #6, item 6 Observable macro
+toujours fermé décision utilisateur, item 5 nécessite conception, item 3 flaky sans cause racine,
+items 1/2 déjà écartés/à-revérifier sans nouvelle information). **Nouvelle piste explorée** :
+`try?` avalant silencieusement des erreurs (distinct de `try!`/`as!`, déjà clos au Run #11) — la
+mémoire projet documente une « passe de fond 2026-07-26 » de 293 sites déjà convertis, mais un
+re-comptage avec la regex correcte (`[^a-zA-Z0-9_]try\?`, évite les faux positifs `StatusEntry?`)
+trouve encore **815 occurrences**, fortement concentrées dans quelques ViewModels géants
+(`ConversationViewModel.swift` 68, `FeedView+Attachments.swift` 27, `StoryViewModel.swift` 25) —
+bien trop pour un run mécanique unique sans un tri exhaustif préalable (même leçon que
+`DispatchQueue.main.async` : beaucoup de `try?` sont légitimement corrects — décodeurs polymorphes,
+parsing en cascade — et la mémoire elle-même liste ce qu'il ne FAUT PAS convertir). Plutôt que
+d'attaquer le gros du gisement à l'aveugle, choisi un **sous-ensemble petit et déjà pré-qualifié** :
+`CameraView.swift`, 9 sites, déjà familier (le fix `DispatchQueue.main.async` du run #3 y avait
+atterri), et déjà couvert par des tests source-guard existants — une garantie que le comportement
+de repli attendu est documenté et vérifiable avant tout changement.
+
+**Chaque site re-lu individuellement avant conversion** (pas une substitution mécanique 1:1) :
+`enableAudioCaptureIfNeeded`/`addVideoInput` (création `AVCaptureDeviceInput` — un échec matériel
+réel, jamais journalisé) ; deux nettoyages `FileManager.default.removeItem` dans des boucles de
+segments (converti vers l'aide déjà existante `FileManager.removeItemLogging`, exactement le
+patron prescrit par la mémoire plutôt qu'un `do/catch` réécrit à la main) ; et les 5 sites de
+`mergeSegments` (chargement de durée + insertion pistes vidéo/audio) — vérifié avec soin que la
+distinction « piste absente » (`.first == nil`, cas nominal d'un enregistrement sans micro,
+NE DOIT PAS journaliser — un test dédié le protège explicitement) vs « l'appel a réellement levé »
+(un vrai échec, doit journaliser) reste intacte après conversion : `if let x = try await
+...loadTracks(...).first` laisse toujours passer un tableau vide sans lever, seul un throw réel
+entre dans le nouveau `catch`.
+
+**TDD** :
+- Baseline confirmée verte AVANT toute modification : `CameraModelSwitchDuringRecordingTests` +
+  `CameraModelSegmentMergeTests`, 11 tests, 0 échec.
+- 2 des tests existants référençaient le texte LITTÉRAL des sites `try?`
+  (`test_mergeSegments_skipsUnreadableSegmentsInsteadOfFailingEntirely`,
+  `test_mergeSegments_toleratesSegmentsWithoutAudioTrack`) — mis à jour pour matcher la nouvelle
+  forme `try` (plus `try?`) et enrichis : une nouvelle sous-assertion isole le bloc `catch` du
+  chargement de durée et vérifie qu'il contient toujours `continue` (mutation-prouvée — retirer ce
+  `continue` du code source ferait échouer exactement cette assertion), et une assertion globale
+  `XCTAssertFalse(fn.contains("try?"))` verrouille mécaniquement contre toute régression future.
+- GREEN : les 9 conversions appliquées (`Logger.media` déjà disponible via l'extension centrale
+  `packages/MeeshySDK/Sources/MeeshySDK/Core/Logging.swift`, `import os` ajouté au fichier — zéro
+  nouvelle déclaration de logger nécessaire). 11/11 tests verts après modification.
+
+**Vérification** :
+- `./apps/ios/meeshy.sh build` vert (80s).
+- `./apps/ios/meeshy.sh test` (suite complète) : **premier lancement en arrière-plan TUÉ sans sortie
+  de diagnostic** (statut « killed », fichier de sortie vide — cause non élucidée, pas un ENOSPC
+  direct : disque à 5,6 Gi à ce moment, pas 0). Worktree/branche confirmés intacts après l'incident.
+  **Relancé une 2e fois, complet cette fois** : Phase 0 (SDK) verte, Phase 3 verte, **Phases 1/2 :
+  19 échecs, ZÉRO ne touchant `CameraView`/`CameraModel`** (tous dans `Focal*`/liste de
+  messages/accessibilité — code jamais touché par ce diff) — confirmé par lecture individuelle de
+  chaque échec, pas une supposition. Recoupé avec `gh run list --branch main --workflow iOS` :
+  plusieurs commits récents de `main` déjà `conclusion: failure` sur ce même axe Focal (churn
+  concurrent), confirmant l'absence de rapport avant même l'ouverture de la PR.
+- Disque surveillé tout du long (11 Gi → 5,9 Gi → 4,4 Gi pendant ce run, stable depuis) — pas
+  d'incident de type « 0 octet libre » cette fois, mais assez proche pour justifier une vigilance
+  continue les prochains runs.
+- Branche `claude/apps/ios/debt-cameraview-try-optional-logging` créée EN PREMIER, avant toute
+  édition. Diff strictement `apps/ios` (2 fichiers, aucun churn pbxproj — aucun fichier nouveau).
+- PR #3109 : CI intégralement verte cette fois (y compris `Test shared`, `Build app`, `Summary`) —
+  contrairement aux 3 PR précédentes de ce cycle, aucun job rouge à diagnostiquer. Mergée via
+  l'API GitHub directe → `6d81a727b`.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=cameraview-try-optional-logging`
+  (commit séparé, poussé directement sur `main`, jamais mélangé au diff `apps/ios`).
+
+**Nouveau backlog noté pour un futur run IOS_DETTE** : `try?` reste un gisement de 815 sites
+(moins 9 désormais) — un futur run pourrait reprendre la méthode d'aujourd'hui (choisir UN fichier
+déjà couvert par des tests source-guard, re-lire chaque site individuellement) plutôt qu'un tri
+exhaustif de l'ensemble en une fois, à la manière dont `DispatchQueue.main.async` a été découpé en
+plusieurs sous-lots au fil de plusieurs runs.
