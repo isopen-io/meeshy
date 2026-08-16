@@ -494,9 +494,9 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     expect(emitMock).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
   });
 
-  it('returns 200 even when broadcastReadStatusUpdate throws (socket error is caught)', async () => {
+  it('returns 200 even when broadcastReadStatus throws (socket error is caught)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // Cause broadcastReadStatusUpdate to throw by making participant.findMany reject
+    // Cause broadcastReadStatus to throw by making participant.findMany reject
     mockPrisma.participant.findMany = jest.fn().mockRejectedValue(new Error('socket failure'));
 
     const response = await app.inject({
@@ -528,9 +528,9 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
 
   it('returns 200 and broadcasts READ_STATUS_UPDATED when shouldShowReadReceipts=true (happy path)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
-    // participant.findMany used inside broadcastReadStatusUpdate
+    // participant.findMany used inside broadcastReadStatus
     mockPrisma.participant.findMany = jest.fn().mockResolvedValue([{ userId: USER_ID }]);
-    // cursor needed by broadcastReadStatusUpdate for type='read'
+    // cursor needed by broadcastReadStatus for type='read'
     mockPrisma.conversationReadCursor = {
       findUnique: jest.fn().mockResolvedValue({ lastReadAt: new Date() }),
       upsert: jest.fn(),
@@ -620,7 +620,7 @@ describe('POST /conversations/:conversationId/mark-as-received — edge cases', 
     expect(emitMock).not.toHaveBeenCalled();
   });
 
-  it('returns 200 even when broadcastReadStatusUpdate throws (socket error is caught)', async () => {
+  it('returns 200 even when broadcastReadStatus throws (socket error is caught)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
     // Cause broadcast to fail
     mockPrisma.participant.findMany = jest.fn().mockRejectedValue(new Error('socket pipe broken'));
@@ -743,7 +743,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     expect(emitMock).not.toHaveBeenCalled();
   });
 
-  it('returns 200 even when broadcastReadStatusUpdate throws (socket error is caught)', async () => {
+  it('returns 200 even when broadcastReadStatus throws (socket error is caught)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
     // Force broadcast failure
     mockPrisma.participant.findMany = jest.fn().mockRejectedValue(new Error('socket timeout'));
@@ -821,7 +821,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
 
   it('returns 200 and broadcasts when shouldShowReadReceipts=true (happy path broadcast)', async () => {
     // All mocks at defaults: shouldShowReadReceipts=true, participant.findMany returns users,
-    // getLatestMessageSummary resolves — this exercises broadcastReadStatusUpdate success path.
+    // getLatestMessageSummary resolves — this exercises broadcastReadStatus success path.
     const response = await app.inject({
       method: 'POST',
       url: url(),

@@ -720,7 +720,7 @@ export class MeeshySocketIOManager {
         // Chain the conversation room + each participant's user room, deduped so
         // Socket.IO delivers the event at most once per socket. Same unit as the
         // four sibling emitters of this same event — `autoDeliverToOnlineRecipients`,
-        // `broadcastReadStatusUpdate` and the two REST mark-as-read routes — so
+        // `broadcastReadStatus` (l'unité partagée des trois portes REST) — so
         // authors never get stuck on a single "sent" tick after navigating away.
         // The copy this replaces filtered on `userId` one step earlier than the
         // others, at the `Map` it built rather than at the emit, which is why the

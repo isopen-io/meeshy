@@ -192,11 +192,11 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
 });
 
 // ---------------------------------------------------------------------------
-// Badge reset: broadcastReadStatusUpdate must emit CONVERSATION_UNREAD_UPDATED
+// Badge reset: broadcastReadStatus must emit CONVERSATION_UNREAD_UPDATED
 // to the reader's user room so multi-device badge is cleared after mark-as-read.
 // ---------------------------------------------------------------------------
 
-describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset', () => {
+describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () => {
   let app2: FastifyInstance;
   let mockEmit2: jest.Mock;
   let mockTo2: jest.Mock;
