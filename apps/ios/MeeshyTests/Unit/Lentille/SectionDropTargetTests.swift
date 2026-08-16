@@ -232,6 +232,10 @@ final class SectionDropTargetTests: XCTestCase {
         let categoryB = "6512f2a0e1b4c3d2a1908878"
 
         // 1/4 — « Épingles » : le drop épingle (jamais de dés-épinglage).
+        // behaviour-matrix:L07 — volet section dédiée à l'épingle (le drop
+        // range bien SOUS le sticker épingles). Voir aussi
+        // LentilleRowSourceGuardTests (volet sourdine) et
+        // LentilleRowBehaviourAnchorTests (volet glyphe 📌, TROU RÉEL).
         // `behaviour-matrix.json` L07 : « … l'épingle ajoute un glyphe 📌 avant
         // le nom + le sticker ÉPINGLÉES » — cette cible est celle qui fait
         // atterrir la conversation SOUS ce sticker précis.

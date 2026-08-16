@@ -187,10 +187,16 @@ async function buildApp(optedOutUserIds: string[]): Promise<FastifyInstance> {
         },
       ]),
     },
-    userPreference: {
+    // Cf. `services/preferences/privacy-storage.ts` : l'application n'écrit que
+    // le document JSON. Un double qui n'exprimerait l'opt-out que par les
+    // lignes héritées testerait un chemin que plus aucun client n'emprunte.
+    userPreferences: {
       findMany: jest.fn().mockResolvedValue(
-        optedOutUserIds.map((userId) => ({ userId }))
+        optedOutUserIds.map((userId) => ({ userId, privacy: { showReadReceipts: false } }))
       ),
+    },
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   };
 

@@ -1,8 +1,17 @@
-# Cycle 46 — la garde monotone iOS jetait les recalculs autoritatifs
+# Cycle 46 bis — la garde monotone iOS jetait les recalculs autoritatifs
 
 Journal d'audit. Suite du cycle 40, qui avait MESURÉ ce défaut sans le livrer
 (« pas de toolchain Swift ici », § Constats iOS **A**), et du cycle 45, dont la
 piste ouverte se referme ici sans correctif — voir § 1.
+
+**« bis » parce qu'une AUTRE exécution de cette routine a tourné en parallèle et
+porte déjà le numéro 46** (`tasks/realtime-sync-audit-2026-08-15-cycle46.md`,
+« l'écran Confidentialité écrivait dans un tiroir que le serveur n'ouvrait
+pas »). C'est le motif exact de la leçon 281, et il s'est reproduit. Les deux
+exécutions sont parties de la MÊME piste léguée par le cycle 45 et ont abouti à
+la MÊME conclusion sur elle (§ 1) — indépendamment, ce qui la confirme à deux
+voix — puis ont divergé : l'autre a suivi les deux rangements de la préférence,
+celle-ci a suivi la garde monotone de l'aperçu. Aucun recouvrement de code.
 
 ---
 
@@ -234,7 +243,10 @@ aurait simplement retiré la garde ferait rougir ce témoin-là.
 
 ---
 
-## 7. Piste pour le cycle 47 — repérée, NON livrée
+## 7. Piste suivante — repérée, NON livrée
+
+(Distincte des trois que l'autre cycle 46 lègue : celles-ci portent sur les
+deux rangements de la préférence et l'invalidation des caches à l'écriture.)
 
 `emitConversationPreviewUpdate` sait dire « ce lecteur n'a plus AUCUN message
 visible ici » : `messagePayloadFor(null)` sort alors `lastMessageAt: null`,
