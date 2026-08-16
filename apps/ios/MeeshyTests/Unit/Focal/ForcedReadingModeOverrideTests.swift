@@ -2,8 +2,9 @@ import XCTest
 @testable import Meeshy
 
 /// I-075 — override ÉPHÉMÈRE `ReadingModeController.init(forcedMode:)` (item
-/// « Focal (dev) » du menu d'appui long de la liste, gardé par
-/// `LentilleFeatureFlag.focalDevPreview`).
+/// « Focal (bêta) » du menu d'appui long de la liste, gardé par
+/// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+/// amendement produit 2026-08-16).
 ///
 /// Trois garanties prouvées ICI, discriminantes (mêmes entrées, forcedMode
 /// présent vs absent) :
@@ -155,8 +156,8 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(store.setModeCallCount, 0, "L'item « Focal (dev) » ne doit écrire AUCUNE préférence collante — override éphémère, jamais persistant.")
-        XCTAssertEqual(store.noteOpenedCallCount, 0, "L'item « Focal (dev) » ne doit écrire AUCUN horodatage d'ouverture.")
+        XCTAssertEqual(store.setModeCallCount, 0, "L'item « Focal (bêta) » ne doit écrire AUCUNE préférence collante — override éphémère, jamais persistant.")
+        XCTAssertEqual(store.noteOpenedCallCount, 0, "L'item « Focal (bêta) » ne doit écrire AUCUN horodatage d'ouverture.")
     }
 
     /// Plus strict que l'exigence produit : `init(forcedMode:)` ne lit même
