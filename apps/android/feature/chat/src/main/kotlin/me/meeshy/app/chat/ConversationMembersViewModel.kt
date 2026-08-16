@@ -50,7 +50,7 @@ data class ConversationMembersUiState(
     val isEmpty: Boolean get() = status == MembersLoadStatus.Loaded && members.isEmpty()
 
     fun isSelf(member: PaginatedParticipant): Boolean =
-        currentUserId != null && member.matches(currentUserId)
+        currentUserId?.let(member::matches) == true
 
     fun canRemove(member: PaginatedParticipant): Boolean =
         MemberModeration.canRemove(actor = viewerRole, target = member.role, isSelf = isSelf(member))
