@@ -167,6 +167,18 @@ final class BridgeFingerprintTests: XCTestCase {
         XCTAssertEqual(original.renderFingerprint, restored.renderFingerprint)
     }
 
+    // behaviour-matrix:L15 — « renderFingerprint est étendu avec le champ
+    // bridge (texte du pont, unreadCount, suggestedMode) pour que le
+    // portillon .equatable() ne gèle pas les mises à jour du pont ». Ce
+    // témoin verrouille l'apparition ; le TEXTE est couvert par
+    // test_renderFingerprint_bridgeTextChanges_changes,
+    // test_renderFingerprint_bridgeTranslationTextChangesForSameLanguage_changes
+    // (ci-dessus), unreadCount par
+    // test_renderFingerprint_bridgeUnreadCountAloneChanges_changes et
+    // suggestedMode par test_renderFingerprint_bridgeSuggestedModeChanges_changes
+    // (ci-dessous). Le jumeau au niveau du RANG (`==` étendu, pas seulement
+    // le fingerprint) est LentilleRowEquatableTests/LentilleFlatRowTests
+    // .test_equatable_differentBridgeValues_areNotEqual.
     /// Le pendant discriminant des trois témoins ci-dessus : l'apparition d'un
     /// pont sur une ligne qui n'en avait pas DOIT rouvrir le portillon.
     func test_renderFingerprint_bridgeAppears_changes() {

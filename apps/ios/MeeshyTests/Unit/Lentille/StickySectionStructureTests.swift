@@ -161,6 +161,9 @@ final class StickySectionStructureTests: XCTestCase {
 
     // MARK: - Travail 1-2 — rangs en contenu, sticker en header
 
+    // behaviour-matrix:L16 — volet structurel (sticker au slot `header:`
+    // d'une `Section`, condition nécessaire pour que VoiceOver le lise comme
+    // un en-tête de section).
     /// `behaviour-matrix.json` L16 : « … et lit les stickers comme des
     /// en-têtes de section » (VoiceOver). Cette lecture n'est correcte QUE si
     /// le sticker occupe réellement le slot `header:` d'une `Section` — la
