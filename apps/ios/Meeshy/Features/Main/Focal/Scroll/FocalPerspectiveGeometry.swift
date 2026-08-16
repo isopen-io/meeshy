@@ -204,11 +204,16 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
 
         return FocalCellTransform(
             scale: scale,
-            // AUCUN plancher : la maquette de référence n'en a pas, et sa
-            // décroissance d'opacité (0,78 au lieu de 0,82) suffit à garder
-            // les voisins lisibles. Un plancher local recréerait un écart
-            // avec la cinématique qu'on transpose.
-            alpha: min(alphaCeiling, curve.alpha),
+            // AUCUN fondu de distance — décision produit 2026-08-16
+            // (« enlever l'effet transparent sur les bulles »), constatée sur
+            // device en mode sombre : l'estompage rendait le haut du fil
+            // illisible. Écart ASSUMÉ avec la maquette de référence
+            // (`opacity = 1 − 0.78·f`) : la profondeur est portée par
+            // l'ÉCHELLE seule. Le plafond reste — il porte un état d'envoi
+            // (optimiste 0,7, §4.4), pas un effet de perspective ; la courbe
+            // gelée continue de calculer son alpha, il n'est simplement plus
+            // consommé ici.
+            alpha: alphaCeiling,
             translation: CGSize(width: tx, height: ty)
         )
     }

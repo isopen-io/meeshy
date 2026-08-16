@@ -1329,7 +1329,11 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16,
+                // Le représentable court désormais jusqu'au bord BAS physique
+                // (`ignoresSafeArea` bas, cf. plus bas) : la bande safe area
+                // qu'il traverse s'ajoute à la réserve du composeur pour que
+                // le repos du fil ne bouge pas d'un point.
+                bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 // 0 en preview : la vue y est hébergée dans une `.sheet` à
                 // détentes, dont le bord haut est déjà sous la status bar —
                 // réserver la bande îlot y décalerait le flux dans le vide.
@@ -1569,7 +1573,16 @@ struct ConversationView: View {
             // inset (`applyTopInset`), le contenu ne fait qu'y transiter au
             // défilement. Le header flottant, lui, reste dans la safe area
             // (zIndex 100, au-dessus).
-            .ignoresSafeArea(.container, edges: .top)
+            //
+            // MÊME règle au bord BAS (retour user 2026-08-16, capture device) :
+            // borné à la safe area basse, le représentable coupait les
+            // messages ~34 pt AVANT le bord physique — visible dès que le
+            // chrome s'escamote au défilement (Focal) : le fil doit sortir de
+            // l'écran par le bord, exactement comme en haut. La réserve du
+            // composeur est portée par `bottomInset` (le contrôleur la
+            // compose dans `contentInset.top`), compensée de
+            // `safeAreaBottom` au site d'appel — le repos est inchangé.
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
 
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par

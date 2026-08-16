@@ -129,9 +129,12 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // §4.3 — Échelle / opacité : DÉLÉGUÉES au miroir gelé, jamais recalculées
     // =========================================================================
 
-    /// La courbe ne se réécrit JAMAIS : pour une même distance, le transform
+    /// L'ÉCHELLE ne se réécrit JAMAIS : pour une même distance, le transform
     /// du pass doit rendre exactement `FocalFocusCurve.focusCurve(_, .thread)`.
-    func test_transform_delegatesScaleAndAlphaToTheFrozenCurve() {
+    /// L'ALPHA, lui, n'est PLUS un effet de distance — décision produit
+    /// 2026-08-16 (« enlever l'effet transparent sur les bulles ») : il reste
+    /// au plafond quelle que soit la distance.
+    func test_transform_delegatesScaleToTheFrozenCurve_alphaStaysAtCeiling() {
         for distance in [CGFloat(0), 60, 190, 379, 380, 900] {
             let expected = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
             let transform = geometry.transform(
@@ -146,8 +149,8 @@ final class FocalScrollPassGeometryTests: XCTestCase {
                 "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'échelle du miroir GELÉ FocalFocusCurve.focusCurve(.thread) — aucune constante recopiée"
             )
             XCTAssertEqual(
-                transform.alpha, expected.alpha, accuracy: Self.epsilon,
-                "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'alpha du miroir GELÉ FocalFocusCurve.focusCurve(.thread)"
+                transform.alpha, FocalPassConstants.opaqueAlphaCeiling, accuracy: Self.epsilon,
+                "décision produit 2026-08-16 : AUCUN fondu de distance — la profondeur est portée par l'échelle seule, l'alpha reste au plafond (d=\(distance))"
             )
         }
     }
@@ -166,9 +169,9 @@ final class FocalScrollPassGeometryTests: XCTestCase {
             isRightToLeft: false,
             alphaCeiling: FocalPassConstants.opaqueAlphaCeiling
         )
-        XCTAssertEqual(transform.alpha, thread.alpha, accuracy: Self.epsilon,
+        XCTAssertEqual(transform.scale, thread.scale, accuracy: Self.epsilon,
                        "FocalPerspectiveGeometry doit consommer le variant .thread de FocalFocusCurve")
-        XCTAssertNotEqual(transform.alpha, list.alpha, accuracy: Self.epsilon,
+        XCTAssertNotEqual(transform.scale, list.scale, accuracy: Self.epsilon,
                           "le pass du FIL ne doit jamais consommer le variant .list (courbe de la Lentille)")
     }
 
@@ -291,22 +294,19 @@ final class FocalScrollPassGeometryTests: XCTestCase {
                        "§4.4 : le plafond d'alpha ne touche JAMAIS l'échelle")
     }
 
-    /// Loin au-dessus de la bande, c'est la courbe qui gagne (elle passe sous
-    /// le plafond) — `min`, pas « la valeur optimiste toujours ».
-    func test_alphaCeiling_farFromBand_curveWinsOverCeiling() {
-        let distance: CGFloat = 380
-        let curveAlpha = FocalFocusCurve.focusCurve(distance: distance, variant: .thread).alpha
+    /// Loin au-dessus de la bande, le plafond reste la SEULE loi d'alpha —
+    /// décision produit 2026-08-16 : la distance n'estompe plus rien, une
+    /// rangée optimiste reste à 0,7 (état d'envoi), une confirmée à 1.
+    func test_alphaCeiling_farFromBand_ceilingStillHolds() {
         let transform = geometry.transform(
-            distance: distance,
+            distance: 380,
             cellSize: CGSize(width: 320, height: 100),
             horizontalAnchor: .leading,
             isRightToLeft: false,
             alphaCeiling: FocalPassConstants.optimisticAlphaCeiling
         )
-        XCTAssertLessThan(curveAlpha, FocalPassConstants.optimisticAlphaCeiling,
-                          "pré-condition : à saturation la courbe du fil descend sous le plafond optimiste")
-        XCTAssertEqual(transform.alpha, curveAlpha, accuracy: Self.epsilon,
-                       "§4.4 : alpha = min(plafond, courbe) — le plafond ne doit jamais RELEVER une rangée estompée")
+        XCTAssertEqual(transform.alpha, FocalPassConstants.optimisticAlphaCeiling, accuracy: Self.epsilon,
+                       "décision produit 2026-08-16 : loin de la bande, l'alpha reste au plafond — plus aucun fondu de distance")
     }
 
     /// Le plafond par défaut (rangée confirmée) est l'opacité pleine.
@@ -741,8 +741,8 @@ final class FocalScrollPassWriteTests: XCTestCase {
                        "FocalScrollPass.apply doit écrire l'échelle de FocalFocusCurve.focusCurve(.thread) dans m11")
         XCTAssertEqual(target.layer.transform.m22, expected.scale, accuracy: 0.0001,
                        "FocalScrollPass.apply doit écrire la même échelle en Y (échelle pure, symétrique en signe — elle traverse l'inversion parentale, §4.3)")
-        XCTAssertEqual(target.alpha, expected.alpha, accuracy: 0.0001,
-                       "FocalScrollPass.apply doit écrire l'alpha de la courbe gelée")
+        XCTAssertEqual(target.alpha, 1, accuracy: 0.0001,
+                       "décision produit 2026-08-16 : plus aucun fondu de distance — l'alpha d'une rangée confirmée reste 1, seule l'échelle porte la profondeur")
         XCTAssertEqual(
             target.layer.transform.m42,
             -(target.bounds.height / 2) * (1 - expected.scale),
