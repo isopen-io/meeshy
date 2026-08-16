@@ -27,13 +27,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.AttachFile
@@ -44,9 +42,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -54,7 +50,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,9 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -99,6 +92,8 @@ import me.meeshy.sdk.model.waveform.VoiceRecordingFile
 import me.meeshy.sdk.model.waveform.VoiceRecordingOutcome
 import me.meeshy.sdk.model.waveform.VoiceRecordingSession
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.ui.component.LanguagePickerDialog
+import me.meeshy.ui.component.LanguagePickerOption
 import me.meeshy.ui.component.recording.VoiceRecordingPill
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -735,55 +730,21 @@ private fun ComposerLanguagePickerDialog(
 ) {
     var query by remember { mutableStateOf("") }
     val languages = remember(query) { LanguageStepSelection.filter(query) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.feed_composer_language_title)) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    placeholder = { Text(stringResource(R.string.feed_composer_language_search)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = MeeshySpacing.xs),
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    languages.forEach { info ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = { onSelect(info.code) })
-                                .semantics { role = Role.RadioButton }
-                                .padding(vertical = MeeshySpacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = info.code.equals(currentCode, ignoreCase = true),
-                                onClick = { onSelect(info.code) },
-                            )
-                            Text(
-                                text = "${info.flag}  ${info.nativeName}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(start = MeeshySpacing.sm),
-                            )
-                        }
-                    }
-                }
-            }
+    LanguagePickerDialog(
+        titleText = stringResource(R.string.feed_composer_language_title),
+        options = languages.map { info ->
+            LanguagePickerOption(
+                code = info.code,
+                label = "${info.flag}  ${info.nativeName}",
+                isSelected = info.code.equals(currentCode, ignoreCase = true),
+            )
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.feed_composer_cancel))
-            }
-        },
+        onSelect = { code -> code?.let(onSelect) },
+        onDismiss = onDismiss,
+        dismissButtonLabel = stringResource(R.string.feed_composer_cancel),
+        searchQuery = query,
+        onSearchQueryChange = { query = it },
+        searchPlaceholder = stringResource(R.string.feed_composer_language_search),
     )
 }
 
