@@ -144,6 +144,38 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `loading the viewer joins the current slide's realtime room`() = runTest {
+        viewModel(startUserId = "a", posts = twoAuthors())
+
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("a1") }
+    }
+
+    @Test
+    fun `advancing to a new slide leaves the old room and joins the new one`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("b1") }
+
+        vm.advance() // b1 → b2
+
+        coVerify(exactly = 1) { socialSocket.leavePostRoom("b1") }
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("b2") }
+    }
+
+    @Test
+    fun `an emit that does not change the current slide never re-joins its room`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("a1") }
+
+        vm.react("🔥") // re-emits without changing the current slide
+
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("a1") }
+        coVerify(exactly = 0) { socialSocket.leavePostRoom(any()) }
+    }
+
+    @Test
     fun `markCurrentViewed reports the current slide to the repository`() = runTest {
         val vm = viewModel(startUserId = "b", posts = twoAuthors())
         vm.markCurrentViewed()
