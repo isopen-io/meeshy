@@ -1,5 +1,80 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **User search pagination shipped, closing another dead-but-half-wired gap**
+> (slice `user-search-pagination`) — same defect shape as `customName`/`reaction`/`tags` this same
+> day, found on a totally different screen (the "new conversation" picker, not conversation
+> preferences): `UserRepository.searchUsers(query, limit=20, offset=0)` already accepted
+> `limit`/`offset`, the gateway's `GET /users/search` already computed a real
+> `pagination.hasMore = offset + resultCount < total`, and a `pagedApiCall`/`PagedResult<T>` helper
+> already existed in `:core:network` specifically to preserve that block instead of discarding it
+> (the plain `apiCall` does) — but `NewConversationViewModel.runSearch` called the discarding
+> variant and never exposed a "load more" trigger, so the picker permanently showed only the first
+> 20 matches for any query.
+>
+> **RE-PROUVED before choosing this slice**: `feature-parity.md`'s "Conversation info sheet" /
+> "Paginated member list" / "Member moderation" lines are already being closed by a concurrent
+> session's open PR #3083 — checked its diff first to avoid duplicating work. "Conversation lock"
+> (PIN entry UI + unlock flow) was assessed and correctly left alone: it's flagged in this file's
+> own history as needing "its own scoping pass" (new screens, not a wiring gap), and forcing it into
+> one run would violate the mechanical/bounded-risk bar the other candidates met. Scanned
+> `feature-parity.md`'s shortest unchecked lines (a proxy for "single, atomic capability" vs.
+> "multi-clause epic") and found `User search (paginated)` — confirmed the search itself already
+> works (debounced, wired to `NewConversationScreen`) and only the "(paginated)" qualifier was the
+> real gap, via the same three-file trace (repository → gateway route → paginator helper) already
+> proven productive earlier this session.
+>
+> **Deliberately narrow, additive change — not a `searchUsers` signature change**:
+> `UserRepository.searchUsers` has three OTHER call sites (`SuggestionsRepository`, `MentionSearch`,
+> `DiscoverViewModel`, each with its own substantial test suite) that only ever need page one and
+> have no use for `hasMore`. Added `searchUsersPaged` as a new, separate method instead of touching
+> the existing one — zero blast radius on those three call sites' tests.
+>
+> **`NewConversationViewModel.loadMoreIfNeeded(userId)` mirrors an ALREADY-ESTABLISHED in-repo
+> pattern** (`CallHistoryViewModel.loadMoreIfNeeded`) rather than inventing a new one: a plain,
+> idempotent, non-suspend guard function called once per visible row during composition
+> (`viewModel.loadMoreIfNeeded(user.id)` inside the `LazyColumn`'s `items{}` body, exactly like
+> `CallHistoryScreen`'s own call site) — near-the-end-of-list threshold (`LOAD_MORE_THRESHOLD = 5`,
+> same constant value), guarded on `hasMore`/`isLoadingMore` so it's safe to call on every
+> recomposition of every row. Private `rawResults`/`nextOffset`/`currentQuery` ViewModel fields
+> (not part of published `_state`) track the accumulator, mirroring `CallHistoryViewModel`'s own
+> `pagedRecords`/`nextCursor` shape.
+>
+> **+7 tests**: 2 `UserRepositoryTest` (`searchUsersPaged` forwards query/offset and preserves the
+> pagination block; folds a failed envelope into `Failure`), 5 `NewConversationViewModelTest`
+> (a fresh search resets `hasMore`/offset; `loadMoreIfNeeded` appends the next page for a row near
+> the end; is a no-op with no more data; is a no-op for a row far from the end) — the 7 pre-existing
+> tests in this file were updated in place (their `searchUsers` stubs → `searchUsersPaged`, since
+> `runSearch` now calls the paged method too, to know `hasMore` from page one).
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 31s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> **Real merge conflict while this PR sat in CI** — a concurrent session's `conversation-members-
+> roster` (PR #3083) merged to `main` first; resolved by hand in this file (classic simultaneous-
+> prepend conflict, both entries kept, this one placed first since it merged later
+> chronologically) — `feature-parity.md` and the production diff itself auto-merged cleanly
+> (verified: no corrupted lines). Re-ran the full local gate after the merge (green, 50s) before
+> re-pushing.
+>
+> **The already-documented DataStore timeout flake (`datastore-test-timeout-flake`, PR #3058)
+> recurred TWICE on this PR's CI, on two DIFFERENT files each time** (1st:
+> `MediaDownloadPreferencesStoreTest`/`NotificationPreferencesStoreTest`; 2nd: `ThemeStoreTest`) —
+> both already carry `withTimeout(15_000)` (confirmed by grep before either rerun, not assumed),
+> and neither file has any relation to this PR's diff. `gh run rerun --failed` resolved it both
+> times. **Not yet at the "3+ recurrences" threshold** the earlier fix's own lesson sets for
+> re-investigating (compare every DataStore test's timeout, not just the 6 already bumped) — but
+> two occurrences on ONE PR's CI, each on a different file, is a stronger signal than the
+> occasional single flake this fix was meant to close. Flagging as a genuine open question for a
+> future run to watch: is 15s still enough headroom on the CI runner's current load, or does the
+> fix need a wider sweep / a larger constant? Not investigated further this run — the two reruns
+> resolved it, no code in this PR was implicated, and forcing an investigation here would have
+> meant working on files this slice never touched.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=user-search-pagination`
+> (re-read at merge time, not at slice-selection time — this run's own choice of ordering
+> confirms the caution the concurrent `conversation-members-roster` entry below records:
+> streak had already moved to 2 by the time this PR's CI resolved, so this entry lands at 3).
+
 > On 2026-08-16 **Paginated conversation member list + role moderation shipped** (slice
 > `conversation-members-roster`) — advances two adjacent `feature-parity.md` §C lines at once
 > ("Paginated member list (infinite scroll + search)" → `[~]`, "Member moderation:

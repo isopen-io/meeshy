@@ -18,11 +18,13 @@ import me.meeshy.sdk.model.VerifyPhoneChangeRequest
 import me.meeshy.sdk.model.VerifyPhoneChangeResponse
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.api.UpdateAvatarRequest
 import me.meeshy.sdk.net.api.UpdateBannerRequest
 import me.meeshy.sdk.net.api.UserApi
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -45,6 +47,21 @@ class UserRepository @Inject constructor(
         offset: Int = 0,
     ): NetworkResult<List<UserSearchResult>> =
         apiCall { userApi.search(query, limit, offset) }
+
+    /**
+     * [searchUsers], but preserving the envelope's `pagination` block instead of
+     * discarding it — for callers that need to offer "load more" (the "new
+     * conversation" picker). A separate method rather than changing [searchUsers]'s
+     * return type: three other call sites (`SuggestionsRepository`, `MentionSearch`,
+     * `DiscoverViewModel`) only ever need the first page and have no use for
+     * `hasMore`.
+     */
+    suspend fun searchUsersPaged(
+        query: String,
+        limit: Int = 20,
+        offset: Int = 0,
+    ): NetworkResult<PagedResult<List<UserSearchResult>>> =
+        pagedApiCall { userApi.search(query, limit, offset) }
 
     suspend fun updateProfile(request: UpdateProfileRequest): NetworkResult<MeeshyUser> =
         apiCall { userApi.updateProfile(request) }.map { it.user }
