@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **`feature:feed`'s `ComposerLanguagePickerDialog` migrated to the shared
+> `LanguagePickerDialog`** (slice `feed-composer-language-picker-shared`) — the explicit follow-up
+> left open by the prior slice (`sdk-ui-language-picker-dialog`, PR #3070): the third and last of
+> the three near-identical picker dialogs. `FeedComposerSheet.kt`'s own doc comment already said
+> this dialog "mirrors `SettingsScreen`'s own `RegionalLanguageDialog` shape" — re-proved against
+> the real code before starting: same `AlertDialog` + search field + scrollable radio-row-list
+> shape, differing only in trivial layout details (a `Spacer` vs a `Text` start-padding for the
+> row's inter-element gap — visually identical) and a case-insensitive `isSelected` match
+> (`info.code.equals(currentCode, ignoreCase = true)`, vs the Settings pickers' exact match) —
+> preserved verbatim by computing `isSelected` at the call site before handing options to the
+> shared component, which stays agnostic of how a caller decides selection.
+>
+> **Behaviour-preserving, no new pure logic**: `ComposerLanguagePickerDialog` now builds a
+> `List<LanguagePickerOption>` from `LanguageStepSelection.filter(query)` (already-tested pure
+> catalogue/filter core, unchanged) and delegates rendering to `:sdk-ui`'s `LanguagePickerDialog`.
+> The original had no empty-state text for a no-match search (unlike the regional picker) — not
+> introduced here either (`emptyStateText` left unset, matching the shared component's designed
+> fallback of an empty scrollable column, byte-for-byte the prior behaviour). Seven now-genuinely-
+> unused imports removed from `FeedComposerSheet.kt` (`AlertDialog`, `RadioButton`,
+> `heightIn`, `verticalScroll`, the `Search` icon, `Role`, `role`) — each checked file-wide for
+> remaining uses before removal (`rememberScrollState`/`Icon`/`OutlinedTextField`/`semantics`/
+> `contentDescription` all still used elsewhere in this large composer file and correctly kept).
+>
+> **All three near-identical language-picker dialogs are now unified** on the one `:sdk-ui`
+> component (Settings' interface + regional pickers from the prior slice, Feed's composer picker
+> this slice) — the standing candidate from the routine's backlog is fully closed.
+>
+> **No new tests**: `@Composable` UI glue exempt (`TDD-COVERAGE.md`); the logic this dialog renders
+> (`LanguageStepSelection.filter`) already has its own tests, unchanged and still green.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 12s (incremental, most
+> modules unaffected), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=feed-composer-language-picker-shared`.
+
 > On 2026-08-16 **Shared `LanguagePickerDialog` extracted to `:sdk-ui`** (slice
 > `sdk-ui-language-picker-dialog`) — first ANDROID slice after the IOS_DETTE bascule (streak
 > reset to 0 following the critical Focal/Lentille iOS build-break fix, see
