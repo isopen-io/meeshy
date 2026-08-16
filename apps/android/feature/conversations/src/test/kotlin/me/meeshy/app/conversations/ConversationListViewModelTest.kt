@@ -802,6 +802,20 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun setCustomName_forwards_the_trimmed_name_to_the_repository() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setCustomNameOptimistic("c1", "Work squad") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.setCustomName("c1", "Work squad")
+        advanceUntilIdle()
+
+        coVerify { repo.setCustomNameOptimistic("c1", "Work squad") }
+    }
+
+    @Test
     fun leaveConversation_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),

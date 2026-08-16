@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Per-conversation custom name (rename) shipped** (slice
+> `conversation-custom-name`) — advances `feature-parity.md`'s "Per-conversation preferences: custom
+> name, reaction emoji, pin, category, tags, mute, mentions-only" line (still unchecked: reaction
+> emoji and tags remain genuinely open on both platforms). Re-proved against real code before
+> starting: `ApiConversationPreferences.customName`/`ConversationPreferencesUpdate.customName` were
+> already modeled on the wire, but `ConversationPrefsPayload` (the outbox-lane snapshot payload)
+> only carried `isPinned`/`isMuted`/`isArchived`/`mentionsOnly`/`categoryId` — `customName` never
+> reached `OutboxFlushWorker`'s `ConversationPreferencesUpdate(...)` construction, so setting it
+> locally would never have reached the server.
+>
+> **Clear-semantics gap resolved, not blocked**: an earlier finding this session flagged that
+> `MeeshyApi.json`'s app-wide `explicitNulls = false` makes a Kotlin `null` field indistinguishable
+> from "untouched" on the wire, which looked like it would make clearing an existing name
+> inexpressible. Re-traced the actual read path and found `ConversationFilter.kt:69`
+> (`resolvedPreferences?.customName?.takeIf { it.isNotBlank() }`) and `ApiConversation.displayTitle`
+> (`ConversationAccent.kt:34`, same blank-check) already treat a blank `customName` the same as
+> absent — so the write side never needs Kotlin `null` for "clear": `setCustomNameOptimistic` stores
+> `name.trim()` verbatim, including an explicit `""` on clear, which the encoder does NOT drop
+> (`explicitNulls` only suppresses actual `null`, not empty strings) and the gateway's
+> `data.customName !== undefined` patch guard applies as a real clear.
+>
+> **Repository → outbox → flush pipeline**: `ConversationRepository.setCustomNameOptimistic(id, name)`
+> (mirrors `setCategoryOptimistic`'s shape via the existing `updatePreferencesOptimistic` private
+> helper) → `ConversationPrefsPayload.customName` (new field, doc-commented with the same
+> null-vs-empty-string trick already documented on `categoryId`) → `OutboxFlushWorker`'s
+> `UPDATE_CONVERSATION_PREFS` sender now threads `prefs.customName` into
+> `ConversationPreferencesUpdate(...)`. Every prefs snapshot (pin/mute/archive/mentions/category)
+> now also carries whatever `customName` happens to be cached, matching the established
+> full-snapshot design already used for the other fields (not a per-field diff).
+>
+> **ViewModel + UI**: `ConversationListViewModel.setCustomName(id, name)` (via the existing
+> `runPrefMutation` helper, same shape as `toggleMentionsOnly`). New context-menu action "Rename
+> conversation" (between Archive and the category picker) opens an `AlertDialog` with a single-line
+> `TextField` pre-filled with the conversation's current custom name (empty if none — placeholder
+> shows the resolved display title), Save/Cancel. Strings added in all 4 locales (en/fr/es/pt).
+>
+> **+4 tests**: 3 `ConversationRepositoryTest` (sets+queues a snapshot carrying the trimmed name,
+> no-op when unchanged, clearing to blank sends an explicit `"customName":""` — asserts the raw
+> JSON payload string to prove the value isn't silently dropped by the `explicitNulls=false`
+> encoder), 1 `ConversationListViewModelTest` (`setCustomName` forwards the trimmed name to the
+> repository). The new context-menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 25s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=conversation-custom-name`.
+
 > On 2026-08-16 **Conversation "delete for everyone" (creator-only) shipped** (slice
 > `conversation-delete-for-all`) — closes `feature-parity.md`'s "Leave / archive / delete-for-me /
 > delete-for-all conversation" item; re-proved against real code before starting (per convention):
