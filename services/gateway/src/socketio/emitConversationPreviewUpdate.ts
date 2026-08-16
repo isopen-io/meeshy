@@ -250,6 +250,20 @@ export async function emitConversationPreviewUpdate(
       // the send path in MeeshySocketIOManager, which always fills this field.
       updatedBy: { id: updatedByUserId },
       updatedAt: new Date().toISOString(),
+      // Tout ce que CETTE unité émet est un recalcul depuis l'état courant de
+      // la base — c'est sa définition même (`message.findFirst` juste au-dessus,
+      // plus la sonde de masquage personnel). Un tel aperçu peut légitimement
+      // RECULER dans le temps : supprimer le dernier message pour tous fait
+      // redescendre la ligne sur le précédent, et un lecteur qui masque son
+      // dernier message visible se voit servir un remplaçant plus ancien par
+      // construction. La garde monotone des clients jette ce cas — elle ne peut
+      // pas le distinguer d'une diffusion arrivée dans le désordre, qui recule
+      // elle aussi. Ce drapeau est la seule chose qui les sépare, et seul
+      // l'émetteur peut le dire.
+      //
+      // Les émetteurs message-driven (`MessageHandler`, `MeeshySocketIOManager`)
+      // ne le posent PAS : ce sont exactement ceux que la garde protège.
+      previewRecalculated: true,
     };
 
     // Un payload PAR destinataire : la carte d'aperçu est filtrée au prisme du
