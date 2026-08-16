@@ -153,8 +153,17 @@ jest.mock('@/components/ui/dropdown-menu', () => ({
 }));
 
 jest.mock('@/components/video-calls/OngoingCallBanner', () => ({
-  OngoingCallBanner: ({ onJoin, onDismiss }: { onJoin: () => void; onDismiss: () => void }) => (
+  OngoingCallBanner: ({
+    onJoin,
+    onDismiss,
+    participantCount,
+  }: {
+    onJoin: () => void;
+    onDismiss: () => void;
+    participantCount: number;
+  }) => (
     <div data-testid="call-banner">
+      <span data-testid="call-banner-participant-count">{participantCount}</span>
       <button onClick={onJoin}>Join</button>
       <button onClick={onDismiss}>Dismiss</button>
     </div>
@@ -666,6 +675,39 @@ describe('ConversationHeader', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('call-banner')).toBeInTheDocument();
+      });
+    });
+
+    it('should exclude participants who already left from the banner count', async () => {
+      // Regression: `GET .../active-call` (toCallSessionResponse) keeps every
+      // CallParticipant row Prisma ever attached to a session — a leave-then-
+      // rejoin (network blip, tab reload, a group-call member leaving while
+      // others stay on) inserts a fresh row and leaves the departed one in
+      // place forever. The banner must count only participants still IN the
+      // call (`!leftAt`), mirroring VideoCallInterface.tsx's own
+      // `participants.filter(p => !p.leftAt).length` — not the raw array
+      // length, which only ever grows.
+      (useCallBanner as unknown as jest.Mock).mockReturnValue({
+        currentCall: {
+          id: 'call-1',
+          conversationId: 'conv-1',
+          status: 'active',
+          participants: [
+            { id: 'p1', userId: 'user-1', role: 'member', joinedAt: new Date().toISOString(), leftAt: null },
+            { id: 'p2', userId: 'user-2', role: 'member', joinedAt: new Date().toISOString(), leftAt: new Date().toISOString() },
+          ],
+          startedAt: new Date().toISOString(),
+        },
+        callDuration: 0,
+        showCallBanner: true,
+        handleJoinCall: jest.fn(),
+        handleDismissCallBanner: jest.fn(),
+      });
+
+      render(<ConversationHeader {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('call-banner-participant-count')).toHaveTextContent('1');
       });
     });
 
