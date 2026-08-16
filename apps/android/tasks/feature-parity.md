@@ -3927,7 +3927,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `BookmarksViewModel` (cursor paging, optimistic un-bookmark with rollback, skeleton-on-cold,
       pull-to-refresh); `PostRepository.getBookmarksPage` carries the pagination watermark; reached
       from the feed top-bar bookmark action → `Routes.SAVED_POSTS` (slice `feed-bookmarks-screen`, 2026-07-17)
-- [ ] Post-detail room real-time subscriptions
+- [x] Post-detail room real-time subscriptions — closed 2026-08-16 (slice `post-detail-realtime-room`).
+      Android had ZERO `post:join`/`post:leave` anywhere (`grep` exhaustive), even though
+      `PostDetailViewModel` already listened to `comment:added`/`comment:deleted` for its comment-
+      count badge — it worked only by the incidental fallback the gateway's `SocialEventsHandler`
+      dual-broadcasts comments to (`ROOMS.post`+friend-feed-rooms per its own test name), which
+      reaches a friend's activity but never a non-friend's, nor `post:liked`/`post:unliked` (those
+      target `ROOMS.post` EXCLUSIVELY — `PostReactionHandler.ts`, no feed-room fallback). Added
+      `SocialSocketManager.joinPostRoom`/`.leavePostRoom` (mirrors iOS `SocialSocketManager`,
+      `socketManager.emit("post:join"/"post:leave", {postId})` — same `emit`-JSONObject pattern as
+      `CallSignalManager`'s existing `call:join`/`call:leave`). `PostDetailViewModel` now joins on
+      init (guarded on a non-blank route id) and leaves on `onCleared()`; the existing per-field
+      `liveCommentCount` overlay generalised into a `LiveOverlay(commentCount, likeCount, isLiked)`
+      so a live `post:liked`/`post:unliked` resyncs the like count and — only when `event.userId`
+      is the viewer's own id — the `isLiked` flag, mirroring `FeedViewModel`/`FeedRealtimeReducer
+      .like`'s established `mine: Boolean?` semantics (`null` = another user's action, count-only).
+      Scoped to `PostDetailScreen` only this slice — iOS also joins the same room from
+      `ReelsViewModel`/`StoryViewerView`/`FeedCommentsSheet`; those are real, separate follow-ups
+      (documented, not silently dropped), each with its own screen/lifecycle to wire. +9 tests
+      (`SocialSocketManagerTest` ×2 for join/leave; `PostDetailViewModelTest` ×7 for the join call,
+      the blank-route no-op, viewer-own like/unlike, another-user's-like count-only, cross-post
+      isolation, and refresh dropping the overlay).
 - [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap

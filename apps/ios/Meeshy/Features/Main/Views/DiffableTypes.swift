@@ -16,6 +16,15 @@ nonisolated enum MessageListItem: Hashable, Sendable {
     /// stable pour la diffable datasource (le label exact est recalculé à
     /// l'affichage par la cell registration, qui s'adapte au passage de minuit).
     case dayHeader(dayStart: Date)
+    /// Marqueur « Début de la conversation » (contrat Focal §4.5/§4.8, WS-6
+    /// travail 4 — R-d, réserve tracée Porte V1). Rendu par
+    /// `FocalConversationStartRow` (vue pure, `Focal/Row/`). Appended EN
+    /// QUEUE du tableau d'items (= haut visuel du flux inversé, loin de la
+    /// zone de prepend) et UNIQUEMENT quand `hasReachedOldest == true` — sans
+    /// `localId`, cette cellule n'est jamais éligible à l'élection de focus
+    /// ni au pass de perspective (§4.8 : « cellule sans localId ne peut pas
+    /// être élue »).
+    case conversationStart
 }
 
 nonisolated enum FeedListSection: Hashable, Sendable { case main }

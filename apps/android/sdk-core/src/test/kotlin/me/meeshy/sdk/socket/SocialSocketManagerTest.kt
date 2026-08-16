@@ -4,6 +4,8 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
@@ -30,6 +32,30 @@ class SocialSocketManagerTest {
         val manager = SocialSocketManager(socket, json)
         manager.attach()
         return manager to handlers
+    }
+
+    @Test
+    fun `joinPostRoom emits post-join with the postId`() = runTest {
+        val socket: SocketManager = mockk(relaxed = true)
+        val manager = SocialSocketManager(socket, json)
+
+        manager.joinPostRoom("p1")
+
+        val payload = slot<JSONObject>()
+        verify { socket.emit("post:join", capture(payload)) }
+        assertThat(payload.captured.getString("postId")).isEqualTo("p1")
+    }
+
+    @Test
+    fun `leavePostRoom emits post-leave with the postId`() = runTest {
+        val socket: SocketManager = mockk(relaxed = true)
+        val manager = SocialSocketManager(socket, json)
+
+        manager.leavePostRoom("p1")
+
+        val payload = slot<JSONObject>()
+        verify { socket.emit("post:leave", capture(payload)) }
+        assertThat(payload.captured.getString("postId")).isEqualTo("p1")
     }
 
     @Test

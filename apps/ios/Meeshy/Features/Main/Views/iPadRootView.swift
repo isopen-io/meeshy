@@ -168,7 +168,7 @@ struct iPadRootView: View {
                 }
             )
             .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
                 showMyStoriesFromProfile = true
             }
             .onAppear {

@@ -57,6 +57,81 @@
 > sheet" (hero/direct headers, members/media/stats/options tabs) — the members tab landed with
 > `conversation-members-roster`, so the sheet itself is now the containing gap; and "Add member"
 > (named by that slice as its own natural follow-up, still unchecked).
+>
+> **Two integrations of `main` while this PR sat in CI**, both resolved by hand. The first (7
+> commits, iOS/SDK/web/gateway from the concurrent realtime cycle) touched not one file this diff
+> touches and merged clean. The second brought a concurrent session's `post-detail-realtime-room`
+> (PR #3092) and produced the now-familiar simultaneous-prepend conflict in this very file — both
+> entries kept, this one placed first since it merged later chronologically, exactly as the
+> `user-search-pagination` entry below records having done. `NOTES.md` and `feature-parity.md`
+> auto-merged (verified: no corrupted lines).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=datastore-test-deterministic-scheduler`
+> — re-read at merge time, not at slice-selection time (it said 3 when this slice was chosen and 4
+> by the time CI resolved). **At 5, rule 2(b) fires: the next run switches to the `IOS_DETTE`
+> lane.** That is the intended behaviour, not an accident of the race — five consecutive Android
+> slices is precisely the condition the alternation rule exists to interrupt.
+>
+> **The flake did not recur once across this PR's three CI cycles** (runs 31954283468, 31954583393,
+> 31955399022) — the first Android CI in three PRs needing no rerun. Three green runs is evidence,
+> not proof; the real test is the next dozen slices.
+
+> On 2026-08-16 **Post-detail room real-time subscriptions shipped** (slice
+> `post-detail-realtime-room`) — closes `feature-parity.md`'s §"Post-detail room real-time
+> subscriptions" line, discovered while scanning for the next well-scoped candidate after
+> `user-search-pagination` (avoided duplicating the concurrent session's `conversation-members-
+> roster`/`datastore-test-deterministic-scheduler` PRs — checked `gh pr list` first).
+>
+> **Genuine dead-but-half-wired gap, same shape as the day's earlier slices**: Android had
+> ZERO `post:join`/`post:leave` anywhere (exhaustive grep), yet `PostDetailViewModel`'s own doc
+> comment already claimed its comment-count badge was "kept honest by the same realtime room" —
+> re-read the gateway to check whether that claim was even true. It only half was: the
+> gateway's `SocialEventsHandler` dual-broadcasts `comment:added`/`comment:deleted` to BOTH
+> `ROOMS.post` AND friend-feed-rooms (confirmed by the handler's own test name), so Android's
+> listener worked by incidental fallback for a FRIEND's comment — but would silently miss a
+> non-friend's, and would ALWAYS miss `post:liked`/`post:unliked`, since `PostReactionHandler`
+> targets `ROOMS.post` exclusively with no feed-room fallback. `PostDetailViewModel` had zero
+> like-related socket handling at all.
+>
+> **`SocialSocketManager.joinPostRoom`/`.leavePostRoom`** mirror iOS's `SocialSocketManager`
+> exactly (`socketManager.emit("post:join"/"post:leave", {postId})`) — same `emit`+`JSONObject`
+> pattern already established by `CallSignalManager`'s `call:join`/`call:leave` (mirrored, not
+> invented). `PostDetailViewModel` now calls `joinPostRoom` from `observeRealtime()` (guarded on
+> a non-blank route id, same guard already covering the comment listeners) and `leavePostRoom`
+> from a new `onCleared()` override — the latter has no dedicated test, matching this codebase's
+> own precedent (`ChatViewModel.onCleared()`'s `stopTypingEmission()` isn't unit-tested either;
+> `protected` makes it awkward without reflection, and the join call already covers the
+> behaviourally-interesting half).
+>
+> **Generalised the existing single-field live overlay into a small struct**: `liveCommentCount:
+> Int?` → `LiveOverlay(commentCount, likeCount, isLiked)`, so a live `post:liked`/`post:unliked`
+> resyncs `likeCount` unconditionally and `isLiked` ONLY when `event.userId` is the viewer's own
+> id — mirroring `FeedViewModel`/`FeedRealtimeHead.like`'s already-established `mine: Boolean?`
+> convention (`null` = someone else's action, count-only; a concrete value = the viewer's own
+> echo, safe to overwrite). A `combine()` call can't cleanly grow past 5 flows without the
+> array-based overload, so the struct keeps `init{}`'s `combine(rawPost, currentUser, activeCode,
+> status, liveOverlay)` at 5 args instead of 6.
+>
+> **Deliberately scoped to `PostDetailScreen` only**: iOS's `joinPostRoom`/`leavePostRoom` are
+> ALSO called from `ReelsViewModel`, `StoryViewerView`, and `FeedCommentsSheet` — each a distinct
+> screen with its own current-item lifecycle (reels/stories track a "currently visible" id that
+> changes on swipe, unlike post-detail's fixed route param). Documented as real, separate
+> follow-ups in `feature-parity.md` rather than silently dropped — same judgment already applied
+> twice today (`reaction`'s deferred autocomplete corpus, `tags`'s deferred `allTags` fetch).
+>
+> **+9 tests**: 2 `SocialSocketManagerTest` (`joinPostRoom`/`leavePostRoom` emit with the postId,
+> `slot<JSONObject>()` capture — the established pattern from `CallSignalManagerTest`, since
+> `org.json.JSONObject` has no `equals()` override so a captured-value assertion is required, not
+> a direct `verify(eq(...))`), 7 `PostDetailViewModelTest` (joins on load; a blank route never
+> joins; a viewer-own like/unlike updates count+`isLiked`; another user's like updates count
+> only; a live like event for a different post is inert; a refresh drops the live overlay for
+> fresh server truth).
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 35s (970 actionable
+> tasks, matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=post-detail-realtime-room`
+> (re-read at merge time, per the caution this file's own recent entries now record twice).
 
 > On 2026-08-16 **User search pagination shipped, closing another dead-but-half-wired gap**
 > (slice `user-search-pagination`) — same defect shape as `customName`/`reaction`/`tags` this same
