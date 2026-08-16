@@ -683,7 +683,7 @@ struct RootView: View {
             }
         )
         .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
             showMyStoriesFromProfile = true
         }
         // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
@@ -2366,4 +2366,21 @@ private struct PendingStoryBannerInline: View {
         dismissedAtCount = publishService.pendingCount
         HapticFeedback.light()
     }
+}
+
+// MARK: - Notification Names
+
+/// R-j (réserve tracée Porte V1, `tasks/lentille-workshop-execution.md` §8,
+/// notes REV-3 de la ligne V3) : re-preuve — QUATRE sites répétaient le
+/// littéral `"openMyStories"` sans domicile partagé : deux ÉCOUTEURS
+/// (`RootView.swift`, `iPadRootView.swift`, tous deux "racines" — la porte
+/// canonique décrite par `ScrollPillStateTests.test_selfEntryRouting_reusesTheExistingDoors`)
+/// et deux ÉMETTEURS (`ConversationListView.swift` — rail « moi » ;
+/// `ProfileUserPostsList.swift` — tuile Stories du profil). `RootView` est le
+/// domicile retenu : c'est l'une des deux racines qui OBSERVENT ce nom (même
+/// patron que `Router.meeshyNavigateToConversation`, dont le domicile est le
+/// consommateur canonique, pas un émetteur) — les trois autres sites
+/// l'importent, aucun ne recopie plus la chaîne.
+extension Notification.Name {
+    static let openMyStories = Notification.Name("openMyStories")
 }
