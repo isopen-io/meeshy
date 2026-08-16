@@ -143,9 +143,12 @@ class PostCommentsViewModel @Inject constructor(
      * the row vanishes everywhere and a deleted reply decrements its parent's reply-count. A blank
      * route [postId] never subscribes, and events for any other post are ignored. Mirror of iOS
      * `PostDetailViewModel.subscribeToSocket` (`commentAdded`/`commentDeleted` sinks filtered to `postId`).
+     * Also joins [SocialSocketManager.joinPostRoom] for the sheet's lifetime — mirror of iOS
+     * `FeedCommentsSheet.onAppear`/`.onDisappear`, left in [onCleared] below.
      */
     private fun observeRealtime() {
         if (postId.isBlank()) return
+        socialSocket.joinPostRoom(postId)
         viewModelScope.launch {
             socialSocket.commentAdded.collect { event ->
                 if (event.postId != postId) return@collect
@@ -205,6 +208,12 @@ class PostCommentsViewModel @Inject constructor(
         val parentId = replies.value.parentOfReply(commentId) ?: return
         replies.update { it.removedReply(commentId) }
         thread.update { it.bumpReplyCount(parentId, -1) }
+    }
+
+    /** Leaves the realtime room this VM joined in [observeRealtime]. */
+    override fun onCleared() {
+        if (postId.isNotBlank()) socialSocket.leavePostRoom(postId)
+        super.onCleared()
     }
 
     /**

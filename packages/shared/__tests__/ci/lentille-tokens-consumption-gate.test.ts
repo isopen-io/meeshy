@@ -143,11 +143,7 @@ function cssVarPrefix(section: 'list' | 'thread', family: string): string {
 // inutile si elle ne re-prouvait que le web). La preuve iOS : grep de
 // `LentilleMetrics.<X>` / `FocalMetrics.<X>` sur `apps/ios/Meeshy` HORS
 // fichiers de définition et HORS `MeeshyTests` — zéro site dans les DEUX cas
-// pour les trois familles ci-dessous (2026-08-16).
-//
-// `thread.hiddenChrome` en faisait partie jusqu'au 2026-08-16 ; elle a depuis
-// gagné un consommateur iOS réel et son entrée a été retirée (voir la note à
-// l'emplacement qu'elle occupait, plus bas).
+// pour les deux familles ci-dessous (2026-08-16).
 //
 // `list.tags` et `list.muted` (les deux AUTRES tokens que REV-4 soupçonnait
 // morts côté web, avec `thread.hiddenChrome`) ont été VÉRIFIÉS VIVANTS côté
@@ -156,6 +152,17 @@ function cssVarPrefix(section: 'list' | 'thread', family: string): string {
 // `LentilleMetrics.Muted` (opacité de sourdine, `LentilleConversationRow.swift`)
 // sont bien consommés. Ils NE FIGURENT PAS ici — la garde les couvre par le
 // chemin normal (consommateur iOS trouvé).
+//
+// **`thread.hiddenChrome` a rejoint ce cas le 2026-08-16, quelques heures
+// après avoir été exclue** : WS-6, le propriétaire annoncé, a branché le
+// token — `FocalMetrics.HiddenChrome.easeOut` cadence désormais la
+// disparition du header entier dans `ConversationView.swift`
+// (`.animation(.easeOut(duration:), value: hidesEntireHeaderForScroll)`).
+// Son entrée a donc été retirée, exactement comme le message d'échec de
+// `it.each` le demande. C'est le premier passage de cette garde du côté
+// « l'exclusion est devenue périmée », et il valide sa raison d'être : sans
+// ce contre-test, l'exclusion aurait survécu à sa cause et couvert un
+// retrait futur du consommateur en silence.
 interface DeadFamilyExclusion {
   readonly family: string;
   readonly since: string;
@@ -189,14 +196,6 @@ const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
       'de la ligne V3). Mort des deux côtés. Attend le même chantier que la réserve R-e ' +
       '(drapeau agent_grammar orphelin), hors périmètre de ce lot.',
   },
-  // `thread.hiddenChrome` FIGURAIT ici, exclue le 2026-08-16 au motif que
-  // « WS-6, le propriétaire annoncé, ne la branche pas encore ». WS-6 la branche
-  // désormais : `ConversationView.swift` lit `FocalMetrics.HiddenChrome.easeOut`
-  // pour la durée d'animation du chrome escamotable. L'entrée est donc RETIRÉE
-  // plutôt que laissée périmée — exactement ce que prescrit
-  // « exclusion « $family » : toujours réellement morte des deux côtés », qui l'a
-  // signalée dès le premier commit consommateur. La famille est maintenant
-  // couverte par le chemin normal (consommateur iOS trouvé).
 ];
 
 const excludedFamilySet = new Set(EXCLUDED_DEAD_FAMILIES.map((e) => e.family));
