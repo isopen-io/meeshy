@@ -545,6 +545,59 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     }
 
     // =========================================================================
+    // §4.7bis — Atterrissage d'élection (zone d'activation sans conflit)
+    // =========================================================================
+
+    /// Un élu dont le bord bas visuel passe sous le composeur est ramené à
+    /// `gap` points au-dessus : `offset = minY − bottomClearance − gap`.
+    /// Vérification : H=800, inset.top=180, gap=12, minY=1140, offset=1000
+    /// ⇒ visualBottom = 800 − (1140−1000) = 660 > 800−180−12 = 608 ⇒ cible 948.
+    func test_settleOffset_straddlingElected_landsAboveTheComposer() throws {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 1140, currentOffsetY: 1000, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(offset), 948, accuracy: Self.epsilon,
+            "§4.7bis : l'élu qui chevauche le composeur atterrit bord bas à `gap` du haut du composeur — offset = minY − bottomClearance − gap"
+        )
+    }
+
+    /// Élu déjà au clair (bord bas au-dessus du composeur + gap) : AUCUN
+    /// mouvement — le nudge ne doit jamais se faire sentir quand tout va bien.
+    func test_settleOffset_electedAlreadyClear_returnsNil() {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 1200, currentOffsetY: 1000, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertNil(offset, "§4.7bis : un élu déjà entièrement au-dessus du composeur ne déclenche aucun nudge")
+    }
+
+    /// Au bas du fil (offset = −inset.top), le message le plus récent frôle
+    /// toujours le composeur par construction : le clamp rend le déplacement
+    /// nul et le fil ne bouge pas.
+    func test_settleOffset_atConversationBottom_clampNeutralizesTheNudge() {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 0, currentOffsetY: -180, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 0, contentHeight: 3000, gap: 12
+        )
+        XCTAssertNil(offset, "§4.7bis : au bas du fil, le clamp à −bottomClearance neutralise le nudge — on ne repousse jamais le dernier message")
+    }
+
+    /// La cible est bornée à la plage réellement défilable, comme
+    /// `landingContentOffsetY` (§4.7).
+    func test_settleOffset_clampsToTheScrollableRange() throws {
+        let offset = geometry.settleContentOffsetY(
+            cellMinY: 400, currentOffsetY: 290, viewportHeight: 800,
+            bottomClearance: 180, headClearance: 100, contentHeight: 900, gap: 12
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(offset), 200, accuracy: Self.epsilon,
+            "§4.7bis : la cible est bornée à contentSize.height − H + headClearance (900 − 800 + 100 = 200)"
+        )
+    }
+
+    // =========================================================================
     // §4.8 — Les SIX sites d'appel, en DONNÉES (leçon 257)
     // =========================================================================
 
@@ -756,6 +809,33 @@ final class FocalScrollPassWriteTests: XCTestCase {
         let focused = pass.apply(to: collectionView) { _ in FocalScrollPass.CellDescriptor.ineligible }
         XCTAssertNil(focused, "§4.8 : une cellule sans localId ne peut pas être élue — aucune carte de focus sur un séparateur de jour")
         XCTAssertNil(pass.focusedLocalId, "FocalScrollPass.focusedLocalId doit rester nil quand aucun candidat n'est éligible")
+    }
+
+    // MARK: - §4.7bis — Élection épinglée pendant l'atterrissage
+
+    /// L'épingle fige l'élection sur un candidat VISIBLE, même si un autre est
+    /// plus proche de la bande — le nudge déplace la liste, pas le choix du
+    /// lecteur.
+    func test_apply_pinnedFocus_overridesTheElection() throws {
+        let pass = makePass()
+        let free = try XCTUnwrap(pass.apply(to: collectionView, describe: Self.describeAll))
+
+        let other = free == "m2" ? "m3" : "m2"
+        pass.pinnedFocusLocalId = other
+        let pinned = pass.apply(to: collectionView, describe: Self.describeAll)
+
+        XCTAssertEqual(pinned, other, "§4.7bis : l'épingle fige l'élection le temps de l'atterrissage")
+    }
+
+    /// Une épingle sur un id qui n'est plus à l'écran (recyclage pendant
+    /// l'animation) n'immobilise rien : l'élection normale reprend.
+    func test_apply_pinnedFocusOffScreen_electionResumes() {
+        let pass = makePass()
+        pass.pinnedFocusLocalId = "fantome-hors-ecran"
+        let elected = pass.apply(to: collectionView, describe: Self.describeAll)
+
+        XCTAssertNotEqual(elected, "fantome-hors-ecran", "§4.7bis : une épingle sur un fantôme n'immobilise rien")
+        XCTAssertNotNil(elected, "§4.7bis : l'élection normale reprend quand l'épinglé a quitté l'écran")
     }
 
     // MARK: - Élection sur la vraie géométrie

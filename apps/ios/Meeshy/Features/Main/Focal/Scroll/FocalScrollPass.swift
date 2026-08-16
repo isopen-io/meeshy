@@ -160,6 +160,20 @@ final class FocalScrollPass {
 
     private(set) var focusedLocalId: String?
 
+    /// Élection ÉPINGLÉE pendant l'atterrissage d'élection (§4.7bis).
+    ///
+    /// Le nudge de pose déplace la liste pour dégager l'élu du composeur —
+    /// parfois de plus que l'hystérésis (un message haut se dégage de
+    /// `h/2` points). Sans épingle, le déplacement ferait élire le voisin
+    /// du dessous à mi-animation, et la magnification §4.6 atterrirait sur
+    /// un AUTRE message que celui qu'on vient de dégager. L'épingle fige
+    /// l'élection le temps du nudge ; le doigt qui reprend la main la lève
+    /// (l'hôte la pose et la retire, jamais le pass lui-même).
+    ///
+    /// Si l'épinglé quitte l'écran (recyclage pendant l'animation), l'élection
+    /// normale reprend — une épingle sur un fantôme n'immobilise rien.
+    var pinnedFocusLocalId: String?
+
     // Tampons RÉUTILISÉS d'une passe à l'autre (`removeAll(keepingCapacity:)`)
     // — le critère §7 « le pass de scroll n'alloue pas » ne tolère pas un
     // tableau neuf par frame.
@@ -294,11 +308,16 @@ final class FocalScrollPass {
             )
         }
 
-        focusedLocalId = geometry.electFocus(
-            candidates: candidates,
-            focusY: focusY,
-            current: focusedLocalId
-        )
+        if let pinned = pinnedFocusLocalId, candidates.contains(where: { $0.id == pinned }) {
+            // §4.7bis — l'atterrissage déplace la liste, pas le choix du lecteur.
+            focusedLocalId = pinned
+        } else {
+            focusedLocalId = geometry.electFocus(
+                candidates: candidates,
+                focusY: focusY,
+                current: focusedLocalId
+            )
+        }
 
         for entry in pending {
             decoration.update(
@@ -433,6 +452,7 @@ final class FocalScrollPass {
             reset(cell)
         }
         focusedLocalId = nil
+        pinnedFocusLocalId = nil
     }
 
     // MARK: - Site 6 — changement de mode de lecture

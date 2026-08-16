@@ -270,6 +270,47 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         return min(max(0, needed), ceiling)
     }
 
+    // MARK: - §4.7bis — Atterrissage d'élection (zone d'activation sans conflit)
+
+    /// `contentOffset.y` qui pose le bord BAS visuel du message élu à
+    /// `gap` points au-dessus du haut du composeur — ou `nil` si l'élu est
+    /// déjà au clair (ou si le clamp rend le déplacement nul).
+    ///
+    /// C'est la règle « plus du tout en conflit avec la zone de saisie » :
+    /// à l'arrêt du geste, un élu dont le bas passe sous le composeur est
+    /// ramené entièrement au-dessus, contrôles de bord compris. Pendant le
+    /// défilement le conflit n'existe pas (le chrome est escamoté) ; cette
+    /// correction ne joue qu'à la pose.
+    ///
+    /// Géométrie inversée : le bord bas VISUEL de la cellule est son
+    /// `frame.minY` de CONTENU. `visualBottom = H − (minY − offset)` ; on
+    /// veut `visualBottom = H − bottomClearance − gap`, d'où
+    /// `offset = minY − bottomClearance − gap`. Le résultat est borné à la
+    /// plage réellement défilable (mêmes bornes que `landingContentOffsetY`) —
+    /// au bas du fil, le clamp rend le déplacement nul et on ne bouge pas.
+    ///
+    /// `cellMinY` doit venir des `layoutAttributes` (boîte de LAYOUT), jamais
+    /// de `cell.frame`, qui intègre le transform de perspective.
+    func settleContentOffsetY(
+        cellMinY: CGFloat,
+        currentOffsetY: CGFloat,
+        viewportHeight: CGFloat,
+        bottomClearance: CGFloat,
+        headClearance: CGFloat,
+        contentHeight: CGFloat,
+        gap: CGFloat
+    ) -> CGFloat? {
+        let visualBottom = viewportHeight - (cellMinY - currentOffsetY)
+        let readableBottom = viewportHeight - bottomClearance
+        guard visualBottom > readableBottom - gap else { return nil }
+
+        let target = cellMinY - bottomClearance - gap
+        let minOffset = -bottomClearance
+        let maxOffset = max(minOffset, contentHeight - viewportHeight + headClearance)
+        let clamped = min(max(target, minOffset), maxOffset)
+        return abs(clamped - currentOffsetY) > 0.5 ? clamped : nil
+    }
+
     // MARK: - §4.7 — Atterrissage dans la bande
 
     /// `contentOffset.y` qui pose le centre de la cellule cible EXACTEMENT sur
