@@ -1632,20 +1632,29 @@ describe('CallService', () => {
       expect(updateCall[0].data.duration).toBe(0);
     });
 
-    it('un refus explicite pré-décroché garde le statut REJECTED — sinon fausse notification « manqué » + faux filtre journal', async () => {
+    it('un refus explicite pré-décroché par le CALLEE garde le statut REJECTED — sinon fausse notification « manqué » + faux filtre journal', async () => {
       const initiatorParticipant = createMockParticipant({
         role: ParticipantRole.initiator
+      });
+      const calleeParticipant = createMockParticipant({
+        id: 'p2',
+        participantId: 'participant-456',
+        userId: 'user-456',
+        role: ParticipantRole.participant
       });
       const mockCall = createMockCallSession({
         status: CallStatus.ringing,
         answeredAt: null,
-        participants: [initiatorParticipant]
+        participants: [initiatorParticipant, calleeParticipant]
       });
       const endedCall = {
         ...mockCall,
         status: CallStatus.missed,
         endedAt: new Date(),
-        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        participants: [
+          { ...initiatorParticipant, leftAt: new Date(), user: createMockUser() },
+          { ...calleeParticipant, leftAt: new Date(), user: createMockUser() }
+        ],
         initiator: createMockUser(),
         conversation: createMockConversation()
       };
@@ -1656,7 +1665,8 @@ describe('CallService', () => {
       mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
 
-      await callService.endCall('call-123', 'user-123', 'participant-123', false, 'rejected');
+      // The CALLEE (not the initiator) reports the rejection.
+      await callService.endCall('call-123', 'user-456', 'participant-456', false, 'rejected');
 
       const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
       // status REJECTED distinct : handleMissedCall (gaté sur status missed)
@@ -1665,6 +1675,48 @@ describe('CallService', () => {
       // promettait déjà.
       expect(updateCall[0].data.status).toBe(CallStatus.rejected);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.rejected);
+    });
+
+    it('security (calling-stack audit 2026-08-15): the INITIATOR cannot self-report reason=rejected on their own call', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const calleeParticipant = createMockParticipant({
+        id: 'p2',
+        participantId: 'participant-456',
+        userId: 'user-456',
+        role: ParticipantRole.participant
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [initiatorParticipant, calleeParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [
+          { ...initiatorParticipant, leftAt: new Date(), user: createMockUser() },
+          { ...calleeParticipant, leftAt: new Date(), user: createMockUser() }
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      // The INITIATOR cancels their own outgoing call but sends
+      // reason: 'rejected' — must NOT be honored as a callee rejection.
+      await callService.endCall('call-123', 'user-123', 'participant-123', false, 'rejected');
+
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.missed);
     });
 
     it('audit C3/C4: an answered call still ends as completed regardless of pre-answer logic', async () => {

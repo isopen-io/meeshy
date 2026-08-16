@@ -55,6 +55,22 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.lastConfiguredIceServers.first?.urls.first, "turn:turn.meeshy.me:3478")
     }
 
+    // Calling-stack audit 2026-08-15 — `configure` used to swallow a genuine
+    // peer-connection creation failure and return Void, so every CallManager
+    // call site proceeded as if setup had succeeded. It must now surface the
+    // failure so the caller can abort instead of wasting audio-session /
+    // reliability-monitor setup on a call that can never connect.
+    func test_configure_whenClientSucceeds_returnsTrue() {
+        let (sut, _) = makeSUT()
+        XCTAssertTrue(sut.configure(isVideo: false, iceServers: nil))
+    }
+
+    func test_configure_whenClientThrows_returnsFalse() {
+        let (sut, client) = makeSUT()
+        client.configureError = WebRTCError.failedToCreatePeerConnection
+        XCTAssertFalse(sut.configure(isVideo: false, iceServers: nil))
+    }
+
     // MARK: - ICE Candidate Buffering
 
     func test_addICECandidate_beforeRemoteDescription_buffersCandidate() {
@@ -916,6 +932,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
 
     var configureCallCount = 0
     private(set) var lastConfiguredIceServers: [IceServer] = []
+    var configureError: Error?
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
@@ -932,6 +949,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func configure(iceServers: [IceServer]) throws {
         configureCallCount += 1
         lastConfiguredIceServers = iceServers
+        if let configureError { throw configureError }
     }
     func updateIceServers(_ iceServers: [IceServer]) {}
     private(set) var lastNegotiationIsPolite: Bool?
