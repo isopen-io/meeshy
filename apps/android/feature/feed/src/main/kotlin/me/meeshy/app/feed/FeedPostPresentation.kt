@@ -17,6 +17,7 @@ data class FeedPostImage(
     val thumbnailUrl: String?,
     val width: Int?,
     val height: Int?,
+    val thumbHash: String?,
 )
 
 /**
@@ -79,6 +80,7 @@ object FeedPostBuilder {
                     thumbnailUrl = media.thumbnailUrl?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                     width = media.width,
                     height = media.height,
+                    thumbHash = media.thumbHash,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()

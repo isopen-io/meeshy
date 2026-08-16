@@ -46,6 +46,21 @@ class FeedPostBuilderTest {
     )
 
     @Test
+    fun build_carriesTheThumbHashThroughToTheProjectedImage() {
+        val media = ApiPostMedia(
+            id = "m1",
+            fileUrl = "https://cdn.example/m1.jpg",
+            mimeType = "image/jpeg",
+            thumbHash = "1QcSHQRnh493V4dIh4eXd3h4kJUI",
+        )
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.images.single().thumbHash).isEqualTo("1QcSHQRnh493V4dIh4eXd3h4kJUI")
+    }
+
+    @Test
     fun build_resolvesPrismeContentAndTranslationFlag() {
         val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
         val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)

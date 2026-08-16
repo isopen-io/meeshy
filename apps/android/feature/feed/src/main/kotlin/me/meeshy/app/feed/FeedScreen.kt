@@ -96,6 +96,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.media.MediaCollage
+import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
@@ -648,6 +649,7 @@ private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit
             model = image.url,
             contentDescription = stringResource(R.string.feed_image_description),
             contentScale = ContentScale.Crop,
+            placeholder = rememberThumbHashPainter(image.thumbHash),
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(imageAspectRatio(image))
@@ -704,6 +706,7 @@ private fun CollageTile(
             model = image.thumbnailUrl ?: image.url,
             contentDescription = stringResource(R.string.feed_image_description),
             contentScale = ContentScale.Crop,
+            placeholder = rememberThumbHashPainter(image.thumbHash),
             modifier = Modifier.fillMaxSize(),
         )
         if (overflowCount > 0) {

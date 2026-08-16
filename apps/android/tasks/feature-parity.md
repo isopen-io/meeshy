@@ -5364,8 +5364,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of *this repo's* decoder (`p=(r+g)/2−b`, `q=r−g`) so encode∘decode round-trips. **Surpasses** the
       reference's unguarded inputs: rejects a non-positive / over-100 side and a buffer shorter than
       `w·h·4` (`IllegalArgumentException` vs reading past the buffer into `NaN` garbage). +13 tests (hand-derived
-      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards). App-side
-      raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
+      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards).
+      — **First Coil placeholder wired 2026-08-16** (slice `feed-thumbhash-placeholder`) — both the encoder
+      AND the decoder had **zero call sites anywhere in the app** (exhaustive grep) despite being fully
+      ported and tested for over a month; `ApiPostMedia.thumbHash`/`FeedPostImage` never even carried the
+      field through the feed projection. Added `ThumbHash.decodeBase64(String?): ThumbHashImage?` (`:core:model`,
+      pure — base64-decode + malformed/blank/too-short guard, never throws) and
+      `rememberThumbHashPainter(base64): Painter?` (`:sdk-ui`, the one Android-`Bitmap`-touching piece,
+      UI glue) wired into `FeedScreen`'s `PostImageGrid`/`CollageTile` `AsyncImage`s as the Coil
+      `placeholder`. **Scoped to feed post images only** — avatars, message attachments, and story slides
+      (iOS's `CachedAsyncImage`/`MeeshyAvatar`/`StorySlideRenderer` all consume ThumbHash already) remain
+      real, separate follow-ups, not silently dropped. Slide-level **generation** (encode → upload during
+      story composition) is the OTHER open half, tracked by its own checklist line below (§ story composer)
+      — genuinely different scope (write path vs. read path). +4 tests (`ThumbHash.decodeBase64` round-trip,
+      null/blank, malformed base64, too-short; `FeedPostBuilder` carries `thumbHash` through the projection).
 
 ## Q. Cross-cutting infrastructure
 - [x] App icon — launcher icon (`app-launcher-icon`, 2026-08-10). Was **entirely absent**:

@@ -76,6 +76,70 @@
 > 31955399022) — the first Android CI in three PRs needing no rerun. Three green runs is evidence,
 > not proof; the real test is the next dozen slices.
 
+> On 2026-08-16 **First ThumbHash Coil placeholder wired — a month-old, fully-tested, zero-caller
+> codec finally gets a consumer** (slice `feed-thumbhash-placeholder`) — advances §P's "ThumbHash
+> blur placeholders for all media" line, discovered while scanning for the next well-scoped
+> candidate (avoided PR #3093's territory — a concurrent session's Reels-side
+> `post:join`/`post:leave` follow-up to my own `post-detail-realtime-room` slice; confirmed via
+> `gh pr list` before picking anything post-room-related).
+>
+> **The gap, re-proved before starting**: `ThumbHash.encode`/`.decode` (`:core:model`) are both
+> fully ported (Evan Wallace's reference algorithm), fully tested (34 existing tests), and their
+> own doc comments explicitly reference "feature-parity §P" — yet an exhaustive grep found **zero
+> call sites anywhere in the app**, for either direction. `ApiPostMedia.thumbHash: String?`
+> already exists on the wire model too — but `FeedPostBuilder.build()`'s image projection silently
+> dropped it, so even a caller reading the PROJECTED `FeedPostImage` (the type every feed
+> Composable actually sees) had no way to reach the wire field at all. Three layers of "modeled
+> but never wired," stacked.
+>
+> **New `ThumbHash.decodeBase64(String?): ThumbHashImage?`** (`:core:model`, pure) — base64-decodes
+> the wire string and calls the existing `decode`, folding a blank/null value AND anything `decode`
+> itself would throw on (malformed base64, a hash too short for its own header) into a plain
+> `null` — the blur-placeholder call site should degrade to the existing flat-tint fallback, never
+> crash on a bad hash. **New `rememberThumbHashPainter(base64): Painter?`** (`:sdk-ui`,
+> `component/media/`, alongside the existing `MediaCollage`) — the ONE piece that has to touch
+> `android.graphics.Bitmap` (manual ARGB packing from the raw `rgba` `ByteArray` — Compose has no
+> built-in RGBA-buffer-to-`ImageBitmap` path), `remember`-cached per hash string, wrapped in
+> `BitmapPainter`. Pure JVM logic (base64 + guards) stays in `:core:model`, so no new
+> `testImplementation(libs.robolectric)` needed in `:sdk-ui` — only the genuinely
+> Android-framework-touching sliver is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Wired into `FeedScreen`'s two image call sites** (`PostImageGrid`'s single-image path,
+> `CollageTile`'s multi-image grid) as Coil `AsyncImage`'s `placeholder` parameter — no new Coil
+> integration pattern needed, `placeholder: Painter?` is already a first-class `AsyncImage` param.
+>
+> **Scoped to feed post images only, everything else documented as a real follow-up, not silently
+> dropped**: iOS's `CachedAsyncImage`/`MeeshyAvatar`/`StorySlideRenderer` all already consume
+> ThumbHash for avatars, message attachments, and story slides — each a distinct call site needing
+> its own wiring pass. Slide-level **generation** (encode → upload during story composition, the
+> OTHER checklist line, §story composer) is a genuinely separate scope — write path vs. this
+> slice's read path — not touched here.
+>
+> **+4 tests**: `ThumbHash.decodeBase64` round-trips through `encode` for a well-formed hash,
+> returns `null` for null/blank, returns `null` for malformed base64 rather than throwing, returns
+> `null` for a hash too short to decode rather than throwing; `FeedPostBuilder.build` carries
+> `thumbHash` through the image projection (a genuine pre-existing test gap — `FeedPostBuilderTest`
+> had zero image-projection coverage before this).
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 41s (970 actionable tasks,
+> matching prior slices — no build-graph regression; the DataStore flake that recurred twice on the
+> two prior PRs today did NOT reappear, consistent with the concurrent session's PR #3091 root-cause
+> fix having merged in between), zero regressions.
+>
+> **A real merge conflict while this PR sat in CI**: the concurrent `datastore-test-deterministic-
+> scheduler` slice (entry above) merged in between, bumping the cursor to `android_streak=5` and
+> — per its own entry — arming rule 2(b) (`>= 5` switches the NEXT run to `IOS_DETTE`). This
+> slice's own choice was made and its code written while the cursor legitimately read `4`, before
+> that PR existed; discarding finished, tested, green work over a lane-counting race would be
+> pure waste, so it ships as this run's ANDROID-lane completion — matching this file's own
+> established precedent for exactly this class of race (see the `user-search-pagination` and
+> `post-detail-realtime-room` entries below). The switch itself isn't skipped, only deferred one
+> slice: the NEXT iteration reads the cursor fresh, sees `>= 5`, and bascules to `IOS_DETTE`.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=6 last_run=feed-thumbhash-placeholder`
+> (re-read fresh at merge time, continuing the `datastore-test-deterministic-scheduler` entry's own
+> count rather than the `4` this slice was chosen under).
+
 > On 2026-08-16 **Post-detail room real-time subscriptions shipped** (slice
 > `post-detail-realtime-room`) — closes `feature-parity.md`'s §"Post-detail room real-time
 > subscriptions" line, discovered while scanning for the next well-scoped candidate after
