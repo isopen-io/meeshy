@@ -115,7 +115,16 @@ final class WebRTCService {
 
     // MARK: - Peer Connection Lifecycle
 
-    func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
+    /// Returns `false` on failure (calling-stack audit 2026-08-15). Every
+    /// caller MUST check the result and abort call setup on `false` — before
+    /// this fix the failure was logged and swallowed, so `CallManager`
+    /// proceeded to activate the audio session, start the reliability
+    /// monitor, and attempt local media anyway. The failure only surfaced
+    /// several steps later at `startLocalMedia`'s `guard peerConnection !=
+    /// nil` — a confusing "local media failed" error instead of the real
+    /// "configuration failed" one, after wasted setup work.
+    @discardableResult
+    func configure(isVideo: Bool, iceServers: [IceServer]? = nil) -> Bool {
         do {
             // Treat an empty array the same as nil: a VoIP push whose
             // `iceServers` field decodes to zero usable servers (all entries
@@ -127,8 +136,10 @@ final class WebRTCService {
             let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
+            return true
         } catch {
             Logger.webrtc.error("WebRTC configuration failed: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -523,6 +534,22 @@ final class WebRTCService {
 
     func close() {
         stopQualityMonitor()
+        // Cross-call quality-ladder leak: `stopQualityMonitor()` above resets
+        // `lastStats`/`qualityMonitorStartDate`/`jitterBitrateCapTracker`, but
+        // `currentQualityLevel`/`currentBitrate`/`qualityLevelDebounceDate`/
+        // `lastThermalState` survived — this service is a CallManager-owned
+        // singleton reused across calls. A call that dropped while `.critical`
+        // (debounced within `qualityLevelDebounceSeconds`) had an immediate
+        // redial inherit the stale `.critical` verdict: the new, healthy
+        // call's first stats tick gets suppressed by `adjustBitrate`'s
+        // debounce guard, so `currentQualityLevel` stays `.critical` and the
+        // "poor connection" banner + gateway quality report both fire on a
+        // call that never degraded. Reset to the same values these
+        // properties declare at init.
+        currentQualityLevel = .excellent
+        currentBitrate = QualityThresholds.defaultBitrate
+        qualityLevelDebounceDate = nil
+        lastThermalState = .nominal
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()

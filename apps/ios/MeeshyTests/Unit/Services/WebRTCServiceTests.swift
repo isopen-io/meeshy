@@ -55,6 +55,22 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.lastConfiguredIceServers.first?.urls.first, "turn:turn.meeshy.me:3478")
     }
 
+    // Calling-stack audit 2026-08-15 — `configure` used to swallow a genuine
+    // peer-connection creation failure and return Void, so every CallManager
+    // call site proceeded as if setup had succeeded. It must now surface the
+    // failure so the caller can abort instead of wasting audio-session /
+    // reliability-monitor setup on a call that can never connect.
+    func test_configure_whenClientSucceeds_returnsTrue() {
+        let (sut, _) = makeSUT()
+        XCTAssertTrue(sut.configure(isVideo: false, iceServers: nil))
+    }
+
+    func test_configure_whenClientThrows_returnsFalse() {
+        let (sut, client) = makeSUT()
+        client.configureError = WebRTCError.failedToCreatePeerConnection
+        XCTAssertFalse(sut.configure(isVideo: false, iceServers: nil))
+    }
+
     // MARK: - ICE Candidate Buffering
 
     func test_addICECandidate_beforeRemoteDescription_buffersCandidate() {
@@ -189,6 +205,21 @@ final class WebRTCServiceTests: XCTestCase {
         sut.close()
         XCTAssertEqual(sut.connectionState, .closed)
         XCTAssertEqual(client.disconnectCallCount, 1)
+    }
+
+    /// `WebRTCService` is a single instance owned by `CallManager` for the app's
+    /// lifetime, so `currentQualityLevel`/`currentBitrate` are cross-call state.
+    /// They already start at their defaults here (nothing drove them away from
+    /// init in this SUT), but this pins `close()` as the place that GUARANTEES
+    /// the reset regardless of prior call state — see the source-guard companion
+    /// in `SwitchCameraSourceGuardTests.test_close_resetsQualityLadderState` for
+    /// the two fully-private siblings (`qualityLevelDebounceDate`/
+    /// `lastThermalState`) this behavioral test can't reach.
+    func test_close_resetsQualityLevelAndBitrateToDefaults() {
+        let (sut, _) = makeSUT()
+        sut.close()
+        XCTAssertEqual(sut.currentQualityLevel, .excellent)
+        XCTAssertEqual(sut.currentBitrate, QualityThresholds.defaultBitrate)
     }
 
     // MARK: - setRemoteDescription return value
@@ -916,6 +947,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
 
     var configureCallCount = 0
     private(set) var lastConfiguredIceServers: [IceServer] = []
+    var configureError: Error?
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
@@ -932,6 +964,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func configure(iceServers: [IceServer]) throws {
         configureCallCount += 1
         lastConfiguredIceServers = iceServers
+        if let configureError { throw configureError }
     }
     func updateIceServers(_ iceServers: [IceServer]) {}
     private(set) var lastNegotiationIsPolite: Bool?
@@ -1072,6 +1105,50 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
             body.contains("switchCameraTask?.cancel()"),
             "close() must cancel switchCameraTask like its other tracked tasks so a pending camera " +
             "switch cannot outlive teardown"
+        )
+    }
+
+    /// Cross-call quality-ladder leak: `WebRTCService` is a single instance owned
+    /// by `CallManager` for the app's lifetime (`CallManager.webRTCService`), so
+    /// `currentQualityLevel`/`currentBitrate`/`qualityLevelDebounceDate`/
+    /// `lastThermalState` are cross-call state unless `close()` resets them.
+    /// `stopQualityMonitor()` (called at the top of `close()`) already resets its
+    /// own trio (`lastStats`/`qualityMonitorStartDate`/`jitterBitrateCapTracker`)
+    /// — these four were the ones left dirty. Concretely: a call that dropped
+    /// while `.critical` (within `qualityLevelDebounceSeconds` of the drop)
+    /// followed by an immediate redial had the new, healthy call's first stats
+    /// tick suppressed by `adjustBitrate`'s debounce guard, so the UI "poor
+    /// connection" banner and the gateway quality report both fired against a
+    /// call that never degraded. `currentBitrate`/`currentQualityLevel` are
+    /// `private(set)` (asserted directly below); `qualityLevelDebounceDate`/
+    /// `lastThermalState` are fully `private` so only source-verifiable here.
+    func test_close_resetsQualityLadderState() throws {
+        // Behavioral half (currentQualityLevel/currentBitrate, both `private(set)`)
+        // lives in WebRTCServiceTests.test_close_resetsQualityLevelAndBitrateToDefaults —
+        // this class has no makeSUT()/TestableWebRTCClient access. The other two
+        // properties below are fully `private`, so source-verification is the
+        // only option for them.
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func close()", in: src) else {
+            XCTFail("close() not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("currentQualityLevel = .excellent"),
+            "close() must reset currentQualityLevel to .excellent — its declared initial value — " +
+            "so a redial doesn't inherit the previous call's quality verdict"
+        )
+        XCTAssertTrue(
+            body.contains("currentBitrate = QualityThresholds.defaultBitrate"),
+            "close() must reset currentBitrate to QualityThresholds.defaultBitrate"
+        )
+        XCTAssertTrue(
+            body.contains("qualityLevelDebounceDate = nil"),
+            "close() must clear qualityLevelDebounceDate — otherwise a redial inside the debounce " +
+            "window has its first (healthy) quality transition suppressed by adjustBitrate"
+        )
+        XCTAssertTrue(
+            body.contains("lastThermalState = .nominal"),
+            "close() must reset lastThermalState to .nominal — its declared initial value"
         )
     }
 }

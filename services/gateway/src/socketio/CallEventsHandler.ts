@@ -3069,7 +3069,7 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated',
-            callId: data.callId
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -3097,7 +3097,7 @@ export class CallEventsHandler {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
             message: validationError,
             details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data.callId
+            callId: data?.callId
           } as CallError);
           return;
         }
@@ -3350,7 +3350,7 @@ export class CallEventsHandler {
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'SIGNAL_FAILED',
           message: 'Failed to forward WebRTC signal',
-          callId: data.callId
+          callId: data?.callId
         } as CallError);
       }
     });

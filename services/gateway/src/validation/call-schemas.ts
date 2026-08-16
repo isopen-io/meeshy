@@ -156,8 +156,15 @@ export const socketSignalSchema = z.object({
     type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
       error: () => 'Signal type must be offer, answer, ice-candidate, or ice-restart'
     }),
-    from: z.string().min(1, 'from field is required'),
-    to: z.string().min(1, 'to field is required'),
+    // Bounded (calling-stack audit 2026-08-15): both carry a userId
+    // (24-char Mongo ObjectId in practice, verified against the
+    // authenticated `userId` below) — 128 is a generous ceiling that
+    // closes the only unbounded fields in this payload. Socket.IO's
+    // default 1MB frame limit is otherwise the sole cap, letting a
+    // rate-limited-but-still-abusive client relay near-1MB frames
+    // 100×/10s through `io.to(targetSocketId).emit(...)`.
+    from: z.string().min(1, 'from field is required').max(128, 'from field exceeds maximum length'),
+    to: z.string().min(1, 'to field is required').max(128, 'to field exceeds maximum length'),
     // SDP data for offer/answer — size-capped and structurally validated.
     // Every RFC 4566 WebRTC SDP must contain "v=0" (version field, always first)
     // and at least one "m=" line (media description). A string that passes the
@@ -182,7 +189,9 @@ export const socketSignalSchema = z.object({
       )
       .optional(),
     sdpMLineIndex: z.number().optional(),
-    sdpMid: z.string().optional(),
+    // Bounded for the same reason as from/to above — real values are short
+    // media-stream identifiers ("0", "audio", "video", "sdparta_0").
+    sdpMid: z.string().max(256, 'sdpMid exceeds maximum length').optional(),
     // §3.5 negotiation epoch — declared so Zod does not strip it from the
     // opaque relay payload (the gateway passes it through verbatim; the
     // receiving client uses it to drop stale offers/candidates).

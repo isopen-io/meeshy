@@ -2082,9 +2082,31 @@ export class CallService {
     // answered" signal across every status the session may pass through.
     const wasPreAnswered = !call.answeredAt;
     const resolvedReason = this.resolveEndReason(reason);
-    const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
-      ? CallEndReason.missed
+    // Security (calling-stack audit 2026-08-15): `reason` is raw, schema-gated
+    // client input — nothing upstream verifies the reporter is actually the
+    // callee. `endCall()` already lets ANY active participant end a P2P call
+    // (spec C4), so without this guard the INITIATOR could send `call:end`
+    // with `reason: 'rejected'` on their own outgoing call and have the
+    // server persist `CallStatus.rejected` — mislabeling a self-cancellation
+    // as "the callee declined" in both parties' call history/analytics.
+    // Only a reporter who is NOT the initiator (the callee, in a 2-party
+    // call) can make `rejected` stick; an initiator's `rejected` is treated
+    // like the unset/default reason below.
+    // NOTE: `participantId` here (and `call.initiatorId`) both live in the
+    // `CallParticipant.participantId` → `Participant.id` space, NOT
+    // `User.id` — `CallSession.initiatorId` is a `User.id` FK, a different
+    // collection entirely, so it cannot be compared to `participantId`
+    // directly. The initiator's OWN `CallParticipant` row (tagged at
+    // creation with `role: ParticipantRole.initiator`, see `initiateCall`
+    // above) is the only apples-to-apples identity to compare against.
+    const initiatorParticipant = call.participants.find(p => p.role === ParticipantRole.initiator);
+    const reporterIsInitiator = !!initiatorParticipant && participantId === initiatorParticipant.participantId;
+    const effectiveReason = reporterIsInitiator && resolvedReason === CallEndReason.rejected
+      ? CallEndReason.completed
       : resolvedReason;
+    const endReason = wasPreAnswered && effectiveReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : effectiveReason;
     // Un refus EXPLICITE (reason=rejected, envoyé par les boutons Refuser de
     // toutes les plateformes) garde son statut distinct : normalisé `missed`,
     // il déclenchait handleMissedCall — une notification « appel manqué »
@@ -2093,7 +2115,7 @@ export class CallService {
     // un statut `rejected` que rien n'écrivait jusqu'ici).
     const targetStatus = !wasPreAnswered
       ? CallStatus.ended
-      : resolvedReason === CallEndReason.rejected
+      : effectiveReason === CallEndReason.rejected
         ? CallStatus.rejected
         : CallStatus.missed;
 

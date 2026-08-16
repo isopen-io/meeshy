@@ -124,6 +124,47 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// `timedOutPerforming` was the only `CXProviderDelegate` method in
+    /// `CallKitDelegateProxy` unconditionally acting on `manager.endCall()` without
+    /// first checking `action.callUUID == manager.activeCallUUID` — every sibling
+    /// (`CXAnswerCallAction`/`CXEndCallAction`/`CXSetMutedCallAction`/
+    /// `CXSetHeldCallAction`/`CXPlayDTMFCallAction`) has this guard because
+    /// `reportIncomingVoIPCall`'s busy path reports a second, distinct
+    /// CXCallUpdate/UUID that `activeCallUUID` never tracks. Without the guard, a
+    /// CallKit timeout on that phantom UUID — or on any stale/foreign action —
+    /// hangs up whatever call IS genuinely active. The
+    /// `discardTimedOutAnswerAction` call must stay ungated (checked separately
+    /// below) so a genuinely pending answer action is still released.
+    func test_callKitDelegateProxy_timedOutPerforming_guardsEndCallOnActiveCallUUID() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {") else {
+            XCTFail("provider(_:timedOutPerforming:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        guard let discardRange = body.range(of: "manager.discardTimedOutAnswerAction(answerAction)") else {
+            XCTFail("discardTimedOutAnswerAction call site moved — update the marker"); return
+        }
+        let afterDiscard = String(body[discardRange.upperBound...])
+
+        XCTAssertTrue(
+            afterDiscard.contains("guard (action as? CXCallAction)?.callUUID == manager.activeCallUUID else"),
+            "timedOutPerforming must guard manager.endCall() on action.callUUID == " +
+            "manager.activeCallUUID, mirroring every other CXProviderDelegate method in " +
+            "this proxy — otherwise a CallKit timeout on a stale/phantom-UUID action " +
+            "(e.g. the busy-path second CXCallUpdate) hangs up the real active call."
+        )
+
+        guard let guardRange = afterDiscard.range(of: "guard (action as? CXCallAction)?.callUUID == manager.activeCallUUID else") else {
+            XCTFail("Identity guard not found after discardTimedOutAnswerAction"); return
+        }
+        XCTAssertTrue(
+            String(afterDiscard[guardRange.upperBound...]).contains("manager.endCall()"),
+            "manager.endCall() must be gated BEHIND the identity guard, not run unconditionally."
+        )
+    }
+
     // MARK: - Audio Interruption Reactivation vs. Hangup Race
 
     /// `handleAudioInterruption`'s `.ended` branch reactivates RTCAudioSession via
