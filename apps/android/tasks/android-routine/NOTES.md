@@ -560,3 +560,33 @@ Append-only log of gotchas and decisions that save time next run.
   before reaching for a rerun again — `git log -p` on the never-flaky siblings is a cheap, decisive
   check that turns "known flake, keep rerunning" into "known fix, already proven elsewhere in this
   exact codebase."**
+
+- **An orphan model is the cheapest slice-finding signal in this repo, and it is mechanical.**
+  (2026-08-16, `conversation-members-roster`.) The re-proof that killed the prior run's nominated
+  slice ("change email/phone has no UI" — false, `AccountContactViewModel` has shipped) left no
+  candidate, so instead of re-reading `feature-parity.md` notes yet again, the search became: *which
+  `:core:model` types are declared and referenced nowhere?* `PaginatedParticipant` +
+  `PaginatedParticipantsResponse` + `PaginatedParticipantsPagination` came back with zero non-self
+  hits — and each one was a wire contract ported ahead of a screen that never landed. The same probe
+  applied to `MessageSocketManager` (which of the 30 listened events has no collector?) surfaced the
+  same gap from a second angle: `participant:role-updated`, `conversation:participant-left` and
+  `conversation:participant-banned` were all being decoded and discarded. **Generalises: two greps —
+  "declared model with no reference" and "listened socket event with no consumer" — find real,
+  right-sized gaps without trusting a single line of prose in the tracking files, and they
+  cross-validate each other when they point at the same feature. Run both when the "Next slice"
+  pointer goes stale.** Notably this is the *inverse* of the categorical blind spot documented at
+  iteration 19 (whole categories that were never written down): here the category WAS written down,
+  and the code was half-written too — what was missing was anything that made the half-written state
+  visible.
+
+- **When a Retrofit route's envelope genuinely does not fit the shared `ApiResponse<T>`, adapt it in
+  the repository — do not widen the shared envelope.** (2026-08-16, same slice.)
+  `GET /conversations/:id/participants` answers with a root-level *cursor* `pagination`
+  (`nextCursor`/`hasMore`/`totalCount`); the shared `Pagination` is offset-shaped (`total`/`offset`/
+  `limit`) and has no `totalCount`. Adding `totalCount` to the shared type would have leaked one
+  route's shape into every other endpoint's model. The route is typed as its own
+  `PaginatedParticipantsResponse` instead and the repository re-wraps it into an `ApiResponse` inside
+  the `apiCall { }` block — which costs three lines and keeps the whole HttpException/IOException/
+  SerializationException ladder. The gateway's own source comment already records that normalising
+  this route server-side is a coordinated breaking change for iOS and web, so the deviation is
+  permanent and worth absorbing client-side rather than papering over.

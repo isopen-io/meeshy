@@ -1,5 +1,85 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Paginated conversation member list + role moderation shipped** (slice
+> `conversation-members-roster`) — advances two adjacent `feature-parity.md` §C lines at once
+> ("Paginated member list (infinite scroll + search)" → `[~]`, "Member moderation:
+> promote/demote, expel, ban, add member" → `[~]`), the Android port of iOS `ParticipantsView`.
+>
+> **RE-PROVED before starting, and the re-proof changed the plan.** The prior run's own "Next
+> slice candidates" list still nominated *"Change email / phone (two-step verification) — no UI
+> screen consumes it anywhere"*. That is **stale**: `AccountContactViewModel` +
+> `AccountContactViewModelTest` are live in `:feature:settings` and exercise `changeEmail` /
+> `verifyEmailChange` / `resendEmailChangeVerification` / `changePhone` / `verifyPhoneChange`
+> end-to-end. Yet another confirmation of the standing rule — a "Next slice" note is a
+> hypothesis, not a fact. Re-scanned §C instead and found the genuine gap below.
+>
+> **Three independent symptoms of one hole**, each verified against real code before writing
+> anything: (1) `PaginatedParticipant` / `PaginatedParticipantsResponse` /
+> `PaginatedParticipantsPagination` were modelled in `:core:model` with **zero references
+> anywhere** in the app; (2) `MessageSocketManager` listened to `participant:role-updated`,
+> `conversation:participant-left` and `conversation:participant-banned` — three flows with **no
+> consumer**; (3) a group member on Android simply could not see who else was in the
+> conversation. The wire contract had been ported ahead of the screen, and the screen never
+> landed.
+>
+> **Pure logic (`:core:model`)**: `MemberRoster` — an immutable cursor-page accumulator
+> (`withFirstPage`/`withNextPage`/`withoutUser`/`withRole`/`displayCount`). Two rules it encodes
+> that the **iOS reference leaves open**: it deduplicates ids repeated across pages (cursor
+> pagination over a roster mutating underneath legitimately repeats a row), and it normalises
+> `hasMore && nextCursor != null` — a server answering `hasMore: true, nextCursor: null` would
+> otherwise make the list re-request page one forever. `MemberModeration` — `canRemove` /
+> `roleActions`, a faithful port of `ParticipantsView.canRemoveParticipant` +
+> `contextMenuItems`, mirroring the gateway's own checks in `routes/conversations/
+> participants.ts` so no affordance is offered that would come back 403.
+> `PaginatedParticipant.displayLabel`/`.role`/`.matches` port iOS's `name` fallback chain and
+> identity matching.
+>
+> **Wire + repository**: `ConversationApi.participants` / `updateParticipantRole` /
+> `removeParticipant`. `participants` deliberately stays **off** the shared `ApiResponse<T>`
+> envelope — this route answers with a root-level *cursor* `pagination`
+> (`nextCursor`/`hasMore`/`totalCount`) that the offset-shaped shared `Pagination` cannot
+> express, and the gateway's own source comment records that changing it is a coordinated
+> breaking change for iOS and web. The repository adapts it onto `apiCall` so transport/HTTP/
+> parse failures fold into `NetworkResult.Failure` exactly like every other call. The role
+> travels as `MemberRole.wireValue`, never a hand-written string.
+>
+> **ViewModel + UI**: `ConversationMembersViewModel` (load, debounced search at 300 ms,
+> `loadMore`, optimistic role change, optimistic removal — both rolling back to the exact prior
+> roster on refusal, per ARCHITECTURE.md §5; iOS applies only after the server answers) +
+> `ConversationMembersSheet` reachable from a new **group-only** header action. Rebinding to a
+> different conversation cancels the previous one's collectors, so a stale socket event can
+> never mutate the new roster. Strings in all 4 locales (en/fr/es/pt).
+>
+> **+55 tests**: 14 `MemberRosterTest`, 14 `MemberModerationTest` (the full actor × target ×
+> isSelf matrix for both removal and role changes, plus a guard that no offered action targets a
+> role the gateway does not accept), 7 `PaginatedParticipantDisplayTest`, 11 new
+> `ConversationRepositoryTest`, 20 `ConversationMembersViewModelTest`. No coverage floor
+> lowered; the two `@Composable` files are UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Cleanup carried in the same diff**: the five near-identical `ConversationApi` test fakes
+> (~165 lines of copy-pasted stubs) now extend one `StubConversationApi` base answering "not
+> wired" for everything, so each fake overrides only the call it is about — the next interface
+> method costs one line instead of one per fake. Every stub a test actually exercises was
+> checked before defaulting it.
+>
+> **Verified**: local `./apps/android/meeshy.sh check` **could not run** — this container has no
+> Android SDK and the egress policy denies `dl.google.com` (403 on the `sdkmanager` bootstrap),
+> the case `ROUTINE.md §CI reality` documents. CI's **Android (assemble + unit tests)** check is
+> the compiler and the gate for PR #3083; not merged on anything less than green.
+>
+> **Next slice candidates (not attempted this run)**: **add member** (the natural follow-up —
+> needs a user-search surface of its own, iOS reference is `AddParticipantSheet`) and
+> **ban/unban** (`PATCH .../ban`/`.../unban` are live on the gateway and unwired on BOTH
+> platforms — iOS does not wire them in `ParticipantsView` either, so this is a genuine
+> both-platforms gap rather than an Android debt); conversation lock PIN-entry UI + hiding
+> locked conversations from the list (storage foundation + logout wipe already shipped);
+> per-conversation **reaction emoji** and **tags** (model fields exist, no UI on either
+> platform); on-device transcription for the Feed audio attachment (still the standing
+> candidate, needs its own foundation).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=conversation-members-roster`
+> — which trips the `android_streak >= 5` rule, so **the next run bascules to `IOS_DETTE`**.
+
 > On 2026-08-16 **Per-conversation custom name (rename) shipped** (slice
 > `conversation-custom-name`) — advances `feature-parity.md`'s "Per-conversation preferences: custom
 > name, reaction emoji, pin, category, tags, mute, mentions-only" line (still unchecked: reaction

@@ -2673,8 +2673,35 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       MessageActionMenu 5, ReportMessageForm 11, ChatViewModel 7, plus the updated basic-menu order);
       mutation-checked (dropping the `!isOutgoing` gate killed exactly the 3 outgoing-message tests).
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
-- [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
-- [ ] Member moderation: promote/demote, expel, ban, add member
+- [~] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list —
+      **member list shipped 2026-08-16** (slice `conversation-members-roster`, port of iOS
+      `ParticipantsView`): a group-only header action opens a members bottom sheet with cursor
+      pagination, server-side search (`?search=` filters `displayName` case-insensitively) and
+      role badges. Pure `MemberRoster` (`:core:model`) accumulates pages, **deduplicates ids
+      repeated across pages** (cursor pagination over a roster mutating underneath legitimately
+      repeats a row) and normalises `hasMore && nextCursor != null` — a server answering
+      `hasMore: true, nextCursor: null` would otherwise re-request page one forever; **both holes
+      are open in the iOS reference**. `PaginatedParticipant.displayLabel` ports iOS's
+      `name` fallback chain. Shared-media grid and pinned-messages list are already live
+      (`ConversationMediaGallery`, `PinnedMessagesSheet`) — box stays `[~]` only because this line
+      bundles three surfaces and all three should be re-verified together before checking it.
+- [~] Member moderation: promote/demote, expel, ban, add member — **promote/demote/expel shipped
+      2026-08-16** (slice `conversation-members-roster`) via a per-row overflow menu inside the
+      members sheet. Pure `MemberModeration` (`:core:model`) is the SSOT for which affordance a
+      viewer may see: `canRemove` (never self, never the creator, admin+ removes anyone,
+      moderator removes plain members only) and `roleActions` (creator moves anyone between
+      member/moderator/admin; a conversation admin does the same except on a peer admin;
+      moderators and members get nothing) — a faithful port of `ParticipantsView.
+      canRemoveParticipant` + `contextMenuItems`, mirroring the gateway's own checks in
+      `routes/conversations/participants.ts` so no control is offered that would come back 403.
+      Both actions are **optimistic with rollback** on refusal (iOS applies only after the server
+      answers). Real-time: `participant:role-updated` / `conversation:participant-left` /
+      `conversation:participant-banned` were listened for in `MessageSocketManager` but had **no
+      consumer** before this slice — the sheet is now that consumer, so a moderation action taken
+      on another device or by another moderator lands without a refetch. Still open: **add
+      member** (needs its own user-search surface, iOS has `AddParticipantSheet`) and **ban/unban**
+      (`PATCH .../ban`/`.../unban` exist on the gateway; iOS does not wire them in this view
+      either). Box stays unchecked until those two land.
 - [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
       settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
       earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**
