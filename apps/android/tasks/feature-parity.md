@@ -5185,7 +5185,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## N. Search
 - [ ] Global search (messages, conversations, users) with recent searches + query highlighting
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
-- [ ] User search (paginated)
+- [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
+      itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,
+      backing the "new conversation" picker) but was a dead-but-half-wired gap exactly like
+      `customName`/`reaction`/`tags` before their own slices: `UserRepository.searchUsers` already
+      accepted `limit`/`offset` parameters, and the gateway's `GET /users/search` already computed
+      `pagination.hasMore` (`offset + resultCount < total`), but the ViewModel only ever fetched
+      page one and never exposed a "load more" trigger — the shared `pagedApiCall` helper
+      (`PagedResult<T>` — preserves the envelope's `pagination` block that plain `apiCall` discards)
+      already existed for exactly this purpose but had zero callers. Added
+      `UserRepository.searchUsersPaged` (a new, additive method — NOT a signature change to
+      `searchUsers`, which three other call sites depend on: `SuggestionsRepository`,
+      `MentionSearch`, `DiscoverViewModel`, none of which need pagination). `NewConversationViewModel
+      .loadMoreIfNeeded(userId)` mirrors `CallHistoryViewModel.loadMoreIfNeeded`'s exact shape
+      (idempotent threshold guard called per-row during composition, `LOAD_MORE_THRESHOLD = 5`) —
+      an established in-repo pattern, not a new one. +7 tests
+      (`UserRepositoryTest` ×2, `NewConversationViewModelTest` ×5 incl. append/no-op-far-from-end/
+      no-op-no-more-data).
 
 ## O. Links
 - [ ] Links hub (share / tracking / community / affiliate) with quick-create
