@@ -421,6 +421,69 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `setCustomNameOptimistic sets the cached custom name and queues a snapshot carrying it`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setCustomNameOptimistic("c1", "  Work squad  ")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.customName).isEqualTo("Work squad")
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.customName).isEqualTo("Work squad")
+    }
+
+    @Test
+    fun `setCustomNameOptimistic is a no-op when the trimmed name is unchanged`() = runTest {
+        val named = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(customName = "Work squad"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(named))))
+        repo.refresh()
+
+        val applied = repo.setCustomNameOptimistic("c1", "Work squad")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
+    fun `setCustomNameOptimistic clearing to blank sends an explicit empty string, not a dropped null`() = runTest {
+        val named = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(customName = "Work squad"),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(named))))
+        repo.refresh()
+
+        val applied = repo.setCustomNameOptimistic("c1", "   ")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.customName).isEmpty()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        // Must be a real "" in the JSON, not a Kotlin null the shared explicitNulls=false
+        // encoder would silently drop — that would leave the server-side name untouched.
+        assertThat(payload.customName).isEqualTo("")
+        assertThat(row.payload).contains("\"customName\":\"\"")
+    }
+
+    @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "down")))
 

@@ -337,6 +337,11 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
     }
 
+    /** Renames a conversation (context-menu "Rename", parity iOS `setCustomName`). */
+    fun setCustomName(id: String, name: String) {
+        runPrefMutation { repository.setCustomNameOptimistic(id, name) }
+    }
+
     /**
      * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
      * No optimistic local removal: the socket-driven purge path
