@@ -657,3 +657,47 @@ héritée ne tenait pas, le tableau des trois sites (opt-in / recopié / servi),
 piège qui survit au correctif, les trois options écartées, et la piste du
 cycle 44 : établir si `showReadReceipts` gouverne les `received` avant de
 retourner le gate d'écriture des deux émetteurs socket.
+
+# Cycle 45 — la question ouverte depuis le cycle 43 avait sa réponse écrite dans le dépôt
+
+## Constat
+
+- [x] Question héritée TRANCHÉE : `showReadReceipts` gouverne la DIVULGATION,
+      pas l'enregistrement — la règle est écrite deux fois dans le dépôt
+      (doc de `broadcastReadStatus`, doc de `POST …/delivery-receipt`)
+- [x] Défaut livré : les deux émetteurs SOCKET gataient l'ÉCRITURE
+      (`autoDeliverToOnlineRecipients` filtrait avant `markMessagesAsReceived`,
+      `_emitDeliveryForDrainedMessages` sortait sur la préférence), là où les
+      trois portes REST enregistrent toujours et ne taisent que la diffusion
+- [x] L'ÉTAT dépendait donc du transport, sur le chemin NOMINAL (auto-livraison)
+- [x] Le gate d'écriture ne protégeait rien : `_loadReadReceiptOptOuts` retire
+      l'opt-out des CINQ lecteurs de statut quoi qu'il y ait en base
+- [x] Coût réel : `showReadReceipts` est RÉVERSIBLE — à la réactivation
+      l'arriéré ressort « jamais livré » et les coches de l'expéditeur
+      régressent de ✓✓ à ✓ sur tout l'historique
+
+## Correctifs
+
+- [x] Gate déplacé de l'écriture vers la diffusion, aux deux sites
+- [x] `firstAcker` choisi parmi les destinataires marqués QUI PARTAGENT leurs
+      accusés — le déplacement naïf aurait nommé un opt-out dans le payload
+- [x] Doc des deux méthodes + `socketio/README.md` (qui déclarait l'écart
+      « connu et non tranché ») alignés
+
+## Gates
+
+- [x] 3 RED discriminants vus rouges avant correctif
+- [x] 2 gardes de non-régression vertes d'emblée (aucune diffusion quand tous
+      les destinataires en ligne ont coupé, ni au drain d'un lecteur opt-out)
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte
+- [x] CHANGELOG + journal d'audit (cycle45) + leçon 282
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle45.md` — les deux citations qui
+tranchent la question, le tableau des cinq portes, pourquoi un gate d'écriture
+qui double un gate de lecture ne fait que détruire, le piège de l'acteur nommé,
+les deux options écartées, et la piste du cycle 46 : `_loadReadReceiptOptOuts`
+ignore les participants sans `userId` — établir si une session anonyme peut
+atteindre `PATCH /me/preferences/privacy` avant de conclure.

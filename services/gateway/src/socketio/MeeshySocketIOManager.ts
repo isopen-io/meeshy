@@ -608,7 +608,10 @@ export class MeeshySocketIOManager {
    * messages as "received" on their behalf and broadcast `read-status:updated`
    * to the conversation rooms so senders see the delivery checkmark advance.
    *
-   * Respects the reader's `showReadReceipts` privacy preference.
+   * Respects the reader's `showReadReceipts` privacy preference — on the
+   * BROADCAST only. The delivery cursor is advanced either way, exactly as the
+   * REST doors do (`mark-as-received`, `delivery-receipt`) and as
+   * `broadcastReadStatus` documents.
    * Batches the participant lookup across all affected conversations in a
    * single Prisma query to minimise round-trips on the reconnect path.
    *
@@ -650,7 +653,15 @@ export class MeeshySocketIOManager {
     const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
       { id: readerKey, isAnonymous },
     ]);
-    if (!prefMap.get(readerKey)?.showReadReceipts) return;
+    // La préférence tait la DIFFUSION, elle n'annule pas l'ENREGISTREMENT — même
+    // contrat que les trois portes REST et que `broadcastReadStatus`, dont la
+    // doc porte la règle. Sortir ici, comme ce chemin le faisait, faisait
+    // dépendre l'ÉTAT du transport : la livraison du même message laissait une
+    // trace par REST et aucune par le drain de reconnexion. `showReadReceipts`
+    // étant RÉVERSIBLE et le gate réel étant à la lecture
+    // (`_loadReadReceiptOptOuts`), l'arriéré ressortait « jamais livré » dès la
+    // réactivation, faisant régresser les coches de l'expéditeur.
+    const mayBroadcastReceipt = prefMap.get(readerKey)?.showReadReceipts === true;
 
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
@@ -698,6 +709,7 @@ export class MeeshySocketIOManager {
         if (!latestMessageId) return;
 
         await this.readStatusService.markMessagesAsReceived(own.id, conversationId, latestMessageId);
+        if (!mayBroadcastReceipt) return;
 
         const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
         const drainPayload = {
