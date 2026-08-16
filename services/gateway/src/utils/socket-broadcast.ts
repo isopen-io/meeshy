@@ -15,9 +15,22 @@ interface SocketIOLike {
 }
 
 /**
- * Resolve the Socket.IO server from the Fastify instance, accepting
- * both the `socketIOHandler.getManager().io` shape (production wiring)
- * and the `socketIOHandler.io` shape (compatibility / older tests).
+ * Resolve the Socket.IO server from the Fastify instance.
+ *
+ * Three shapes are accepted, in this order:
+ *  1. `socketIOHandler.getManager().getIO()` — the manager's PUBLIC accessor,
+ *     and the only one production wiring actually declares;
+ *  2. `socketIOHandler.getManager().io` — the same object read straight off
+ *     the manager's PRIVATE field;
+ *  3. `socketIOHandler.io` — flat handler shape used by some doubles.
+ *
+ * The public accessor comes first on purpose. `MeeshySocketIOManager.io` is
+ * declared `private`, and only the erasure of TypeScript modifiers at runtime
+ * ever made shape 2 resolve. Renaming that private field — an internal move
+ * with no TypeScript caller to break — would have silently degraded every
+ * caller of `broadcastToUser` into a `warn` + no-op, taking the real-time
+ * pin/mute/archive sync (`conversationPreferencesSync`) down with it. Shape 2
+ * is kept as a fallback for the doubles that model the manager that way.
  *
  * Exposed for unit-testing the resolution path; route code should call
  * `broadcastToUser` instead.
@@ -28,6 +41,11 @@ export function resolveSocketIO(fastify: FastifyInstance): SocketIOLike | null {
 
   const managerGetter = (handler as { getManager?: () => unknown }).getManager;
   const manager = typeof managerGetter === 'function' ? managerGetter.call(handler) : undefined;
+
+  const ioGetter = (manager as { getIO?: () => SocketIOLike | null } | undefined)?.getIO;
+  const ioFromAccessor = typeof ioGetter === 'function' ? ioGetter.call(manager) : undefined;
+  if (ioFromAccessor) return ioFromAccessor;
+
   const ioFromManager = (manager as { io?: SocketIOLike } | undefined)?.io;
   if (ioFromManager) return ioFromManager;
 

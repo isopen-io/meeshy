@@ -68,6 +68,8 @@ function makePrisma(opts: {
   updateError?: Error | null;
   findUniqueError?: Error | null;
   upsertError?: Error | null;
+  /** Nombre de lignes touchées par la remise à zéro : 0 = compte sans ligne. */
+  updateManyCount?: number;
 } = {}) {
   const {
     findUniqueResult = { notification: STORED_PREFS, id: 'pref-1' },
@@ -75,6 +77,7 @@ function makePrisma(opts: {
     updateError = null,
     findUniqueError = null,
     upsertError = null,
+    updateManyCount = 1,
   } = opts;
 
   return {
@@ -85,9 +88,12 @@ function makePrisma(opts: {
       upsert: upsertError
         ? jest.fn<any>().mockRejectedValue(upsertError)
         : jest.fn<any>().mockResolvedValue(upsertResult),
-      update: updateError
+      update: jest.fn<any>().mockResolvedValue(undefined),
+      // La remise à zéro passe par `updateMany` (cycle 48) : `updateError`
+      // pilote donc ce verbe-là, celui que le DELETE appelle réellement.
+      updateMany: updateError
         ? jest.fn<any>().mockRejectedValue(updateError)
-        : jest.fn<any>().mockResolvedValue(undefined),
+        : jest.fn<any>().mockResolvedValue({ count: updateManyCount }),
     },
   };
 }
