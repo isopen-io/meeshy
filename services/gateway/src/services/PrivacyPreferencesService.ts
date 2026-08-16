@@ -5,20 +5,28 @@
  * pour vérifier si on doit broadcaster certains événements (typing, online status, read receipts).
  *
  * Fonctionnalités:
- * - Cache en mémoire avec TTL pour éviter les requêtes répétées
+ * - Lecture mémoïsée via le cache PARTAGÉ `services/preferences/privacy-cache`
  * - Support des valeurs par défaut si aucune préférence stockée
  * - Méthodes d'accès rapide pour chaque type de préférence
- * - Nettoyage automatique du cache
  *
- * @version 1.0.0
+ * La mémoire ne vit PAS dans l'instance. Ce service est construit cinq fois dans
+ * le processus — gestionnaire Socket.IO, singleton de présence, et un par plugin
+ * de routes — et chaque instance portait autrefois sa propre `Map` : cinq copies
+ * de la même donnée qu'aucune écriture ne pouvait atteindre toutes à la fois.
+ * Voir l'en-tête de `preferences/privacy-cache.ts`.
+ *
+ * @version 2.0.0
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PRIVACY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import {
-  loadStoredPrivacyPreferences,
-  type StoredPrivacyPreferences,
-} from './preferences/privacy-storage';
+  clearPrivacyPreferencesCache,
+  invalidatePrivacyPreferences,
+  loadPrivacyPreferencesCached,
+  privacyPreferencesCacheSize,
+} from './preferences/privacy-cache';
+import type { StoredPrivacyPreferences } from './preferences/privacy-storage';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'PrivacyPreferencesService' });
@@ -34,64 +42,15 @@ export interface PrivacyPreferences {
   allowAnalytics: boolean;
 }
 
-interface CacheEntry {
-  preferences: PrivacyPreferences;
-  fetchedAt: number;
-}
-
 export class PrivacyPreferencesService {
-  // Cache en mémoire: userId → préférences + timestamp
-  private cache = new Map<string, CacheEntry>();
-
-  // TTL du cache: 5 minutes (les préférences changent rarement)
-  private readonly CACHE_TTL_MS = 5 * 60 * 1000;
-
-  // Nettoyage du cache: toutes les 10 minutes
-  private readonly CACHE_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
-  private cleanupInterval: NodeJS.Timeout | null = null;
-
-  constructor(private prisma: PrismaClient) {
-    this.startCacheCleanup();
-  }
+  constructor(private prisma: PrismaClient) {}
 
   /**
-   * Démarre le nettoyage périodique du cache
-   */
-  private startCacheCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupCache();
-    }, this.CACHE_CLEANUP_INTERVAL_MS);
-    this.cleanupInterval.unref?.();
-  }
-
-  /**
-   * Nettoie les entrées expirées du cache
-   */
-  private cleanupCache(): void {
-    const now = Date.now();
-    let cleaned = 0;
-
-    for (const [userId, entry] of this.cache.entries()) {
-      if (now - entry.fetchedAt > this.CACHE_TTL_MS) {
-        this.cache.delete(userId);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      logger.debug('privacy preferences cache cleanup', { removed: cleaned, remaining: this.cache.size });
-    }
-  }
-
-  /**
-   * Arrête le service et nettoie les ressources
+   * Vide le cache partagé. Aucun appelant en production — conservé pour
+   * l'isolation des tests et la symétrie de l'API.
    */
   public shutdown(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.cache.clear();
+    this.clearCache();
   }
 
   /**
@@ -105,30 +64,8 @@ export class PrivacyPreferencesService {
       return this.getDefaultPreferences();
     }
 
-    // Vérifier le cache
-    const cached = this.cache.get(userId);
-    if (cached && (Date.now() - cached.fetchedAt) < this.CACHE_TTL_MS) {
-      return cached.preferences;
-    }
-
-    // Récupérer depuis la base de données
-    const preferences = await this.fetchFromDatabase(userId);
-
-    // Mettre en cache
-    this.cache.set(userId, {
-      preferences,
-      fetchedAt: Date.now()
-    });
-
-    return preferences;
-  }
-
-  /**
-   * Récupère les préférences depuis la base de données
-   */
-  private async fetchFromDatabase(userId: string): Promise<PrivacyPreferences> {
     try {
-      const stored = await loadStoredPrivacyPreferences(this.prisma, [userId]);
+      const stored = await loadPrivacyPreferencesCached(this.prisma, [userId]);
       return this.buildPreferences(stored.get(userId));
     } catch (error) {
       logger.error('privacy preferences fetch from database failed', { userId, error });
@@ -150,23 +87,6 @@ export class PrivacyPreferencesService {
   }
 
   /**
-   * Lit les préférences de plusieurs utilisateurs en UNE requête, puis répartit
-   * les lignes par utilisateur. Ne rattrape pas les erreurs : l'appelant décide
-   * du repli, et surtout ne met pas un échec en cache.
-   */
-  private async fetchManyFromDatabase(
-    userIds: string[]
-  ): Promise<Map<string, PrivacyPreferences>> {
-    const storedByUser = await loadStoredPrivacyPreferences(this.prisma, userIds);
-
-    const result = new Map<string, PrivacyPreferences>();
-    for (const userId of userIds) {
-      result.set(userId, this.buildPreferences(storedByUser.get(userId)));
-    }
-    return result;
-  }
-
-  /**
    * Retourne les préférences par défaut
    */
   getDefaultPreferences(): PrivacyPreferences {
@@ -184,16 +104,19 @@ export class PrivacyPreferencesService {
 
   /**
    * Invalide le cache pour un utilisateur (à appeler après mise à jour des préférences)
+   *
+   * Délègue au point d'entrée du module : les portes d'écriture l'appellent
+   * directement, sans avoir à tenir la référence d'une instance.
    */
   invalidateCache(userId: string): void {
-    this.cache.delete(userId);
+    invalidatePrivacyPreferences(userId);
   }
 
   /**
    * Vide tout le cache
    */
   clearCache(): void {
-    this.cache.clear();
+    clearPrivacyPreferencesCache();
   }
 
   // ========== MÉTHODES D'ACCÈS RAPIDE ==========
@@ -238,43 +161,32 @@ export class PrivacyPreferencesService {
     userIds: Array<{ id: string; isAnonymous: boolean }>
   ): Promise<Map<string, PrivacyPreferences>> {
     const result = new Map<string, PrivacyPreferences>();
-    const misses: string[] = [];
+    const registered: string[] = [];
 
-    // Anonymes et entrées encore chaudes sont servis sans toucher la base ;
-    // seuls les manquants partent en requête, et en UNE seule.
+    // Les anonymes sont servis par les défauts sans toucher la base : leur `id`
+    // est un `Participant.id`, pas un `User.id` — l'envoyer au résolveur ferait
+    // payer une requête pour rien et mémoïserait un vide sous une clé qui n'est
+    // pas un utilisateur.
     for (const { id, isAnonymous } of userIds) {
-      if (isAnonymous) {
-        result.set(id, this.getDefaultPreferences());
-        continue;
-      }
-
-      const cached = this.cache.get(id);
-      if (cached && (Date.now() - cached.fetchedAt) < this.CACHE_TTL_MS) {
-        result.set(id, cached.preferences);
-        continue;
-      }
-
-      misses.push(id);
+      if (isAnonymous) result.set(id, this.getDefaultPreferences());
+      else registered.push(id);
     }
 
-    if (misses.length === 0) return result;
+    if (registered.length === 0) return result;
 
-    let fetched: Map<string, PrivacyPreferences>;
+    let stored: Map<string, StoredPrivacyPreferences>;
     try {
-      fetched = await this.fetchManyFromDatabase(misses);
+      stored = await loadPrivacyPreferencesCached(this.prisma, registered);
     } catch (error) {
-      logger.error('privacy preferences batch fetch failed', { count: misses.length, error });
+      logger.error('privacy preferences batch fetch failed', { count: registered.length, error });
       // Repli sur les défauts SANS mise en cache : mémoriser un échec le
       // figerait pour toute la durée du TTL.
-      for (const id of misses) result.set(id, this.getDefaultPreferences());
+      for (const id of registered) result.set(id, this.getDefaultPreferences());
       return result;
     }
 
-    const fetchedAt = Date.now();
-    for (const id of misses) {
-      const preferences = fetched.get(id) ?? this.getDefaultPreferences();
-      this.cache.set(id, { preferences, fetchedAt });
-      result.set(id, preferences);
+    for (const id of registered) {
+      result.set(id, this.buildPreferences(stored.get(id)));
     }
 
     return result;
@@ -285,7 +197,7 @@ export class PrivacyPreferencesService {
    */
   getMetrics(): { cacheSize: number; cacheHitRate: string } {
     return {
-      cacheSize: this.cache.size,
+      cacheSize: privacyPreferencesCacheSize(),
       cacheHitRate: 'N/A' // Pourrait être implémenté avec des compteurs
     };
   }

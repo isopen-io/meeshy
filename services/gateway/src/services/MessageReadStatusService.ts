@@ -18,8 +18,7 @@ import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
-import { loadStoredPrivacyPreferences } from './preferences/privacy-storage';
-import { BoundedTtlCache } from '../utils/bounded-cache';
+import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
   NO_PERSONAL_HIDING,
   applyPersonalHistoryHiding,
@@ -50,28 +49,6 @@ const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
  * curseur rattrapera au passage suivant.
  */
 const EXACT_CURSOR_SCAN_LIMIT = 500;
-
-/**
- * Mémoïsation de la préférence « accusés de lecture » par utilisateur.
- *
- * `getLatestMessageSummary` est appelée à CHAQUE accusé de lecture, depuis cinq
- * sites dont des handlers socket : sans cache, le filtre d'exclusion y ajouterait
- * une requête payée en permanence. Partagée au niveau module parce que le service
- * est construit par requête — une instance par appel n'aurait rien mémoïsé.
- *
- * `BoundedTtlCache` plutôt qu'une Map : elle borne la mémoire et expire seule,
- * sans le `setInterval` de `PrivacyPreferencesService` qui, capturant `this`,
- * empêcherait la collecte de chaque instance.
- *
- * TTL de 5 min, aligné sur `PrivacyPreferencesService`. Conséquence assumée :
- * désactiver ses accusés met jusqu'à 5 min à masquer l'utilisateur des vues déjà
- * chaudes — la préférence n'a pas à être instantanée, et l'écriture continue
- * d'être enregistrée pendant ce temps.
- */
-const READ_RECEIPT_OPT_OUT_CACHE = new BoundedTtlCache<string, boolean>({
-  maxSize: 5000,
-  ttlMs: 5 * 60 * 1000,
-});
 
 
 // Helper pour retry des transactions en cas de deadlock (P2034)
@@ -174,12 +151,6 @@ export class MessageReadStatusService {
    */
   private static recentActionCache = new Map<string, number>();
 
-  /**
-   * Exposée en statique pour suivre la convention de `recentActionCache` : les
-   * tests la vident dans leur `beforeEach` pour rester isolés d'un cache dont la
-   * portée est le processus.
-   */
-  private static readReceiptOptOutCache = READ_RECEIPT_OPT_OUT_CACHE;
   private static readonly DEDUP_TTL_MS = 2000;
   private static readonly dedupCleanupInterval = (() => {
     const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
@@ -1207,35 +1178,22 @@ export class MessageReadStatusService {
     if (participantsByUserId.size === 0) return new Set();
 
     const excluded = new Set<string>();
-    const unresolved: string[] = [];
-
-    const exclude = (userId: string) => {
-      for (const participantId of participantsByUserId.get(userId) ?? []) {
-        excluded.add(participantId);
-      }
-    };
-
-    for (const userId of participantsByUserId.keys()) {
-      const cached = MessageReadStatusService.readReceiptOptOutCache.get(userId);
-      if (cached === undefined) unresolved.push(userId);
-      else if (cached) exclude(userId);
-    }
-
-    if (unresolved.length === 0) return excluded;
 
     try {
-      // Même résolveur que `PrivacyPreferencesService` : la règle « où la
-      // préférence est-elle rangée ? » n'a qu'un seul endroit. La lire ici en
-      // propre l'avait déjà fait diverger une fois (cf. `decisions.md`
-      // § 2026-08-13) — et une seconde fois en silence, en n'interrogeant que
-      // les lignes clé/valeur héritées que l'application n'écrit plus
-      // (`decisions.md` § 2026-08-16).
-      const stored = await loadStoredPrivacyPreferences(this.prisma, unresolved);
+      // Même résolveur ET même cache que les cinq autres portes de diffusion :
+      // la règle « où la préférence est-elle rangée ? » n'a qu'un seul endroit,
+      // et sa mémoire aussi. La lire ici en propre l'avait déjà fait diverger
+      // une fois (cf. `decisions.md` § 2026-08-13), puis une seconde fois en
+      // silence en n'interrogeant que les lignes clé/valeur héritées que
+      // l'application n'écrit plus (§ 2026-08-16) ; la mémoïser ici en propre
+      // rendait cette porte SOURDE aux purges d'écriture (§ 2026-08-16 bis).
+      const stored = await loadPrivacyPreferencesCached(this.prisma, [
+        ...participantsByUserId.keys(),
+      ]);
 
-      for (const userId of unresolved) {
-        const isOptOut = stored.get(userId)?.showReadReceipts === false;
-        MessageReadStatusService.readReceiptOptOutCache.set(userId, isOptOut);
-        if (isOptOut) exclude(userId);
+      for (const [userId, participantIds] of participantsByUserId) {
+        if (stored.get(userId)?.showReadReceipts !== false) continue;
+        for (const participantId of participantIds) excluded.add(participantId);
       }
       return excluded;
     } catch (error) {

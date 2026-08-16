@@ -32,6 +32,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import {
   setSharedNotificationService,
   getSharedNotificationService,
@@ -82,7 +83,7 @@ describe('MessageReadStatusService — cascade notifications indépendante du cu
   beforeEach(() => {
     jest.clearAllMocks();
     (MessageReadStatusService as any).recentActionCache.clear();
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
 
     service = new MessageReadStatusService(mockPrisma);
 

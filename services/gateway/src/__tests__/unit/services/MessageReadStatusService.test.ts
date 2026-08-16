@@ -13,6 +13,7 @@
  */
 
 import { MessageReadStatusService, buildCursorFreshnessGuard } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // Mock the NotificationService import (used dynamically in markMessagesAsRead)
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -107,7 +108,7 @@ describe('MessageReadStatusService', () => {
     (MessageReadStatusService as any).recentActionCache.clear();
     // Idem pour le cache d'opt-out « accusés de lecture » : sa portée est le
     // processus, une entrée laissée par un test fausserait le suivant.
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
 
     // `clearAllMocks` efface les APPELS, pas les implémentations : un
     // `mockRejectedValue` posé par un test survit à tous les suivants. Sans
