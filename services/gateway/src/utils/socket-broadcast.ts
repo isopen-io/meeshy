@@ -39,20 +39,29 @@ export function resolveSocketIO(fastify: FastifyInstance): SocketIOLike | null {
   const handler = (fastify as unknown as { socketIOHandler?: unknown }).socketIOHandler;
   if (!handler) return null;
 
-  const managerGetter = (handler as { getManager?: () => unknown }).getManager;
-  const manager = typeof managerGetter === 'function' ? managerGetter.call(handler) : undefined;
+  // La résolution est appelée AVANT le `try` de `broadcastToUser` : une
+  // exception ici remonterait jusqu'au gestionnaire de route et ferait échouer
+  // une écriture REST à cause d'un canal latéral — exactement ce que la
+  // promesse de no-op de ce module exclut. Elle traverse deux appels
+  // (`getManager()`, `getIO()`) dont on ne contrôle pas les implémentations.
+  try {
+    const managerGetter = (handler as { getManager?: () => unknown }).getManager;
+    const manager = typeof managerGetter === 'function' ? managerGetter.call(handler) : undefined;
 
-  const ioGetter = (manager as { getIO?: () => SocketIOLike | null } | undefined)?.getIO;
-  const ioFromAccessor = typeof ioGetter === 'function' ? ioGetter.call(manager) : undefined;
-  if (ioFromAccessor) return ioFromAccessor;
+    const ioGetter = (manager as { getIO?: () => SocketIOLike | null } | undefined)?.getIO;
+    const ioFromAccessor = typeof ioGetter === 'function' ? ioGetter.call(manager) : undefined;
+    if (ioFromAccessor) return ioFromAccessor;
 
-  const ioFromManager = (manager as { io?: SocketIOLike } | undefined)?.io;
-  if (ioFromManager) return ioFromManager;
+    const ioFromManager = (manager as { io?: SocketIOLike } | undefined)?.io;
+    if (ioFromManager) return ioFromManager;
 
-  const ioFromHandler = (handler as { io?: SocketIOLike }).io;
-  if (ioFromHandler) return ioFromHandler;
+    const ioFromHandler = (handler as { io?: SocketIOLike }).io;
+    if (ioFromHandler) return ioFromHandler;
 
-  return null;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**

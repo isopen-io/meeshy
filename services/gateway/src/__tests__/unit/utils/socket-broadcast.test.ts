@@ -117,6 +117,37 @@ describe('resolveSocketIO', () => {
 
     expect(resolveSocketIO(makeFastify(handler))).toBeNull();
   });
+
+  // La résolution s'exécute AVANT le `try` de `broadcastToUser` : ce qu'elle
+  // laisserait échapper ferait échouer une écriture REST à cause d'un canal
+  // latéral, ce que la promesse de no-op de ce module exclut.
+  it('degrades to null when getManager throws', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockImplementation(() => { throw new Error('not bootstrapped'); }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBeNull();
+  });
+
+  it('degrades to null when getIO throws', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({
+        getIO: () => { throw new Error('adapter gone'); },
+      }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBeNull();
+  });
+
+  it('broadcastToUser reports failure instead of throwing when resolution blows up', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockImplementation(() => { throw new Error('not bootstrapped'); }),
+    };
+    const fastify = makeFastify(handler);
+
+    expect(broadcastToUser(fastify, 'user-7', 'user:preferences-updated', {})).toBe(false);
+    expect(fastify.log.warn).toHaveBeenCalled();
+  });
 });
 
 // ─── broadcastToUser ─────────────────────────────────────────────────────────
