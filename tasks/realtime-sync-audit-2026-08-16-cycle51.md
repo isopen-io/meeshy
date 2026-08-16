@@ -152,6 +152,30 @@ cycles 46 bis à 51 paient à répétition — *une règle vérifiée sur un sit
 pas une règle vérifiée* — et c'est pourquoi la piste n°1 du cycle 52 vise le
 mapping d'événements plutôt que la fusion elle-même.
 
+## 6 bis. Les autres surfaces — vérifiées, indemnes, et pas pour la même raison
+
+**Web : indemne, parce qu'il n'a jamais eu la divergence à fermer.**
+`normalizeConversationPatch` recopie `title` tel quel, et
+`TransformersService` le recopie AUSSI tel quel depuis le REST
+(`title: conv.title as string`) — sans jamais le dériver du participant d'en
+face. Les vues rendent `conversation.title` directement. Le titre d'un DM y est
+donc celui de la base **sur les deux transports**, ce qui est cohérent : il n'y
+a pas de règle client à contredire. Le défaut iOS naît précisément de ce que le
+REST y écarte délibérément le titre, et que le socket ne le savait qu'à moitié.
+*(Que le web AFFICHE un titre de DM plutôt que le nom du contact est une
+question de produit, pas de synchronisation — hors périmètre de ce cycle, et
+noté ici pour qu'un futur alignement des surfaces ne le prenne pas pour une
+régression.)*
+
+**Android : indemne pour la raison déjà établie au cycle 49.** Son
+`conversation:updated` déclenche un `refreshSilently()` REST — il ne peut pas
+mal lire un payload qu'il ne lit pas, au prix d'un aller-retour par événement.
+
+**Gateway : rien à corriger.** Le serveur dit la vérité — le titre EST celui du
+document. C'est le client iOS qui a sa propre règle d'affichage, et c'est à lui
+de l'appliquer partout où il fusionne. Refermer la route est une piste distincte
+(§8, n°3).
+
 ## 7. Écarté délibérément
 
 **Faire appeler `ConversationStore.merging` par l'écran** — la piste telle que
