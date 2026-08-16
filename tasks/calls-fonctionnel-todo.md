@@ -8844,3 +8844,85 @@ jusqu'à l'affichage — pas seulement le booléen agrégé.
   toolchain) ; W6/W7 grille adaptative + i18n groupe restant ; détection de capture d'écran côté
   navigateur web (aucun émetteur `call:screen-capture-detected`, feature neuve) ; erreurs de build
   Focal/Lentille (hors périmètre calling).
+
+## Vague 132 — les alertes distantes portaient le MAUVAIS espace d'identité, jamais un `User.id` (gateway + web) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), suite directe
+de la Vague 131. Base explicite sur `origin/main` (`de027d9d1`, branche déjà à parité bit à bit,
+Vague 131 mergée). Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox. Audit dédié
+(subagent, périmètre gateway/web — la seule surface vérifiable ici) mandaté avec la liste explicite
+des correctifs déjà livrés (Vagues 126-131) et des chantiers ouverts pour ne rien redécouvrir.
+
+- **Root cause** : le correctif de la Vague 131 (exposer l'identité du pair rapporté par une alerte
+  pour résoudre son NOM) reposait sur `event.participantId` — mais cette valeur est
+  `CallParticipant.participantId`, la FK vers `Participant.id` (`resolveActiveCallParticipantId`,
+  `CallEventsHandler.ts:1208` avant correctif), **jamais** un `User.id`. Côté client, le roster d'un
+  appel (`currentCall.participants[i]`) n'a JAMAIS de champ `.participantId` peuplé (confirmé en lisant
+  `toCallParticipantResponse` — `call-session-response.ts:67-94` — qui aplatit un `CallParticipantResponse`
+  sans ce champ) ; son `.userId` porte un vrai `User.id` pour un participant enregistré, et ne retombe
+  sur `Participant.id` que pour un invité anonyme. `resolveParticipantName` (`VideoCallInterface.tsx`,
+  ajouté Vague 131) cherchait `(p.userId || p.participantId) === participantId` — comparaison entre
+  DEUX espaces d'identité disjoints pour tout participant enregistré. Résultat : nom introuvable
+  (chaîne vide) pour la quasi-totalité des appels réels ; seul un invité anonyme (dont le `userId`
+  côté roster retombe déjà sur son `Participant.id`) matchait par coïncidence. La suite de tests de la
+  Vague 131 elle-même masquait le défaut en fabriquant un id d'alerte identique au `userId` du
+  fixture roster — coïncidence qui ne se produit jamais avec de vrais ObjectId Mongo en production.
+- **Scénario de défaillance** : appel 1:1 OU de groupe entre utilisateurs enregistrés — le pair B se
+  dégrade (`call:quality-alert`) : `CallQualityOverlay` affiche `"'s connection is unstable"` (nom
+  vide, apostrophe orpheline) au lieu de `"Bob's connection is unstable"`, en anglais comme en
+  français (`"La connexion de  est instable"`, double espace) — visible ET dans l'`aria-label`. Idem
+  pour la pastille privacy de capture d'écran. Le correctif de la Vague 131 (labelliser le BON pair)
+  ne se voyait donc jamais dans la pratique — seul son SQUELETTE (agrégation par pair, Vague 129)
+  fonctionnait ; la couche nom, ajoutée par-dessus, était cassée dès sa livraison.
+- **Bug adjacent trouvé en creusant le même Set** : le nettoyage `call:participant-left` de la Vague 129
+  (`capturingParticipants.delete(event.participantId)`) comparait déjà, lui, contre un TROISIÈME espace
+  d'identité — `CallParticipant.id` (la ligne d'appel elle-même, pas la FK) sur 2 des 3 émetteurs
+  socket, et sur le 3ᵉ (expiration de la fenêtre de grâce déconnexion, `broadcastParticipantLeftResult`)
+  aucun `userId` n'était même envoyé. Le nettoyage anti-fuite de la Vague 129 ne pouvait donc déjà
+  jamais matcher pour un participant enregistré — corrigé dans le même changement puisqu'il touche le
+  même Set et le même principe (accorder tous les émetteurs sur un seul espace d'identité).
+- **Fix** :
+  - Gateway — `resolveActiveCallParticipantId` refactorée en `resolveActiveCallParticipant` (renvoie
+    `{ participantId, userId }`, `userId = participant.userId ?? participantId`, dérivation identique à
+    `toCallParticipantResponse`) ; `resolveActiveCallParticipantId` devient un wrapper fin conservant
+    les 16 sites d'appel existants inchangés. Les deux émetteurs d'alerte (`QUALITY_ALERT`,
+    `SCREEN_CAPTURE_ALERT`) ajoutent le champ `userId` au payload. Le seul émetteur `PARTICIPANT_LEFT`
+    sans `userId` (`broadcastParticipantLeftResult`, expiration grâce déconnexion) le renseigne — la
+    valeur était déjà en scope (`opts.userId`), aucun lookup DB neuf.
+  - Types partagés — `CallQualityAlertEvent`/`CallScreenCaptureEvent` gagnent un `userId?: string`
+    optionnel (miroir de `CallParticipantLeftEvent`, déjà dans cette forme).
+  - Web — `useRemoteCallAlerts` introduit `resolveAlertIdentity(event) = event.userId || event.participantId`,
+    appliqué UNIFORMÉMENT aux trois consommateurs (id de qualité dégradée, Set de capture, nettoyage
+    participant-left) — les trois DOIVENT s'accorder sur le même espace, sous peine de rendre le
+    retrait silencieusement inopérant comme avant. `VideoCallInterface.resolveParticipantName` ne
+    change PAS : il cherchait déjà `(p.userId || p.participantId)`, c'est l'identité qui remonte
+    désormais du hook qui est corrigée, pas le point de résolution.
+- **Tests** (TDD) : gateway — `CallEventsHandler-heartbeat-quality.test.ts` (assertion `userId` sur
+  l'alerte qualité existante + 1 cas neuf de repli anonyme), `CallEventsHandler-analytics-screen-capture.test.ts`
+  (2 cas neufs : `userId` distinct du `participantId` legacy, repli anonyme),
+  `CallEventsHandler-disconnect.test.ts` (1 cas neuf : `userId` sur le PARTICIPANT_LEFT de la
+  fenêtre de grâce), `CallEventsHandler.test.ts` (2 assertions exactes étendues avec le nouveau
+  champ). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites / 1205 tests** verts. Suite
+  complète `test:coverage` : **729 suites / 17799 tests** verts, 0 régression. `npx tsc --noEmit`
+  gateway : 0. Web — `use-remote-call-alerts.test.tsx` : 4 cas neufs (`userId` prioritaire sur
+  `participantId`, repli sans `userId`, Set capture avec `userId`, nettoyage participant-left avec
+  `userId` alors que le `participantId` de CET événement diffère) — suite **25/25** verts, couverture
+  **100 %** stmts/branches/funcs/lines. Sweep web `--testPathPatterns="[Cc]all"` : **53 suites / 504
+  tests** verts, 0 régression. `npx tsc --noEmit` (diff `git stash`/`stash pop`) : 1768 erreurs
+  préexistantes des deux côtés, seule différence un réordonnancement cosmétique de union type
+  `lib.dom.d.ts` sans rapport avec ce diff (0 erreur nouvelle, 0 corrigée).
+- **Non fait volontairement** : les DEUX autres émetteurs `PARTICIPANT_LEFT` (call:leave, REST
+  leave/kick) envoyaient déjà `userId` correctement — vérifié, pas retouchés. Le choix « dernier
+  rapporteur gagne » pour l'id de qualité dégradée (hérité Vague 131) n'est pas revisité ici.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`, décision produit requise) ;
+  `MAX_CALL_PARTICIPANTS = 9999` sans plafond effectif (décision produit) ; mesh iOS/Android
+  potentiellement affecté du même bug étoile-vs-maillage que la Vague 126 (à auditer avec
+  toolchain) ; W6/W7 grille adaptative + i18n groupe restant ; détection de capture d'écran côté
+  navigateur web (aucun émetteur `call:screen-capture-detected`, feature neuve) ; erreurs de build
+  Focal/Lentille (hors périmètre calling) ; backup candidat non poursuivi — `CallControls.tsx` bouton
+  haut-parleur, `aria-label` décrivant l'ACTION et `title` décrivant l'ÉTAT (asymétrie mineure,
+  libellé déjà tranché Vague 111).

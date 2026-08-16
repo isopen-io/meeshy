@@ -294,4 +294,62 @@ describe('useRemoteCallAlerts', () => {
       expect(result.current.remoteScreenCapturingParticipantIds).toEqual([]);
     });
   });
+
+  // --- Vague 132 — `event.participantId` is `CallParticipant.participantId`
+  // (a `Participant.id`), never a `User.id`. A registered peer's roster entry
+  // is keyed by `.userId` (a real `User.id`), so `VideoCallInterface`'s
+  // `resolveParticipantName` could never match it — the overlay silently
+  // rendered a blank name for essentially every real (non-anonymous) call.
+  // The gateway now also sends `userId` on both alerts; this hook must prefer
+  // it over the legacy `participantId`, and every consumer (quality id,
+  // screen-capture set, participant-left cleanup) must agree on the SAME
+  // identity space or cleanup silently stops matching. -----------------------
+  describe('identité pair — userId prime sur le participantId hérité (Vague 132)', () => {
+    it('une quality-alert avec userId expose le userId, pas le participantId legacy', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, {
+        callId: CALL_ID, participantId: 'participant-row-id', userId: 'user-real-id',
+        metric: 'rtt', value: 412, threshold: 300,
+      }));
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBe('user-real-id');
+    });
+
+    it('une quality-alert SANS userId (compat gateway antérieure) retombe sur le participantId', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_QUALITY_ALERT, qualityAlert()));
+
+      expect(result.current.remoteQualityDegradedParticipantId).toBe('p2');
+    });
+
+    it('une screen-capture-alert avec userId ajoute le userId à l’ensemble, pas le participantId legacy', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, {
+        callId: CALL_ID, participantId: 'participant-row-id', userId: 'user-real-id', isCapturing: true,
+      }));
+
+      expect(result.current.remoteScreenCapturingParticipantIds).toEqual(['user-real-id']);
+    });
+
+    it('un participant-left avec userId retire la bonne entrée du set (même quand participantId diffère)', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, {
+        callId: CALL_ID, participantId: 'participant-row-id', userId: 'user-real-id', isCapturing: true,
+      }));
+      expect(result.current.remoteScreenCapturing).toBe(true);
+
+      // CALL_PARTICIPANT_LEFT's own `participantId` field lives in a THIRD
+      // identifier space (CallParticipant.id) — only `userId` is guaranteed
+      // to match what the capture alert added to the set.
+      act(() => socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, {
+        callId: CALL_ID, participantId: 'call-participant-row-id', userId: 'user-real-id', mode: 'p2p',
+      }));
+
+      expect(result.current.remoteScreenCapturing).toBe(false);
+    });
+  });
 });
