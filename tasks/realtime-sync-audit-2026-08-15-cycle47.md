@@ -128,7 +128,7 @@ plutôt que laissé implicite.
       retente) ; une entrée périmée est relâchée à la lecture
 - [x] `bunx tsc --noEmit` gateway : 0
 - [x] Suite gateway complète verte (730 suites / 17 826 témoins)
-- [x] CHANGELOG + ADR `services/gateway/decisions.md` + ce journal + leçon 284
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + ce journal + leçon 203
 
 ## 8. Écarté délibérément
 

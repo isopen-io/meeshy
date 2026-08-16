@@ -8554,7 +8554,7 @@ deux rangements coexistent pour la même donnée, la LECTURE rejoint l'écriture
 jamais l'inverse : faire écrire les deux installe durablement la divergence qu'on
 prétend réparer.*
 
-## Leçon 284 — une méthode d'invalidation sur un objet construit N fois n'invalide rien (2026-08-16, routine temps réel, cycle 47)
+## Leçon 203 — une méthode d'invalidation sur un objet construit N fois n'invalide rien (2026-08-16, routine temps réel, cycle 47)
 
 **Le constat.** `PrivacyPreferencesService.invalidateCache(userId)` existait,
 écrit et documenté (« à appeler après mise à jour des préférences »), sans un

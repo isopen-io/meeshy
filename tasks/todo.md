@@ -784,7 +784,7 @@ par un témoin.
       pas, écriture en échec ne purge pas
 - [x] `bunx tsc --noEmit` gateway : 0
 - [x] Suite gateway complète verte — 730 suites / 17 826 témoins
-- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle47) + leçon 284
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle47) + leçon 203
 
 ## Revue
 
