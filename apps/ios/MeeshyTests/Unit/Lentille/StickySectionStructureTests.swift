@@ -115,11 +115,21 @@ final class StickySectionStructureTests: XCTestCase {
             "pas `expandedHeight` en dur — sinon la liste démarre une hauteur de barre trop " +
             "bas sous drapeau ON."
         )
+        // R-a a déplacé l'inset dans `LentilleStickyHeaderInsetModifier` :
+        // drapeau OFF ⇒ le modificateur n'est PAS monté (zéro chaîne ajoutée),
+        // drapeau ON ⇒ même `safeAreaInset` qu'avant, hauteur inchangée.
         XCTAssertTrue(
-            code.contains(".safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: stickyHeaderInset) }"),
-            "L'inset se pose au SITE D'APPEL, sur `MeeshyRefreshableScroll` : le ScrollView " +
+            code.contains(".modifier(LentilleStickyHeaderInsetModifier( isEnabled: LentilleFeatureFlag.isLentilleListEnabled, height: stickyHeaderInset ))"),
+            "L'inset se pose au SITE D'APPEL, sur `MeeshyRefreshableScroll`, via " +
+            "`LentilleStickyHeaderInsetModifier` injecté du drapeau (R-a) : le ScrollView " +
             "interne hérite de la safe area réduite et sa ligne d'épinglage descend d'autant. " +
             "`MeeshyRefreshableScroll` (SDK) n'est pas touché — gel S1."
+        )
+        XCTAssertTrue(
+            code.contains("content.safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: height) }"),
+            "Dans la branche ON du modificateur, l'inset reste le `safeAreaInset(edge: .top)` " +
+            "d'origine — même géométrie, seule la présence du modificateur est devenue " +
+            "conditionnelle (R-a)."
         )
         XCTAssertEqual(
             occurrences(of: "private var stickyHeaderInset: CGFloat {", in: code), 1,
