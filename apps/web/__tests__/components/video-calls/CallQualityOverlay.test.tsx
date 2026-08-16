@@ -35,12 +35,12 @@ describe('CallQualityOverlay', () => {
   // --- remote alerts (call:quality-alert / call:screen-capture-alert) ------
 
   it('shows the discreet remote-quality indicator while the peer link is degraded', () => {
-    render(<CallQualityOverlay stats={null} remoteQualityDegraded participantName="Alice" />);
+    render(<CallQualityOverlay stats={null} remoteQualityDegraded qualityDegradedParticipantName="Alice" />);
     expect(screen.getByTestId('remote-quality-indicator')).toBeInTheDocument();
   });
 
   it('no longer renders the intrusive text pill for a degraded peer link', () => {
-    render(<CallQualityOverlay stats={null} remoteQualityDegraded participantName="Alice" />);
+    render(<CallQualityOverlay stats={null} remoteQualityDegraded qualityDegradedParticipantName="Alice" />);
     expect(screen.queryByTestId('remote-quality-pill')).not.toBeInTheDocument();
   });
 
@@ -50,12 +50,12 @@ describe('CallQualityOverlay', () => {
   });
 
   it('shows the privacy pill while the peer captures the screen', () => {
-    render(<CallQualityOverlay stats={null} remoteScreenCapturing participantName="Alice" />);
+    render(<CallQualityOverlay stats={null} remoteScreenCapturing screenCapturingParticipantName="Alice" />);
     expect(screen.getByTestId('screen-capture-pill')).toBeInTheDocument();
   });
 
   it('hides the privacy pill once the capture stops', () => {
-    render(<CallQualityOverlay stats={null} remoteScreenCapturing={false} participantName="Alice" />);
+    render(<CallQualityOverlay stats={null} remoteScreenCapturing={false} screenCapturingParticipantName="Alice" />);
     expect(screen.queryByTestId('screen-capture-pill')).not.toBeInTheDocument();
   });
 
@@ -65,7 +65,8 @@ describe('CallQualityOverlay', () => {
         stats={null}
         remoteQualityDegraded
         remoteScreenCapturing
-        participantName="Alice"
+        qualityDegradedParticipantName="Alice"
+        screenCapturingParticipantName="Alice"
       />,
     );
     // The degraded-peer signal is now a discreet icon: the interpolated label
@@ -75,5 +76,26 @@ describe('CallQualityOverlay', () => {
     expect(indicator.getAttribute('aria-label')).not.toContain('{name}');
     expect(screen.getByTestId('screen-capture-pill').textContent).toContain('Alice');
     expect(screen.getByTestId('screen-capture-pill').textContent).not.toContain('{name}');
+  });
+
+  // Vague 131 — the two alerts are about POTENTIALLY DIFFERENT peers in a
+  // group call; a single shared name prop could only ever be right for one
+  // of them. Each alert must interpolate ITS OWN name independently.
+  it('interpolates a DIFFERENT name per alert when the degraded peer and the capturing peer differ', () => {
+    render(
+      <CallQualityOverlay
+        stats={null}
+        remoteQualityDegraded
+        remoteScreenCapturing
+        qualityDegradedParticipantName="Alice"
+        screenCapturingParticipantName="Bob"
+      />,
+    );
+    const indicator = screen.getByTestId('remote-quality-indicator');
+    expect(indicator.getAttribute('aria-label')).toContain('Alice');
+    expect(indicator.getAttribute('aria-label')).not.toContain('Bob');
+    const pill = screen.getByTestId('screen-capture-pill');
+    expect(pill.textContent).toContain('Bob');
+    expect(pill.textContent).not.toContain('Alice');
   });
 });
