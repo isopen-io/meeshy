@@ -73,6 +73,9 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       upsert: jest.fn<any>().mockResolvedValue({ id: 'pref-1' }),
       update: jest.fn<any>().mockResolvedValue({}),
+      // La remise à zéro passe par `updateMany` : une ligne `UserPreferences`
+      // absente y rend `{ count: 0 }` au lieu de lever `P2025` (cycle 48).
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     userConversationCategory: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -191,7 +194,7 @@ describe('DELETE / — reset all preferences', () => {
 
   it('returns 500 on DB error', async () => {
     const prisma = makePrisma();
-    prisma.userPreferences.update = jest.fn<any>().mockRejectedValue(new Error('db error'));
+    prisma.userPreferences.updateMany = jest.fn<any>().mockRejectedValue(new Error('db error'));
     const errApp = await buildApp({ prisma });
     const res = await errApp.inject({ method: 'DELETE', url: '/' });
     expect(res.statusCode).toBe(500);

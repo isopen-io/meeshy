@@ -8,6 +8,10 @@ import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
+import {
+  PREFERENCE_CATEGORIES,
+  emitPreferenceCategoryUpdated
+} from '../../../services/preferences/preferences-broadcast';
 import { categoriesRoutes } from './categories';
 import {
   PrivacyPreferenceSchema,
@@ -143,7 +147,10 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        await prisma.userPreferences.update({
+        // `updateMany` et non `update` — même raison qu'au verbe DELETE d'une
+        // catégorie : la ligne `UserPreferences` n'existe pas tant que rien
+        // n'a été écrit, et `update` levait alors `P2025`, rendu en 500.
+        await prisma.userPreferences.updateMany({
           where: { userId },
           data: {
             privacy: null,
@@ -160,6 +167,13 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
         // des portes de diffusion doit l'apprendre, comme sur une écriture
         // ciblée (cf. `services/preferences/privacy-cache`).
         invalidatePrivacyPreferences(userId);
+
+        // Et les autres appareils aussi. Le contrat client est par catégorie
+        // (`queryKeys.preferences.category`), donc une émission par catégorie
+        // effacée — cf. `services/preferences/preferences-broadcast`.
+        for (const category of PREFERENCE_CATEGORIES) {
+          emitPreferenceCategoryUpdated(fastify, userId, category);
+        }
 
         return sendSuccess(reply, undefined, { message: 'All preferences reset to defaults' });
       } catch (error: any) {

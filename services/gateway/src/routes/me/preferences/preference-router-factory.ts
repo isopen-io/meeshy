@@ -8,19 +8,11 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
+import { emitPreferenceCategoryUpdated } from '../../../services/preferences/preferences-broadcast';
 import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
-
-type PreferenceCategory =
-  | 'privacy'
-  | 'audio'
-  | 'message'
-  | 'notification'
-  | 'video'
-  | 'document'
-  | 'application';
+import type { PreferenceCategory } from '../../../services/preferences/preferences-broadcast';
 
 /**
  * Factory qui crée un plugin Fastify avec routes CRUD complètes
@@ -57,19 +49,8 @@ export function createPreferenceRouter<T>(
       if (category === 'privacy') invalidatePrivacyPreferences(userId);
     };
 
-    const emitPreferencesUpdated = (userId: string) => {
-      try {
-        const io = fastify.socketIOHandler?.getManager?.()?.getIO?.();
-        if (io) {
-          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
-            userId,
-            category,
-          });
-        }
-      } catch {
-        // Socket.IO emission is best-effort
-      }
-    };
+    const emitPreferencesUpdated = (userId: string) =>
+      emitPreferenceCategoryUpdated(fastify, userId, category);
     // GET /me/preferences/{category}
     fastify.get(
       '/',
@@ -369,13 +350,21 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          // Mettre le champ JSON à null (les defaults seront retournés au GET)
-          await fastify.prisma.userPreferences.update({
+          // Mettre le champ JSON à null (les defaults seront retournés au GET).
+          //
+          // `updateMany` et non `update` : rien ne crée la ligne
+          // `UserPreferences` à l'inscription — ses seuls créateurs sont les
+          // `upsert` de PUT/PATCH. `update` y levait `P2025`, rendu en 500,
+          // exactement pour l'utilisateur qui n'a jamais rien écrit, donc qui
+          // EST déjà aux valeurs par défaut. `updateMany` rend `{ count: 0 }`
+          // sans lever, et ne crée aucune ligne vide pour le dire.
+          await fastify.prisma.userPreferences.updateMany({
             where: { userId },
             data: { [category]: null }
           });
 
           invalidateServerCache(userId);
+          emitPreferencesUpdated(userId);
 
           return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {

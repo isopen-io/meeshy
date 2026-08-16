@@ -92,7 +92,26 @@ struct ComposerTextHost<Content: View>: View {
 extension ConversationView {
 
     // MARK: - Themed Composer (powered by UniversalComposerBar)
+    //
+    // Garde anti-débordement de pile (2026-08-16) : cette propriété empilait
+    // ~13 modificateurs système (.sheet ×2, .fullScreenCover ×6, .photosPicker,
+    // .fileImporter, .animation ×3, .adaptiveOnChange) sur UN SEUL `some View`.
+    // Chaque modificateur ajoute un niveau de générique `ModifiedContent<…>`
+    // distinct ; à la profondeur atteinte, la résolution runtime du type opaque
+    // (swift_getTypeByMangledName, récursive) dépassait la pile du thread
+    // principal — crash reproductible EXC_BAD_ACCESS / « Could not determine
+    // thread index for stack guard region » à CHAQUE ouverture de conversation
+    // (7 crashs le 2026-08-16, même frame faulting : themedComposer.getter →
+    // __swift_instantiateConcreteTypeFromMangledNameV2). Fractionner en
+    // plusieurs propriétés `some View` distinctes donne à chacune son propre
+    // accesseur de type opaque au lieu d'un mangled name unique géant — la
+    // récursion runtime se répartit sur plusieurs appels bornés au lieu d'un
+    // seul appel non borné.
     var themedComposer: some View {
+        composerEditingCovers(composerPickersAndSheets(composerCore))
+    }
+
+    private var composerCore: some View {
         ComposerTextHost(model: composerText) { textBinding in
             UniversalComposerBar(
             style: .light,
@@ -207,6 +226,12 @@ extension ConversationView {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
+    }
+
+    /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
+    /// pickers, sheets légers et l'unique fullScreenCover caméra.
+    private func composerPickersAndSheets<Content: View>(_ content: Content) -> some View {
+        content
         .sheet(isPresented: $viewModel.showEffectsPicker) {
             EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
         }
@@ -245,6 +270,13 @@ extension ConversationView {
         .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
+    }
+
+    /// 3e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
+    /// les 5 fullScreenCover d'édition de pièces jointes en attente — le groupe
+    /// le plus dense en types de closures distincts (un par éditeur média).
+    private func composerEditingCovers<Content: View>(_ content: Content) -> some View {
+        content
         // C. Tap pending image → MeeshyImageEditorView
         //
         // Bug fix (2026-07-09): `isPresented` used to be driven solely by
