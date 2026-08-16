@@ -216,7 +216,11 @@ final class FocalHostSourceGuardTests: XCTestCase {
     /// etc.). Ces sections doivent consommer `FocalFocusCurve`/
     /// `FocalPassConstants`/`focalPass.*`, jamais une constante en dur.
     func test_r15_newComputationSections_carryNoLawLiteral() throws {
-        let code = try strippedSource("MessageListViewController.swift")
+        // Les bornes `// MARK: -` sont cherchées dans la source BRUTE (elles
+        // sont elles-mêmes des commentaires — `strippedSource` les efface) ;
+        // seul le CONTENU de chaque tranche est ensuite passé au retrait de
+        // commentaires, pour ne juger que du code réel.
+        let raw = try source("MessageListViewController.swift")
         let sections: [(start: String, end: String)] = [
             ("// MARK: - §4.5 — Inset de tête (« Début de la conversation »)",
              "// MARK: - CollectionView Setup"),
@@ -225,15 +229,15 @@ final class FocalHostSourceGuardTests: XCTestCase {
         ]
         let forbidden = ["380", "520", "0.82", "0.45", "0.40", "150", "140", "95", "900", "25", "24"]
         for section in sections {
-            guard let startRange = code.range(of: section.start) else {
+            guard let startRange = raw.range(of: section.start) else {
                 XCTFail("Section introuvable : `\(section.start)`.")
                 continue
             }
-            guard let endRange = code.range(of: section.end, range: startRange.upperBound..<code.endIndex) else {
+            guard let endRange = raw.range(of: section.end, range: startRange.upperBound..<raw.endIndex) else {
                 XCTFail("Borne de fin introuvable pour la section `\(section.start)` : `\(section.end)`.")
                 continue
             }
-            let body = code[startRange.lowerBound..<endRange.lowerBound]
+            let body = AppSourceGuard.stripComments(String(raw[startRange.lowerBound..<endRange.lowerBound]))
             for literal in forbidden {
                 XCTAssertFalse(
                     body.contains(literal),
