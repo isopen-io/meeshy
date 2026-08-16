@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=4 last_run=post-detail-realtime-room
+lane=ANDROID android_streak=5 last_run=datastore-test-deterministic-scheduler
