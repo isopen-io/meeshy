@@ -52,6 +52,7 @@ const mockPrisma: any = {
   message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn(), findMany: jest.fn() },
   messageStatusEntry: { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
   userPreference: { findMany: jest.fn() },
+  userPreferences: { findMany: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
     updateMany: jest.fn(),
@@ -101,6 +102,7 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
     mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.userPreference.findMany.mockResolvedValue([]);
+    mockPrisma.userPreferences.findMany.mockResolvedValue([]);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
     mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});

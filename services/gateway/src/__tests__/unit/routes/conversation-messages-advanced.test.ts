@@ -197,6 +197,9 @@ const makePrisma = (): any => ({
   messageStatusEntry: {
     findMany: jest.fn().mockResolvedValue([]),
   },
+  userPreferences: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   userPreference: {
     findMany: jest.fn().mockResolvedValue([]),
   },
@@ -3051,9 +3054,12 @@ describe('registerMessagesAdvancedRoutes', () => {
           { messageId: MSG_ID, participantId: OPEN_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
           { messageId: MSG_ID, participantId: SILENT_PART_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
         ]);
-        prisma.userPreference.findMany.mockResolvedValue(
-          optedOutUserIds.map((userId) => ({ userId }))
+        // L'opt-out passe par le document JSON, seul rangement que
+        // `PATCH /me/preferences/privacy` écrive.
+        prisma.userPreferences.findMany.mockResolvedValue(
+          optedOutUserIds.map((userId) => ({ userId, privacy: { showReadReceipts: false } }))
         );
+        prisma.userPreference.findMany.mockResolvedValue([]);
       };
 
       it('ne sert plus les colonnes mortes : le résumé vient du comptage réel', async () => {
