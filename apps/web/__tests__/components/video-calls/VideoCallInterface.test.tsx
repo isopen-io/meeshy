@@ -90,6 +90,9 @@ jest.mock('@/hooks/use-call-quality', () => ({
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: (...args: unknown[]) => useRemoteCallAlertsMock(...(args as [])),
 }));
+jest.mock('@/hooks/use-remote-transcription-active', () => ({
+  useRemoteTranscriptionActive: () => ({ peerTranscribing: false }),
+}));
 jest.mock('@/hooks/use-call-captions', () => ({
   useCallCaptions: () => ({ captions: [] }),
 }));
