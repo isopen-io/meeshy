@@ -457,6 +457,9 @@
       "single": "Ce fichier est déjà ajouté",
       "multiple": "{count} fichiers sont déjà ajoutés"
     },
+    "attachmentUploadFailure": {
+      "reduceCount": "Réduisez le nombre de pièces jointes ({count} en cours) et réessayez."
+    },
     "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement",
     "filter": {
       "all": "Toutes",

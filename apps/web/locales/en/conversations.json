@@ -453,6 +453,9 @@
       "single": "This file is already added",
       "multiple": "{count} files are already added"
     },
+    "attachmentUploadFailure": {
+      "reduceCount": "Reduce the number of attachments ({count} pending) and try again."
+    },
     "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically",
     "filter": {
       "all": "All",

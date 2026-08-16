@@ -1160,6 +1160,67 @@ describe('MessageProcessor — audio attachment dispatch', () => {
       expect.objectContaining({ mobileTranscription: { text: 'mobile text' } })
     );
   });
+
+  // Un message peut porter jusqu'à MAX_ATTACHMENTS_PER_MESSAGE (199) vocaux et
+  // chaque dispatch ouvre un pipeline ML. Le `Promise.all` nu qui vivait ici
+  // les libérait tous d'un coup sur le translator.
+  function makeAudioRows(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `audio-${i}`, mimeType: 'audio/mp4', fileUrl: `https://cdn/${i}.m4a`,
+      filePath: `/uploads/${i}.m4a`, duration: 10, metadata: null, transcription: null,
+    }));
+  }
+
+  function primeAudioDispatch(rows: ReturnType<typeof makeAudioRows>) {
+    jest.clearAllMocks();
+    resetPrisma();
+    mockShouldProcess.mockReturnValue(true);
+    mockExtractMentionsWithParticipants.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map());
+    mockValidateMentionPermissions.mockResolvedValue({ validUserIds: [] });
+    msgCreate.mockResolvedValue(makeMessage());
+    attFindMany.mockResolvedValue(rows);
+    partFindUnique.mockResolvedValue({ userId: 'u1' });
+  }
+
+  it('bounds concurrent audio dispatches instead of releasing all at once', async () => {
+    const rows = makeAudioRows(40);
+    primeAudioDispatch(rows);
+
+    let inFlight = 0;
+    let peak = 0;
+    const processAudioAttachment = jest.fn(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 1));
+      inFlight -= 1;
+    }) as jest.Mock<any>;
+
+    const processor = new MessageProcessor(prisma, undefined, { processAudioAttachment } as never);
+    await processor.saveMessage({ ...baseData, attachmentIds: rows.map(r => r.id) });
+    await new Promise(r => setTimeout(r, 200));
+
+    expect(processAudioAttachment).toHaveBeenCalledTimes(40);
+    expect(peak).toBeLessThan(40);
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it('still dispatches every track when one of them throws', async () => {
+    const rows = makeAudioRows(12);
+    primeAudioDispatch(rows);
+
+    const processAudioAttachment = jest.fn(async ({ attachmentId }: any) => {
+      if (attachmentId === 'audio-0') throw new Error('corrupted audio');
+    }) as jest.Mock<any>;
+
+    const processor = new MessageProcessor(prisma, undefined, { processAudioAttachment } as never);
+    await processor.saveMessage({ ...baseData, attachmentIds: rows.map(r => r.id) });
+    await new Promise(r => setTimeout(r, 200));
+
+    expect(processAudioAttachment).toHaveBeenCalledTimes(12);
+    const dispatched = processAudioAttachment.mock.calls.map((c: any[]) => c[0].attachmentId);
+    expect(new Set(dispatched).size).toBe(12);
+  });
 });
 
 // ── Branch gap-fillers for MessageProcessor ────────────────────────────────

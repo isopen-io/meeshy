@@ -130,6 +130,13 @@ jobs:
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
+      # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
+      # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
+      # ~15 min et meurt à la première erreur, alors que ce garde les liste
+      # toutes avant même que le job iOS ne démarre.
+      - name: ViewBuilder statement-chaining guard
+        run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
+
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%

@@ -35,6 +35,19 @@ extension ConversationView {
         await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
     }
 
+    /// Motif d'échec d'un envoi de pièces jointes, complété d'un conseil
+    /// actionnable quand plusieurs pièces sont en jeu : réduire le nombre de
+    /// pièces et réessayer. Un échec sur un envoi de 150 photos n'a pas le
+    /// même remède qu'un échec sur une pièce isolée, et sans le dire on laisse
+    /// l'utilisateur rejouer à l'identique le même envoi trop lourd.
+    ///
+    /// Silencieux sur une pièce unique — « réduire » n'y veut rien dire.
+    /// Miroir du `withReduceAttachmentsHint` du composer web.
+    nonisolated static func uploadFailureReason(error: Error, attachmentCount: Int) -> String {
+        guard attachmentCount > 1 else { return error.localizedDescription }
+        return "\(error.localizedDescription) Réduisez le nombre de pièces jointes (\(attachmentCount) en cours) et réessayez."
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -377,30 +390,83 @@ extension ConversationView {
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
-                    // Declare the full planned batch up front so the upload progress
-                    // bar reflects the real total files/bytes immediately, instead of
-                    // oscillating to 100% as each sequential file completes (the
-                    // per-file `uploadFile` loop registers them one at a time).
-                    let uploadableAttachments = send.group.attachments.filter { mediaFiles[$0.id] != nil }
-                    let plannedBytes = uploadableAttachments.reduce(Int64(0)) { acc, att in
-                        let size = mediaFiles[att.id]
-                            .flatMap { (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.size] as? Int64 }
+                    // Upload PARALLÈLE borné.
+                    //
+                    // `TusUploadManager` porte déjà un pool (`maxConcurrent = 3`)
+                    // et une file d'attente, mais la boucle séquentielle qui
+                    // vivait ici ne lui confiait QU'UN fichier à la fois : le
+                    // pool ne dépassait jamais un actif, sa file restait vide, et
+                    // 199 photos (`maxMediaSelection`) partaient l'une après
+                    // l'autre. Le commentaire de `maxMediaSelection` promettait
+                    // pourtant une borne par la concurrence d'upload — elle
+                    // existait, elle n'était simplement jamais atteinte.
+                    // On confie désormais tout le groupe d'un coup ; c'est
+                    // l'acteur qui borne.
+                    //
+                    // Seules des valeurs `Sendable` franchissent la frontière de
+                    // tâche (URL, String, String?) — l'amorçage de cache, qui lit
+                    // les octets, touche `UIImage` et les stores
+                    // `CacheCoordinator`, reste SÉQUENTIEL en aval : il préserve
+                    // l'ordre des pièces et ne tient qu'un fichier en mémoire à
+                    // la fois (199 photos lues d'un bloc feraient exploser
+                    // l'empreinte mémoire).
+                    let pendingUploads: [(attachment: MeeshyMessageAttachment, fileURL: URL, mimeType: String, thumbHash: String?)] =
+                        send.group.attachments.compactMap { att in
+                            guard let fileURL = mediaFiles[att.id] else { return nil }
+                            return (
+                                att,
+                                fileURL,
+                                send.group.kind == .audio ? "audio/mp4" : att.mimeType,
+                                thumbnails[att.id]?.toThumbHash()
+                            )
+                        }
+
+                    // Déclarer le lot complet AVANT de lancer les uploads, pour
+                    // que la barre de progression affiche d'emblée le vrai total
+                    // fichiers/octets au lieu d'osciller à mesure des
+                    // enregistrements un par un. `pendingUploads` porte
+                    // exactement les pièces qui vont monter — ce filtre vivait
+                    // ici en double, au risque de diverger de la liste
+                    // réellement uploadée.
+                    let plannedBytes = pendingUploads.reduce(Int64(0)) { acc, item in
+                        let size = (try? FileManager.default.attributesOfItem(atPath: item.fileURL.path))?[.size] as? Int64
                         return acc + (size ?? 0)
                     }
-                    await uploader.setExpectedBatch(totalFiles: uploadableAttachments.count, totalBytes: plannedBytes)
-                    for att in send.group.attachments {
-                        guard let fileURL = mediaFiles[att.id] else { continue }
+                    await uploader.setExpectedBatch(totalFiles: pendingUploads.count, totalBytes: plannedBytes)
+
+                    // Contrat de reprise INCHANGÉ : la première erreur sort du
+                    // groupe (les tâches restantes sont annulées) et rejoint le
+                    // `catch` ci-dessous, qui renvoie le groupe entier vers
+                    // l'outbox durable. Le dedup par `clientMessageId` côté
+                    // gateway couvre le rejeu des pièces déjà montées.
+                    var uploadResults = [TusUploadResult?](repeating: nil, count: pendingUploads.count)
+                    try await withThrowingTaskGroup(of: (Int, TusUploadResult).self) { group in
+                        for (index, item) in pendingUploads.enumerated() {
+                            let fileURL = item.fileURL
+                            let mime = item.mimeType
+                            let thumbHash = item.thumbHash
+                            group.addTask {
+                                let result = try await uploader.uploadFile(
+                                    fileURL: fileURL, mimeType: mime, token: token, thumbHash: thumbHash
+                                )
+                                return (index, result)
+                            }
+                        }
+                        for try await (index, result) in group {
+                            uploadResults[index] = result
+                        }
+                    }
+
+                    for (index, item) in pendingUploads.enumerated() {
+                        guard let result = uploadResults[index] else { continue }
+                        let att = item.attachment
+                        let fileURL = item.fileURL
                         // Off-MainActor read: this `Task` inherits the
                         // MainActor isolation of `sendMessageWithAttachments`
                         // (project default actor isolation), so a raw
                         // `Data(contentsOf:)` here froze the UI for the
                         // duration of every large video/photo read on send.
                         let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
-                        let thumbHash = thumbnails[att.id]?.toThumbHash()
-                        let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
-                        let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: mime, token: token, thumbHash: thumbHash
-                        )
                         uploadedIds.append(result.id)
                         if let fileData {
                             // Seed under the exact key the renderer resolves to
@@ -498,8 +564,16 @@ extension ConversationView {
                     } else {
                         // Ré-enfilage impossible (fichiers sources disparus,
                         // disque plein, encodage) : état terminal, retry manuel.
+                        // L'utilisateur ne rejouera pas le même envoi à
+                        // l'identique s'il sait que le volume est en cause —
+                        // parité avec le message d'échec du composer web.
                         await viewModel.markOptimisticMediaFailed(
-                            tempId: send.tempId, reason: error.localizedDescription)
+                            tempId: send.tempId,
+                            reason: Self.uploadFailureReason(
+                                error: error,
+                                attachmentCount: send.group.attachments.count
+                            )
+                        )
                     }
                 }
             }

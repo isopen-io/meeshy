@@ -12,6 +12,7 @@ import {
   SocketConversationLeaveSchema,
   SocketReactionAddSchema,
 } from '../../../validation/socket-event-schemas.js';
+import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
 const VALID_MONGO_ID = '507f1f77bcf86cd799439011';
 const VALID_CLIENT_ID = 'cid_550e8400-e29b-41d4-a716-446655440000';
@@ -75,14 +76,22 @@ describe('SocketMessageSendWithAttachmentsSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects more than 100 attachment IDs', () => {
-    const ids = Array.from({ length: 101 }, () => VALID_MONGO_ID);
+  it(`rejects more than ${MAX_ATTACHMENTS_PER_MESSAGE} attachment IDs`, () => {
+    const ids = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE + 1 }, () => VALID_MONGO_ID);
     const result = SocketMessageSendWithAttachmentsSchema.safeParse({ ...base, attachmentIds: ids });
     expect(result.success).toBe(false);
   });
 
-  it('accepts exactly 100 attachment IDs', () => {
-    const ids = Array.from({ length: 100 }, () => VALID_MONGO_ID);
+  it(`accepts exactly ${MAX_ATTACHMENTS_PER_MESSAGE} attachment IDs`, () => {
+    const ids = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE }, () => VALID_MONGO_ID);
+    const result = SocketMessageSendWithAttachmentsSchema.safeParse({ ...base, attachmentIds: ids });
+    expect(result.success).toBe(true);
+  });
+
+  // Le composer iOS plafonne à 199 depuis le 2026-08-14 : un envoi plein doit
+  // franchir CE schéma, qui bornait à 100.
+  it('accepts a full iOS composer selection (199 pieces)', () => {
+    const ids = Array.from({ length: 199 }, () => VALID_MONGO_ID);
     const result = SocketMessageSendWithAttachmentsSchema.safeParse({ ...base, attachmentIds: ids });
     expect(result.success).toBe(true);
   });
