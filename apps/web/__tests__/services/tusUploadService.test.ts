@@ -1,6 +1,6 @@
 import { TusUploadService, type QueueProgress } from '@/services/tusUploadService';
 import {
-  MAX_FILES_PER_MESSAGE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   SMALL_FILE_THRESHOLD,
   getSizeLimit,
   getAttachmentType,
@@ -32,7 +32,7 @@ jest.mock('@meeshy/shared/types/attachment', () => ({
   getSizeLimit: jest.fn(() => 4294967296),
   getAttachmentType: jest.fn(() => 'document'),
   formatFileSize: jest.fn((bytes: number) => `${bytes} bytes`),
-  MAX_FILES_PER_MESSAGE: 30,
+  MAX_ATTACHMENTS_PER_MESSAGE: 199,
   MAX_CONCURRENT_UPLOADS: 3,
   SMALL_FILE_THRESHOLD: 50 * 1024 * 1024,
   TUS_CHUNK_SIZE: 10 * 1024 * 1024,
@@ -206,14 +206,14 @@ describe('TusUploadService', () => {
   });
 
   describe('uploadFiles — validation', () => {
-    it('throws when files count exceeds MAX_FILES_PER_MESSAGE', async () => {
+    it('throws when files count exceeds MAX_ATTACHMENTS_PER_MESSAGE', async () => {
       const service = new TusUploadService();
-      const files = Array.from({ length: MAX_FILES_PER_MESSAGE + 1 }, (_, i) =>
+      const files = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE + 1 }, (_, i) =>
         makeSmallFile(`file${i}.jpg`)
       );
 
       await expect(service.uploadFiles(files)).rejects.toThrow(
-        `Maximum ${MAX_FILES_PER_MESSAGE} files allowed per message`
+        `Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed per message`
       );
     });
 

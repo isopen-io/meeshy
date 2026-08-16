@@ -32,9 +32,17 @@ import {
 import { parseSharedPlace } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
+import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
+
+/**
+ * Pistes audio dispatchées simultanément vers le translator. Assez pour tenir
+ * le pipeline occupé, assez bas pour qu'un message de 199 vocaux ne le
+ * submerge pas d'un coup.
+ */
+const AUDIO_DISPATCH_CONCURRENCY = 4;
 
 
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -804,30 +812,60 @@ export class MessageProcessor {
 
       const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
 
-      await Promise.all(audioAttachments.map(async (audioAtt) => {
-        let mobileTranscription: any = undefined;
-        if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
-          const metadata = audioAtt.metadata as any;
-          if (metadata.transcription) {
-            mobileTranscription = metadata.transcription;
+      // Dispatch BORNÉ : un message peut porter jusqu'à
+      // `MAX_ATTACHMENTS_PER_MESSAGE` (199) vocaux, et chaque dispatch ouvre un
+      // pipeline ML (Whisper → NLLB → TTS). Un `Promise.all` nu les libérait
+      // tous d'un coup sur le translator. Le pool garde le parallélisme utile
+      // sans rafale.
+      //
+      // Chaque piste est isolée dans son propre try/catch : le pool s'arrête à
+      // la première exception (sémantique `Promise.all`), donc sans cette garde
+      // un audio illisible priverait de traitement toutes les pistes que son
+      // worker n'a pas encore prises.
+      const outcomes = await mapWithConcurrency(
+        audioAttachments,
+        AUDIO_DISPATCH_CONCURRENCY,
+        async (audioAtt) => {
+          let mobileTranscription: any = undefined;
+          if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
+            const metadata = audioAtt.metadata as any;
+            if (metadata.transcription) {
+              mobileTranscription = metadata.transcription;
+            }
+          }
+
+          const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
+
+          try {
+            await this.translationService!.processAudioAttachment({
+              messageId,
+              attachmentId: audioAtt.id,
+              conversationId,
+              senderId: resolvedSenderId,
+              audioUrl: audioAtt.fileUrl || '',
+              audioPath: audioPath,
+              audioDurationMs: audioAtt.duration || 0,
+              mobileTranscription: mobileTranscription,
+              generateVoiceClone: true,
+              modelType: 'medium'
+            });
+            return true;
+          } catch (error) {
+            logger.error(
+              `[MessageProcessor] Audio dispatch failed for attachment ${audioAtt.id} (message ${messageId})`,
+              error as Error
+            );
+            return false;
           }
         }
+      );
 
-        const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
-
-        await this.translationService!.processAudioAttachment({
-          messageId,
-          attachmentId: audioAtt.id,
-          conversationId,
-          senderId: resolvedSenderId,
-          audioUrl: audioAtt.fileUrl || '',
-          audioPath: audioPath,
-          audioDurationMs: audioAtt.duration || 0,
-          mobileTranscription: mobileTranscription,
-          generateVoiceClone: true,
-          modelType: 'medium'
-        });
-      }));
+      const failedCount = outcomes.filter((dispatched) => !dispatched).length;
+      if (failedCount > 0) {
+        logger.warn(
+          `[MessageProcessor] ${failedCount}/${audioAttachments.length} audio dispatch(es) failed (message ${messageId})`
+        );
+      }
     } catch (error) {
       logger.error('[MessageProcessor] Error processing audio attachments', error);
     }

@@ -3,7 +3,7 @@ import {
   MAX_CONCURRENT_UPLOADS,
   TUS_CHUNK_SIZE,
   SMALL_FILE_THRESHOLD,
-  MAX_FILES_PER_MESSAGE,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   getSizeLimit,
   getAttachmentType,
   formatFileSize,
@@ -62,8 +62,8 @@ export class TusUploadService {
     files: File[],
     metadataArray?: Record<string, string>[]
   ): Promise<UploadedAttachmentResponse[]> {
-    if (files.length > MAX_FILES_PER_MESSAGE) {
-      throw new Error(`Maximum ${MAX_FILES_PER_MESSAGE} files allowed per message`);
+    if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      throw new Error(`Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed per message`);
     }
 
     for (const file of files) {

@@ -577,6 +577,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
+
+      // Snapshot the ending participant's OWN CallParticipant row id BEFORE
+      // endCall() runs — mirrors the leave route's `leavingCallParticipant`
+      // capture just below, needed for the PARTICIPANT_LEFT broadcast in the
+      // group-call-continues case (calling-stack audit 2026-08-16).
+      const endingCallParticipant = call.participants.find(
+        (p) => p.participantId === endParticipantId && !p.leftAt
+      );
+
       const callSession = await callService.endCall(callId, userId, endParticipantId);
       // Parité socket call:end — invalide le cache de session `call:signal`
       // (TTL 2s) immédiatement après l'écriture de `leftAt`, comme tous les
@@ -589,8 +598,30 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
       callService.finalizeCallSummary(callId);
       // Parité socket call:end — diffuse `call:ended` au pair (WebRTC/CallKit
-      // tear-down temps réel) au lieu d'attendre le GC ~120s. Auto-gardé terminal.
+      // tear-down temps réel) au lieu d'attendre le GC ~120s. Auto-gardé terminal
+      // — CallService.endCall() délègue désormais à leaveCall() (voir son
+      // commentaire) quand l'appel est un GROUPE avec d'autres participants
+      // actifs, donc `callSession` reste non-terminal ici et ce broadcast
+      // est naturellement un no-op pour ce cas.
       callService.broadcastCallEndedIfTerminal(callSession, userId);
+      // Group hang-up via REST (calling-stack audit 2026-08-16) — mirrors the
+      // leave route's own `broadcastParticipantLeft` fix (2026-08-15): when
+      // endCall() delegated to leaveCall() because other participants were
+      // still active, the OTHER participants must still learn this one hung
+      // up (roster/grid teardown for just their peer connection), even
+      // though the call itself did not end. Unconditional like the socket
+      // handler and the leave route (NOT gated on terminal status, unlike
+      // broadcastCallEndedIfTerminal above) — broadcastParticipantLeft fires
+      // on every leave/end by design, since it drives per-peer WebRTC
+      // teardown regardless of whether the call itself also ends.
+      if (endingCallParticipant) {
+        callService.broadcastParticipantLeft(
+          callId,
+          endingCallParticipant.id,
+          userId,
+          callSession.mode
+        );
+      }
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {

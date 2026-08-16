@@ -1963,8 +1963,13 @@ export class CallService {
   /**
    * End call (force end)
    * CVE-004: Anonymous users cannot end calls for everyone (must leave instead).
-   * P2P: any active participant may end the call for everyone (spec C4 fix).
-   * SFU (Phase 2): TODO restrict to initiator/moderator once group calls exist.
+   * DIRECT (1:1): any active participant may end the call for everyone (spec C4 fix).
+   * GROUP: an active participant hanging up while other participants are
+   * still active only removes THEMSELVES — delegated to leaveCall() (see the
+   * group hang-up check below, calling-stack audit 2026-08-16). Only ends
+   * the whole session when it's the last active participant, mirroring
+   * leaveCall()'s own isDirectCall/isLastParticipant distinction.
+   * SFU (Phase 2): TODO restrict to initiator/moderator once an SFU exists.
    *
    * @param callId - Call session ID
    * @param endedBy - User ID attempting to end the call
@@ -2053,6 +2058,41 @@ export class CallService {
           callId, endedBy
         });
         return this.getCallSession(callId);
+      }
+    }
+
+    // Group hang-up (calling-stack audit 2026-08-16) — endCall() force-ends
+    // the ENTIRE session for every participant regardless of call type. That
+    // is correct for a DIRECT (1:1) call (spec C4: any active participant may
+    // end it — there is no one left to keep talking to) but wrong for a
+    // GROUP call: one participant hanging up must only remove THEMSELVES,
+    // exactly like leaveCall()'s isDirectCall/isLastParticipant distinction
+    // above (same collapse already applied to preJoinDecline). Without this,
+    // any participant's hang-up button (the only path iOS/web/Android wire
+    // to call:end — none of them call call:leave on hang-up) silently killed
+    // the call for every OTHER active participant still on it.
+    // `preJoinDecline` is excluded here: it is handled entirely above (it
+    // has no CallParticipant row to compare against) and always either
+    // returns early (group) or falls through to the direct-call end path
+    // below (direct).
+    if (!options?.preJoinDecline) {
+      const conversation = await this.prisma.conversation.findUnique({
+        where: { id: call.conversationId },
+        select: { type: true }
+      });
+      const otherActiveParticipants = call.participants.filter(
+        (p) => !p.leftAt && p.id !== userParticipant?.id
+      );
+      if (conversation?.type !== 'direct' && otherActiveParticipants.length > 0) {
+        logger.info('ℹ️ endCall on a group call with other active participants — treated as a leave', {
+          callId, endedBy
+        });
+        return this.leaveCall({
+          callId,
+          userId: endedBy,
+          participantId,
+          endReasonHint: this.resolveEndReason(reason)
+        });
       }
     }
 
