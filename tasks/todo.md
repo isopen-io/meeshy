@@ -797,3 +797,68 @@ les pistes du cycle 48 : `DELETE /me/preferences/:category` n'émet aucun
 `preferences:updated` (staleness CLIENT, symétrique de celle-ci), la suppression
 du `PreferencesService` orphelin, et le verrou par témoin sur
 `allowAnonymous: false`.
+
+# Cycle 46 bis — un aperçu recalculé a le droit de reculer ; la garde iOS l'ignorait
+
+(« bis » : une autre exécution parallèle de la routine porte déjà le numéro 46 —
+même piste héritée du cycle 45, même conclusion sur elle, surfaces disjointes.
+Motif de la leçon 198, reproduit ; cf. leçon 204.)
+
+## Constat
+
+- [x] Piste héritée du cycle 45 TRANCHÉE, sans correctif : `PATCH
+      /me/preferences/privacy` est INATTEIGNABLE par une session anonyme (les
+      deux routeurs montent `allowAnonymous: false`, le middleware répond 403
+      avant tout handler) — le `continue` sur les participants sans `userId`
+      est correct, les deux bouts s'accordent pour la bonne raison
+- [x] Vérifié au passage : `READ_RECEIPT_OPT_OUT_CACHE` n'est invalidé nulle
+      part en production, mais `PrivacyPreferencesService.invalidateCache` non
+      plus — même TTL, même absence d'invalidation, l'alignement revendiqué est
+      réel. Rien à corriger
+- [x] Défaut livré : `ConversationStore.merging` tient le groupe d'aperçu pour
+      monotone et jette TOUT recul — or un recalcul serveur recule
+      légitimement sur DEUX chemins nominaux (suppression pour tous du dernier
+      message, masquage personnel du dernier message visible)
+- [x] Coût réel : la ligne de liste affichait l'aperçu d'un message qui
+      n'existe plus, indéfiniment si rien d'autre ne bougeait dans la
+      conversation ; et le correctif du cycle 40 restait **inerte sur iOS**
+- [x] Le client ne pouvait pas s'en tirer seul : diffusion périmée et recalcul
+      autoritatif sont indiscernables du seul contenu (les deux reculent, les
+      deux nomment un autre message)
+
+## Correctifs
+
+- [x] `emitConversationPreviewUpdate` — seul émetteur qui RECALCULE depuis la
+      base — pose `previewRecalculated: true` ; les émetteurs message-driven ne
+      le posent pas
+- [x] La garde cède devant cette déclaration, et devant elle seule
+- [x] Les trois maillons câblés (contrat partagé, décodage, mapping du pont —
+      ce dernier perdait déjà `updatedAt` en silence)
+- [x] DEUXIÈME surface, trouvée en instruisant la première :
+      `ConversationListViewModel` appliquait l'aperçu mais JAMAIS
+      `lastMessageAt` — le bon texte au mauvais rang. Corrigé sous le même
+      drapeau
+
+## Gates
+
+- [x] 2 RED discriminants gateway vus rouges avant correctif, verts après
+- [x] Double prisma COMPLET (l'émetteur avale ses pannes — leçon du cycle 40)
+- [x] 1 garde de non-régression : le bump message-driven n'a PAS le drapeau
+- [x] 8 témoins Swift (SDK + app), dont les deux contre-épreuves du recul NON
+      déclaré
+- [x] `bunx tsc --noEmit` gateway : 0 ; `packages/shared` : 0
+- [x] Suite gateway complète : 730 suites / 17 802 tests verts
+      (cycle 45 : 729 / 17 799 — exactement +1 suite, +3 tests)
+- [x] Swift vérifié par `sdk-tests.yml` (aucune toolchain Swift ici)
+- [x] CHANGELOG + journal d'audit (cycle46 bis) + leçon 204
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-16-cycle46-bis.md` — pourquoi la piste du
+cycle 45 se referme sans correctif, le tableau des trois gestes qui recalculent,
+pourquoi aucun prédicat sur le payload ne pouvait discriminer, les trois options
+écartées (dont l'ordonnancement par `updatedAt`, nommé par le cycle 40 et écarté
+sur mesure : son marqueur est nul au démarrage à froid, exactement là où le
+défaut se produit), et la piste suivante : le payload « plus AUCUN message
+visible » (`lastMessageAt: null`) reste inapplicable côté SDK, faute du même
+tri-état que la carte du Prisme a déjà dû introduire.

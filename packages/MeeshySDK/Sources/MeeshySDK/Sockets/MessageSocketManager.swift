@@ -671,6 +671,22 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// `updatedBy` and continue to populate this field.
     public let updatedBy: SocketEventUser?
     public let updatedAt: String
+    /// `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de sa
+    /// base, par opposition à une poussée du message qu'on vient d'écrire.
+    ///
+    /// C'est la seule chose qui autorise le groupe d'aperçu à RECULER dans le
+    /// temps. `ConversationStore.merging` tient ce groupe pour monotone — un
+    /// `lastMessageAt` plus ancien y désigne un message périmé — parce que du
+    /// seul contenu, une diffusion arrivée dans le désordre et un recalcul
+    /// autoritatif sont indiscernables : les deux reculent, les deux nomment un
+    /// autre message. Supprimer le dernier message pour tous, ou masquer son
+    /// propre dernier message visible, produit pourtant un aperçu légitimement
+    /// PLUS ANCIEN.
+    ///
+    /// Absent des payloads message-driven, et absent de tout gateway antérieur
+    /// à ce champ : `false` par défaut conserve alors exactement l'ancienne
+    /// règle.
+    public let previewRecalculated: Bool
 
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
@@ -678,6 +694,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
         case location
         case lastMessageTranslations, lastMessageOriginalLanguage
+        case previewRecalculated
     }
 
     public init(from decoder: Decoder) throws {
@@ -709,6 +726,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
+        previewRecalculated = try container.decodeIfPresent(Bool.self, forKey: .previewRecalculated) ?? false
     }
 
     public init(
@@ -729,7 +747,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
-        updatedAt: String
+        updatedAt: String,
+        previewRecalculated: Bool = false
     ) {
         self.conversationId = conversationId
         self.title = title
@@ -749,6 +768,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.senderId = senderId
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
+        self.previewRecalculated = previewRecalculated
     }
 }
 

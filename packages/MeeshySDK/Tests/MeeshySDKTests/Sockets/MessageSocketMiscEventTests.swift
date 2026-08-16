@@ -214,6 +214,44 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.autoTranslateEnabled, true)
         XCTAssertEqual(event.updatedBy?.id, "u1")
         XCTAssertEqual(event.updatedAt, "2026-04-09T10:00:00.000Z")
+        XCTAssertFalse(event.previewRecalculated,
+                       "a metadata-driven update is not a preview recalculation")
+    }
+
+    // `previewRecalculated` — le drapeau qui autorise le groupe d'aperçu à
+    // RECULER dans le temps. Ces deux témoins tiennent le NOM de la clé : le
+    // gateway l'écrit dans `emitConversationPreviewUpdate`, et une orthographe
+    // qui divergerait ne casserait rien de visible — elle rendrait simplement
+    // le correctif inerte, ce qui est précisément l'état d'AVANT.
+
+    func test_conversationUpdatedEvent_decodesPreviewRecalculatedFlag() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "lastMessageId": "msg-previous",
+            "lastMessagePreview": "celui d avant",
+            "updatedBy": {"id": "u1"},
+            "updatedAt": "2026-04-09T10:00:00.000Z",
+            "previewRecalculated": true
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertTrue(event.previewRecalculated)
+    }
+
+    func test_conversationUpdatedEvent_absentPreviewRecalculated_defaultsToFalse() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "lastMessageId": "msg-1",
+            "updatedAt": "2026-04-09T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertFalse(event.previewRecalculated,
+                       "an older gateway omits the key — the row must keep the pre-existing monotone rule")
     }
 
     // Le tri-état du Prisme. `Optional` confondrait « clé absente » (renommage :

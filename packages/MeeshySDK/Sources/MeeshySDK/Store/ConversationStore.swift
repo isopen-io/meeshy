@@ -444,10 +444,17 @@ public actor ConversationStore {
     /// the timestamp (otherwise a delayed broadcast for an older message
     /// would leave the row showing the newest timestamp paired with the
     /// older message's text). An EQUAL timestamp is the same message, not a
-    /// stale one — that is an edit, and it applies. Fields unrelated to
-    /// message ordering (e.g.
-    /// `title`) are still applied regardless. No-op for an unknown
-    /// conversation (the next list refresh will catch up).
+    /// stale one — that is an edit, and it applies.
+    ///
+    /// La monotonie cède devant `previewRecalculated` : le serveur déclare
+    /// alors avoir RECALCULÉ l'aperçu depuis sa base, et un tel aperçu recule
+    /// légitimement (suppression pour tous du dernier message, masquage
+    /// personnel du dernier message visible). Sans cette exception, le groupe
+    /// entier était jeté sur ces deux chemins nominaux.
+    ///
+    /// Fields unrelated to message ordering (e.g. `title`) are still applied
+    /// regardless. No-op for an unknown conversation (the next list refresh
+    /// will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
         guard let conv = conversations[event.conversationId],
               let merged = Self.merging(conv, with: event) else { return }
@@ -474,7 +481,31 @@ public actor ConversationStore {
         // était donc silencieusement jeté sur le seul chemin qui en avait besoin.
         // Ré-appliquer les mêmes valeurs sur un doublon d'événement est idempotent.
         let lastMessageIsCurrent = event.lastMessageAt.map { $0 >= conv.lastMessageAt } ?? true
-        if lastMessageIsCurrent {
+
+        // …sauf quand le serveur DÉCLARE avoir recalculé l'aperçu depuis sa base.
+        //
+        // La garde monotone lit un recul comme la marque d'un message périmé.
+        // C'en est une pour un événement message-driven, qui ne porte que le
+        // message qu'on vient d'écrire. C'en est une FAUSSE pour un recalcul :
+        // supprimer le dernier message pour tous fait redescendre la ligne sur
+        // le message PRÉCÉDENT, et un lecteur qui masque son propre dernier
+        // message visible se voit servir un remplaçant plus ancien par
+        // construction. Les deux reculent, les deux nomment un autre message —
+        // du seul contenu, ils sont indiscernables, et la garde jetait donc le
+        // groupe ENTIER sur deux chemins nominaux. C'est pourquoi le
+        // discriminant ne pouvait venir que de l'émetteur.
+        //
+        // Ce qu'il ne faut PAS faire à la place : omettre `lastMessageAt` du
+        // payload pour passer sous la garde. Le champ deviendrait faux et le tri
+        // de la liste avec lui — on remplacerait un aperçu périmé par un tri
+        // périmé.
+        //
+        // Reste assumé : deux recalculs qui se doubleraient s'appliquent dans
+        // l'ordre d'ARRIVÉE. Une même connexion Socket.IO préserve l'ordre
+        // d'émission, et le cas où ça se joue vraiment — une traduction qui
+        // atterrit derrière un message plus neuf — est déjà tenu côté serveur
+        // par la borne `onlyIfLatestIs`, qui abandonne le fan-out.
+        if lastMessageIsCurrent || event.previewRecalculated {
             if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
             if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
             if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
@@ -875,6 +906,10 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// ordre, et c'est la seule façon de rendre une édition applicable.
     public let lastMessageTranslations: LastMessagePreviewTranslations
     public let lastMessageOriginalLanguage: String?
+    /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
+    /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
+    /// de RECULER dans le temps — voir `merging(_:with:)`.
+    public let previewRecalculated: Bool
     public let title: String?
     public let avatar: String?
     public let description: String?
@@ -891,6 +926,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
+        previewRecalculated: Bool = false,
         title: String? = nil,
         avatar: String? = nil,
         description: String? = nil,
@@ -906,6 +942,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.previewRecalculated = previewRecalculated
         self.title = title
         self.avatar = avatar
         self.description = description

@@ -443,15 +443,21 @@ jobs:
           # Les erreurs du compilateur partent AUSSI en annotations : le log
           # brut exige un token, la page publique du run non (même remède que
           # le résumé XCTest — leçon 265, lecteur distant sans rien d'autre).
+          # `set +e` obligatoire : le runner lance ce script avec `bash -e`,
+          # et -e + pipefail tuent le script sur le pipeline en échec AVANT
+          # d'atteindre le bloc d'annotations (constaté au run #79 — exit 65
+          # nu, zéro annotation). On sort explicitement avec `exit "$rc"`.
+          #
           # `-continue-building-after-errors` : sans lui le frontend Swift
           # s'arrête à la PREMIÈRE erreur du module. Un fichier qui en porte
           # trois coûtait donc trois runs de ~15 min pour être déminé, chacun
           # ne révélant que la suivante. Avec, le typage continue et le MÊME
-          # run les liste toutes — c'est ce qui rend l'annotation ci-dessous
-          # exhaustive plutôt qu'anecdotique. No-op sur un build vert ; en
+          # run les liste toutes — c'est ce qui rend le bloc d'annotations
+          # exhaustif plutôt qu'anecdotique. No-op sur un build vert ; en
           # contrepartie une erreur amont peut cascader en diagnostics
           # dérivés, d'où la déduplication par POSITION plus bas.
           set -o pipefail
+          set +e
           xcodebuild build-for-testing \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \

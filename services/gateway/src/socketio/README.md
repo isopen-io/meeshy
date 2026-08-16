@@ -555,6 +555,31 @@ doit se demander si le message touche est le DERNIER de sa conversation — et s
 oui, appeler `emitConversationPreviewUpdate`. Un champ d'apercu qui n'est jamais
 reservi n'est pas « en retard », il est faux definitivement.
 
+### `previewRecalculated` — pourquoi la troisieme famille se declare
+
+Les clients tiennent le groupe d'apercu pour **monotone** : un `lastMessageAt`
+plus ancien que celui de la ligne y designe un message perime, et tout le groupe
+est ecarte (`ConversationStore.merging` cote SDK). La garde protege des deux
+premieres familles, ou une diffusion arrivee dans le desordre porterait le texte
+d'un message plus vieux sous l'horodatage du plus neuf.
+
+`emitConversationPreviewUpdate` ne pousse PAS un message : il **recalcule**
+l'apercu depuis l'etat courant de la base. Un tel apercu recule legitimement —
+supprimer le dernier message pour tous fait redescendre la ligne sur le
+PRECEDENT, et un lecteur qui masque son propre dernier message visible se voit
+servir un remplacant plus ancien par construction. Du seul CONTENU, ce recul-la
+est indiscernable d'une diffusion perimee : les deux reculent, les deux nomment
+un autre `lastMessageId`. Seul l'emetteur sait lequel des deux il envoie.
+
+Il pose donc `previewRecalculated: true`, et les deux familles message-driven
+l'omettent — ce sont exactement celles que la garde protege. Cote client, la
+monotonie ne cede que devant ce drapeau. Le champ est optionnel : un client qui
+ne le lit pas garde l'ancienne regle a l'identique.
+
+**Ce qu'il ne faut PAS faire** : omettre `lastMessageAt` du payload pour passer
+sous la garde. Le champ deviendrait faux et le TRI de la liste avec lui — on
+remplacerait un apercu perime par un tri perime.
+
 ---
 
 ## `message:translation` — la traduction doit aussi les lecteurs HORS LIGNE

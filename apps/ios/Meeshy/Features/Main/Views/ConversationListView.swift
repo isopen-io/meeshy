@@ -1393,13 +1393,15 @@ struct ConversationListView: View {
                         // EXACT, bit à bit identique (mêmes arguments,
                         // aucun `compact:`).
                         case .searchNoResults:
-                            // `Group` porte les modificateurs communs : un
-                            // `if/else` est une INSTRUCTION, pas une expression
-                            // — lui chaîner `.padding` directement fait lire
-                            // `.padding` comme un membre de type sur `View`
-                            // (« instance member 'padding' cannot be used on
-                            // type 'View' »). `Group` est transparent au rendu,
-                            // les métriques restent celles de `.skeleton`.
+                            // `Group` : un modificateur ne s'attache pas à un
+                            // `if/else` dans un ViewBuilder (« instance member
+                            // 'padding' cannot be used on type 'View' »). Le
+                            // mux de drapeau posé ici a rendu ces deux lignes
+                            // orphelines. `Group` est transparent au rendu —
+                            // il rétablit la cible du modificateur sans
+                            // dupliquer les métriques dans chaque branche, ce
+                            // qui est précisément ce que ce restylage promet
+                            // (« même `.padding(.top, 60)` »).
                             Group {
                                 if LentilleFeatureFlag.isLentilleListEnabled {
                                     EmptyStateView(
