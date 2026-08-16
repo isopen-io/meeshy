@@ -9210,3 +9210,98 @@ Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebu
   `2026-08-13-group-calls-gap-analysis.md` (dont W4/W5 constatés DÉJÀ résolus par des vagues
   antérieures lors de cet audit — `aggregateConnectionState`/`aggregateIceConnectionState`
   (`use-webrtc-p2p.ts`) et `use-peer-connections.ts` qui a remplacé `useActivePeerConnection`).
+
+## Vague 137 — a participant leaving a group call wiped every OTHER participant's buffered §4.6 signaling offer (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-136) mandaté pour trouver un correctif chirurgical neuf.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/
+`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : le mécanisme §4.6 de mise en tampon des offres/réponses SDP
+  (`CallEventsHandler.bufferOffer`/`bufferedOfferFor`) est délibérément keyé PAR DESTINATAIRE
+  (`${callId}:${signal.to}`, doc comment de `bufferOffer` — un offre bufferisée pour un
+  destinataire et une réponse bufferisée pour un AUTRE destinataire sur le MÊME appel doivent
+  coexister sans s'écraser). Mais les trois points d'entrée « ce participant quitte l'appel »
+  (`call:leave`, `call:force-leave`, et la branche `call:end` traitée comme un leave quand le
+  groupe continue) nettoyaient TOUS via `clearBufferedOffer(callId)` — un BALAYAGE DE TOUT L'APPEL
+  qui supprime CHAQUE entrée préfixée par ce `callId`, quel que soit le destinataire. Correct pour
+  un appel 1:1 (la seule forme qui existait quand §4.6 a été écrit — un participant qui part, c'est
+  l'appel entier qui se termine), mais faux dès qu'un appel de GROUPE continue au-delà du départ
+  d'un seul participant (mesh réel depuis la Vague 126) : le départ du participant D supprimait
+  l'offre encore en attente d'un participant C totalement étranger à ce départ (ex. le socket de C
+  n'avait pas encore (re)rejoint la room de l'appel), affamant définitivement la connexion mesh de
+  C — `bufferedOfferFor` ne trouvait plus rien à rejouer à son `call:join` ultérieur. La branche
+  `call:end`-traitée-comme-leave est particulièrement révélatrice : son propre commentaire, daté du
+  MÊME jour (« Group hang-up (calling-stack audit 2026-08-16) — … group call continues for other
+  participants »), documentait explicitement que l'appel continue pour les autres, tout en appelant
+  encore `clearBufferedOffer(data.callId)` sans discrimination deux lignes plus bas — le nettoyage
+  par-appel n'avait jamais été reconsidéré au moment où le keyage par-destinataire, puis la
+  continuation de groupe, ont été introduits.
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel (Vague
+  126). A crée une offre vers B (livrée directement, B se connecte) ET vers C — mais le socket de C
+  n'a pas encore fini de rejoindre la room (réseau lent, app en arrière-plan), donc l'offre vers C
+  est bufferisée (`${callId}:C`). B raccroche tôt (`call:leave`) ; le groupe continue pour A et C
+  (2 participants actifs restants). Le handler appelait `clearBufferedOffer(data.callId)` —
+  supprimant AUSSI `${callId}:C`, sans aucun rapport avec le départ de B. Quand le socket de C
+  rejoint enfin et appelle `call:join`, `bufferedOfferFor` ne trouve plus rien : l'offre de A n'est
+  jamais rejouée à C, aucune `RTCPeerConnection` A↔C n'est jamais établie pour le reste de l'appel —
+  C reste un spectateur silencieux dans le roster, sans lien média avec A, alors que rien dans SON
+  propre parcours de connexion n'a jamais échoué.
+- **Preuve indépendante** : un test EXISTANT (`CallEventsHandler-force-leave.test.ts`, « clears any
+  buffered offer for the force-left call ») codifiait littéralement l'ancien comportement bogué
+  comme correct — il bufferisait une offre pour un destinataire `some-recipient` totalement
+  arbitraire et affirmait qu'elle disparaissait après le force-leave d'un AUTRE utilisateur,
+  exactement le symptôme décrit ci-dessus.
+- **Fix** : nouvelle méthode `clearBufferedOfferFor(callId, ...participantIdentities)` — supprime
+  UNIQUEMENT le(s) slot(s) adressé(s) au participant donné (les deux espaces d'identité, `userId`
+  ET `participantId`, comme `bufferedOfferFor` le fait déjà en lecture). Les trois sites « ce
+  participant quitte » (`call:leave`, `call:force-leave`, `call:end` groupe-continue) l'utilisent
+  désormais à la place de `clearBufferedOffer`. `clearBufferedOffer` (balayage total) reste
+  INCHANGÉ et continue d'être le bon outil pour les 3 sites restants où l'appel se termine
+  réellement pour TOUT LE MONDE (fin de négociation post-`answer`, sender-parti détecté au replay,
+  branche terminale de `call:end`) — non retouchés, cf. « Non fait volontairement ». Le cas où le
+  leave scopé laisse une entrée résiduelle d'un AUTRE destinataire quand l'appel finit VRAIMENT en
+  même temps (dernier participant d'un appel 1:1, ou dernier membre d'un groupe) s'auto-guérit via
+  le balayage TTL périodique déjà en place (60s, `OFFER_BUFFER_TTL_MS` = 150s) — même filet de
+  sécurité déjà documenté pour les autres chemins d'erreur qui sautent `clearBufferedOffer`.
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, 3 échecs nets contre le
+  code non corrigé, un par site, les cas « nettoie son propre slot » passant trivialement par
+  construction avant comme après) :
+  - `CallEventsHandler-leave-buffered-offer-scope.test.ts` (nouveau fichier, `call:leave`) — 3 cas :
+    nettoie le slot du partant (espace `userId`) ; nettoie aussi son slot dans l'espace
+    `participantId` (FK membership) ; NE nettoie PAS le slot d'un spectateur toujours actif — **3/3**
+    verts.
+  - `CallEventsHandler-force-leave.test.ts` — le test existant qui codifiait le bug réécrit pour
+    affirmer le nettoyage scopé au partant + 1 cas neuf affirmant qu'un slot destinataire non lié
+    survit — **15/15** verts (+1 net, 1 réécrit).
+  - `CallEventsHandler-end.test.ts` — nouveau groupe « group hang-up: buffered-offer cleanup is
+    scoped to the hanger-up, not the whole call », 2 cas neufs (nettoie son propre slot ; NE
+    nettoie PAS le slot d'un spectateur toujours actif) — **46/46** verts (+2 net). Piège de double
+    découvert en écrivant ce cas : `hasOtherActiveParticipants` compare `p.id !== activeParticipant.id`
+    (la clé primaire `CallParticipant.id`, pas la FK `participantId`) — un fixture de test sans champ
+    `.id` distinct par participant fait comparer `undefined !== undefined` (toujours faux), rendant
+    `willContinueAsGroupLeave` silencieusement faux quel que soit le nombre de participants ; corrigé
+    en donnant à chaque participant du fixture un `.id` unique.
+  - Sweep gateway `--testPathPatterns="[Cc]all"` : **53 suites / 1224 tests** verts (+6 net, 0
+    régression). Suite gateway COMPLÈTE (`jest --config=jest.config.json`, toutes suites) :
+    **735 suites / 17 876 tests** verts (+1 suite / +6 tests nets vs. la Vague 136), 0 régression.
+    `npx tsc --noEmit` (services/gateway) : **0 erreur** avant et après (`git stash`/`stash pop` du
+    fichier source — client Prisma généré sans accroc cette session, `packages/shared` buildé en
+    amont via `bun run build`).
+- **Non fait volontairement** : les 3 AUTRES sites d'appel à `clearBufferedOffer` (balayage total)
+  restent inchangés — ce sont les seuls où le call-wide sweep reste correct par construction (fin
+  de négociation `answer` reçue § `call:signal`, purge d'une offre bufferisée dont l'émetteur s'est
+  avéré parti au moment du replay `call:join`, branche terminale `call:end` où l'appel finit
+  vraiment pour tout le monde) — les auditer un par un pour un éventuel raffinement supplémentaire
+  (ex. l'`answer` reçue pourrait en théorie, elle aussi, sur-nettoyer dans un appel de groupe à 3+
+  paires simultanées en cours de négociation) est une piste distincte, plus large, laissée à un
+  prochain cycle plutôt que d'étendre ce correctif chirurgical au-delà des 3 sites « un participant
+  part » vérifiés ici. Reconduits (inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors
+  d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous`
+  (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans
+  filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ;
+  gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.

@@ -363,7 +363,7 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
     });
 
-    it('clears any buffered offer for the force-left call', async () => {
+    it('clears the buffered offer slot addressed to the force-leaving user', async () => {
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([
           makeActiveCallWithParticipant(USER_ID),
@@ -376,16 +376,51 @@ describe('CallEventsHandler — call:force-leave handler', () => {
 
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
-      // Seed a buffered offer for this callId the way `call:signal` would —
-      // keyed `${callId}:${to}` (see bufferOffer).
-      (handler as any).bufferedOffers.set(`${CALL_ID}:some-recipient`, {
+      // Seed a buffered offer addressed to the force-leaving user themselves
+      // — keyed `${callId}:${to}` (see bufferOffer). This slot is genuinely
+      // stale once they leave and must be dropped.
+      (handler as any).bufferedOffers.set(`${CALL_ID}:${USER_ID}`, {
         signal: { type: 'offer', sdp: 'v=0' },
         bufferedAt: Date.now(),
       });
 
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
-      expect((handler as any).bufferedOffers.has(`${CALL_ID}:some-recipient`)).toBe(false);
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:${USER_ID}`)).toBe(false);
+    });
+
+    // Group-call bug (calling-stack audit 2026-08-16) — a force-leave used to
+    // clear via `clearBufferedOffer(callId)`, a WHOLE-CALL sweep that drops
+    // every recipient's slot, not just the force-leaving user's own. In a
+    // group call that continues for everyone else, that silently discarded a
+    // totally unrelated, still-active participant's own pending buffered
+    // offer (e.g. their socket hadn't (re)joined the call room yet) —
+    // permanently starving their mesh connection, since `bufferedOfferFor`
+    // would find nothing on their eventual `call:join`.
+    it('does NOT clear a sibling recipient\'s buffered offer — only the force-leaving user\'s own slot', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      // A buffered offer addressed to an unrelated, still-active bystander —
+      // e.g. still waiting to (re)join the call room. USER_ID force-leaving
+      // must not touch it.
+      (handler as any).bufferedOffers.set(`${CALL_ID}:bystander-user-id`, {
+        signal: { type: 'offer', sdp: 'v=0' },
+        bufferedAt: Date.now(),
+      });
+
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:bystander-user-id`)).toBe(true);
     });
   });
 
