@@ -27,6 +27,23 @@
  * rapporteur) et `remoteScreenCapturingParticipantIds` (l'ensemble ordonné
  * des pairs actuellement capturants, miroir exact de `capturingParticipants`
  * ci-dessous) pour que l'appelant résolve le VRAI nom à afficher.
+ *
+ * Espace d'identité (Vague 132, 2026-08-16) : `event.participantId` est
+ * `CallParticipant.participantId` (FK vers `Participant.id`), PAS
+ * `User.id`. `VideoCallInterface.resolveParticipantName` cherche pourtant
+ * dans le roster par `(p.userId || p.participantId)`, où `p.userId` porte un
+ * vrai `User.id` pour un participant enregistré (`participantId` n'existe
+ * même pas sur l'entrée roster côté client — jamais peuplé par le gateway).
+ * Résultat avant correctif : nom introuvable pour QUASIMENT tout appel
+ * (seul un invité anonyme, dont `userId` retombe déjà sur son
+ * `Participant.id`, matchait par coïncidence). `resolveAlertIdentity`
+ * ci-dessous préfère `event.userId` (ajouté Vague 132, même dérivation que
+ * `toCallParticipantResponse`) et ne retombe sur `event.participantId` que
+ * si le gateway ne l'a pas encore envoyé — c'est CETTE valeur, jamais le
+ * `participantId` brut, qui doit peupler les deux Maps/Set ci-dessous ET la
+ * clé de nettoyage sur `call:participant-left`, sous peine de rendre le
+ * retrait silencieusement inopérant (les trois événements doivent
+ * s'accorder sur le même espace d'identité).
  */
 
 'use client';
@@ -42,6 +59,15 @@ import type {
 
 /** Parité iOS `QualityThresholds.remoteQualityResetSeconds` (15 s). */
 const REMOTE_QUALITY_RESET_MS = 15_000;
+
+/**
+ * The identity to key alert state by — see the file-level doc comment
+ * (Vague 132). Applied uniformly to all three side-channel events so a
+ * `participant-left` cleanup always matches what quality/screen-capture
+ * alerts wrote.
+ */
+const resolveAlertIdentity = (event: { participantId: string; userId?: string }): string =>
+  event.userId || event.participantId;
 
 export function useRemoteCallAlerts(callId: string | null): {
   remoteQualityDegraded: boolean;
@@ -88,7 +114,7 @@ export function useRemoteCallAlerts(callId: string | null): {
       setRemoteQualityDegraded(true);
       // Last reporter wins — consistent with the 15s auto-clear below, which
       // already tracks only the most recent alert regardless of who sent it.
-      setRemoteQualityDegradedParticipantId(event.participantId);
+      setRemoteQualityDegradedParticipantId(resolveAlertIdentity(event));
       if (resetTimeout) clearTimeout(resetTimeout);
       resetTimeout = setTimeout(() => {
         resetTimeout = null;
@@ -99,10 +125,11 @@ export function useRemoteCallAlerts(callId: string | null): {
 
     const handleScreenCaptureAlert = (event: CallScreenCaptureEvent) => {
       if (event.callId !== callId) return;
+      const identity = resolveAlertIdentity(event);
       if (event.isCapturing) {
-        capturingParticipants.add(event.participantId);
+        capturingParticipants.add(identity);
       } else {
-        capturingParticipants.delete(event.participantId);
+        capturingParticipants.delete(identity);
       }
       setRemoteScreenCapturing(capturingParticipants.size > 0);
       setRemoteScreenCapturingParticipantIds(Array.from(capturingParticipants));
@@ -114,7 +141,7 @@ export function useRemoteCallAlerts(callId: string | null): {
     // call even once nobody is capturing anymore.
     const handleParticipantLeft = (event: CallParticipantLeftEvent) => {
       if (event.callId !== callId) return;
-      if (capturingParticipants.delete(event.participantId)) {
+      if (capturingParticipants.delete(resolveAlertIdentity(event))) {
         setRemoteScreenCapturing(capturingParticipants.size > 0);
         setRemoteScreenCapturingParticipantIds(Array.from(capturingParticipants));
       }
