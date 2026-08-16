@@ -386,14 +386,47 @@ describe('CallService.listHistory', () => {
   });
 
   describe('missed call filter', () => {
-    it('queries only missed calls and excludes current user as initiator when filter=missed', async () => {
+    it('excludes current user as initiator and keeps the base terminal-status window when filter=missed', async () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
       await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
       const { where } = callSessionFindMany.mock.calls[0][0];
-      expect(where.status).toBe(CallStatus.missed);
+      // The base terminal-status window (ended/missed/rejected/failed) must
+      // survive — the missed filter narrows further via `where.OR` below, it
+      // must never collapse the query down to `status: missed` alone (that
+      // would silently exclude the group-bystander case this filter exists
+      // to catch — see the two OR-branch tests below).
+      expect(where.status).toEqual({ in: [CallStatus.ended, CallStatus.missed, CallStatus.rejected, CallStatus.failed] });
       expect(where.initiatorId).toEqual({ not: USER_ID });
+    });
+
+    it('matches a call-wide missed status (nobody answered) via the OR clause', async () => {
+      const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
+      const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
+      const { where } = callSessionFindMany.mock.calls[0][0];
+      expect(where.OR).toContainEqual({ status: CallStatus.missed });
+    });
+
+    it('also matches a group call ANSWERED by others that the current user never personally joined (mirrors deriveCallDirection — Vague 105/136)', async () => {
+      // A group call can reach `status: 'ended'` (not `missed`) when other
+      // members answered and talked while this member's own CallParticipant
+      // row never got created (declined, ignored, offline). `direction`
+      // already reports 'missed' for this row under filter=all (Vague 105);
+      // the missed-tab QUERY must select the same rows, or the filter is a
+      // lie for every group call with 3+ members (the common case since the
+      // 2-participant cap was lifted 2026-08-13).
+      const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
+      const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
+      const { where } = callSessionFindMany.mock.calls[0][0];
+      expect(where.OR).toContainEqual({
+        answeredAt: { not: null },
+        participants: { none: { participant: { userId: USER_ID } } },
+      });
     });
 
     it('does not apply missed filter when filter=all', async () => {
@@ -403,6 +436,7 @@ describe('CallService.listHistory', () => {
       await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
       const { where } = callSessionFindMany.mock.calls[0][0];
       expect(where.initiatorId).toBeUndefined();
+      expect(where.OR).toBeUndefined();
     });
   });
 });
