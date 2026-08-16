@@ -169,4 +169,16 @@ interface ConversationApi {
         @Path("id") id: String,
         @Body body: AddParticipantRequest,
     ): ApiResponse<Unit>
+
+    /**
+     * Bans a member from the conversation — server-enforced (the client only gates the
+     * affordance via [me.meeshy.sdk.model.MemberModeration.canBan]). Mirror of iOS
+     * `ConversationService.banParticipant` (`packages/MeeshySDK`), itself the only iOS
+     * surface that wires ban — `PATCH`, no body, path params only.
+     */
+    @PATCH("conversations/{id}/participants/{userId}/ban")
+    suspend fun banParticipant(
+        @Path("id") id: String,
+        @Path("userId") userId: String,
+    ): ApiResponse<Unit>
 }

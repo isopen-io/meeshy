@@ -61,6 +61,8 @@ private abstract class StubConversationApi : ConversationApi {
         ApiResponse<Unit>(success = false)
     override suspend fun addParticipant(id: String, body: AddParticipantRequest) =
         ApiResponse<Unit>(success = false)
+    override suspend fun banParticipant(id: String, userId: String) =
+        ApiResponse<Unit>(success = false)
 }
 
 private class FakeConversationApi(
@@ -123,6 +125,7 @@ private class RecordingParticipantsApi(
     private val roleResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
     private val removeResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
     private val addResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+    private val banResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
 ) : StubConversationApi() {
     var lastId: String? = null
     var lastSearch: String? = null
@@ -132,6 +135,7 @@ private class RecordingParticipantsApi(
     var lastRoleBody: ParticipantRoleUpdate? = null
     var lastRemovedUserId: String? = null
     var lastAddedUserId: String? = null
+    var lastBannedUserId: String? = null
 
     override suspend fun participants(
         id: String,
@@ -167,6 +171,12 @@ private class RecordingParticipantsApi(
         lastId = id
         lastAddedUserId = body.userId
         return addResponse
+    }
+
+    override suspend fun banParticipant(id: String, userId: String): ApiResponse<Unit> {
+        lastId = id
+        lastBannedUserId = userId
+        return banResponse
     }
 }
 
@@ -1008,5 +1018,32 @@ class ConversationRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.message)
             .isEqualTo("Only admins and moderators can add participants")
+    }
+
+    @Test
+    fun `banParticipant forwards the conversation and user ids`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.banParticipant("c1", "u1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastBannedUserId).isEqualTo("u1")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `banParticipant folds a refusal into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                banResponse = ApiResponse(success = false, error = "Vous ne pouvez pas bannir un participant de rang égal ou supérieur"),
+            ),
+        )
+
+        val result = repo.banParticipant("c1", "u1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message)
+            .isEqualTo("Vous ne pouvez pas bannir un participant de rang égal ou supérieur")
     }
 }
