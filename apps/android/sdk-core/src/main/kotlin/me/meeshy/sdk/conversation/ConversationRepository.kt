@@ -266,6 +266,20 @@ class ConversationRepository @Inject constructor(
     }
 
     /**
+     * Optimistic tag-set replacement (the "Tags" context-menu dialog, parity
+     * iOS `ConversationOptionsViewModel.setTags`) — trims, drops blanks, and
+     * deduplicates (first occurrence wins) before comparing against the
+     * cached set, so a no-op edit never enqueues a wasted snapshot. Unlike
+     * [setCustomNameOptimistic]/[setReactionOptimistic], an empty list needs
+     * no null-vs-empty-string sentinel: `[]` is a real, non-null JSON array
+     * value the shared `explicitNulls = false` encoder never drops.
+     */
+    suspend fun setTagsOptimistic(id: String, tags: List<String>): Boolean {
+        val normalized = tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        return updatePreferencesOptimistic(id) { it.copy(tags = normalized) }
+    }
+
+    /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
      * cached preferences mutate instantly (the filter re-derives the visible
      * list) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation joins the
@@ -306,6 +320,7 @@ class ConversationRepository @Inject constructor(
                         categoryId = snapshot.categoryId,
                         customName = snapshot.customName,
                         reaction = snapshot.reaction,
+                        tags = snapshot.tags,
                     ),
                 ),
             ),

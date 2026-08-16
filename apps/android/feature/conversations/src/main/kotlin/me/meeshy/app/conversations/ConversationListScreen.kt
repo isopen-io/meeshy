@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AlternateEmail
@@ -53,6 +56,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -217,6 +221,7 @@ fun ConversationListScreen(
                                 onDeleteForAll = { viewModel.deleteConversationForAll(conversation.id) },
                                 onRename = { viewModel.setCustomName(conversation.id, it) },
                                 onSetReaction = { viewModel.setReaction(conversation.id, it) },
+                                onSetTags = { viewModel.setTags(conversation.id, it) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -384,6 +389,7 @@ private fun ConversationRow(
     onDeleteForAll: () -> Unit,
     onRename: (String) -> Unit,
     onSetReaction: (String?) -> Unit,
+    onSetTags: (List<String>) -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -444,6 +450,8 @@ private fun ConversationRow(
             currentCustomName = prefs?.customName,
             onSetReaction = onSetReaction,
             currentReaction = prefs?.reaction,
+            onSetTags = onSetTags,
+            currentTags = prefs?.tags.orEmpty(),
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -501,6 +509,8 @@ private fun ConversationRowContent(
     currentCustomName: String?,
     onSetReaction: (String?) -> Unit,
     currentReaction: String?,
+    onSetTags: (List<String>) -> Unit,
+    currentTags: List<String>,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -653,6 +663,8 @@ private fun ConversationRowContent(
             currentCustomName = currentCustomName,
             onSetReaction = onSetReaction,
             currentReaction = currentReaction,
+            onSetTags = onSetTags,
+            currentTags = currentTags,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -665,6 +677,7 @@ private fun ConversationRowContent(
 /** Fixed favorite-reaction choices — parity iOS `ConversationListView+Overlays`'s "Favori" submenu. */
 private val favoriteReactionChoices = listOf("⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡")
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConversationContextMenu(
     expanded: Boolean,
@@ -695,6 +708,8 @@ private fun ConversationContextMenu(
     currentCustomName: String?,
     onSetReaction: (String?) -> Unit,
     currentReaction: String?,
+    onSetTags: (List<String>) -> Unit,
+    currentTags: List<String>,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -706,6 +721,9 @@ private fun ConversationContextMenu(
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
     var showRenameDialog by remember(expanded) { mutableStateOf(false) }
     var renameText by remember(expanded) { mutableStateOf(currentCustomName.orEmpty()) }
+    var showTagsDialog by remember(expanded) { mutableStateOf(false) }
+    var editedTags by remember(expanded) { mutableStateOf(currentTags) }
+    var newTagText by remember(expanded) { mutableStateOf("") }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
@@ -845,6 +863,11 @@ private fun ConversationContextMenu(
                 onClick = { onSetReaction(null); onDismiss() },
             )
         }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.conversations_action_tags)) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
+            onClick = { showTagsDialog = true },
+        )
         // Move-to-category / create-category (parity iOS `CategoryPickerField` +
         // `ConversationOptionsViewModel.setCategory`/`createCategoryAndSelect`): a
         // search field filters the pure ConversationCategoryPicker SSOT's displayed
@@ -1020,6 +1043,78 @@ private fun ConversationContextMenu(
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
+    }
+
+    if (showTagsDialog) {
+        AlertDialog(
+            onDismissRequest = { showTagsDialog = false },
+            title = { Text(stringResource(R.string.conversations_tags_dialog_title)) },
+            text = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = newTagText,
+                            onValueChange = { newTagText = it },
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.conversations_tags_field_hint)) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                editedTags = ConversationTagsEditor.add(editedTags, newTagText)
+                                newTagText = ""
+                            },
+                        ) {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = stringResource(R.string.conversations_tags_add_content_description),
+                            )
+                        }
+                    }
+                    FlowRow(
+                        modifier = Modifier.padding(top = MeeshySpacing.sm),
+                        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                    ) {
+                        editedTags.forEach { tag ->
+                            InputChip(
+                                selected = false,
+                                onClick = {},
+                                label = { Text(tag) },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = stringResource(
+                                            R.string.conversations_tags_remove_content_description,
+                                            tag,
+                                        ),
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clickable { editedTags = ConversationTagsEditor.remove(editedTags, tag) },
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showTagsDialog = false
+                        onSetTags(editedTags)
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_rename_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTagsDialog = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },

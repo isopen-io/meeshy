@@ -263,6 +263,14 @@ public data class ConversationPrefsPayload(
      * shared `explicitNulls = false` encoder.
      */
     val reaction: String? = null,
+    /**
+     * The conversation's full personal tag set — `null` means "unrelated
+     * snapshot, leave the tags untouched"; an explicit (possibly empty) list
+     * is the new desired set. Unlike [customName]/[reaction], no
+     * empty-string sentinel is needed here: `[]` is a real, non-null JSON
+     * array the `explicitNulls = false` encoder never drops.
+     */
+    val tags: List<String>? = null,
 )
 
 /**

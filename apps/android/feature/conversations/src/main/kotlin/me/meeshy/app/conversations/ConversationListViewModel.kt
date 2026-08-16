@@ -351,6 +351,11 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.setReactionOptimistic(id, emoji) }
     }
 
+    /** Replaces a conversation's full tag set (context-menu "Tags" dialog, parity iOS `setTags`). */
+    fun setTags(id: String, tags: List<String>) {
+        runPrefMutation { repository.setTagsOptimistic(id, tags) }
+    }
+
     /**
      * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
      * No optimistic local removal: the socket-driven purge path

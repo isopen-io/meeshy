@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Per-conversation tags shipped — closes the "Per-conversation preferences" line**
+> (slice `conversation-tags-preference`) — the box is now checked: pin/category/mute/mentions-only
+> (PR #3054), custom name (PR #3079), reaction (PR #3082) and now tags are all wired. Re-proved
+> against real code before starting: unlike `customName`/`reaction`, NEITHER model field existed on
+> Android at all yet — `ApiConversationPreferences.tags` and `ConversationPreferencesUpdate.tags`
+> both had to be added from scratch (the gateway already supported `data.tags` on the write side —
+> `services/gateway/src/routes/conversation-preferences.ts:440`).
+>
+> **iOS reference read in full**: `ConversationOptionsViewModel.setTags`/`.addTag`/`.removeTag`
+> (`prefs.tags: [String]?`), rendered by `ConversationPreferencesTab`'s `TagInputField`, backed by
+> `PreferenceService.getMyConversationTags()` — which has **no dedicated gateway endpoint**: it calls
+> the existing `GET /user-preferences/conversations?limit=200` list and aggregates `tags` across
+> every row client-side into a deduped, sorted autocomplete corpus (`allTags`).
+>
+> **Scope decision, made explicit rather than silently dropped**: implementing the full corpus-fetch
+> + typeahead autocomplete in the same slice would have meant a second new REST integration path
+> AND a new Compose autocomplete component — a materially bigger lift than `customName`/`reaction`
+> (which only needed to wire ALREADY-modeled fields). Rather than force it into one run or skip
+> `tags` again, shipped the CORE write path (repository → outbox → ViewModel → UI, no dead end) with
+> a plain add/remove chip editor and explicitly deferred the autocomplete corpus as a documented
+> follow-up — same judgment call already applied to `reaction` (iOS's own "Favori" submenu uses a
+> small FIXED set, not its full categorized `EmojiFullPicker`, so matching iOS's simpler surface was
+> correct there too, not corner-cutting).
+>
+> **No null-vs-empty-string sentinel needed** (unlike `customName`/`reaction`): tags is a `List<String>`
+> field. `explicitNulls = false` only drops a Kotlin `null`; `[]` is a real, non-null JSON array value
+> that always serializes — so `ConversationRepository.setTagsOptimistic` needs no clear-semantics
+> workaround, just a normalize step (trim, drop blanks, `.distinct()` — first occurrence wins,
+> matching iOS's own exact-match `contains` dedup rule).
+>
+> **Pure `ConversationTagsEditor.add`/`.remove`** (`feature/conversations`, mirrors
+> `ConversationCategoryReassignment`'s placement precedent — app-side product logic, not an SDK
+> atom) — the ONLY testable decision extracted out of the new dialog Composable per
+> `TDD-COVERAGE.md`. UI: a "Tags" context-menu item opening an `AlertDialog` with a `TextField` +
+> add `IconButton`, and a `FlowRow` (stable, already used elsewhere e.g.
+> `RegistrationScreen`'s username-suggestion strip) of removable `InputChip`s (Material3, new to this
+> codebase — trailing `Close` icon wired to `ConversationTagsEditor.remove`). Used
+> `Icons.AutoMirrored.Filled.Label` (not the deprecated `Icons.Filled.Label`) for the menu item.
+>
+> **+9 tests**: 5 `ConversationTagsEditorTest` (add trims, add-blank no-ops, add-duplicate no-ops,
+> remove drops, remove-absent no-ops), 3 `ConversationRepositoryTest` (sets + queues a snapshot with
+> the normalized/deduped set, no-op when unchanged, clearing to `[]` sends a real empty JSON array —
+> asserts the raw `"tags":[]` payload string), 1 `ConversationListViewModelTest` (`setTags` forwards
+> the full set). The new dialog/chip UI is glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 59s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=conversation-tags-preference`.
+
 > On 2026-08-16 **Per-conversation favorite reaction shipped, fixing a genuinely dead filter tab**
 > (slice `conversation-favorite-reaction`) — re-proved against real code before starting: the prior
 > slice's own `PROGRESS.md`/`feature-parity.md` notes claimed "iOS has no real UI for `reaction`
