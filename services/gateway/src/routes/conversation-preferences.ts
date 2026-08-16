@@ -28,6 +28,7 @@ import {
   ConversationPreferencesScopeError,
   type ConversationPreferencesWrite,
 } from '../services/conversationPreferencesSync';
+import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -39,6 +40,7 @@ interface ConversationPreferencesBody {
   orderInCategory?: number | null;
   customName?: string | null;
   reaction?: string | null;
+  readingMode?: ReadingModePreference;
 }
 
 interface ConversationIdParams {
@@ -46,6 +48,12 @@ interface ConversationIdParams {
 }
 
 // ========== SCHEMAS FOR OPENAPI DOCUMENTATION ==========
+
+// `ReadingModePreferenceSchema.options` est la SEULE source de l'énumération —
+// jamais une copie littérale : c'est le contrat gelé §3.1
+// (`packages/shared/types/reading-modes.ts`), déjà partagé avec les miroirs
+// client. Dupliquer la liste ici créerait deux vérités divergentes.
+const READING_MODE_PREFERENCE_VALUES = ReadingModePreferenceSchema.options;
 
 const conversationPreferencesSchema = {
   type: 'object',
@@ -63,6 +71,9 @@ const conversationPreferencesSchema = {
     orderInCategory: { type: 'number', nullable: true, description: 'Display order within category' },
     customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
+    // `ReadingModePreference` (packages/shared/types/reading-modes.ts) — ce que
+    // l'utilisateur a choisi. `auto` rend la main à l'orchestrateur (LWS-3).
+    readingMode: { type: 'string', enum: READING_MODE_PREFERENCE_VALUES, description: 'Reading-mode preference (auto hands control back to the orchestrator)' },
     isDefault: { type: 'boolean', description: 'Whether this is using default values' },
     // Le compteur monotone sur lequel TOUS les clients arbitrent le temps réel
     // (`incoming.version <= local -> drop`). Fastify retire toute propriété
@@ -119,7 +130,11 @@ const updateConversationPreferencesRequestSchema = {
     categoryId: { type: 'string', nullable: true, pattern: '^[0-9a-fA-F]{24}$', description: 'Category ID (ObjectId) or null to uncategorize' },
     orderInCategory: { type: 'number', nullable: true, description: 'Order within category' },
     customName: { type: 'string', nullable: true, description: 'Custom conversation name' },
-    reaction: { type: 'string', nullable: true, description: 'Emoji reaction' }
+    reaction: { type: 'string', nullable: true, description: 'Emoji reaction' },
+    // Hors énumération ⇒ 400 avant toute écriture (même garde que `categoryId`
+    // ci-dessus) : `readingMode` est une préférence versionnée, jamais un
+    // magasin clé/valeur libre (E9).
+    readingMode: { type: 'string', enum: READING_MODE_PREFERENCE_VALUES, description: 'Reading-mode preference (auto|focal|script|resume|riviere)' }
   }
 } as const;
 
@@ -442,6 +457,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           ...(data.orderInCategory !== undefined && { orderInCategory: data.orderInCategory }),
           ...(data.customName !== undefined && { customName: data.customName }),
           ...(data.reaction !== undefined && { reaction: data.reaction }),
+          ...(data.readingMode !== undefined && { readingMode: data.readingMode }),
         };
 
         const preferences = await writeConversationPreferences(fastify, {

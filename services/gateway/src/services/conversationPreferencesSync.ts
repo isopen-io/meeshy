@@ -43,6 +43,7 @@ export interface ConversationPrefRow {
   orderInCategory: number | null;
   customName: string | null;
   reaction: string | null;
+  readingMode: string;
   deletedForUserAt: Date | null;
   clearHistoryBefore: Date | null;
   version: number;
@@ -58,6 +59,7 @@ export const toPreferencesPayload = (row: ConversationPrefRow): ConversationPref
   orderInCategory: row.orderInCategory,
   customName: row.customName,
   reaction: row.reaction,
+  readingMode: row.readingMode,
   deletedForUserAt: row.deletedForUserAt ? row.deletedForUserAt.toISOString() : null,
   clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
 });
@@ -76,6 +78,7 @@ export interface ConversationPreferencesWrite {
   readonly orderInCategory?: number | null;
   readonly customName?: string | null;
   readonly reaction?: string | null;
+  readonly readingMode?: string;
   readonly deletedForUserAt?: Date | null;
   readonly clearHistoryBefore?: Date | null;
 }
