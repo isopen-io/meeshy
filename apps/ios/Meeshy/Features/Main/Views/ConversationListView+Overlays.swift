@@ -278,15 +278,17 @@ extension ConversationListView {
                 )
             }
 
-            // Focal (dev) — I-075. Item éphémère de développement : force le
-            // mode Focal pour CETTE ouverture SEULE, sans écrire NI la
-            // préférence de mode NI aucun drapeau (jamais `select()`, jamais
-            // `LentilleFeatureFlag.setForDebug`). Gardé par
-            // `LentilleFeatureFlag.focalDevPreview` (défaut OFF) — invisible
-            // en production, indépendant de `reading_modes` : allumer ce
+            // Focal (bêta) — I-075, amendement produit 2026-08-16. Publication
+            // bêta publique (plus un outil de dev) : force le mode Focal pour
+            // CETTE ouverture SEULE, sans écrire NI la préférence de mode NI
+            // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
+            // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
+            // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
+            // utilisateur « Activer les bêta », défaut ON — réglages,
+            // SettingsView) — indépendant de `reading_modes` : allumer ce
             // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
             // conversations (mode AUTO), ce que ce chantier interdit.
-            if LentilleFeatureFlag.isFocalDevPreviewEnabled {
+            if BetaFeaturesPreference.isEnabled {
                 Divider()
                 Button {
                     HapticFeedback.light()
@@ -294,7 +296,7 @@ extension ConversationListView {
                     onSelect(conversation)
                 } label: {
                     Label(
-                        String(localized: "context.focal_dev_preview", defaultValue: "Focal (dev)", bundle: .main),
+                        String(localized: "context.focal_beta_preview", defaultValue: "Focal (bêta)", bundle: .main),
                         systemImage: "viewfinder"
                     )
                 }
@@ -584,7 +586,7 @@ extension ConversationListView {
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
                         canRename: conversation.type != .direct,
-                        isFocalDevPreviewEnabled: LentilleFeatureFlag.isFocalDevPreviewEnabled,
+                        isFocalBetaPreviewEnabled: BetaFeaturesPreference.isEnabled,
                         onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
                         onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
                         onMarkReadToggle: {
@@ -647,7 +649,7 @@ extension ConversationListView {
                             // (dialog attaché dans ConversationListView.body).
                             deleteTargetConversation = conversation
                         },
-                        onOpenFocalDevPreview: {
+                        onOpenFocalBetaPreview: {
                             // I-075 — override éphémère, jamais persistant :
                             // même chemin que l'item du menu natif.
                             router.pendingForcedReadingMode = .focal

@@ -222,9 +222,10 @@ final class Router: ObservableObject {
     @Published var pendingOpenSearch: Bool = false
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
-    /// (dev) » du menu d'appui long de la liste (gardé par
-    /// `LentilleFeatureFlag.focalDevPreview`, défaut OFF — invisible en
-    /// production). Consommé + remis à `nil` par le site d'appel de
+    /// (bêta) » du menu d'appui long de la liste (gardé par
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+    /// amendement produit 2026-08-16, ex-drapeau caché `focalDevPreview`).
+    /// Consommé + remis à `nil` par le site d'appel de
     /// `ConversationView(forcedReadingMode:)` à l'ouverture — MÊME patron que
     /// `pendingReplyContext`/`pendingOpenSearch` ci-dessus : une propriété
     /// `Router` en mémoire, JAMAIS `UserDefaults`, JAMAIS la préférence

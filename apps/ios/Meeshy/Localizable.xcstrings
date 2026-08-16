@@ -147515,49 +147515,190 @@
         }
       }
     },
-    "context.focal_dev_preview": {
+    "context.focal_beta_preview": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "فوكال (dev)"
+            "value": "فوكال (بيتا)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (Beta)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (beta)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (beta)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (bêta)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (beta)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Focal (dev)"
+            "value": "Focal (beta)"
+          }
+        }
+      }
+    },
+    "settings.section.beta": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بيتا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bêta"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        }
+      }
+    },
+    "settings.beta.toggle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفعيل ميزات بيتا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta-Funktionen aktivieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable beta features"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar funciones beta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer les bêta"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva le funzioni beta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar recursos beta"
+          }
+        }
+      }
+    },
+    "settings.beta.toggle.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احصل على وصول مبكر إلى الميزات قيد التطوير، مثل طرق عرض المحادثة الجديدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Früher Zugriff auf Funktionen in Entwicklung, wie neue Unterhaltungsansichten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get early access to features still in development, like new conversation views."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accede antes que nadie a funciones en desarrollo, como las nuevas vistas de conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accède en avant-première aux fonctionnalités en développement, comme les nouvelles vues de conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accedi in anteprima alle funzionalità in sviluppo, come le nuove visualizzazioni delle conversazioni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tenha acesso antecipado a recursos em desenvolvimento, como as novas visualizações de conversa."
           }
         }
       }

@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// I-075 — preuves par lecture de source du chemin de navigation
-/// « Focal (dev) » : `Router.pendingForcedReadingMode` (override ÉPHÉMÈRE) →
+/// « Focal (bêta) » : `Router.pendingForcedReadingMode` (override ÉPHÉMÈRE) →
 /// `ConversationView.init(forcedReadingMode:)` → `ReadingModeController
 /// .init(forcedMode:)`. Même patron que `ConversationViewReadingModeSourceGuardTests`
 /// (F-086) : ce qu'un test d'exécution ne peut pas couvrir sans construire un
@@ -24,7 +24,7 @@ import XCTest
 ///    (`ReadingModeController.init`), jamais dupliqué aux six sites internes.
 ///    `FocalHostSourceGuardTests` reste donc intact, non affaibli, non amendé
 ///    — ce lot n'avait pas besoin d'y toucher.
-final class FocalDevPreviewNavigationSourceGuardTests: XCTestCase {
+final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
 
     private func appRoot() -> URL {
         URL(fileURLWithPath: #filePath)
@@ -45,7 +45,7 @@ final class FocalDevPreviewNavigationSourceGuardTests: XCTestCase {
         let code = try source("Features/Main/Views/RootView.swift")
         XCTAssertTrue(
             code.contains("forcedReadingMode: router.pendingForcedReadingMode"),
-            "RootView doit lire `router.pendingForcedReadingMode` au site de construction de ConversationView — sinon l'item « Focal (dev) » n'atteint jamais l'écran."
+            "RootView doit lire `router.pendingForcedReadingMode` au site de construction de ConversationView — sinon l'item « Focal (bêta) » n'atteint jamais l'écran."
         )
         XCTAssertTrue(
             code.contains("router.pendingForcedReadingMode = nil"),

@@ -33,9 +33,10 @@ final class ReadingModeController: ObservableObject {
     private let store: FocalReadingModePreferenceStoring
     private let now: () -> Date
 
-    /// I-075 — override ÉPHÉMÈRE de développement (item « Focal (dev) » du
-    /// menu d'appui long de la liste, gardé par
-    /// `LentilleFeatureFlag.focalDevPreview`, défaut OFF). Non-`nil` ⇒ la
+    /// I-075 — override ÉPHÉMÈRE posé par l'item « Focal (bêta) » du menu
+    /// d'appui long de la liste, gardé par `BetaFeaturesPreference.isEnabled`
+    /// (préférence utilisateur, défaut ON — amendement produit 2026-08-16).
+    /// Non-`nil` ⇒ la
     /// décision D'OUVERTURE de CETTE instance est `forcedMode`, quels que
     /// soient le drapeau `reading_modes`, la préférence collante ou le compte
     /// de non-lus — court-circuite `Self.decide` (donc

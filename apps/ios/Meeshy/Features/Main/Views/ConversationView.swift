@@ -256,9 +256,10 @@ struct ConversationView: View {
     /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
-    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (dev) » du
+    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
     /// menu d'appui long de la liste (gardé par
-    /// `LentilleFeatureFlag.focalDevPreview`, défaut OFF). `nil` (défaut) ⇒
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+    /// amendement produit 2026-08-16). `nil` (défaut) ⇒
     /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
     /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
     /// valeur non-`nil`. Transmis tel quel à
