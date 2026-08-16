@@ -8773,3 +8773,74 @@ directe, périmètre gateway/web) mandaté pour ne pas dupliquer les 129 vagues 
   sans plafond effectif (décision produit) ; mesh iOS/Android potentiellement affecté du même bug étoile-
   vs-maillage que la Vague 126 (à auditer avec toolchain) ; W6/W7 grille adaptative + i18n groupe restant ;
   erreurs de build Focal/Lentille (voir ci-dessus, hors périmètre calling).
+
+## Vague 131 — `CallQualityOverlay` labellisait les alertes distantes avec le MAUVAIS pair en appel de groupe (web) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), suite directe
+de la Vague 130. Base explicite sur `origin/main` après merge des PR #3051, #3059, #3062 de cette
+même routine. Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox. Recensement par
+audit ciblé du même style que les Vagues 129/130 : relecture de chaque consommateur des deux
+side-channels d'alerte (`call:quality-alert`, `call:screen-capture-alert`) déjà corrigés côté
+agrégation par la Vague 129, en vérifiant cette fois que l'identité du pair concerné survit
+jusqu'à l'affichage — pas seulement le booléen agrégé.
+
+- **Root cause** : `VideoCallInterface.tsx` passait un unique
+  `participantName={remoteParticipant?.username || ''}` à `CallQualityOverlay`, pour LES DEUX
+  alertes (`remoteQualityDegraded` et `remoteScreenCapturing`) — `remoteParticipant` étant
+  simplement le premier participant distant trouvé par `.find()` sur le roster, sans aucun rapport
+  avec le pair réellement à l'origine de l'alerte. `useRemoteCallAlerts` (corrigé par la Vague 129
+  pour tenir `capturingParticipants` comme un `Set` par pair, et par construction pour dater
+  `handleQualityAlert` par `event.participantId`) connaissait déjà l'identité exacte de chaque
+  rapporteur mais ne l'exposait pas au-delà de deux booléens — l'appelant n'avait donc aucun moyen
+  de résoudre le VRAI nom, même après la Vague 129.
+- **Scénario de défaillance** : appel de groupe à 3 participants ou plus (mesh réel depuis la
+  Vague 126) — A, B et l'utilisateur local. Le lien de B se dégrade (`call:quality-alert`,
+  `participantId: B`) : l'indicateur de qualité s'allume avec le nom de A (premier trouvé par
+  `.find()`), jamais B. Simultanément ou peu après, A capture l'écran de l'appel
+  (`call:screen-capture-alert`, `participantId: A`) : la pastille de vie privée affiche… le nom de
+  A à nouveau si A est toujours le premier du roster, masquant que c'est en réalité B qui est
+  dégradé. Dans le pire cas (le pair dégradé ET le pair capturant sont deux personnes différentes
+  et NI L'UN NI L'AUTRE n'est le premier du roster), les deux alertes affichent le nom d'un
+  troisième participant totalement hors de cause — l'utilisateur ne peut identifier ni qui a un
+  mauvais lien ni qui capture l'écran.
+- **Fix** : `useRemoteCallAlerts` retourne désormais aussi
+  `remoteQualityDegradedParticipantId: string | null` (dernier rapporteur — cohérent avec
+  l'auto-effacement 15 s existant, qui suit déjà le dernier rapporteur) et
+  `remoteScreenCapturingParticipantIds: readonly string[]` (miroir exact du `Set`
+  `capturingParticipants` interne de la Vague 129, converti en tableau à chaque mutation).
+  `VideoCallInterface.tsx` ajoute un petit résolveur `resolveParticipantName(participantId)` qui
+  cherche dans `currentCall.participants` par `userId || participantId` et passe le résultat dans
+  deux props désormais SÉPARÉES sur `CallQualityOverlay` :
+  `qualityDegradedParticipantName` et `screenCapturingParticipantName` (remplacent l'ancien
+  `participantName` partagé). `CallQualityOverlay` interpole chaque nom dans son propre message
+  (`remoteAlerts.qualityDegraded` / `remoteAlerts.screenCapturing`, placeholder `{name}`) — les deux
+  alertes peuvent désormais nommer deux pairs différents simultanément et correctement.
+- **Tests** (TDD, RED confirmé contre le code non corrigé avant l'ajout des champs d'identité) :
+  `use-remote-call-alerts.test.tsx` — nouveau groupe « participant identity exposed to callers »,
+  6 cas neufs (id exposé par alerte qualité, id effacé avec le drapeau au bout de 15 s, id du
+  DERNIER rapporteur en cas d'alertes qualité successives de pairs différents,
+  tableau de capturants exposé et tenu à jour au fil des start/stop, retrait par `participant-left`
+  reflété dans le tableau) — suite complète **21/21** verts (+6 nets), couverture **100 %**.
+  `CallQualityOverlay.test.tsx` — props renommées dans tous les tests existants + 1 cas neuf
+  prouvant que les deux alertes peuvent interpoler des noms DIFFÉRENTS simultanément — **10/10**
+  verts, couverture **100 %**. `VideoCallInterface.test.tsx` — nouveau groupe « group calls — remote-
+  alert overlay must name the peer the alert is ABOUT, not just the first one », 3 cas neufs — suite
+  complète **46/46** verts (+3 nets). Sweep `--testPathPatterns="[Cc]all"` (apps/web) : **53 suites
+  / 500 tests** verts, 0 régression. `npx tsc --noEmit` : diff contre le référentiel de 1768 erreurs
+  préexistantes, 0 nouvelle.
+- **Non fait volontairement** : le choix « dernier rapporteur gagne » pour
+  `remoteQualityDegradedParticipantId` reconduit exactement la sémantique déjà en place pour le
+  drapeau `remoteQualityDegraded` lui-même (protocole sans événement « qualité rétablie » côté pair
+  spécifique — un historique multi-pairs simultané serait une feature d'UI neuve, pas un correctif
+  chirurgical). Web n'a toujours aucun ÉMETTEUR pour `call:screen-capture-detected` (reconduit des
+  Vagues 129/130).
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`, décision produit requise) ;
+  `MAX_CALL_PARTICIPANTS = 9999` sans plafond effectif (décision produit) ; mesh iOS/Android
+  potentiellement affecté du même bug étoile-vs-maillage que la Vague 126 (à auditer avec
+  toolchain) ; W6/W7 grille adaptative + i18n groupe restant ; détection de capture d'écran côté
+  navigateur web (aucun émetteur `call:screen-capture-detected`, feature neuve) ; erreurs de build
+  Focal/Lentille (hors périmètre calling).
