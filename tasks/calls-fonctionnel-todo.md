@@ -8621,3 +8621,88 @@ comme feature multi-fichiers nécessitant une décision produit d'UI, pas un bug
   (décision produit) ; mesh iOS/Android mono-PC potentiellement affecté du même bug étoile-vs-maillage
   que le fix web de la Vague 126 (à auditer avec toolchain disponible) ; W6 (grille adaptative,
   roster mute/vidéo) et W7 (i18n groupe restant) toujours à traiter.
+
+## Vague 129 — `useRemoteCallAlerts` : un pair qui arrête sa capture d'écran masquait la capture toujours active d'un AUTRE pair (web) (2026-08-15)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), nouvelle
+session. Base explicite sur le développement précédent : `git fetch origin main`, branche dédiée
+déjà alignée bit à bit sur `origin/main` (`4418bc043`, contient jusqu'à la Vague 128 — PR mergée),
+aucune PR ouverte de cette routine au démarrage. Toolchains iOS/Android toujours hors d'atteinte
+dans ce sandbox (confirmé à nouveau, cf. Vagues 126/127/128). Recensement par audit ciblé (lecture
+de `VideoCallInterface.tsx`, `use-webrtc-p2p.ts`, `CallControls.tsx`, `CallEventsHandler.ts` côté
+gateway) en repérant systématiquement chaque signal PAR-PARTICIPANT du protocole d'appel et en
+vérifiant s'il est bien tenu comme tel côté client — c'est cette recherche qui a mené à
+`use-remote-call-alerts.ts`, jamais retouché depuis sa création (audit 2026-07-11) alors que le cap
+de participants a été levé depuis (Vague 126).
+
+- **Root cause** : `handleScreenCaptureAlert` (`apps/web/hooks/use-remote-call-alerts.ts`) écrivait
+  `remoteScreenCapturing` en dernier-arrivé-gagne, directement depuis `event.isCapturing`, en
+  ignorant totalement `event.participantId` — pourtant présent sur `CallScreenCaptureEvent`
+  (`packages/shared/types/video-call.ts:521-525`) et déjà résolu SERVEUR-SIDE par pair
+  (`CallEventsHandler.ts`, handler `call:screen-capture-detected` → relais `SCREEN_CAPTURE_ALERT`,
+  un événement PAR transition PAR participant, jamais un scalaire d'appel). C'est très exactement
+  la forme de bug déjà nommée et corrigée deux fois dans ce même chantier — W4
+  (`aggregateConnectionState`, Vague antérieure au gap-analysis) et W5 (`useCallQuality`
+  multi-pair, `2026-08-13-group-calls-gap-analysis.md`) — un fait PAR PARTICIPANT modélisé comme un
+  scalaire d'appel entier. La différence : ici c'est un signal de VIE PRIVÉE (« un pair capture
+  l'écran de l'appel »), pas une métrique de qualité — le masquage silencieux est plus grave qu'un
+  indicateur de connexion qui clignote à tort.
+- **Scénario de défaillance** : appel de groupe (3+ participants, mesh désormais réel depuis la
+  Vague 126) ; le participant A démarre une capture d'écran (iOS/Android — web n'a pas encore
+  d'émetteur, seule la réception est implémentée) → alerte reçue, `remoteScreenCapturing = true`,
+  la pastille privacy s'allume pour tout le monde. Le participant B, qui capturait indépendamment
+  plus tôt (ou dont le détecteur local se réinitialise pour une tout autre raison), arrête SA
+  PROPRE capture → `isCapturing: false` arrive et écrase purement et simplement le drapeau à
+  `false`, alors que A capture TOUJOURS. La pastille de vie privée disparaît de l'écran de tout le
+  monde pendant que l'appel continue d'être enregistré. Deuxième volet du même défaut, non
+  atteignable par un simple `event.isCapturing` : un participant capturant qui QUITTE l'appel
+  (raccroche, coupure réseau) sans jamais émettre de transition « stop » laissait son entrée
+  gelée — mais comme il n'y avait pas de Map par participant, ce second bug n'existait pas encore
+  sous cette forme ; il apparaît avec le correctif ci-dessous et est traité dans le même changement.
+- **Fix** : `capturingParticipants` — un `Set<string>` scopé à l'effet (recréé à chaque changement
+  de `callId`, donc jamais besoin d'un reset explicite ailleurs) — remplace le scalaire. Une alerte
+  `isCapturing: true` ajoute le participant, `false` le retire ; `remoteScreenCapturing` est dérivé
+  de `capturingParticipants.size > 0` (OR sur tout l'appel, jamais le dernier rapport d'un seul
+  pair). Nouvel abonnement à `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` (déjà émis par le gateway sur
+  tout départ, cf. Vague fix REST/socket parity antérieur) qui retire l'entrée du partant et
+  ré-évalue le drapeau — miroir exact du nettoyage déjà fait par `removeParticipant`
+  (`use-webrtc-p2p.ts`) pour `connectionStatesRef`/`stalledPeersRef`. `remoteQualityDegraded` (le
+  second signal du même hook) n'a PAS été touché : c'est un debounce OR-avec-décroissance sur des
+  alertes UNIQUEMENT positives (pas d'événement « qualité rétablie » côté protocole) — aucun pair
+  ne peut jamais écraser silencieusement l'alerte d'un autre à `false`, la classe de bug ne
+  s'applique pas.
+- **Tests** (TDD, RED confirmé — 2 échecs nets contre le code non corrigé avant l'ajout du handler
+  de départ, le 3e cas neuf passant trivialement par construction) : 4 cas neufs dans
+  `use-remote-call-alerts.test.tsx`, groupe « group calls (multiple peers, screen-capture
+  aggregation) » — le stop d'UN pair ne masque pas la capture toujours active d'un AUTRE (repro
+  directe du bug) ; un pair qui quitte l'appel EN PLEINE capture lève l'alerte s'il était le seul
+  capturant ; le départ d'un pair NON capturant ne baisse pas le drapeau d'un autre toujours actif ;
+  un `participant-left` d'un AUTRE appel reste inerte (parité avec les gardes déjà testées sur les
+  deux autres handlers). Suite du fichier : **15/15** verts (+4 nets). Sweep
+  `--testPathPatterns="[Cc]all"` (apps/web) : **53 suites / 490 tests** verts (+1 net, 0
+  régression). Couverture du fichier modifié : **100 % stmts/branches/funcs/lines** (le test de
+  garde cross-call sur `participant-left` a fermé la seule branche restante). `npx tsc --noEmit` :
+  diff `git stash`/`stash pop` — **1768 erreurs préexistantes identiques avant et après** (diff
+  textuel vide), 0 nouvelle. `eslint`/`next lint` : toujours inexploitable dans ce sandbox (même
+  erreur `Converting circular structure to JSON` que documentée aux vagues précédentes). Prérequis
+  CLAUDE.md rejoués (sandbox sans `node_modules` au démarrage) : `bun install --ignore-scripts`
+  (bun 1.3.11 disponible localement, pas 1.3.14), puis `packages/shared && npx prisma generate
+  --generator client && bun run build` sans erreur. Gateway non touché par ce correctif — suite
+  `test:coverage` non rejouée (aucun fichier `services/gateway` modifié).
+- **Non fait volontairement** : web n'a toujours aucun ÉMETTEUR pour
+  `call:screen-capture-detected` (confirmé cette session — seule la réception existe côté web,
+  cohérent avec l'audit d'origine 2026-07-11 qui documentait cette parité comme réception
+  uniquement) ; ajouter la détection de capture d'écran côté navigateur (Screen Capture API /
+  heuristique `getDisplayMedia` active) serait une feature neuve, pas un correctif chirurgical —
+  hors scope ici. Mesh iOS/Android mono-PC (I1-I7, potentiellement le même bug étoile-vs-maillage
+  que le fix web de la Vague 126) toujours hors de portée sans toolchain.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 ; piste `CXSetHeldCallAction` vs. `supportsHolding =
+  false` (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  sélection réelle de périphérique de sortie audio (`setSinkId`, feature multi-fichiers, décision
+  produit d'UI requise) ; `MAX_CALL_PARTICIPANTS = 9999` sans plafond effectif sur le mesh P2P
+  (décision produit) ; mesh iOS/Android mono-PC potentiellement affecté du même bug étoile-vs-maillage
+  que le fix web de la Vague 126 (à auditer avec toolchain disponible) ; W6 (grille adaptative,
+  roster mute/vidéo) et W7 (i18n groupe restant) toujours à traiter ; détection de capture d'écran
+  côté navigateur web (aucun émetteur `call:screen-capture-detected`, feature neuve).

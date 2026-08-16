@@ -38,10 +38,15 @@ final class RingbackTonePlayer {
 
     func start() { startLoop(resource: "RingbackTone", volume: 0.6) }
 
-    func stop() {
-        guard loopPlayer != nil else { return }
-        stopLoop()
-    }
+    /// Audit fix (calling-stack audit 2026-08-15): must mirror `stopRingtone()`'s
+    /// `activeLoop` check. Before this fix, `stop()` tore down whichever loop
+    /// happened to be playing — if `startRingtone()` had won the race (e.g. an
+    /// incoming call while a stale ringback loop reference lingered), a call
+    /// site that calls `stop()` alone would silently cut the ringtone instead
+    /// of being a no-op. Every current call site pairs `stop()` with
+    /// `stopRingtone()`, which masked this; a future call site that calls only
+    /// `stop()` would not be so lucky.
+    func stop() { if activeLoop == "RingbackTone" { stopLoop() } }
 
     // MARK: - Ringtone (callee — in-app, Mac only; iOS uses CallKit)
 

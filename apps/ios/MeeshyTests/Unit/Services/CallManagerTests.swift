@@ -4390,6 +4390,89 @@ final class RetryCallSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - WebRTC Configure Failure Handling (calling-stack audit 2026-08-15)
+
+/// `WebRTCService.configure` used to swallow a genuine peer-connection
+/// creation failure and return Void — every one of these 4 call-setup paths
+/// proceeded as if configuration had succeeded, wasting audio-session /
+/// reliability-monitor setup on a call that could never connect. Source
+/// guards (rather than a live async exercise of `startCall`'s fire-and-forget
+/// `Task`) match this file's own convention for asserting fire-and-forget
+/// setup-flow shape elsewhere in this suite.
+final class WebRTCConfigureFailureSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    @discardableResult", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    var ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_startCall_abortsOnConfigureFailure() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
+            XCTFail("startCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers) else"),
+            "startCall must check webRTCService.configure's result and abort on failure " +
+            "instead of proceeding to activate the audio session on a call that can never connect."
+        )
+        XCTAssertTrue(body.contains("self.failCall("),
+            "a configure failure must route through failCall so CallKit/Recents is told the call ended.")
+    }
+
+    func test_rejoinActiveCall_abortsOnConfigureFailure() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejoinActiveCall(callId:", in: source) else {
+            XCTFail("rejoinActiveCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: nil) else"),
+            "rejoinActiveCall must check webRTCService.configure's result and abort on failure."
+        )
+        XCTAssertTrue(body.contains("return false"),
+            "rejoinActiveCall's configure guard must return false, matching its Bool contract.")
+    }
+
+    func test_reportIncomingVoIPCall_abortsOnConfigureFailure() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func reportIncomingVoIPCall(callId:", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
+            "reportIncomingVoIPCall must check webRTCService.configure's result and abort on failure."
+        )
+    }
+
+    func test_handleIncomingCallNotification_abortsOnConfigureFailure() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func handleIncomingCallNotification(callId:", in: source) else {
+            XCTFail("handleIncomingCallNotification not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else"),
+            "handleIncomingCallNotification must check webRTCService.configure's result and abort on failure."
+        )
+    }
+}
+
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
 
 /// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder

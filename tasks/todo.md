@@ -562,3 +562,98 @@ les deux options écartées (porter les champs par `conversation:unread-updated`
 retirer la room de conversation de l'éventail), et la piste du cycle 42 :
 `routes/messages.ts` émet un `read` qui ne synchronise AUCUN appareil de
 l'acteur — le symétrique de cette fuite, pas une fuite.
+
+# Cycle 42 — la préférence tenait à trois portes sur quatre
+
+Piste ouverte à la fin du cycle 41, instruite ici — et plus large que ce qu'elle
+annonçait.
+
+## Constat
+
+- [x] `POST /messages/:messageId/status` est le 4e émetteur REST de
+      `read-status:updated`, et le seul qui ne consulte JAMAIS
+      `showReadReceipts` : un utilisateur ayant retiré ses accusés diffusait
+      quand même un événement NOMINATIF à toute la conversation
+- [x] `summary` retirait déjà les opt-out de ses compteurs — ce n'est pas le
+      compteur qui fuyait, c'est le NOM de l'acteur
+- [x] Les deux manques annoncés par la piste confirmés : ni `actorReadSync`
+      (curseur multi-appareils), ni `conversation:unread-updated` (badge)
+- [x] Aucun client du dépôt n'appelle cette route — balayage web / iOS /
+      Android / SDK / E2E ; seuls deux fichiers de tests gateway l'exercent
+
+## Correctifs
+
+- [x] Une unité partagée, `socketio/broadcastReadStatus.ts`, remplace les
+      QUATRE copies — écrire une 4e copie correcte aurait rejoué le mécanisme
+      qui a produit le défaut
+- [x] La préférence décide de la DIFFUSION, jamais de la LECTURE : le badge de
+      l'acteur part sur les deux branches
+- [x] Acquis des cycles 38 et 41 (deux identités, deux payloads) désormais tenus
+      à un seul endroit
+- [x] Préférence et arriéré lus EN PARALLÈLE — le chemin chaud perd une attente
+      sérielle
+- [x] Route conservée, pas retirée : aucun appelant dans le dépôt ne prouve
+      aucun appelant sur le terrain
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges, 5 non-régressions vertes d'emblée
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : 726 suites, 17 771 tests, tout vert
+- [x] `broadcastReadStatus.ts` 100 % ; `message-read-status.ts` 100 % lignes
+- [x] 2 doubles de test préexistants complétés (`.except` manquant ; `io` absent)
+- [x] CHANGELOG + README socketio + journal d'audit + leçon 277
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle42.md` — le tableau des trois
+pièces manquantes, pourquoi c'est le nom et non le compteur qui fuyait, le
+raisonnement aligner-plutôt-que-retirer, les deux doubles réparés, et la piste
+du cycle 43 : les deux émetteurs SOCKET du même événement ne consultent pas la
+préférence non plus, mais leur fan-out est collectif — établir d'abord si un
+`received` automatique relève de ce réglage.
+
+# Cycle 43 — la piste du cycle 42 était fausse ; le sérialiseur cachait une dépense
+
+## Constat
+
+- [x] Piste héritée VÉRIFIÉE puis écartée : les deux émetteurs socket de
+      `read-status:updated` consultent bien `showReadReceipts` — le cycle 42 se
+      trompait sur les deux
+- [x] Écart réel trouvé à la place, et NON livré : côté socket la préférence
+      coupe le `markMessagesAsReceived` (l'ÉTAT), là où les trois portes REST
+      enregistrent et ne taisent que la diffusion — l'intention n'est donc
+      atteinte par personne, l'état dépend du transport
+- [x] Défaut livré : trois `select` chargent `statusEntries` que
+      `fast-json-stringify` retire faute d'être déclaré au schéma — chargé,
+      parfois recopié, jeté
+- [x] Deux des trois sites payaient la relation SANS opt-in, sur chaque page de
+      messages d'un lien partagé
+- [x] Aucun client du dépôt ne demande `include_status` ; le champ était pourtant
+      promis jusque dans `@meeshy/shared`
+
+## Correctifs
+
+- [x] Trois `select` + le mapping + la recopie du formateur de lien supprimés
+- [x] `include_status` conservé et ACCEPTÉ (aucun client rejeté), description
+      corrigée, renvoi vers la voie gatée `GET /conversations/:id/statuses`
+- [x] La raison écrite aux trois endroits où quelqu'un voudrait les rétablir —
+      déclarer le champ au schéma publierait des accusés nominatifs SANS gate
+- [x] Doc `@meeshy/shared` corrigée (elle promettait un champ jamais servi)
+
+## Gates
+
+- [x] 4 RED discriminants vus rouges avant correctif
+- [x] Garde de contrat sur un VRAI Fastify — les doubles sans sérialiseur ne
+      pouvaient pas voir le défaut (3e cycle consécutif sur ce motif)
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète : 727 suites, 17 776 tests, tout vert
+- [x] CHANGELOG + journal d'audit (cycle43) + leçon 278
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle43.md` — pourquoi la piste
+héritée ne tenait pas, le tableau des trois sites (opt-in / recopié / servi), le
+piège qui survit au correctif, les trois options écartées, et la piste du
+cycle 44 : établir si `showReadReceipts` gouverne les `received` avant de
+retourner le gate d'écriture des deux émetteurs socket.

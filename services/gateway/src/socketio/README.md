@@ -634,6 +634,48 @@ suppression ne compile pas sans nommer l'auteur.
 
 ---
 
+## `read-status:updated` — une seule forme de diffusion, `broadcastReadStatus`
+
+Les portes REST qui diffusent cet evenement passent TOUTES par
+`socketio/broadcastReadStatus.ts`. Il y en a quatre, et elles en ont longtemps
+porte quatre copies :
+
+| Porte | Fichier |
+|---|---|
+| `POST /conversations/:id/mark-as-read` | `routes/message-read-status.ts` |
+| `POST /conversations/:id/mark-as-received` | `routes/message-read-status.ts` |
+| `POST /conversations/:cid/messages/:mid/delivery-receipt` | `routes/message-read-status.ts` |
+| `POST /conversations/:id/mark-read` | `routes/conversations/messages.ts` |
+| `POST /messages/:id/status` (heritee, aucun client connu) | `routes/messages.ts` |
+
+Chaque copie a fini par deriver sur un point que rien ne mesurait — un
+`Participant.id` servi dans un champ declare `User.id` (cycle 38), l'arriere de
+l'acteur diffuse a toute la conversation (cycle 41), et la preference
+`showReadReceipts` jamais consultee sur la derniere (cycle 42). **Ne pas ecrire
+une copie de plus, meme correcte** : c'est le mecanisme qui a produit les trois.
+
+Les trois proprietes que l'unite tient ENSEMBLE, et qu'aucune copie ne tenait
+toutes :
+
+1. **La preference decide de la DIFFUSION, jamais de la LECTURE.** Le curseur est
+   avance par l'appelant AVANT d'entrer ici. Taire l'accuse ne doit jamais faire
+   perdre a l'acteur la trace de ce qu'il a lu : `conversation:unread-updated`
+   part sur les DEUX branches de `showReadReceipts`. La garde vivait autrefois au
+   site d'appel, recopiee a chaque porte — et c'est ainsi qu'elle a manque a une.
+2. **Deux payloads pour deux audiences.** `summary` decrit la conversation et va
+   a tout le monde ; `lastReadAt` / `unreadCount` decrivent UNE personne et ne
+   vont qu'a ses propres appareils, l'eventail l'excluant via `exceptRoom`.
+3. **Deux identites, deux roles.** `actorUserId` (champ du contrat, `null` pour
+   un anonyme) et `personalRoomKey = userId ?? participantId` (cle de room, qui
+   ne l'est jamais).
+
+Les emetteurs SOCKET du meme evenement — `MessageHandler.autoDeliverToOnlineRecipients`
+et le drain hors ligne de `MeeshySocketIOManager` — n'empruntent PAS cette unite :
+ils diffusent un `received` collectif, pour plusieurs destinataires a la fois, et
+ne consultent aucune preference. L'ecart est connu et non tranche.
+
+---
+
 ## `read-status:updated` — l'evenement manque pendant une coupure n'est rejoue nulle part
 
 `read-status:updated` n'est emis que par une ACTION d'accuse : un pair qui lit,

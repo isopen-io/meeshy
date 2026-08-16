@@ -8123,3 +8123,145 @@ compteur global est un fichier visé par tout le monde* : la relecture d'avant-P
 doit inclure `tasks/lessons.md` et le glob des journaux d'audit, même quand le
 correctif n'y touche pas — sinon le numéro est choisi au démarrage et défendu
 jusqu'au conflit.
+
+## Leçon 276 — un plafond qu'on lève réveille chaque scalaire qui présumait qu'il n'y avait qu'un seul pair (cycle 36, routine appels, Vague 129)
+
+**Le défaut.** `useRemoteCallAlerts` recevait `call:screen-capture-alert`
+— un événement PAR PARTICIPANT, avec un `participantId` explicite sur son
+propre type (`CallScreenCaptureEvent`) — et l'écrivait comme un scalaire
+dernier-arrivé-gagne (`setRemoteScreenCapturing(event.isCapturing)`), en
+ignorant `participantId`. En appel de groupe, le participant B qui arrête SA
+capture efface silencieusement le drapeau alors que le participant A capture
+toujours : une pastille de vie privée qui disparaît pendant que
+l'enregistrement continue.
+
+**Ce n'est pas un bug neuf, c'est un bug LATENT devenu réel.** Le même hook,
+avec le même code, était sans défaut tant que `MAX_CALL_PARTICIPANTS` valait 2
+(tout appel était forcément à deux, donc « dernier rapport » et « rapport du
+seul autre participant » coïncidaient toujours). La Vague 126 a levé ce
+plafond pour permettre le maillage web N-pairs ; ce hook n'a jamais été
+retouché depuis, parce qu'il n'a jamais planté ni fait échouer un test — il a
+seulement cessé d'être vrai. C'est la MÊME cause racine que W4
+(`connectionState`) et W5 (`useCallQuality`), documentées dans le
+gap-analysis du 2026-08-13 et déjà corrigées ailleurs dans le même dossier
+`hooks/` : *un fait par participant modélisé comme un scalaire d'appel entier
+reste correct exactement tant que « par participant » et « pour l'appel » ont
+un seul élément en commun.* Le lever du plafond ne casse rien à la
+compilation ni à l'exécution immédiate — il change silencieusement le domaine
+sur lequel un ancien raisonnement scalaire cesse de tenir.
+
+**La règle.** *Un changement de capacité (plafond, cardinalité) est une
+requête à lancer sur chaque site qui consommait l'ancienne limite comme une
+hypothèse implicite.* Le grep qui aurait trouvé celui-ci ne cherche pas une
+erreur de syntaxe : il cherche, dans TOUT hook/composant qui reçoit un
+événement portant un `participantId`/`userId` explicite, si la valeur reçue
+finit dans un `useState` scalaire plutôt que dans une `Map`/`Set` keyée par ce
+champ. Trois sites dans le même sous-système (`use-webrtc-p2p.ts` ×2,
+`use-remote-call-alerts.ts` ×1) partageaient ce même angle mort ; les deux
+premiers avaient déjà été trouvés et corrigés avant celui-ci, mais aucune
+recherche systématique n'avait balayé le reste du dossier `hooks/*call*` pour
+la MÊME forme après le premier correctif — chaque cycle qui lève un plafond de
+cardinalité devrait fermer par cette recherche, pas seulement par le site qui
+a motivé la levée.
+
+**Le corollaire sur la sévérité.** Toutes les instances de cette forme ne se
+valent pas : `remoteQualityDegraded`, dans le MÊME hook, reçoit aussi un
+`participantId` ignoré — et n'est PAS un bug, parce que le protocole n'émet
+que des alertes POSITIVES (jamais de « qualité rétablie » par pair) : un
+scalaire OR-avec-décroissance-temporelle ne peut jamais se faire écraser à
+`false` par un autre pair, il n'existe pas de message qui porte cette valeur.
+La forme du défaut (`participantId` ignoré) ne suffit pas à conclure au bug —
+il faut vérifier si le protocole permet à un AUTRE participant d'émettre la
+valeur qui écrase silencieusement celle du premier. Corriger le second signal
+aurait été une sur-correction sans repro possible.
+## Leçon 277 — une règle recopiée à chaque porte est une règle qui finira par manquer à une porte (2026-08-16, routine temps réel, cycle 42)
+
+**Le défaut.** `read-status:updated` avait quatre émetteurs REST. Trois
+consultaient `showReadReceipts` avant de diffuser ; le quatrième ne l'avait
+jamais fait. Un utilisateur qui avait retiré ses accusés de lecture les
+diffusait donc quand même — nominativement, à toute la conversation — dès que la
+lecture passait par cette porte-là.
+
+**Ce qui rend la forme dangereuse.** La garde n'était pas DANS la diffusion,
+elle était AUTOUR : chaque appelant écrivait son propre `if
+(shouldShowReadReceipts)` avant d'appeler le fan-out. Une garde extérieure est
+invisible depuis l'unité qu'elle protège : rien, ni un type ni un test, ne peut
+constater qu'un appelant l'a omise. Elle a été écrite trois fois et oubliée une
+— ce qui est le taux normal d'une consigne humaine, pas le taux acceptable d'un
+réglage de confidentialité. *Une règle qui vit au site d'appel est une règle
+dont le respect dépend de la mémoire de celui qui ajoute le prochain site.*
+
+**Le réflexe à prendre.** Devant un défaut d'un site parmi N, ne pas corriger le
+site : compter les N. Si les N-1 autres tiennent la règle par recopie, le
+correctif n'est pas d'écrire une N-ième copie correcte — c'est de faire
+descendre la règle dans l'unité, pour que le prochain appelant ne puisse plus
+l'oublier. Écrire la copie correcte, c'est rejouer exactement le mécanisme qui a
+produit le défaut, en se félicitant d'avoir fait attention cette fois.
+
+**Une moitié protégée peut masquer l'autre.** Le payload fuyait, mais son
+compteur (`summary`) retirait déjà les opt-out, numérateur et dénominateur. En
+lisant vite, la porte semblait couverte. Ce qui fuyait était l'`identité` de
+l'acteur — `participantId`, `userId`, `type: 'read'`, horodaté — c'est-à-dire
+exactement ce que le réglage protège. *Quand une partie du payload est assainie,
+vérifier ce qui reste : l'assainissement partiel ressemble à s'y méprendre à
+l'assainissement.*
+
+**Sur « aucun appelant » comme argument de suppression.** Un balayage complet du
+dépôt n'a trouvé aucun client de cette route — et ce n'était pas une raison
+suffisante de la retirer. Un dépôt prouve l'absence d'appelant DANS LE DÉPÔT ;
+les builds mobiles déjà installés ne se relisent pas dans `git`. Retirer un
+point d'entrée REST public transforme leur marquage de lecture en 404 silencieux
+— une régression invisible côté serveur et non réparable côté client. *« Personne
+ne l'appelle » se vérifie en télémétrie, pas en `grep` ; et le retrait d'une
+surface publique mérite sa propre dépréciation, pas d'être emporté au passage
+par un correctif de confidentialité.*
+
+**Corollaire de test, deuxième cycle consécutif.** Deux doubles ont dû être
+complétés pour que le correctif soit observable : un `io` sans `.except()` (la
+chaîne jetait, le `try/catch` de la route avalait, et AUCUNE émission n'était
+visible — le double décrivait un autre programme), et une app de test sans
+`socketIOHandler`. Le cycle 41 avait déjà réparé un double pour la même raison.
+*Un double qui ne connaît pas la forme réelle de l'appel ne teste pas le
+programme livré, et son silence se lit comme un succès.*
+
+## Leçon 278 — un champ qu'on charge n'est pas un champ qu'on sert : le sérialiseur est une frontière, et elle est muette (2026-08-16, routine temps réel, cycle 43)
+
+**La piste héritée était fausse, et c'est la vérification qui a payé.** Le cycle
+42 affirmait que les deux émetteurs socket de `read-status:updated` ne
+consultaient pas `showReadReceipts`. Les deux la consultent. La consigne qu'il
+s'était donnée — « établir laquelle des deux avant d'écrire quoi que ce soit » —
+a évité d'écrire un correctif pour un défaut inexistant. *Une piste laissée en
+fin de cycle est une hypothèse, pas un constat : elle se relit dans le code
+avant de servir de point de départ, même — surtout — quand c'est soi qui l'a
+écrite.*
+
+**Le sérialiseur retire en silence, donc « la donnée est chargée » ne prouve
+jamais « la donnée est servie ».** `fast-json-stringify` ne sérialise que les
+champs déclarés au schéma. Trois `select` ramenaient `statusEntries` ; aucun des
+deux `messageSchema` ne le déclare ; le tableau était construit, parfois recopié,
+puis jeté. Le coût, lui, était bien réel : une requête de relation par page,
+jusqu'à `messages × participants` documents, sur le chemin de lecture le plus
+chaud du produit — et deux des trois sites la payaient sans opt-in. *Entre le
+`select` et le client il y a une frontière qui ne journalise rien ; tant qu'on ne
+l'a pas traversée sur un vrai serveur, on ne sait pas ce qui arrive.*
+
+**Une fuite hypothétique peut être un piège réel.** L'hypothèse de départ —
+accusés nominatifs exposés sans le gate d'opt-out — était fausse *aujourd'hui*,
+uniquement parce que le schéma retire le champ. Déclarer `statusEntries` pour
+« réparer » l'absence publierait d'un coup identité, horodatage, durée de lecture
+et appareil, sans gate. *Quand ce qui protège est un effet de bord et non une
+règle, le correctif n'est pas seulement de supprimer la dépense : c'est d'écrire
+la raison à l'endroit exact où quelqu'un voudra la rétablir.*
+
+**Troisième cycle consécutif : un double qui décrit un autre programme.** Deux
+témoins affirmaient la dépense comme un acquis (« adds statusEntries to select »,
+« statusEntries field mapped ») — ils passaient parce que leur faux Fastify n'a
+pas de sérialiseur. Après les cycles 41 et 42, le motif est établi. *Un double
+allégé n'est pas un double neutre : chaque pièce qu'on lui retire est une
+propriété du programme livré qu'il cesse de pouvoir constater. Pour un contrat de
+sortie, la garde se monte sur un vrai serveur, ou elle ne garde rien.*
+
+**Corollaire de garde.** La garde utile verrouille les deux moitiés séparément —
+le champ n'est pas servi, ET il n'est pas chargé. La première est verte avant
+comme après : c'est elle qui établit la prémisse. *Un témoin vert d'emblée n'est
+pas un témoin inutile quand c'est lui qui porte la raison du correctif.*
