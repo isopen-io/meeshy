@@ -49,7 +49,7 @@ nonisolated enum FocalFocusCurve {
     // MARK: - Constantes gelées (miroir de FOCUS_CURVE_CONSTANTS)
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — RÉSERVE 1, revue REV-1.
-    static let threadMaxDistance: CGFloat = 380
+    static let threadMaxDistance: CGFloat = 740
     static let threadScaleDecay: CGFloat = 0.4
     static let threadAlphaDecay: CGFloat = 0.82
 
