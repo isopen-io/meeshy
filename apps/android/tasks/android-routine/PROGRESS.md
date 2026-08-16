@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Feed-comments-sheet realtime room shipped** (slice `feed-comments-realtime-room`)
+> — the second of the three follow-ups `post-detail-realtime-room` named and `reels-realtime-room`
+> picked up first: this routine's standing rule is to build on the prior run's own named list
+> rather than re-grepping for a fresh candidate every time. `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed two concurrent PRs (#3096 realtime/gateway+iOS+web,
+> #3098 a `packages/shared` fix) — neither touches `apps/android`, confirmed via `gh pr view
+> --json files` before picking anything, so no collision risk.
+>
+> **Re-proved the gap before writing anything**: `PostCommentsViewModel` (Android's take on iOS
+> `FeedCommentsSheet` — the full-screen comment thread reached from feed/reels/post-detail) already
+> had `observeRealtime()` wired for `comment:added`/`comment:deleted`/`comment:reaction-added`/
+> `comment:reaction-removed`, but a `grep` for `joinPostRoom`/`leavePostRoom` in
+> `apps/android/feature/stories` and this file both came back empty — exactly the "modeled the
+> listener, never opened the door" gap the two prior room slices both found. Cross-checked the iOS
+> source directly rather than trusting the PROGRESS.md note's paraphrase: `FeedCommentsSheet.swift`
+> lines 704/724, `.onAppear { SocialSocketManager.shared.joinPostRoom(postId: post.id) }` /
+> `.onDisappear { …leavePostRoom… }` — plain open/close, no `currentId`-style slide transition
+> (unlike `ReelsViewModel`/`StoryViewerView`), so the fix is a straight join-in-`observeRealtime`/
+> leave-in-`onCleared` pair, mirroring `PostDetailViewModel`'s own precedent almost verbatim.
+>
+> **No live like/comment-count overlay added here** (unlike `post-detail-realtime-room`/
+> `reels-realtime-room`) — deliberately scoped out: the sheet is always presented *over* a surface
+> (feed card, reel, post detail) that already owns and displays its own like state; only the
+> comment-thread room subscription itself was the gap, and that channel was already wired.
+>
+> **+2 tests**: `opening the sheet joins its realtime room` (`coVerify(exactly = 1) {
+> socialSocket.joinPostRoom("p1") }`), `a blank postId never joins a realtime room` — same shape
+> and wording as `PostDetailViewModelTest`'s own join-room pair, for a future reader who already
+> knows that precedent to recognise this one instantly.
+>
+> **Verified**: Android SDK *was* available in this container this run (unlike several prior
+> entries) — `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green locally, `BUILD SUCCESSFUL`, before any push.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=feed-comments-realtime-room`
+> (re-read fresh at merge time, not at slice-selection time, per the established principle — see
+> the streak-arithmetic note on the `reels-realtime-room` entry below for why this matters).
+>
+> **Still open, named for a future run**: `StoryViewerViewModel` — the last of the three deferred
+> room-join follow-ups (iOS `StoryViewerView.swift` lines 569/600/1190/1193, a slide-to-slide
+> `currentId`-style transition like the reel viewer's, not a plain open/close like this one).
+
 > On 2026-08-16 **Reel-viewer realtime room shipped** (slice `reels-realtime-room`) — the first
 > of the three follow-ups the previous slice (`post-detail-realtime-room`) explicitly deferred,
 > taken up deliberately rather than re-grepping for a fresh candidate: this routine's own standing

@@ -115,6 +115,22 @@ class PostCommentsViewModelTest {
     }
 
     @Test
+    fun `opening the sheet joins its realtime room`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
+
+        viewModel()
+
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("p1") }
+    }
+
+    @Test
+    fun `a blank postId never joins a realtime room`() = runTest {
+        viewModel(postId = null)
+
+        coVerify(exactly = 0) { socialSocket.joinPostRoom(any()) }
+    }
+
+    @Test
     fun `a blank postId never hits the network and shows empty`() = runTest {
         val vm = viewModel(postId = null)
         vm.state.test {

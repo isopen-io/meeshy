@@ -3969,6 +3969,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       healing, cross-reel isolation, out-of-thread inertness, negative-count clamp, anonymous
       viewer). **Still open** (the remaining two of the three): `StoryViewerViewModel` and the feed
       comments sheet, each with its own current-item lifecycle.
+- [x] Feed-comments-sheet room real-time subscription — closed 2026-08-16 (slice
+      `feed-comments-realtime-room`), the second of the three follow-ups deferred above.
+      `PostCommentsViewModel` (Android's take on iOS `FeedCommentsSheet`, presented full-screen over
+      the feed/reels/post-detail comment thread) already listened to `comment:added`/`comment:deleted`/
+      `commentReactionAdded`/`commentReactionRemoved` but never joined the post room itself — the same
+      "modeled the listener, never opened the door" gap as the other two rooms. Re-proved against iOS:
+      `FeedCommentsSheet.onAppear`/`.onDisappear` call `SocialSocketManager.shared.joinPostRoom`/
+      `.leavePostRoom(postId: post.id)` (lines 704/724) — Android's `observeRealtime()` now calls
+      `socialSocket.joinPostRoom(postId)` (guarded on the existing blank-route check) and a new
+      `onCleared()` leaves it, mirroring `PostDetailViewModel`'s precedent exactly. No live post-like
+      overlay needed here (unlike post detail/reels) — the sheet is presented over a surface that
+      already tracks its own like state; only the room join/leave was missing. +2 tests (join on open,
+      blank route never joins). **Still open** (the last of the three): `StoryViewerViewModel`.
 - [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
