@@ -118,7 +118,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     private func makeConversationUpdatedEvent(
         conversationId: String,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         title: String? = nil,
         previewRecalculated: Bool = false
@@ -127,7 +127,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             conversationId: conversationId,
             title: title,
             lastMessageAt: lastMessageAt,
-            lastMessageId: lastMessageId,
+            lastMessage: lastMessage,
             lastMessagePreview: lastMessagePreview,
             updatedAt: "2024-01-01T00:00:00.000Z",
             previewRecalculated: previewRecalculated
@@ -184,7 +184,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         env.conversationUpdated.send(makeConversationUpdatedEvent(
             conversationId: "c1",
             lastMessageAt: previous,
-            lastMessageId: "msg-previous",
+            lastMessage: .replaced("msg-previous"),
             lastMessagePreview: "celui d avant",
             previewRecalculated: true
         ))
@@ -207,7 +207,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         env.conversationUpdated.send(makeConversationUpdatedEvent(
             conversationId: "c1",
             lastMessageAt: newAt,
-            lastMessageId: "msg-99",
+            lastMessage: .replaced("msg-99"),
             lastMessagePreview: "Hello!"
         ))
 
@@ -216,6 +216,31 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             return c?.lastMessageId == "msg-99" && c?.lastMessagePreview == "Hello!"
         }
         XCTAssertTrue(applied, "bridge must apply lastMessageId and lastMessagePreview from conversation:updated")
+    }
+
+    /// Le tri-état traverse le pont. Un pont qui aplatirait `.replaced(nil)` en
+    /// `nil` rendrait le correctif entièrement inerte sans casser un seul
+    /// témoin de décodage ni de fusion — c'est exactement l'oubli que le
+    /// cycle 46 bis a payé sur `previewRecalculated`.
+    func test_conversationUpdated_clearedLastMessage_reachesTheStore() async {
+        let store = makeStore()
+        var c1 = makeConv(id: "c1")
+        c1.lastMessageId = "msg-only"
+        c1.lastMessagePreview = "le seul message"
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessage: .replaced(nil),
+            previewRecalculated: true
+        ))
+
+        let cleared = await waitUntil {
+            let c = await store.conversation(id: "c1")
+            return c?.lastMessageId == nil && c?.lastMessagePreview == nil
+        }
+        XCTAssertTrue(cleared, "the bridge must forward the cleared tri-state, not flatten it to an absence")
     }
 
     func test_conversationUpdated_metadataTitle_applied() async {

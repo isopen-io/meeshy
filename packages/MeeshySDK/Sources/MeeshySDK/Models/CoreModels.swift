@@ -426,6 +426,62 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         return lastMessagePreview
     }
 
+    /// Vide TOUT ce que la ligne de liste dit du dernier message — ce lecteur
+    /// n'en a plus AUCUN de visible ici.
+    ///
+    /// Le seul geste qui produit cet état est PERSONNEL (suppression pour soi
+    /// ou purge d'historique portant sur le dernier message restant) : la
+    /// conversation n'est pas supprimée, elle n'a simplement plus rien à
+    /// montrer à ce lecteur. Le serveur le dit en posant `lastMessageId` à
+    /// `null` sur `conversation:updated` (cf. `LastMessageIdentity`).
+    ///
+    /// Central, et non recopié dans chaque consommateur : la ligne dit bien
+    /// plus que son texte — pastille de pièce jointe, nom d'expéditeur, épingle
+    /// de position, et le libellé que `lastMessageSummaryKind` compose depuis
+    /// les drapeaux éphémères. Un vidage PARTIEL est pire que pas de vidage :
+    /// il laisse « Message expiré » ou une épingle décrire un message que le
+    /// lecteur ne voit plus, ce qui se lit comme un bug plutôt que comme un
+    /// résidu.
+    ///
+    /// `lastMessageAt` ne bouge délibérément PAS : il porte le RANG de la
+    /// conversation dans la liste, une donnée GLOBALE
+    /// (`Conversation.lastMessageAt`, non nullable en base) qu'un masquage
+    /// personnel ne change pour personne. Un `GET /conversations` juste après
+    /// rendrait exactement la valeur conservée ici — la reculer ferait plonger
+    /// la ligne au fond de la liste jusqu'à la synchro suivante, qui la
+    /// remonterait.
+    ///
+    /// Rend `false` quand il n'y avait déjà rien à vider, pour qu'un doublon
+    /// d'événement ne republie pas la ligne.
+    @discardableResult
+    public mutating func clearLastMessage() -> Bool {
+        let hadLastMessage = lastMessageId != nil
+            || lastMessagePreview != nil
+            || lastMessageTranslations != nil
+            || lastMessageOriginalLanguage != nil
+            || !lastMessageAttachments.isEmpty
+            || lastMessageAttachmentCount != 0
+            || lastMessageSenderName != nil
+            || lastMessageIsBlurred
+            || lastMessageIsViewOnce
+            || lastMessageExpiresAt != nil
+            || lastMessageLocation != nil
+        guard hadLastMessage else { return false }
+
+        lastMessageId = nil
+        lastMessagePreview = nil
+        lastMessageTranslations = nil
+        lastMessageOriginalLanguage = nil
+        lastMessageAttachments = []
+        lastMessageAttachmentCount = 0
+        lastMessageSenderName = nil
+        lastMessageIsBlurred = false
+        lastMessageIsViewOnce = false
+        lastMessageExpiresAt = nil
+        lastMessageLocation = nil
+        return true
+    }
+
     /// Hash des champs visuels — utilisé dans ThemedConversationRow.== pour détecter les changements de contenu.
     /// Mettre à jour ce hash quand un nouveau champ est affiché dans ThemedConversationRow.
     public var renderFingerprint: Int {
