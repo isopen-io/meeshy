@@ -51,7 +51,11 @@ private struct EpisodeRow: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
+                // Chevron de divulgation nommé par la DIRECTION DE LECTURE,
+                // jamais par un côté physique : `chevron.forward` se retourne
+                // seul en arabe, `chevron.right` non (garde
+                // `RightToLeftLayoutGuardTests`).
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.32))
             }
