@@ -1046,9 +1046,17 @@ final class ConversationStoreTests: XCTestCase {
     /// `lastMessage` reste `.unchanged`, l'affectation n'est jamais atteinte,
     /// et l'épingle légitime reste en place. Sans cette garde, changer le titre
     /// d'une conversation effacerait l'épingle de sa ligne.
+    /// Part de `makeGroupConv` et NON de `makeConv` : le fixture par défaut est
+    /// `.direct`, dont `merging` ignore désormais le `title` (#3099 — le titre
+    /// client d'un DM est le nom du participant, pas celui de la base). Sur une
+    /// conversation directe, l'assertion de titre ci-dessous tomberait, et —
+    /// bien pire — le témoin deviendrait VACUEUX : la ligne conserverait son
+    /// épingle parce que l'événement entier n'aurait rien fait, et non parce
+    /// que le vidage est correctement borné à la branche du dernier message.
+    /// C'est le titre appliqué qui prouve que l'événement a bien traversé.
     func test_applyConversationUpdated_renameOnly_leavesThePinAlone() async {
         let (store, _, _, _) = makeStore()
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageId = "msg-place"
         conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
         await store.hydrate(conv)

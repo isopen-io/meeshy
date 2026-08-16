@@ -9018,3 +9018,65 @@ Le cycle 49 annonçait « les trois émetteurs de `conversation:updated` ». Il 
 a quatre. Un audit qui COMPTE doit énumérer par recherche, pas de mémoire — et
 le compte lui-même mérite un témoin quand il porte une garantie (« aucun
 émetteur ne doit poser cette clé »).
+
+---
+
+## Leçon — une fusion textuelle PROPRE peut casser un témoin sans toucher une de ses lignes (cycle 50)
+
+### 1. Le fait
+
+3e intégration de `main` dans le cycle 50. Git fusionne
+`ConversationStoreTests.swift` **sans conflit** : les deux branches ont ajouté
+des tests à des endroits différents du fichier. Aucune ligne de mon témoin n'a
+bougé. `sdk-tests` passe de vert à rouge, sur exactement un test — le mien.
+
+La cause vit dans un TROISIÈME fichier. La PR #3099 avait ajouté une garde à
+`ConversationStore.merging` :
+
+```swift
+if let v = event.title, conv.type != .direct { conv.title = v; changed = true }
+```
+
+Mon témoin (« un renommage ne touche pas l'épingle de position ») partait de
+`makeConv`, dont le type par défaut est `.direct`, et affirmait
+`XCTAssertEqual(after.title, "Nouveau nom")`. Le titre n'est plus appliqué :
+`nil`.
+
+### 2. Pourquoi aucun outil ne pouvait le voir
+
+Git fusionne des LIGNES. Le conflit ici n'était pas entre deux lignes mais
+entre une garde neuve et la **signification d'un fixture** — `makeConv`
+retournait déjà `.direct` avant, et retourne toujours `.direct` après. Ce qui a
+changé, c'est ce que `.direct` IMPLIQUE.
+
+C'est la forme de conflit qu'aucune fusion trois-points ne détecte : les deux
+côtés sont individuellement corrects, leur texte ne se recouvre pas, et le
+défaut n'apparaît qu'à l'exécution.
+
+### 3. La règle
+
+**Après une fusion sans conflit, la liste des fichiers modifiés des DEUX côtés
+est une liste de choses à relire, pas une liste de choses à cocher.**
+`ConversationStore.swift` figurait dans les deux diffs ; j'ai vérifié que mon
+champ `location` avait survécu (il avait), et j'ai pris ça pour une
+vérification. C'en était une du MIEN, pas de ce que l'autre côté avait changé
+sous mes témoins.
+
+Le geste juste : pour chaque fichier touché des deux côtés, lire ce que
+l'AUTRE branche y a introduit et se demander ce que mes tests supposent de ce
+fichier — pas seulement si mon code y est toujours.
+
+### 4. Le détail qui rend le correctif non trivial
+
+La correction évidente serait de retirer l'assertion de titre. Elle serait
+FAUSSE : le sujet du témoin est « l'épingle survit à un événement de
+métadonnées », et sans le titre appliqué, la ligne conserverait son épingle
+parce que l'événement entier n'a rien fait. Le témoin passerait au vert en
+n'attestant plus rien — un témoin VACUEUX, vert pour la mauvaise raison.
+
+Le correctif est donc de changer le FIXTURE (`makeGroupConv`, que #3099 avait
+justement ajouté pour ce cas, avec le mode d'emploi dans son doc-comment :
+« Tout test dont le sujet est "une métadonnée s'applique" doit donc partir
+d'ici »). Quand un test casse à cause d'une garde neuve, se demander d'abord si
+le test tombe SOUS la garde par accident — auquel cas c'est son point de départ
+qu'il faut déplacer, jamais son assertion qu'il faut affaiblir.
