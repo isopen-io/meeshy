@@ -152,7 +152,42 @@ nominative à côté de `GET /conversations/:id/statuses`, qui existe, qui est
 gatée, et que le web consomme déjà. Deux voies pour une donnée sensible, c'est
 la configuration qui a produit les cycles 38 à 42.
 
-## Piste pour le cycle suivant — repérée, NON livrée
+## Piste PRIORITAIRE pour le cycle 44 — mesurée, NON livrée
+
+**Le même mécanisme, beaucoup plus large, sur `GET /links/:identifier/messages`.**
+Le `messageSchema` de `routes/links/types.ts` ne déclare que **sept** propriétés.
+Mesuré en montant le schéma réel sur un vrai Fastify :
+
+```
+SURVIVING KEYS: ["id","content","originalLanguage","messageType","createdAt","sender","translations"]
+```
+
+Sont donc retirés du fil, alors que `formatMessageWithSeparateSenders` les
+produit : `anonymousSender`, `attachments`, `reactions`, `replyTo`, `replyToId`,
+`isEdited`, `editedAt`, `deletedAt`, `updatedAt`.
+
+Deux conséquences, et la première n'est pas une dépense mais un **défaut
+fonctionnel** :
+
+1. Une conversation ouverte par lien partagé ne peut afficher **ni pièce jointe,
+   ni réaction, ni réponse citée**, et un message d'invité arrive **sans
+   identité** (`sender` vaut `null` pour un anonyme, et c'est `anonymousSender`
+   qui portait le nom — retiré). À vérifier côté client avant de conclure : le
+   web a peut-être un autre chemin pour ces vues.
+2. `getConversationMessagesWithDetails` **charge** tout cela — `attachments`,
+   `reactions`, et `replyTo` avec son sender, ses attachments et ses réactions
+   imbriqués — à chaque page, pour rien. La dépense corrigée dans ce cycle
+   (`statusEntries`) est la plus petite des quatre.
+
+Ordre de travail suggéré : établir d'abord ce que le client attend réellement de
+ce point de service (il est possible que le schéma ait raison et que le
+formateur/les `include` soient en trop), puis trancher champ par champ —
+compléter le schéma là où le client en a besoin, retirer les `include` partout
+ailleurs. Ne pas déclarer en bloc : `attachments` et `anonymousSender` sont des
+surfaces de données, et le cycle 43 vient de montrer qu'un champ déclaré sans
+examiner ce qu'il publie est exactement le piège.
+
+## Piste secondaire — repérée, NON livrée
 
 **La préférence coupe l'ÉCRITURE sur les deux émetteurs socket de `received`**
 (voir § 2 ci-dessus). Trois choses à établir avant d'écrire :
