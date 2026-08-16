@@ -2261,12 +2261,22 @@ export class CallService {
       conversation: { participants: { some: { userId, isActive: true } } }
     };
     if (filter === 'missed') {
-      // A missed call: an incoming call that rang out unanswered. Keyed on the
-      // distinct `missed` status so calls the user actively rejected
-      // (status `rejected`) and the user's own unanswered outgoing calls are
-      // excluded.
-      where.status = CallStatus.missed;
+      // A missed call, for THIS user, is either (a) the call-wide `missed`
+      // status the ringing-timeout sets when nobody at all answered, or (b)
+      // — mirroring `deriveCallDirection` (Vague 105) — a call that WAS
+      // answered by someone else in a group conversation but this user never
+      // personally got a `CallParticipant` row (declined, ignored, offline).
+      // That second case reaches `status: 'ended'`, never `missed`: keying
+      // this filter on `status` alone silently dropped every such row from
+      // the "Missed" tab, even though `direction: 'missed'` already reports
+      // it correctly under "All" (Vague 136). Narrowing via `where.OR`
+      // instead of overwriting `where.status` keeps the base terminal-status
+      // window (`missed` is already one of its members, so no conflict).
       where.initiatorId = { not: userId };
+      where.OR = [
+        { status: CallStatus.missed },
+        { answeredAt: { not: null }, participants: { none: { participant: { userId } } } }
+      ];
     }
 
     const rows = await this.prisma.callSession.findMany({

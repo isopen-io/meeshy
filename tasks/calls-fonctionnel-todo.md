@@ -9133,3 +9133,80 @@ non testable.
   ce sandbox). Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ;
   ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce
   sandbox ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 136 — the "Missed" call-history filter never matched a group call the current user was bystander to (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallService.ts`/`CallEventsHandler.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-135) mandaté pour trouver un correctif chirurgical neuf.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/
+`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : `CallService.listHistory` construit son `where` Prisma de base avec
+  `status: { in: TERMINAL_STATUSES }` (`ended`/`missed`/`rejected`/`failed`), puis, pour
+  `filter === 'missed'`, ÉCRASAIT ce filtre par `where.status = CallStatus.missed` — la valeur
+  d'ENUM `CallStatus.missed` qu'une timer de sonnerie pose UNIQUEMENT quand personne n'a
+  répondu, call-wide. Or `deriveCallDirection` (`callHistory.ts:85-93`, fixé Vague 105) définit
+  `missed` pour un utilisateur donné de façon plus large : `!(answeredAt && userParticipated)` —
+  c'est-à-dire soit personne n'a répondu, SOIT quelqu'un D'AUTRE a répondu mais CET utilisateur
+  n'a jamais eu sa propre ligne `CallParticipant` (a décliné, ignoré, ou était hors ligne). Ce
+  second cas atteint `CallSession.status: 'ended'` (le call a bien eu lieu pour les autres), jamais
+  `'missed'` — la Vague 105 n'avait corrigé QUE ce que `buildCallHistoryItem` *retourne* (le champ
+  `direction` sous l'onglet « All »), jamais la requête `filter === 'missed'` elle-même, qui restait
+  couplée à l'ancienne sémantique 1:1 (« missed » = personne n'a répondu à qui que ce soit).
+  Au moment de la Vague 105, cet écart était latent : le plafond `MAX_CALL_PARTICIPANTS` limitait
+  les appels de groupe à 2 participants actifs (S1, `tasks/2026-08-13-group-calls-gap-analysis.md`),
+  rendant « quelqu'un d'autre a répondu pendant que moi je n'ai jamais rejoint » un cas de bord
+  étroit. Ce plafond a été levé le 2026-08-13 — tout appel de groupe à 3+ membres où un membre est
+  lent/hors-ligne pendant que les autres discutent normalement produit désormais ce cas.
+- **Scénario de défaillance concret** : conversation de groupe à 4 membres. D est hors ligne/lent
+  et n'obtient jamais de ligne `CallParticipant` pour un appel donné ; A (initiateur), B, C
+  répondent et discutent, puis raccrochent — `CallSession.status` finit à `'ended'`, `answeredAt`
+  posé par B ou C. D ouvre plus tard l'onglet Appels iOS (`CallsTab.swift:33`, filtre `.missed`
+  câblé sur `GET /calls/history?filter=missed` — confirmé) ou une future vue web « appels manqués »
+  bâtie sur le même filtre REST. Sous l'onglet « Tous », l'entrée de D pour cet appel affiche
+  correctement `direction: 'missed'` (Vague 105). Sous l'onglet « Manqués », le même appel est
+  silencieusement absent — `where.status = CallStatus.missed` l'exclut puisque le statut réel de la
+  session est `'ended'`. D ne voit jamais cet appel comme manqué nulle part sauf dans le flux « Tous »,
+  ce qui vide le filtre « Manqués » de son utilité pour tout appel de groupe où quelqu'un d'autre a
+  décroché.
+- **Fix** : `CallService.listHistory`, branche `filter === 'missed'` — ne remplace plus
+  `where.status` (la fenêtre de base `{ in: TERMINAL_STATUSES }` reste intacte ; `missed` en fait
+  déjà partie, aucun conflit) ; ajoute `where.OR` à deux branches, miroir exact de
+  `deriveCallDirection` : `{ status: CallStatus.missed }` (personne n'a répondu) OU
+  `{ answeredAt: { not: null }, participants: { none: { participant: { userId } } } }` (répondu par
+  quelqu'un d'autre, mais aucune ligne `CallParticipant` pour CET utilisateur). La forme nichée
+  `participants: { none: { participant: { userId } } }` réutilise exactement le même pattern de
+  relation déjà présent quelques lignes plus bas dans la même fonction
+  (`callParticipant.findMany({ where: { callSessionId: { in }, participant: { userId } } } })`,
+  `CallService.ts:2345-2348`) — aucun nouveau pattern de requête introduit. Le contrat REST est
+  INCHANGÉ (même query param `filter=missed`, même forme de réponse) — aucun changement route/web/iOS
+  requis.
+- **Tests** (TDD, RED confirmé contre le code non corrigé) :
+  `CallService.listHistory.test.ts` — le test existant du filtre `missed` (qui codifiait l'ancien
+  contrat bogué, `where.status).toBe(CallStatus.missed)`) réécrit pour affirmer que `where.status`
+  reste la fenêtre de base ; 2 cas neufs affirmant les deux branches du `where.OR` (statut `missed`
+  call-wide ; groupe répondu-mais-non-rejoint) ; le test `filter=all` étendu pour affirmer
+  `where.OR` reste `undefined` (aucune fuite du filtre missed vers l'onglet « Tous »). RED confirmé :
+  les 3 cas neufs/modifiés échouaient contre le code non corrigé (`where.status` valait la string
+  `'missed'` au lieu de l'objet `{ in: [...] }` ; `where.OR` valait `undefined`). Suite du fichier :
+  **22/22** verts (+2 net, 1 modifié). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites /
+  1218 tests** verts (+2 net, 0 régression). Suite gateway COMPLÈTE (`jest --config=jest.config.json`,
+  toutes suites) : **734 suites / 17 870 tests** verts, 0 régression. `tsc --noEmit`
+  (services/gateway) : 0 erreur (client Prisma généré dans cette session —
+  `npx prisma generate --generator client` a fonctionné cette fois, contrairement aux vagues
+  précédentes bloquées par la politique réseau ; `packages/shared` buildé en amont via
+  `tsc --project tsconfig.json`).
+- **Non fait volontairement** (candidats revus, non retenus) : `CallSystemMessage.tsx:63` —
+  `canCallBack` sans garde `!isAnonymous` (reconduit — toujours latent : le seul rendu
+  `isAnonymous={true}` connu, `bubble-stream-page.tsx:613`, code en dur `conversationType="public"`,
+  qui échoue déjà `conversationSupportsCalls` ; vérifié à nouveau cette vague, aucun nouveau chemin
+  `isAnonymous` + `direct`/`group` identifié). `mergeEntries`/`upsertRemoteSegment` (web + iOS) —
+  toujours sans filtre explicite par `targetLanguage` côté client, toujours différé (le fix Vague 135
+  élimine la cause racine côté serveur). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; gaps d'infrastructure groupe documentés dans
+  `2026-08-13-group-calls-gap-analysis.md` (dont W4/W5 constatés DÉJÀ résolus par des vagues
+  antérieures lors de cet audit — `aggregateConnectionState`/`aggregateIceConnectionState`
+  (`use-webrtc-p2p.ts`) et `use-peer-connections.ts` qui a remplacé `useActivePeerConnection`).
