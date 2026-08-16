@@ -67,6 +67,9 @@ const mockPrisma: any = {
     findFirst: jest.fn<any>(),
     findMany: jest.fn<any>(),
   },
+  userPreferences: {
+    findMany: jest.fn()
+  },
   userPreference: {
     findMany: jest.fn<any>(),
   },
@@ -94,6 +97,7 @@ describe('MessageReadStatusService — cascade notifications indépendante du cu
     mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
     mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
     mockPrisma.userPreference.findMany.mockResolvedValue([]);
+    mockPrisma.userPreferences.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {
