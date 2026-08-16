@@ -748,3 +748,52 @@ conservé, les trois options écartées, et les pistes du cycle 47 : supprimer l
 `PreferencesService` orphelin, invalider les caches à l'écriture (un réglage met
 aujourd'hui jusqu'à 5 min à prendre effet), et verrouiller `allowAnonymous: false`
 par un témoin.
+
+# Cycle 47 — le réglage était pris, et six caches continuaient de diffuser l'ancien
+
+## Constat
+
+- [x] Dette du cycle 46 reprise — mais son analyse était fausse sur le point
+      décisif : il n'y a pas DEUX caches à purger, il y en avait **SIX**
+- [x] Cinq d'entre eux sont le MÊME code : `PrivacyPreferencesService` déclarait
+      sa mémoire en champ d'INSTANCE, et le service est construit cinq fois
+      (gestionnaire Socket.IO, singleton de présence, 3 plugins de routes)
+- [x] Le sixième : `BoundedTtlCache` statique de `MessageReadStatusService`
+- [x] `invalidateCache` existait SANS aucun appelant — le brancher aurait purgé
+      1 copie sur 6, rendant la fraîcheur NON DÉTERMINISTE selon la porte
+- [x] Cinq `setInterval` capturant `this` + cinq `Map` non bornées, pour une
+      donnée qu'un `BoundedTtlCache` expire seul
+
+## Correctifs
+
+- [x] `services/preferences/privacy-cache.ts` — la mémoïsation descend au niveau
+      MODULE, à côté du résolveur du cycle 46
+- [x] Les DEUX familles de lecteurs y passent ; `PrivacyPreferencesService` perd
+      `Map`, TTL, `setInterval` et ses deux méthodes de fetch
+- [x] `invalidatePrivacyPreferences(userId)` = point d'entrée unique, appelé par
+      `PUT`/`PATCH`/`DELETE /me/preferences/privacy` + `DELETE /me/preferences`
+- [x] Aucun câblage : la route importe une fonction, pas une instance
+- [x] Statique `readReceiptOptOutCache` retirée (pas maquillée en façade) ;
+      5 suites appellent `clearPrivacyPreferencesCache()`
+
+## Gates
+
+- [x] 4 RED discriminants + 6 témoins de route vus rouges avant correctif
+- [x] Gardes : purge ciblée (n'affecte pas les autres users), échec jamais
+      mémoïsé, entrée périmée relâchée à la lecture, autre catégorie ne purge
+      pas, écriture en échec ne purge pas
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte — 730 suites / 17 826 témoins
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle47) + leçon 284
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle47.md` — le tableau des six
+mémoires, pourquoi le correctif « évident » était un piège (une purge partielle
+rend la fraîcheur non déterministe et se lit comme une garantie), la règle
+générale (« la mémoire d'une donnée vit à la portée de la donnée, pas à celle de
+son lecteur »), la borne multi-processus assumée, les deux options écartées, et
+les pistes du cycle 48 : `DELETE /me/preferences/:category` n'émet aucun
+`preferences:updated` (staleness CLIENT, symétrique de celle-ci), la suppression
+du `PreferencesService` orphelin, et le verrou par témoin sur
+`allowAnonymous: false`.

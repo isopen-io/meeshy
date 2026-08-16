@@ -18,6 +18,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { PrivacyPreferencesService } from '../../../services/PrivacyPreferencesService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PRIVACY_PREFERENCES_DEFAULTS } from '../../../config/user-preferences-defaults';
 
@@ -69,11 +70,16 @@ function makeSut(prisma?: PrismaClient) {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('PrivacyPreferencesService', () => {
+  // La mémoïsation vit au niveau MODULE, partagée par toutes les instances et
+  // par les autres portes de diffusion (cf. `preferences/privacy-cache`) : sans
+  // cette purge, un identifiant réutilisé d'un cas à l'autre serait servi chaud.
   beforeEach(() => {
+    clearPrivacyPreferencesCache();
     jest.useFakeTimers();
   });
 
   afterEach(() => {
+    clearPrivacyPreferencesCache();
     jest.useRealTimers();
     jest.clearAllMocks();
   });
@@ -275,22 +281,26 @@ describe('PrivacyPreferencesService', () => {
     });
   });
 
-  // ── Cleanup interval ─────────────────────────────────────────────────────
+  // ── Expiration ───────────────────────────────────────────────────────────
+  //
+  // Le balayage périodique par `setInterval` a disparu avec la `Map`
+  // d'instance : le cache partagé expire à la LECTURE et se borne à
+  // l'insertion. Ce qui compte n'est pas qu'une entrée périmée soit balayée,
+  // c'est qu'elle ne soit jamais SERVIE.
 
-  describe('cache cleanup interval', () => {
-    it('removes expired entries on cleanup tick (10 min interval)', async () => {
+  describe('expiration', () => {
+    it('une entrée périmée est relâchée à la lecture suivante', async () => {
       const prisma = makePrisma([]);
       const sut = makeSut(prisma);
 
       await sut.getPreferences('user-1');
       expect(sut.getMetrics().cacheSize).toBe(1);
 
-      // Let entry expire
       jest.advanceTimersByTime(5 * 60 * 1000 + 1);
-      // Trigger cleanup interval (10 min)
-      jest.advanceTimersByTime(10 * 60 * 1000);
+      await sut.getPreferences('user-1');
 
-      expect(sut.getMetrics().cacheSize).toBe(0);
+      expect(sut.getMetrics().cacheSize).toBe(1);
+      expect((prisma.userPreference.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(2);
     });
   });
 

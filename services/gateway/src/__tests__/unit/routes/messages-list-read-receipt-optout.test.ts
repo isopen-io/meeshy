@@ -73,6 +73,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 
 import { registerMessagesRoutes } from '../../../routes/conversations/messages';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -239,7 +240,7 @@ describe("GET /conversations/:id/messages — l'opt-out d'accusés de lecture", 
     mockCanAccessConversation.mockResolvedValue(true);
     // Le cache d'opt-out a la portée du PROCESSUS : une entrée laissée par un
     // test fausserait le suivant.
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
   });
 
   it('compte les deux destinataires quand personne ne s\'est retiré', async () => {
