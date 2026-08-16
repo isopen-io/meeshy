@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.TestDispatcher
@@ -54,6 +55,7 @@ import java.io.File
  * }
  * ```
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class TestDataStores {
 
     /** Runs every coroutine inline on the test thread — no pool, no scheduling latency. */
