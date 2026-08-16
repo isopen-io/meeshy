@@ -1,48 +1,131 @@
 /**
- * `LentilleConversationListMount` — placeholder de WL-101.
+ * `LentilleConversationListMount` — WL-102/WL-103 (LWS-10).
  *
- * Ce composant n'est jamais montré à un utilisateur réel (voir son en-tête).
- * Ces tests verrouillent son CONTRAT minimal pour WL-102/103 : un point de
- * montage réel (pas une coquille vide non testable), `aria-hidden` (aucune
- * sémantique accessible à annoncer tant qu'il n'y a rien à annoncer), et
- * l'abonnement typing bien câblé DEPUIS ce composant (pas depuis
- * `ConversationList.tsx` — décision WL-101 : abonné uniquement quand ce
- * composant est monté, donc uniquement drapeau ON).
+ * Le placeholder de WL-101 est remplacé par le rendu réel : ces tests
+ * verrouillent l'ORCHESTRATION (sections, squelette, rail, typing/bridge
+ * transmis aux rangs) — le comportement de `LentilleRow` lui-même est
+ * couvert par ses propres suites (`LentilleRow.test.tsx`), donc mocké ici
+ * pour isoler ce qui est propre au point de montage.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 
-const mockUseLentilleListTyping = jest.fn(() => new Map());
-
+const mockUseLentilleListTyping = jest.fn((_currentUserId: string | null | undefined) => new Map());
 jest.mock('@/hooks/lentille/use-lentille-list-typing', () => ({
-  useLentilleListTyping: (currentUserId: string | null | undefined) =>
-    mockUseLentilleListTyping(currentUserId),
+  useLentilleListTyping: (currentUserId: string | null | undefined) => mockUseLentilleListTyping(currentUserId),
+}));
+
+jest.mock('@/hooks/lentille/use-lentille-bridges', () => ({
+  useLentilleBridges: () => new Map(),
+}));
+
+jest.mock('@/stores/conversation-ui-store', () => ({
+  useConversationUIStore: (selector: any) => selector({ draftMessages: {} }),
+}));
+
+jest.mock('../LentilleRow', () => ({
+  LentilleRow: ({ conversation, onClick }: any) => (
+    <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
+      {conversation.title}
+    </div>
+  ),
 }));
 
 import { LentilleConversationListMount } from '../LentilleConversationListMount';
 
+const makeUser = (): User => ({ id: 'user-1', username: 'alice', displayName: 'Alice', email: 'a@a.com', role: 'USER' } as unknown as User);
+
+const conv = (id: string, overrides: Partial<Conversation> = {}): Conversation =>
+  ({
+    id,
+    type: 'group',
+    title: `Conv ${id}`,
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 3,
+    participants: [],
+    createdAt: new Date('2026-08-01'),
+    updatedAt: new Date('2026-08-01'),
+    lastMessageAt: new Date('2026-08-16T09:00:00.000Z'),
+    unreadCount: 0,
+    ...overrides,
+  }) as unknown as Conversation;
+
+const t = (key: string) => key;
+
+const baseProps = {
+  currentUser: makeUser(),
+  selectedConversationId: null as string | null,
+  onSelectConversation: jest.fn(),
+  preferencesMap: new Map(),
+  categories: [],
+  isLoading: false,
+  t,
+};
+
 describe('LentilleConversationListMount', () => {
   beforeEach(() => {
     mockUseLentilleListTyping.mockClear();
+    (baseProps.onSelectConversation as jest.Mock).mockClear();
   });
 
-  it('rend un point de montage identifiable, aria-hidden', () => {
-    render(<LentilleConversationListMount currentUserId="user-1" />);
-
-    const mount = screen.getByTestId('lentille-list-mount');
-    expect(mount).toHaveAttribute('aria-hidden', 'true');
+  it('rend un point de montage identifiable', () => {
+    render(<LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} />);
+    expect(screen.getByTestId('lentille-list-mount')).toBeInTheDocument();
   });
 
   it("s'abonne au typing DÈS son montage, avec le currentUserId reçu", () => {
-    render(<LentilleConversationListMount currentUserId="user-1" />);
-
+    render(<LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[]} />);
     expect(mockUseLentilleListTyping).toHaveBeenCalledWith('user-1');
   });
 
-  it('fonctionne sans currentUserId (garde défensive)', () => {
-    render(<LentilleConversationListMount currentUserId={null} />);
+  it('rend un rang par conversation, réparti par section', () => {
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a'), conv('b')]}
+      />
+    );
+    expect(screen.getAllByTestId('mock-lentille-row')).toHaveLength(2);
+  });
 
+  it('déclenche onSelectConversation au clic sur un rang', () => {
+    render(<LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} />);
+    fireEvent.click(screen.getByTestId('mock-lentille-row'));
+    expect(baseProps.onSelectConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche le squelette UNIQUEMENT si le cache est vide (isLoading et zéro conversation)', () => {
+    const { rerender } = render(
+      <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[]} isLoading={true} />
+    );
+    expect(screen.getByTestId('lentille-list-skeleton')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-lentille-row')).not.toBeInTheDocument();
+
+    rerender(
+      <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} isLoading={true} />
+    );
+    expect(screen.queryByTestId('lentille-list-skeleton')).not.toBeInTheDocument();
+  });
+
+  it("n'affiche PAS le squelette une fois des conversations en cache, même si isLoading redevient true (pagination)", () => {
+    render(
+      <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} isLoading={true} />
+    );
+    expect(screen.queryByTestId('lentille-list-skeleton')).not.toBeInTheDocument();
+  });
+
+  it('masque le rail vivants quand aucune conversation live (section `live` absente)', () => {
+    render(<LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a')]} />);
+    expect(screen.queryByTestId('lentille-lives-rail')).not.toBeInTheDocument();
+  });
+
+  it('fonctionne sans currentUserId (garde défensive)', () => {
+    render(<LentilleConversationListMount {...baseProps} currentUserId={null} conversations={[]} />);
     expect(mockUseLentilleListTyping).toHaveBeenCalledWith(null);
     expect(screen.getByTestId('lentille-list-mount')).toBeInTheDocument();
   });

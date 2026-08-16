@@ -331,7 +331,17 @@ export const ConversationList = memo(function ConversationList({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {lentilleListActive ? (
           <FeatureErrorBoundary featureName="Lentille" fallback={renderContent}>
-            <LentilleConversationListMount currentUserId={currentUser?.id ?? null} />
+            <LentilleConversationListMount
+              currentUserId={currentUser?.id ?? null}
+              currentUser={currentUser}
+              conversations={filteredConversations}
+              selectedConversationId={selectedConversation?.id ?? null}
+              onSelectConversation={handleSelectConversation}
+              preferencesMap={preferencesMap}
+              categories={categories}
+              isLoading={isLoading || isLoadingPreferences}
+              t={t}
+            />
           </FeatureErrorBoundary>
         ) : (
           renderContent

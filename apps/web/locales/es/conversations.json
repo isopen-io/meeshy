@@ -741,7 +741,15 @@
       "typing": {
         "one": "{name} está escribiendo…"
       },
-      "draft": "✎ Borrador"
+      "draft": "✎ Borrador",
+      "sections": {
+        "pinned": "Fijadas",
+        "live": "En directo",
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "thisWeek": "Esta semana",
+        "older": "Más antiguo"
+      }
     }
   },
   "bubbleStream": {

@@ -741,7 +741,15 @@
       "typing": {
         "one": "{name} está digitando…"
       },
-      "draft": "✎ Rascunho"
+      "draft": "✎ Rascunho",
+      "sections": {
+        "pinned": "Fixadas",
+        "live": "Ao vivo",
+        "today": "Hoje",
+        "yesterday": "Ontem",
+        "thisWeek": "Esta semana",
+        "older": "Mais antigo"
+      }
     }
   },
   "bubbleStream": {

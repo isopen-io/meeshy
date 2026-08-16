@@ -743,7 +743,15 @@
       "typing": {
         "one": "{name} écrit…"
       },
-      "draft": "✎ Brouillon"
+      "draft": "✎ Brouillon",
+      "sections": {
+        "pinned": "Épinglées",
+        "live": "En direct",
+        "today": "Aujourd'hui",
+        "yesterday": "Hier",
+        "thisWeek": "Cette semaine",
+        "older": "Plus ancien"
+      }
     }
   },
   "bubbleStream": {

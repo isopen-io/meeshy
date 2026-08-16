@@ -60,6 +60,12 @@ const LENTILLE_KEYS = [
   'lentille.modes.riviereLockedDirect',
   'lentille.typing.one',
   'lentille.draft',
+  'lentille.sections.pinned',
+  'lentille.sections.live',
+  'lentille.sections.today',
+  'lentille.sections.yesterday',
+  'lentille.sections.thisWeek',
+  'lentille.sections.older',
 ];
 
 describe('lentille namespace i18n keys — reachable via useI18n(\'conversations\') scoping (REV-1 réserve 12b)', () => {

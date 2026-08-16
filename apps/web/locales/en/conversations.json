@@ -739,7 +739,15 @@
       "typing": {
         "one": "{name} is typing…"
       },
-      "draft": "✎ Draft"
+      "draft": "✎ Draft",
+      "sections": {
+        "pinned": "Pinned",
+        "live": "Live",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This week",
+        "older": "Older"
+      }
     }
   },
   "bubbleStream": {
