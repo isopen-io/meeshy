@@ -1249,9 +1249,17 @@ export interface ConversationPreferencesPayload {
 }
 
 /**
- * Variante "préférences user-level" : émis par
- * `me/preferences/{category}` factory. Le client doit refetch la
- * catégorie nommée.
+ * Variante "préférences user-level" : émis par les QUATRE verbes écrivains de
+ * `me/preferences/{category}` (`PUT`, `PATCH`, `DELETE`) ET par la remise à
+ * zéro globale `DELETE /me/preferences`, qui émet UNE FOIS PAR CATÉGORIE
+ * effacée — le contrat étant per-catégorie, un événement « tout » sans
+ * `category` ne tomberait dans aucune branche du discriminant côté client.
+ *
+ * Le client doit refetch la catégorie nommée : `usePreferences()` pose
+ * `staleTime: Infinity`, donc cette invalidation est le seul chemin par lequel
+ * un réglage changé sur un autre appareil atteint un onglet ouvert.
+ *
+ * Point unique côté gateway : `services/preferences/preferences-broadcast.ts`.
  */
 export interface UserPreferencesCategoryUpdatedEventData {
   readonly userId: string;

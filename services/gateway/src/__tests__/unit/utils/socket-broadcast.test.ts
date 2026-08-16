@@ -74,6 +74,80 @@ describe('resolveSocketIO', () => {
     const fastify = makeFastify({});
     expect(resolveSocketIO(fastify)).toBeNull();
   });
+
+  // `MeeshySocketIOManager` n'expose QUE `getIO()` en public : son champ `io`
+  // est privé, et seul l'effacement des types à l'exécution le rendait
+  // lisible. Un renommage de ce champ privé — geste interne, sans appelant
+  // TypeScript à casser — aurait dégradé silencieusement `broadcastToUser` en
+  // no-op pour tous ses appelants. L'accesseur public est donc consulté EN
+  // PREMIER, et le champ n'est plus qu'un repli pour les doubles de test.
+  it('prefers the public getManager().getIO() accessor over the private io field', () => {
+    const publicIo = makeIo('public');
+    const privateIo = makeIo('private');
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({
+        getIO: jest.fn<any>().mockReturnValue(publicIo),
+        io: privateIo,
+      }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBe(publicIo);
+  });
+
+  it('resolves via getManager().getIO() when no io field exists at all', () => {
+    const io = makeIo('room');
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({ getIO: jest.fn<any>().mockReturnValue(io) }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBe(io);
+  });
+
+  it('falls back to the io field when getIO() yields nothing', () => {
+    const io = makeIo('room');
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({ getIO: jest.fn<any>().mockReturnValue(null), io }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBe(io);
+  });
+
+  it('does not throw when the manager is null (Socket.IO not yet bootstrapped)', () => {
+    const handler = { getManager: jest.fn<any>().mockReturnValue(null) };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBeNull();
+  });
+
+  // La résolution s'exécute AVANT le `try` de `broadcastToUser` : ce qu'elle
+  // laisserait échapper ferait échouer une écriture REST à cause d'un canal
+  // latéral, ce que la promesse de no-op de ce module exclut.
+  it('degrades to null when getManager throws', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockImplementation(() => { throw new Error('not bootstrapped'); }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBeNull();
+  });
+
+  it('degrades to null when getIO throws', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockReturnValue({
+        getIO: () => { throw new Error('adapter gone'); },
+      }),
+    };
+
+    expect(resolveSocketIO(makeFastify(handler))).toBeNull();
+  });
+
+  it('broadcastToUser reports failure instead of throwing when resolution blows up', () => {
+    const handler = {
+      getManager: jest.fn<any>().mockImplementation(() => { throw new Error('not bootstrapped'); }),
+    };
+    const fastify = makeFastify(handler);
+
+    expect(broadcastToUser(fastify, 'user-7', 'user:preferences-updated', {})).toBe(false);
+    expect(fastify.log.warn).toHaveBeenCalled();
+  });
 });
 
 // ─── broadcastToUser ─────────────────────────────────────────────────────────

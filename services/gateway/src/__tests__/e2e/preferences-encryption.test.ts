@@ -39,7 +39,10 @@ describe('E2E: Preferences Encryption & Security', () => {
     userPreferences: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
-      update: jest.fn()
+      update: jest.fn(),
+      // La remise à zéro passe par `updateMany` (cycle 48) : une ligne absente
+      // y rend `{ count: 0 }` au lieu de lever `P2025`.
+      updateMany: jest.fn()
     },
     userConsent: {
       findMany: jest.fn()
@@ -240,10 +243,7 @@ describe('E2E: Preferences Encryption & Security', () => {
 
   describe('Data Protection - Reset to Defaults', () => {
     it('should reset privacy preferences including encryption settings', async () => {
-      mockPrisma.userPreferences.update.mockResolvedValue({
-        userId,
-        privacy: null
-      });
+      mockPrisma.userPreferences.updateMany.mockResolvedValue({ count: 1 });
 
       const response = await app.inject({
         method: 'DELETE',
@@ -257,10 +257,7 @@ describe('E2E: Preferences Encryption & Security', () => {
     });
 
     it('should reset audio preferences including voice profile', async () => {
-      mockPrisma.userPreferences.update.mockResolvedValue({
-        userId,
-        audio: null
-      });
+      mockPrisma.userPreferences.updateMany.mockResolvedValue({ count: 1 });
 
       const response = await app.inject({
         method: 'DELETE',

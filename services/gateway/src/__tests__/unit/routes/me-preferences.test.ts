@@ -42,17 +42,25 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   ROOMS: { user: (id: string) => `user:${id}` },
 }));
 
-// Mock the auth middleware — we control req.auth directly in buildApp
+// Mock the auth middleware — we control req.auth directly in buildApp.
+// Les options reçues sont conservées : elles sont elles-mêmes sous témoin
+// (cf. « garde d'accès » plus bas), `allowAnonymous: false` étant la
+// prémisse dont dépend le service des anonymes par les défauts.
+const mockAuthMiddlewareOptions: unknown[] = [];
+
 jest.mock('../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: () => async (req: FastifyRequest) => {
-    // no-op: buildApp adds a preHandler hook instead
+  createUnifiedAuthMiddleware: (_prisma: unknown, options: unknown) => {
+    mockAuthMiddlewareOptions.push(options);
+    return async (req: FastifyRequest) => {
+      // no-op: buildApp adds a preHandler hook instead
+    };
   },
 }));
 
-// Mock socket-broadcast used by categories sub-routes
-jest.mock('../../../utils/socket-broadcast', () => ({
-  broadcastToUser: jest.fn(),
-}));
+// `utils/socket-broadcast` n'est PAS doublé : c'est par lui que passe désormais
+// toute diffusion de préférences, et le doubler rendrait « ce verbe diffuse »
+// indiscernable de « ce verbe ne diffuse pas ». Les émissions sont observées
+// au bout de la chaîne, sur la couche Socket.IO factice de `makeSocketLayer`.
 
 // Le cache serveur des préférences de confidentialité — on observe qu'il est
 // bien purgé par chaque écriture, pas ce qu'il contient (cf. son propre témoin,
@@ -141,7 +149,27 @@ type PrismaOpts = {
   updateError?: Error | null;
   upsertResult?: Record<string, unknown>;
   upsertError?: Error | null;
+  /**
+   * Rien ne crée la ligne `UserPreferences` à l'inscription : ses seuls
+   * créateurs sont les `upsert` de PUT/PATCH. `rowExists: false` modélise
+   * l'utilisateur qui n'a jamais écrit de préférence — celui pour qui la
+   * remise à zéro est un no-op, pas une erreur.
+   *
+   * Le double doit modéliser les DEUX verbes tels que Prisma les rend sur une
+   * ligne absente, sans quoi il rend vert un chemin rouge en production :
+   * `update` LÈVE P2025, `updateMany` rend `{ count: 0 }`. C'est précisément
+   * ce que l'ancien double (`update` toujours résolu) cachait.
+   */
+  rowExists?: boolean;
+  updateManyError?: Error | null;
 };
+
+/** Ce que Prisma lève quand `update` ne trouve pas la ligne visée. */
+function missingRowError(): Error {
+  const error = new Error('An operation failed because it depends on one or more records that were required but not found.');
+  (error as Error & { code: string }).code = 'P2025';
+  return error;
+}
 
 function makePrisma({
   findUniqueResult = { ...STORED_ALL_PREFS },
@@ -150,15 +178,22 @@ function makePrisma({
   updateError = null,
   upsertResult = { id: 'pref-id', privacy: STORED_PRIVACY },
   upsertError = null,
+  rowExists = true,
+  updateManyError = null,
 }: PrismaOpts = {}) {
+  const updateRejection = updateError ?? (rowExists ? null : missingRowError());
+
   return {
     userPreferences: {
       findUnique: findUniqueError
         ? jest.fn().mockRejectedValue(findUniqueError)
         : jest.fn().mockResolvedValue(findUniqueResult),
-      update: updateError
-        ? jest.fn().mockRejectedValue(updateError)
+      update: updateRejection
+        ? jest.fn().mockRejectedValue(updateRejection)
         : jest.fn().mockResolvedValue(updateResult),
+      updateMany: updateManyError
+        ? jest.fn().mockRejectedValue(updateManyError)
+        : jest.fn().mockResolvedValue({ count: rowExists ? 1 : 0 }),
       upsert: upsertError
         ? jest.fn().mockRejectedValue(upsertError)
         : jest.fn().mockResolvedValue(upsertResult),
@@ -184,16 +219,37 @@ function makePrisma({
 
 type AuthMode = 'registered' | 'no-user-id';
 
+type Emission = { readonly room: string; readonly event: string; readonly payload: unknown };
+
+/**
+ * Couche Socket.IO observable. Le double précédent rendait `getIO: () => null`,
+ * ce qui rendait TOUTE diffusion invisible — un verbe qui n'émet pas y était
+ * indiscernable d'un verbe qui émet. Les émissions sont désormais collectées
+ * pour que la question « ce verbe diffuse-t-il ? » ait une réponse.
+ */
+function makeSocketLayer() {
+  const emissions: Emission[] = [];
+  const io = {
+    to(room: string) {
+      return {
+        emit(event: string, payload: unknown) {
+          emissions.push({ room, event, payload });
+        },
+      };
+    },
+  };
+  return { emissions, handler: { getManager: () => ({ getIO: () => io }) } };
+}
+
 async function buildApp(prismaOpts: PrismaOpts = {}, authMode: AuthMode = 'registered'): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const prisma = makePrisma(prismaOpts);
   app.decorate('prisma', prisma as unknown);
 
-  // Simulate socketIOHandler (socket emission is best-effort, tests don't need real IO)
-  app.decorate('socketIOHandler', {
-    getManager: () => ({ getIO: () => null }),
-  } as unknown);
+  const socket = makeSocketLayer();
+  app.decorate('socketIOHandler', socket.handler as unknown);
+  (app as unknown as Record<string, unknown>).emissions = socket.emissions;
 
   // Simulate mutationLogService (used by withMutationLog when cmid present)
   app.decorate('mutationLogService', null as unknown);
@@ -218,14 +274,22 @@ async function buildCategoryApp(
   prismaOpts: PrismaOpts = {},
   authMode: AuthMode = 'registered',
 ): Promise<FastifyInstance> {
+  return buildCategoryAppWith(category, makePrisma(prismaOpts), authMode);
+}
+
+/** Same, over a Prisma double the caller keeps a handle on (to inspect its calls). */
+async function buildCategoryAppWith(
+  category: 'privacy' | 'audio',
+  prisma: ReturnType<typeof makePrisma>,
+  authMode: AuthMode = 'registered',
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  const prisma = makePrisma(prismaOpts);
   app.decorate('prisma', prisma as unknown);
 
-  app.decorate('socketIOHandler', {
-    getManager: () => ({ getIO: () => null }),
-  } as unknown);
+  const socket = makeSocketLayer();
+  app.decorate('socketIOHandler', socket.handler as unknown);
+  (app as unknown as Record<string, unknown>).emissions = socket.emissions;
 
   app.decorate('mutationLogService', null as unknown);
 
@@ -329,7 +393,7 @@ describe('DELETE /me/preferences', () => {
     expect(body.message).toMatch(/reset/i);
   });
 
-  it('nulls out all category fields in the prisma update call', async () => {
+  it('nulls out all category fields in the prisma updateMany call', async () => {
     const prisma = makePrisma();
     const appInspect = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     appInspect.decorate('prisma', prisma as unknown);
@@ -343,7 +407,7 @@ describe('DELETE /me/preferences', () => {
 
     await appInspect.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
 
-    const updateCall = (prisma.userPreferences.update as ReturnType<typeof jest.fn>).mock.calls[0][0];
+    const updateCall = (prisma.userPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls[0][0];
     expect(updateCall.where.userId).toBe(USER_ID);
     expect(updateCall.data.privacy).toBeNull();
     expect(updateCall.data.audio).toBeNull();
@@ -364,11 +428,150 @@ describe('DELETE /me/preferences', () => {
   });
 
   it('returns 500 on db error', async () => {
-    const appErr = await buildApp({ updateError: new Error('db crash') });
+    const appErr = await buildApp({ updateManyError: new Error('db crash') });
     const res = await appErr.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
 
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DELETE — la remise à zéro se diffuse, et n'échoue pas sur un compte neuf
+//
+// Cycle 48. Deux défauts jumeaux sur les DEUX routes de remise à zéro :
+//   A. elles n'émettaient pas `preferences:updated` alors que PUT/PATCH le font
+//      — les autres appareils gardaient la valeur d'AVANT la remise à zéro
+//      (`usePreferences()` pose `staleTime: Infinity` côté web) ;
+//   B. elles appelaient `update()`, qui lève P2025 quand la ligne n'existe pas
+//      — or rien ne la crée à l'inscription, donc « remettre à zéro » rendait
+//      500 exactement pour l'utilisateur qui EST déjà aux valeurs par défaut.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const emissionsOf = (app: FastifyInstance): Emission[] =>
+  (app as unknown as { emissions: Emission[] }).emissions;
+
+const prefsEmissions = (app: FastifyInstance): Emission[] =>
+  emissionsOf(app).filter((e) => e.event === 'user:preferences-updated');
+
+describe('DELETE /me/preferences/:category — diffusion et compte sans ligne', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('diffuse preferences:updated dans la room personnelle, comme PUT et PATCH', async () => {
+    const app = await buildCategoryApp('privacy');
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(prefsEmissions(app)).toEqual([
+      { room: `user:${USER_ID}`, event: 'user:preferences-updated', payload: { userId: USER_ID, category: 'privacy' } },
+    ]);
+    await app.close();
+  });
+
+  it('rend 200 pour un utilisateur sans ligne UserPreferences — il est déjà aux valeurs par défaut', async () => {
+    const app = await buildCategoryApp('privacy', { rowExists: false });
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('ne crée aucune ligne vide pour un utilisateur qui n\'en a pas', async () => {
+    const prisma = makePrisma({ rowExists: false });
+    const app = await buildCategoryAppWith('privacy', prisma);
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(prisma.userPreferences.upsert).not.toHaveBeenCalled();
+    expect(prisma.userPreferences.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('cible la seule catégorie demandée, jamais les autres', async () => {
+    const prisma = makePrisma();
+    const app = await buildCategoryAppWith('privacy', prisma);
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    const call = (prisma.userPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls[0][0];
+    expect(call.where.userId).toBe(USER_ID);
+    expect(call.data).toEqual({ privacy: null });
+    await app.close();
+  });
+
+  it('ne diffuse pas quand la remise à zéro échoue', async () => {
+    const app = await buildCategoryApp('privacy', { updateManyError: new Error('db crash') });
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(res.statusCode).toBe(500);
+    expect(prefsEmissions(app)).toEqual([]);
+    await app.close();
+  });
+});
+
+describe('DELETE /me/preferences — diffusion et compte sans ligne', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('diffuse une fois par catégorie effacée — le contrat client est per-catégorie', async () => {
+    const app = await buildApp();
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
+
+    const categories = prefsEmissions(app).map((e) => (e.payload as { category: string }).category);
+    expect(categories.sort()).toEqual(
+      ['application', 'audio', 'document', 'message', 'notification', 'privacy', 'video'],
+    );
+    expect(prefsEmissions(app).every((e) => e.room === `user:${USER_ID}`)).toBe(true);
+    await app.close();
+  });
+
+  it('rend 200 pour un utilisateur sans ligne UserPreferences', async () => {
+    const app = await buildApp({ rowExists: false });
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('ne diffuse pas quand la remise à zéro globale échoue', async () => {
+    const app = await buildApp({ updateManyError: new Error('db crash') });
+
+    const res = await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
+
+    expect(res.statusCode).toBe(500);
+    expect(prefsEmissions(app)).toEqual([]);
+    await app.close();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Garde d'accès — dette nommée par les cycles 46 et 47
+//
+// `PrivacyPreferencesService.getPreferencesForUsers` sert les participants
+// anonymes par les valeurs par défaut SANS consulter la base : ils n'ont pas
+// de ligne `UserPreferences`, et `authContext.userId` porte pour eux un
+// `Participant.id`, qui ne désigne aucun utilisateur. Ce raccourci n'est
+// correct QUE tant que ces routes leur restent fermées — un `allowAnonymous`
+// passé à `true` ferait écrire un anonyme sous une clé qui n'est pas la
+// sienne. Rien ne gardait cette prémisse ; ce témoin la garde.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('userPreferencesRoutes — garde d\'accès', () => {
+  it('refuse les sessions anonymes et exige une authentification', async () => {
+    mockAuthMiddlewareOptions.length = 0;
+
+    const app = await buildApp();
+
+    expect(mockAuthMiddlewareOptions.length).toBeGreaterThan(0);
+    for (const options of mockAuthMiddlewareOptions) {
+      expect(options).toMatchObject({ requireAuth: true, allowAnonymous: false });
+    }
+    await app.close();
   });
 });
 
@@ -786,27 +989,6 @@ describe('DELETE /me/preferences/privacy', () => {
     expect(body.message).toMatch(/privacy.*reset/i);
   });
 
-  it('calls prisma.userPreferences.update with the category nulled out', async () => {
-    const prisma = makePrisma();
-    const appInspect = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    appInspect.decorate('prisma', prisma as unknown);
-    appInspect.decorate('socketIOHandler', { getManager: () => null } as unknown);
-    appInspect.decorate('mutationLogService', null as unknown);
-    appInspect.addHook('preHandler', async (req) => {
-      (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
-    });
-    const router = createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS);
-    await appInspect.register(router, { prefix: '/me/preferences/privacy' });
-    await appInspect.ready();
-
-    await appInspect.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
-
-    const updateCall = (prisma.userPreferences.update as ReturnType<typeof jest.fn>).mock.calls[0][0];
-    expect(updateCall.where.userId).toBe(USER_ID);
-    expect(updateCall.data.privacy).toBeNull();
-    await appInspect.close();
-  });
-
   it('returns 401 when userId is missing', async () => {
     const appNoAuth = await buildCategoryApp('privacy', {}, 'no-user-id');
     const res = await appNoAuth.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
@@ -816,7 +998,7 @@ describe('DELETE /me/preferences/privacy', () => {
   });
 
   it('returns 500 on db error', async () => {
-    const appErr = await buildCategoryApp('privacy', { updateError: new Error('db crash') });
+    const appErr = await buildCategoryApp('privacy', { updateManyError: new Error('db crash') });
     const res = await appErr.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
 
     expect(res.statusCode).toBe(500);
