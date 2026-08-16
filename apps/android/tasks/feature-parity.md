@@ -2722,25 +2722,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       is impossible and an unchanged field is never overwritten. **+37 tests** (SlowModeOptions 7,
       ConversationSettingsForm 10, MemberRole 5, ConversationRepository +2, ConversationSettingsViewModel 7);
       mutation-checked (neutralising the diff killed exactly the 5 partial-patch/dirty tests).
-- [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
-      — pin/category/mute/**mentions-only** are wired (slice `conversation-mentions-only-preference`,
+- [x] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
+      — pin/category/mute/**mentions-only** wired (slice `conversation-mentions-only-preference`,
       2026-08-15, PR #3054: `setMentionsOnlyOptimistic`/`toggleMentionsOnly` + a context-menu toggle,
       shown only while not muted). **Custom name wired 2026-08-16** (slice `conversation-custom-name`):
       `ConversationRepository.setCustomNameOptimistic` (stores `name.trim()` verbatim, including an
       explicit empty string on clear — the pre-existing `explicitNulls = false` JSON config only drops
       Kotlin `null`, never `""`) + `ConversationPrefsPayload.customName`/`OutboxFlushWorker` threading
       through to `ConversationPreferencesUpdate` + a "Rename conversation" context-menu action/dialog.
-      **Reaction emoji wired 2026-08-16** (slice `conversation-favorite-reaction`) — correction to the
-      note above: iOS DOES have real UI for this (`ConversationListView+Overlays`'s "Favori" submenu,
-      a fixed 8-emoji set ⭐️❤️🔥💎🎯✨🏆💡 + "Retirer le favori", `ConversationPreferencesTab`'s own
-      "Reaction" row is a second entry point to the SAME field). It also drives
-      `ConversationFilter.FAVORITES`, which was a confirmed dead end on Android (the tab existed,
-      `ConversationFilters` already gated on `prefs?.reaction != null`, but nothing ever wrote it).
-      `ConversationRepository.setReactionOptimistic` mirrors `setCustomNameOptimistic`'s explicit-
-      empty-string-on-clear trick; `ConversationFilters.FAVORITES` fixed to `isNullOrBlank()` so the
-      clear sentinel doesn't itself count as a favorite. Only `tags` remains unwired — the
-      `UserConversationPreferences.tags` field exists but nothing reads/writes it from the UI on
-      either platform. Box stays unchecked until that lands too.
+      **Reaction emoji wired 2026-08-16** (slice `conversation-favorite-reaction`): iOS's real UI is
+      `ConversationListView+Overlays`'s "Favori" submenu (fixed 8-emoji set ⭐️❤️🔥💎🎯✨🏆💡ﾠ+ "Retirer le
+      favori"; `ConversationPreferencesTab`'s "Reaction" row is a second entry point to the SAME
+      field). Also fixed a confirmed Android dead end: `ConversationFilter.FAVORITES` already existed
+      as a filter chip gated on `prefs?.reaction != null`, but nothing ever wrote it — the tab was
+      permanently empty. `ConversationRepository.setReactionOptimistic` mirrors `setCustomNameOptimistic`'s
+      explicit-empty-string-on-clear trick; `ConversationFilters.FAVORITES` fixed to `isNullOrBlank()`.
+      **Tags wired 2026-08-16** (slice `conversation-tags-preference`) — neither model field existed
+      on Android before this slice (`ApiConversationPreferences.tags`/`ConversationPreferencesUpdate.tags`
+      both newly added; the gateway already supported `tags` on the write side). No null-vs-empty-string
+      sentinel needed here (unlike `customName`/`reaction`): `[]` is a real non-null JSON array the
+      shared `explicitNulls = false` encoder never drops. New "Tags" context-menu dialog: a text field
+      + `Icons.AutoMirrored.Filled.Label`-tagged add button + a `FlowRow` of removable `InputChip`s,
+      backed by the pure `ConversationTagsEditor.add`/`.remove` SSOT. **Deferred, not core**: iOS's
+      `TagInputField` also autocompletes against `allTags` (every tag the user has ever used across all
+      conversations, aggregated client-side from `GET /user-preferences/conversations` — no dedicated
+      gateway endpoint) — Android's first cut has no autocomplete corpus; a real, documented follow-up,
+      not a silently-dropped feature. Every sub-item of this line is now wired on both platforms — box
+      checked.
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN

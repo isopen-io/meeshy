@@ -52,6 +52,11 @@
     <string name="conversations_action_favorite">Favorite</string>
     <string name="conversations_action_remove_favorite">Remove favorite</string>
     <string name="conversations_favorite_set_content_description">Set favorite reaction %1$s</string>
+    <string name="conversations_action_tags">Tags</string>
+    <string name="conversations_tags_dialog_title">Tags</string>
+    <string name="conversations_tags_field_hint">Add a tag…</string>
+    <string name="conversations_tags_add_content_description">Add tag</string>
+    <string name="conversations_tags_remove_content_description">Remove tag %1$s</string>
     <string name="conversations_action_mark_read">Mark as read</string>
     <string name="conversations_action_mark_unread">Mark as unread</string>
     <string name="conversations_action_move_to_category">Move to category</string>

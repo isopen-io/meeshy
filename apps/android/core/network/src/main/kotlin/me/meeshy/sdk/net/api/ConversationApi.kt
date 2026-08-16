@@ -30,6 +30,7 @@ data class ConversationPreferencesUpdate(
     val categoryId: String? = null,
     val customName: String? = null,
     val reaction: String? = null,
+    val tags: List<String>? = null,
 )
 
 /**

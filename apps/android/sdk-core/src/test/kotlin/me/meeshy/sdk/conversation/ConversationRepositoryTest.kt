@@ -542,6 +542,68 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `setTagsOptimistic sets the cached tags trimmed and deduplicated, queuing a snapshot`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setTagsOptimistic("c1", listOf("  work  ", "family", "work"))
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.tags)
+            .containsExactly("work", "family").inOrder()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.tags).containsExactly("work", "family").inOrder()
+    }
+
+    @Test
+    fun `setTagsOptimistic is a no-op when the normalized tag set is unchanged`() = runTest {
+        val tagged = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(tags = listOf("work")),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(tagged))))
+        repo.refresh()
+
+        val applied = repo.setTagsOptimistic("c1", listOf("work"))
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
+    fun `setTagsOptimistic clearing to an empty list sends an explicit empty array`() = runTest {
+        val tagged = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(tags = listOf("work")),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = listOf(tagged))))
+        repo.refresh()
+
+        val applied = repo.setTagsOptimistic("c1", emptyList())
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.tags).isEmpty()
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.tags).isEqualTo(emptyList<String>())
+        assertThat(row.payload).contains("\"tags\":[]")
+    }
+
+    @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "down")))
 
