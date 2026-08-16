@@ -41,6 +41,13 @@ struct SettingsView: View {
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
     @State private var scrollOffset: CGFloat = 0
+    /// I-075 — préférence « Activer les bêta » (`BetaFeaturesPreference`,
+    /// défaut ON, amendement produit 2026-08-16). Lu UNE fois au montage (le
+    /// même patron que `interfaceLanguageChoice` ci-dessus) ; le toggle
+    /// écrit `BetaFeaturesPreference.setEnabled` ET ce `@State` en même
+    /// temps — pas de source de vérité seconde, juste un miroir local pour
+    /// que la vue se re-rende sans relire `UserDefaults` à chaque frame.
+    @State private var betaFeaturesEnabled: Bool = BetaFeaturesPreference.isEnabled
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -172,6 +179,7 @@ struct SettingsView: View {
                 notificationsSection
                 dataSection
                 meeshyToolsSection
+                betaSection
                 supportSection
                 aboutSection
                 logoutSection
@@ -622,6 +630,41 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.tools.affiliate", bundle: .main))
             .accessibilityHint(String(localized: "settings.tools.affiliate.hint", bundle: .main))
+        }
+    }
+
+    // MARK: - Beta Section
+
+    /// I-075 — « Activer les bêta » (amendement produit 2026-08-16). Toggle
+    /// de PLEIN DROIT (écrit `BetaFeaturesPreference.setEnabled`, jamais
+    /// `LentilleFeatureFlag.setForDebug`) : OFF ⇒ l'item « Focal (bêta) » du
+    /// menu d'appui long de la liste disparaît (`ConversationListView+Overlays
+    /// .swift`, `ConversationContextMenuView.morePanel`) ; ce que cet item
+    /// FAIT à l'ouverture (forçage éphémère, aucune écriture de préférence de
+    /// mode) reste inchangé par ce réglage.
+    private var betaSection: some View {
+        settingsSection(title: String(localized: "settings.section.beta", bundle: .main), icon: "flask.fill", color: MeeshyColors.trackingAccentHex) {
+            VStack(alignment: .leading, spacing: 0) {
+                settingsRow(icon: "sparkles", title: String(localized: "settings.beta.toggle", bundle: .main), color: MeeshyColors.trackingAccentHex) {
+                    Toggle("", isOn: Binding(
+                        get: { betaFeaturesEnabled },
+                        set: { val in
+                            betaFeaturesEnabled = val
+                            BetaFeaturesPreference.setEnabled(val)
+                        }
+                    ))
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityLabel(String(localized: "settings.beta.toggle", bundle: .main))
+                    .accessibilityValue(betaFeaturesEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
+                }
+
+                Text(String(localized: "settings.beta.toggle.subtitle", bundle: .main))
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(theme.textSecondary)
+                    .padding(.horizontal, MeeshySpacing.md + 2)
+                    .padding(.bottom, MeeshySpacing.sm + 2)
+            }
         }
     }
 

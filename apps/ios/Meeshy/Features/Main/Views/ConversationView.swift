@@ -256,6 +256,18 @@ struct ConversationView: View {
     /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
+    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
+    /// menu d'appui long de la liste (gardé par
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+    /// amendement produit 2026-08-16). `nil` (défaut) ⇒
+    /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
+    /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
+    /// valeur non-`nil`. Transmis tel quel à
+    /// `ReadingModeController.init(forcedMode:)` : court-circuite la décision
+    /// D'OUVERTURE sans dupliquer ni relâcher la loi gelée
+    /// `ReadingModeOrchestrator.resolveOrchestratorDecision` — voir la
+    /// docstring de `ReadingModeController.forcedMode`.
+    var forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -508,13 +520,14 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
         self.previewMode = previewMode
         self.showsOwnConnectionBanner = showsOwnConnectionBanner
         self.onOpenFullConversation = onOpenFullConversation
+        self.forcedReadingMode = forcedReadingMode
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
@@ -550,7 +563,8 @@ struct ConversationView: View {
             scope: identity.scope,
             unreadCount: conversation?.userState.unreadCount ?? 0,
             capabilities: capabilities,
-            isFlagEnabled: isFlagEnabled
+            isFlagEnabled: isFlagEnabled,
+            forcedMode: forcedReadingMode
         ))
         // Même `capabilities` locale que ci-dessus — pas de seconde résolution
         // (§WS-7 travail 5, arbitrage F-086bis) : le catalogue de la feuille

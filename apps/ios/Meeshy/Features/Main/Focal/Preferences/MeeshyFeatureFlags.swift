@@ -7,8 +7,17 @@ import Foundation
 /// apps/ios` montre que le drapeau existe déjà — `LentilleFeatureFlag.readingModes`
 /// (M-046, `Lentille/Core/LentilleFeatureFlag.swift`), résolu
 /// `ProcessInfo` (`MEESHY_FLAG_READING_MODES`) PRIME sur `UserDefaults`
-/// (clé `meeshy.flag.reading_modes`), défaut OFF, déjà couvert par
-/// `LentilleFlagGateTests`.
+/// (clé `meeshy.flag.reading_modes` — SI POSÉE EXPLICITEMENT), déjà couvert
+/// par `LentilleFlagGateTests`.
+///
+/// **RE-PREUVE (I-075, second amendement 2026-08-16)** : « défaut OFF »
+/// n'est plus vrai. Clé jamais posée ⇒ `LentilleFeatureFlag.readingModes`
+/// replie sur `BetaFeaturesPreference.isEnabled` (défaut ON) — le drapeau
+/// devient le premier « client » du programme bêta : à l'installation, les
+/// modes de lecture sont ACTIFS (l'orchestrateur GELÉ décide au tap normal
+/// d'une conversation), et couper « Activer les bêta » (réglages) les
+/// désactive tous d'un coup. Voir la docstring de `LentilleFeatureFlag`
+/// pour la cascade à trois étages.
 ///
 /// `LentilleFeatureFlag.swift` anticipe explicitement ce fichier : « Toute
 /// évolution ultérieure qui introduirait un `MeeshyFeatureFlags` central

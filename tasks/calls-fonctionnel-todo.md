@@ -8998,3 +8998,62 @@ sandbox.
   `CallManager.tsx`'s propre référence morte à `event.anonymousId` (ligne de LOG uniquement — jamais
   utilisée pour résoudre une identité réelle, `removeParticipant(event.participantId)` gouverne déjà
   le nettoyage sur ce composant ; corriger le log serait cosmétique, hors scope chirurgical).
+
+## Vague 134 — `useRemoteTranscriptionActive` never cleared a peer who left mid-transcription (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/*call*`/`video-calls/**`, exclusion explicite des Vagues 126-133) mandaté pour trouver un
+correctif chirurgical neuf. Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox.
+
+- **Root cause** : `useRemoteTranscriptionActive` tient un `Set<speakerId>` des pairs dont le
+  panneau de transcription est ouvert, alimenté uniquement par `call:transcription-active`
+  (`active: true`/`false`). Aucun autre chemin de retrait. Son jumeau direct
+  `useRemoteCallAlerts` (même jour, même style, même sémantique « groupe-safe / OR sur tout
+  l'appel ») porte un troisième listener `CALL_PARTICIPANT_LEFT` dédié à exactement ce risque —
+  jamais porté dans ce hook-ci. Le seul émetteur `active: false` est un effet
+  `VideoCallInterface.tsx` sans fonction de nettoyage (`[showTranscript, callId]`) : un pair qui
+  raccroche (ou crashe, ou perd le réseau) panneau ouvert se démonte sans jamais émettre
+  `{active: false}`. Le gateway est un pur relais et ne synthétise rien au départ/à la
+  déconnexion.
+- **Scénario de défaillance** : appel de groupe A/B/C. B ouvre son panneau de transcription →
+  badge d'invitation « sous-titres » chez A et C. B raccroche (ou son laptop se ferme). A et C
+  reçoivent bien `call:participant-left` pour B et nettoient sa vignette — mais le badge
+  d'invitation reste allumé pour le RESTE de l'appel, alors que plus personne ne transcrit. Si B
+  rejoint panneau fermé, le badge reste bloqué (le `ref` d'annonce de B repart à `false`, B
+  n'émettra donc jamais le correctif `active: false`).
+- **Fix** : `useRemoteTranscriptionActive` (web) ajoute un troisième listener
+  `SERVER_EVENTS.CALL_PARTICIPANT_LEFT`, miroir ligne à ligne de `useRemoteCallAlerts`
+  (`event.userId || event.participantId`, retrait group-safe, `socket.off` symétrique). Espaces
+  d'identité déjà alignés depuis les Vagues 132/133 — aucun risque de piège Vague-132.
+  `VideoCallInterface.test.tsx` ne mockait PAS ce hook (seul survivant parmi les hooks-collaborateurs
+  du composant, tous les autres l'étaient déjà) : son helper `participantLeftHandler` (sélection par
+  PREMIER `call:participant-left` enregistré sur le fake socket) capturait donc désormais le nouveau
+  listener du hook au lieu de celui du composant, dans les tests qui fournissent un vrai fake socket.
+  Corrigé en ajoutant le mock manquant (`jest.mock('@/hooks/use-remote-transcription-active', …)`),
+  seule ligne touchée hors du hook/test ciblés — alignement sur la convention déjà appliquée à tous
+  les autres hooks-collaborateurs de ce fichier de test.
+- **Tests** (TDD, RED confirmé contre le hook non corrigé) :
+  `use-remote-transcription-active.test.tsx` — nouveau groupe « participant-left cleanup »,
+  5 cas neufs (nettoyage simple ; groupe-safe avec un second pair encore actif ; repli
+  `participantId` sans `userId` ; `participant-left` d'un AUTRE appel inerte ; désabonnement au
+  démontage). Suite du fichier : **10/10** verts (+4 net, un cas trivialement déjà vert). Sweep
+  web `--testPathPatterns="[Cc]all"` : **53 suites / 506 tests** verts, 0 régression (dont
+  `VideoCallInterface.test.tsx` **48/48** après l'ajout du mock manquant).
+  `npx tsc --noEmit` (apps/web) : **1768** erreurs préexistantes, identique avant/après ce diff
+  (aucune nouvelle, aucune corrigée).
+- **Backlog fusionné de la routine précédente** : PR #3080 (Vague antérieure — `endCall()` d'un
+  appel de groupe ne termine plus l'appel pour tout le monde) était vert CI et sans conflit,
+  mergé sur `main` (squash) avant de commencer cette vague.
+- **Non fait volontairement** (candidats identifiés, non retenus pour cette vague) :
+  `CallSystemMessage.tsx:63` — `canCallBack` omet le garde `!isAnonymous` que porte son jumeau
+  `canJoin` ; actuellement latent (le seul rendu `isAnonymous={true}` connu code en dur
+  `conversationType="public"`, qui échoue déjà `conversationSupportsCalls`) — pas de scénario de
+  défaillance réel identifié, à revisiter si un chemin `isAnonymous` avec type direct/groupe
+  apparaît. `translateAndEmitSegment` (`CallEventsHandler.ts:1839-1875`) diffuse une traduction
+  PAR langue cible à TOUTE la room plutôt qu'un fanout par destinataire — bug réel en appel de
+  groupe multilingue, mais correctif serveur non-trivial (nouvelle logique de ciblage), hors
+  gabarit chirurgical de cette vague. Reconduits (inchangés depuis les vagues précédentes) : dead
+  code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.

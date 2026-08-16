@@ -210,6 +210,7 @@ class OutboxFlushWorker @AssistedInject constructor(
                 categoryId = prefs.categoryId,
                 customName = prefs.customName,
                 reaction = prefs.reaction,
+                tags = prefs.tags,
             )
             when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success

@@ -83,6 +83,7 @@ data class ApiConversationPreferences(
     val categoryId: String? = null,
     val mentionsOnly: Boolean = false,
     val reaction: String? = null,
+    val tags: List<String> = emptyList(),
 )
 
 @Serializable

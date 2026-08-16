@@ -301,7 +301,11 @@ struct RootView: View {
                     case .conversation(let conv):
                         ConversationView(
                             conversation: conv,
-                            replyContext: router.pendingReplyContext
+                            replyContext: router.pendingReplyContext,
+                            // I-075 — override éphémère, jamais persistant :
+                            // consommé ici comme `pendingReplyContext`
+                            // ci-dessus, jamais écrit en préférence.
+                            forcedReadingMode: router.pendingForcedReadingMode
                         )
                         // Identité par conversation — même fix que iPadRootView.
                         // `Router.navigateToConversation` REMPLACE la pile en une
@@ -314,7 +318,10 @@ struct RootView: View {
                         // brouillon de A via onDisappear) + une vue neuve pour B.
                         .id(conv.id)
                         .navigationBarHidden(true)
-                        .onAppear { router.pendingReplyContext = nil }
+                        .onAppear {
+                            router.pendingReplyContext = nil
+                            router.pendingForcedReadingMode = nil
+                        }
                     case .settings:
                         SettingsView()
                             .navigationBarHidden(true)

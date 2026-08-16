@@ -2673,8 +2673,35 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       MessageActionMenu 5, ReportMessageForm 11, ChatViewModel 7, plus the updated basic-menu order);
       mutation-checked (dropping the `!isOutgoing` gate killed exactly the 3 outgoing-message tests).
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
-- [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
-- [ ] Member moderation: promote/demote, expel, ban, add member
+- [~] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list —
+      **member list shipped 2026-08-16** (slice `conversation-members-roster`, port of iOS
+      `ParticipantsView`): a group-only header action opens a members bottom sheet with cursor
+      pagination, server-side search (`?search=` filters `displayName` case-insensitively) and
+      role badges. Pure `MemberRoster` (`:core:model`) accumulates pages, **deduplicates ids
+      repeated across pages** (cursor pagination over a roster mutating underneath legitimately
+      repeats a row) and normalises `hasMore && nextCursor != null` — a server answering
+      `hasMore: true, nextCursor: null` would otherwise re-request page one forever; **both holes
+      are open in the iOS reference**. `PaginatedParticipant.displayLabel` ports iOS's
+      `name` fallback chain. Shared-media grid and pinned-messages list are already live
+      (`ConversationMediaGallery`, `PinnedMessagesSheet`) — box stays `[~]` only because this line
+      bundles three surfaces and all three should be re-verified together before checking it.
+- [~] Member moderation: promote/demote, expel, ban, add member — **promote/demote/expel shipped
+      2026-08-16** (slice `conversation-members-roster`) via a per-row overflow menu inside the
+      members sheet. Pure `MemberModeration` (`:core:model`) is the SSOT for which affordance a
+      viewer may see: `canRemove` (never self, never the creator, admin+ removes anyone,
+      moderator removes plain members only) and `roleActions` (creator moves anyone between
+      member/moderator/admin; a conversation admin does the same except on a peer admin;
+      moderators and members get nothing) — a faithful port of `ParticipantsView.
+      canRemoveParticipant` + `contextMenuItems`, mirroring the gateway's own checks in
+      `routes/conversations/participants.ts` so no control is offered that would come back 403.
+      Both actions are **optimistic with rollback** on refusal (iOS applies only after the server
+      answers). Real-time: `participant:role-updated` / `conversation:participant-left` /
+      `conversation:participant-banned` were listened for in `MessageSocketManager` but had **no
+      consumer** before this slice — the sheet is now that consumer, so a moderation action taken
+      on another device or by another moderator lands without a refetch. Still open: **add
+      member** (needs its own user-search surface, iOS has `AddParticipantSheet`) and **ban/unban**
+      (`PATCH .../ban`/`.../unban` exist on the gateway; iOS does not wire them in this view
+      either). Box stays unchecked until those two land.
 - [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
       settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
       earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**
@@ -2695,25 +2722,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       is impossible and an unchanged field is never overwritten. **+37 tests** (SlowModeOptions 7,
       ConversationSettingsForm 10, MemberRole 5, ConversationRepository +2, ConversationSettingsViewModel 7);
       mutation-checked (neutralising the diff killed exactly the 5 partial-patch/dirty tests).
-- [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
-      — pin/category/mute/**mentions-only** are wired (slice `conversation-mentions-only-preference`,
+- [x] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
+      — pin/category/mute/**mentions-only** wired (slice `conversation-mentions-only-preference`,
       2026-08-15, PR #3054: `setMentionsOnlyOptimistic`/`toggleMentionsOnly` + a context-menu toggle,
       shown only while not muted). **Custom name wired 2026-08-16** (slice `conversation-custom-name`):
       `ConversationRepository.setCustomNameOptimistic` (stores `name.trim()` verbatim, including an
       explicit empty string on clear — the pre-existing `explicitNulls = false` JSON config only drops
       Kotlin `null`, never `""`) + `ConversationPrefsPayload.customName`/`OutboxFlushWorker` threading
       through to `ConversationPreferencesUpdate` + a "Rename conversation" context-menu action/dialog.
-      **Reaction emoji wired 2026-08-16** (slice `conversation-favorite-reaction`) — correction to the
-      note above: iOS DOES have real UI for this (`ConversationListView+Overlays`'s "Favori" submenu,
-      a fixed 8-emoji set ⭐️❤️🔥💎🎯✨🏆💡 + "Retirer le favori", `ConversationPreferencesTab`'s own
-      "Reaction" row is a second entry point to the SAME field). It also drives
-      `ConversationFilter.FAVORITES`, which was a confirmed dead end on Android (the tab existed,
-      `ConversationFilters` already gated on `prefs?.reaction != null`, but nothing ever wrote it).
-      `ConversationRepository.setReactionOptimistic` mirrors `setCustomNameOptimistic`'s explicit-
-      empty-string-on-clear trick; `ConversationFilters.FAVORITES` fixed to `isNullOrBlank()` so the
-      clear sentinel doesn't itself count as a favorite. Only `tags` remains unwired — the
-      `UserConversationPreferences.tags` field exists but nothing reads/writes it from the UI on
-      either platform. Box stays unchecked until that lands too.
+      **Reaction emoji wired 2026-08-16** (slice `conversation-favorite-reaction`): iOS's real UI is
+      `ConversationListView+Overlays`'s "Favori" submenu (fixed 8-emoji set ⭐️❤️🔥💎🎯✨🏆💡ﾠ+ "Retirer le
+      favori"; `ConversationPreferencesTab`'s "Reaction" row is a second entry point to the SAME
+      field). Also fixed a confirmed Android dead end: `ConversationFilter.FAVORITES` already existed
+      as a filter chip gated on `prefs?.reaction != null`, but nothing ever wrote it — the tab was
+      permanently empty. `ConversationRepository.setReactionOptimistic` mirrors `setCustomNameOptimistic`'s
+      explicit-empty-string-on-clear trick; `ConversationFilters.FAVORITES` fixed to `isNullOrBlank()`.
+      **Tags wired 2026-08-16** (slice `conversation-tags-preference`) — neither model field existed
+      on Android before this slice (`ApiConversationPreferences.tags`/`ConversationPreferencesUpdate.tags`
+      both newly added; the gateway already supported `tags` on the write side). No null-vs-empty-string
+      sentinel needed here (unlike `customName`/`reaction`): `[]` is a real non-null JSON array the
+      shared `explicitNulls = false` encoder never drops. New "Tags" context-menu dialog: a text field
+      + `Icons.AutoMirrored.Filled.Label`-tagged add button + a `FlowRow` of removable `InputChip`s,
+      backed by the pure `ConversationTagsEditor.add`/`.remove` SSOT. **Deferred, not core**: iOS's
+      `TagInputField` also autocompletes against `allTags` (every tag the user has ever used across all
+      conversations, aggregated client-side from `GET /user-preferences/conversations` — no dedicated
+      gateway endpoint) — Android's first cut has no autocomplete corpus; a real, documented follow-up,
+      not a silently-dropped feature. Every sub-item of this line is now wired on both platforms — box
+      checked.
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN

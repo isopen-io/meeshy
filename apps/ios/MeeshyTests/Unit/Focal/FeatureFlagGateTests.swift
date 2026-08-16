@@ -3,10 +3,12 @@ import XCTest
 
 /// F-080 (WS-1) — `MeeshyFeatureFlags.isReadingModesEnabled` : délègue à
 /// `LentilleFeatureFlag.readingModes` (M-046, déjà couvert par
-/// `LentilleFlagGateTests`) plutôt que de dupliquer la résolution
-/// `UserDefaults`/`ProcessInfo`. Ce fichier ne re-teste PAS la matrice
-/// process/UserDefaults (déjà verte côté `LentilleFlagGateTests`) — il
-/// prouve la DÉLÉGATION, et le critère d'acceptation §WS-1 : « drapeau OFF
+/// `LentilleFlagGateTests`, y compris la cascade vers `BetaFeaturesPreference`
+/// — I-075, second amendement 2026-08-16) plutôt que de dupliquer la
+/// résolution `UserDefaults`/`ProcessInfo`. Ce fichier ne re-teste PAS la
+/// matrice complète (déjà verte côté `LentilleFlagGateTests`) — il prouve la
+/// DÉLÉGATION (témoin discriminant unique : la cascade bêta, absente d'ici
+/// AVANT l'amendement), et le critère d'acceptation §WS-1 : « drapeau OFF
 /// ⇒ toute décision rend `.bubbles` » (le mode de repli, contrat
 /// §3.1 `.bubbleLegacy` — RE-PREUVE : rawValue identique, nom de cas réel
 /// `.bubbles` sur la loi gelée).
@@ -19,9 +21,19 @@ final class FeatureFlagGateTests: XCTestCase {
 
     // MARK: - Délégation, pas de duplication
 
-    func test_isReadingModesEnabled_injectable_defaultsToFalse() {
+    /// I-075 (second amendement) — la délégation PORTE la cascade bêta :
+    /// `defaults`/`environment` fraîches ⇒ `true` (pas `false`), puisque
+    /// `LentilleFeatureFlag.readingModes` replie sur `BetaFeaturesPreference
+    /// .isEnabled` (défaut ON) quand sa propre clé n'a jamais été posée.
+    /// Témoin discriminant de la délégation : si `MeeshyFeatureFlags
+    /// .isReadingModesEnabled` recalculait sa propre résolution au lieu de
+    /// déléguer, ce test resterait vert par coïncidence — la paire avec
+    /// `test_isReadingModesEnabled_injectable_matchesUnderlyingFlagForSameInputs`
+    /// (égalité stricte avec `LentilleFeatureFlag.readingModes.isEnabled`)
+    /// referme cette échappatoire.
+    func test_isReadingModesEnabled_injectable_defaultsToTrue_viaBetaCascade() {
         let defaults = makeIsolatedDefaults()
-        XCTAssertFalse(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
+        XCTAssertTrue(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
     }
 
     func test_isReadingModesEnabled_injectable_userDefaultsTrue_returnsTrue() {
