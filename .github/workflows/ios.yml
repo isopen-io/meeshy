@@ -448,14 +448,27 @@ jobs:
           # d'atteindre le bloc d'annotations (constaté au run #79 — exit 65
           # nu, zéro annotation). On sort explicitement avec `exit "$rc"`.
           #
-          # `-continue-building-after-errors` : sans lui le frontend Swift
-          # s'arrête à la PREMIÈRE erreur du module. Un fichier qui en porte
-          # trois coûtait donc trois runs de ~15 min pour être déminé, chacun
-          # ne révélant que la suivante. Avec, le typage continue et le MÊME
-          # run les liste toutes — c'est ce qui rend le bloc d'annotations
-          # exhaustif plutôt qu'anecdotique. No-op sur un build vert ; en
-          # contrepartie une erreur amont peut cascader en diagnostics
-          # dérivés, d'où la déduplication par POSITION plus bas.
+          # NE PAS passer `OTHER_SWIFT_FLAGS` ici. Essayé le 2026-08-16 pour
+          # ajouter `-Xfrontend -continue-building-after-errors` (le frontend
+          # Swift s'arrête sinon à la première erreur d'un module) : un
+          # réglage de build en ligne de commande REMPLACE la valeur, il ne
+          # s'y ajoute pas, et `$(inherited)` n'a rien à hériter à ce niveau.
+          # Or SwiftPM compile les `swiftSettings` de `Package.swift` en
+          # `OTHER_SWIFT_FLAGS` sur les cibles du package : l'override a effacé
+          # `.enableUpcomingFeature("InferIsolatedConformances")` (SE-0470) et
+          # `.enableUpcomingFeature("NonisolatedNonsendingByDefault")`
+          # (SE-0461) de MeeshySDK, et 19 erreurs de concurrence stricte sont
+          # apparues dans MeeshyUI — sur du code inchangé et vert par ailleurs
+          # (run 31945994902). Le seul emplacement sûr pour un drapeau Swift
+          # est `apps/ios/project.yml`, qui ne porte QUE les cibles du dépôt.
+          #
+          # Ce que le bloc d'annotations ci-dessous remonte reste complet pour
+          # ce que le compilateur a effectivement émis : la compilation par
+          # lots parallèles produit déjà plusieurs erreurs par run (19 sur
+          # celui-là). Ce qu'on n'a pas, c'est l'exhaustivité DANS un fichier.
+          # Pour la classe d'erreurs qui avait motivé la tentative, le garde
+          # `scripts/check-swift-viewbuilder.sh` la donne en 1 s sur ubuntu,
+          # avant même que ce runner ne démarre.
           set -o pipefail
           set +e
           xcodebuild build-for-testing \
@@ -466,7 +479,6 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             DEBUG_INFORMATION_FORMAT=dwarf \
-            OTHER_SWIFT_FLAGS="-Xfrontend -continue-building-after-errors" \
             "${ARCH_SETTINGS[@]}" \
             -quiet 2>&1 | tee /tmp/xcodebuild-build.log
           rc=${PIPESTATUS[0]}

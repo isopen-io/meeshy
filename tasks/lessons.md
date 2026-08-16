@@ -8722,6 +8722,36 @@ réel, dans les conditions réelles* — pas sur une fixture, pas avec le fichie
 passé à la main. Ici, remettre la version cassée de `main` en place et voir le
 garde sortir en 1 est le seul geste qui distinguait les deux versions.
 
+**Le troisième piège, payé au run suivant.** Le geste « rendre la porte
+exhaustive » a été tenté en passant
+`OTHER_SWIFT_FLAGS="-Xfrontend -continue-building-after-errors"` sur la ligne
+de commande `xcodebuild`. Le build est devenu rouge avec **19 erreurs de
+concurrence stricte** dans `MeeshyUI`, sur du code inchangé et vert partout
+ailleurs. Cause : *un réglage de build passé en ligne de commande REMPLACE la
+valeur, il ne s'y ajoute jamais* — il siège au sommet de la hiérarchie, où
+`$(inherited)` n'a rien à hériter. Or **SwiftPM compile les `swiftSettings` de
+`Package.swift` en `OTHER_SWIFT_FLAGS`** sur les cibles du package :
+l'override a effacé `.enableUpcomingFeature("InferIsolatedConformances")`
+(SE-0470) et `.enableUpcomingFeature("NonisolatedNonsendingByDefault")`
+(SE-0461), et les diagnostics que ces deux features suppriment sont
+mécaniquement remontés.
+
+*Un réglage global n'est jamais gratuit quand une dépendance en dépend
+silencieusement.* Le tell est visible sans rien connaître du flag ajouté : les
+erreurs sortent **dans un module qu'on n'a pas touché**, et leur libellé nomme
+exactement la garantie qu'une feature du langage apportait. Corollaire
+d'emplacement : un drapeau Swift destiné au dépôt se pose dans
+`apps/ios/project.yml`, qui ne porte QUE les cibles du dépôt — jamais sur
+l'invocation `xcodebuild`, qui arrose aussi les paquets SPM.
+
+Et une conclusion sur le geste lui-même : il n'a pas été redéposé ailleurs.
+Le garde amont donne la classe visée en 1 s, la compilation par lots
+parallèles remonte déjà plusieurs erreurs par run (19 sur celui-là), et ce qui
+restait à gagner — l'exhaustivité DANS un fichier — ne valait pas un réglage
+global dont je venais de mesurer le rayon d'action. *Quand un geste
+d'observabilité vient de casser ce qu'il devait observer, la bonne réponse est
+souvent de ne pas le replacer, pas de le replacer mieux.*
+
 **Le signal, disponible avant tout diagnostic.** Un `xcodebuild` qui ne remonte
 qu'UNE erreur alors que le diff touche plusieurs branches d'un même `switch`.
 *Un compilateur qui n'a qu'une chose à dire sur un changement large n'a pas
