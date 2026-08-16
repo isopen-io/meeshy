@@ -149,17 +149,19 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
     /// du token : un décompte figé détecte toute branche qui dériverait vers
     /// une police concurrente sans que les tests ci-dessus (qui ne
     /// vérifient que la PRÉSENCE d'au moins une occurrence) ne le voient.
-    /// Valeur de repère au moment de ce commit : 10 occurrences (typing,
-    /// brouillon × 2, expired, hidden × 1 + sender, view-once × 1 + sender,
-    /// standard texte + sender, pièce jointe + sender). Une VARIATION (à la
+    /// Valeur de repère : 11 occurrences (typing, brouillon × 2, expired,
+    /// hidden × 1 + sender, view-once × 1 + sender, standard texte + sender,
+    /// pièce jointe + sender, statut d'appel en direct). La 11ᵉ est le badge
+    /// live-call ajouté par V3ter L13 (47f9556b) — investiguée : elle
+    /// référence bien le token, pas une police littérale. Une VARIATION (à la
     /// hausse comme à la baisse) doit être investiguée avant d'ajuster ce
     /// nombre — jamais relâchée en `>= 1`.
     func test_realRow_line2_everyBranch_usesLine2FontToken_fixedCount() throws {
         let code = try realRowSource()
         XCTAssertEqual(
-            occurrences(of: "LentilleMetrics.Line2.font", in: code), 10,
+            occurrences(of: "LentilleMetrics.Line2.font", in: code), 11,
             "Le compte d'occurrences de LentilleMetrics.Line2.font dans LentilleConversationRow.swift " +
-            "a changé par rapport au repère connu (10) — vérifier qu'aucune branche de la ligne 2 " +
+            "a changé par rapport au repère connu (11) — vérifier qu'aucune branche de la ligne 2 " +
             "n'a dérivé vers une police littérale avant d'ajuster ce nombre."
         )
     }
