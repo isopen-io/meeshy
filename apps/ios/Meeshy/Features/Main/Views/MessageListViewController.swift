@@ -2199,7 +2199,29 @@ extension MessageListViewController: UICollectionViewDelegate {
             .filter { snapshot.indexOfItem($0) != nil }
         guard !items.isEmpty else { return }
         snapshot.reconfigureItems(items)
-        dataSource.apply(snapshot, animatingDifferences: false)
+        // FocalPassCallSite.snapshotApplyCompletion — OBLIGATOIRE, et il
+        // manquait ici.
+        //
+        // « Toute réalisation ou re-mesure de cellule EFFACE la perspective »
+        // (`FocalScrollPass`, §4.8) : appliquer ce snapshot réécrit les
+        // `layoutAttributes` des deux cellules reconfigurées, donc remet leur
+        // `layer.transform` à l'identité. Sans repose, elles restaient à
+        // l'échelle 1 et à l'opacité 1 jusqu'au geste suivant — c'est-à-dire
+        // pendant TOUT le temps où l'utilisateur regarde, puisque cette
+        // méthode ne se déclenche qu'à l'ARRÊT du défilement.
+        //
+        // Symptôme observé : d'une capture à l'autre, les mêmes messages
+        // apparaissaient tantôt progressivement réduits, tantôt tous à taille
+        // pleine. La courbe n'était pas en cause — l'échelle disparaissait.
+        //
+        // Défaut PRÉEXISTANT : ce chemin appelle `apply` depuis qu'il existe,
+        // et n'a jamais reposé le pass. Il passait inaperçu tant que la
+        // reconfiguration produisait un contenu identique (aucun champ de
+        // focus sur `FocalRowInput` avant ce chantier) : seule la perspective
+        // sautait, sans que rien ne change par ailleurs.
+        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+            self?.applyFocalPassIfEnabled()
+        }
     }
 }
 
