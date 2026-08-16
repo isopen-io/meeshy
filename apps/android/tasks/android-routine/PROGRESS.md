@@ -49,7 +49,102 @@
 > **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 31s (970 actionable tasks,
 > matching prior slices — no build-graph regression), zero regressions.
 >
-> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=user-search-pagination`.
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=user-search-pagination`
+> (re-read at merge time, not at slice-selection time — this run's own choice of ordering
+> confirms the caution the concurrent `conversation-members-roster` entry below records:
+> streak had already moved to 2 by the time this PR's CI resolved, so this entry lands at 3).
+
+> On 2026-08-16 **Paginated conversation member list + role moderation shipped** (slice
+> `conversation-members-roster`) — advances two adjacent `feature-parity.md` §C lines at once
+> ("Paginated member list (infinite scroll + search)" → `[~]`, "Member moderation:
+> promote/demote, expel, ban, add member" → `[~]`), the Android port of iOS `ParticipantsView`.
+>
+> **RE-PROVED before starting, and the re-proof changed the plan.** The prior run's own "Next
+> slice candidates" list still nominated *"Change email / phone (two-step verification) — no UI
+> screen consumes it anywhere"*. That is **stale**: `AccountContactViewModel` +
+> `AccountContactViewModelTest` are live in `:feature:settings` and exercise `changeEmail` /
+> `verifyEmailChange` / `resendEmailChangeVerification` / `changePhone` / `verifyPhoneChange`
+> end-to-end. Yet another confirmation of the standing rule — a "Next slice" note is a
+> hypothesis, not a fact. Re-scanned §C instead and found the genuine gap below.
+>
+> **Three independent symptoms of one hole**, each verified against real code before writing
+> anything: (1) `PaginatedParticipant` / `PaginatedParticipantsResponse` /
+> `PaginatedParticipantsPagination` were modelled in `:core:model` with **zero references
+> anywhere** in the app; (2) `MessageSocketManager` listened to `participant:role-updated`,
+> `conversation:participant-left` and `conversation:participant-banned` — three flows with **no
+> consumer**; (3) a group member on Android simply could not see who else was in the
+> conversation. The wire contract had been ported ahead of the screen, and the screen never
+> landed.
+>
+> **Pure logic (`:core:model`)**: `MemberRoster` — an immutable cursor-page accumulator
+> (`withFirstPage`/`withNextPage`/`withoutUser`/`withRole`/`displayCount`). Two rules it encodes
+> that the **iOS reference leaves open**: it deduplicates ids repeated across pages (cursor
+> pagination over a roster mutating underneath legitimately repeats a row), and it normalises
+> `hasMore && nextCursor != null` — a server answering `hasMore: true, nextCursor: null` would
+> otherwise make the list re-request page one forever. `MemberModeration` — `canRemove` /
+> `roleActions`, a faithful port of `ParticipantsView.canRemoveParticipant` +
+> `contextMenuItems`, mirroring the gateway's own checks in `routes/conversations/
+> participants.ts` so no affordance is offered that would come back 403.
+> `PaginatedParticipant.displayLabel`/`.role`/`.matches` port iOS's `name` fallback chain and
+> identity matching.
+>
+> **Wire + repository**: `ConversationApi.participants` / `updateParticipantRole` /
+> `removeParticipant`. `participants` deliberately stays **off** the shared `ApiResponse<T>`
+> envelope — this route answers with a root-level *cursor* `pagination`
+> (`nextCursor`/`hasMore`/`totalCount`) that the offset-shaped shared `Pagination` cannot
+> express, and the gateway's own source comment records that changing it is a coordinated
+> breaking change for iOS and web. The repository adapts it onto `apiCall` so transport/HTTP/
+> parse failures fold into `NetworkResult.Failure` exactly like every other call. The role
+> travels as `MemberRole.wireValue`, never a hand-written string.
+>
+> **ViewModel + UI**: `ConversationMembersViewModel` (load, debounced search at 300 ms,
+> `loadMore`, optimistic role change, optimistic removal — both rolling back to the exact prior
+> roster on refusal, per ARCHITECTURE.md §5; iOS applies only after the server answers) +
+> `ConversationMembersSheet` reachable from a new **group-only** header action. Rebinding to a
+> different conversation cancels the previous one's collectors, so a stale socket event can
+> never mutate the new roster. Strings in all 4 locales (en/fr/es/pt).
+>
+> **+55 tests**: 14 `MemberRosterTest`, 14 `MemberModerationTest` (the full actor × target ×
+> isSelf matrix for both removal and role changes, plus a guard that no offered action targets a
+> role the gateway does not accept), 7 `PaginatedParticipantDisplayTest`, 11 new
+> `ConversationRepositoryTest`, 20 `ConversationMembersViewModelTest`. No coverage floor
+> lowered; the two `@Composable` files are UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Cleanup carried in the same diff**: the five near-identical `ConversationApi` test fakes
+> (~165 lines of copy-pasted stubs) now extend one `StubConversationApi` base answering "not
+> wired" for everything, so each fake overrides only the call it is about — the next interface
+> method costs one line instead of one per fake. Every stub a test actually exercises was
+> checked before defaulting it.
+>
+> **Verified**: local `./apps/android/meeshy.sh check` **could not run** — this container has no
+> Android SDK and the egress policy denies `dl.google.com` (403 on the `sdkmanager` bootstrap),
+> the case `ROUTINE.md §CI reality` documents. CI's **Android (assemble + unit tests)** check is
+> the compiler and the gate for PR #3083; not merged on anything less than green.
+>
+> **Next slice candidates (not attempted this run)**: **add member** (the natural follow-up —
+> needs a user-search surface of its own, iOS reference is `AddParticipantSheet`) and
+> **ban/unban** (`PATCH .../ban`/`.../unban` are live on the gateway and unwired on BOTH
+> platforms — iOS does not wire them in `ParticipantsView` either, so this is a genuine
+> both-platforms gap rather than an Android debt); conversation lock PIN-entry UI + hiding
+> locked conversations from the list (storage foundation + logout wipe already shipped);
+> ~~per-conversation reaction emoji / tags~~ — **both halves shipped in parallel while this slice
+> sat in CI**: reaction emoji by `conversation-favorite-reaction` (PR #3082) and tags by
+> `conversation-tags-preference` (PR #3085), which closes that `feature-parity.md` line entirely.
+> Struck through rather than deleted: the candidate was real when written, and the pace at which it
+> was overtaken is itself the lesson recorded below; on-device transcription for the Feed audio attachment (still the standing
+> candidate, needs its own foundation).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=2 last_run=conversation-members-roster`.
+> **The cursor moved FOUR times under this run while it sat in CI** — the sharpest caution this run
+> produced: it read `streak=4` at slice selection; `conversation-favorite-reaction` (PR #3082) took
+> it to 5; an `IOS_DETTE` run (`ios-debt-backlog-reverification-2026-08-16`) then performed the
+> `>= 5` bascule and reset it to **0**; and `conversation-tags-preference` (PR #3085) took it back
+> to 1. So the bascule this entry originally predicted was claimed by another run, and this slice
+> lands at **2**, not the 5/6 first written here. **Read `tasks/lane-cursor.md` at merge time, never
+> from the value read at slice-selection time** — on a repo with concurrent routine runs the cursor
+> is live state, and a CI wait long enough to absorb four flaky/queued runs is long enough for two
+> other slices to ship. The same applies to every "Next slice candidate" this file records: two of
+> the three this entry originally listed were shipped by other runs before it merged.
 
 > On 2026-08-16 **Per-conversation tags shipped — closes the "Per-conversation preferences" line**
 > (slice `conversation-tags-preference`) — the box is now checked: pin/category/mute/mentions-only

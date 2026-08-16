@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
@@ -341,6 +342,7 @@ fun ChatScreen(
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
+    var showMembers by remember { mutableStateOf(false) }
     // Window-space frame of each rendered message row, captured during layout for
     // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
     // snapshot state: written from onGloballyPositioned without forcing recomposition,
@@ -442,6 +444,14 @@ fun ChatScreen(
                         val peerName = state.conversationTitle.orEmpty()
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        if (state.isGroup) {
+                            IconButton(onClick = { showMembers = true }) {
+                                Icon(
+                                    Icons.Filled.Group,
+                                    contentDescription = stringResource(R.string.conversation_members_open),
+                                )
+                            }
                         }
                         // Moderator+ viewers of a group get the admin surfaces: the
                         // share-link creator and the conversation-settings sheet
@@ -793,6 +803,14 @@ fun ChatScreen(
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { showConversationSettings = false },
+        )
+    }
+
+    if (showMembers) {
+        ConversationMembersSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showMembers = false },
         )
     }
 
