@@ -70,7 +70,18 @@ nonisolated enum FocalAudioRouting {
             return .carousel
         }
 
-        // Miroir de `audioIsSoleContent` (`private`, `:278`).
+        // Miroir de `audioIsSoleContent` (`private`, `:278`). Le
+        // `&& !audioAttachments.isEmpty` de l'original est déjà garanti par
+        // le `guard` ci-dessus.
+        //
+        // ATTENTION — le `.audio` PUR + texte tombe ICI, pas dans
+        // `.hostsCaption` : `BubbleContent.hasTextOrNonMediaContent`
+        // (`BubbleContent.swift:207-215`) renvoie délibérément `false` quand
+        // du texte accompagne le cas `.audio` PUR (« audio-only with
+        // transcription text » — le texte EST la transcription, le widget la
+        // rend lui-même). C'est le comportement de la bulle, donc c'est le
+        // nôtre : ne PAS « corriger » cet ordre en croyant récupérer un
+        // caption perdu.
         let isSoleContent = !content.isEmojiOnly
             && !content.hasTextOrNonMediaContent
             && content.reply == nil
@@ -78,7 +89,9 @@ nonisolated enum FocalAudioRouting {
 
         if content.audioHostsReply { return .hostsReply }
 
-        // Miroir de `audioHostsCaption` (`private`, `:301`).
+        // Miroir de `audioHostsCaption` (`private`, `:301`) — atteint quand
+        // le texte/lieu/pièce non-média n'est PAS une transcription : cas
+        // `.mixed` sans visuel, ou `.audio` + `location`.
         let hostsCaption = !content.audioHostsReply
             && !content.visualHostsReply
             && content.hasTextOrNonMediaContent
