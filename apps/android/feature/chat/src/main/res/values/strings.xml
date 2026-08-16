@@ -194,4 +194,9 @@
     <string name="conversation_members_ban_title">Ban this member?</string>
     <string name="conversation_members_ban_message">%1$s will be removed and won\'t be able to rejoin this conversation.</string>
     <string name="conversation_members_ban_confirm">Ban</string>
+    <string name="share_target_title">Share to Meeshy</string>
+    <string name="share_target_search_hint">Search conversations</string>
+    <string name="share_target_send">Send</string>
+    <string name="share_target_sent">Sent</string>
+    <string name="share_target_signed_out">Sign in to Meeshy to share content.</string>
 </resources>
