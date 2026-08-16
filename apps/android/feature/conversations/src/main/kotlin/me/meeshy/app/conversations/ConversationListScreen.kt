@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +73,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -82,6 +84,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
@@ -213,6 +216,7 @@ fun ConversationListScreen(
                                 onDeleteForMe = { viewModel.deleteConversationForMe(conversation.id) },
                                 onDeleteForAll = { viewModel.deleteConversationForAll(conversation.id) },
                                 onRename = { viewModel.setCustomName(conversation.id, it) },
+                                onSetReaction = { viewModel.setReaction(conversation.id, it) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -379,6 +383,7 @@ private fun ConversationRow(
     onDeleteForMe: () -> Unit,
     onDeleteForAll: () -> Unit,
     onRename: (String) -> Unit,
+    onSetReaction: (String?) -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -437,6 +442,8 @@ private fun ConversationRow(
             onDeleteForAll = onDeleteForAll,
             onRename = onRename,
             currentCustomName = prefs?.customName,
+            onSetReaction = onSetReaction,
+            currentReaction = prefs?.reaction,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -492,6 +499,8 @@ private fun ConversationRowContent(
     onDeleteForAll: () -> Unit,
     onRename: (String) -> Unit,
     currentCustomName: String?,
+    onSetReaction: (String?) -> Unit,
+    currentReaction: String?,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -642,6 +651,8 @@ private fun ConversationRowContent(
             onDeleteForAll = onDeleteForAll,
             onRename = onRename,
             currentCustomName = currentCustomName,
+            onSetReaction = onSetReaction,
+            currentReaction = currentReaction,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -650,6 +661,9 @@ private fun ConversationRowContent(
         )
     }
 }
+
+/** Fixed favorite-reaction choices — parity iOS `ConversationListView+Overlays`'s "Favori" submenu. */
+private val favoriteReactionChoices = listOf("⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡")
 
 @Composable
 private fun ConversationContextMenu(
@@ -679,6 +693,8 @@ private fun ConversationContextMenu(
     onDeleteForAll: () -> Unit,
     onRename: (String) -> Unit,
     currentCustomName: String?,
+    onSetReaction: (String?) -> Unit,
+    currentReaction: String?,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -787,6 +803,48 @@ private fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
             onClick = { showRenameDialog = true },
         )
+        // Favorite reaction (parity iOS `ConversationListView+Overlays`'s "Favori"
+        // menu): a fixed 8-emoji set — no full picker, matching iOS exactly — plus
+        // a conditional "Remove favorite" row shown only once one is set. Drives
+        // the ConversationFilter.FAVORITES tab, which was previously unreachable
+        // (nothing wrote ApiConversationPreferences.reaction).
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.conversations_action_favorite),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            favoriteReactionChoices.forEach { emoji ->
+                val setLabel = stringResource(R.string.conversations_favorite_set_content_description, emoji)
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { onSetReaction(emoji); onDismiss() }
+                        .semantics { contentDescription = setLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = emoji, fontSize = 18.sp)
+                }
+            }
+        }
+        if (!currentReaction.isNullOrBlank()) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_remove_favorite)) },
+                leadingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+                onClick = { onSetReaction(null); onDismiss() },
+            )
+        }
         // Move-to-category / create-category (parity iOS `CategoryPickerField` +
         // `ConversationOptionsViewModel.setCategory`/`createCategoryAndSelect`): a
         // search field filters the pure ConversationCategoryPicker SSOT's displayed
