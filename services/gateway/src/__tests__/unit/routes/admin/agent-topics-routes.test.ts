@@ -109,6 +109,23 @@ describe('Agent Topics Routes — admin dashboard push', () => {
     expect(adminEventsPublished()).toEqual([{ kind: 'topics' }]);
   });
 
+  it('PATCH /topics/:id n\'écrit QUE les champs envoyés', async () => {
+    // `TopicInputSchema` défaille `examples`, `cooldownMinutes` et `isActive` ;
+    // `partial()` conserve ces `default()`. Sans réduction aux clés du corps,
+    // renommer un topic remettait son délai à 60 min, le réactivait et vidait
+    // ses exemples — trois effets qu'aucun administrateur n'avait demandés.
+    mockPrisma.agentTopicCatalog.update.mockResolvedValueOnce(storedTopic);
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/topics/${storedTopic.id}`,
+      payload: { label: 'Cinéma & séries' },
+    });
+
+    const written = mockPrisma.agentTopicCatalog.update.mock.calls.at(-1)[0].data;
+    expect(written).toEqual({ label: 'Cinéma & séries' });
+  });
+
   it('DELETE /topics/:id (soft) publishes {kind:"topics"} on agent:admin-event', async () => {
     mockPrisma.agentTopicCatalog.update.mockResolvedValueOnce({ ...storedTopic, isActive: false });
 

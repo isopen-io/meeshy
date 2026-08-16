@@ -9,10 +9,32 @@ import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
+import { submittedKeysOnly } from '../../../utils/partial-update';
 import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
 import { emitPreferenceCategoryUpdated } from '../../../services/preferences/preferences-broadcast';
 import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import type { PreferenceCategory } from '../../../services/preferences/preferences-broadcast';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+
+/**
+ * Où vit l'état d'une catégorie, quand ce n'est pas seulement son champ JSON.
+ *
+ * Une seule catégorie a besoin de le dire : `privacy` possède, en plus de son
+ * document, les lignes clé/valeur héritées de janvier 2026 que les six portes
+ * de diffusion obéissent encore (`services/preferences/privacy-storage`).
+ * Tant que la factory lisait le seul document, la route et les portes se
+ * contredisaient — et le `PATCH`, reconstruisant sa base sur ce que la route
+ * lisait, écrasait un opt-out que personne n'avait demandé de lever.
+ *
+ * Injecté plutôt que testé sur `category` : la factory n'a pas à connaître
+ * l'histoire d'une catégorie, seulement à demander à qui la connaît.
+ */
+export type CategoryStorage<T> = {
+  /** Ce que le serveur tient pour stocké — au-delà du seul document JSON. */
+  readStored: (prisma: PrismaClient, userId: string) => Promise<Partial<T> | null>;
+  /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
+  afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
+};
 
 /**
  * Factory qui crée un plugin Fastify avec routes CRUD complètes
@@ -21,11 +43,13 @@ import type { PreferenceCategory } from '../../../services/preferences/preferenc
  * @param category - Nom de la catégorie (doit matcher le champ JSON dans Prisma)
  * @param schema - Schema Zod de validation
  * @param defaults - Valeurs par défaut si aucune préférence n'est settée
+ * @param storage - Rangement de la catégorie ; le document JSON par défaut
  */
 export function createPreferenceRouter<T>(
   category: PreferenceCategory,
   schema: ZodSchema<T>,
-  defaults: T
+  defaults: T,
+  storage?: CategoryStorage<T>
 ) {
   return async function (fastify: FastifyInstance) {
     // Instancier le service de validation de consentement
@@ -34,6 +58,39 @@ export function createPreferenceRouter<T>(
     const isEmpty = (obj: any): boolean => {
       return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
     };
+
+    /**
+     * L'UNIQUE lecture de l'état stocké — partagée par le `GET` et par la base
+     * de fusion du `PATCH`. Les deux divergeaient : le `GET` rendait le
+     * document brut, le `PATCH` le complétait par les défauts. Un document
+     * partiel se lisait donc différemment selon le verbe qui le regardait.
+     */
+    const readStored = async (userId: string): Promise<Partial<T> | null> => {
+      if (storage) return storage.readStored(fastify.prisma, userId);
+
+      const prefs = await fastify.prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { [category]: true }
+      });
+
+      return isEmpty(prefs?.[category]) ? null : (prefs[category] as Partial<T>);
+    };
+
+    /** L'état complet servi au client : les défauts, comblés par le stocké. */
+    const resolveComplete = async (userId: string): Promise<T> => ({
+      ...defaults,
+      ...((await readStored(userId)) ?? {})
+    });
+
+    /**
+     * Le rangement hérité disparaît dès qu'une écriture rend le document
+     * autoritatif. Une panne ici rend 500 sans diffuser : sur la remise à zéro,
+     * des lignes de janvier survivantes RESSUSCITERAIENT le réglage effacé —
+     * annoncer un succès partiel serait annoncer l'inverse de ce qui s'est
+     * passé. Les trois verbes sont idempotents, le client peut retenter.
+     */
+    const retireSupersededStorage = (userId: string) =>
+      storage?.afterWrite ? storage.afterWrite(fastify.prisma, userId) : Promise.resolve();
 
     /**
      * Six portes de diffusion mémoïsent la confidentialité pendant cinq minutes
@@ -81,15 +138,7 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          const prefs = await fastify.prisma.userPreferences.findUnique({
-            where: { userId },
-            select: { [category]: true }
-          });
-
-          // Si aucune préférence ou champ null/vide, retourner les defaults
-          const data = isEmpty(prefs?.[category]) ? defaults : (prefs[category] as T);
-
-          return sendSuccess(reply, data);
+          return sendSuccess(reply, await resolveComplete(userId));
         } catch (error: any) {
           fastify.log.error({ error, category }, 'Error fetching preferences');
           return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch preferences' });
@@ -190,6 +239,7 @@ export function createPreferenceRouter<T>(
             },
           });
 
+          await retireSupersededStorage(userId);
           invalidateServerCache(userId);
           emitPreferencesUpdated(userId);
 
@@ -247,18 +297,18 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          // Validation partielle Zod
-          const validated = (schema as any).partial().parse(request.body);
+          // Validation partielle Zod, réduite aux clés que le corps nomme :
+          // `partial()` ne retire pas les `default()`, et sans cette réduction
+          // la fusion ci-dessous serait inerte (cf. `utils/partial-update`).
+          const validated = submittedKeysOnly(
+            (schema as any).partial().parse(request.body) as Record<string, unknown>,
+            request.body
+          );
 
-          // Récupérer les préférences existantes
-          const existing = await fastify.prisma.userPreferences.findUnique({
-            where: { userId },
-            select: { [category]: true }
-          });
-
-          // Merger avec les defaults puis avec les nouvelles valeurs
-          const current = isEmpty(existing?.[category]) ? defaults : (existing[category] as T);
-          const merged = { ...current, ...validated };
+          // La base de fusion est CE QUE LE SERVEUR OBÉIT, pas ce que le seul
+          // document dit : sinon une clé absente du document repart au défaut,
+          // et un réglage qu'on ne touchait pas se trouve levé en silence.
+          const merged = { ...(await resolveComplete(userId)), ...validated };
 
           // Validation des consentements GDPR sur les données mergées
           const consentViolations = await consentService.validatePreferences(
@@ -305,6 +355,7 @@ export function createPreferenceRouter<T>(
             },
           });
 
+          await retireSupersededStorage(userId);
           invalidateServerCache(userId);
           emitPreferencesUpdated(userId);
 
@@ -363,6 +414,7 @@ export function createPreferenceRouter<T>(
             data: { [category]: null }
           });
 
+          await retireSupersededStorage(userId);
           invalidateServerCache(userId);
           emitPreferencesUpdated(userId);
 
