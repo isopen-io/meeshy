@@ -71,6 +71,28 @@ Trouvé par accident : un témoin du défaut B lisait `data.privacy.showReadRece
 et recevait `undefined` là où `false` était attendu. Le témoin qui couvrait cette
 route affirmait `toHaveProperty('privacy')` — vrai d'un objet vide.
 
+**Et celui-là a bel et bien atteint un client livré.** La chaîne, vérifiée après
+coup : `UserPreferencesManager.fetchFromBackend()` — appelé à la connexion et sur
+chaque changement d'authentification (`observeAuth()`) — appelle
+`PreferenceService.getAllPreferences()`, donc CETTE route, puis `applyRemote`,
+qui est explicitement « server wins » et PERSISTE ce qu'il reçoit.
+
+Le décodage ne pouvait pas s'en protéger : `UserPreferences.init(from:)` comme
+chacun des sept modèles de catégorie décodent en `decodeIfPresent(...) ?? défaut`.
+Un `{}` ne lève donc PAS — il décode proprement en `.defaults`. Le `catch` de
+`fetchFromBackend` (« Network failure: local values remain authoritative ») ne
+voyait jamais rien à attraper.
+
+Conséquence : **chaque synchronisation écrasait par les défauts toutes les
+catégories non en attente**, sur iOS. Les réglages de l'utilisateur revenaient à
+zéro après une connexion. La seule chose qui en réchappait était une catégorie
+présente dans `pendingCategories` — c'est-à-dire modifiée dans la seconde
+précédente.
+
+C'est la tolérance du décodeur qui a rendu le défaut muet des deux côtés : le
+serveur effaçait à la sortie, le client comblait à l'entrée, et les deux gestes
+se composaient en un silence parfait.
+
 ## 5. Défaut D, mineur — `GET` et `PATCH` ne complétaient pas pareil
 
 Le `GET` rendait le document brut ; le `PATCH` le complétait par les défauts. Un
@@ -161,6 +183,12 @@ Le motif n'est plus une coïncidence : il mérite d'être nommé (leçon 207 § 
 
 ## 11. Pistes pour le cycle 50 — repérées, NON livrées
 
+0. **Un `{}` autoritatif côté SDK.** `applyRemote` est « server wins » et rien ne
+   distingue « le serveur dit : tout aux défauts » de « le serveur n'a rien dit ».
+   Le correctif serveur retire la cause, pas la fragilité : une catégorie
+   entièrement vide reste indiscernable d'un défaut délibéré. C'est une tranche
+   iOS, avec ses propres témoins (aucune toolchain Swift ici), pas un ajout en
+   marge d'un correctif gateway.
 1. **La fusion profonde.** `submittedKeysOnly` ne descend pas dans les objets
    imbriqués. Aucun schéma appelant n'en porte aujourd'hui — le premier qui en
    portera héritera silencieusement du défaut du § 2, un niveau plus bas.
