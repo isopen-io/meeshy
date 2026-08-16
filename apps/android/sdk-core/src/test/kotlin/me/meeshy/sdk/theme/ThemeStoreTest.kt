@@ -1,43 +1,35 @@
 package me.meeshy.sdk.theme
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.Preferences
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.AppThemeMode
+import me.meeshy.sdk.testing.TestDataStores
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 
 /**
  * The theme persistence seam (feature-parity §L). [InMemoryThemeStore] is the
  * volatile store used by tests/previews; [DataStoreThemeStore] is the durable
  * DataStore-backed one that survives process death and hydrates on construction.
  *
- * `withTimeout(15_000)` on real DataStore-Flow collection (`runBlocking`, real
- * wall-clock time — not `runTest`'s virtual clock): `5_000` flaked repeatedly
- * under CI-runner disk-I/O load (`TimeoutCancellationException`, no relation to
- * the diff under test each time). `15_000` matches the value
- * [me.meeshy.sdk.media.MediaDownloadPreferencesStoreTest]/
- * [me.meeshy.sdk.privacy.PrivacyPreferencesStoreTest] already use without
- * incident — never observed to flake at that threshold in this session.
+ * The durable cases run on [TestDataStores] — an inline, deterministic scheduler —
+ * so no assertion here is bounded by wall-clock time. See that class for why the
+ * previous `Dispatchers.IO` + `withTimeout(15_000)` recipe was retired.
  */
 class ThemeStoreTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun newDataStore(scope: CoroutineScope, file: File): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create(scope = scope) { file }
+    private val dataStores = TestDataStores()
+
+    @After
+    fun tearDown() = dataStores.close()
 
     // ---- InMemoryThemeStore (pure behaviour) ----
 
@@ -67,49 +59,41 @@ class ThemeStoreTest {
     // ---- DataStoreThemeStore (durable) ----
 
     @Test
-    fun dataStore_defaultsToAutoOnEmptyStore() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreThemeStore(newDataStore(scope, tmp.newFile("empty.preferences_pb")), scope)
-        try {
-            val value = withTimeout(15_000) { store.themeMode.first() }
-            assertThat(value).isEqualTo(AppThemeMode.AUTO)
-        } finally {
-            scope.cancel()
-        }
+    fun dataStore_defaultsToAutoOnEmptyStore() = runTest(dataStores.dispatcher) {
+        val store = DataStoreThemeStore(
+            dataStores.preferences(tmp.newFile("empty.preferences_pb")),
+            dataStores.scope,
+        )
+
+        assertThat(store.themeMode.first()).isEqualTo(AppThemeMode.AUTO)
     }
 
     @Test
-    fun dataStore_setThemeMode_isReflectedInTheFlow() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val store = DataStoreThemeStore(newDataStore(scope, tmp.newFile("set.preferences_pb")), scope)
-        try {
-            store.setThemeMode(AppThemeMode.DARK)
-            val value = withTimeout(15_000) { store.themeMode.first { it == AppThemeMode.DARK } }
-            assertThat(value).isEqualTo(AppThemeMode.DARK)
-        } finally {
-            scope.cancel()
-        }
+    fun dataStore_setThemeMode_isReflectedInTheFlow() = runTest(dataStores.dispatcher) {
+        val store = DataStoreThemeStore(
+            dataStores.preferences(tmp.newFile("set.preferences_pb")),
+            dataStores.scope,
+        )
+
+        store.setThemeMode(AppThemeMode.DARK)
+
+        assertThat(store.themeMode.first { it == AppThemeMode.DARK }).isEqualTo(AppThemeMode.DARK)
     }
 
     @Test
-    fun dataStore_hydratesAlreadyPersistedChoiceOnConstruction() = runBlocking {
+    fun dataStore_hydratesAlreadyPersistedChoiceOnConstruction() = runTest(dataStores.dispatcher) {
         // DataStore enforces one active instance per file per process, so the two
         // store wrappers share one durable DataStore. The point under test is that a
         // *freshly constructed* store hydrates the already-persisted choice rather
         // than emitting the AUTO default — the "no flash of the wrong theme on cold
         // start" guarantee.
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val dataStore = newDataStore(scope, tmp.newFile("hydrate.preferences_pb"))
-        try {
-            val writer = DataStoreThemeStore(dataStore, scope)
-            writer.setThemeMode(AppThemeMode.LIGHT)
-            withTimeout(15_000) { writer.themeMode.first { it == AppThemeMode.LIGHT } }
+        val dataStore = dataStores.preferences(tmp.newFile("hydrate.preferences_pb"))
+        val writer = DataStoreThemeStore(dataStore, dataStores.scope)
+        writer.setThemeMode(AppThemeMode.LIGHT)
+        writer.themeMode.first { it == AppThemeMode.LIGHT }
 
-            val fresh = DataStoreThemeStore(dataStore, scope)
-            val value = withTimeout(15_000) { fresh.themeMode.first { it == AppThemeMode.LIGHT } }
-            assertThat(value).isEqualTo(AppThemeMode.LIGHT)
-        } finally {
-            scope.cancel()
-        }
+        val fresh = DataStoreThemeStore(dataStore, dataStores.scope)
+
+        assertThat(fresh.themeMode.first { it == AppThemeMode.LIGHT }).isEqualTo(AppThemeMode.LIGHT)
     }
 }

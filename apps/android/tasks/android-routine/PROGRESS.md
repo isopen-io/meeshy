@@ -1,5 +1,81 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **the DataStore test flake was closed at its mechanism, not at its threshold**
+> (slice `datastore-test-deterministic-scheduler`) — a **test-only** slice, taken because this
+> routine's own throughput was paying for it: the flake had recurred **five** times across the two
+> preceding slices, on **four different files**, and `rerun-failed-jobs` is 403 for this token on
+> `android.yml`, so every occurrence cost a fresh push rather than a retry.
+>
+> **Chosen over a feature slice deliberately, and the choice is the one `NOTES.md` already
+> prescribed.** Three consecutive entries there root-caused the flake and each one closed by naming
+> the same follow-up — *"remove wall-clock time from the assertion; inject the dispatcher/scope so
+> the test drives a controlled scheduler"* — and each one deferred it for the same reason: it was a
+> refactor of files the slice under way did not own. Making it *the* slice removes that objection
+> entirely. It is also the one shape of unverifiable-Kotlin risk this container can honestly take:
+> the diff is test sources only, and the Android CI check is both the compiler and the very system
+> whose stability is under repair.
+>
+> **What was actually wrong.** Every `DataStore*Store` publishes
+> `dataStore.data.map { … }.stateIn(scope, SharingStarted.Eagerly, DEFAULT)`, and every durable test
+> built that scope as `CoroutineScope(SupervisorJob() + Dispatchers.IO)`. An assertion shaped
+> `first { predicate }` therefore could not complete until the sharing coroutine was *scheduled on a
+> real thread pool* — on a runner executing the whole monorepo matrix at once, an unbounded wait.
+> `withTimeout(15_000)` did not bound that wait, it only priced it. The price was raised once
+> (`5_000` → `15_000`) and lost anyway, including on two files that had **always** been at the
+> higher value and had never flaked. The constant was never the mechanism.
+>
+> **The fix removes the scheduling rather than budgeting for it.** New test-only
+> `me.meeshy.sdk.testing.TestDataStores` hands out an `UnconfinedTestDispatcher` plus a scope built
+> on it; the DataStore write actor and the `stateIn` collector then run **eagerly and inline on the
+> test thread**, so there is nothing to be starved of CPU and no wall-clock bound is needed. Every
+> `withTimeout(15_000)` is deleted — 19 occurrences, zero remaining in `sdk-core/src/test`.
+> `runTest`'s own 60 s net (4× the bound it replaces) is what now catches a genuine hang.
+>
+> **The store scope is deliberately NOT the `TestScope`.** `TestDataStores.scope` carries its own
+> unparented `SupervisorJob`, so the never-completing DataStore actor and `stateIn` collector are
+> not children of the test coroutine and `runTest` cannot wait on them at teardown. That is the one
+> way this pattern hangs, and it is designed out rather than hoped away. `@After` cancels the scope.
+>
+> **Swept all EIGHT files that drive a real DataStore, not just the four observed flaky.**
+> `theme`, `media`, `notification`, `privacy`, `language`, `category` (the six that carried
+> `withTimeout`) plus `chat/ConversationDraftStoreTest` and `session/AnonymousSessionStoreTest` —
+> the latter two had never flaked *and had no timeout at all*, which makes them worse, not better:
+> the same `Dispatchers.IO` exposure with a hang instead of a failure as the symptom. A partial
+> sweep would have reproduced exactly the reasoning `NOTES.md` has now falsified three times
+> ("these files are fine, they've never flaked").
+>
+> **Behaviour is untouched**: no production Kotlin in the diff, no test deleted, no assertion
+> weakened, no coverage floor moved — 324 insertions / 465 deletions is the boilerplate
+> (`newDataStore` helper, scope construction, `try`/`finally`, timeout wrappers) collapsing into one
+> shared harness.
+>
+> **Verified**: local Gradle unavailable in this container (no Android SDK; `dl.google.com` returns
+> `CONNECT tunnel failed, response 403`), so per `ROUTINE.md §CI reality` the **Android** check is
+> the compiler and the gate. See the run log below for its result.
+>
+> **Next slice candidates (not attempted this run)**: `feature-parity.md` §C "Conversation info
+> sheet" (hero/direct headers, members/media/stats/options tabs) — the members tab landed with
+> `conversation-members-roster`, so the sheet itself is now the containing gap; and "Add member"
+> (named by that slice as its own natural follow-up, still unchecked).
+>
+> **Two integrations of `main` while this PR sat in CI**, both resolved by hand. The first (7
+> commits, iOS/SDK/web/gateway from the concurrent realtime cycle) touched not one file this diff
+> touches and merged clean. The second brought a concurrent session's `post-detail-realtime-room`
+> (PR #3092) and produced the now-familiar simultaneous-prepend conflict in this very file — both
+> entries kept, this one placed first since it merged later chronologically, exactly as the
+> `user-search-pagination` entry below records having done. `NOTES.md` and `feature-parity.md`
+> auto-merged (verified: no corrupted lines).
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=5 last_run=datastore-test-deterministic-scheduler`
+> — re-read at merge time, not at slice-selection time (it said 3 when this slice was chosen and 4
+> by the time CI resolved). **At 5, rule 2(b) fires: the next run switches to the `IOS_DETTE`
+> lane.** That is the intended behaviour, not an accident of the race — five consecutive Android
+> slices is precisely the condition the alternation rule exists to interrupt.
+>
+> **The flake did not recur once across this PR's three CI cycles** (runs 31954283468, 31954583393,
+> 31955399022) — the first Android CI in three PRs needing no rerun. Three green runs is evidence,
+> not proof; the real test is the next dozen slices.
+
 > On 2026-08-16 **Post-detail room real-time subscriptions shipped** (slice
 > `post-detail-realtime-room`) — closes `feature-parity.md`'s §"Post-detail room real-time
 > subscriptions" line, discovered while scanning for the next well-scoped candidate after

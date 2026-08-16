@@ -1,23 +1,17 @@
 package me.meeshy.sdk.language
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.testing.TestDataStores
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 
 /**
  * The interface-language persistence seam (feature-parity §L). [InMemoryInterfaceLanguageStore]
@@ -27,21 +21,19 @@ import java.io.File
  *
  * `null` is the "follow the device locale" (System) preference throughout.
  *
- * `withTimeout(15_000)` on real DataStore-Flow collection (`runBlocking`, real
- * wall-clock time — not `runTest`'s virtual clock): `5_000` flaked repeatedly
- * under CI-runner disk-I/O load (`TimeoutCancellationException`, no relation to
- * the diff under test each time). `15_000` matches the value
- * [me.meeshy.sdk.media.MediaDownloadPreferencesStoreTest]/
- * [me.meeshy.sdk.privacy.PrivacyPreferencesStoreTest] already use without
- * incident — never observed to flake at that threshold in this session.
+ * The durable cases run on [TestDataStores] — an inline, deterministic scheduler — so no
+ * assertion here is bounded by wall-clock time. See that class for why the previous
+ * `Dispatchers.IO` + `withTimeout(15_000)` recipe was retired.
  */
 class InterfaceLanguageStoreTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun newDataStore(scope: CoroutineScope, file: File): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create(scope = scope) { file }
+    private val dataStores = TestDataStores()
+
+    @After
+    fun tearDown() = dataStores.close()
 
     // ---- InMemoryInterfaceLanguageStore (pure behaviour) ----
 
@@ -84,68 +76,52 @@ class InterfaceLanguageStoreTest {
     // ---- DataStoreInterfaceLanguageStore (durable) ----
 
     @Test
-    fun dataStore_defaultsToSystemOnEmptyStore() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    fun dataStore_defaultsToSystemOnEmptyStore() = runTest(dataStores.dispatcher) {
         val store = DataStoreInterfaceLanguageStore(
-            newDataStore(scope, tmp.newFile("empty.preferences_pb")), scope,
+            dataStores.preferences(tmp.newFile("empty.preferences_pb")),
+            dataStores.scope,
         )
-        try {
-            val value = withTimeout(15_000) { store.languageCode.first() }
-            assertThat(value).isNull()
-        } finally {
-            scope.cancel()
-        }
+
+        assertThat(store.languageCode.first()).isNull()
     }
 
     @Test
-    fun dataStore_setLanguageCode_isReflectedInTheFlow() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    fun dataStore_setLanguageCode_isReflectedInTheFlow() = runTest(dataStores.dispatcher) {
         val store = DataStoreInterfaceLanguageStore(
-            newDataStore(scope, tmp.newFile("set.preferences_pb")), scope,
+            dataStores.preferences(tmp.newFile("set.preferences_pb")),
+            dataStores.scope,
         )
-        try {
-            store.setLanguageCode("ar")
-            val value = withTimeout(15_000) { store.languageCode.first { it == "ar" } }
-            assertThat(value).isEqualTo("ar")
-        } finally {
-            scope.cancel()
-        }
+
+        store.setLanguageCode("ar")
+
+        assertThat(store.languageCode.first { it == "ar" }).isEqualTo("ar")
     }
 
     @Test
-    fun dataStore_hydratesAlreadyPersistedChoiceOnConstruction() = runBlocking {
+    fun dataStore_hydratesAlreadyPersistedChoiceOnConstruction() = runTest(dataStores.dispatcher) {
         // DataStore enforces one active instance per file per process, so the two store
         // wrappers share one durable DataStore. The point under test is that a *freshly
         // constructed* store hydrates the already-persisted choice rather than emitting the
         // System default — the "no flash of the wrong language on cold start" guarantee.
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val dataStore = newDataStore(scope, tmp.newFile("hydrate.preferences_pb"))
-        try {
-            val writer = DataStoreInterfaceLanguageStore(dataStore, scope)
-            writer.setLanguageCode("es")
-            withTimeout(15_000) { writer.languageCode.first { it == "es" } }
+        val dataStore = dataStores.preferences(tmp.newFile("hydrate.preferences_pb"))
+        val writer = DataStoreInterfaceLanguageStore(dataStore, dataStores.scope)
+        writer.setLanguageCode("es")
+        writer.languageCode.first { it == "es" }
 
-            val fresh = DataStoreInterfaceLanguageStore(dataStore, scope)
-            val value = withTimeout(15_000) { fresh.languageCode.first { it == "es" } }
-            assertThat(value).isEqualTo("es")
-        } finally {
-            scope.cancel()
-        }
+        val fresh = DataStoreInterfaceLanguageStore(dataStore, dataStores.scope)
+
+        assertThat(fresh.languageCode.first { it == "es" }).isEqualTo("es")
     }
 
     @Test
-    fun dataStore_decodesCorruptPersistedTokenToSystem() = runBlocking {
+    fun dataStore_decodesCorruptPersistedTokenToSystem() = runTest(dataStores.dispatcher) {
         // A legacy/corrupt raw token written directly (bypassing the codec) must decode to
         // System (null), never crash or stick the app in an unshippable language.
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val dataStore = newDataStore(scope, tmp.newFile("corrupt.preferences_pb"))
-        try {
-            dataStore.edit { it[stringPreferencesKey("interface_language")] = "klingon" }
-            val store = DataStoreInterfaceLanguageStore(dataStore, scope)
-            val value = withTimeout(15_000) { store.languageCode.first() }
-            assertThat(value).isNull()
-        } finally {
-            scope.cancel()
-        }
+        val dataStore = dataStores.preferences(tmp.newFile("corrupt.preferences_pb"))
+        dataStore.edit { it[stringPreferencesKey("interface_language")] = "klingon" }
+
+        val store = DataStoreInterfaceLanguageStore(dataStore, dataStores.scope)
+
+        assertThat(store.languageCode.first()).isNull()
     }
 }
