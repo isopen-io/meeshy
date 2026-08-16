@@ -49,8 +49,8 @@ function qualityAlert(callId = CALL_ID) {
   return { callId, participantId: 'p2', metric: 'rtt', value: 412, threshold: 300 };
 }
 
-function captureAlert(isCapturing: boolean, callId = CALL_ID) {
-  return { callId, participantId: 'p2', isCapturing };
+function captureAlert(isCapturing: boolean, callId = CALL_ID, participantId = 'p2') {
+  return { callId, participantId, isCapturing };
 }
 
 describe('useRemoteCallAlerts', () => {
@@ -166,5 +166,64 @@ describe('useRemoteCallAlerts', () => {
     renderHook(() => useRemoteCallAlerts(null));
 
     expect(socket.on).not.toHaveBeenCalled();
+  });
+
+  describe('group calls (multiple peers, screen-capture aggregation)', () => {
+    it('le capture-stopped d’UN pair ne masque pas la capture toujours active d’un AUTRE', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p2')));
+      expect(result.current.remoteScreenCapturing).toBe(true);
+
+      // p2 stops capturing — p1 is still capturing, the privacy pill must stay lit.
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(false, CALL_ID, 'p2')));
+      expect(result.current.remoteScreenCapturing).toBe(true);
+
+      // Only once the LAST capturing peer stops does the flag drop.
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(false, CALL_ID, 'p1')));
+      expect(result.current.remoteScreenCapturing).toBe(false);
+    });
+
+    it('un pair qui quitte l’appel en pleine capture lève l’alerte s’il était le seul capturant', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      expect(result.current.remoteScreenCapturing).toBe(true);
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, {
+        callId: CALL_ID,
+        participantId: 'p1',
+        mode: 'p2p',
+      }));
+
+      expect(result.current.remoteScreenCapturing).toBe(false);
+    });
+
+    it('le départ d’un pair NON capturant ne baisse pas le drapeau d’un AUTRE toujours actif', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      act(() => socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, {
+        callId: CALL_ID,
+        participantId: 'p2',
+        mode: 'p2p',
+      }));
+
+      expect(result.current.remoteScreenCapturing).toBe(true);
+    });
+
+    it('un participant-left d’un AUTRE appel est inerte', () => {
+      const { result } = renderHook(() => useRemoteCallAlerts(CALL_ID));
+
+      act(() => socket.fire(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, captureAlert(true, CALL_ID, 'p1')));
+      act(() => socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, {
+        callId: 'other-call',
+        participantId: 'p1',
+        mode: 'p2p',
+      }));
+
+      expect(result.current.remoteScreenCapturing).toBe(true);
+    });
   });
 });
