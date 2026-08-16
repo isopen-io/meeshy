@@ -33,6 +33,7 @@ import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiConversationPreferences
+import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
@@ -74,6 +75,7 @@ class ConversationListViewModelTest {
 
     private fun socketManager(
         conversationDeleted: MutableSharedFlow<ConversationDeletedSocketEvent> = MutableSharedFlow(),
+        conversationClosed: MutableSharedFlow<ConversationClosedSocketEvent> = MutableSharedFlow(),
         participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
         userStatus: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
         presenceSnapshot: MutableSharedFlow<PresenceSnapshotEvent> = MutableSharedFlow(),
@@ -83,6 +85,7 @@ class ConversationListViewModelTest {
             every { messageReceived } returns MutableSharedFlow()
             every { conversationUpdated } returns MutableSharedFlow()
             every { this@mockk.conversationDeleted } returns conversationDeleted
+            every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
             every { this@mockk.userStatus } returns userStatus
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
@@ -799,6 +802,20 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun setCustomName_forwards_the_trimmed_name_to_the_repository() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setCustomNameOptimistic("c1", "Work squad") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.setCustomName("c1", "Work squad")
+        advanceUntilIdle()
+
+        coVerify { repo.setCustomNameOptimistic("c1", "Work squad") }
+    }
+
+    @Test
     fun leaveConversation_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
@@ -860,6 +877,69 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.errorMessage).isEqualTo("Not a participant")
+    }
+
+    @Test
+    fun deleteConversationForAll_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.deleteForAll("c1") } returns me.meeshy.sdk.net.NetworkResult.Success(Unit)
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.deleteConversationForAll("c1")
+        advanceUntilIdle()
+
+        coVerify { repo.deleteForAll("c1") }
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun deleteConversationForAll_surfaces_the_error_on_failure() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.deleteForAll("c1") } returns
+            me.meeshy.sdk.net.NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "Only the creator can do this"))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.deleteConversationForAll("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("Only the creator can do this")
+    }
+
+    @Test
+    fun a_closed_conversation_sheds_its_stars_and_refreshes_the_list() = runTest(dispatcher) {
+        val closed = MutableSharedFlow<ConversationClosedSocketEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"), star("c2"))))
+        val vm = viewModel(repo, socket = socketManager(conversationClosed = closed), starredStore = stars)
+        advanceUntilIdle()
+
+        closed.emit(ConversationClosedSocketEvent(conversationId = "c1", closedBy = "creator-1"))
+        advanceUntilIdle()
+
+        // c1's bookmark is gone; c2's survives.
+        assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c2")
+        coVerify { repo.refresh() }
+    }
+
+    @Test
+    fun a_blank_close_event_touches_neither_the_stars_nor_the_network() = runTest(dispatcher) {
+        val closed = MutableSharedFlow<ConversationClosedSocketEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1")), ageMillis = 0)))
+        val stars = InMemoryStarredMessagesStore(StarredMessages(listOf(star("c1"))))
+        val vm = viewModel(repo, socket = socketManager(conversationClosed = closed), starredStore = stars)
+        advanceUntilIdle()
+
+        closed.emit(ConversationClosedSocketEvent(conversationId = "  ", closedBy = "creator-1"))
+        advanceUntilIdle()
+
+        assertThat(stars.starred.value.items.map { it.conversationId }).containsExactly("c1")
+        coVerify(exactly = 0) { repo.refresh() }
     }
 
     @Test

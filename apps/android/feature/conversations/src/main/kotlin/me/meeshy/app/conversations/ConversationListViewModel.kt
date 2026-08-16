@@ -231,6 +231,11 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
             launch {
+                messageSocketManager.conversationClosed.collect { event ->
+                    ConversationPurge.onConversationClosed(event)?.let(::purge)
+                }
+            }
+            launch {
                 messageSocketManager.participantLeft.collect { event ->
                     ConversationPurge.onParticipantLeft(event, _state.value.currentUserId)?.let(::purge)
                 }
@@ -332,6 +337,11 @@ class ConversationListViewModel @Inject constructor(
         runPrefMutation { repository.setMentionsOnlyOptimistic(id, !mentionsOnly) }
     }
 
+    /** Renames a conversation (context-menu "Rename", parity iOS `setCustomName`). */
+    fun setCustomName(id: String, name: String) {
+        runPrefMutation { repository.setCustomNameOptimistic(id, name) }
+    }
+
     /**
      * Leaves [id] (context menu, gated by a confirmation dialog in the caller UI).
      * No optimistic local removal: the socket-driven purge path
@@ -357,6 +367,23 @@ class ConversationListViewModel @Inject constructor(
     fun deleteConversationForMe(id: String) {
         viewModelScope.launch {
             when (val result = repository.deleteForMe(id)) {
+                is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /**
+     * Ends [id] for every participant (context menu, offered to the creator
+     * only, gated by a confirmation dialog in the caller UI). No optimistic
+     * local removal: the socket-driven purge path
+     * (`ConversationPurge.onConversationClosed`) drops the row — for every
+     * participant, including this device — once the server confirms and
+     * broadcasts `conversation:closed`.
+     */
+    fun deleteConversationForAll(id: String) {
+        viewModelScope.launch {
+            when (val result = repository.deleteForAll(id)) {
                 is NetworkResult.Success -> _state.update { it.copy(errorMessage = null) }
                 is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
             }

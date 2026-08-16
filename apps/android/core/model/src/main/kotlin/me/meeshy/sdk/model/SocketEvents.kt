@@ -181,6 +181,16 @@ data class ConversationDeletedSocketEvent(
     val deletedAt: String? = null,
 )
 
+/** `conversation:closed` — the whole conversation ended for EVERY participant
+ *  (creator-only full delete), distinct from [ConversationDeletedSocketEvent]
+ *  which is scoped to the caller's own devices only (`delete-for-me`). */
+@Serializable
+data class ConversationClosedSocketEvent(
+    val conversationId: String,
+    val closedBy: String,
+    val closedAt: String? = null,
+)
+
 @Serializable
 data class ReadStatusSummary(
     val totalMembers: Int = 0,

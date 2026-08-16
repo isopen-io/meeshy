@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 
@@ -22,6 +23,16 @@ object ConversationPurge {
      * everyone; null (inert) when the event carries no usable id.
      */
     fun onConversationDeleted(event: ConversationDeletedSocketEvent): String? =
+        event.conversationId.takeIf { it.isNotBlank() }
+
+    /**
+     * The conversationId to purge when a creator closes the conversation for
+     * EVERY participant (`conversation:closed`) — unlike [onConversationDeleted]
+     * (self-only `delete-for-me`), this fires for every participant's device,
+     * including the closer's own other devices. Null (inert) when the event
+     * carries no usable id.
+     */
+    fun onConversationClosed(event: ConversationClosedSocketEvent): String? =
         event.conversationId.takeIf { it.isNotBlank() }
 
     /**

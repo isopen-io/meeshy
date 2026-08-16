@@ -440,6 +440,15 @@ jobs:
             DESTINATION='platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}'
             ARCH_SETTINGS=(ONLY_ACTIVE_ARCH=YES)
           fi
+          # Les erreurs du compilateur partent AUSSI en annotations : le log
+          # brut exige un token, la page publique du run non (même remède que
+          # le résumé XCTest — leçon 265, lecteur distant sans rien d'autre).
+          # `set +e` obligatoire : le runner lance ce script avec `bash -e`,
+          # et -e + pipefail tuent le script sur le pipeline en échec AVANT
+          # d'atteindre le bloc d'annotations (constaté au run #79 — exit 65
+          # nu, zéro annotation). On sort explicitement avec `exit "$rc"`.
+          set -o pipefail
+          set +e
           xcodebuild build-for-testing \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
@@ -449,7 +458,17 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             DEBUG_INFORMATION_FORMAT=dwarf \
             "${ARCH_SETTINGS[@]}" \
-            -quiet
+            -quiet 2>&1 | tee /tmp/xcodebuild-build.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            grep -E "error: " /tmp/xcodebuild-build.log | grep -v "^warning" | sort -u | head -n 9 \
+              | while IFS= read -r line; do
+                  echo "::error title=Compilation::${line:0:220}"
+                done
+            TOTAL=$(grep -cE "error: " /tmp/xcodebuild-build.log || true)
+            echo "::notice title=Compilation::${TOTAL} ligne(s) d'erreur au total"
+          fi
+          exit "$rc"
 
       # Seed DerivedData the instant the compile succeeds — BEFORE the test run,
       # which can itself be slow. Same rationale as "Save SPM cache": the

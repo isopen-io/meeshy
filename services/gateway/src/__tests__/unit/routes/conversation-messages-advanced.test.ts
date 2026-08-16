@@ -161,6 +161,7 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -3005,7 +3006,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         // Le cache d'opt-out a la portée du PROCESSUS : sans ce nettoyage, le
         // premier test (personne de retiré) le remplit et les suivants lisent
         // sa réponse périmée au lieu du double.
-        (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+        clearPrivacyPreferencesCache();
       });
 
       const entryFor = (participantId: string, userId: string, displayName: string, username: string) => ({

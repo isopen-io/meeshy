@@ -1,5 +1,101 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Per-conversation custom name (rename) shipped** (slice
+> `conversation-custom-name`) — advances `feature-parity.md`'s "Per-conversation preferences: custom
+> name, reaction emoji, pin, category, tags, mute, mentions-only" line (still unchecked: reaction
+> emoji and tags remain genuinely open on both platforms). Re-proved against real code before
+> starting: `ApiConversationPreferences.customName`/`ConversationPreferencesUpdate.customName` were
+> already modeled on the wire, but `ConversationPrefsPayload` (the outbox-lane snapshot payload)
+> only carried `isPinned`/`isMuted`/`isArchived`/`mentionsOnly`/`categoryId` — `customName` never
+> reached `OutboxFlushWorker`'s `ConversationPreferencesUpdate(...)` construction, so setting it
+> locally would never have reached the server.
+>
+> **Clear-semantics gap resolved, not blocked**: an earlier finding this session flagged that
+> `MeeshyApi.json`'s app-wide `explicitNulls = false` makes a Kotlin `null` field indistinguishable
+> from "untouched" on the wire, which looked like it would make clearing an existing name
+> inexpressible. Re-traced the actual read path and found `ConversationFilter.kt:69`
+> (`resolvedPreferences?.customName?.takeIf { it.isNotBlank() }`) and `ApiConversation.displayTitle`
+> (`ConversationAccent.kt:34`, same blank-check) already treat a blank `customName` the same as
+> absent — so the write side never needs Kotlin `null` for "clear": `setCustomNameOptimistic` stores
+> `name.trim()` verbatim, including an explicit `""` on clear, which the encoder does NOT drop
+> (`explicitNulls` only suppresses actual `null`, not empty strings) and the gateway's
+> `data.customName !== undefined` patch guard applies as a real clear.
+>
+> **Repository → outbox → flush pipeline**: `ConversationRepository.setCustomNameOptimistic(id, name)`
+> (mirrors `setCategoryOptimistic`'s shape via the existing `updatePreferencesOptimistic` private
+> helper) → `ConversationPrefsPayload.customName` (new field, doc-commented with the same
+> null-vs-empty-string trick already documented on `categoryId`) → `OutboxFlushWorker`'s
+> `UPDATE_CONVERSATION_PREFS` sender now threads `prefs.customName` into
+> `ConversationPreferencesUpdate(...)`. Every prefs snapshot (pin/mute/archive/mentions/category)
+> now also carries whatever `customName` happens to be cached, matching the established
+> full-snapshot design already used for the other fields (not a per-field diff).
+>
+> **ViewModel + UI**: `ConversationListViewModel.setCustomName(id, name)` (via the existing
+> `runPrefMutation` helper, same shape as `toggleMentionsOnly`). New context-menu action "Rename
+> conversation" (between Archive and the category picker) opens an `AlertDialog` with a single-line
+> `TextField` pre-filled with the conversation's current custom name (empty if none — placeholder
+> shows the resolved display title), Save/Cancel. Strings added in all 4 locales (en/fr/es/pt).
+>
+> **+4 tests**: 3 `ConversationRepositoryTest` (sets+queues a snapshot carrying the trimmed name,
+> no-op when unchanged, clearing to blank sends an explicit `"customName":""` — asserts the raw
+> JSON payload string to prove the value isn't silently dropped by the `explicitNulls=false`
+> encoder), 1 `ConversationListViewModelTest` (`setCustomName` forwards the trimmed name to the
+> repository). The new context-menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 25s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=4 last_run=conversation-custom-name`.
+
+> On 2026-08-16 **Conversation "delete for everyone" (creator-only) shipped** (slice
+> `conversation-delete-for-all`) — closes `feature-parity.md`'s "Leave / archive / delete-for-me /
+> delete-for-all conversation" item; re-proved against real code before starting (per convention):
+> `leave`/`deleteForMe`/`setArchivedOptimistic` were already live, `delete-for-all` was the one
+> genuine gap (verified by grepping the gateway for a matching route and finding none under that
+> name — the real endpoint is the plain creator-gated `DELETE /conversations/:id` in
+> `routes/conversations/core.ts`, ported from iOS's `ConversationSettingsView.deleteConversationForAll`
+> → `ConversationService.delete(conversationId:)`).
+>
+> **REST + repository + ViewModel**, mirroring the `leave`/`deleteForMe` shape exactly:
+> `ConversationApi.deleteForAll` (`@DELETE("conversations/{id}")`) → `ConversationRepository.
+> deleteForAll` → `ConversationListViewModel.deleteConversationForAll`. Gated client-side (server
+> already enforces creator-only) via a new pure `ApiConversation.currentUserRole(currentUserId):
+> MemberRole` extension (`:core:model`) — looks up the caller's own `ApiParticipant.role` in the
+> conversation's roster, defaulting to `MEMBER` when absent, so no separate member-list fetch is
+> needed to show/hide the menu item.
+>
+> **Real-time purge for every participant, not just the actor** — the genuinely new piece beyond a
+> plain REST port: the gateway broadcasts `conversation:closed` (not `conversation:deleted`, which
+> is `delete-for-me`-only and scoped to the caller's own devices) to the WHOLE roster. Android had
+> zero handling of this event before this slice, even though iOS already wires it
+> (`MessageSocketManager.conversationClosed` in `packages/MeeshySDK`). Added: `ConversationClosedSocketEvent`
+> (`:core:model`, mirrors `ConversationDeletedSocketEvent`'s shape), a new `MessageSocketManager.
+> conversationClosed` flow (`listen("conversation:closed", ...)`, same pattern as the 27 other
+> listened events), `ConversationPurge.onConversationClosed` (pure, mirrors `onConversationDeleted`),
+> and a `ConversationListViewModel` subscription purging + refreshing on receipt — without this,
+> shipping the REST call alone would have been a dead end for every participant EXCEPT the actor
+> (and even the actor's other devices).
+>
+> **New UI**: a third context-menu action "Delete for everyone", shown only when `isCreator`, with
+> its own confirmation dialog (same shape as leave/delete-for-me's). Strings added in all 4 locales
+> (en/fr/es/pt, matching the existing translation-complete convention for this screen).
+>
+> **+13 tests**: 4 `ConversationCurrentUserRoleTest` (creator/member/absent-user/not-in-roster), 2
+> `ConversationPurgeTest` (`onConversationClosed` id-vs-blank), 4 `ConversationListViewModelTest`
+> (`deleteConversationForAll` success/failure + `conversationClosed` purge/blank-inert — mirrors the
+> existing `conversationDeleted` pair), 2 `ConversationRepositoryTest` (`deleteForAll` forwards
+> id/folds failure), plus the 4 `ConversationApi` test fakes (`FakeConversationApi`/
+> `RecordingSettingsApi`/`RecordingLeaveApi`/`RecordingDeleteForMeApi`) each updated with the new
+> interface method and a new `RecordingDeleteForAllApi` added, mirroring `RecordingDeleteForMeApi`.
+>
+> **No coverage floor lowered**: all new pure logic (`currentUserRole`, `onConversationClosed`) has
+> dedicated tests; the new `@Composable` menu item/dialog is UI glue, exempt per `TDD-COVERAGE.md`.
+>
+> **Verified**: `./apps/android/meeshy.sh check` → `BUILD SUCCESSFUL` in 48s (970 actionable tasks,
+> matching prior slices — no build-graph regression), zero regressions.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=3 last_run=conversation-delete-for-all`.
+
 > On 2026-08-16 **`feature:feed`'s `ComposerLanguagePickerDialog` migrated to the shared
 > `LanguagePickerDialog`** (slice `feed-composer-language-picker-shared`) — the explicit follow-up
 > left open by the prior slice (`sdk-ui-language-picker-dialog`, PR #3070): the third and last of

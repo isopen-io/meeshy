@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
+import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.LiveLocationStartedEvent
 import me.meeshy.sdk.model.LiveLocationUpdatedEvent
@@ -60,6 +61,7 @@ class MessageSocketManager @Inject constructor(
     private val _attachmentUpdated = buf<AttachmentUpdatedEvent>()
     private val _conversationUpdated = buf<ConversationUpdatedSocketEvent>()
     private val _conversationDeleted = buf<ConversationDeletedSocketEvent>()
+    private val _conversationClosed = buf<ConversationClosedSocketEvent>()
     private val _userStatus = buf<UserStatusEvent>()
     private val _presenceSnapshot = buf<PresenceSnapshotEvent>()
     private val _participantLeft = buf<ParticipantLeftEvent>()
@@ -87,6 +89,7 @@ class MessageSocketManager @Inject constructor(
     val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.asSharedFlow()
     val conversationUpdated: SharedFlow<ConversationUpdatedSocketEvent> = _conversationUpdated.asSharedFlow()
     val conversationDeleted: SharedFlow<ConversationDeletedSocketEvent> = _conversationDeleted.asSharedFlow()
+    val conversationClosed: SharedFlow<ConversationClosedSocketEvent> = _conversationClosed.asSharedFlow()
     val userStatus: SharedFlow<UserStatusEvent> = _userStatus.asSharedFlow()
     val presenceSnapshot: SharedFlow<PresenceSnapshotEvent> = _presenceSnapshot.asSharedFlow()
     val participantLeft: SharedFlow<ParticipantLeftEvent> = _participantLeft.asSharedFlow()
@@ -115,6 +118,7 @@ class MessageSocketManager @Inject constructor(
         listen("message:attachment-updated", _attachmentUpdated)
         listen("conversation:updated", _conversationUpdated)
         listen("conversation:deleted", _conversationDeleted)
+        listen("conversation:closed", _conversationClosed)
         listen("user:status", _userStatus)
         listen("presence:snapshot", _presenceSnapshot)
         listen("conversation:participant-left", _participantLeft)

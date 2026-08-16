@@ -91,4 +91,14 @@ interface ConversationApi {
      */
     @DELETE("conversations/{id}/delete-for-me")
     suspend fun deleteForMe(@Path("id") id: String): ApiResponse<Unit>
+
+    /**
+     * Deletes the conversation for EVERY participant (gateway `routes/conversations/
+     * core.ts`, `DELETE /conversations/:id` — "requires creator role", enforced
+     * server-side; the client only gates the affordance). Distinct from
+     * [deleteForMe]: this ends the conversation for the whole roster, not just
+     * the caller.
+     */
+    @DELETE("conversations/{id}")
+    suspend fun deleteForAll(@Path("id") id: String): ApiResponse<Unit>
 }
