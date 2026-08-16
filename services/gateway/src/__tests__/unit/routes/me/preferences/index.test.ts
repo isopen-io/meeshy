@@ -77,6 +77,13 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       // absente y rend `{ count: 0 }` au lieu de lever `P2025` (cycle 48).
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
+    // Le SECOND rangement de la confidentialité : des lignes clé/valeur
+    // héritées de janvier 2026, que les portes de diffusion obéissent encore et
+    // que ces routes lisent désormais (`services/preferences/privacy-storage`).
+    userPreference: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     userConversationCategory: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       count: jest.fn<any>().mockResolvedValue(0),
@@ -131,9 +138,12 @@ describe('GET / — get all preferences', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(body.data).toHaveProperty('privacy');
-    expect(body.data).toHaveProperty('audio');
-    expect(body.data).toHaveProperty('notification');
+    // Le CONTENU, pas la seule présence de la clé : le schéma de réponse
+    // déclarait `type: 'object'` sans `additionalProperties`, ce qui faisait
+    // sérialiser sept objets VIDES. `toHaveProperty` passait quand même.
+    expect(body.data.privacy.showOnlineStatus).toBe(true);
+    expect(body.data.audio).not.toEqual({});
+    expect(body.data.notification).not.toEqual({});
   });
 
   it('returns 200 with stored prefs when they exist', async () => {

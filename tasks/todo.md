@@ -1,3 +1,45 @@
+# Cycle 49 — un `PATCH` qui n'a jamais été partiel
+
+## Constat
+
+- [x] `ZodObject.partial()` ne retire pas les `default()` : un corps `PATCH`
+      VIDE écrivait 13 à 33 clés par défaut, sur les sept catégories
+- [x] La fusion `{ ...existant, ...validé }` était donc inerte — toucher un
+      interrupteur remettait tous les autres réglages à leur défaut
+- [x] Les routes `/me/preferences` ne lisaient que le document, quand les six
+      portes de diffusion lisent AUSSI le rangement hérité de janvier 2026
+- [x] Les deux se composent : le premier réglage touché posait un document
+      tout-à-`true`, qui gagne alors sur janvier — opt-out perdu DÉFINITIVEMENT
+- [x] `GET /me/preferences` rendait sept objets VIDES (`type: 'object'` sans
+      `additionalProperties` ⇒ fast-json-stringify efface tout)
+
+## Correctifs
+
+- [x] `utils/partial-update.ts` — `submittedKeysOnly`, câblé sur les sept
+      catégories et sur `PATCH /admin/agent/topics/:id`
+- [x] `CategoryStorage<T>` injecté ; `resolveStoredPrivacyPreferences` sert les
+      deux `GET` et la base de fusion du `PATCH`
+- [x] `retireLegacyPrivacyRows` après chaque écriture de la catégorie
+- [x] `additionalProperties: true` sur les sept catégories du schéma de réponse
+
+## Gates
+
+- [x] 12 témoins discriminants vus rouges avant correctif
+- [x] Gardes : valeur envoyée COÏNCIDANT avec le défaut bien appliquée ; clé
+      inconnue toujours écartée ; 400 toujours rendu ; catégories non-`privacy`
+      intouchées
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète — 733 suites / 17 862 témoins
+- [x] CHANGELOG + 2 ADR + journal (cycle49) + leçon 207
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle49.md` — la table des sept
+schémas, pourquoi les deux défauts se composent en pire que leur somme, les
+quatre options écartées, le double plus simple que le réel (5e cycle), et les
+pistes du cycle 50 : la fusion profonde non traitée, et `PUT` avec un corps
+partiel que rien ne fige.
+
 # Cycle 25 — la file de rejeu hors ligne n'avait de borne que du côté qui ne sert jamais
 
 Routine « amélioration continue temps réel ». Les cycles 21–23 avaient pris la
