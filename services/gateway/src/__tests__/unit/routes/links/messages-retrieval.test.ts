@@ -30,7 +30,7 @@ jest.mock('../../../../routes/links/utils/prisma-queries', () => ({
 }));
 
 jest.mock('../../../../routes/links/utils/message-formatters', () => ({
-  formatMessageWithSeparateSenders: jest.fn((m: any) => m),
+  formatLinkMessageWithDetails: jest.fn((m: any) => m),
 }));
 
 jest.mock('../../../../routes/links/utils/link-helpers', () => ({

@@ -47,7 +47,7 @@ jest.mock('../../../routes/links/utils/prisma-queries', () => ({
 const mockFormatMessageWithSeparateSenders = jest.fn<any>((msg: any) => msg);
 
 jest.mock('../../../routes/links/utils/message-formatters', () => ({
-  formatMessageWithSeparateSenders: (...a: any[]) => mockFormatMessageWithSeparateSenders(...a),
+  formatLinkMessageWithDetails: (...a: any[]) => mockFormatMessageWithSeparateSenders(...a),
 }));
 
 jest.mock('../../../routes/links/types', () => ({

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
-import { sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { messageAttachmentSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD VALIDATION SCHEMAS
@@ -279,6 +279,67 @@ export const sendLinkMessageResponseSchema = {
   }
 } as const;
 
+const messageTranslationsSchema = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      targetLanguage: { type: 'string' },
+      translatedContent: { type: 'string' },
+      translationModel: { type: 'string', nullable: true },
+      confidenceScore: { type: 'number', nullable: true },
+      createdAt: { type: 'string', format: 'date-time' }
+    }
+  }
+} as const;
+
+/**
+ * Message cité, tel que `formatReplyToMessage` le produit : son texte et son
+ * auteur, rien de plus.
+ */
+const replyToMessageSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Quoted message (reply target) — text and author only',
+  properties: {
+    id: { type: 'string', description: 'Quoted message identifier' },
+    content: { type: 'string', description: 'Quoted message content' },
+    originalLanguage: { type: 'string', description: 'Quoted message original language' },
+    messageType: { type: 'string', description: 'Quoted message type' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Quoted message creation timestamp' },
+    sender: { ...messageSenderSchema, nullable: true, description: 'Author of the quoted message (registered or anonymous)' }
+  }
+} as const;
+
+/**
+ * `fast-json-stringify` ne sérialise QUE les propriétés déclarées ici — tout le
+ * reste est retiré en silence, sans journal ni avertissement.
+ *
+ * Ce schéma n'en déclarait que sept, alors que le formateur de
+ * `GET /links/:identifier/messages` en produisait quinze et que
+ * `getConversationMessagesWithDetails` charge les relations correspondantes à
+ * chaque page. Une conversation ouverte par lien partagé ne pouvait donc
+ * afficher ni pièce jointe, ni réaction, ni réponse citée — pendant qu'un lien
+ * peut explicitement autoriser les envois anonymes de fichiers et d'images
+ * (`allowAnonymousFiles`, `allowAnonymousImages`).
+ *
+ * Toute propriété ajoutée au formateur DOIT être déclarée ici, sinon elle est
+ * chargée, recopiée, puis jetée.
+ *
+ * Ce schéma sert AUSSI `GET /links/:identifier` (`retrieval.ts`), dont le
+ * formateur `formatMessageWithUnifiedSender` est plus maigre. L'élargir ne lui
+ * fait rien émettre de neuf — `fast-json-stringify` omet une propriété absente
+ * de l'objet — À CONDITION qu'aucune propriété ajoutée ne porte de `default`,
+ * qui serait alors matérialisé sur une route qui ne le produit pas. Un témoin
+ * de `messages-retrieval-serialization.test.ts` verrouille cette condition.
+ *
+ * Champs délibérément NON déclarés :
+ *   - `anonymousSender` : aucun lecteur (web ni iOS) ; `sender` porte désormais
+ *     l'identité des auteurs anonymes, et une seconde voie nominative vers la
+ *     même donnée est exactement ce que le cycle 43 a refusé.
+ *   - `deletedAt` : la requête filtre `deletedAt: null`, la valeur est constante.
+ */
 export const messageSchema = {
   type: 'object',
   description: 'Message object',
@@ -288,21 +349,31 @@ export const messageSchema = {
     originalLanguage: { type: 'string', description: 'Original message language code', default: 'fr' },
     messageType: { type: 'string', description: 'Message type', default: 'text' },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last update timestamp' },
+    isEdited: { type: 'boolean', description: 'Whether the message was edited' },
+    editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edition timestamp' },
+    replyToId: { type: 'string', nullable: true, description: 'Quoted message identifier' },
     sender: { ...messageSenderSchema, nullable: true },
-    translations: {
+    replyTo: replyToMessageSchema,
+    attachments: {
       type: 'array',
+      description: 'Message attachments (files, images, audio) with their Prisme transcription/translations',
+      items: messageAttachmentSchema
+    },
+    reactions: {
+      type: 'array',
+      description: 'Reactions on this message',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          targetLanguage: { type: 'string' },
-          translatedContent: { type: 'string' },
-          translationModel: { type: 'string', nullable: true },
-          confidenceScore: { type: 'number', nullable: true },
+          emoji: { type: 'string' },
+          participantId: { type: 'string', nullable: true },
           createdAt: { type: 'string', format: 'date-time' }
         }
       }
-    }
+    },
+    translations: messageTranslationsSchema
   }
 } as const;
 
