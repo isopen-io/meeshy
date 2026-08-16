@@ -124,7 +124,7 @@ propres témoins, pas un ajout en marge d'un correctif gateway.
       créée pour un compte qui n'en a pas
 - [x] `bunx tsc --noEmit` gateway : 0
 - [x] Suite gateway complète verte — 729 suites / 17 812 témoins
-- [x] CHANGELOG + ADR `services/gateway/decisions.md` + leçon 204
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + leçon 205
 
 ## 10. Le même motif ailleurs — cherché, rien trouvé
 

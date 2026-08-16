@@ -1554,6 +1554,31 @@ export interface ConversationUpdatedEventData {
    */
   readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
   readonly lastMessageOriginalLanguage?: string | null;
+  /**
+   * `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de la
+   * base, par opposition à une poussée de message (`bump-to-top`) qui ne fait
+   * que porter le message qu'on vient d'écrire.
+   *
+   * Ce que le champ existe pour dire : **cet aperçu peut légitimement RECULER
+   * dans le temps.** Supprimer le dernier message pour tous fait redescendre la
+   * ligne sur le message PRÉCÉDENT, donc plus ancien ; un lecteur qui masque
+   * son propre dernier message visible se voit servir un remplaçant plus ancien
+   * par construction. Les clients tiennent une garde monotone sur le groupe
+   * d'aperçu — un `lastMessageAt` plus ancien y désigne un message périmé, et
+   * tout le groupe est jeté — parce qu'ils ne peuvent pas distinguer, du seul
+   * contenu, une diffusion arrivée dans le désordre d'un recalcul autoritatif :
+   * les deux reculent, les deux nomment un autre message. Seul l'émetteur le
+   * sait, et c'est ce qu'il déclare ici.
+   *
+   * Posé par `emitConversationPreviewUpdate` (édition, suppression pour tous,
+   * traduction qui atterrit, masquage personnel) et par LUI SEUL. Les émetteurs
+   * message-driven (`MessageHandler`, `MeeshySocketIOManager`) l'omettent
+   * délibérément : ce sont eux que la garde monotone protège.
+   *
+   * Optionnel et absent par défaut — un client qui ne le lit pas garde
+   * exactement le comportement d'avant.
+   */
+  readonly previewRecalculated?: boolean;
   readonly [key: string]: unknown;
 }
 

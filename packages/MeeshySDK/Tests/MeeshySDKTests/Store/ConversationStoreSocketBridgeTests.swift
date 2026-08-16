@@ -120,7 +120,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
-        title: String? = nil
+        title: String? = nil,
+        previewRecalculated: Bool = false
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
             conversationId: conversationId,
@@ -128,7 +129,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             lastMessageAt: lastMessageAt,
             lastMessageId: lastMessageId,
             lastMessagePreview: lastMessagePreview,
-            updatedAt: "2024-01-01T00:00:00.000Z"
+            updatedAt: "2024-01-01T00:00:00.000Z",
+            previewRecalculated: previewRecalculated
         )
     }
 
@@ -162,6 +164,38 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         let overwritten = await waitUntil { (await store.conversation(id: "c1"))?.lastMessageAt != t0 }
         XCTAssertFalse(overwritten, "a stale lastMessageAt must not overwrite the current value")
+    }
+
+    /// Le témoin de bout en bout du recul autorisé, et il porte plus que la
+    /// règle de fusion : `mapConversationUpdated` ne recopie qu'un SOUS-ENSEMBLE
+    /// des champs décodés, et un drapeau décodé mais jamais transmis serait
+    /// exactement aussi inerte qu'un drapeau absent. C'est la moitié du chemin
+    /// qu'un test de `merging` seul ne peut pas voir.
+    func test_conversationUpdated_recalculatedPreview_appliedThroughTheBridge() async {
+        let store = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var c1 = makeConv(id: "c1")  // lastMessageAt = t0
+        c1.lastMessageId = "msg-latest"
+        c1.lastMessagePreview = "le dernier message"
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        let previous = Date(timeIntervalSince1970: 1_699_000_000)
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: previous,
+            lastMessageId: "msg-previous",
+            lastMessagePreview: "celui d avant",
+            previewRecalculated: true
+        ))
+
+        let applied = await waitUntil {
+            let c = await store.conversation(id: "c1")
+            return c?.lastMessageId == "msg-previous" && c?.lastMessageAt == previous
+        }
+        XCTAssertTrue(applied,
+                      "the bridge must forward previewRecalculated — a flag decoded but not mapped is inert")
+        XCTAssertNotEqual(t0, previous)
     }
 
     func test_conversationUpdated_lastMessageId_andPreview_applied() async {

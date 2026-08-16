@@ -443,7 +443,12 @@ jobs:
           # Les erreurs du compilateur partent AUSSI en annotations : le log
           # brut exige un token, la page publique du run non (même remède que
           # le résumé XCTest — leçon 265, lecteur distant sans rien d'autre).
+          # `set +e` obligatoire : le runner lance ce script avec `bash -e`,
+          # et -e + pipefail tuent le script sur le pipeline en échec AVANT
+          # d'atteindre le bloc d'annotations (constaté au run #79 — exit 65
+          # nu, zéro annotation). On sort explicitement avec `exit "$rc"`.
           set -o pipefail
+          set +e
           xcodebuild build-for-testing \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
