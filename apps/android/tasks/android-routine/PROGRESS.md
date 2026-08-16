@@ -54,8 +54,8 @@
 > checked explicitly too (the new Activity/manifest wiring lives there, outside the usual
 > `:feature:*` test scope).
 >
-> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
-> android_streak=<confirmed at merge> last_run=share-target-text-url`.
+> `tasks/lane-cursor.md` → re-read fresh at merge time (unchanged from before this PR's CI wait,
+> `streak=0`, no race) → advances to `lane=ANDROID android_streak=1 last_run=share-target-text-url`.
 
 > On 2026-08-16 **No code shipped — the four remaining named candidates were re-proved and each
 > found genuinely too large, too ambiguous, or non-functional even on iOS, documented here so a
