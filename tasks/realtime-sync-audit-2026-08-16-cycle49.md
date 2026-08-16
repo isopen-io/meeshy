@@ -252,6 +252,36 @@ teste déjà `!isEmpty` — mais une seule dit ce que le modèle veut dire.
         à `null`) est le MÊME que celui de la branche du Prisme trois lignes plus
         bas, joué en CI depuis le cycle 46 bis.
 
+## 5 bis. État de livraison — PR #3086 ouverte, bloquée hors du code
+
+Tout ce qui peut être vérifié ici l'a été, et la CI Linux est verte **deux fois**
+(SHA `0f8707d8` puis `be06752`, qui ne diffèrent que par des `.md` sous
+`tasks/`) : `Quality`, `Build`, `Security`, `Test gateway`, `Test web`,
+`Test shared`, `Test agent`, `Prisma`, Python, audio, TTS/STT, voix — et
+`Build app (app + cibles de test)`, donc **le Swift compile**, cibles de test
+comprises.
+
+Le merge attend une seule chose : que des runners `macos-15` parviennent à
+provisionner un simulateur. Les deux jobs macOS (`sdk-tests` et `Build app +
+tests unitaires`), sur **deux runners distincts et deux workflows différents**,
+pendent depuis plus de deux heures sur la MÊME étape — « Provision iOS 18.2
+simulator », qui descend la plateforme Apple — alors qu'elle prenait 4 min 15 s
+au run précédent, et sans que GitHub applique leurs `timeout-minutes` (50 et 60).
+
+**Leçon de méthode, payée sur place** : le premier diagnostic que j'ai publié
+était faux sur deux points, parce qu'il lisait l'endpoint `check-runs` de la PR
+— lequel retardait d'environ **110 minutes**. Il annonçait `Quality (bun)`
+bloqué (il avait terminé en 1 min 44 s) et nommait l'étape de cache (16 s). Les
+horodatages par étape de `list_workflow_jobs` disent la vérité ; la liste des
+checks d'une PR, non. *Un état d'exécution se lit à la source qui porte les
+horodatages, jamais à celle qui porte les vignettes.*
+
+Rappel pour la lecture du run app quand il repartira : `MeeshyTests` porte des
+échecs PRÉEXISTANTS documentés (assertions dépendant de la locale française,
+chevron RTL, tri `topSenders`) — l'étape 14 du job s'appelle littéralement
+« Annoter les échecs restants (10 à 27) ». Ce qu'il faudra y chercher, ce sont
+les **2** témoins `ConversationListViewModelTests` de ce cycle.
+
 ## 6. Écarté délibérément
 
 **Rendre `lastMessageAt` optionnel sur `MeeshyConversation`.** Ce serait la
