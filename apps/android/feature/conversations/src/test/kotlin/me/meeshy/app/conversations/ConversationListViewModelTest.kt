@@ -844,6 +844,20 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun setTags_forwards_the_full_tag_set_to_the_repository() = runTest(dispatcher) {
+        val conv = ApiConversation(id = "c1", title = "Team")
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(conv), ageMillis = 0)))
+        coEvery { repo.setTagsOptimistic("c1", listOf("work", "family")) } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.setTags("c1", listOf("work", "family"))
+        advanceUntilIdle()
+
+        coVerify { repo.setTagsOptimistic("c1", listOf("work", "family")) }
+    }
+
+    @Test
     fun leaveConversation_calls_the_repository_and_clears_any_prior_error() = runTest(dispatcher) {
         val repo = repositoryReturning(
             flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
