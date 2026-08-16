@@ -51,6 +51,7 @@ import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
+import { ConversationBridgeService } from '../services/ConversationBridgeService';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -182,6 +183,9 @@ export class MeeshySocketIOManager {
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
   private readStatusService!: MessageReadStatusService;
+  // Le pont ✦ (G-123) — même discipline que `readStatusService` : une seule
+  // instance, sans état, réutilisée par les trois transports d'envoi.
+  private bridgeService!: ConversationBridgeService;
 
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
@@ -369,6 +373,7 @@ export class MeeshySocketIOManager {
     const reactionService = new ReactionService(prisma);
     this.readStatusService = new MessageReadStatusService(prisma);
     const readStatusService = this.readStatusService;
+    this.bridgeService = new ConversationBridgeService(prisma);
 
     this.messageHandler = new MessageHandler({
       io: this.io,
@@ -836,6 +841,7 @@ export class MeeshySocketIOManager {
       io: this.io,
       prisma: this.prisma,
       readStatusService: this.readStatusService,
+      bridgeService: this.bridgeService,
       conversationId: params.conversationId,
       senderId: params.senderId,
       onError: (error) => logger.warn('unread count update failed (link message)', { error }),
@@ -2551,6 +2557,7 @@ export class MeeshySocketIOManager {
             io: this.io,
             prisma: this.prisma,
             readStatusService: this.readStatusService,
+            bridgeService: this.bridgeService,
             conversationId: normalizedId,
             senderId,
             participants: allParticipants,

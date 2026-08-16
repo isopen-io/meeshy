@@ -6,6 +6,9 @@
 // Import unified Participant types
 import type { ParticipantType } from './participant.js';
 
+// Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
+import type { ConversationBridge } from './conversation-bridge.js';
+
 // Prédicat des marquages de notifications en masse
 import type {
   NotificationDeletedBulkScope,
@@ -872,6 +875,14 @@ export interface ConversationOnlineStatsEventData {
 export interface ConversationUnreadUpdatedEventData {
   readonly conversationId: string;
   readonly unreadCount: number;
+  /**
+   * Le pont ✦ recalculé POUR CE destinataire (G-123). OPTIONNEL — un client
+   * qui l'ignore garde son comportement d'avant ; absent quand `unreadCount`
+   * retombe à zéro ou que le serveur n'a rien à annoncer (contrat gelé §3.2).
+   * Le pont est PAR lecteur : deux destinataires du même événement source
+   * (un `message:new`) ne portent jamais le même `bridge`.
+   */
+  readonly bridge?: ConversationBridge;
 }
 
 /**

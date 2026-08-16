@@ -1,4 +1,5 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 
 /**
  * A conversation participant, reduced to what the unread fan-out reads.
@@ -35,6 +36,20 @@ export interface UnreadParticipantSource {
       select: { id: true; userId: true; joinedAt: true };
     }): Promise<UnreadRecipient[]>;
   };
+}
+
+/**
+ * Ce que ce fan-out demande à `ConversationBridgeService` — G-123. Interface
+ * STRUCTURELLE plutôt qu'un import direct de la classe : ce fichier reste
+ * testable sans construire un vrai `PrismaClient`, et n'importe quel objet
+ * qui sait construire un pont depuis un candidat unique convient (le vrai
+ * service, ou un double de test).
+ */
+export interface UnreadBridgeBuilder {
+  buildBridgeData(params: {
+    readonly viewerId: string;
+    readonly candidates: readonly { readonly conversationId: string; readonly unreadCount: number }[];
+  }): Promise<ReadonlyMap<string, { readonly bridge: ConversationBridge; readonly lastReadAt?: Date }>>;
 }
 
 /**
@@ -78,9 +93,20 @@ export async function emitUnreadCountsToRecipients(params: {
   conversationId: string;
   senderId: string | null | undefined;
   participants?: ReadonlyArray<UnreadRecipient>;
+  /**
+   * Optionnel — G-123. Absent : comportement d'avant, `{conversationId,
+   * unreadCount}` seul. Présent : chaque destinataire dont le compteur
+   * repasse au-dessus de zéro reçoit AUSSI `bridge`, recalculé pour LUI (le
+   * pont est par lecteur, jamais partagé entre deux destinataires du même
+   * événement). Un candidat SINGLETON par appel — la fenêtre agrégée que
+   * `ConversationBridgeService` documente reste UNE conversation ici, jamais
+   * N ; le coût nouveau est borné par l'effectif de LA conversation, pas par
+   * son historique ni par le nombre de conversations de la liste.
+   */
+  bridgeService?: UnreadBridgeBuilder;
   onError?: (error: unknown) => void;
 }): Promise<void> {
-  const { io, prisma, readStatusService, conversationId, senderId, participants, onError } = params;
+  const { io, prisma, readStatusService, conversationId, senderId, participants, bridgeService, onError } = params;
   if (!io || !senderId) return;
 
   try {
@@ -98,12 +124,39 @@ export async function emitUnreadCountsToRecipients(params: {
 
     const counts = await readStatusService.getUnreadCountsForParticipants(recipients, conversationId);
 
-    for (const recipient of recipients) {
-      io.to(ROOMS.user(recipient.userId ?? recipient.id)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId,
-        unreadCount: counts.get(recipient.id) ?? 0,
-      });
-    }
+    await Promise.all(
+      recipients.map(async (recipient) => {
+        const unreadCount = counts.get(recipient.id) ?? 0;
+        const viewerId = recipient.userId ?? recipient.id;
+
+        // Le pont ne coûte rien pour un destinataire déjà à jour (unreadCount
+        // === 0) : `ConversationBridgeService` filtrerait le candidat de toute
+        // façon (contrat gelé §3.2), autant ne pas l'appeler du tout.
+        let bridge: ConversationBridge | undefined;
+        if (bridgeService && unreadCount > 0) {
+          try {
+            const entry = (
+              await bridgeService.buildBridgeData({
+                viewerId,
+                candidates: [{ conversationId, unreadCount }],
+              })
+            ).get(conversationId);
+            bridge = entry?.bridge;
+          } catch (error) {
+            // Best-effort : un pont qui échoue ne doit pas priver ce
+            // destinataire de sa pastille — même posture que le reste du
+            // fan-out (cf. le catch englobant).
+            onError?.(error);
+          }
+        }
+
+        io.to(ROOMS.user(viewerId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount,
+          ...(bridge ? { bridge } : {}),
+        });
+      })
+    );
   } catch (error) {
     onError?.(error);
   }

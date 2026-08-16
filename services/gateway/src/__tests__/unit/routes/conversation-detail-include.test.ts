@@ -104,6 +104,11 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
       'isMuted',
       'isPinned',
       'reaction',
+      // G-123 — choix collant du mode de lecture (G-121), lu pour l'entrée
+      // d'orchestrateur du pont ✦ (workshop A6). SERVEUR-side uniquement,
+      // comme `clearHistoryBefore`/`deletedForUserAt` : le wire ne le
+      // déclare pas, `fast-json-stringify` le strippe de la réponse.
+      'readingMode',
       'tags'
     ]);
   });

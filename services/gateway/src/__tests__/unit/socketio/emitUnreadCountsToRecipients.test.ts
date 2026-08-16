@@ -242,6 +242,127 @@ describe('emitUnreadCountsToRecipients — source des participants', () => {
   });
 });
 
+describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)', () => {
+  function makeBridgeService(map: Map<string, { bridge: unknown; lastReadAt?: Date }>) {
+    return { buildBridgeData: jest.fn<any>().mockResolvedValue(map) };
+  }
+
+  it('enrichit le payload du destinataire dont le service rend un pont', async () => {
+    const { io, emit } = makeIO();
+    const bridge = {
+      kind: 'fallback',
+      unreadCount: 3,
+      suggestedMode: 'focal',
+      data: { authors: ['Bob'], extraAuthorCount: 0, messageCount: 3 },
+    };
+    const bridgeService = makeBridgeService(new Map([[CONV_ID, { bridge }]]));
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([sender(), peer()]) as any,
+      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 3 }),
+      conversationId: CONV_ID,
+      senderId: SENDER_PART_ID,
+      bridgeService,
+    });
+
+    // Candidat SINGLETON — une conversation, jamais la liste entière : le
+    // pont d'UN destinataire ne recalcule que CE destinataire.
+    expect(bridgeService.buildBridgeData).toHaveBeenCalledWith({
+      viewerId: PEER_USER_ID,
+      candidates: [{ conversationId: CONV_ID, unreadCount: 3 }],
+    });
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 3,
+      bridge,
+    });
+  });
+
+  it("n'appelle pas le constructeur de pont pour un destinataire à zéro non-lu", async () => {
+    const { io, emit } = makeIO();
+    const bridgeService = makeBridgeService(new Map());
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([sender(), peer()]) as any,
+      readStatusService: makeReadStatusService(), // aucune entrée ⇒ 0
+      conversationId: CONV_ID,
+      senderId: SENDER_PART_ID,
+      bridgeService,
+    });
+
+    expect(bridgeService.buildBridgeData).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 0,
+    });
+  });
+
+  it('reste exactement { conversationId, unreadCount } sans bridgeService — comportement historique intact', async () => {
+    const { io, emit } = makeIO();
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([sender(), peer()]) as any,
+      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 5 }),
+      conversationId: CONV_ID,
+      senderId: SENDER_PART_ID,
+    });
+
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 5,
+    });
+  });
+
+  it("n'ajoute pas bridge, et n'empêche pas l'émission du compteur, quand le pont échoue", async () => {
+    const { io, emit } = makeIO();
+    const onError = jest.fn();
+    const bridgeService = { buildBridgeData: jest.fn<any>().mockRejectedValue(new Error('bridge down')) };
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([sender(), peer()]) as any,
+      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 2 }),
+      conversationId: CONV_ID,
+      senderId: SENDER_PART_ID,
+      bridgeService,
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 2,
+    });
+  });
+
+  it('recalcule un pont DISTINCT par destinataire — le pont est par lecteur, jamais partagé', async () => {
+    const { io, emit } = makeIO();
+    const bridgeForPeer = { kind: 'fallback', unreadCount: 1, suggestedMode: 'focal', data: { authors: [], extraAuthorCount: 0, messageCount: 1 } };
+    const buildBridgeData = jest
+      .fn<any>()
+      .mockImplementation(async ({ viewerId }: { viewerId: string }) =>
+        viewerId === PEER_USER_ID ? new Map([[CONV_ID, { bridge: bridgeForPeer }]]) : new Map()
+      );
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([sender(), peer(), { id: ANON_PART_ID, userId: null, joinedAt: null }]) as any,
+      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 1, [ANON_PART_ID]: 1 }),
+      conversationId: CONV_ID,
+      senderId: SENDER_PART_ID,
+      bridgeService: { buildBridgeData },
+    });
+
+    expect(buildBridgeData).toHaveBeenCalledWith({ viewerId: PEER_USER_ID, candidates: [{ conversationId: CONV_ID, unreadCount: 1 }] });
+    expect(buildBridgeData).toHaveBeenCalledWith({ viewerId: ANON_PART_ID, candidates: [{ conversationId: CONV_ID, unreadCount: 1 }] });
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: bridgeForPeer });
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1 });
+  });
+});
+
 describe('emitUnreadCountsToRecipients — best-effort', () => {
   it('ne rejette pas quand le calcul des compteurs échoue, et signale l\'erreur', async () => {
     const { io } = makeIO();
