@@ -140,6 +140,18 @@ avec la raison écrite, des deux côtés (store et pont).
 un contrat. Ici il l'était devenu par accident — cinq témoins affirmaient qu'un
 DM prend un titre brut, sans qu'aucun n'ait voulu le dire.*
 
+**Le détail qui achève le diagnostic** : côté app, les DEUX moitiés de la règle
+étaient déjà épinglées depuis le 2026-07-04 —
+`test_conversationUpdatedEvent_titleOnDirect_doesNotClobberParticipantName` ET
+`test_conversationUpdatedEvent_titleOnGroup_appliesRename`, voisines dans
+`ConversationListViewModelTests`. Le SDK n'avait ni l'une ni l'autre. Le trou de
+couverture épousait exactement le trou de code : la règle a été écrite, testée
+et datée sur un seul des deux sites qui l'appliquent, et rien dans le dépôt ne
+disait qu'il y en avait deux. C'est la forme générique du problème que les
+cycles 46 bis à 51 paient à répétition — *une règle vérifiée sur un site n'est
+pas une règle vérifiée* — et c'est pourquoi la piste n°1 du cycle 52 vise le
+mapping d'événements plutôt que la fusion elle-même.
+
 ## 7. Écarté délibérément
 
 **Faire appeler `ConversationStore.merging` par l'écran** — la piste telle que
