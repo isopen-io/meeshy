@@ -77,6 +77,7 @@ fun ConversationMembersSheet(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<PaginatedParticipant?>(null) }
+    var pendingBan by remember { mutableStateOf<PaginatedParticipant?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
@@ -167,8 +168,10 @@ fun ConversationMembersSheet(
                             accentColor = accentColor,
                             roleActions = state.roleActions(member),
                             canRemove = state.canRemove(member),
+                            canBan = state.canBan(member),
                             onRoleAction = { action -> viewModel.changeRole(member, action) },
                             onRemove = { pendingRemoval = member },
+                            onBan = { pendingBan = member },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -211,6 +214,38 @@ fun ConversationMembersSheet(
         )
     }
 
+    val banTarget = pendingBan
+    if (banTarget != null) {
+        AlertDialog(
+            onDismissRequest = { pendingBan = null },
+            title = { Text(stringResource(R.string.conversation_members_ban_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.conversation_members_ban_message,
+                        banTarget.displayLabel,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.banMember(banTarget)
+                    pendingBan = null
+                }) {
+                    Text(
+                        text = stringResource(R.string.conversation_members_ban_confirm),
+                        color = MeeshyPalette.Error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBan = null }) {
+                    Text(stringResource(R.string.conversation_members_remove_cancel))
+                }
+            },
+        )
+    }
+
     if (showAddSheet) {
         AddParticipantSheet(
             conversationId = conversationId,
@@ -229,8 +264,10 @@ private fun MemberRow(
     accentColor: Color,
     roleActions: List<MemberRoleAction>,
     canRemove: Boolean,
+    canBan: Boolean,
     onRoleAction: (MemberRoleAction) -> Unit,
     onRemove: () -> Unit,
+    onBan: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val name = member.displayLabel
@@ -271,7 +308,7 @@ private fun MemberRow(
             }
         }
 
-        if (roleActions.isNotEmpty() || canRemove) {
+        if (roleActions.isNotEmpty() || canRemove || canBan) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
@@ -300,6 +337,20 @@ private fun MemberRow(
                             onClick = {
                                 menuOpen = false
                                 onRemove()
+                            },
+                        )
+                    }
+                    if (canBan) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(R.string.conversation_members_ban),
+                                    color = MeeshyPalette.Error,
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onBan()
                             },
                         )
                     }

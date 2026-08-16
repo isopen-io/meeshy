@@ -2714,9 +2714,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       current member never gets an enabled "Add" button; `onAdded` refreshes the roster sheet
       behind it, mirroring iOS's own callback. +8 tests (`ConversationRepositoryTest` ×2 for the
       new endpoint, `AddParticipantViewModelTest` ×6 for debounce/floor/member-flagging/add/
-      refusal-rollback/in-flight-dedup). **Still open: ban/unban** (`PATCH .../ban`/`.../unban`
-      exist on the gateway; iOS does not wire them in this view either). Box stays unchecked until
-      that lands too.
+      refusal-rollback/in-flight-dedup). **Ban shipped 2026-08-16** (slice
+      `conversation-member-ban`) — re-proved before assuming "iOS does not wire it": `ban` IS
+      wired, just not in `ParticipantsView` (the screen `ConversationMembersSheet` otherwise
+      mirrors) — it lives in a SECOND, parallel iOS member-management surface,
+      `MemberManagementSection` (embedded in the conversation-settings sheet, reached via
+      `ConversationInfoSheet` → "Conversation info sheet" §C, itself still open below), calling
+      `ConversationSettingsViewModel.banParticipant` (`packages/MeeshySDK`). Android already
+      unified both iOS screens into one `ConversationMembersSheet`, so ban was added there as a
+      fourth row action alongside promote/demote/remove rather than waiting on the larger,
+      still-open settings-sheet port. New `MemberModeration.canBan` — **stricter than
+      `canRemove`**, ported from iOS's own guard (`currentUserRole > targetRole &&
+      currentUserRole.hasMinimumRole(.admin)`): an admin may remove ANY non-creator member but
+      may only BAN a strictly lower-ranked one — an admin cannot ban a peer admin, unlike
+      removal. New `PATCH /conversations/{id}/participants/{userId}/ban` wired
+      (`ConversationApi.banParticipant`/`ConversationRepository.banParticipant`, no body — mirror
+      of iOS `ConversationService.banParticipant`). `ConversationMembersViewModel.banMember`
+      reuses the exact optimistic-with-rollback shape as `removeMember` (banning drops the row
+      from the active roster immediately, same visible effect), with its own confirmation dialog
+      (Android's `removeMember` already confirms before firing — iOS's `MemberManagementSection`
+      does NOT show a confirmation for either expel or ban, an iOS gap not worth reproducing over
+      the already-safer Android convention). +6 tests (`MemberModerationTest` ×5 for the stricter
+      rank gate, `ConversationMembersViewModelTest` ×3 for optimistic drop/rollback/role gating).
+      **Still open: unban** — the SDK method (`ConversationService.unbanParticipant`) exists and
+      is fully wired, but has genuinely ZERO iOS UI anywhere (no banned-members list screen at
+      all) — confirmed by exhaustive grep, not assumed. Not a "port iOS→Android" candidate until
+      iOS itself grows a reference UI; noted here rather than silently dropped. Box stays
+      unchecked until it lands.
 - [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
       settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
       earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**

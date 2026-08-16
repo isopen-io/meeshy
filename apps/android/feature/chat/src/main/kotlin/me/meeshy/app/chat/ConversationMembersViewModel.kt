@@ -57,6 +57,9 @@ data class ConversationMembersUiState(
 
     fun roleActions(member: PaginatedParticipant): List<MemberRoleAction> =
         MemberModeration.roleActions(actor = viewerRole, target = member.role, isSelf = isSelf(member))
+
+    fun canBan(member: PaginatedParticipant): Boolean =
+        MemberModeration.canBan(actor = viewerRole, target = member.role, isSelf = isSelf(member))
 }
 
 /**
@@ -187,6 +190,26 @@ class ConversationMembersViewModel @Inject constructor(
         _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }
         viewModelScope.launch {
             val result = conversationRepository.removeParticipant(id, userId)
+            if (result is NetworkResult.Failure) {
+                _state.update { it.copy(roster = previous, actionFailed = true) }
+            }
+        }
+    }
+
+    /**
+     * Ban a member (destructive — the caller UI confirms first). Optimistic with the same
+     * rollback contract as [removeMember]: banning drops the member from the active roster
+     * server-side, same visible effect as removal. Mirror of iOS
+     * `MemberManagementSection`/`ConversationSettingsViewModel.banParticipant`.
+     */
+    fun banMember(member: PaginatedParticipant) {
+        val id = _state.value.conversationId ?: return
+        val userId = member.userId ?: member.id
+        val previous = _state.value.roster
+
+        _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }
+        viewModelScope.launch {
+            val result = conversationRepository.banParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
             }

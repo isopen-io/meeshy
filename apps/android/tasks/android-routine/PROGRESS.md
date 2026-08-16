@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Member ban shipped** (slice `conversation-member-ban`). `gh pr list --state
+> open --search "apps/android OR apps/ios"` showed three concurrent PRs (#3096, #3105, #3106),
+> none touching `apps/android` — no collision.
+>
+> **The previous run's own note — "ban/unban: iOS doesn't wire them in this view either" — was
+> re-checked rather than trusted, and turned out half-wrong.** `grep -rln "banParticipant"
+> apps/ios/Meeshy` found `MemberManagementSection.swift`, a SECOND, independent member-management
+> surface (embedded in `ConversationInfoSheet`'s settings sheet, not `ParticipantsView` —
+> confirmed by tracing `@ObservedObject var viewModel: ConversationSettingsViewModel` to its
+> declaration, which — surprisingly — lives in `packages/MeeshySDK/Sources/MeeshyUI/Conversation/
+> ConversationSettingsView.swift`, not `apps/ios`) that DOES wire a one-tap ban action. iOS
+> genuinely has two parallel, non-identical member-management screens; the previous note only
+> checked the one Android had already ported. Confirmed `unbanParticipant` exists as a fully
+> wired SDK method with **zero** call sites anywhere in `apps/ios` — that half of the note holds.
+>
+> **Chose to extend the existing `ConversationMembersSheet` rather than port the second iOS
+> screen.** Android already collapsed iOS's `ParticipantsView` + `MemberManagementSection` into
+> one sheet; re-splitting them to exactly mirror iOS's own (arguably redundant) duplication would
+> add a screen with no Android-side reason to exist. Ban fits as a fourth row action alongside the
+> three already there.
+>
+> **The rank gate is genuinely stricter than removal's, and the tests prove it rather than assert
+> it once**: iOS's ban guard is `currentUserRole > targetRole && currentUserRole.hasMinimumRole(
+> .admin)` — an admin may remove ANY non-creator member (existing `canRemove` behaviour, unchanged)
+> but may only ban someone STRICTLY below their own rank, so an admin cannot ban a peer admin.
+> `MemberModeration.canBan` ranks by `.level`, not Kotlin's default enum `Comparable` (which
+> follows declaration order — `CREATOR` first — backwards from the actual hierarchy); a docstring
+> in the source explains why, so a future reader doesn't reach for `>` on the enum directly.
+>
+> **No confirmation dialog on iOS for either expel or ban** (`Button(role: .destructive)` fires
+> immediately) — Android's own `removeMember` already confirms first, an existing Android-side
+> safety margin beyond the iOS reference. Ban gets the same treatment for consistency within
+> Android's own UI rather than reproducing the gap.
+>
+> **+6 tests**: `MemberModerationTest` ×5 (self-ban blocked, creator bans everyone below,
+> admin-cannot-ban-admin — the one that actually distinguishes this from `canRemove` — admin can
+> ban moderators/members, moderator and plain member can ban nobody);
+> `ConversationMembersViewModelTest` ×3 (optimistic drop + send, refusal rollback, the viewer-role
+> gate offering ban on moderators but not peer admins).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> run before any push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=<confirmed at merge> last_run=conversation-member-ban`.
+
 > On 2026-08-16 **"Add member" shipped, closing the last open gap in conversation member
 > moderation** (slice `add-participant-sheet`). `gh pr list --state open --search "apps/android
 > OR apps/ios"` showed one concurrent PR (#3096, realtime/gateway+iOS+web) not touching

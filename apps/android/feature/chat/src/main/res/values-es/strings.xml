@@ -190,4 +190,8 @@
     <string name="add_participant_no_results">Ningún usuario encontrado</string>
     <string name="add_participant_member_badge">Miembro</string>
     <string name="add_participant_add_button">Añadir</string>
+    <string name="conversation_members_ban">Banear de la conversación</string>
+    <string name="conversation_members_ban_title">¿Banear a este miembro?</string>
+    <string name="conversation_members_ban_message">%1$s será eliminado y no podrá volver a unirse a esta conversación.</string>
+    <string name="conversation_members_ban_confirm">Banear</string>
 </resources>

@@ -135,6 +135,62 @@ class MemberModerationTest {
         }
     }
 
+    // MARK: ban
+
+    @Test
+    fun nobody_can_ban_themselves() {
+        MemberRole.entries.forEach { role ->
+            assertThat(MemberModeration.canBan(actor = role, target = role, isSelf = true)).isFalse()
+        }
+    }
+
+    @Test
+    fun the_creator_can_ban_admins_moderators_and_members() {
+        listOf(MemberRole.ADMIN, MemberRole.MODERATOR, MemberRole.MEMBER).forEach { target ->
+            assertThat(
+                MemberModeration.canBan(actor = MemberRole.CREATOR, target = target, isSelf = false),
+            ).isTrue()
+        }
+    }
+
+    @Test
+    fun an_admin_cannot_ban_another_admin() {
+        // Stricter than canRemove — iOS MemberManagementSection.availableActions gates on
+        // `currentUserRole > targetRole`, not just `hasMinimumRole(.admin)`.
+        assertThat(
+            MemberModeration.canBan(actor = MemberRole.ADMIN, target = MemberRole.ADMIN, isSelf = false),
+        ).isFalse()
+    }
+
+    @Test
+    fun an_admin_can_ban_moderators_and_members() {
+        listOf(MemberRole.MODERATOR, MemberRole.MEMBER).forEach { target ->
+            assertThat(
+                MemberModeration.canBan(actor = MemberRole.ADMIN, target = target, isSelf = false),
+            ).isTrue()
+        }
+    }
+
+    @Test
+    fun a_moderator_can_ban_nobody() {
+        // Ban requires hasMinimumRole(.admin) on iOS — moderators never see the action,
+        // unlike canRemove which does grant moderators removal of plain members.
+        listOf(MemberRole.ADMIN, MemberRole.MODERATOR, MemberRole.MEMBER).forEach { target ->
+            assertThat(
+                MemberModeration.canBan(actor = MemberRole.MODERATOR, target = target, isSelf = false),
+            ).isFalse()
+        }
+    }
+
+    @Test
+    fun a_plain_member_can_ban_nobody() {
+        MemberRole.entries.forEach { target ->
+            assertThat(
+                MemberModeration.canBan(actor = MemberRole.MEMBER, target = target, isSelf = false),
+            ).isFalse()
+        }
+    }
+
     @Test
     fun every_offered_action_targets_a_role_the_gateway_accepts_on_the_wire() {
         // `PATCH /conversations/:id/participants/:userId/role` only enumerates

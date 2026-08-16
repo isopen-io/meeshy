@@ -323,6 +323,51 @@ class ConversationMembersViewModelTest {
     }
 
     @Test
+    fun `banning a member drops the row instantly and sends the ban`() = runTest {
+        val repository = repo(
+            NetworkResult.Success(page(listOf(member("p1", userId = "u1"), member("p2", userId = "u2")), totalCount = 2)),
+        )
+        coEvery { repository.banParticipant(any(), any()) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.banMember(vm.state.value.members.first())
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p2")
+        assertThat(vm.state.value.memberCount).isEqualTo(1)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { repository.banParticipant("c1", "u1") }
+    }
+
+    @Test
+    fun `a refused ban puts the member back`() = runTest {
+        val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))
+        coEvery { repository.banParticipant(any(), any()) } returns
+            NetworkResult.Failure(ApiError("forbidden"))
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.banMember(vm.state.value.members.single())
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1")
+        assertThat(vm.state.value.actionFailed).isTrue()
+    }
+
+    @Test
+    fun `the viewer's admin role offers banning moderators but not other admins`() = runTest {
+        val vm = viewModel(repo(viewerRole = "admin"))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.canBan(member("p1", role = "moderator"))).isTrue()
+        assertThat(vm.state.value.canBan(member("p1", role = "admin"))).isFalse()
+    }
+
+    @Test
     fun `dismissing the action error clears it`() = runTest {
         val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))
         coEvery { repository.removeParticipant(any(), any()) } returns

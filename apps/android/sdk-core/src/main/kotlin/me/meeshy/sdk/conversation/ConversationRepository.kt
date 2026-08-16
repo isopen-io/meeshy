@@ -205,6 +205,14 @@ class ConversationRepository @Inject constructor(
         apiCallUnit { conversationApi.addParticipant(id, AddParticipantRequest(userId)) }
 
     /**
+     * Bans [userId] from [id] (server-enforced — the client only gates the affordance via
+     * [me.meeshy.sdk.model.MemberModeration.canBan]). Mirror of iOS
+     * `ConversationService.banParticipant`.
+     */
+    suspend fun banParticipant(id: String, userId: String): NetworkResult<Unit> =
+        apiCallUnit { conversationApi.banParticipant(id, userId) }
+
+    /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to
      * zero instantly and a `READ_RECEIPT` mutation joins its outbox lane (the
      * coalescer merges repeats). No-op when the conversation is unknown or

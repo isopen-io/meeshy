@@ -190,4 +190,8 @@
     <string name="add_participant_no_results">No user found</string>
     <string name="add_participant_member_badge">Member</string>
     <string name="add_participant_add_button">Add</string>
+    <string name="conversation_members_ban">Ban from conversation</string>
+    <string name="conversation_members_ban_title">Ban this member?</string>
+    <string name="conversation_members_ban_message">%1$s will be removed and won\'t be able to rejoin this conversation.</string>
+    <string name="conversation_members_ban_confirm">Ban</string>
 </resources>

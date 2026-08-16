@@ -51,6 +51,17 @@ object MemberModeration {
         else -> emptyList()
     }
 
+    /**
+     * Ban eligibility, ported from iOS `MemberManagementSection.availableActions`: never
+     * yourself, and the actor must both outrank the target AND hold admin-or-above — stricter
+     * than [canRemove], which lets an admin remove another admin and a moderator remove a
+     * plain member. Ranked by [MemberRole.level] rather than enum declaration order, since
+     * Kotlin's default `Comparable` for an enum follows declaration order (`CREATOR` first),
+     * the opposite of the role hierarchy.
+     */
+    fun canBan(actor: MemberRole, target: MemberRole, isSelf: Boolean): Boolean =
+        !isSelf && actor.level > target.level && actor.hasMinimumRole(MemberRole.ADMIN)
+
     private fun creatorActions(target: MemberRole): List<MemberRoleAction> = when (target) {
         MemberRole.MEMBER -> listOf(MemberRoleAction.PROMOTE_MODERATOR, MemberRoleAction.PROMOTE_ADMIN)
         MemberRole.MODERATOR -> listOf(MemberRoleAction.PROMOTE_ADMIN, MemberRoleAction.DEMOTE_MEMBER)
