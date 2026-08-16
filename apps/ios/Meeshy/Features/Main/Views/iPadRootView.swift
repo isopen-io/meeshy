@@ -346,11 +346,18 @@ struct iPadRootView: View {
         if let conversation = activeConversation {
             ConversationView(
                 conversation: conversation,
-                replyContext: router.pendingReplyContext
+                replyContext: router.pendingReplyContext,
+                // I-075 — override éphémère, jamais persistant : consommé ici
+                // comme `pendingReplyContext` ci-dessus, jamais écrit en
+                // préférence.
+                forcedReadingMode: router.pendingForcedReadingMode
             )
             .id(conversation.id)
             .navigationBarHidden(true)
-            .onAppear { router.pendingReplyContext = nil }
+            .onAppear {
+                router.pendingReplyContext = nil
+                router.pendingForcedReadingMode = nil
+            }
         } else if let route = rightPanelRoute {
             // `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink`
             // interne à un écran du panneau est inerte (lignes de
