@@ -45,8 +45,19 @@
 > (assembleDebug + testDebugUnitTest, all modules) run before any push.
 >
 > `tasks/lane-cursor.md` → re-read fresh at merge time (see the recurring note on this pattern in
-> the `reels-realtime-room` entry further below) → advances from whatever `streak` `main` carries
-> at merge to `lane=ANDROID android_streak=<confirmed at merge> last_run=add-participant-sheet`.
+> the `reels-realtime-room` entry further below) → unchanged from before this PR's CI wait
+> (`streak=2`), so this run advances it cleanly to `lane=ANDROID android_streak=3
+> last_run=add-participant-sheet`.
+>
+> **`Test shared` failed on this PR's CI too — 3rd consecutive Android run** — same root cause
+> as the previous two: `focus-curve.test.ts` (Focal curve-math), confirmed broken on `main`'s own
+> CI across multiple consecutive commits during this PR's wait (`d87f59b34`, `0612c8caac`, both
+> `conclusion: failure`) — an actively-in-progress concurrent Focal tuning session (the numeric
+> assertion targets themselves kept shifting between runs), not a one-off regression. Landed for
+> real between this PR opening and merging (`packages/shared/utils/focus-curve.ts` touched again
+> by the merge of PR #3102). `Android` (the actual merge gate) was green all three times — noting
+> this explicitly a third time in case the pattern is worth a future dedicated look (e.g. should
+> `Test shared` even run on an `apps/android`-only diff at all?), not because it blocked anything.
 
 > On 2026-08-16 **Story-viewer realtime room shipped — the last of three deferred room-join
 > follow-ups, all now closed** (slice `story-viewer-realtime-room`). `gh pr list --state open
