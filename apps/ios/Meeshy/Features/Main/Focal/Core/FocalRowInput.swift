@@ -124,6 +124,45 @@ struct FocalRowInput: Equatable {
     /// justification et la garantie de compatibilité du site de montage.
     let effects: MessageEffects
 
+    // MARK: - Focus (§4.6) — la rangée ÉLUE se magnifie
+
+    /// Cette rangée est l'élue du pass (`FocalScrollPass.focusedLocalId`).
+    ///
+    /// **Ce champ manquait, et c'est ce qui rendait §4.6 MORTE.** L'hôte
+    /// appelle déjà `reconfigureFocusTypographyAtScrollStop()` sur le
+    /// changement d'élu (ancienne + nouvelle cellule, jamais plus), aux deux
+    /// arrêts de défilement ET au changement de mode — mais aucun champ ne
+    /// portait le focus jusqu'ici, donc la reconfiguration reproduisait un
+    /// contenu bit-à-bit identique et la « typographie 15→16 » du contrat
+    /// n'était jamais rendue. Le signal entre ici, par la porte que le gate
+    /// de re-render (`==`) surveille déjà.
+    ///
+    /// Écrit UNIQUEMENT à l'arrêt du défilement (jamais par frame) : la
+    /// magnification est un changement de LAYOUT, le pass reste pur
+    /// compositor (§4.6, « la typographie n'est pas de son ressort »).
+    let isFocused: Bool
+
+    /// Date d'envoi — la rangée élue affiche « jour · heure », pas l'heure
+    /// seule. `BubbleContent.Meta` ne porte qu'un `timeString` déjà formaté
+    /// (aucun `Date`), et le contrat interdit de refabriquer un formateur :
+    /// la date brute entre donc ici, où l'hôte l'a sous la main
+    /// (`message.createdAt`).
+    let sentAt: Date
+
+    /// Le défilement est en cours ⇒ les heures des rangées non focalisées
+    /// se montrent, puis s'effacent à l'arrêt.
+    ///
+    /// Remplace la pilule flottante « jour · heure » (`ScrollTimePillOverlay`),
+    /// qui affichait UN horodatage détaché en haut d'écran pendant que chaque
+    /// rangée portait déjà le sien en permanence — trois chromes temporels
+    /// concurrents pour une seule information. La loi de fenêtre
+    /// (`ScrollTimePillLaw`, `lingerMs = 900`) est CONSERVÉE et pilote
+    /// désormais ce booléen : même tempo, autre support.
+    ///
+    /// La rangée focalisée ne le lit pas — elle montre date ET heure en
+    /// permanence (`isFocused`), défilement ou pas.
+    let revealsTimestamp: Bool
+
     init(
         localId: String,
         serverId: String?,
@@ -156,7 +195,10 @@ struct FocalRowInput: Equatable {
         translatedAudios: [MessageTranslatedAudio],
         allAudioItems: [ConversationViewModel.AudioItem],
         conversationName: String,
-        effects: MessageEffects = .none
+        effects: MessageEffects = .none,
+        isFocused: Bool = false,
+        sentAt: Date = .distantPast,
+        revealsTimestamp: Bool = false
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -190,6 +232,9 @@ struct FocalRowInput: Equatable {
         self.allAudioItems = allAudioItems
         self.conversationName = conversationName
         self.effects = effects
+        self.isFocused = isFocused
+        self.sentAt = sentAt
+        self.revealsTimestamp = revealsTimestamp
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -234,6 +279,9 @@ struct FocalRowInput: Equatable {
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
             && lhs.conversationName == rhs.conversationName
             && lhs.effects == rhs.effects
+            && lhs.isFocused == rhs.isFocused
+            && lhs.sentAt == rhs.sentAt
+            && lhs.revealsTimestamp == rhs.revealsTimestamp
     }
 }
 
@@ -258,6 +306,12 @@ struct FocalRowActions {
     /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
     /// dans le dépôt) — voir doc de tête de fichier.
     var onOpenProfile: ((ProfileSheetUser) -> Void)?
+    /// Ouvre le menu complet du message (édition, suppression, signalement,
+    /// traduction détaillée…) depuis la barre de contrôles de la rangée élue.
+    /// Câblé sur le MÊME gestionnaire que l'appui long — la barre est une
+    /// affordance supplémentaire vers le menu existant, jamais une seconde
+    /// liste d'actions.
+    var onMore: ((String) -> Void)?
     var onViewStory: ((String) -> Void)?
     var onCallBack: ((String) -> Void)?
     var onLongPressCallDetail: ((String) -> Void)?

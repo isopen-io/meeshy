@@ -35,12 +35,14 @@ import MeeshyUI
 final class FocalFocusDecoration {
 
     private static let cardLayerName = "focal.focus.card"
+    private static let haloLayerName = "focal.focus.halo"
     private static let flashLayerName = "focal.focus.flash"
     private static let flashAnimationKey = "focal.focus.flash.opacity"
 
     /// Clés FAIBLES : une cellule relâchée par la collection ne doit pas être
     /// retenue par la décoration (et son layer part avec elle).
     private let cards = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
+    private let halos = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
     private let flashes = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
 
     // MARK: - Mémoïsation des couleurs (discipline 1)
@@ -51,6 +53,7 @@ final class FocalFocusDecoration {
     private var cachedAccentKey: String?
     private var cachedAccentColor: CGColor?
     private var cachedIsDark: Bool?
+    private var cachedSurfaceKey: String?
     private var cachedSurfaceColor: CGColor?
 
     init() {}
@@ -70,15 +73,39 @@ final class FocalFocusDecoration {
             if let existing = cards.object(forKey: cell) {
                 withoutImplicitAnimations { existing.opacity = 0 }
             }
+            if let existing = halos.object(forKey: cell) {
+                withoutImplicitAnimations { existing.opacity = 0 }
+            }
             return
         }
 
         let layer = cardLayer(for: cell)
+        let halo = haloLayer(for: cell)
         let accent = accentColor(accentHex)
-        let surface = surfaceColor(isDark: isDark)
+        let surface = surfaceColor(accentHex, isDark: isDark)
         let frame = decorationFrame(for: cell)
 
         withoutImplicitAnimations {
+            // Halo — le « magnifié » du cadre : un second anneau accent très
+            // dilué, posé LÉGÈREMENT EN DEHORS de la carte. Il donne au bord
+            // sa présence sans épaissir l'anneau normatif (`ringSize` est une
+            // cote GELÉE du token `thread.focusCard`, jamais retouchée ici).
+            //
+            // Un `shadow` aurait produit le même halo en une ligne — refusé :
+            // sans `shadowPath`, CoreAnimation le dérive du canal alpha en
+            // passe HORS ÉCRAN, à chaque frame d'un pass qui tourne à 120 Hz ;
+            // avec `shadowPath`, il faudrait allouer un `CGPath` neuf par
+            // frame (la carte est re-cadrée à chaque passe, self-sizing).
+            // Les deux violent « le pass n'alloue pas et ne déclenche aucun
+            // relayout ». Un second `CALayer` réutilisé ne coûte qu'une
+            // écriture de `frame`.
+            halo.frame = frame.insetBy(dx: -Self.haloOutset, dy: -Self.haloOutset)
+            halo.cornerRadius = FocalMetrics.FocusCard.radius + Self.haloOutset
+            halo.cornerCurve = .continuous
+            halo.borderWidth = Self.haloWidth
+            halo.borderColor = accent
+            halo.opacity = Self.haloOpacity
+
             layer.frame = frame
             layer.cornerRadius = FocalMetrics.FocusCard.radius
             layer.cornerCurve = .continuous
@@ -89,6 +116,14 @@ final class FocalFocusDecoration {
         }
     }
 
+    /// Débord du halo hors de la carte, sa largeur, son opacité. Aucune de ces
+    /// trois cotes n'existe dans `thread.focusCard` (le token ne décrit qu'UN
+    /// anneau) — nommées ici plutôt que laissées en littéraux orphelins
+    /// (garde R15), sans revendiquer de miroir `thread.*`.
+    private static let haloOutset: CGFloat = 3
+    private static let haloWidth: CGFloat = 3
+    private static let haloOpacity: Float = 0.22
+
     /// Retire toute décoration de `cell` — appelée par
     /// `FocalScrollPass.reset(_:)`, donc en première ligne de chaque
     /// registration de cellule (aucun `prepareForReuse` n'existe : sans ce
@@ -98,6 +133,10 @@ final class FocalFocusDecoration {
         if let card = cards.object(forKey: cell) {
             card.removeFromSuperlayer()
             cards.removeObject(forKey: cell)
+        }
+        if let halo = halos.object(forKey: cell) {
+            halo.removeFromSuperlayer()
+            halos.removeObject(forKey: cell)
         }
         if let flash = flashes.object(forKey: cell) {
             flash.removeAllAnimations()
@@ -207,6 +246,23 @@ final class FocalFocusDecoration {
         return layer
     }
 
+    /// Le halo vit SOUS la carte (index 0) : la carte, son anneau net et son
+    /// fond le recouvrent, seul le débord reste visible.
+    private func haloLayer(for cell: UICollectionViewCell) -> CALayer {
+        if let existing = halos.object(forKey: cell) {
+            if existing.superlayer !== cell.contentView.layer {
+                cell.contentView.layer.insertSublayer(existing, at: 0)
+            }
+            return existing
+        }
+        let layer = CALayer()
+        layer.name = Self.haloLayerName
+        layer.opacity = 0
+        cell.contentView.layer.insertSublayer(layer, at: 0)
+        halos.setObject(layer, forKey: cell)
+        return layer
+    }
+
     private func flashLayer(for cell: UICollectionViewCell) -> CALayer {
         if let existing = flashes.object(forKey: cell) {
             if existing.superlayer !== cell.contentView.layer {
@@ -246,9 +302,26 @@ final class FocalFocusDecoration {
         return color
     }
 
-    private func surfaceColor(isDark: Bool) -> CGColor {
-        if let cached = cachedSurfaceColor, cachedIsDark == isDark { return cached }
-        let color = UIColor(MeeshyColors.backgroundSecondary(isDark: isDark)).cgColor
+    /// Fond de la carte — **teinte d'accent TRANSLUCIDE**, plus
+    /// `backgroundSecondary` opaque.
+    ///
+    /// L'ancien fond opaque était la vraie cause de l'effet « boîte » : il
+    /// posait un rectangle plein derrière la rangée élue, si bien que la
+    /// couleur de la conversation ne se lisait que sur 1,5 pt d'anneau
+    /// pendant qu'un aplat neutre occupait toute la surface. Une teinte
+    /// d'accent très diluée fait exactement l'inverse — la conversation
+    /// colore la carte entière, sans jamais peser sur le texte.
+    ///
+    /// La clé de mémoïsation combine accent ET thème : mémoïser sur le seul
+    /// `isDark` (ce que faisait la version opaque, qui ne dépendait que de
+    /// lui) rendrait la couleur insensible à un changement d'accent.
+    private func surfaceColor(_ hex: String?, isDark: Bool) -> CGColor {
+        let key = "\(hex ?? "")|\(isDark)"
+        if let cached = cachedSurfaceColor, cachedSurfaceKey == key { return cached }
+        let base = (hex.map { $0.isEmpty } ?? true) ? MeeshyColors.brandPrimary : Color(hex: hex ?? "")
+        let alpha = isDark ? FocalMetrics.FocusCard.surfaceDarkAlpha : FocalMetrics.FocusCard.surfaceLightAlpha
+        let color = UIColor(base).withAlphaComponent(alpha).cgColor
+        cachedSurfaceKey = key
         cachedIsDark = isDark
         cachedSurfaceColor = color
         return color

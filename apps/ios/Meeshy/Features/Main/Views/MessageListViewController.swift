@@ -304,6 +304,12 @@ final class MessageListViewController: UIViewController {
     private var scrollTimePillHost: UIHostingController<AnyView>?
     private var scrollTimePillTopConstraint: NSLayoutConstraint?
 
+    /// Révélé des heures pendant le défilement — le successeur de la pilule
+    /// flottante. Alimenté par la MÊME loi (`ScrollTimePillLaw`) et au MÊME
+    /// site (§4.8 site 1), donc aucun observateur neuf ; seul le support
+    /// change. Injecté dans chaque cellule par `environmentObject`.
+    let timestampReveal = FocalTimestampRevealState()
+
     init(
         store: MessageStore,
         currentUserId: String,
@@ -603,13 +609,22 @@ final class MessageListViewController: UIViewController {
     /// `.bubbles` ⇒ aucun `UIHostingController` enfant supplémentaire
     /// (contrat §WS-6 « bit-à-bit identique »). Appelée depuis `viewDidLoad`
     /// et depuis le `didSet` de `readingMode`.
+    /// **La pilule flottante n'est plus montée — nulle part.**
+    ///
+    /// Elle datait un POINT DE L'ÉCRAN (« Mercredi · 17:42 » figé en haut),
+    /// pendant que le sticker de jour occupait déjà la bande au-dessus et
+    /// que chaque rangée portait son heure en permanence : trois chromes
+    /// temporels concurrents pour une seule question, « quand ce
+    /// message-ci ? ». Seule la rangée sait y répondre.
+    ///
+    /// `ScrollTimePillState` et sa loi restent en place et continuent d'être
+    /// alimentés (`noteScrollTimePillActivity`) — c'est cette même loi qui
+    /// pilote désormais `timestampReveal`. Rien n'est réimplémenté ; seul le
+    /// SUPPORT de l'information change. Le démontage est inconditionnel pour
+    /// qu'un contrôleur recyclé depuis un mode antérieur n'en garde pas une
+    /// à l'écran.
     private func updateScrollTimePillMounting() {
-        if readingMode != .bubbles {
-            guard scrollTimePillHost == nil else { return }
-            configureScrollTimePillOverlay()
-        } else {
-            teardownScrollTimePillOverlay()
-        }
+        teardownScrollTimePillOverlay()
     }
 
     /// Second `UIHostingController` enfant, MÊME topologie que
@@ -677,6 +692,12 @@ final class MessageListViewController: UIViewController {
             ScrollTimePillLabelFormatter.label(for: $0, now: Date(), calendar: .current, locale: .current)
         }
         scrollTimePillState.note(.scrolled(at: Double(Self.nowMs())), label: label)
+        // Même événement, même horloge, même loi — l'autre consommateur
+        // (§WS-2 amendement A4 : « une loi, deux libellés », ici un
+        // troisième support). C'est ce qui garantit que les heures des
+        // rangées s'ouvrent et se referment EXACTEMENT sur le tempo qu'avait
+        // la pilule, sans réimplémenter la fenêtre.
+        timestampReveal.note(.scrolled(at: Double(Self.nowMs())))
     }
 
     private func topVisibleMessageDate() -> Date? {
@@ -1225,7 +1246,18 @@ final class MessageListViewController: UIViewController {
                     transcription: transcription?.text,
                     translatedAudios: translatedAudios,
                     allAudioItems: allAudioItems,
-                    conversationName: conversationName ?? ""
+                    conversationName: conversationName ?? "",
+                    // §4.6 — la rangée ÉLUE se magnifie. Lu ici, à la
+                    // configuration de cellule, donc UNIQUEMENT quand l'hôte
+                    // reconfigure : à l'arrêt du défilement et au changement
+                    // de mode (`reconfigureFocusTypographyAtScrollStop`),
+                    // jamais par frame. Le pass reste pur compositor.
+                    //
+                    // `.focal` SEUL : Script est plat par construction (WS-4),
+                    // il n'élit rien à magnifier.
+                    isFocused: self.readingMode == .focal
+                        && self.focalPass.focusedLocalId == localId,
+                    sentAt: message.createdAt
                 )
                 var focalActions = FocalRowActions()
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
@@ -1251,6 +1283,11 @@ final class MessageListViewController: UIViewController {
                     self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                 }
                 focalActions.onOpenProfile = openProfileHandler
+                // Le « … » de la barre de contrôles ouvre EXACTEMENT le menu
+                // de l'appui long — même gestionnaire, donc même liste
+                // d'actions (édition, suppression, signalement, traduction),
+                // sans qu'aucune seconde liste n'existe à maintenir.
+                focalActions.onMore = { _ in longPressHandler?(messageId) }
                 focalActions.onViewStory = (senderRingState != .none) ? { _ in viewSenderStoryHandler?(senderId) } : nil
                 focalActions.onCallBack = { _ in
                     guard let summary = message.callSummary else { return }
@@ -1288,6 +1325,12 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(stories)
                 .environmentObject(statuses)
                 .environmentObject(convList)
+                // Révélé des heures au défilement (successeur de la pilule
+                // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
+                // une `Text` et rien d'autre — donc son basculement
+                // n'invalide jamais la rangée entière ni ne traverse le gate
+                // `EquatableFocalRow`.
+                .environmentObject(timestampReveal)
                 // Counter-flip to undo the parent collectionView.transform.
                 .scaleEffect(x: 1, y: -1)
                 // iOS 26+ : `.contextMenu` NATIF + aperçu = la VRAIE bulle
@@ -1999,6 +2042,7 @@ extension MessageListViewController {
                 // aucun observateur/timer NEUF introduit pour la pilule.
                 if self.readingMode != .bubbles {
                     self.scrollTimePillState.note(.tick(at: Double(Self.nowMs())))
+                    self.timestampReveal.note(.tick(at: Double(Self.nowMs())))
                 }
                 if self.wantsImmediateSeenFlush {
                     self.wantsImmediateSeenFlush = false

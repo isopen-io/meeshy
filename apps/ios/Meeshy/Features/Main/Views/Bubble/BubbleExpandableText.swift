@@ -39,6 +39,17 @@ struct BubbleExpandableText: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
     var trackedLinks: [String: String] = [:]
+    /// Taille de rendu du texte. `15` = la cote de bulle historique
+    /// (`thread.line2.size`), valeur par DÉFAUT : tous les sites d'appel
+    /// existants gardent leur rendu bit-à-bit sans rien passer.
+    ///
+    /// Paramétrée pour la rangée ÉLUE du mode Focal, dont §4.6 exige le
+    /// passage à `16`. Un `.font()` externe ne pouvait pas l'obtenir :
+    /// `MessageTextRenderer.render` produit une `AttributedString` dont
+    /// chaque run porte sa police explicite, et une police posée par le
+    /// parent ne surcharge pas des runs attribués — l'écart aurait été un
+    /// no-op silencieux.
+    var fontSize: CGFloat = 15
 
     var onLongPress: (() -> Void)? = nil
 
@@ -54,7 +65,8 @@ struct BubbleExpandableText: View, Equatable {
         lhs.hashtagTint == rhs.hashtagTint &&
         lhs.linkTint == rhs.linkTint &&
         lhs.isDark == rhs.isDark &&
-        lhs.trackedLinks == rhs.trackedLinks
+        lhs.trackedLinks == rhs.trackedLinks &&
+        lhs.fontSize == rhs.fontSize
     }
 
     var body: some View {
@@ -64,7 +76,7 @@ struct BubbleExpandableText: View, Equatable {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+                MessageTextRenderer.render(truncated + "...", fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
                     // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
@@ -118,7 +130,7 @@ struct BubbleExpandableText: View, Equatable {
             // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
             // son rôle et disparaît (spec : « déplier uniquement et disparaître,
             // pas de repli »). `isExpanded` reste local à la sous-vue.
-            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+            MessageTextRenderer.render(content, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
                 // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le

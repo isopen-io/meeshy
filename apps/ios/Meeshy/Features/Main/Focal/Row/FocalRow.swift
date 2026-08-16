@@ -33,6 +33,21 @@ struct FocalRow: View {
 
     private var content: BubbleContent { input.content }
 
+    /// Retrait du texte — suit la pastille, qui grandit en focus (§4.6).
+    /// `FocalMetrics.Text.indent` (29) reste le cas nominal ; l'élue prend
+    /// `FocalMetrics.Focus.textIndent`, dérivé de la MÊME gouttière de 7 pt,
+    /// jamais un second littéral.
+    private var indent: CGFloat {
+        input.isFocused ? FocalMetrics.Focus.textIndent : FocalMetrics.Text.indent
+    }
+
+    /// « Typographie 15 → 16 » (§4.6) — l'écart que le contrat nomme depuis
+    /// toujours et que rien ne rendait, faute d'un champ de focus sur
+    /// `FocalRowInput`.
+    private var textSize: CGFloat {
+        input.isFocused ? FocalMetrics.Focus.textSize : FocalMetrics.Text.size
+    }
+
     var body: some View {
         Group {
             switch content.kind {
@@ -93,6 +108,8 @@ struct FocalRow: View {
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
+                    isFocused: input.isFocused,
+                    sentAt: input.sentAt,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
                     // décision finale (précalculée par le mux qui construit
                     // `FocalRowInput`, contrat §3.6) — cette rangée ne relit
@@ -135,6 +152,9 @@ struct FocalRow: View {
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
+                    indent: indent,
+                    isFocused: input.isFocused,
+                    sentAt: input.sentAt,
                     // F-083ter (F10) — « modifié » visible en rangée de suite.
                     editedAt: content.editedAt,
                     isEditSaving: content.isEditSaving,
@@ -142,6 +162,14 @@ struct FocalRow: View {
                 )
             }
         }
+        // « Les contrôles par-dessus le cadre » : la barre chevauche le bord
+        // BAS de la carte de focus. `padding` réserve sa place dans la
+        // hauteur de la rangée (sinon elle recouvrirait la dernière ligne du
+        // message) ; `offset` la redescend ensuite pour l'asseoir SUR
+        // l'anneau. Rendue seulement pour l'élue — une rangée ordinaire ne
+        // paye rien, pas même une vue vide.
+        .padding(.bottom, input.isFocused ? FocalMetrics.Focus.controlBarReservedHeight : 0)
+        .overlay(alignment: .bottomLeading) { focusControlBar }
         // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
         // contenu » — même overlay que le chemin bulle
         // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
@@ -205,7 +233,47 @@ struct FocalRow: View {
                 onShowReactions: actions.onShowReactions
             )
             .equatable()
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, indent)
+        }
+    }
+
+    // MARK: - §4.6 — les contrôles de la rangée élue
+
+    /// Barre de contrôles de l'élue, assise sur le bord bas de la carte.
+    ///
+    /// Ne se monte QUE pour l'élue : `@ViewBuilder` + `if` (jamais un
+    /// ternaire ni un `.opacity(0)`), pour qu'une rangée ordinaire
+    /// n'instancie même pas la vue — la même discipline que le mux de
+    /// cellule de l'hôte.
+    @ViewBuilder
+    private var focusControlBar: some View {
+        if input.isFocused {
+            FocalFocusControlBar(
+                accentHex: input.accentHex,
+                isDark: input.isDark,
+                availableFlags: content.translation?.availableFlags ?? [],
+                activeFlagCode: input.secondaryLangCode,
+                onReact: { emoji in actions.onToggleReaction?(emoji) },
+                onExpandPicker: { actions.onOpenReactPicker?(content.messageId) },
+                onFlagTap: { code in
+                    // Même règle que la bulle : re-taper la langue ouverte la
+                    // referme. La décision vit dans
+                    // `BubbleLanguageFlagController` côté bulle ; ici la
+                    // rangée ne porte AUCUN état de langue (contrainte dure
+                    // §WS-4), elle renvoie la cible et le ViewModel tranche.
+                    actions.onSetSecondaryLanguage?(
+                        content.messageId,
+                        code == input.secondaryLangCode ? nil : code
+                    )
+                },
+                onMore: { actions.onMore?(input.localId) }
+            )
+            .equatable()
+            .padding(.leading, indent)
+            // Assied la barre SUR l'anneau : la carte est encartée de
+            // `FocusCard.marginVertical` sous le bord de la cellule, la
+            // barre descend de la moitié de sa hauteur pour le chevaucher.
+            .offset(y: FocalMetrics.Focus.controlBarReservedHeight / 2 - FocalMetrics.FocusCard.marginVertical)
         }
     }
 
@@ -274,7 +342,7 @@ struct FocalRow: View {
         Text(content.text?.raw ?? "")
             .font(MeeshyFont.relative(content.text?.emojiFontSize ?? FocalMetrics.Text.size))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, indent)
     }
 
     /// `BubbleExpandableText` (§1.3, lu jamais modifié) résout déjà `15`pt
@@ -301,14 +369,15 @@ struct FocalRow: View {
                 hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
                 linkTint: Color(hex: input.accentHex),
                 isDark: input.isDark,
-                trackedLinks: content.text?.trackedLinks ?? [:]
+                trackedLinks: content.text?.trackedLinks ?? [:],
+                fontSize: textSize
             )
             .equatable()
-            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
 
             translationChip
         }
-        .padding(.leading, FocalMetrics.Text.indent)
+        .padding(.leading, indent)
     }
 
     /// « Apparition du chip 🌐 en méta » (F06) quand le texte affiché EST
