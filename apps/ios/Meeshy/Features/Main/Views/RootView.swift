@@ -614,6 +614,10 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        // Humeur / anneau de story par EnvironmentValues : les feuilles (dont la
+        // feuille de commentaires) en héritent, contrairement aux
+        // EnvironmentObject ci-dessus. Cf. SocialChromeEnvironment.swift.
+        .meeshySocialChrome(status: statusViewModel, story: storyViewModel, storyViewer: storyViewerCoordinator)
         .environment(\.zoomTransitionNamespace, storyZoomNamespace)
         // In-app notification preview: long-press / pull-down on a toast opens
         // the conversation (last messages + simple composer) over the current

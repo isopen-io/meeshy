@@ -44,8 +44,6 @@ struct ThreadedCommentSection: View {
     /// porté par le parent ; ici on teinte la rangée de la RÉPONSE ciblée.
     var highlightedCommentId: String? = nil
 
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// Renvoie un handler de suppression pour `c` SEULEMENT si l'utilisateur
@@ -218,8 +216,12 @@ struct CommentsSheetView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var storyViewModel: StoryViewModel
+    // Chrome social par EnvironmentValues, JAMAIS par @EnvironmentObject : cette
+    // vue est toujours présentée en feuille, et une feuille n'hérite pas des
+    // EnvironmentObject de son présentateur (cf. SocialChromeEnvironment.swift).
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyStoryRingResolver) private var storyRingResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     @State private var replyingTo: FeedComment? = nil
     /// @mention auto-injectée par `beginReply` lors d'une réponse à une réponse —
     /// suivie pour pouvoir la retirer proprement si on change de cible.
@@ -617,11 +619,11 @@ struct CommentsSheetView: View {
                                                 postId: post.id, commentId: target.id, targetLanguage: lang)
                                         }
                                     },
-                                    moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
-                                    storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
+                                    moodEmoji: moodEmojiResolver?(comment.authorId),
+                                    storyState: storyRingResolver?(comment.authorId) ?? .none,
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
-                                    replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                                    replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
+                                    replyMoodResolver: { moodEmojiResolver?($0) },
+                                    replyStoryResolver: { storyRingResolver?($0) ?? .none },
                                     replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
                                     hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
                                     onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
@@ -923,8 +925,8 @@ struct CommentsSheetView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
@@ -1299,9 +1301,9 @@ struct CommentsSheetView: View {
                     name: post.author,
                     context: .postAuthor,
                     accentColor: post.authorColor,
-                    moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                    moodEmoji: moodEmojiResolver?(post.authorId),
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
-                    onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
+                    onMoodTap: moodTapResolver?(post.authorId),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
@@ -2114,7 +2116,8 @@ struct CommentRowView: View, Equatable {
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var statusViewModel: StatusViewModel
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
@@ -2455,8 +2458,8 @@ struct CommentRowView: View, Equatable {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,

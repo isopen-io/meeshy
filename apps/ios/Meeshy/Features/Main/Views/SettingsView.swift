@@ -120,7 +120,10 @@ struct SettingsView: View {
             NotificationSettingsView()
         }
         .sheet(isPresented: $showSecurity) {
+            // Une feuille n'hérite pas des EnvironmentObject de son
+            // présentateur : `SecurityView` lit `authManager`.
             SecurityView()
+                .environmentObject(authManager)
         }
         .sheet(isPresented: $showBlockedUsers) {
             BlockedUsersView()
