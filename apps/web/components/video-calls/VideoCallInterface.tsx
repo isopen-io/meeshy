@@ -614,7 +614,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const handleParticipantLeft = (event: unknown) => {
       if (event.callId !== callId) return;
 
-      const participantId = event.userId || event.anonymousId;
+      // Vague 133 — `CallParticipantLeftEvent` has no `anonymousId` field
+      // (see packages/shared/types/video-call.ts); that fallback was always
+      // dead. `participantId` (the DB CallParticipant id) is the one field
+      // the event always carries — fall back to it instead so a payload
+      // whose optional `userId` is absent still disconnects/cleans up the
+      // right tile instead of silently no-oping.
+      const participantId = event.userId || event.participantId;
       if (!participantId) return;
 
       logger.info('[VideoCallInterface]', 'Participant left event received', { participantId });
@@ -694,11 +700,18 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Vague 131 — `remoteParticipant` above is an arbitrary "first non-self"
   // pick, correct only for a 1:1 call. `remoteQualityDegraded`/
   // `remoteScreenCapturing` are call-WIDE aggregates (Vague 129) but each
-  // alert is still ABOUT a specific peer (`event.participantId`, already
-  // relayed by the gateway and exposed by useRemoteCallAlerts below) — in a
-  // group call that peer is not necessarily `remoteParticipant`. Resolve
-  // each alert's name independently instead of reusing the same guess for
-  // both.
+  // alert is still ABOUT a specific peer (already relayed by the gateway and
+  // exposed by useRemoteCallAlerts below) — in a group call that peer is not
+  // necessarily `remoteParticipant`. Resolve each alert's name independently
+  // instead of reusing the same guess for both.
+  //
+  // The id passed in here is `useRemoteCallAlerts`' resolved identity
+  // (`event.userId ?? event.participantId`, Vague 132) — a real `User.id`
+  // whenever the gateway sends one, matching what every roster entry's
+  // `.userId` already carries. It is NOT the raw `CallScreenCaptureEvent`/
+  // `CallQualityAlertEvent.participantId` field (a `Participant.id`, which
+  // never matches this roster lookup for a registered peer) — that
+  // translation must happen upstream in the hook, not here.
   const resolveParticipantName = (participantId: string | null | undefined): string =>
     (participantId
       ? currentCall?.participants?.find((p) => (p.userId || p.participantId) === participantId)?.username

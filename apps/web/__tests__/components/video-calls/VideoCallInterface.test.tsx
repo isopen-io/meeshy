@@ -481,6 +481,60 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
+  // Vague 133 — `CallParticipantLeftEvent.userId` is optional (the gateway's
+  // disconnect-grace-expiry error-fallback path omitted it entirely before
+  // this wave's gateway fix). The handler's identity resolution used to fall
+  // back to a nonexistent `event.anonymousId` field, so any payload missing
+  // `userId` silently no-op'd — no disconnected marker, no cleanup, no
+  // `offersCreatedFor` release. It must fall back to the always-present
+  // `participantId` (the DB CallParticipant id) instead.
+  describe('PARTICIPANT_LEFT falls back to participantId when userId is absent (Vague 133)', () => {
+    it('marks the participant disconnected and cleans up using participantId alone', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+        storeState.peerConnections = new Map();
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
+        // No `userId` — exactly the shape emitted by the gateway's
+        // forceCleanupParticipationAfterLeaveFailure fallback before this
+        // wave's gateway fix (still a possibility from an older gateway
+        // build, hence the client-side fallback too).
+        handleParticipantLeft({ callId: 'call1', participantId: 'peer1' });
+        jest.advanceTimersByTime(2000);
+
+        expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
+        expect(webrtc.removeParticipant).toHaveBeenCalledWith('peer1');
+      } finally {
+        jest.useRealTimers();
+        storeState.peerConnections = new Map();
+        storeState.remoteStreams = new Map();
+      }
+    });
+
+    it('still no-ops when neither userId nor participantId is present', () => {
+      jest.useFakeTimers();
+      try {
+        const fakeSocket = { on: jest.fn(), off: jest.fn() };
+        (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+        render(<VideoCallInterface callId="call1" />);
+
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
+        handleParticipantLeft({ callId: 'call1' });
+        jest.advanceTimersByTime(2000);
+
+        expect(storeState.removeRemoteStream).not.toHaveBeenCalled();
+        expect(webrtc.removeParticipant).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   // Group calls used to be a star, not a mesh: the offer-creation effect
   // bailed out entirely unless `currentCall.initiatorId === user.id`, so only
   // the initiator ever called `createOffer`. Two non-initiator participants

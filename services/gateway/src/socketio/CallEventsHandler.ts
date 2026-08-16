@@ -785,6 +785,15 @@ export class CallEventsHandler {
       {
         callId: participation.callSessionId,
         participantId: participation.id,
+        // Vague 132 — this emit omitted `userId` (call:leave and REST
+        // leave/kick already set it; Vague 133 closed the last gap, the
+        // forceCleanupParticipationAfterLeaveFailure fallback below). Without
+        // it, a client tracking per-participant state keyed by `userId`
+        // (e.g. `useRemoteCallAlerts`' screen-capturing Set) could never
+        // clear a registered peer's entry on a disconnect-grace expiry
+        // specifically. `userId` is already the resolved caller identity
+        // passed into this method — no extra lookup needed.
+        userId,
         mode: participation.callSession.mode
       } as CallParticipantLeftEvent
     );
@@ -925,6 +934,16 @@ export class CallEventsHandler {
         {
           callId: participation.callSessionId,
           participantId: participation.id,
+          // Vague 133 — Vague 132's own comment above claimed
+          // broadcastParticipantLeftResult was "the only PARTICIPANT_LEFT
+          // emit site that omitted `userId`", but this sibling fallback
+          // (reached when leaveCall itself throws — DB blip, validation
+          // failure) still omitted it. `userId` is already in scope (see
+          // destructure above) — every client that resolves identity by
+          // `userId` (VideoCallInterface, useRemoteCallAlerts) silently
+          // no-ops specifically on this fallback path, leaving the other
+          // participants' UI with a stale tile/zombie RTCPeerConnection.
+          userId,
           mode: participation.callSession.mode
         } as CallParticipantLeftEvent
       );
@@ -1191,34 +1210,64 @@ export class CallEventsHandler {
   }
 
   /**
-   * Resolve the caller's own CallParticipant.participantId, verifying they
-   * are an ACTIVE participant of THIS specific call — unlike
+   * Resolve the caller's own CallParticipant row, verifying they are an
+   * ACTIVE participant of THIS specific call — unlike
    * `resolveParticipantIdFromCall`, which only checks conversation
    * membership. A conversation member who never joined (or already left)
-   * this call must not pass authorization checks
-   * gating writes against call state/stats (quality reports, media toggles,
-   * background/foreground, reconnect status).
+   * this call must not pass authorization checks gating writes against call
+   * state/stats (quality reports, media toggles, background/foreground,
+   * reconnect status).
+   *
+   * Returns BOTH identifier spaces the caller is known by:
+   * - `participantId` — `CallParticipant.participantId`, the FK to the
+   *   conversation's `Participant.id` row. Legacy value, still relayed
+   *   verbatim on `call:quality-alert`/`call:screen-capture-alert` for
+   *   backward compat.
+   * - `userId` — `Participant.userId` for a registered user, falling back to
+   *   `participantId` for an anonymous guest (no `User` row to point at).
+   *   Mirrors `toCallParticipantResponse`'s own `userId` derivation exactly
+   *   (`call-session-response.ts`), which is what every call ROSTER entry's
+   *   `.userId` is populated from — a side-channel alert that only carries
+   *   `participantId` can never match a roster lookup keyed by `userId` for a
+   *   registered peer (Vague 132: both alert overlays silently rendered a
+   *   blank peer name because of exactly this mismatch).
    */
-  private async resolveActiveCallParticipantId(userId: string, callId: string): Promise<string | null> {
+  private async resolveActiveCallParticipant(
+    userId: string,
+    callId: string
+  ): Promise<{ participantId: string; userId: string } | null> {
     try {
       const callSession = await this.callService.getCallSession(callId);
       const activeParticipant = callSession.participants.find(
         (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
       );
-      return activeParticipant?.participantId ?? null;
+      if (!activeParticipant) return null;
+      return {
+        participantId: activeParticipant.participantId,
+        userId: activeParticipant.participant?.userId ?? activeParticipant.participantId
+      };
     } catch (error) {
       // A genuine "not a participant" resolves via the `.find()` above
       // returning undefined, never via this catch — reaching here means
       // getCallSession itself failed (DB timeout, connection drop, bug), which
       // is otherwise indistinguishable from "not a participant" and silently
       // drops the caller's toggle/heartbeat/quality-report with zero trace.
-      logger.warn('resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized', {
+      logger.warn('resolveActiveCallParticipant: getCallSession failed, treating caller as unauthorized', {
         userId,
         callId,
         error: error instanceof Error ? error.message : String(error)
       });
       return null;
     }
+  }
+
+  /**
+   * Thin wrapper over `resolveActiveCallParticipant` for the (majority) call
+   * sites that only need the legacy `CallParticipant.participantId` value.
+   */
+  private async resolveActiveCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    const resolved = await this.resolveActiveCallParticipant(userId, callId);
+    return resolved?.participantId ?? null;
   }
 
   /**
@@ -3665,8 +3714,9 @@ export class CallEventsHandler {
         // conversation — `resolveParticipantIdFromCall` only checked that,
         // letting any other conversation member flood-write bogus
         // bytesSent/bytesReceived/level onto someone else's active call).
-        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!participantId) return;
+        const activeReporter = await this.resolveActiveCallParticipant(userId, data.callId);
+        if (!activeReporter) return;
+        const { participantId, userId: reporterUserId } = activeReporter;
 
         // Check quality thresholds and emit alerts if needed
         const { stats } = data;
@@ -3716,6 +3766,11 @@ export class CallEventsHandler {
             socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
               callId: data.callId,
               participantId,
+              // Vague 132 — `participantId` alone (CallParticipant.participantId,
+              // a Participant.id) never matches a registered peer's roster
+              // entry, whose `.userId` is a real User.id. See
+              // `resolveActiveCallParticipant`'s doc comment.
+              userId: reporterUserId,
               metric,
               value,
               threshold
@@ -4176,19 +4231,23 @@ export class CallEventsHandler {
         // rationale as call:backgrounded/call:foregrounded. Otherwise either
         // participant in a call could impersonate the other, forging or
         // suppressing that peer's screen-capture privacy alert.
-        const screenCaptureParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!screenCaptureParticipantId) return;
+        const screenCaptureReporter = await this.resolveActiveCallParticipant(userId, data.callId);
+        if (!screenCaptureReporter) return;
 
         const alertEvent: CallScreenCaptureEvent = {
           callId: data.callId,
-          participantId: screenCaptureParticipantId,
+          participantId: screenCaptureReporter.participantId,
+          // Vague 132 — same mismatch as call:quality-alert: without this, a
+          // registered peer's roster lookup (keyed by User.id) can never
+          // match `participantId` alone (a Participant.id).
+          userId: screenCaptureReporter.userId,
           isCapturing: data.isCapturing,
         };
         socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
 
         logger.info('📞 Socket: call:screen-capture-detected relayed', {
           callId: data.callId,
-          participantId: screenCaptureParticipantId,
+          participantId: screenCaptureReporter.participantId,
           isCapturing: data.isCapturing,
           userId,
         });
