@@ -14,6 +14,7 @@ import { invalidatePrivacyPreferences } from '../../../services/preferences/priv
 import { emitPreferenceCategoryUpdated } from '../../../services/preferences/preferences-broadcast';
 import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import type { PreferenceCategory } from '../../../services/preferences/preferences-broadcast';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 /**
  * Où vit l'état d'une catégorie, quand ce n'est pas seulement son champ JSON.
@@ -30,9 +31,9 @@ import type { PreferenceCategory } from '../../../services/preferences/preferenc
  */
 export type CategoryStorage<T> = {
   /** Ce que le serveur tient pour stocké — au-delà du seul document JSON. */
-  readStored: (prisma: any, userId: string) => Promise<Partial<T> | null>;
+  readStored: (prisma: PrismaClient, userId: string) => Promise<Partial<T> | null>;
   /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
-  afterWrite?: (prisma: any, userId: string) => Promise<void>;
+  afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
 };
 
 /**
