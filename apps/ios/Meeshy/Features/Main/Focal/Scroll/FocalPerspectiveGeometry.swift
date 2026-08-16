@@ -192,7 +192,11 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
 
         return FocalCellTransform(
             scale: scale,
-            alpha: min(alphaCeiling, curve.alpha),
+            // Plancher AVANT plafond : un message en vol garde son plafond
+            // `optimisticAlphaCeiling` (0,7) — le plancher relève les voisins
+            // trop effacés, il ne peut jamais rendre une rangée PLUS opaque
+            // que son plafond ne l'autorise.
+            alpha: min(alphaCeiling, max(FocalPassConstants.neighbourAlphaFloor, curve.alpha)),
             translation: CGSize(width: tx, height: ty)
         )
     }

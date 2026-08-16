@@ -135,6 +135,56 @@ nonisolated public enum FocalMetrics {
         public static let marginVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 8
         public static let paddingVertical: CGFloat = 12
+
+        /// Opacité de la TEINTE D'ACCENT qui remplit la carte de focus.
+        ///
+        /// Cotes ABSENTES de `thread.focusCard` (qui ne décrit que la
+        /// géométrie de l'anneau, jamais son remplissage) — nommées ici selon
+        /// le précédent `SurfaceTint`, sans revendiquer de miroir `thread.*`.
+        ///
+        /// La carte se remplissait jusqu'ici de `backgroundSecondary`, un
+        /// aplat OPAQUE et neutre : la couleur de la conversation ne survivait
+        /// que sur l'anneau de 1,5 pt, et la rangée élue lisait comme une
+        /// boîte posée sur le fil. Ces deux alphas rendent la teinte à la
+        /// carte entière. Volontairement bas — le texte du message garde son
+        /// contraste, aucune des mesures de `FocalPaletteContrastTests` ne
+        /// s'exerce sur un fond teinté à ce point.
+        public static let surfaceLightAlpha: CGFloat = 0.055
+        public static let surfaceDarkAlpha: CGFloat = 0.10
+    }
+
+    // MARK: - Rangée ÉLUE — la magnification (§4.6)
+
+    /// Ce que gagne la rangée en focus. §4.6 ne nomme qu'un écart de
+    /// TYPOGRAPHIE (« 15 → 16 ») ; les autres cotes en sont le prolongement
+    /// direct — l'élue doit se lire comme le message qu'on regarde, avec son
+    /// auteur et son horodatage complets, et non comme ses voisines.
+    ///
+    /// **Ce bloc était inatteignable jusqu'ici.** L'hôte appelait déjà
+    /// `reconfigureFocusTypographyAtScrollStop()` sur le changement d'élu,
+    /// mais `FocalRowInput` ne portait aucun champ de focus : la
+    /// reconfiguration reproduisait un contenu identique et le 15→16 n'a
+    /// jamais été rendu depuis que le contrat l'a écrit.
+    nonisolated public enum Focus {
+        /// Le « 16 » de §4.6, en toutes lettres. `Text.size` vaut
+        /// `MeeshyFont.bodySize` (15) — l'écart est de +1, appliqué
+        /// UNIQUEMENT à l'élue et UNIQUEMENT à l'arrêt du défilement.
+        @MainActor public static var textSize: CGFloat { Text.size + 1 }
+
+        /// Pastille agrandie : `22` (`Avatar.size`) → `34`. L'auteur du
+        /// message regardé doit être identifiable sans effort.
+        public static let avatarSize: CGFloat = 34
+
+        /// Le retrait du texte suit la pastille — `avatarSize` + la même
+        /// gouttière de `7` que `Text.indent` (`22 + 7 = 29`).
+        public static let textIndent: CGFloat = avatarSize + 7
+
+        /// Nom de l'auteur, agrandi d'un cran par rapport à `Name.size` (13).
+        @MainActor public static var nameSize: CGFloat { Name.size + 2 }
+
+        /// Espace réservé SOUS le contenu de l'élue pour la barre de
+        /// contrôles, qui chevauche le bord bas de la carte.
+        public static let controlBarReservedHeight: CGFloat = 34
     }
 
     // MARK: - Citation

@@ -1762,6 +1762,37 @@ struct ConversationView: View {
         isScrollingList && !isSearchOpen
     }
 
+    /// **En Focal, c'est le header ENTIER qui s'efface** — retour, avatar,
+    /// titre, recherche, appel et bascule de vue compris — là où le mode
+    /// bulles n'efface que sa grappe de boutons d'action.
+    ///
+    /// La raison est le mode lui-même : Focal met le message regardé au
+    /// centre et lui donne ses propres contrôles, sur le bord de sa carte
+    /// (`FocalFocusControlBar`). Garder au-dessus une barre d'outils
+    /// concurrente pendant qu'on lit contredit toute l'intention.
+    ///
+    /// **Toujours une porte de sortie** : le header revient dès l'ARRÊT du
+    /// défilement (ce n'est pas un masquage permanent), et le geste de retour
+    /// natif iOS reste actif en toutes circonstances. Une recherche ouverte
+    /// échappe à la règle, comme pour les boutons d'action — sa barre est un
+    /// champ de saisie qui doit rester joignable pendant qu'on fait défiler
+    /// les résultats.
+    static func hidesEntireHeader(
+        usesFlatRow: Bool,
+        isScrollingList: Bool,
+        isSearchOpen: Bool
+    ) -> Bool {
+        usesFlatRow && hidesHeaderActions(isScrollingList: isScrollingList, isSearchOpen: isSearchOpen)
+    }
+
+    private var hidesEntireHeaderForScroll: Bool {
+        Self.hidesEntireHeader(
+            usesFlatRow: readingModeController.mode.usesFlatRow,
+            isScrollingList: scrollState.isScrollingActiveList,
+            isSearchOpen: headerState.showSearch
+        )
+    }
+
     private var hidesHeaderActionsForScroll: Bool {
         Self.hidesHeaderActions(
             isScrollingList: scrollState.isScrollingActiveList,
@@ -1783,6 +1814,12 @@ struct ConversationView: View {
                 AnyView(anonymousHeaderBar)
             } else if isTyping {
                 AnyView(typingHeaderBar)
+            } else if hidesEntireHeaderForScroll {
+                // Focal + défilement : le header entier s'efface (loi
+                // `hidesEntireHeader`). `EmptyView` plutôt qu'une opacité
+                // nulle — un header transparent continuerait d'intercepter
+                // les touches au-dessus des messages.
+                AnyView(EmptyView())
             } else {
                 expandedHeaderBand
             }
@@ -1802,6 +1839,7 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+        .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
     }
 
     private var typingHeaderBar: some View {

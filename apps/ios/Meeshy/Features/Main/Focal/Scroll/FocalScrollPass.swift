@@ -293,7 +293,10 @@ final class FocalScrollPass {
         for entry in pending {
             decoration.update(
                 cell: entry.cell,
-                isFocused: entry.allowsFocusCard && entry.localId != nil && entry.localId == focusedLocalId,
+                isFocused: entry.allowsFocusCard
+                    && entry.localId != nil
+                    && entry.localId == focusedLocalId
+                    && isFullyVisible(entry.cell, in: collectionView),
                 accentHex: accentHex,
                 isDark: isDark
             )
@@ -302,6 +305,54 @@ final class FocalScrollPass {
         pending.removeAll(keepingCapacity: true)
 
         return focusedLocalId
+    }
+
+    /// La cellule tient-elle ENTIÈREMENT dans la zone lisible ?
+    ///
+    /// « N'encadrer le message que lorsqu'il est entièrement visible » : une
+    /// carte dont le bord bas passe sous le composeur (ou dont le bord haut
+    /// sort par le haut) dessine un cadre ouvert, et pire, coupe la barre de
+    /// contrôles qui vit sur ce bord — les emojis deviennent inatteignables
+    /// alors qu'ils sont la raison d'être de la carte.
+    ///
+    /// La zone lisible n'est PAS `bounds` : la liste est inversée, donc
+    /// `contentInset.top` borne le côté COMPOSEUR (bas visuel) et
+    /// `contentInset.bottom` le côté header. `frame` intègre le transform de
+    /// perspective déjà posé — c'est voulu ici : on teste ce que l'œil voit,
+    /// pas la boîte de layout.
+    ///
+    /// Le message reste ÉLU dans tous les cas (le focus pilote la
+    /// magnification du contenu, qui elle n'a rien à voir avec le cadre) :
+    /// seule la DÉCORATION est suspendue. Un message partiellement visible
+    /// n'en devient pas moins manipulable.
+    func isFullyVisible(_ cell: UICollectionViewCell, in collectionView: UICollectionView) -> Bool {
+        let viewport = collectionView.bounds.height
+        guard viewport > 0 else { return false }
+        let offsetY = collectionView.contentOffset.y
+
+        // La MÊME conversion que tout le reste du pass — `visualY = H −
+        // (contentY − contentOffset.y)`, §4.2 — appliquée aux deux bords de
+        // la cellule. L'inversion échange les extrémités : le `maxY` de
+        // contenu devient le HAUT visuel.
+        //
+        // Deux repères faux ont précédé celui-ci, tous deux constatés au
+        // simulateur (la carte ne s'affichait jamais) :
+        // 1. comparer `cell.frame` décalé de `−contentOffset.y` à une fenêtre
+        //    dérivée de `bounds` — dont l'origine EST déjà `contentOffset` ;
+        // 2. rétrécir `bounds` par `contentInset` — or `contentInset.bottom`
+        //    porte ici le `headInset` de §4.5, une réserve de DÉFILEMENT de
+        //    plusieurs centaines de points, pas une occlusion de chrome :
+        //    la fenêtre devenait plus petite que n'importe quelle cellule.
+        let visualTop = viewport - (cell.frame.maxY - offsetY)
+        let visualBottom = viewport - (cell.frame.minY - offsetY)
+
+        // Seul le composeur occulte réellement, et sa garde est déjà nommée :
+        // `contentInset.top` est ce que la géométrie appelle son
+        // `bottomClearance` (cf. `focusY(viewportHeight:bottomClearance:)`).
+        // Le haut de l'écran n'occulte rien en Focal — le header s'efface
+        // pendant le défilement.
+        let readableBottom = viewport - collectionView.contentInset.top
+        return visualTop >= 0 && visualBottom <= readableBottom
     }
 
     // MARK: - Site 2 — la cellule entrante seule
@@ -352,7 +403,9 @@ final class FocalScrollPass {
 
         decoration.update(
             cell: cell,
-            isFocused: descriptor.allowsFocusCard && localId == focusedLocalId,
+            isFocused: descriptor.allowsFocusCard
+                && localId == focusedLocalId
+                && isFullyVisible(cell, in: collectionView),
             accentHex: accentHex,
             isDark: isDark
         )

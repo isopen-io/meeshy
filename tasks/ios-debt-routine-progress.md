@@ -1232,3 +1232,109 @@ fichier de suivi uniquement). Pas de branche `claude/apps/ios/*` créée, pas de
 
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-backlog-reverification-2026-08-16`
   (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`).
+
+### 2026-08-16 — Run #11 (`MessageLanguageDetailView` → `adaptiveOnChange`, PR #3097 mergée `0bb9c853a`)
+
+Contexte : `tasks/lane-cursor.md` à `lane=ANDROID android_streak=6 last_run=feed-thumbhash-placeholder` —
+règle d'alternance (streak ≥ 5) déclenchée, bascule vers `IOS_DETTE`. `gh pr list --state open --search
+"apps/android OR apps/ios"` → vide (aucune PR concurrente à ce moment).
+
+**RE-PROUVÉ tout le backlog avant de choisir, aucun candidat de `CURRENT_QUALITY_REVIEW.md` ni de ce
+fichier n'a survécu à la vérification** :
+- Les 3 « Refactoring/Modernization Opportunities » de `CURRENT_QUALITY_REVIEW.md` sont TOUTES déjà
+  closes : Swift 6 `#filePath`/`#file` (item 1, clos ancienne itération) ; « Shared Singleton Access » —
+  les 3 leaf views nommées par `apps/ios/CLAUDE.md` (`ThemedMessageBubble`, `MeeshyAvatar`,
+  `ThemedConversationRow`/`LentilleConversationRow`) : zéro `@ObservedObject`/`@StateObject` sur un
+  singleton global, vérifié par grep direct — la règle citée est déjà respectée partout où le rapport
+  la nomme ; « UI State Aggregation / `ConversationLoadingPhase` » — le type EXISTE déjà
+  (`Features/Main/Models/ConversationLoadingPhase.swift`), consommé par `ConversationViewModel
+  .paginationPhase`. `CURRENT_QUALITY_REVIEW.md` est donc entièrement périmé comme source de backlog.
+- Item 4 (`DispatchQueue.main.async`) : re-grep bare (hors `asyncAfter`, `\b` en fin de motif) →
+  28 occurrences / 11 fichiers sous `apps/ios/Meeshy`. Mais relecture de l'historique complet de CE
+  fichier (runs #2/#3/#6) montre que l'item a déjà été **fermé explicitement au run #6** après triage
+  exhaustif des 55 fichiers de l'époque : 2/2 sites mécaniques nus migrés (`DiscoverTab.swift`,
+  `CameraView.swift`), le reste classé en 5 catégories (faux positifs commentaire, timing documenté,
+  pont structuré déjà correct, escape SwiftUI documentée nécessitant vérification device dédiée,
+  WebRTC delegate à haut risque) — reprendre nécessite une session interactive simulateur dédiée
+  (login, ouvrir conversation, déclencher signalement story + focus composer + animation liste), hors
+  périmètre d'un incrément de routine. Le run #10 (même jour, plus tôt) avait re-proposé cet item sans
+  retrouver cette fermeture — corrigé ici : **toujours fermé, pas repris**.
+- Item 6 (Observable macro) : fermé par décision utilisateur explicite 2026-08-11 (« on reste iOS 16 »)
+  — ne plus re-proposer sans relèvement du plancher de déploiement.
+- Item 5 (Date.ParseStrategy) : toujours ouvert mais nécessite une conception d'API avant tout fix
+  mécanique — non actionnable en un run.
+- Item 3 (`OfflineQueueTests` flaky) : toujours sans cause racine — ne satisfait pas le filtre de
+  sûreté.
+- Item 2 (~16 tests littéraux français) et item 1 (`joinFlow` i18n) : laissés « À RE-VÉRIFIER »/écartés
+  par le run #10 — **re-vérifiés ici indirectement** : CI GitHub Actions confirmée VERTE sur le tip
+  courant de `main` avant ce run (run 31957691661, job « Build app + tests unitaires » = success),
+  donc les 10 échecs pré-existants documentés par le run #10 sont déjà résolus par de l'activité tierce
+  concurrente (confirmée : commit `a59c326e9`, « run #99 », auteur/session distincts, recalibrage de 3
+  gardes source sans rapport). Rien à rouvrir.
+- **Sweep négatif supplémentaire, nouvelle catégorie non listée dans ce fichier** : `try!`/`as!` en code
+  de production (`apps/ios/Meeshy` + `packages/MeeshySDK/Sources`) → 10 + 3 = 13 sites, TOUS des
+  assertions programmeur légitimes après lecture individuelle : `try! NSRegularExpression(pattern:
+  <littéral compile-time>)` (8 sites, `ComposerDropResolver.swift`/`MessageTextRenderer.swift`) ;
+  `try! DatabaseQueue()` (`AppDatabase.swift:137`, fallback in-memory déjà annoté `// swiftlint:disable
+  :next force_try` avec commentaire explicite sur le choix) ; `layer as! AVPlayerLayer` ×3
+  (`ReelsPlayerView.swift`/`StoryVideoPlayerView.swift`/`VideoEditorStage.swift`, patron Apple standard
+  pairé avec `override static var layerClass`). Zéro dette réelle — catégorie fermée, pas de suivi.
+
+**Choisi : `MessageLanguageDetailView.swift` — migration `.onChange(of:)` brut (textTranslations,
+translatedAudios) vers `adaptiveOnChange`.** Item déjà NOMMÉ par le run build-break du même jour (stash
+`debt-message-language-detail-adaptive-onchange`, mis de côté faute de temps, jamais implémenté — le
+stash ne contenait que du churn pbxproj, `git stash drop` sans perte au run #10). Re-prouvé contre le
+code réel : exactement 2 sites dans exactement 1 fichier app-side (`grep` exhaustif de tout
+`apps/ios/Meeshy` pour `.onChange(of:` — les 2 seules autres occurrences sont des commentaires de
+prose dans `StoryViewerView(+Sidebar).swift`, pas du code). La garde SDK existante
+(`AdaptiveOnChangeSweepTests.swift`) ne couvre que des fichiers sous `packages/MeeshySDK/Sources/
+MeeshyUI/` — ce fichier app-side n'était couvert par AUCUNE garde.
+
+**TDD** :
+- RED : nouveau `MessageLanguageDetailViewAdaptiveOnChangeSourceGuardTests.swift` (même patron que
+  `CameraPreviewLayerUpdateUIViewSourceGuardTests` — isole le corps de `body` via `AppSourceGuard
+  .stripComments` + bornage par marqueurs de code réels, JAMAIS un commentaire `// MARK:` — piège
+  évité en cours de route : un premier marqueur de fin choisi sur un commentaire disparaissait après
+  strip, corrigé en bornant sur `private var content: some View {`, code réel). Confirmé en échec (4
+  assertions rouges) contre la source non modifiée.
+- GREEN : `.onChange(of: textTranslations) { _ in syncTranslationsFromProps() }` →
+  `.adaptiveOnChange(of: textTranslations) { _, _ in syncTranslationsFromProps() }` (idem
+  `translatedAudios`). `MessageTranslation`/`MessageTranslatedAudio` déjà `Equatable` (requis par
+  `adaptiveOnChange<V: Equatable>`) — aucun changement de type nécessaire. Test relancé isolément →
+  vert ; `MessageDetailLanguageNameSSOTTests` voisin toujours vert.
+
+**Vérification** :
+- `./apps/ios/meeshy.sh build` vert (95s).
+- `./apps/ios/meeshy.sh test` (suite complète) : Phase 0 (SDK) verte, Phase 1 verte (2873 tests, 1
+  skip), Phase 2 verte (3813 tests), Phase 3 verte (1 skip, pas de credentials démo locaux) — **zéro
+  échec sur l'ensemble**, confirmant à la fois le fix et l'absence de régression.
+- Branche `claude/apps/ios/debt-message-language-detail-adaptive-onchange` créée EN PREMIER, avant
+  toute édition (le piège de l'itération précédente — édition avant branche — ne s'est PAS reproduit).
+  Une branche locale homonyme préexistante (vide, pointant sur un ancien commit sans rapport) a été
+  supprimée puis recréée proprement depuis `origin/main` frais.
+- PR #3097 : CI complète déclenchée (matrice `ci.yml` entière, pas seulement iOS — confirme une fois
+  de plus qu'un diff `apps/ios`-only ne limite pas le scope CI). **Un seul job rouge, `Test shared`** —
+  diagnostiqué en profondeur avant tout merge (jamais bypassé sans preuve) : le test `packages/shared/
+  __tests__/ci/lentille-tokens-consumption-gate.test.ts` (garde « déclaré ⇒ consommé » des tokens
+  Lentille) attendait `thread.hiddenChrome` dans `EXCLUDED_DEAD_FAMILIES` (mort des deux côtés) mais a
+  trouvé un consommateur Swift RÉEL — `FocalMetrics.HiddenChrome.easeOut` dans `ConversationView
+  .swift:1842`. Vérifié via `git show origin/main:...` : ce symbole vient de 3 commits « focal-ios »
+  atterris sur `main` APRÈS le point de branchement de cette PR (`85cf1ec48`/`20c7b7385`/`38781d0e4`,
+  session tierce concurrente), donc confirmé À 100 % sans rapport avec ce diff (qui ne touche ni
+  `ConversationView.swift` ni `packages/shared`). Le job `Summary` (probablement le vrai gate agrégé)
+  était déjà vert malgré ce rouge. Tous les autres jobs verts, dont `Build app (app + cibles de test)`
+  (le job iOS pertinent pour ce diff). **Nouveau backlog découvert, hors périmètre de ce run** (item
+  `packages/shared`, jamais `apps/ios`/`MeeshySDK` sans item dédié — donc pas traité ici) : l'entrée
+  `EXCLUDED_DEAD_FAMILIES['thread.hiddenChrome']` doit être retirée par un futur run/session (probable
+  candidat : la session « focal-ios » elle-même, ou un futur item `packages/shared` dédié) — sinon CE
+  MÊME échec réapparaîtra sur toute future PR jusqu'à correction.
+- Merge : squash via l'API GitHub directe (`gh pr merge` local échouait — conflit avec le worktree
+  principal qui a `main` checked out ; contourné avec `gh api -X PUT .../pulls/3097/merge`) →
+  `0bb9c853a`. Branche distante supprimée, worktree `ops/android-ios-parity-routine` resynchronisé en
+  fast-forward sur `origin/main`.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=message-language-detail-adaptive-onchange`
+  (commit séparé, poussé directement sur `main`). Note : au moment du merge, `tasks/lane-cursor.md`
+  avait déjà avancé à `android_streak=7 last_run=reels-realtime-room` via une session Android
+  concurrente pendant que cette PR attendait sa CI — lu FRAIS au merge (pas à la sélection du slice),
+  conformément au principe établi ; ce run écrase avec la valeur de reset standard post-IOS_DETTE.
