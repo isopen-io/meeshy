@@ -162,9 +162,9 @@ final class LentilleFlatRowTests: XCTestCase {
     // LentilleMetricsTests.test_unreadDot_size et
     // LentilleRowSourceGuardTests.test_bridgeLine_unreadDot_usesMetric_notALiteral.
     // Le second volet de L06 (« le timestamp rouge sur non-lu … supprimé,
-    // l'heure reste tertiaire ») reste un TROU RÉEL, documenté et
-    // verrouillé RED par
-    // LentilleRowBehaviourAnchorTests.test_L06_timestampColor_stillReturnsErrorOnUnread_realGapDocumented.
+    // l'heure reste tertiaire ») est, lui aussi, fermé (REV-3/V3ter) et
+    // verrouillé VERT par
+    // LentilleRowBehaviourAnchorTests.test_L06_timestampColor_isTertiary_neverErrorOnUnread.
 
     func test_sourceGuard_rowFiles_containNoUnreadBadgeBackground() throws {
         for relativePath in [

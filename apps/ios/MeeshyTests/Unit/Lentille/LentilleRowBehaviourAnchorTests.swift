@@ -5,7 +5,7 @@ import MeeshyUI
 
 /// Ancrages complémentaires de la matrice comportementale liste (contrat
 /// LWS-7/LWS-8, `packages/shared/fixtures/conformance/behaviour-matrix.json`,
-/// ids L01..L17) — REV-3, blocker B1.
+/// ids L01..L17) — REV-3, blocker B1, TROUS FERMÉS par REV-3/V3ter.
 ///
 /// **Pourquoi une suite séparée.** À l'armement de la garde d'ensemble
 /// (`packages/shared/__tests__/vectors/behaviour-matrix.test.ts`, Porte V1),
@@ -17,12 +17,16 @@ import MeeshyUI
 /// vérifié), soit un témoin qui prouverait le CONTRAIRE de ce que la matrice
 /// exige (un TROU RÉEL — le comportement décrit n'est PAS implémenté).
 /// Même discipline que `FocalRealtimeMatrixTests` (F-090/F-083ter) : un
-/// témoin qui affirme l'invariant CORRECT (celui que la matrice décrit) est
-/// ROUGE aujourd'hui quand le trou est réel — c'est la preuve du trou, pas
-/// une erreur de rédaction. AUCUN jeton `behaviour-matrix:<id>` n'est posé
-/// sans un test RÉEL en face (jamais de jeton de complaisance) : les tests
-/// rouges ci-dessous sont des tests réels qui échouent pour la bonne raison,
-/// documentée dans leur commentaire.
+/// témoin qui affirme l'invariant CORRECT (celui que la matrice décrit) était
+/// ROUGE au moment de l'audit B1 quand le trou était réel — c'est la preuve
+/// du trou, pas une erreur de rédaction. AUCUN jeton `behaviour-matrix:<id>`
+/// n'est posé sans un test RÉEL en face (jamais de jeton de complaisance).
+/// **REV-3/V3ter** a fermé les 8 trous identifiés par B1 (L01, L03, L06,
+/// L07, L08, L10, L13, L17-partiel) — chaque témoin renommé ci-dessous
+/// (le suffixe `_realGapDocumented` retiré) affirme désormais l'invariant
+/// CORRECT et est VERT parce que le correctif existe, pas par
+/// affaiblissement de l'assertion : chaque commentaire cite l'implémentation
+/// qui le ferme.
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1591`, qui contient notamment `Conversation`,
@@ -67,7 +71,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
             .joined(separator: " ")
     }
 
-    // MARK: - L01 — typing multi-membres : reduce-motion (réel) + dot de présence forcé vert (TROU RÉEL)
+    // MARK: - L01 — typing multi-membres : reduce-motion (réel) + dot de présence forcé vert (FERMÉ, V3ter)
 
     /// Volet RÉEL de L01 : `LentilleTypingDots` respecte Reduce Motion — au
     /// repos à la phase HAUTE (`scaleEffect`/`opacity` à `1.0`), jamais figée
@@ -90,51 +94,49 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     }
 
     // behaviour-matrix:L01 — « … et force le dot de présence au vert. »
-    /// TROU RÉEL. `LentilleConversationRow.swift` (lu intégralement pour ce
-    /// témoin) ne contient AUCUNE expression qui combine `typingUsername`
-    /// avec `PresenceState.online`/`.online` : le `presenceState` transmis à
-    /// `LentilleRowAvatar` est TOUJOURS l'état réel du paramètre
-    /// `presenceState` du rang (souvent hors ligne), jamais forcé en ligne
-    /// pendant qu'un membre écrit. `ConversationListViewModel` (gestion du
-    /// typing, `ViewModels/ConversationListViewModel.swift`) ne pousse
-    /// aucune valeur de présence non plus — il ne connaît que
-    /// `typingUsernames`/`typingUsers`. Non corrigé ici (mission REV-3/B1 :
-    /// documenter, pas corriger l'app) — voir aussi
-    /// `test_L10_presenceDot_isNeverShownForGroups_realGapDocumented`, même
-    /// ligne de source, trou voisin.
-    func test_L01_presenceDot_isNeverForcedOnline_whenTyping_realGapDocumented() throws {
+    /// FERMÉ (REV-3/V3ter). `LentilleConversationRow.effectivePresenceState`
+    /// combine désormais `typingUsername` avec `.online` — vol.5 §5.3
+    /// (docs/design/2026-08-15-conversation-list-lentille.html, ré-prouvé à
+    /// CINQ endroits distincts du document normatif : lignes 188/355/406/
+    /// 456/491-492, « dot présence forcé vert (typing = preuve d'activité) »)
+    /// exige exactement ce câblage — le `presenceState` transmis à
+    /// `LentilleRowAvatar` est `.online` dès qu'un typeur est affiché, quel
+    /// que soit l'état de présence réel. Voir aussi
+    /// `test_L10_presenceDot_isShownForGroupsToo`, même ligne de source,
+    /// trou voisin fermé dans le même lot.
+    func test_L01_presenceDot_isForcedOnline_whenTyping() throws {
         let code = normalizedCode(try rowSource())
         XCTAssertTrue(
             code.contains("typingUsername != nil ? PresenceState.online")
                 || code.contains("typingUsername != nil ? .online")
                 || code.contains(".online : presenceState"),
-            "TROU RÉEL (behaviour-matrix:L01) : « force le dot de présence au vert » — " +
-            "LentilleConversationRow.swift ne combine JAMAIS typingUsername avec .online : " +
-            "le dot de présence reste l'état réel (souvent hors ligne) pendant qu'un membre écrit."
+            "behaviour-matrix:L01 : « force le dot de présence au vert » — " +
+            "LentilleConversationRow.swift doit combiner typingUsername avec .online : " +
+            "le dot de présence doit être forcé en ligne pendant qu'un membre écrit."
         )
     }
 
-    // MARK: - L03 — glyphes SF des kinds (expired/hidden/viewOnce) : TROU RÉEL
+    // MARK: - L03 — glyphes SF des kinds (expired/hidden/viewOnce) : FERMÉ (V3ter)
 
     // behaviour-matrix:L03
-    /// TROU RÉEL. `ThemedConversationRow.swift` porte bien les glyphes SF
-    /// `timer`/`eye.slash`/`flame` pour ces branches (lignes ~510/561/573,
-    /// re-preuve faite à l'écriture de ce test) — mais
-    /// `LentilleConversationRow.previewLine` (branches `.expired`/`.hidden`/
-    /// `.viewOnce`) ne rend AUCUN `Image(systemName:)` : uniquement du texte
-    /// italique. La matrice exige « conservent leurs glyphes SF actuels » ;
-    /// le rang plat les a perdus. Non corrigé ici (documentation, mission
-    /// REV-3/B1).
-    func test_L03_previewKindGlyphs_areMissingFromTheFlatRow_realGapDocumented() throws {
+    /// FERMÉ (REV-3/V3ter). `ThemedConversationRow.swift` porte les glyphes
+    /// SF `timer`/`eye.slash`/`flame` pour ces branches (lignes ~510/561/573,
+    /// lu seulement, fichier interdit d'édition) — `LentilleConversationRow
+    /// .previewLine` les reproduit désormais (branches `.expired` via
+    /// `timer.badge.xmark`, `.hidden` via `eye.slash`, `.viewOnce` via
+    /// `flame`, `.ephemeralActive` via `timer` dans `standardPreview`) : la
+    /// matrice exige « conservent leurs glyphes SF actuels », le rang plat
+    /// les a retrouvés.
+    func test_L03_previewKindGlyphs_areRestoredToTheFlatRow() throws {
         let code = normalizedCode(try rowSource())
         XCTAssertTrue(
             code.contains("systemName: \"timer\"")
                 || code.contains("systemName: \"eye.slash\"")
                 || code.contains("systemName: \"flame\""),
-            "TROU RÉEL (behaviour-matrix:L03) : « conservent leurs glyphes SF actuels " +
-            "(timer, eye.slash, flame) » — LentilleConversationRow.swift ne rend AUCUN de " +
-            "ces trois glyphes dans previewLine (expired/hidden/viewOnce) : les branches " +
-            "italiques ont perdu leur icône par rapport à ThemedConversationRow.swift."
+            "behaviour-matrix:L03 : « conservent leurs glyphes SF actuels " +
+            "(timer, eye.slash, flame) » — LentilleConversationRow.swift doit rendre au moins " +
+            "un de ces trois glyphes dans previewLine (expired/hidden/viewOnce/ephemeral) : les " +
+            "branches italiques doivent porter leur icône, comme ThemedConversationRow.swift."
         )
     }
 
@@ -185,69 +187,69 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    // MARK: - L06 — timestamp rouge sur non-lu : TROU RÉEL (le badge, lui, EST retiré — voir LentilleFlatRowTests)
+    // MARK: - L06 — timestamp rouge sur non-lu : FERMÉ, V3ter (le badge, lui, était déjà retiré — voir LentilleFlatRowTests)
 
     // behaviour-matrix:L06
-    /// TROU RÉEL. La matrice exige : « le timestamp rouge sur non-lu [est]
-    /// supprimé […] l'heure reste TERTIAIRE ». `LentilleConversationRow
-    /// .timestampColor(unreadCount:accent:)` (pure, testable sans vue)
-    /// retourne pourtant encore `MeeshyColors.error` (rouge) dès qu'il y a
-    /// du non-lu — comportement COPIÉ tel quel de `ThemedConversationRow`
-    /// (§0), jamais retiré pour le rang plat. Le retrait du BADGE 99+
-    /// (l'autre volet de L06) est, lui, bien réel — voir
+    /// FERMÉ (REV-3/V3ter). La matrice exige : « le timestamp rouge sur
+    /// non-lu [est] supprimé […] l'heure reste TERTIAIRE ».
+    /// `LentilleConversationRow.timestampColor(unreadCount:accent:isDark:)`
+    /// (pure, testable sans vue) retourne désormais TOUJOURS
+    /// `MeeshyColors.textMuted(isDark:)` — le rouge sémantique
+    /// (`MeeshyColors.error`, comportement copié de `ThemedConversationRow`
+    /// §0) est retiré, quel que soit l'état de lecture. Le retrait du BADGE
+    /// 99+ (l'autre volet de L06) était déjà réel — voir
     /// `LentilleFlatRowTests.test_sourceGuard_rowFiles_containNoUnreadBadgeBackground`.
-    /// Non corrigé ici (documentation, mission REV-3/B1).
-    func test_L06_timestampColor_stillReturnsErrorOnUnread_realGapDocumented() {
+    func test_L06_timestampColor_isTertiary_neverErrorOnUnread() {
         XCTAssertNotEqual(
             LentilleConversationRow.timestampColor(unreadCount: 5, accent: .blue),
             MeeshyColors.error,
-            "TROU RÉEL (behaviour-matrix:L06) : « le timestamp rouge sur non-lu [est] " +
+            "behaviour-matrix:L06 : « le timestamp rouge sur non-lu [est] " +
             "supprimé […] l'heure reste tertiaire » — timestampColor(unreadCount: 5, …) " +
-            "retourne encore MeeshyColors.error (rouge), pas une couleur tertiaire."
+            "ne doit JAMAIS retourner MeeshyColors.error (rouge)."
         )
     }
 
-    // MARK: - L07 — glyphe 📌 avant le nom : TROU RÉEL (la sourdine et le drop-cible, eux, SONT réels)
+    // MARK: - L07 — glyphe 📌 avant le nom : FERMÉ, V3ter (la sourdine et le drop-cible, eux, étaient déjà réels)
 
     // behaviour-matrix:L07
-    /// TROU RÉEL. « L'épingle ajoute un glyphe 📌 avant le nom » —
-    /// `LentilleConversationRow.swift` (lu intégralement pour ce témoin) ne
-    /// contient AUCUNE occurrence de « 📌 ». Seule la sourdine (🔕, voir
+    /// FERMÉ (REV-3/V3ter). « L'épingle ajoute un glyphe 📌 avant le nom » —
+    /// `LentilleConversationRow.headerLine` rend désormais « 📌 » gated par
+    /// `conversation.userState.isPinned`, juste avant `Text(conversation
+    /// .displayName)` — même position que la sourdine (🔕, voir
     /// `LentilleRowSourceGuardTests
-    /// .test_mutedGlyph_gatedByUserStateIsMuted_inLentilleConversationRow`)
-    /// a été ajoutée à l'audit ; le glyphe d'épingle ne l'a pas été. Le
-    /// classement dans la section dédiée (le drop range bien sous le
-    /// sticker épingles) est, lui, réel — voir
+    /// .test_mutedGlyph_gatedByUserStateIsMuted_inLentilleConversationRow`),
+    /// même style décoratif. Le classement dans la section dédiée (le drop
+    /// range bien sous le sticker épingles) était déjà réel — voir
     /// `SectionDropTargetTests.test_dropOnSectionN_landsInSectionN_forFourTargets`.
-    /// Non corrigé ici (documentation, mission REV-3/B1).
-    func test_L07_pinnedGlyph_isMissingFromTheRow_realGapDocumented() throws {
+    func test_L07_pinnedGlyph_isPresentInTheRow() throws {
         let code = try rowSource()
         XCTAssertTrue(
             code.contains("📌"),
-            "TROU RÉEL (behaviour-matrix:L07) : « l'épingle ajoute un glyphe 📌 avant le nom » " +
-            "— LentilleConversationRow.swift ne contient AUCUNE occurrence de 📌 ; seule la " +
-            "sourdine (🔕) a été ajoutée par l'audit, pas l'épingle."
+            "behaviour-matrix:L07 : « l'épingle ajoute un glyphe 📌 avant le nom » " +
+            "— LentilleConversationRow.swift doit contenir 📌, gated par isPinned, comme la " +
+            "sourdine (🔕)."
         )
     }
 
-    // MARK: - L08 — badge de type absorbé par la focus card (TROU RÉEL) ; tags ≤ 3 pastilles (réel)
+    // MARK: - L08 — badge de type absorbé par la focus card (FERMÉ, V3ter) ; tags ≤ 3 pastilles (réel)
 
     // behaviour-matrix:L08
-    /// TROU RÉEL. « Le badge de type (groupe/canal/bot + memberCount) est
-    /// absorbé par la focus card » — `LentilleFocusCard.swift` (lu
-    /// intégralement pour ce témoin) ne référence NI `conversation.type`
-    /// NI `memberCount` : la carte de focus ne rend que l'encoche de mode
-    /// (« AUTO · <décision> ») et le fond/ring accent — le type de
-    /// conversation et le nombre de membres ne sont affichés NULLE PART
-    /// sur la Lentille. Non corrigé ici (documentation, mission REV-3/B1).
-    func test_L08_typeBadgeAndMemberCount_areAbsentFromTheFocusCard_realGapDocumented() throws {
+    /// FERMÉ (REV-3/V3ter). « Le badge de type (groupe/canal/bot +
+    /// memberCount) est absorbé par la focus card » — `LentilleFocusCard
+    /// .typeBadge` (coin bas-gauche, `allowsHitTesting(false)`) référence
+    /// désormais `conversation.type` (icône, `Self.typeBadgeIcon(for:)`,
+    /// reproduit depuis `ThemedConversationRow.typeBadgeIcon` — fichier
+    /// interdit d'édition, lu seulement) et `conversation.memberCount`
+    /// (compteur, seuil `> 1`, identique au badge historique) : le type de
+    /// conversation et le nombre de membres sont maintenant affichés sur la
+    /// carte de focus, pas sur le rang.
+    func test_L08_typeBadgeAndMemberCount_areAbsorbedByTheFocusCard() throws {
         let code = normalizedCode(try focusCardSource())
         XCTAssertTrue(
             code.contains("memberCount") || code.contains("conversation.type"),
-            "TROU RÉEL (behaviour-matrix:L08) : « le badge de type (groupe/canal/bot + " +
-            "memberCount) est absorbé par la focus card » — LentilleFocusCard.swift ne " +
-            "référence ni memberCount ni conversation.type : rien n'affiche le type/effectif " +
-            "de la conversation sur la Lentille."
+            "behaviour-matrix:L08 : « le badge de type (groupe/canal/bot + " +
+            "memberCount) est absorbé par la focus card » — LentilleFocusCard.swift doit " +
+            "référencer memberCount et/ou conversation.type."
         )
     }
 
@@ -286,25 +288,24 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    // MARK: - L10 — dots de présence pour les groupes (TROU RÉEL) ; propagation mood/présence (réel)
+    // MARK: - L10 — dots de présence pour les groupes (FERMÉ, V3ter) ; propagation mood/présence (réel)
 
     // behaviour-matrix:L10
-    /// TROU RÉEL. « … avec des dots de présence AUSSI pour les groupes
-    /// (agrégat PresenceManager, "quelqu'un d'actif") » — `LentilleRowAvatar`
-    /// ne transmet `presenceState` à `MeeshyAvatar` que si `isDirect` est
-    /// vrai (`(isDirect && moodStatus == nil) ? presenceState : nil`) : pour
-    /// TOUTE conversation de groupe, `presenceState` transmis est
-    /// TOUJOURS `nil`, quel que soit l'agrégat de présence réel. Non
-    /// corrigé ici (documentation, mission REV-3/B1). Voir aussi
-    /// `test_L01_presenceDot_isNeverForcedOnline_whenTyping_realGapDocumented`,
-    /// même ligne de source, trou voisin.
-    func test_L10_presenceDot_isNeverShownForGroups_realGapDocumented() throws {
+    /// FERMÉ (REV-3/V3ter). « … avec des dots de présence AUSSI pour les
+    /// groupes (agrégat PresenceManager, "quelqu'un d'actif") » —
+    /// `LentilleRowAvatar` transmet désormais `presenceState` à
+    /// `MeeshyAvatar` dès que `moodStatus == nil` (`isDirect` retiré du
+    /// gate) : pour une conversation de groupe, `presenceState` transmis
+    /// est l'agrégat réel (offline = aucun dot, verrouillé par
+    /// `MeeshyAvatar`), plus jamais `nil` par construction. Voir aussi
+    /// `test_L01_presenceDot_isForcedOnline_whenTyping`, même ligne de
+    /// source, trou voisin fermé dans le même lot.
+    func test_L10_presenceDot_isShownForGroupsToo() throws {
         let code = normalizedCode(try rowSource())
         XCTAssertFalse(
             code.contains("presenceState: (isDirect && moodStatus == nil) ? presenceState : nil"),
-            "TROU RÉEL (behaviour-matrix:L10) : « des dots de présence aussi pour les groupes » " +
-            "— LentilleRowAvatar transmet encore presenceState: (isDirect && moodStatus == nil) " +
-            "? presenceState : nil, qui vaut TOUJOURS nil pour un groupe."
+            "behaviour-matrix:L10 : « des dots de présence aussi pour les groupes » " +
+            "— LentilleRowAvatar ne doit plus court-circuiter presenceState avec isDirect."
         )
     }
 
@@ -338,19 +339,27 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    // MARK: - L13 — appel en cours (Scène) : TROU RÉEL COMPLET
+    // MARK: - L13 — appel en cours (Scène) : FERMÉ, V3ter (câblage d'injection amont documenté comme restant)
 
     // behaviour-matrix:L13
-    /// TROU RÉEL. Le type `ConversationLiveCall` (voix, `startedAt`,
-    /// `joined`) existe bien — miroir Swift GELÉ du protocole
+    /// FERMÉ CÔTÉ RANG (REV-3/V3ter). Le type `ConversationLiveCall` (voix,
+    /// `startedAt`, `joined`) — miroir Swift GELÉ du protocole
     /// `ConversationLiveCallProviding` (LWS-2bis, `LentilleProviders.swift`)
-    /// — mais AUCUN fichier de `Lentille/Row/` ni `Lentille/Mode/` ne le
-    /// consomme : `LentilleConversationRow.swift` ne référence ni
-    /// `ConversationLiveCall`, ni `liveCall`, ni un bouton « Rejoindre », ni
-    /// un point pulsant. Le type existe côté données (LWS-2bis livré) ; sa
-    /// consommation par le rang (le rendu décrit par L13) n'a jamais été
-    /// câblée. Non corrigé ici (documentation, mission REV-3/B1).
-    func test_L13_liveCallBanner_isNotConsumedByTheRow_realGapDocumented() throws {
+    /// — est désormais CONSOMMÉ par `LentilleConversationRow` : un paramètre
+    /// `liveCall: ConversationLiveCall? = nil` (même contrat que
+    /// `moodStatus`/`draftSummary` — `nil` ⇒ rien de fabriqué) pilote un
+    /// badge « ● n voix · depuis X » (`LentilleLiveCallBadge`, ticker 60 s)
+    /// et un bouton « Rejoindre » (`joinLiveCallButton`) quand `!joined`.
+    /// ÉCART RESTANT, documenté et assumé (garde `LentilleRowMuxSourceGuardTests
+    /// .test_rowCore_onBranch_buildsLentilleConversationRow_withSameArgumentSet`
+    /// verrouille le site d'appel EXACT de `ConversationListView+Rows.swift`
+    /// — un argument de plus y casserait cette garde) : le CÂBLAGE amont
+    /// (résoudre `ConversationLiveCallProviding` puis passer sa valeur au
+    /// paramètre `liveCall` depuis `ConversationListView`) reste à faire
+    /// dans un lot séparé qui rouvrira sciemment cette garde ; le rang, lui,
+    /// est prêt à consommer une valeur réelle honnêtement dès qu'elle
+    /// existe.
+    func test_L13_liveCallBanner_isConsumedByTheRow() throws {
         XCTAssertTrue(
             try providersSource().contains("struct ConversationLiveCall"),
             "Prérequis : ConversationLiveCall doit exister (LWS-2bis, LentilleProviders.swift) " +
@@ -359,10 +368,9 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         let rowCode = normalizedCode(try rowSource())
         XCTAssertTrue(
             rowCode.contains("ConversationLiveCall") || rowCode.contains("liveCall") || rowCode.contains("Rejoindre"),
-            "TROU RÉEL (behaviour-matrix:L13) : « l'appel en cours (Scène) affiche un point " +
-            "pulsant accent … un bouton Rejoindre » — LentilleConversationRow.swift ne " +
-            "consomme JAMAIS ConversationLiveCall : le type de données existe (LWS-2bis), " +
-            "son rendu sur le rang n'a jamais été câblé."
+            "behaviour-matrix:L13 : « l'appel en cours (Scène) affiche un point " +
+            "pulsant accent … un bouton Rejoindre » — LentilleConversationRow.swift doit " +
+            "consommer ConversationLiveCall."
         )
     }
 
@@ -405,17 +413,17 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    /// TROU PARTIEL. « … avec des états vides restylés plats » — seule la
-    /// branche `.skeleton` est effectivement muxée sous
-    /// `LentilleFeatureFlag.isLentilleListEnabled`
+    /// FERMÉ (REV-3/V3ter). « … avec des états vides restylés plats » —
+    /// les TROIS branches restantes (`.searchNoResults`, `.syncError`,
+    /// `.createFirstConversation`), en plus de `.skeleton`
     /// (`LentilleSkeletonGeometryTests
-    /// .test_emptyBranchSkeletonMux_isGatedByLentilleFeatureFlag`) ; les
-    /// TROIS autres branches (`.searchNoResults`, `.syncError`,
-    /// `.createFirstConversation`) rendent encore l'`EmptyStateView`
-    /// historique, SANS AUCUNE référence à `LentilleFeatureFlag` dans leur
-    /// bloc `case` — ni restylage, ni chemin alternatif sous drapeau. Non
-    /// corrigé ici (documentation, mission REV-3/B1).
-    func test_L17_onlyTheSkeletonBranch_isRestyledUnderTheLentilleFlag_theOtherThreeAreNot_realGapDocumented() throws {
+    /// .test_emptyBranchSkeletonMux_isGatedByLentilleFeatureFlag`), branchent
+    /// désormais sur `LentilleFeatureFlag.isLentilleListEnabled` : restylage
+    /// minimal cohérent (`EmptyStateView(compact: true)`, mêmes
+    /// icône/titre/sous-titre/action, même `.padding(.top, 60)`) sous le
+    /// drapeau ; drapeau OFF ⇒ construction `EmptyStateView` historique
+    /// EXACTE (mêmes arguments, sans `compact:`), bit à bit identique.
+    func test_L17_allFourEmptyBranches_areRestyledUnderTheLentilleFlag() throws {
         let raw = try listViewSource()
         guard
             let searchCaseStart = raw.range(of: "case .searchNoResults:")?.lowerBound,
@@ -428,11 +436,10 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         let threeNonSkeletonBranches = String(raw[searchCaseStart..<elseRange.lowerBound])
         XCTAssertTrue(
             threeNonSkeletonBranches.contains("LentilleFeatureFlag"),
-            "TROU RÉEL (behaviour-matrix:L17, partiel) : « des états vides restylés plats » — " +
-            "les branches .searchNoResults/.syncError/.createFirstConversation ne référencent " +
-            "AUCUNE fois LentilleFeatureFlag : seule .skeleton est muxée sous le drapeau " +
-            "(LentilleSkeletonGeometryTests), les trois autres restent l'EmptyStateView " +
-            "historique sans variante Lentille."
+            "behaviour-matrix:L17 : « des états vides restylés plats » — les branches " +
+            ".searchNoResults/.syncError/.createFirstConversation doivent référencer " +
+            "LentilleFeatureFlag (restylage sous drapeau), comme .skeleton " +
+            "(LentilleSkeletonGeometryTests)."
         )
     }
 }
