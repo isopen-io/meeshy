@@ -5353,19 +5353,42 @@ describe('MeeshySocketIOManager', () => {
       };
     }
 
-    it('skips markMessagesAsReceived when showReadReceipts is false', async () => {
+    it('records the drained delivery when showReadReceipts is false — the preference silences the BROADCAST, not the write', async () => {
       const userId = 'user-drain-priv';
+      const convId = '507f1f77bcf86cd799439201';
       const readStatusSvc = makeReadStatusSvc();
       (manager as any).privacyPreferencesService = makePrivacySvc(userId, false);
       (manager as any).readStatusService = readStatusSvc;
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-priv', userId, conversationId: convId },
+      ]);
 
       const pending = [
-        { messageId: 'msg-1', conversationId: '507f1f77bcf86cd799439201', payload: {}, enqueuedAt: 1 },
+        { messageId: 'msg-1', conversationId: convId, payload: {}, enqueuedAt: 1 },
       ];
 
       await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
 
-      expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-priv', convId, 'msg-1');
+    });
+
+    it('emits no receipt when showReadReceipts is false', async () => {
+      const userId = 'user-drain-priv-silent';
+      const convId = '507f1f77bcf86cd799439202';
+      const readStatusSvc = makeReadStatusSvc();
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, false);
+      (manager as any).readStatusService = readStatusSvc;
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-priv-silent', userId, conversationId: convId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-1', conversationId: convId, payload: {}, enqueuedAt: 1 },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending, false);
+
+      expect(readStatusSvc.getLatestMessageSummary).not.toHaveBeenCalled();
     });
 
     it('chains an accountless peer by its participant id so a link guest sees the checkmark advance', async () => {

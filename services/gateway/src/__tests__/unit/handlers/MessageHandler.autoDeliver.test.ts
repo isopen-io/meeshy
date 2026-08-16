@@ -244,8 +244,15 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('skips recipients whose privacy preference disables read receipts', async () => {
-    const { handler, readStatusService, emit } = makeHandler({
+  /**
+   * La préférence tait la DIFFUSION, elle n'annule pas l'ENREGISTREMENT — même
+   * contrat que les portes REST et que `broadcastReadStatus`. Ce témoin disait
+   * l'inverse jusqu'au cycle 45 : l'état de livraison dépendait alors du
+   * transport, et l'arriéré d'un destinataire qui RÉACTIVE ses accusés
+   * ressortait « jamais livré ».
+   */
+  it('records the delivery of a recipient whose privacy preference disables read receipts', async () => {
+    const { handler, readStatusService } = makeHandler({
       onlineUsers: [onlineUserId],
       showReadReceipts: false
     });
@@ -255,7 +262,24 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       conversationId
     );
 
-    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalled();
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      onlineParticipantId,
+      conversationId,
+      messageId
+    );
+  });
+
+  it('emits no receipt for recipients whose privacy preference disables read receipts', async () => {
+    const { handler, emit } = makeHandler({
+      onlineUsers: [onlineUserId],
+      showReadReceipts: false
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
     expect(emit).not.toHaveBeenCalled();
   });
 

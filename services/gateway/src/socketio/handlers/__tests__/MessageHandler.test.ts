@@ -7,6 +7,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ── Module-level mocks ─────────────────────────────────────────────────────
 
@@ -1598,7 +1599,7 @@ describe('MessageHandler', () => {
       expect(deps.readStatusService.getLatestMessageSummary).not.toHaveBeenCalled();
     });
 
-    it('skips recipients without showReadReceipts preference', async () => {
+    it('records the delivery of an opt-out recipient — the preference tells what is BROADCAST, not what is WRITTEN', async () => {
       const recipient = makeOnlineRecipient();
       (deps.prisma.participant.findMany as jest.Mock<any>)
         .mockResolvedValueOnce([{ userId: USER_ID }])
@@ -1608,6 +1609,7 @@ describe('MessageHandler', () => {
       (deps.privacyPreferencesService.getPreferencesForUsers as jest.Mock<any>).mockResolvedValue(
         new Map([[recipient.userId, { showReadReceipts: false }]])
       );
+      (deps.readStatusService.markMessagesAsReceived as jest.Mock<any>).mockResolvedValue(undefined);
 
       const msg = {
         id: 'msg-1', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
@@ -1619,7 +1621,82 @@ describe('MessageHandler', () => {
       await new Promise(resolve => setImmediate(resolve));
       await new Promise(resolve => setImmediate(resolve));
 
-      expect(deps.readStatusService.markMessagesAsReceived).not.toHaveBeenCalled();
+      expect(deps.readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+        recipient.id, VALID_CONV_ID, 'msg-1'
+      );
+    });
+
+    it('broadcasts nothing when every online recipient opted out', async () => {
+      const recipient = makeOnlineRecipient();
+      (deps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([{ userId: USER_ID }])
+        .mockResolvedValueOnce([{ id: recipient.id, userId: recipient.userId, joinedAt: new Date() }])
+        .mockResolvedValueOnce([{ id: recipient.id, userId: recipient.userId }]);
+      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      (deps.privacyPreferencesService.getPreferencesForUsers as jest.Mock<any>).mockResolvedValue(
+        new Map([[recipient.userId, { showReadReceipts: false }]])
+      );
+      (deps.readStatusService.markMessagesAsReceived as jest.Mock<any>).mockResolvedValue(undefined);
+
+      const msg = {
+        id: 'msg-1', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: []
+      };
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(deps.readStatusService.getLatestMessageSummary).not.toHaveBeenCalled();
+    });
+
+    it('names an acker who SHARES receipts when an opt-out sits first in the list', async () => {
+      const optOut = makeOnlineRecipient();
+      const sharer = { id: 'recip-part-2', userId: 'recip-user-2233445566778899001122', isActive: true };
+      deps.connectedUsers.set(sharer.userId, makeSocketUser({ id: sharer.userId, userId: sharer.userId }));
+      const rows = [
+        { id: optOut.id, userId: optOut.userId },
+        { id: sharer.id, userId: sharer.userId }
+      ];
+      (deps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([{ userId: USER_ID }])
+        .mockResolvedValueOnce(rows.map(r => ({ ...r, joinedAt: new Date() })))
+        .mockResolvedValueOnce(rows);
+      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      (deps.privacyPreferencesService.getPreferencesForUsers as jest.Mock<any>).mockResolvedValue(
+        new Map<string, { showReadReceipts: boolean }>([
+          [optOut.userId, { showReadReceipts: false }],
+          [sharer.userId, { showReadReceipts: true }]
+        ])
+      );
+      (deps.readStatusService.markMessagesAsReceived as jest.Mock<any>).mockResolvedValue(undefined);
+      (deps.readStatusService.getLatestMessageSummary as jest.Mock<any>).mockResolvedValue({ deliveredCount: 2, readCount: 0 });
+
+      const msg = {
+        id: 'msg-1', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: []
+      };
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(deps.readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+        optOut.id, VALID_CONV_ID, 'msg-1'
+      );
+      expect(deps.readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+        sharer.id, VALID_CONV_ID, 'msg-1'
+      );
+      const emitter = (deps.io.to as jest.Mock<any>).mock.results[0].value as { emit: jest.Mock<any> };
+      const receiptEmits = emitter.emit.mock.calls
+        .filter(([event]: [unknown]) => event === SERVER_EVENTS.READ_STATUS_UPDATED) as [string, { participantId: string; userId: string | null }][];
+      expect(receiptEmits.length).toBeGreaterThan(0);
+      for (const [, payload] of receiptEmits) {
+        expect(payload.participantId).toBe(sharer.id);
+        expect(payload.userId).toBe(sharer.userId);
+      }
     });
 
     it('does not auto-deliver when no senderId on message', async () => {
