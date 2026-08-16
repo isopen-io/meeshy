@@ -60,6 +60,8 @@ final class LentilleFlatRowTests: XCTestCase {
     }
 
     // MARK: - Précédence de ligne 2 (contrat §LWS-7 : typing > brouillon > pont > préview)
+    // behaviour-matrix:L02 — précédence typing > brouillon > pont > préview,
+    // couverte par les quatre témoins ci-dessous.
 
     func test_line2Kind_typing_beatsEverything() {
         XCTAssertEqual(
@@ -154,6 +156,15 @@ final class LentilleFlatRowTests: XCTestCase {
     }
 
     // MARK: - Aucun badge chiffré (garde source, contrat §LWS-7)
+    // behaviour-matrix:L06 — « le badge rouge 99+ (unreadBadgeBackground) …
+    // sont supprimés » : ce témoin verrouille le RETRAIT du badge. Le point
+    // accent 8 px et le pont ✦ qui le remplacent sont verrouillés par
+    // LentilleMetricsTests.test_unreadDot_size et
+    // LentilleRowSourceGuardTests.test_bridgeLine_unreadDot_usesMetric_notALiteral.
+    // Le second volet de L06 (« le timestamp rouge sur non-lu … supprimé,
+    // l'heure reste tertiaire ») est, lui aussi, fermé (REV-3/V3ter) et
+    // verrouillé VERT par
+    // LentilleRowBehaviourAnchorTests.test_L06_timestampColor_isTertiary_neverErrorOnUnread.
 
     func test_sourceGuard_rowFiles_containNoUnreadBadgeBackground() throws {
         for relativePath in [

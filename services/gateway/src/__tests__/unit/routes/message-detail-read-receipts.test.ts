@@ -181,8 +181,17 @@ async function buildApp({ optedOutUserIds = [], breakReadStatus = false }: Build
         { messageId: MESSAGE_ID, participantId: SILENT_PARTICIPANT_ID, deliveredAt: READ_AT, receivedAt: READ_AT, readAt: READ_AT },
       ]),
     },
+    // L'opt-out s'exprime par le document JSON `userPreferences.privacy` — le
+    // SEUL rangement qu'écrive `PATCH /me/preferences/privacy`, donc le seul
+    // que l'application produise. Les lignes clé/valeur restent modélisées
+    // vides : elles ne sont plus qu'un repli pour les comptes sans document.
+    userPreferences: {
+      findMany: jest.fn().mockResolvedValue(
+        optedOutUserIds.map((userId) => ({ userId, privacy: { showReadReceipts: false } }))
+      ),
+    },
     userPreference: {
-      findMany: jest.fn().mockResolvedValue(optedOutUserIds.map((userId) => ({ userId }))),
+      findMany: jest.fn().mockResolvedValue([]),
     },
   });
   app.decorate('translationService', {} as any);

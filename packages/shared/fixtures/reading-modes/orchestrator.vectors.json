@@ -16,7 +16,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -43,7 +44,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -70,7 +72,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -97,7 +100,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -124,7 +128,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -151,7 +156,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -178,7 +184,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -205,7 +212,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -232,7 +240,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -259,7 +268,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -286,7 +296,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -313,7 +324,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -340,7 +352,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -367,7 +380,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -394,7 +408,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 0
+          "current": 0,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -420,7 +435,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 2
+          "current": 2,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -446,7 +462,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 2
+          "current": 2,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -472,7 +489,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 2
+          "current": 2,
+          "riverReason": "belowThreshold"
         }
       }
     },
@@ -500,7 +518,8 @@
         "riverEligible": true,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 8
+          "current": 8,
+          "riverReason": "eligible"
         }
       }
     },
@@ -528,7 +547,8 @@
         "riverEligible": true,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 8
+          "current": 8,
+          "riverReason": "eligible"
         }
       }
     },
@@ -554,7 +574,8 @@
         "riverEligible": false,
         "riverEligibilityReason": {
           "threshold": 5,
-          "current": 2
+          "current": 2,
+          "riverReason": "belowThreshold"
         }
       }
     },

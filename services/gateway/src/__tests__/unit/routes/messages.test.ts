@@ -215,6 +215,9 @@ async function buildApp(): Promise<FastifyInstance> {
     messageStatusEntry: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    userPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     userPreference: {
       findMany: jest.fn().mockResolvedValue([]),
     },

@@ -12,16 +12,21 @@ import XCTest
 @MainActor
 final class ReadingModeLensCatalogTests: XCTestCase {
 
+    /// AMENDEMENT S1 (REV-3/B3) : `current` est FAILLIBLE (`nil` = compte
+    /// inconnu) et la raison porte son discriminant. Défaut `.belowThreshold`
+    /// — la forme que les témoins historiques exerçaient déjà, pour qu'ils
+    /// restent lisibles tels quels.
     private func capabilities(
         availableModes: [ConversationReadingMode],
         riverEligible: Bool,
         threshold: Int = ReadingModeOrchestrator.riverEligibilityThreshold,
-        current: Int
+        current: Int?,
+        riverReason: ReadingModeOrchestrator.RiverEligibilityReasonKind = .belowThreshold
     ) -> ReadingModeOrchestrator.ReadingModeCapabilities {
         .init(
             availableModes: availableModes,
             riverEligible: riverEligible,
-            riverEligibilityReason: .init(threshold: threshold, current: current)
+            riverEligibilityReason: .init(threshold: threshold, current: current, riverReason: riverReason)
         )
     }
 
@@ -117,6 +122,116 @@ final class ReadingModeLensCatalogTests: XCTestCase {
             ReadingModeLensCatalog.defaultSubtitle(for: .focal),
             "Un mode disponible doit afficher son sous-titre par défaut, jamais un texte de seuil (réservé à l'indisponibilité)."
         )
+    }
+
+    // MARK: - AMENDEMENT S1 (REV-3/B3) — la trifurcation, côté Lens
+
+    /// `direct` ⇒ une clé DÉDIÉE, sans le moindre nombre. Le sous-titre
+    /// « S'ouvrira à 5 personnes actives — 2 aujourd'hui » sur un duo
+    /// promettait une porte qui n'existe pas ; le fil et la liste
+    /// (`LentilleModeLabels.riverReason`) racontent désormais la même histoire.
+    func test_river_neverEligibleRow_carriesTheDedicatedKey_andNoNumbers() throws {
+        let caps = capabilities(
+            availableModes: [.focal, .script, .summary],
+            riverEligible: false,
+            current: 2,
+            riverReason: .neverEligible
+        )
+        let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal)
+        let riverRow = try XCTUnwrap(rows.first { $0.mode == .river }, "Ligne Rivière introuvable.")
+
+        XCTAssertEqual(riverRow.reasonKey, "reading_mode.river.never")
+        XCTAssertNil(riverRow.thresholdValue, "Un seuil qui ne sera JAMAIS atteint n'a rien à afficher.")
+        XCTAssertNil(riverRow.currentValue, "Un compte qui ne changerait rien n'a rien à afficher.")
+
+        let subtitle = ReadingModeLensCatalog.subtitle(for: riverRow)
+        // Résolution locale-agnostique : même `String(localized:)` que la
+        // production. La langue est libre, l'identité de la clé ne l'est pas.
+        XCTAssertEqual(
+            subtitle,
+            String(
+                localized: "reading_mode.river.never",
+                defaultValue: "Jamais en conversation directe",
+                bundle: .main
+            )
+        )
+        XCTAssertFalse(
+            subtitle.contains(where: \.isNumber),
+            "Aucun nombre ne doit survivre dans le sous-titre « jamais » — rendu : « \(subtitle) »."
+        )
+    }
+
+    /// Compte INCONNU (`nil`) ⇒ le SEUIL seul. C'est la contrepartie du
+    /// passage de `LentilleReadingModeContext.activeParticipantCount` à `nil` :
+    /// plus aucun « 0 aujourd'hui » fabriqué.
+    func test_river_unknownCountRow_citesTheThresholdOnly_neverAFabricatedZero() throws {
+        let caps = capabilities(
+            availableModes: [.focal, .script, .summary],
+            riverEligible: false,
+            threshold: 5,
+            current: nil
+        )
+        let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal)
+        let riverRow = try XCTUnwrap(rows.first { $0.mode == .river }, "Ligne Rivière introuvable.")
+
+        XCTAssertEqual(riverRow.reasonKey, "reading_mode.river.threshold_only")
+        XCTAssertEqual(riverRow.thresholdValue, 5, "Le seuil, lui, est une valeur RÉELLE — il reste affiché.")
+        XCTAssertNil(riverRow.currentValue)
+
+        let subtitle = ReadingModeLensCatalog.subtitle(for: riverRow)
+        XCTAssertEqual(
+            subtitle,
+            String(
+                format: String(
+                    localized: "reading_mode.river.threshold_only",
+                    defaultValue: "S'ouvrira à %d personnes actives",
+                    bundle: .main
+                ),
+                5
+            )
+        )
+        XCTAssertTrue(subtitle.contains("5"), "Le seuil vivant doit rester visible.")
+        XCTAssertFalse(
+            subtitle.contains("0"),
+            "Un compte inconnu ne doit JAMAIS ressortir en « 0 » — rendu : « \(subtitle) »."
+        )
+
+        // Discrimination (leçon 266) : compte MESURÉ à zéro ⇒ l'autre clé, et
+        // un sous-titre différent. Sans ce contraste, un libellé unique
+        // passerait les deux témoins.
+        let measuredZero = capabilities(
+            availableModes: [.focal, .script, .summary],
+            riverEligible: false,
+            threshold: 5,
+            current: 0
+        )
+        let zeroRow = try XCTUnwrap(
+            ReadingModeLensCatalog.rows(capabilities: measuredZero, currentMode: .focal)
+                .first { $0.mode == .river }
+        )
+        XCTAssertEqual(zeroRow.reasonKey, "reading_mode.river.unavailable_reason")
+        XCTAssertNotEqual(
+            ReadingModeLensCatalog.subtitle(for: zeroRow), subtitle,
+            "« inconnu » et « mesuré à zéro » sont deux états ; les afficher pareil est le " +
+            "défaut que l'amendement S1 retire."
+        )
+    }
+
+    /// Nominal INCHANGÉ : compte connu sous le seuil ⇒ la formule à deux
+    /// nombres et sa clé historique.
+    func test_river_belowThresholdWithAKnownCount_keepsTheHistoricalTwoNumberKey() throws {
+        let caps = capabilities(
+            availableModes: [.focal, .script, .summary],
+            riverEligible: false,
+            threshold: 5,
+            current: 3
+        )
+        let riverRow = try XCTUnwrap(
+            ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal).first { $0.mode == .river }
+        )
+        XCTAssertEqual(riverRow.reasonKey, "reading_mode.river.unavailable_reason")
+        let subtitle = ReadingModeLensCatalog.subtitle(for: riverRow)
+        XCTAssertTrue(subtitle.contains("5") && subtitle.contains("3"), "Les DEUX nombres vivants, comme avant l'amendement.")
     }
 
     // MARK: - `toggledDensity` — bascule Focal⇄Script UNIQUEMENT

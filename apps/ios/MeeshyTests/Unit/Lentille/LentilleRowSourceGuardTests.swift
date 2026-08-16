@@ -234,6 +234,9 @@ final class LentilleRowSourceGuardTests: XCTestCase {
     // avant d'ajouter) — sourdine 🔕 et point du pont, aucun des deux
     // structurellement vérifié par LentilleFlatRowTests/LentilleSkeletonRowTests.
 
+    // behaviour-matrix:L07 — volet sourdine (🔕). Voir aussi
+    // SectionDropTargetTests (volet épingle) et
+    // LentilleRowBehaviourAnchorTests (volet glyphe 📌, TROU RÉEL).
     /// `behaviour-matrix.json` L07 : « la sourdine passe enfin visible (rang
     /// à 0.55 + 🔕) ». L'opacité 0.55 est déjà verrouillée par
     /// `LentilleFlatRowTests.test_rowOpacity_muted_usesMetricNotLiteral`

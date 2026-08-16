@@ -357,6 +357,19 @@ export class PreferencesService {
 
   /**
    * Update privacy preferences
+   *
+   * ⚠️ NON BRANCHÉ — et à ne pas rebrancher tel quel. Cette classe n'est
+   * importée par aucune route ni aucun service ; la porte vivante est
+   * `PUT`/`PATCH /me/preferences/privacy`
+   * (`routes/me/preferences/preference-router-factory.ts`), qui écrit le
+   * document `UserPreferences.privacy`.
+   *
+   * Les lignes clé/valeur `UserPreference` qu'écrit cette méthode sont le
+   * rangement HÉRITÉ : `services/preferences/privacy-storage.ts` ne les lit
+   * plus qu'en repli, pour les utilisateurs sans document. Les réécrire ferait
+   * de nouveau diverger les deux — c'est précisément la divergence du cycle 46,
+   * pendant laquelle aucun réglage de confidentialité n'atteignait les portes
+   * de diffusion (cf. `decisions.md` § 2026-08-16).
    */
   async updatePrivacyPreferences(
     userId: string,

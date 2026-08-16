@@ -49,16 +49,21 @@ nonisolated enum LentilleReadingModeContext {
     /// conversation — la présence par membre n'est chargée qu'à l'ouverture
     /// d'une conversation, et le décompte serveur
     /// (`activeParticipantCount`) est un livrable de la vague gateway (V5,
-    /// G-123, hors périmètre LWS-8). En attendant, `0` : une valeur RÉELLE
-    /// (jamais un texte fabriqué), qui ne peut FAUSSER l'éligibilité dans
-    /// AUCUN sens — le seuil est `>= 5` (`ReadingModeOrchestrator
-    /// .riverEligibilityThreshold`), donc `0` ne peut jamais rendre
-    /// éligible une conversation qui ne l'est pas : le risque est
-    /// uniquement un faux NÉGATIF temporaire, jamais un faux positif.
+    /// G-123, hors périmètre LWS-8).
+    ///
+    /// REV-3/B3 : ce compte vaut désormais `nil` — INCONNU — là où il valait
+    /// `0`. Le `0` était défendu comme « une valeur RÉELLE qui ne peut fausser
+    /// l'éligibilité dans aucun sens », et c'était vrai de l'ÉLIGIBILITÉ (le
+    /// seuil est `>= 5`, un faux négatif au pire). Mais ce n'était pas vrai du
+    /// TEXTE : la raison grisée rendait « s'ouvrira à 5 personnes actives —
+    /// 0 aujourd'hui » sur des conversations pleines de monde. Zéro n'était
+    /// pas mesuré, il était fabriqué. `nil` le dit, et l'amendement S1 donne
+    /// au libellé la forme qui va avec (le seuil seul, sans compte inventé).
     /// À remplacer par le champ serveur dès G-123 livré (extension de
-    /// `Conversation`, hors ce fichier).
-    static func activeParticipantCount(for conversation: Conversation) -> Int {
-        0
+    /// `Conversation`, hors ce fichier) — et ce jour-là, seul le corps de
+    /// cette fonction change.
+    static func activeParticipantCount(for conversation: Conversation) -> Int? {
+        nil
     }
 
     // MARK: - Entrées de la loi
@@ -143,18 +148,138 @@ nonisolated enum LentilleReadingModeContext {
     }
 }
 
-// MARK: - Store partagé (M-048) — UNE préférence, trois points d'entrée
+// MARK: - Store partagé (M-048) — UNE préférence, QUATRE points d'entrée
+
+/// Adaptateur Lentille → stockage Focal — arbitrage REV-3/B2.
+///
+/// AVANT : la liste écrivait `meeshy.readingMode.<conversationId>`
+/// (`LocalReadingModePreferenceStore`, M-048) pendant que le fil ouvert
+/// écrivait `meeshy_readmode_<scopeKey>_<conversationId>`
+/// (`ReadingModePreferenceStore`, F-080). Deux magasins DISJOINTS pour une
+/// même préférence : le mode choisi dans le menu de la liste n'était pas
+/// celui que le fil ouvrait, et la clé de la liste n'avait AUCUN préfixe
+/// d'identité — deux comptes sur le même appareil partageaient donc leurs
+/// préférences de lecture (exactement la fuite privacy du 2026-05-26 que
+/// `ReadingModePreferenceStore` documente en tête et que son préfixe scopé
+/// interdit).
+///
+/// APRÈS : le stockage Focal est LE stockage. Cette classe ne fait que
+/// TRADUIRE — elle implémente le protocole GELÉ `ReadingModePreferenceStoring`
+/// (asynchrone, `conversationId` seule, M-048/LWS-2bis — intact) en résolvant
+/// le scope d'identité EN INTERNE, avec le MÊME résolveur que le fil
+/// (`ConversationViewerIdentityResolver`, F-080), puis en déléguant au
+/// point d'entrée partagé `FocalReadingModePreferenceStoring
+/// .preference(for:scope:)` / `.setPreference(_:for:scope:)`. AUCUNE logique
+/// de clé n'est recopiée ici : les clés restent l'affaire exclusive de
+/// `ReadingModePreferenceStore`.
+///
+/// AUCUNE MIGRATION des anciennes clés `meeshy.readingMode.*` — décision
+/// motivée, pas un oubli. (1) Le seul écrivain de ces clés était
+/// `LocalReadingModePreferenceStore`, atteignable uniquement depuis les trois
+/// surfaces montées derrière `LentilleFeatureFlag.isLentilleListEnabled`
+/// (`ConversationListView+Overlays.swift`, `+Rows.swift`), drapeau dont le
+/// défaut est OFF (`UserDefaults.bool(forKey:)` sur clé absente) et dont
+/// l'unique bascule, `setForDebug`, n'a AUCUN site d'appel de production
+/// (tests seuls). (2) Aucun build utilisateur n'a donc jamais écrit une de ces
+/// clés. (3) Surtout : migrer une clé NON scopée vers une clé scopée
+/// consisterait à attribuer au premier lecteur venu une préférence qu'un autre
+/// compte du même appareil aurait laissée — soit re-commettre la fuite du
+/// 2026-05-26 dans le geste même censé la refermer. Ne rien migrer est ici la
+/// seule lecture honnête.
+nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePreferenceStoring, @unchecked Sendable {
+
+    private let store: FocalReadingModePreferenceStoring
+    private let scopeProvider: @Sendable () async -> ReadingModePreferenceScope
+    private let lock = NSLock()
+    private var subscribers: [UUID: @Sendable (String, ReadingModePreference) -> Void] = [:]
+
+    init(
+        store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
+        scopeProvider: @escaping @Sendable () async -> ReadingModePreferenceScope
+            = LentilleScopedReadingModePreferenceStore.currentViewerScope
+    ) {
+        self.store = store
+        self.scopeProvider = scopeProvider
+    }
+
+    /// Scope du lecteur courant, résolu par l'UNIQUE point de branchement
+    /// invité/inscrit du dépôt (§5.1) — jamais un `isAnonymous` recopié sur
+    /// place.
+    ///
+    /// `anonymousSession: nil` — RE-PREUVE, pas un raccourci : les trois
+    /// surfaces qui consomment ce magasin sont montées par
+    /// `ConversationListView` (`+Overlays.swift:125/:459`, `+Rows.swift:149`),
+    /// elle-même hébergée par `RootView`/`iPadRootView` ; une session invitée
+    /// active fait présenter `GuestConversationContainer` en `fullScreenCover`
+    /// par-dessus tout (`MeeshyApp.swift`, condition
+    /// `activeGuestSession != nil && !authManager.isAuthenticated`), et ce
+    /// conteneur ouvre un FIL, jamais la liste. Aucune source client ne publie
+    /// par ailleurs le `participantId` de la session invitée hors du fil
+    /// (`AnonymousSessionStore.load` exige un `linkId`). Le repli documenté du
+    /// résolveur (`.anonymous(participantId: "")`) est donc le comportement
+    /// exact voulu ici : identité inconnue ⇒ préférence non durable, jamais
+    /// une préférence attribuée au mauvais compte. `scopeProvider` reste
+    /// injectable pour que la liste invitée (V5) branche la vraie session sans
+    /// toucher à cette classe.
+    static func currentViewerScope() async -> ReadingModePreferenceScope {
+        await MainActor.run {
+            ConversationViewerIdentityResolver.resolve(
+                authManager: AuthManager.shared,
+                anonymousSession: nil
+            ).scope
+        }
+    }
+
+    func get(conversationId: String) async -> ReadingModePreference {
+        let scope = await scopeProvider()
+        return store.preference(for: conversationId, scope: scope)
+    }
+
+    func set(conversationId: String, value: ReadingModePreference, optimistic: Bool = true) async {
+        let scope = await scopeProvider()
+        store.setPreference(value, for: conversationId, scope: scope)
+        notifySubscribers(conversationId: conversationId, value: value)
+    }
+
+    /// Même portée que le magasin M-048 qu'il remplace : notifie les écritures
+    /// passées PAR CET adaptateur. Un choix fait dans le fil ouvert
+    /// (`ReadingModeController.select`, magasin synchrone sans canal de
+    /// notification) n'émet toujours pas ici — mais il atterrit désormais sur
+    /// la MÊME clé, donc la prochaine lecture de la liste le voit. C'est la
+    /// différence entre « pas encore d'événement » et « deux vérités
+    /// divergentes » : seule la seconde était un défaut.
+    func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void {
+        let token = UUID()
+        lock.lock()
+        subscribers[token] = callback
+        lock.unlock()
+
+        return { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            self.subscribers.removeValue(forKey: token)
+            self.lock.unlock()
+        }
+    }
+
+    private func notifySubscribers(conversationId: String, value: ReadingModePreference) {
+        lock.lock()
+        let callbacks = Array(subscribers.values)
+        lock.unlock()
+        for callback in callbacks {
+            callback(conversationId, value)
+        }
+    }
+}
 
 /// L'encoche (I-071), le sous-menu « Mode de lecture » et l'aperçu (I-072)
-/// doivent lire/écrire EXACTEMENT le même magasin — sinon « trois points
-/// d'entrée, une préférence » (contrat LWS-8) devient trois préférences.
+/// doivent lire/écrire EXACTEMENT le même magasin que le FIL ouvert
+/// (`ReadingModeController`, F-080) — sinon « trois points d'entrée, une
+/// préférence » (contrat LWS-8) devient quatre préférences.
 ///
-/// `LocalReadingModePreferenceStore` (`Lentille/Core/LentilleProviders.swift`,
-/// GELÉ M-048) n'expose pas de singleton — ce fichier n'a pas le droit
-/// d'éditer ce fichier gelé pour lui en ajouter un. Ce point d'accès partagé
-/// vit donc ici, au plus près de ses trois consommateurs, sur le modèle des
-/// autres `.shared` de l'app (`PresenceManager.shared`,
+/// Ce point d'accès partagé vit ici, au plus près de ses trois consommateurs,
+/// sur le modèle des autres `.shared` de l'app (`PresenceManager.shared`,
 /// `ConversationLockManager.shared`).
 nonisolated enum LentilleReadingModePreferenceCenter {
-    static let shared: ReadingModePreferenceStoring = LocalReadingModePreferenceStore()
+    static let shared: ReadingModePreferenceStoring = LentilleScopedReadingModePreferenceStore()
 }

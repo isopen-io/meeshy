@@ -51,6 +51,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F01 — message entrant temps réel, focus suit si au fond
+    // behaviour-matrix:F01
 
     /// Preuve exhaustive de l'élection : `FocalScrollPassGeometryTests`
     /// (`test_election_picksTheClosestCandidateWhenNoCurrent`, etc.).
@@ -85,6 +86,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F02 — typing indicator plat, exclu de la perspective
+    // behaviour-matrix:F02
 
     /// Preuve exhaustive : `FocalScrollPassGeometryTests.
     /// test_apply_ineligibleCells_areResetToIdentity` (une cellule
@@ -104,6 +106,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F03 — dot de présence sur la pastille 22
+    // behaviour-matrix:F03
 
     /// La pastille et son ring de présence viennent de `MeeshyAvatar`
     /// (§1.3, lu jamais modifié) — `FocalIdentityHeader` transmet
@@ -126,6 +129,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F04 — accusés ✓/✓✓/lu dans l'identité, jamais en pied
+    // behaviour-matrix:F04
 
     /// Preuve exhaustive du glyphe/des couleurs : `BubbleDeliveryCheck` lui-
     /// même (§1.3, non re-testé). Ce que WS-4 devait garantir spécifiquement
@@ -143,6 +147,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F05 — réactions live en pilule plate MÉTA (corrigé F-083ter)
+    // behaviour-matrix:F05
 
     /// **Trou réel découvert par F-090, corrigé par F-083ter.** `FocalRow.reactionsSection`
     /// réutilise `BubbleReactionsOverlay` (§1.3, `internal`, vérifié non
@@ -162,6 +167,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F06 — swap de traduction + chip 🌐 (PARTIEL : swap oui, chip non)
+    // behaviour-matrix:F06
 
     /// Le SWAP de texte (résolution Prisme inchangée, `content.translation?.preferredContent`)
     /// EST bien branché — cette moitié de F06 est couverte.
@@ -189,6 +195,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F07 — audio nu, transcription traduite, carrousel multi-pistes
+    // behaviour-matrix:F07
 
     /// Preuve exhaustive du ROUTAGE : `FocalAudioRoutingTests` (8 tests, les
     /// 4 modes + carrousel + exclusivité mutuelle). Ancrage frais : le
@@ -221,6 +228,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F08 — grilles média 1/2/3/4+ nues
+    // behaviour-matrix:F08
 
     /// Preuve exhaustive de la géométrie : `FocalMediaGridLayoutTests`
     /// (n ∈ {0,1,2,3,4,7}). Ancrage frais : la rangée pose la grille SANS
@@ -238,6 +246,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F09 — citation : filet 2.5 + ligne tronquée, tap saute au focus
+    // behaviour-matrix:F09
 
     /// Preuve exhaustive du rendu : `FocalDynamicTypeTests.
     /// test_quotedReply_lineLimitOneIsDocumentedPolicy_notAnOmission` (F-090)
@@ -265,6 +274,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F10 — long-press menu ; « modifié » 10.5 ; supprimé fantôme (PARTIEL)
+    // behaviour-matrix:F10
 
     /// Le message SUPPRIMÉ (rangée fantôme italique sans fond) EST bien
     /// couvert — `FocalDeletedRow` (WS-3).
@@ -295,6 +305,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F11 — badges éphémère/épinglé/transféré au-dessus de l'identité ; flou (PARTIEL)
+    // behaviour-matrix:F11
 
     /// Le FLOU (« s'applique au bloc contenu de la rangée ») EST bien
     /// couvert — `FocalMediaProtectionTests` (8 tests, machine à états
@@ -340,6 +351,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F12 — bannière épinglée inchangée ; recherche saute à la bande de focus
+    // behaviour-matrix:F12
 
     /// La bannière épinglée (`ConversationView`, hors Focal/**) reste
     /// inchangée par construction — WS-7 ne la touche pas (aucun fichier
@@ -367,6 +379,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F13 — rangée optimiste : alpha = min(0.7, alphaPerspective)
+    // behaviour-matrix:F13
 
     /// Preuve exhaustive : `FocalScrollPassGeometryTests` (`test_alphaCeiling_*`,
     /// 3 tests : plafonnement dans la bande, courbe gagnante loin de la
@@ -385,6 +398,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F14 — chargement vers le haut ; inset de tête seulement si première page atteinte
+    // behaviour-matrix:F14
 
     /// Preuve exhaustive : `FocalHostInsetCompositionTests`
     /// (`test_headInset_isPositive_whenFocalAndHasReachedOldest`,
@@ -405,6 +419,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     // MARK: - F15 — effets (bitfield), mentions/hashtags, notices centrées plates (PARTIEL)
+    // behaviour-matrix:F15
 
     /// Mentions/hashtags EUX gardent bien leurs tokens actuels — teintes
     /// transmises à `BubbleExpandableText` (mentionTint/hashtagTint), jamais

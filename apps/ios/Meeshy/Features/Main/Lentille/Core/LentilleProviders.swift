@@ -203,64 +203,33 @@ nonisolated protocol ReadingModePreferenceStoring: Sendable {
     func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void
 }
 
-/// Substitut client — `UserDefaults` injectable, clé
-/// `meeshy.readingMode.<conversationId>`. JAMAIS `.standard` dans les tests
-/// (convention du dépôt, cf. `StoryVisibilityPreferenceStore` /
-/// `StoryVisibilityPreferenceStoreTests` — une suite qui écrirait la vraie
-/// clé laisserait un résidu visible au lancement suivant, `MeeshyTests`
-/// étant hébergé dans `Meeshy.app`).
-final class LocalReadingModePreferenceStore: ReadingModePreferenceStoring, @unchecked Sendable {
-
-    private static let keyPrefix = "meeshy.readingMode."
-
-    private static func key(conversationId: String) -> String {
-        "\(keyPrefix)\(conversationId)"
-    }
-
-    private let defaults: UserDefaults
-    private let lock = NSLock()
-    private var subscribers: [UUID: @Sendable (String, ReadingModePreference) -> Void] = [:]
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    func get(conversationId: String) async -> ReadingModePreference {
-        guard let raw = defaults.string(forKey: Self.key(conversationId: conversationId)),
-              let value = ReadingModePreference(rawValue: raw) else {
-            return .auto
-        }
-        return value
-    }
-
-    func set(conversationId: String, value: ReadingModePreference, optimistic: Bool = true) async {
-        defaults.set(value.rawValue, forKey: Self.key(conversationId: conversationId))
-        notifySubscribers(conversationId: conversationId, value: value)
-    }
-
-    func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void {
-        let token = UUID()
-        lock.lock()
-        subscribers[token] = callback
-        lock.unlock()
-
-        return { [weak self] in
-            guard let self else { return }
-            self.lock.lock()
-            self.subscribers.removeValue(forKey: token)
-            self.lock.unlock()
-        }
-    }
-
-    private func notifySubscribers(conversationId: String, value: ReadingModePreference) {
-        lock.lock()
-        let callbacks = Array(subscribers.values)
-        lock.unlock()
-        for callback in callbacks {
-            callback(conversationId, value)
-        }
-    }
-}
+/// RETIRÉ — arbitrage REV-3/B2 : `LocalReadingModePreferenceStore`.
+///
+/// Ce fichier livrait ici un substitut client `UserDefaults` de clé
+/// `<conversationId>` SEULE, sans préfixe d'identité. C'était le second des
+/// « deux magasins disjoints » du blocker B2 : la liste y écrivait pendant que
+/// le fil ouvert écrivait le magasin scopé de F-080
+/// (`Focal/Preferences/ReadingModePreferenceStore.swift`,
+/// `meeshy_readmode_<scopeKey>_<conversationId>`). Deux défauts en un — la
+/// préférence choisie dans la liste n'était pas celle qu'ouvrait le fil, et la
+/// clé non scopée faisait partager leurs préférences à deux comptes du même
+/// appareil (fuite privacy du 2026-05-26).
+///
+/// L'arbitrage tranche : le stockage Focal est LE stockage. L'implémentation
+/// LOCALE de ce protocole est désormais
+/// `LentilleScopedReadingModePreferenceStore`
+/// (`Lentille/Mode/LentilleReadingModeContext.swift`) — un pur ADAPTATEUR qui
+/// résout le scope avec `ConversationViewerIdentityResolver` et délègue au
+/// magasin scopé. Le PROTOCOLE ci-dessus, lui, est intact : c'est bien le
+/// miroir mot pour mot de `packages/shared/providers/ReadingModePreferenceStoring.ts`
+/// (S1, gelé), et il garde ses deux implémentations attendues — la locale
+/// (l'adaptateur) et la définitive (gateway, G-124).
+///
+/// Retrait assumé dans un fichier GELÉ M-048 : ce fichier annonçait lui-même
+/// que « l'arbitrage entre les deux revient à Fable à l'intégration V3 »
+/// (commentaire du protocole ci-dessus). C'est cette intégration. Garder la
+/// classe aurait laissé dans l'app une seconde écriture non scopée qu'un
+/// prochain câblage pouvait rebrancher — précisément ce que B2 ferme.
 
 // =============================================================================
 // MARK: - ConversationLiveCallProviding
