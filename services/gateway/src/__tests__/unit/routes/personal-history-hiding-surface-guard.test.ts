@@ -158,6 +158,16 @@ const SERVICES_DIR = join(__dirname, '../../../services');
 const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   'MessageReadStatusService.ts': { kind: 'applies', reads: 7, applications: 2 },
 
+  /**
+   * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
+   * non lus : exactement l'ensemble que le badge compte, donc exactement le
+   * même masquage, sur l'unique fenêtre agrégée qu'il lit (jamais une lecture
+   * par conversation — d'où `reads: 1`). Sans l'application, un auteur dont le
+   * lecteur a effacé l'historique reviendrait le nommer dans la phrase du
+   * rang : la fuite que le compteur, lui, ne fait plus depuis le cycle 109.
+   */
+  'ConversationBridgeService.ts': { kind: 'applies', reads: 1, applications: 1 },
+
   'ConversationMessageStatsService.ts': {
     kind: 'exempt',
     reads: 1,
