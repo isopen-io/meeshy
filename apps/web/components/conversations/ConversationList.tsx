@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef, useEffect, memo, useDeferredValue } from 'react';
+import dynamic from 'next/dynamic';
 import { MessageSquare, Link2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -14,6 +15,26 @@ import {
   useConversationFiltering,
   useConversationSorting
 } from './hooks';
+import { useFeatureFlags } from '@/hooks/use-feature-flags';
+import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
+
+/**
+ * Mux Lentille — WL-101 (contrat LWS-10).
+ *
+ * Chargé en `next/dynamic` (`ssr: false`) : drapeau éteint ⇒ ce module (et
+ * tout ce qu'il importe, y compris l'abonnement typing de
+ * `useLentilleListTyping`) n'est JAMAIS téléchargé — coût nul pour qui
+ * n'active pas la Lentille. Aucun `import` statique de ce composant
+ * n'existe ailleurs dans ce fichier (garde structurelle,
+ * `__tests__/components/conversations/ConversationList.lentille-dynamic-structure.test.ts`).
+ */
+const LentilleConversationListMount = dynamic(
+  () =>
+    import('./lentille/LentilleConversationListMount').then(
+      (mod) => mod.LentilleConversationListMount
+    ),
+  { ssr: false }
+);
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -61,6 +82,12 @@ export const ConversationList = memo(function ConversationList({
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedFilter, setSelectedFilter] = useState<CommunityFilter>({ type: 'all' });
+
+  // Résolveur unique du web (contrat LWS-10) — le SEUL site de mux du drapeau
+  // Lentille. Toute décision de rendu Lentille passe par cette variable ;
+  // rien en aval ne relit le drapeau lui-même.
+  const { isFeatureEnabled } = useFeatureFlags();
+  const lentilleListActive = isFeatureEnabled('lentille_list');
 
   // Refs
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -297,9 +324,18 @@ export const ConversationList = memo(function ConversationList({
         />
       </div>
 
-      {/* Contenu scrollable */}
+      {/* Contenu scrollable — drapeau éteint ⇒ rendu historique inchangé,
+          bit-à-bit identique (R20/R8). Drapeau actif ⇒ sous-arborescence
+          Lentille, protégée par un repli qui rend EXACTEMENT ce même rendu
+          historique en cas d'exception (jamais une page morte). */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {renderContent}
+        {lentilleListActive ? (
+          <FeatureErrorBoundary featureName="Lentille" fallback={renderContent}>
+            <LentilleConversationListMount currentUserId={currentUser?.id ?? null} />
+          </FeatureErrorBoundary>
+        ) : (
+          renderContent
+        )}
       </div>
 
       {/* Bouton de création en bas */}

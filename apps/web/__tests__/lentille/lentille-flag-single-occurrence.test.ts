@@ -16,12 +16,14 @@
  * RESSERREMENT PROGRAMMÉ (documenté ici, choix explicite — voir
  * tasks/lentille-workshop-execution.md, protocole §2) : ce garde compte
  * `LENTILLE_FLAG_NAME` ('lentille_list') dans `apps/web` hors exclusions.
- *   - WL-100 (CE commit) : AUCUN site de mux n'existe encore ⇒ attendu 0.
- *   - WL-101 (commit suivant) : le mux de `ConversationList.tsx` introduit
- *     l'unique occurrence ⇒ attendu 1. Le seuil sera resserré DANS LE MÊME
- *     commit qui introduit cette occurrence — jamais laissé « ≤ 1 »
- *     indéfiniment, ce qui aurait dispensé le garde de jamais s'alarmer d'un
- *     deuxième site de mux ajouté par erreur.
+ *   - WL-100 : AUCUN site de mux n'existait encore ⇒ attendu 0 (constaté,
+ *     historique — voir `git log` de ce fichier).
+ *   - WL-101 (CE commit) : le mux de `ConversationList.tsx`
+ *     (`isFeatureEnabled('lentille_list')`) introduit l'unique occurrence
+ *     attendue ⇒ le seuil est resserré ICI, dans LE MÊME commit qui
+ *     introduit cette occurrence — jamais laissé « ≤ 1 » indéfiniment, ce
+ *     qui aurait dispensé le garde de jamais s'alarmer d'un deuxième site de
+ *     mux ajouté par erreur demain.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -91,18 +93,28 @@ describe('Garde LWS-10 — une seule occurrence du nom du drapeau hors résolveu
     expect(LENTILLE_FLAG_NAME).toBe('lentille_list');
   });
 
-  it('WL-100 : zéro occurrence hors résolveur/tests — le mux n\'existe pas encore', () => {
+  it('WL-101 : exactement UNE occurrence hors résolveur/tests — au mux, et nulle part ailleurs', () => {
     const hits = countFlagNameOccurrences();
     const total = hits.reduce((sum, h) => sum + h.count, 0);
 
-    if (total !== 0) {
+    if (total !== 1) {
       throw new Error(
-        `Attendu 0 occurrence de '${LENTILLE_FLAG_NAME}' hors résolveur/tests à ce stade (WL-100).\n` +
+        `Attendu EXACTEMENT 1 occurrence de '${LENTILLE_FLAG_NAME}' hors résolveur/tests (WL-101, le mux).\n` +
           `Trouvé ${total} :\n` +
-          hits.map(h => `  ${h.file}: ${h.count}`).join('\n')
+          (hits.length > 0
+            ? hits.map(h => `  ${h.file}: ${h.count}`).join('\n')
+            : '  (aucune — la logique a disparu du mux, ou le point de branchement a été renommé)')
       );
     }
 
-    expect(total).toBe(0);
+    expect(total).toBe(1);
+  });
+
+  it('la seule occurrence vit dans le mux de ConversationList.tsx', () => {
+    const hits = countFlagNameOccurrences();
+
+    expect(hits).toEqual([
+      { file: path.join('components', 'conversations', 'ConversationList.tsx'), count: 1 },
+    ]);
   });
 });

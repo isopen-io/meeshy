@@ -1,0 +1,217 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`ConversationList — mux Lentille (WL-101) drapeau OFF (défaut) rend un contenu scrollable bit-à-bit stable (snapshot de référence) 1`] = `
+<div
+  class="flex-1 min-h-0 overflow-y-auto"
+>
+  <div
+    class="px-4 py-2"
+  >
+    <div
+      class="mb-4"
+    >
+      <div
+        class="space-y-1"
+      >
+        <div
+          class="group flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent/50 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          role="button"
+          tabindex="0"
+        >
+          <div
+            class="relative flex-shrink-0"
+          >
+            <div
+              class="h-12 w-12"
+              data-testid="avatar"
+            >
+              <div
+                class="bg-primary/10 text-primary font-semibold"
+                data-testid="avatar-fallback"
+              >
+                <svg
+                  class="h-4 w-4"
+                  data-testid="users-icon"
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            class="flex-1 min-w-0"
+          >
+            <div
+              class="flex items-start justify-between gap-2"
+            >
+              <div
+                class="flex items-center gap-1.5 min-w-0"
+              >
+                <h3
+                  class="font-semibold text-sm truncate"
+                >
+                  Test Conversation 1
+                </h3>
+              </div>
+              <span
+                class="text-xs text-muted-foreground flex-shrink-0"
+              >
+                Today
+              </span>
+            </div>
+            <p
+              class="text-sm text-muted-foreground truncate mt-0.5"
+            >
+              <span
+                class="font-medium"
+              >
+                John
+                : 
+              </span>
+              Hello world
+            </p>
+          </div>
+          <span
+            class="ml-2 flex-shrink-0 h-5 min-w-[20px] px-1.5"
+            data-testid="badge"
+          >
+            2
+          </span>
+          <div
+            data-testid="dropdown-menu"
+          >
+            <div>
+              <button
+                class="h-8 w-8 flex-shrink-0 transition-opacity opacity-0 group-hover:opacity-100"
+              >
+                <svg
+                  class="h-4 w-4"
+                  data-testid="morevertical-icon"
+                />
+              </button>
+            </div>
+            <div>
+              <button>
+                <svg
+                  class="mr-2 h-4 w-4"
+                  data-testid="settings-icon"
+                />
+                <span>
+                  conversationHeader.settings
+                </span>
+              </button>
+              <button>
+                <svg
+                  class="mr-2 h-4 w-4"
+                  data-testid="pin-icon"
+                />
+                <span>
+                  conversationHeader.pin
+                </span>
+              </button>
+              <button>
+                <svg
+                  class="mr-2 h-4 w-4"
+                  data-testid="belloff-icon"
+                />
+                <span>
+                  conversationHeader.mute
+                </span>
+              </button>
+              <button>
+                <svg
+                  class="mr-2 h-4 w-4"
+                  data-testid="archive-icon"
+                />
+                <span>
+                  conversationHeader.archive
+                </span>
+              </button>
+              <hr />
+              <button>
+                <svg
+                  class="mr-2 h-4 w-4"
+                  data-testid="share2-icon"
+                />
+                <span>
+                  Share
+                </span>
+              </button>
+              <hr />
+              <div>
+                <div>
+                  <svg
+                    class="mr-2 h-4 w-4"
+                    data-testid="smile-icon"
+                  />
+                  <span>
+                    conversationHeader.reactions
+                  </span>
+                </div>
+                <div>
+                  <div
+                    class="grid grid-cols-3 gap-1"
+                  >
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        ❤️
+                      </span>
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        👍
+                      </span>
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        😊
+                      </span>
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        🎉
+                      </span>
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        🔥
+                      </span>
+                    </button>
+                    <button
+                      class="flex items-center justify-center w-10 h-10 rounded-md hover:bg-accent transition-colors relative"
+                    >
+                      <span
+                        class="text-xl"
+                      >
+                        ⭐
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
