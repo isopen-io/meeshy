@@ -1147,3 +1147,88 @@ constituent un chantier séparé, correctement scopé pour un futur slice IOS_DE
 
 - `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-build-break-focal-lentille`
   (ce commit, poussé directement sur `main`).
+
+### 2026-08-16 — Run #10 (ré-vérification du backlog laissé par le fix de build-break — aucun code livré)
+
+Contexte : `tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5
+last_run=conversation-favorite-reaction` — règle d'alternance déclenchée, bascule vers `IOS_DETTE`.
+Scan de reprise (Étape 0 point 5) : `gh pr list --state open --search "apps/android OR apps/ios"`
+→ une seule PR ouverte (#3083, `claude/keen-hamilton-si27ne`, member-list Android) — nom de branche
+ne matchant PAS la convention `claude/apps/*/ <slice-id>` de cette routine (générée par une session
+tierce), écartée conformément au filtre de bruit. Aucune branche `claude/apps/ios/*` récente.
+
+**WIP orpheline trouvée hors du scan branches/PR** : `git stash list` montrait `stash@{1}` — « WIP
+on claude/apps/ios/debt-message-language-detail-adaptive-onchange » (le slice mis de côté au run
+build-break du même jour, cf. entrée précédente). Inspecté avant de reprendre ou d'abandonner :
+`git stash show --stat` = **1 seul fichier, `project.pbxproj`, +564/-0** — un pur artefact de
+régénération XcodeGen, ZÉRO changement de code source réel (le diff hors-pbxproj est vide). En plus
+d'être un artefact généré (jamais committer ce churn, `apps/ios/CLAUDE.md`), ce snapshot est
+doublement périmé : `main` a avancé de ~700 commits depuis (dont le merge Lentille/Focal ET le fix
+de build-break qui a lui-même régénéré le pbxproj). **`git stash drop`** — aucune perte, la
+migration réelle n'avait jamais été commencée, juste le projet régénéré en préparation.
+
+**RE-PROUVÉ les 3 items laissés en backlog par l'entrée précédente avant de coder quoi que ce
+soit** — les trois se sont révélés soit déjà résolus, soit non actionnables cette itération :
+
+1. **`joinFlow.error.linkNotFound`/`joinFlow.error.unknown` « manquantes des 5 locales »** — FAUX
+   dès la vérification : les deux clés existent dans
+   `packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings` avec une couverture
+   COMPLÈTE sur les **7** locales du catalogue (ar/de/en/es/fr/it/pt-BR — pas 5), confirmé par un
+   script Python parsant le JSON du catalogue plutôt qu'un grep textuel fragile. Le test nommé
+   `test_joinFlowErrorKeys_resolveInAll5Locales` n'existe nulle part dans le repo (`grep -rn`
+   exhaustif, zéro occurrence) — la note elle-même était probablement erronée dès l'origine (nom de
+   test inventé, ou confondu avec une autre feature), pas seulement obsolète. **ÉCARTÉ, preuve
+   ci-dessus.**
+2. **« ~16 `MeeshyTests` assertent des littéraux français », ex. `LentilleSectionIdentityTests`/
+   `test_riviere_reason_isComposedFromLiveThresholds…`** — les DEUX tests nommés en exemple, lus
+   intégralement dans `ModeMenuModelTests.swift` (le nom de fichier réel — `LentilleSectionIdentityTests`
+   ne correspond à aucun fichier existant), sont déjà **locale-agnostiques** : ils composent la
+   valeur attendue via le MÊME `String(localized:defaultValue:bundle:.main)` que la production
+   (patron déjà établi `A11yLabelComposerTests`), avec un commentaire explicite documentant cette
+   résolution comme déjà corrigée (« Résolution locale-agnostique »). Vraisemblablement corrigés par
+   une session tierce concurrente le même jour (forte activité concurrente confirmée : PR #3083,
+   plusieurs commits gateway). **Les 2 exemples nommés sont ÉCARTÉS, preuve ci-dessus** — mais la
+   revendication plus large « ~16 tests » ne peut pas être re-vérifiée sans un run CI/local réel
+   (tenté : `gh run view --log` sur le run CI le plus récent, extraction du résumé de tests
+   infructueuse — log tronqué/mal structuré côté `gh`, pas de résumé de tests exploitable sans lancer
+   un `xcodebuild test` complet, coûteux). **Marqué « À RE-VÉRIFIER » (pas re-fermé, pas re-attaqué à
+   l'aveugle)** — un futur run devra soit lancer la suite complète localement, soit lire le résumé CI
+   directement dans l'UI GitHub, avant de conclure sur le reste des ~14 tests restants.
+3. **`OfflineQueueTests.test_recoverLastUnsentPost_returnsMostRecentMatchingType` flaky** — toujours
+   ouvert, cause racine toujours non élucidée (hypothèse de pollution d'état inter-classes non
+   creusée) — ne satisfait pas le filtre de sûreté « mécanique/à risque borné » tant qu'un
+   diagnostic n'a pas réduit le problème à un fix précis. Laissé tel quel, pas d'action ce run.
+
+**Balayage de réapprovisionnement du backlog** (patron suggéré par le prompt orchestrateur —
+`print(`, `DispatchQueue.main.async`, `#file\b`, `.system(size:` restants) :
+- `#file\b` (hors `#filePath`) dans les tests : **1 seule occurrence**, et c'est la garde
+  `Swift6TestFileArgSourceGuardTests.swift` elle-même (son propre commentaire de doc mentionnant
+  `#file` en prose) — le défaut original (item 1 du seed initial) est déjà entièrement corrigé ET
+  gardé mécaniquement. Rien à faire.
+- `print(` en code de production (`apps/ios/Meeshy` + `packages/MeeshySDK/Sources`, hors tests) :
+  **zéro occurrence réelle** — le premier grep naïf remontait des faux positifs
+  (`mediaKeysFingerprint`/`structureFingerprint`, qui CONTIENNENT la sous-chaîne `print(` sans être
+  un appel `print()`), corrigé avec une frontière de mot. Déjà propre.
+- `DispatchQueue.main.async` restants : **76 occurrences** — réel, mais bien trop large pour un
+  seul run borné (contrairement à l'item 7 `WindowMetrics`, chaque site nécessite un jugement
+  contextuel — s'agit-il d'un callback non-async où le hop de queue est nécessaire, ou d'un contexte
+  déjà `@MainActor` où c'est une pure verrue historique ? — pas une substitution mécanique 1:1
+  uniforme). Candidat pour un FUTUR item correctement scopé (probablement décomposé en plusieurs
+  sous-lots comme l'a été l'item 7), pas attaqué ce run faute d'un premier tri fichier-par-fichier.
+- `.system(size:` restants : **190 occurrences** — encore plus large, item non scopé du tout (pas
+  dans le seed original), simple signal de style à trier avant de devenir un item actionnable.
+
+**Décision : aucun code livré ce run** — les 3 items hérités se sont révélés soit déjà résolus
+(2/3, preuve ci-dessus), soit non bornés/non mécaniques (le 3e, flaky non élucidé), et le
+balayage de réapprovisionnement n'a produit aucun candidat à la fois réel, petit et sûr sans un tri
+supplémentaire (les deux plus gros candidats, `DispatchQueue.main.async`/`.system(size:`,
+nécessitent d'abord une passe de tri fichier-par-fichier avant de devenir un item exécutable en un
+seul run — même précédent que les runs « Item 4 closed » et « Item 7 sous-lot » de ce même fichier).
+Contrairement à un run qui forcerait un fix sur un item non re-prouvé, celui-ci referme
+proprement 2 items périmés avec preuve et documente honnêtement l'état réel du 3e.
+
+**Vérification** : aucune (aucun code applicatif touché — `git stash drop` + mise à jour de ce
+fichier de suivi uniquement). Pas de branche `claude/apps/ios/*` créée, pas de PR, pas de CI.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0 last_run=ios-debt-backlog-reverification-2026-08-16`
+  (commit séparé, poussé directement sur `main` avec `git push origin HEAD:main`).
