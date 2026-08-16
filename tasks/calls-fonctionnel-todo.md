@@ -9057,3 +9057,79 @@ correctif chirurgical neuf. Toolchains iOS/Android toujours hors d'atteinte dans
   code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
   implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; gaps d'infrastructure
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 135 — `translateAndEmitSegment` broadcast every target language to the WHOLE call room, not just its listeners (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement le candidat laissé de côté par la Vague 134 (« hors gabarit chirurgical de cette
+vague ») — cette session dispose du temps pour l'implémenter correctement. Toolchains iOS/Android
+toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (root cause), aucun edit Swift/Kotlin
+non testable.
+
+- **Root cause** : `translateAndEmitSegment` calculait `targetLanguages` comme un `Set<string>`
+  APLATI (l'union des langues résolues de tous les auditeurs, sans mémoriser QUI voulait QUOI),
+  puis, pour CHAQUE langue cible, diffusait la traduction à `socket.to(ROOMS.call(data.callId))` —
+  la room entière de l'appel. En appel de groupe à 3 langues distinctes (locuteur FR, auditeur EN,
+  auditeur ES), l'auditeur EN recevait donc AUSSI la traduction espagnole (et réciproquement) :
+  deux événements `call:translated-segment` par segment final, l'un dans sa langue, l'autre non.
+  Violation directe du Prisme Linguistique (§ règle 1 de CLAUDE.md — la résolution de langue
+  préférée doit gouverner, jamais un fallback qui expose du contenu dans une langue non voulue).
+- **Scénario de défaillance concret** : les deux hooks web consommateurs de
+  `call:translated-segment` n'ont ni l'un ni l'autre de filtre par `targetLanguage` — un choix
+  délibéré à l'origine (le gateway étant censé ne router QUE la bonne langue à chacun) : (1)
+  `use-call-captions.ts` (overlay 4 lignes) affiche CHAQUE segment reçu tel quel — l'auditeur EN
+  voit clignoter des sous-titres en espagnol qu'il ne comprend pas, entrelacés avec les siens ; (2)
+  `use-call-transcript-journal.ts` fusionne par `callTranscriptEntryKey` (speaker+startMs+endMs,
+  sans composante langue) via `upsertCallTranscriptEntry` (`packages/shared/utils/call-transcript.ts`) —
+  `mergeEntries` régime « final + final » remplace `translatedText`/`targetLanguage` par la valeur
+  ENTRANTE dès qu'elle est définie (`incoming.translatedText ?? existing.translatedText`, pas de
+  garde par langue) : le journal d'appel finit par montrer la traduction dont le paquet est arrivé
+  EN DERNIER sur le réseau — non-déterministe, potentiellement jamais dans la langue Prisme du
+  lecteur. iOS (`CallTranscriptionService.upsertRemoteSegment`/`mergedSegment`, mêmes clés, même
+  sémantique — code jumeau documenté « miroir de mergeEntries ») porte la même absence de filtre
+  côté client ; audité en lecture (Swift non testable ici), non modifié.
+- **Fix** : `translateAndEmitSegment` regroupe désormais les auditeurs actifs (hors locuteur, hors
+  ceux dont la langue résolue égale `data.segment.language`) dans une `Map<targetLanguage,
+  userId[]>` (`listenersByLanguage`) au lieu d'un `Set<string>` plat — `targetLanguages` devient
+  une projection de ses clés, comportement de sélection de langue INCHANGÉ (même résolveur Prisme
+  `resolveUserLanguage`, même exclusion de la langue source). Nouvelle méthode privée
+  `emitTranslatedSegmentTo(socket, userIds, payload)` remplace les 3 sites d'émission internes à la
+  boucle `Promise.allSettled` (succès de traduction, timeout 10 s, échec ZMQ) — elle chaîne
+  `socket.to(ROOMS.user(uid))` pour CHAQUE auditeur de cette langue (jamais `ROOMS.call`), avec le
+  garde Socket.IO standard « chaîner, jamais boucler sur `.emit()` séparés » pour qu'un auditeur ne
+  reçoive jamais deux copies. Les deux AUTRES chemins de diffusion à `ROOMS.call` dans cette
+  fonction sont volontairement INCHANGÉS : `targetLanguages.length === 0` (tous les auditeurs
+  partagent la langue source — la room entière EST le bon destinataire) et `!zmqClient` (ZMQ hors
+  service — repli best-effort déjà assumé comme politique globale, pas un bug de ciblage par
+  langue). `ROOMS.user()` déjà le pattern établi de ce même fichier pour du fanout par utilisateur
+  (`io.in(ROOMS.user(userId)).fetchSockets()` ligne 731, `io.in(ROOMS.user(memberId))` ligne 2327) —
+  aucun nouveau pattern introduit.
+- **Tests** (TDD, RED confirmé contre le code non corrigé — `git stash` du seul fichier source,
+  suite rejouée, `git stash pop`) :
+  `CallEventsHandler-transcription-translation.test.ts` — nouveau groupe « group call, 3+ distinct
+  languages — per-language targeting », 3 cas neufs sur un appel FR (locuteur) / EN / ES à 3
+  langues distinctes : la traduction anglaise atteint EXCLUSIVEMENT `ROOMS.user(EN_LISTENER_ID)`
+  (jamais `ROOMS.call`, jamais la room de l'auditeur ES) ; symétrique pour l'espagnol ; exactement
+  2 émissions au total, aucune vers la room d'appel. RED confirmé : les 3 cas échouaient contre le
+  code non corrigé avec `rooms: ["call:<callId>"]` reçu au lieu de `["user:<listenerId>"]`. Nouveau
+  socket-double `makeRoomAwareSocket()` (accumule les rooms adressées par appel chaîné
+  `.to().to()...emit()`, une seule émission enregistrée par appel — miroir du comportement
+  Socket.IO réel) + `makeMultiLanguageFakeZmqClient()` (taskId dérivé de la langue cible, nécessaire
+  pour désambiguïser `onResult` avec DEUX langues en vol sur le même segment). Suite du fichier :
+  **9/9** verts (+3 net). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites / 1216 tests**
+  verts, 0 régression. Sweep `--testPathPatterns="socketio"` (surface complète, pas seulement
+  calls) : **89 suites / 2073 tests** verts, 0 régression. `npx tsc --noEmit` (services/gateway) :
+  diff `git stash`/`stash pop` sur le fichier source + test — **409** erreurs préexistantes
+  identiques avant/après (toutes `Cannot find module '@meeshy/shared/prisma/client'` — client
+  Prisma non généré dans ce sandbox, `binaries.prisma.sh` bloqué par la politique réseau, cf.
+  Leçon 118 ; aucune imputable à ce diff), 0 nouvelle, 0 corrigée.
+- **Non fait volontairement** : `CallSystemMessage.tsx:63` — `canCallBack` sans garde
+  `!isAnonymous` (reconduit tel quel depuis la Vague 134 — toujours latent, aucun scénario de
+  défaillance réel identifié). `mergeEntries`/`upsertRemoteSegment` (web + iOS) ne filtrent
+  toujours PAS explicitement par `targetLanguage` côté client — laissé en l'état car le fix gateway
+  élimine la cause racine (chaque client ne reçoit plus QUE sa propre langue, donc il n'y a plus de
+  second paquet à mal fusionner) ; un filtre défensif côté client resterait pertinent en
+  profondeur-de-défense mais sort du gabarit chirurgical (et le volet iOS n'est pas testable dans
+  ce sandbox). Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ;
+  ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce
+  sandbox ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.

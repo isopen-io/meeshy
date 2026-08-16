@@ -1794,14 +1794,21 @@ export class CallEventsHandler {
     // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
     // Reading only `systemLanguage` here used to strand any listener who
     // configured a regional/custom language instead into a hardcoded 'fr'.
-    const targetLanguages: string[] = [
-      ...new Set<string>(
-        activeParticipants
-          .filter(p => p.participant.userId !== speaker.userId)
-          .map(p => resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined }))
-          .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
-      )
-    ];
+    //
+    // Grouped BY target language, listener userIds and all — the per-language
+    // relay below must reach ONLY the listeners who resolved to that language,
+    // never the whole call room (see `emitTranslatedSegmentTo`).
+    const listenersByLanguage = new Map<string, string[]>();
+    for (const p of activeParticipants) {
+      const userId = p.participant.userId;
+      if (userId === speaker.userId) continue;
+      const lang = resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined });
+      if (typeof lang !== 'string' || lang === data.segment.language) continue;
+      const listeners = listenersByLanguage.get(lang);
+      if (listeners) listeners.push(userId);
+      else listenersByLanguage.set(lang, [userId]);
+    }
+    const targetLanguages: string[] = [...listenersByLanguage.keys()];
 
     if (targetLanguages.length === 0) {
       socket.to(ROOMS.call(data.callId)).emit(
@@ -1838,6 +1845,7 @@ export class CallEventsHandler {
 
     await Promise.allSettled(
       targetLanguages.map(async (targetLanguage) => {
+        const listeners = listenersByLanguage.get(targetLanguage) ?? [];
         try {
           const taskId = await zmqClient.translateText(
             data.segment.text,
@@ -1853,10 +1861,7 @@ export class CallEventsHandler {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
               zmqClient.off(scopedEvent, onResult);
-              socket.to(ROOMS.call(data.callId)).emit(
-                CALL_EVENTS.TRANSLATED_SEGMENT,
-                this.buildTranslatedSegment(data, speaker, targetLanguage)
-              );
+              this.emitTranslatedSegmentTo(socket, listeners, this.buildTranslatedSegment(data, speaker, targetLanguage));
               resolve();
             }, TIMEOUT_MS);
             timer.unref?.();
@@ -1866,8 +1871,8 @@ export class CallEventsHandler {
               clearTimeout(timer);
               zmqClient.off(scopedEvent, onResult);
               this.persistTranslation(persistedTranscriptionId, targetLanguage, event.result.translatedText);
-              socket.to(ROOMS.call(data.callId)).emit(
-                CALL_EVENTS.TRANSLATED_SEGMENT,
+              this.emitTranslatedSegmentTo(
+                socket, listeners,
                 this.buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
               );
               resolve();
@@ -1876,13 +1881,35 @@ export class CallEventsHandler {
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-          socket.to(ROOMS.call(data.callId)).emit(
-            CALL_EVENTS.TRANSLATED_SEGMENT,
-            this.buildTranslatedSegment(data, speaker, targetLanguage)
-          );
+          this.emitTranslatedSegmentTo(socket, listeners, this.buildTranslatedSegment(data, speaker, targetLanguage));
         }
       })
     );
+  }
+
+  /**
+   * Broadcast one translated segment to exactly the listeners who resolved
+   * to `targetLanguage` — never the whole call room. `translateAndEmitSegment`
+   * used to relay every target language's translation to `ROOMS.call(callId)`
+   * wholesale: in a 3+-language group call every peer received EVERY
+   * language's caption event, and the client-side journal merge
+   * (`upsertCallTranscriptEntry`, keyed on speaker+timing — not
+   * `targetLanguage`) let whichever language arrived last silently overwrite
+   * the others, so the reader's own Prisme language was not guaranteed to
+   * win. Chained `.to()` calls (never a loop of separate `.emit()`s) so a
+   * listener sitting in more than one addressed room still receives the
+   * event exactly once.
+   */
+  private emitTranslatedSegmentTo(
+    socket: Socket,
+    userIds: readonly string[],
+    payload: CallTranslatedSegmentEvent
+  ): void {
+    if (userIds.length === 0) return;
+    const [first, ...rest] = userIds;
+    rest
+      .reduce((broadcast, userId) => broadcast.to(ROOMS.user(userId)), socket.to(ROOMS.user(first)))
+      .emit(CALL_EVENTS.TRANSLATED_SEGMENT, payload);
   }
 
   /**
