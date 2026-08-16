@@ -147662,43 +147662,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "احصل على وصول مبكر إلى الميزات قيد التطوير، مثل طرق عرض المحادثة الجديدة."
+            "value": "يفعّل ميزات بيتا، بما في ذلك أوضاع القراءة التي تختار تلقائيًا طريقة فتح المحادثة (فوكال، الملخص...)."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Früher Zugriff auf Funktionen in Entwicklung, wie neue Unterhaltungsansichten."
+            "value": "Aktiviert Beta-Funktionen, darunter Lesemodi, die beim Öffnen automatisch die Ansicht einer Unterhaltung wählen (Focal, Zusammenfassung …)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Get early access to features still in development, like new conversation views."
+            "value": "Enables beta features, including reading modes that automatically pick how a conversation opens (Focal, Summary…)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accede antes que nadie a funciones en desarrollo, como las nuevas vistas de conversación."
+            "value": "Activa las funciones beta, incluidos los modos de lectura que eligen automáticamente cómo se abre una conversación (Focal, Resumen…)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accède en avant-première aux fonctionnalités en développement, comme les nouvelles vues de conversation."
+            "value": "Active les fonctionnalités bêta, dont les modes de lecture qui choisissent automatiquement la vue d'une conversation à l'ouverture (Focal, Résumé…)."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accedi in anteprima alle funzionalità in sviluppo, come le nuove visualizzazioni delle conversazioni."
+            "value": "Attiva le funzionalità beta, tra cui le modalità di lettura che scelgono automaticamente come si apre una conversazione (Focal, Riepilogo…)."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tenha acesso antecipado a recursos em desenvolvimento, como as novas visualizações de conversa."
+            "value": "Ativa os recursos beta, incluindo os modos de leitura que escolhem automaticamente como uma conversa é aberta (Focal, Resumo…)."
           }
         }
       }
