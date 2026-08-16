@@ -126,7 +126,17 @@ propres témoins, pas un ajout en marge d'un correctif gateway.
 - [x] Suite gateway complète verte — 729 suites / 17 812 témoins
 - [x] CHANGELOG + ADR `services/gateway/decisions.md` + leçon 204
 
-## 10. Pistes pour le cycle 49 — repérées, NON livrées
+## 10. Le même motif ailleurs — cherché, rien trouvé
+
+Le défaut B est un motif, pas un accident : `update({ where: { userId } })` sur
+une table dont rien ne garantit la ligne. Balayage de tout `services/gateway/src`
+(hors tests) pour cette forme — **deux** autres sites, tous deux
+`signalPreKeyBundle.update` dans `SignalKeyManager`. Vérifiés : l'étape 1 de
+`initialize()` fait l'`upsert` du bundle avant que les étapes 2 et 3 ne
+l'`update`, et les deux sites sont sous cette séquence. **Pas de défaut ici** —
+noté pour que le prochain cycle n'ait pas à refaire le balayage.
+
+## 11. Pistes pour le cycle 49 — repérées, NON livrées
 
 1. **`resolveSocketIO` lit encore un champ privé en repli.** Le repli
    `manager.io` n'existe plus que pour les doubles qui modèlent le manager
