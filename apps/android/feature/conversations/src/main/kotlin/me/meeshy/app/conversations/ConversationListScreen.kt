@@ -90,6 +90,8 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
@@ -208,6 +210,7 @@ fun ConversationListScreen(
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onLeaveConversation = { viewModel.leaveConversation(conversation.id) },
                                 onDeleteForMe = { viewModel.deleteConversationForMe(conversation.id) },
+                                onDeleteForAll = { viewModel.deleteConversationForAll(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onMarkUnread = { viewModel.markUnread(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
@@ -372,6 +375,7 @@ private fun ConversationRow(
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
+    onDeleteForAll: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -427,6 +431,7 @@ private fun ConversationRow(
             onToggleArchive = onToggleArchive,
             onLeaveConversation = onLeaveConversation,
             onDeleteForMe = onDeleteForMe,
+            onDeleteForAll = onDeleteForAll,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -479,6 +484,7 @@ private fun ConversationRowContent(
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
+    onDeleteForAll: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -487,6 +493,7 @@ private fun ConversationRowContent(
     onLoadPreview: () -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
+    val isCreator = conversation.currentUserRole(currentUserId) == MemberRole.CREATOR
     var menuExpanded by remember { mutableStateOf(false) }
     val previewLabels = LastMessagePreviewLabels(
         photo = stringResource(R.string.conversations_preview_photo),
@@ -618,12 +625,14 @@ private fun ConversationRowContent(
             currentUserId = currentUserId,
             currentUserPrefs = currentUserPrefs,
             previewLabels = previewLabels,
+            isCreator = isCreator,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleMentionsOnly = onToggleMentionsOnly,
             onToggleArchive = onToggleArchive,
             onLeaveConversation = onLeaveConversation,
             onDeleteForMe = onDeleteForMe,
+            onDeleteForAll = onDeleteForAll,
             onMarkRead = onMarkRead,
             onMarkUnread = onMarkUnread,
             onDiscardDraft = onDiscardDraft,
@@ -651,12 +660,14 @@ private fun ConversationContextMenu(
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
     previewLabels: LastMessagePreviewLabels,
+    isCreator: Boolean,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleMentionsOnly: () -> Unit,
     onToggleArchive: () -> Unit,
     onLeaveConversation: () -> Unit,
     onDeleteForMe: () -> Unit,
+    onDeleteForAll: () -> Unit,
     onMarkRead: () -> Unit,
     onMarkUnread: () -> Unit,
     onDiscardDraft: () -> Unit,
@@ -665,6 +676,7 @@ private fun ConversationContextMenu(
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
+    var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         ConversationPreviewCard(
             title = title,
@@ -825,6 +837,13 @@ private fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
             onClick = { showDeleteForMeConfirm = true },
         )
+        if (isCreator) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_delete_for_all)) },
+                leadingIcon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
+                onClick = { showDeleteForAllConfirm = true },
+            )
+        }
     }
 
     if (showLeaveConfirm) {
@@ -869,6 +888,30 @@ private fun ConversationContextMenu(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteForMeConfirm = false }) {
+                    Text(stringResource(R.string.conversations_leave_cancel_button))
+                }
+            },
+        )
+    }
+
+    if (showDeleteForAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteForAllConfirm = false },
+            title = { Text(stringResource(R.string.conversations_delete_for_all_confirm_title)) },
+            text = { Text(stringResource(R.string.conversations_delete_for_all_confirm_message, title)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteForAllConfirm = false
+                        onDeleteForAll()
+                        onDismiss()
+                    },
+                ) {
+                    Text(stringResource(R.string.conversations_delete_for_all_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteForAllConfirm = false }) {
                     Text(stringResource(R.string.conversations_leave_cancel_button))
                 }
             },
