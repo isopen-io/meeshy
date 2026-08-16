@@ -38,6 +38,11 @@ struct ConversationContextMenuView: View {
     let isBlocked: Bool
     /// Renommable = conversation de groupe/communauté (pas un DM).
     let canRename: Bool
+    /// I-075 — gardé par `LentilleFeatureFlag.focalDevPreview` (défaut OFF) :
+    /// visibilité de l'item « Focal (dev) » du panneau « Plus d'options ».
+    /// Résolu par l'appelant (comme `isLocked`/`isArchived`, ce menu restant
+    /// self-contained) — jamais lu ici directement.
+    let isFocalDevPreviewEnabled: Bool
     // Callbacks — chacun = action ; la fermeture est faite par l'appelant via onDismiss
     let onPin: () -> Void
     let onMute: () -> Void
@@ -52,6 +57,12 @@ struct ConversationContextMenuView: View {
     let onArchive: () -> Void
     let onBlock: () -> Void
     let onDelete: () -> Void
+    /// I-075 — force le mode Focal pour CETTE ouverture SEULE (override
+    /// éphémère, jamais persistant : n'écrit ni la préférence de mode ni
+    /// aucun drapeau). Voir `onOpenFocalDevPreview` au site d'appel
+    /// (`ConversationListView+Overlays.swift`) pour le câblage réel
+    /// (`router.pendingForcedReadingMode` + `onSelect`).
+    let onOpenFocalDevPreview: () -> Void
     let onDismiss: () -> Void
 
     private enum Panel { case root, favorite, move, more }
@@ -272,6 +283,15 @@ struct ConversationContextMenuView: View {
                         : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
                     isDestructive: !isBlocked
                 ) { onBlock(); onDismiss() }
+            }
+
+            // Focal (dev) — I-075, même item que le menu natif (parité).
+            if isFocalDevPreviewEnabled {
+                divider
+                actionRow(
+                    icon: "viewfinder",
+                    label: String(localized: "context.focal_dev_preview", defaultValue: "Focal (dev)", bundle: .main)
+                ) { onOpenFocalDevPreview(); onDismiss() }
             }
         }
     }
