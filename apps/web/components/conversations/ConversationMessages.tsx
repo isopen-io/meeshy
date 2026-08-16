@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, memo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import type {
   Message,
@@ -13,6 +14,31 @@ import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
+import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
+
+/**
+ * Mux Focal — WF-110 (workshop §5 V4), patron WL-101 (MINIMAL, documenté).
+ *
+ * RE-PREUVE de topologie (§0, avant d'écrire ce mux) : `ConversationMessages`
+ * est le conteneur de messages EXCLUSIVEMENT possédé par `ConversationView`
+ * (`grep -rln "ConversationMessages\b"` → un seul appelant hors ce fichier
+ * lui-même) — contrairement à `MessagesDisplay`, RÉUTILISÉ VERBATIM aussi par
+ * `bubble-stream-page.tsx`. C'est ce qui rend ce fichier le point de greffe
+ * MINIMAL : la Rivière/BubbleStream n'est jamais concernée par ce mux.
+ *
+ * `next/dynamic` (`ssr: false`) : le drapeau du fil Focal (résolu par
+ * `useReadingModesFlag`, le nom exact vit dans `resolve-reading-modes-
+ * flag.ts` — garde d'occurrence unique, ne pas le recopier ici) éteint ⇒ le
+ * module Focal (et tout ce qu'il importe — les hooks `use-focal-perspective`,
+ * `use-scroll-activity`…) n'est JAMAIS téléchargé, coût nul (garde
+ * structurelle, `__tests__/components/conversations/
+ * ConversationMessages.focal-dynamic-structure.test.ts`).
+ */
+const FocalThread = dynamic(
+  () => import('./focal/FocalThread').then((mod) => mod.FocalThread),
+  { ssr: false }
+);
 
 interface ConversationMessagesProps {
   messages: Message[];
@@ -79,6 +105,12 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   scrollButtonDirection = 'down', // Par défaut: ArrowDown pour Conversations (descendre vers récent)
   scrollContainerRef // Ref externe du conteneur de scroll (optionnelle)
 }: ConversationMessagesProps) {
+  // Drapeau du fil Focal (`useReadingModesFlag`) — WF-110. `reverseOrder`
+  // distingue le fil "Conversations" (ancien en haut, drapeau applicable) du
+  // fil BubbleStream (récent en haut, hors périmètre Focal — en-tête ci-dessus) :
+  // le mux ne s'active donc QUE quand `reverseOrder` est vrai.
+  const focalActive = useReadingModesFlag().active && reverseOrder;
+
   const translatedMessagesRef = useRef(translatedMessages);
   translatedMessagesRef.current = translatedMessages;
 
@@ -432,42 +464,65 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
       {/* Messages */}
       <div className="px-2">
-        {/* 
+        {/*
           Logique d'affichage selon reverseOrder:
           - reverseOrder=false (BubbleStream): garde [récent...ancien] = Récent EN HAUT
           - reverseOrder=true (Conversations): inverse vers [ancien...récent] = Ancien EN HAUT
           - Backend retourne toujours: orderBy createdAt DESC = [récent...ancien]
+
+          Drapeau du fil Focal actif (WF-110) : sous-arborescence Focal,
+          protégée par un repli qui rend EXACTEMENT le rendu historique
+          (`historicalMessagesDisplay` ci-dessous) en cas d'exception —
+          jamais une page morte. Drapeau éteint ⇒ rendu historique inchangé,
+          bit-à-bit identique (même invariant que WL-101/R20/R8).
         */}
-        <MessagesDisplay
-          messages={messages}
-          translatedMessages={translatedMessages}
-          isLoadingMessages={isLoadingMessages}
-          currentUser={currentUser}
-          userLanguage={userLanguage}
-          usedLanguages={usedLanguages}
-          emptyStateMessage={t('noMessages')}
-          emptyStateDescription={t('noMessagesDescription')}
-          reverseOrder={reverseOrder}
-          className=""
-          onEditMessage={onEditMessage}
-          onDeleteMessage={onDeleteMessage}
-          conversationId={conversationId}
-          isAnonymous={isAnonymous}
-          currentAnonymousUserId={currentAnonymousUserId}
-          onReplyMessage={onReplyMessage}
-          onNavigateToMessage={onNavigateToMessage}
-          onImageClick={onImageClick}
-          conversationType={conversationType || 'direct'}
-          userRole={userRole as unknown}
-          addTranslatingState={addTranslatingState}
-          isTranslating={isTranslating}
-          onRetryMessage={onRetryMessage}
-          onCancelMessage={onCancelMessage}
-          containerRef={scrollAreaRef}
-          hasMore={hasMore}
-          isLoadingMore={isLoadingMore}
-          onLoadMore={onLoadMore}
-        />
+        {(() => {
+          const historicalMessagesDisplay = (
+            <MessagesDisplay
+              messages={messages}
+              translatedMessages={translatedMessages}
+              isLoadingMessages={isLoadingMessages}
+              currentUser={currentUser}
+              userLanguage={userLanguage}
+              usedLanguages={usedLanguages}
+              emptyStateMessage={t('noMessages')}
+              emptyStateDescription={t('noMessagesDescription')}
+              reverseOrder={reverseOrder}
+              className=""
+              onEditMessage={onEditMessage}
+              onDeleteMessage={onDeleteMessage}
+              conversationId={conversationId}
+              isAnonymous={isAnonymous}
+              currentAnonymousUserId={currentAnonymousUserId}
+              onReplyMessage={onReplyMessage}
+              onNavigateToMessage={onNavigateToMessage}
+              onImageClick={onImageClick}
+              conversationType={conversationType || 'direct'}
+              userRole={userRole as unknown}
+              addTranslatingState={addTranslatingState}
+              isTranslating={isTranslating}
+              onRetryMessage={onRetryMessage}
+              onCancelMessage={onCancelMessage}
+              containerRef={scrollAreaRef}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={onLoadMore}
+            />
+          );
+
+          if (!focalActive) return historicalMessagesDisplay;
+
+          return (
+            <FeatureErrorBoundary featureName="Focal" fallback={historicalMessagesDisplay}>
+              <FocalThread
+                messages={messages}
+                currentUser={currentUser}
+                scrollContainerRef={scrollAreaRef}
+                onNavigateToMessage={onNavigateToMessage}
+              />
+            </FeatureErrorBoundary>
+          );
+        })()}
       </div>
 
       {/* Indicateur de chargement EN BAS - Mode BubbleStream (scroll down = charger anciens) */}

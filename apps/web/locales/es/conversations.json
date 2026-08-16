@@ -753,6 +753,11 @@
         "thisWeek": "Esta semana",
         "older": "Más antiguo"
       }
+    },
+    "focal": {
+      "row": {
+        "you": "Tú"
+      }
     }
   },
   "bubbleStream": {

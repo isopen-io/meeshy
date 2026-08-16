@@ -755,6 +755,11 @@
         "thisWeek": "Cette semaine",
         "older": "Plus ancien"
       }
+    },
+    "focal": {
+      "row": {
+        "you": "Toi"
+      }
     }
   },
   "bubbleStream": {
