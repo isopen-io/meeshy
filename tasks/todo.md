@@ -1,121 +1,66 @@
-# Cycle 49 bis — un `PATCH` qui n'a jamais été partiel
-
-(« bis » : une autre exécution parallèle de la routine porte déjà le numéro 49
-— surfaces disjointes, motif des leçons 198 et 204, reproduit une fois de plus.)
+# Cycle 52 — la ligne décrivait un mélange de deux messages
 
 ## Constat
 
-- [x] `ZodObject.partial()` ne retire pas les `default()` : un corps `PATCH`
-      VIDE écrivait 13 à 33 clés par défaut, sur les sept catégories
-- [x] La fusion `{ ...existant, ...validé }` était donc inerte — toucher un
-      interrupteur remettait tous les autres réglages à leur défaut
-- [x] Les routes `/me/preferences` ne lisaient que le document, quand les six
-      portes de diffusion lisent AUSSI le rangement hérité de janvier 2026
-- [x] Les deux se composent : le premier réglage touché posait un document
-      tout-à-`true`, qui gagne alors sur janvier — opt-out perdu DÉFINITIVEMENT
-- [x] `GET /me/preferences` rendait sept objets VIDES (`type: 'object'` sans
-      `additionalProperties` ⇒ fast-json-stringify efface tout)
+- [x] Six des onze champs du groupe d'aperçu (`lastMessageSenderName`,
+      `lastMessageAttachments`, `…Count`, `…IsBlurred`, `…IsViewOnce`,
+      `…ExpiresAt`) ne voyagent sur AUCUN `conversation:updated` — le serveur
+      ne les LIT même pas (`PREVIEW_MESSAGE_SELECT`)
+- [x] Correct tant que le payload décrit le MÊME message (édition, traduction).
+      **Faux aux deux chemins où il en nomme un AUTRE** : suppression pour tous
+      du dernier message, masquage personnel avec un remplaçant
+- [x] Ce que la ligne rendait alors : « Windie : salut » (l'auteur du message
+      SUPPRIMÉ), la vignette d'une photo effacée sous un texte neuf,
+      « Vue unique » sur un message ordinaire, « Message expiré » sur un
+      message vivant — **et rien ne corrigeait ensuite**
+- [x] C'est LITTÉRALEMENT le paragraphe d'en-tête de `LastMessageFacet`, revenu
+      par la seule porte qui ne passait pas par elle : la branche `else` du
+      MÊME `if` dont la branche `if` (`bumpToTop`) avait été fermée
+- [x] Troisième site trouvé par `grep lastMessageId =` :
+      `recomputeLastMessagePreviewAfterDeletion` écrivait 4 champs à la main
+      alors qu'il tient le message ENTIER — dont la carte de traductions, que
+      le résolveur PRÉFÈRE à l'aperçu : la ligne rendait le **texte traduit du
+      message supprimé**
 
 ## Correctifs
 
-- [x] `utils/partial-update.ts` — `submittedKeysOnly`, câblé sur les sept
-      catégories et sur `PATCH /admin/agent/topics/:id`
-- [x] `CategoryStorage<T>` injecté ; `resolveStoredPrivacyPreferences` sert les
-      deux `GET` et la base de fusion du `PATCH`
-- [x] `retireLegacyPrivacyRows` après chaque écriture de la catégorie
-- [x] `additionalProperties: true` sur les sept catégories du schéma de réponse
+- [x] `MeeshyConversation.adoptLastMessage(id:)` — l'identité change ⇒ les onze
+      champs descriptifs sont remis à neutre, l'appelant repose aussitôt ce que
+      le payload porte. `lastMessageAt` délibérément dehors : c'est le RANG
+- [x] **La borne fait le correctif** : no-op quand l'id ne change pas. Sans
+      elle, une édition de légende dépouille la ligne de sa photo à chaque frappe
+- [x] Les onze et non les six : exclure le texte et le Prisme rouvrirait le
+      défaut sous sa forme subtile (régression P1-sans-P2 déjà vécue à côté)
+- [x] `ConversationStore.merging` (SDK → store RAM **et** cache disque) +
+      `ConversationListViewModel` (app, 2ᵉ implémentation) câblés
+- [x] `recomputeLastMessagePreviewAfterDeletion` passe à
+      `applyLastMessage(LastMessageFacet(message:preview:))` — la primitive
+      atomique était déjà à deux mètres
+- [x] Gateway inchangé — CONSTAT mesuré, pas oubli : joindre `attachments`
+      coûterait la jointure sur le chemin du fan-out des TRADUCTIONS
+- [x] Web NON traité — défaut réel et plus large (sa ligne rend l'objet
+      `lastMessage`, que le patch ne touche pas), correctif = décision de RENDU
 
 ## Gates
 
-- [x] 12 témoins discriminants vus rouges avant correctif
-- [x] Gardes : valeur envoyée COÏNCIDANT avec le défaut bien appliquée ; clé
-      inconnue toujours écartée ; 400 toujours rendu ; catégories non-`privacy`
-      intouchées
-- [x] `bunx tsc --noEmit` gateway : 0
-- [x] Suite gateway complète — 733 suites / 17 862 témoins
-- [x] CHANGELOG + 2 ADR + journal (cycle49) + leçon 207
+- [x] Gateway : aucune source touchée ; suite `emitConversationPreviewUpdate`
+      (29 témoins) relancée verte pour vérifier le contrat sur lequel s'appuie
+      le correctif client
+- [x] 10 témoins neufs : 3 store (dont la contre-épreuve de l'édition et
+      l'arrivée du Prisme du remplaçant), 5 sur la facette (`LastMessageFacetTests`,
+      fichier neuf — le SDK n'avait AUCUN témoin sur ses gestes atomiques),
+      2 côté app
+- [x] Swift : pas de toolchain sur cet hôte. RED raisonné, non exécuté.
+      `sdk-tests.yml` joue les 8 témoins SDK ; les 2 témoins app restent le
+      résidu non joué (même situation qu'aux cycles 49-51, notée au §9 du journal)
+- [x] CHANGELOG + ADR `packages/MeeshySDK/decisions.md` + journal cycle 52 +
+      leçon 211
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-15-cycle49.md` — la table des sept
-schémas, pourquoi les deux défauts se composent en pire que leur somme, les
-quatre options écartées, le double plus simple que le réel (5e cycle), et les
-pistes du cycle 50 : la fusion profonde non traitée, et `PUT` avec un corps
-partiel que rien ne fige.
-
-# Cycle 49 — le serveur disait « il n'y a plus rien », et quatre clients entendaient « je ne parle pas de ça »
-
-Routine « amélioration continue temps réel ». Le cycle 46 bis a appris à
-l'aperçu de ligne de liste à RECULER quand le serveur déclare l'avoir recalculé,
-et a légué NOMMÉMENT le cran au-delà : le cas où il n'y a plus rien vers quoi
-reculer. C'est ce cycle-ci, avec sa question ouverte tranchée d'abord.
-
-## Constat
-
-- [x] Question léguée par le cycle 46 bis — « la ligne sait-elle rendre une
-      conversation sans dernier message, ou faut-il d'abord lui en donner la
-      forme ? » — **tranchée AVANT d'écrire : elle sait déjà.**
-      `resolvedLastMessagePreview` rend `nil`, `ThemedConversationRow` le traite
-      (`!isEmpty`), VoiceOver compris. Aucune forme nouvelle à introduire
-- [x] Le gateway dit déjà la vérité : `messagePayloadFor(null)` sert tout le
-      groupe d'aperçu à `null` quand le lecteur n'a plus aucun message visible.
-      Témoin de forme écrit, **vert d'emblée** — rien à corriger côté serveur
-- [x] Défaut livré : les `if let` du client jettent ce payload champ par champ,
-      et la ligne garde l'aperçu de ce que le lecteur vient de masquer —
-      **définitivement**, plus rien ne viendra le remplacer
-- [x] Pire que « rien ne bouge » : le seul champ déjà tri-étaté (la carte du
-      Prisme, cycle 46 bis) s'appliquait. La traduction s'effaçait, l'aperçu brut
-      restait — **« Bonjour » → « Hello »**, le masquage exposant l'original
-- [x] `Optional` ne pouvait pas trancher : un renommage n'emporte AUCUNE clé
-      `lastMessage*`, donc « `lastMessageAt == nil` ⇒ vider » effacerait toutes
-      les lignes à chaque changement de titre
-
-## Correctifs
-
-- [x] `LastMessageIdentity` (`.unchanged` / `.replaced(String?)`) remplace
-      `String?` — l'IDENTITÉ porte le fait pour tout le groupe, seule nullité qui
-      veut dire « aucun » et non « inconnu »
-- [x] `MeeshyConversation.clearLastMessage()` — geste unique, **onze** champs,
-      idempotent. Un vidage partiel laisserait « Message expiré » ou une épingle
-      décrire un message que le lecteur ne voit plus
-- [x] `lastMessageAt` délibérément intact : c'est le RANG de la ligne, donnée
-      globale qu'un masquage personnel ne change pour personne
-- [x] Quatre surfaces câblées : décodage SDK, `merging` (RAM **et** cache
-      disque), le pont, `ConversationListViewModel` (app)
-- [x] Web : la ligne rend `conversation.lastMessage` (l'objet), que rien ne
-      touchait — le patch le vide désormais, et cesse de recopier un
-      `lastMessageId` fantôme que personne ne lit
-- [x] Android indemne (`refreshSilently()` REST par événement) — noté, pas touché
-- [x] **Dernière copie du geste** refermée dans la foulée :
-      `recomputeLastMessagePreviewAfterDeletion` vidait 2 champs sur 11 à la main
-
-## Gates
-
-- [x] 3 témoins gateway de FORME (présence des clés autant que nullité), double
-      prisma complet, + contre-épreuve du lecteur non concerné
-- [x] 3 de décodage, 4 de fusion (vidage complet, rang conservé, renommage
-      neutre, idempotence), 1 de bout en bout à travers le pont
-- [x] 2 côté app, 4 côté web dont un **RED prouvé** (fix retiré → rouge)
-- [x] Contre-épreuve du renommage sur **chacune des quatre surfaces**
-- [x] `bunx tsc --noEmit` gateway : 0 ; web : aucune erreur nouvelle
-      (comparaison ensembliste, 1233 préexistantes)
-- [x] Suite gateway COMPLÈTE : **733 suites / 17 850 tests** verts
-- [x] Swift : pas de toolchain ici. `sdk-tests.yml` EXÉCUTE les 9 témoins SDK ;
-      `ios.yml` a COMPILÉ la moitié app sans l'exécuter (son check s'appelle
-      « Build app (app + cibles de test) » précisément pour le dire — la suite
-      `MeeshyTests` demande un mot-clé dans le sujet du commit). Détail et
-      analyse du résidu non joué au §5 du journal
-- [x] CHANGELOG + ADR `packages/MeeshySDK/decisions.md` + journal d'audit
-      (cycle 49) + leçon 207
-
-## Revue
-
-Voir `tasks/realtime-sync-audit-2026-08-16-cycle49.md` — pourquoi la question
-léguée se referme sans nouveau modèle, le tableau des quatre champs et de leur
-sort, pourquoi seule l'identité pouvait porter le fait, pourquoi `lastMessageAt`
-ne bouge pas, le contraste Android (immunisé par un aller-retour REST), les
-options écartées, et les deux pistes restantes : les DEUX implémentations
-divergentes du même événement côté iOS (troisième cycle consécutif à devoir
-corriger aux deux endroits), et les trois émetteurs de `conversation:updated` qui
-composent leur payload à la main sans rien pour empêcher un quatrième d'y glisser
-un `lastMessageId: null` par inadvertance.
+Voir `tasks/realtime-sync-audit-2026-08-16-cycle52.md` — pourquoi la branche
+voisine est passée entre les mailles (elle a été écrite pour les métadonnées, le
+chemin recalculé s'y est greffé plus tard), le tableau des trois sites, le
+constat gateway chiffré par le chemin d'appel, l'analyse du web (piste n°1 du
+cycle 53, désormais la plus grosse), et le témoin gateway écrit puis retiré
+avant commit pour redondance.

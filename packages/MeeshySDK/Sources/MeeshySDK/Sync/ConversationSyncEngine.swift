@@ -1319,12 +1319,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 if let newLast {
-                    updated[idx].lastMessagePreview = newLast.content.meeshyPreviewTruncated
-                    updated[idx].lastMessageId = newLast.id
-                    if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
-                        updated[idx].lastMessageSenderName = name
-                    }
-                    updated[idx].lastMessageAt = newLast.createdAt
+                    // Le survivant est ici TOUT ENTIER : la facette s'écrit donc
+                    // en bloc, plutôt que quatre champs à la main. Les sept
+                    // autres décrivaient encore le message SUPPRIMÉ — sa
+                    // vignette, son « Vue unique », son expiration, sa carte de
+                    // traductions (que le résolveur PRÉFÈRE à l'aperçu, donc la
+                    // ligne rendait le texte traduit du disparu). Même défaut
+                    // que celui du chemin reçu, découvert localement.
+                    updated[idx].applyLastMessage(LastMessageFacet(
+                        message: newLast,
+                        preview: newLast.content
+                    ))
                 } else {
                     // The deleted message was the conversation's ONLY message — there
                     // is no survivor to surface. Clear the stale preview so the list

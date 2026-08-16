@@ -1012,6 +1012,126 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertNil(after.lastMessagePreview)
     }
 
+    // MARK: - Nommer un AUTRE message, c'est cesser de décrire le précédent
+    //
+    // Un cran EN DEÇÀ du vidage : le serveur a bien un remplaçant à servir
+    // (suppression pour tous du dernier message, masquage personnel avec un
+    // message plus ancien encore visible). Le payload nomme donc un autre
+    // message — mais `emitConversationPreviewUpdate` ne lit ni les pièces
+    // jointes, ni l'expéditeur, ni les drapeaux éphémères : six des onze champs
+    // du groupe d'aperçu ne voyagent sur AUCUN `conversation:updated`.
+    // Appliqués champ par champ, ces payloads laissaient la ligne décrire un
+    // MÉLANGE de deux messages, que rien ne venait ensuite corriger.
+
+    /// Le fond du sujet : le texte du remplaçant s'installe, et TOUT ce qui
+    /// décrivait le message supprimé s'en va avec lui.
+    func test_applyConversationUpdated_replacingTheLastMessage_stopsDescribingThePreviousOne() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_100)
+        conv.lastMessageId = "msg-supprime"
+        conv.lastMessagePreview = "regarde ça"
+        conv.lastMessageTranslations = ["fr": "regarde ça"]
+        conv.lastMessageOriginalLanguage = "en"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 1_800_000_000)
+        await store.hydrate(conv)
+
+        // Ce que le serveur envoie vraiment après un « supprimer pour tous » :
+        // l'identité du message PRÉCÉDENT, son texte, son Prisme, et rien d'autre.
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastMessage: .replaced("msg-precedent"),
+            lastMessagePreview: "salut",
+            lastMessageTranslations: .replaced([:]),
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-precedent")
+        XCTAssertEqual(after.lastMessagePreview, "salut")
+        XCTAssertNil(after.lastMessageSenderName,
+                     "« Windie : salut » attribuerait au remplaçant l'auteur du message supprimé")
+        XCTAssertTrue(after.lastMessageAttachments.isEmpty,
+                      "la vignette d'une photo supprimée ne doit pas légender le texte qui la remplace")
+        XCTAssertEqual(after.lastMessageAttachmentCount, 0)
+        XCTAssertNil(after.lastMessageLocation)
+        XCTAssertFalse(after.lastMessageIsBlurred)
+        XCTAssertFalse(after.lastMessageIsViewOnce,
+                       "« Vue unique » collé sur un texte neuf est le symptôme le plus visible du mélange")
+        XCTAssertNil(after.lastMessageExpiresAt,
+                     "l'expiration de l'ancien ferait dire « Message expiré » à un message bien vivant")
+        XCTAssertNil(after.lastMessageTranslations)
+        XCTAssertEqual(after.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]), "salut",
+                       "la carte du message supprimé ne doit plus pouvoir gagner : le résolveur la PRÉFÈRE à l'aperçu")
+    }
+
+    /// La contre-épreuve qui borne le geste, et sans laquelle il serait
+    /// destructeur : une ÉDITION et une TRADUCTION nomment le MÊME message.
+    /// Ses pièces jointes, son auteur et ses drapeaux restent vrais — le
+    /// payload les tait parce qu'ils n'ont pas changé, pas parce qu'ils ont
+    /// disparu.
+    func test_applyConversationUpdated_editingTheSameMessage_keepsItsDescription() async {
+        let (store, _, _, _) = makeStore()
+        let sameInstant = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = sameInstant
+        conv.lastMessageId = "msg-1"
+        conv.lastMessagePreview = "avant"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsViewOnce = true
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: sameInstant,
+            lastMessage: .replaced("msg-1"),
+            lastMessagePreview: "après",
+            lastMessageTranslations: .replaced([:])
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessagePreview, "après")
+        XCTAssertEqual(after.lastMessageSenderName, "Windie",
+                       "éditer une légende ne change pas l'auteur du message")
+        XCTAssertEqual(after.lastMessageAttachments.count, 1,
+                       "éditer une légende ne retire pas la photo qu'elle légende")
+        XCTAssertEqual(after.lastMessageAttachmentCount, 1)
+        XCTAssertTrue(after.lastMessageIsViewOnce)
+    }
+
+    /// Le Prisme du remplaçant doit atteindre la ligne. Le geste remet la carte
+    /// à neutre AVANT que le payload ne repose la sienne : inverser les deux
+    /// rendrait l'aperçu brut là où une traduction était disponible.
+    func test_merging_replacingTheLastMessage_installsTheIncomingPrism() throws {
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-supprime"
+        conv.lastMessagePreview = "look at this"
+        conv.lastMessageTranslations = ["fr": "regarde ça"]
+        conv.lastMessageOriginalLanguage = "en"
+
+        let merged = try XCTUnwrap(ConversationStore.merging(conv, with: ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessage: .replaced("msg-precedent"),
+            lastMessagePreview: "hello",
+            lastMessageTranslations: .replaced(["fr": "bonjour"]),
+            lastMessageOriginalLanguage: "en",
+            previewRecalculated: true
+        )))
+
+        XCTAssertEqual(merged.lastMessageTranslations, ["fr": "bonjour"])
+        XCTAssertEqual(merged.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "bonjour",
+                       "Prisme ['fr'], remplaçant anglais traduit ⇒ « bonjour », jamais « regarde ça »")
+    }
+
     /// Contre-épreuve indispensable : un renommage n'emporte AUCUNE clé
     /// `lastMessage*`. Confondre son silence avec un vidage effacerait l'aperçu
     /// de toutes les lignes à chaque changement de titre ou d'avatar — le

@@ -138,4 +138,48 @@ public extension MeeshyConversation {
         lastMessageOriginalLanguage = facet.originalLanguage
         lastMessageLocation = facet.location
     }
+
+    /// Fait décrire à la ligne un AUTRE message que celui qu'elle décrivait.
+    ///
+    /// Les chemins qui TRANSPORTENT le message écrivent la facette entière
+    /// (`applyLastMessage`). Restent ceux qui n'en portent qu'une part :
+    /// `conversation:updated` recalculé par le serveur (suppression pour tous du
+    /// dernier message, masquage personnel d'un lecteur) nomme un AUTRE message
+    /// et n'en donne que l'identité, le texte et le Prisme —
+    /// `emitConversationPreviewUpdate` ne lit ni les pièces jointes, ni
+    /// l'expéditeur, ni les drapeaux éphémères. Appliqués champ par champ, ces
+    /// payloads laissent la ligne mélanger DEUX messages : le texte du nouveau,
+    /// l'auteur, la pièce jointe, « Vue unique » et l'expiration de l'ancien —
+    /// exactement la classe de défauts que `LastMessageFacet` existe pour
+    /// rendre impossible, revenue par la seule porte qui ne passait pas par
+    /// elle.
+    ///
+    /// Ce geste remet donc à neutre TOUT ce qui décrit le message, à charge
+    /// pour l'appelant de reposer aussitôt ce que le payload porte vraiment.
+    /// Une ligne momentanément dépouillée est corrigée à la synchro suivante ;
+    /// une ligne FAUSSE ne l'est jamais, puisque rien ne signale l'incohérence
+    /// — même arbitrage que `LastMessageFacet.bumped`.
+    ///
+    /// `lastMessageAt` ne bouge délibérément pas : il porte le RANG de la ligne,
+    /// tenu par les règles de monotonie de l'appelant, jamais par l'identité.
+    ///
+    /// Rend `false` quand la ligne décrivait DÉJÀ ce message — c'est le cas de
+    /// l'édition et de la traduction, où l'auteur, les pièces jointes et les
+    /// drapeaux restent vrais et doivent survivre au payload qui les tait.
+    @discardableResult
+    mutating func adoptLastMessage(id: String) -> Bool {
+        guard lastMessageId != id else { return false }
+        lastMessageId = id
+        lastMessagePreview = nil
+        lastMessageTranslations = nil
+        lastMessageOriginalLanguage = nil
+        lastMessageAttachments = []
+        lastMessageAttachmentCount = 0
+        lastMessageSenderName = nil
+        lastMessageIsBlurred = false
+        lastMessageIsViewOnce = false
+        lastMessageExpiresAt = nil
+        lastMessageLocation = nil
+        return true
+    }
 }

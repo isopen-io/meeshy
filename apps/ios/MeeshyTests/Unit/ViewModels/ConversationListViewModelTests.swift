@@ -2192,6 +2192,87 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Une mise à jour de métadonnées ne parle pas du dernier message : sa carte doit survivre")
     }
 
+    // MARK: - conversation:updated : nommer un AUTRE message
+
+    /// Suppression pour tous du dernier message : le serveur recalcule l'aperçu
+    /// et sert le message PRÉCÉDENT. Le payload n'en porte que l'identité, le
+    /// texte et le Prisme — `emitConversationPreviewUpdate` ne lit ni les
+    /// pièces jointes, ni l'expéditeur, ni les drapeaux éphémères. Sans remise
+    /// à neutre, la ligne rendait le texte du remplaçant sous la vignette,
+    /// l'auteur et le « Vue unique » du message supprimé, et rien ne venait
+    /// jamais la corriger.
+    func test_conversationUpdatedEvent_replacingTheLastMessage_stopsDescribingThePreviousOne() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "swap", lastMessageAt: Date(timeIntervalSince1970: 9_000))
+        conv.lastMessageId = "msg-supprime"
+        conv.lastMessagePreview = "regarde ça"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 1_800_000_000)
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "swap", lastMessageAt: Date(timeIntervalSince1970: 5_000),
+            lastMessage: .replaced("msg-precedent"), lastMessagePreview: "salut",
+            previewRecalculated: true)
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let row = sut.conversations.first
+        XCTAssertEqual(row?.lastMessageId, "msg-precedent")
+        XCTAssertEqual(row?.lastMessagePreview, "salut")
+        XCTAssertNil(row?.lastMessageSenderName,
+                     "« Windie : salut » attribuerait au remplaçant l'auteur du message supprimé")
+        XCTAssertTrue(row?.lastMessageAttachments.isEmpty ?? false,
+                      "la vignette d'une photo supprimée ne doit pas légender le texte qui la remplace")
+        XCTAssertEqual(row?.lastMessageAttachmentCount, 0)
+        XCTAssertEqual(row?.lastMessageIsViewOnce, false,
+                       "« Vue unique » collé sur un texte neuf est le symptôme le plus visible du mélange")
+        XCTAssertEqual(row?.lastMessageIsBlurred, false)
+        XCTAssertNil(row?.lastMessageExpiresAt,
+                     "l'expiration de l'ancien ferait dire « Message expiré » à un message bien vivant")
+    }
+
+    /// La borne du geste : une ÉDITION nomme le MÊME message. Ses pièces
+    /// jointes, son auteur et ses drapeaux restent vrais — le payload les tait
+    /// parce qu'ils n'ont pas changé, pas parce qu'ils ont disparu. Sans cette
+    /// contre-épreuve, le correctif ci-dessus dépouillerait la ligne à chaque
+    /// édition de légende.
+    func test_conversationUpdatedEvent_editingTheSameMessage_keepsItsDescription() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        let sameInstant = Date(timeIntervalSince1970: 5_000)
+        var conv = makeConversation(id: "same", lastMessageAt: sameInstant)
+        conv.lastMessageId = "msg-1"
+        conv.lastMessagePreview = "avant"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsViewOnce = true
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "same", lastMessageAt: sameInstant,
+            lastMessage: .replaced("msg-1"), lastMessagePreview: "après")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let row = sut.conversations.first
+        XCTAssertEqual(row?.lastMessagePreview, "après")
+        XCTAssertEqual(row?.lastMessageSenderName, "Windie",
+                       "éditer une légende ne change pas l'auteur du message")
+        XCTAssertEqual(row?.lastMessageAttachments.count, 1,
+                       "éditer une légende ne retire pas la photo qu'elle légende")
+        XCTAssertEqual(row?.lastMessageAttachmentCount, 1)
+        XCTAssertEqual(row?.lastMessageIsViewOnce, true)
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
