@@ -293,7 +293,10 @@ final class FocalScrollPass {
         for entry in pending {
             decoration.update(
                 cell: entry.cell,
-                isFocused: entry.allowsFocusCard && entry.localId != nil && entry.localId == focusedLocalId,
+                isFocused: entry.allowsFocusCard
+                    && entry.localId != nil
+                    && entry.localId == focusedLocalId
+                    && Self.isFullyVisible(entry.cell, in: collectionView),
                 accentHex: accentHex,
                 isDark: isDark
             )
@@ -302,6 +305,46 @@ final class FocalScrollPass {
         pending.removeAll(keepingCapacity: true)
 
         return focusedLocalId
+    }
+
+    /// La cellule tient-elle ENTIÈREMENT dans la zone lisible ?
+    ///
+    /// « N'encadrer le message que lorsqu'il est entièrement visible » : une
+    /// carte dont le bord bas passe sous le composeur (ou dont le bord haut
+    /// sort par le haut) dessine un cadre ouvert, et pire, coupe la barre de
+    /// contrôles qui vit sur ce bord — les emojis deviennent inatteignables
+    /// alors qu'ils sont la raison d'être de la carte.
+    ///
+    /// La zone lisible n'est PAS `bounds` : la liste est inversée, donc
+    /// `contentInset.top` borne le côté COMPOSEUR (bas visuel) et
+    /// `contentInset.bottom` le côté header. `frame` intègre le transform de
+    /// perspective déjà posé — c'est voulu ici : on teste ce que l'œil voit,
+    /// pas la boîte de layout.
+    ///
+    /// Le message reste ÉLU dans tous les cas (le focus pilote la
+    /// magnification du contenu, qui elle n'a rien à voir avec le cadre) :
+    /// seule la DÉCORATION est suspendue. Un message partiellement visible
+    /// n'en devient pas moins manipulable.
+    nonisolated static func isFullyVisible(
+        _ cell: UICollectionViewCell,
+        in collectionView: UICollectionView
+    ) -> Bool {
+        let readable = collectionView.bounds.inset(
+            by: UIEdgeInsets(
+                top: collectionView.contentInset.bottom,
+                left: 0,
+                bottom: collectionView.contentInset.top,
+                right: 0
+            )
+        )
+        guard readable.height > 0 else { return false }
+        // `bounds.origin` d'une scroll view EST `contentOffset` : `readable`
+        // vit donc déjà dans l'espace de CONTENU, le même que `cell.frame`.
+        // Décaler le frame de `-contentOffset.y` (ce que faisait la première
+        // version) le ramenait à l'origine 0 et le comparait à une fenêtre
+        // restée, elle, à `contentOffset` — les deux repères ne coïncidaient
+        // qu'en haut de liste, et la carte ne s'affichait jamais.
+        return cell.frame.minY >= readable.minY && cell.frame.maxY <= readable.maxY
     }
 
     // MARK: - Site 2 — la cellule entrante seule
@@ -352,7 +395,9 @@ final class FocalScrollPass {
 
         decoration.update(
             cell: cell,
-            isFocused: descriptor.allowsFocusCard && localId == focusedLocalId,
+            isFocused: descriptor.allowsFocusCard
+                && localId == focusedLocalId
+                && Self.isFullyVisible(cell, in: collectionView),
             accentHex: accentHex,
             isDark: isDark
         )

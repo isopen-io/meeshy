@@ -144,7 +144,13 @@ struct FocalRow: View {
             visualBlock
             audioBlock
             textOrEmojiBlock
-            reactionsSection
+            // Hors focus, les réactions gardent leur place habituelle sous le
+            // contenu. En focus, elles MIGRENT dans la barre de base, où elles
+            // ouvrent la rangée « posé → (+) → à poser » : deux jeux de
+            // pilules à l'écran pour le même message se contrediraient.
+            if !input.isFocused {
+                reactionsSection
+            }
 
             if !input.isFirstInGroup {
                 FocalMetaRow(
@@ -161,15 +167,9 @@ struct FocalRow: View {
                     hasEditHistory: content.hasEditHistory
                 )
             }
+
+            focusControlBar
         }
-        // « Les contrôles par-dessus le cadre » : la barre chevauche le bord
-        // BAS de la carte de focus. `padding` réserve sa place dans la
-        // hauteur de la rangée (sinon elle recouvrirait la dernière ligne du
-        // message) ; `offset` la redescend ensuite pour l'asseoir SUR
-        // l'anneau. Rendue seulement pour l'élue — une rangée ordinaire ne
-        // paye rien, pas même une vue vide.
-        .padding(.bottom, input.isFocused ? FocalMetrics.Focus.controlBarReservedHeight : 0)
-        .overlay(alignment: .bottomLeading) { focusControlBar }
         // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
         // contenu » — même overlay que le chemin bulle
         // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
@@ -249,12 +249,16 @@ struct FocalRow: View {
     private var focusControlBar: some View {
         if input.isFocused {
             FocalFocusControlBar(
+                messageId: content.messageId,
                 accentHex: input.accentHex,
                 isDark: input.isDark,
+                reactions: content.reactions,
+                isMe: content.isMe,
                 availableFlags: content.translation?.availableFlags ?? [],
                 activeFlagCode: input.secondaryLangCode,
-                onReact: { emoji in actions.onToggleReaction?(emoji) },
-                onExpandPicker: { actions.onOpenReactPicker?(content.messageId) },
+                onToggleReaction: { emoji in actions.onToggleReaction?(emoji) },
+                onOpenReactPicker: { actions.onOpenReactPicker?(content.messageId) },
+                onShowReactions: { actions.onShowReactions?(content.messageId) },
                 onFlagTap: { code in
                     // Même règle que la bulle : re-taper la langue ouverte la
                     // referme. La décision vit dans
@@ -270,10 +274,12 @@ struct FocalRow: View {
             )
             .equatable()
             .padding(.leading, indent)
-            // Assied la barre SUR l'anneau : la carte est encartée de
-            // `FocusCard.marginVertical` sous le bord de la cellule, la
-            // barre descend de la moitié de sa hauteur pour le chevaucher.
-            .offset(y: FocalMetrics.Focus.controlBarReservedHeight / 2 - FocalMetrics.FocusCard.marginVertical)
+            // Dernier enfant de la VStack, SANS débord : le cadre de la carte
+            // (`FocalFocusDecoration`, encarté de `FocusCard.margin` dans la
+            // cellule) fait donc le tour de la rangée ET de cette barre, d'un
+            // seul trait continu. Un `offset` la ferait chevaucher l'anneau
+            // et couperait le trait en deux.
+            .padding(.top, FocalMetrics.Row.paddingVertical)
         }
     }
 
