@@ -134,7 +134,10 @@ final class ProviderSubstitutionTests: XCTestCase {
 
     func test_readingModeStoring_localAndStub_sameWrite_producesEqualRead() async {
         await withIsolatedDefaults { defaults in
-            let local: any ReadingModePreferenceStoring = LocalReadingModePreferenceStore(defaults: defaults)
+            let local: any ReadingModePreferenceStoring = LentilleScopedReadingModePreferenceStore(
+                store: ReadingModePreferenceStore(defaults: defaults),
+                scopeProvider: { .registered(userId: "substitution-viewer") }
+            )
             let stub: any ReadingModePreferenceStoring = StubReadingModePreferenceStore()
 
             await local.set(conversationId: "c1", value: .script, optimistic: true)
@@ -150,7 +153,10 @@ final class ProviderSubstitutionTests: XCTestCase {
 
     func test_readingModeStoring_bothImplementations_unknownConversationDefaultsToAuto() async {
         await withIsolatedDefaults { defaults in
-            let local: any ReadingModePreferenceStoring = LocalReadingModePreferenceStore(defaults: defaults)
+            let local: any ReadingModePreferenceStoring = LentilleScopedReadingModePreferenceStore(
+                store: ReadingModePreferenceStore(defaults: defaults),
+                scopeProvider: { .registered(userId: "substitution-viewer") }
+            )
             let stub: any ReadingModePreferenceStoring = StubReadingModePreferenceStore()
 
             let localValue = await local.get(conversationId: "never-set")

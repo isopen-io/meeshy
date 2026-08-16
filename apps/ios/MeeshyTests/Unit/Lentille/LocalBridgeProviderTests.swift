@@ -60,7 +60,7 @@ final class LocalBridgeProviderTests: XCTestCase {
     /// Compteur thread-safe — un `var` local mutable capturé par une closure
     /// `@Sendable` ne compile pas en Swift 6 (concurrence stricte) ; ce
     /// double protège son compteur par verrou, même patron que
-    /// `LocalReadingModePreferenceStore`/`LocalLiveCallProvider`.
+    /// `LentilleScopedReadingModePreferenceStore`/`LocalLiveCallProvider`.
     private final class CallCounter: @unchecked Sendable {
         private let lock = NSLock()
         private(set) var count = 0

@@ -110,23 +110,18 @@ final class ReadingModeController: ObservableObject {
         return ReadingModeOrchestrator.resolveOrchestratorDecision(input)
     }
 
-    /// Réciproque de `stickyMode(for:)` (privée côté
-    /// `ReadingModeOrchestrator` — ce contrôleur la reconstruit plutôt que
-    /// de la dupliquer aveuglément) : traduit un mode RENDU mémorisé en
-    /// préférence (les mots du menu) que l'orchestrateur consomme en entrée.
-    /// `.bubbles` n'est jamais un choix mémorisable (mode de repli drapeau
-    /// OFF, absent du catalogue sélectionnable) — replié sur `.auto` par
-    /// défense plutôt que sur une préférence qui n'existe pas côté loi.
+    /// Réciproque de `stickyMode(for:)` (privée côté `ReadingModeOrchestrator`) :
+    /// traduit un mode RENDU mémorisé en préférence (les mots du menu) que
+    /// l'orchestrateur consomme en entrée.
+    ///
+    /// REV-3/B2 : cette table vivait ici en `private static`. Depuis que
+    /// l'adaptateur Lentille lit le MÊME magasin, elle a un second lecteur —
+    /// elle a donc déménagé dans `ReadingModePreferenceMapping`
+    /// (`ReadingModePreferenceStore.swift`, un seul domicile) et ce contrôleur
+    /// s'y adresse au lieu d'en garder une copie.
     private static func preference(
         for mode: ConversationReadingMode?
     ) -> ReadingModeOrchestrator.ReadingModePreference {
-        guard let mode else { return .auto }
-        switch mode {
-        case .focal: return .focal
-        case .script: return .script
-        case .summary: return .resume
-        case .river: return .riviere
-        case .bubbles: return .auto
-        }
+        ReadingModePreferenceMapping.preference(for: mode)
     }
 }
