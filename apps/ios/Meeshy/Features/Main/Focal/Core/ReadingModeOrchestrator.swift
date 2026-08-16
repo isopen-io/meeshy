@@ -115,15 +115,37 @@ nonisolated public enum ReadingModeOrchestrator {
     /// procès (C-012).
     public static let riverEligibilityThreshold: Int = 5
 
-    /// Raison structurée pour le libellé grisé (« s'ouvrira à 5 personnes
-    /// actives — N aujourd'hui »).
+    /// POURQUOI la Rivière est fermée (ou ouverte) — miroir de
+    /// `RiverEligibilityReasonKind` (AMENDEMENT S1, REV-3/B3). Sans ce
+    /// discriminant, le libellé grisé ne savait dire qu'une chose (« s'ouvrira
+    /// à 5 personnes actives »), y compris sur une conversation `direct` où
+    /// elle ne s'ouvrira JAMAIS : l'éligibilité exclut `direct`
+    /// STRUCTURELLEMENT, quel que soit le compte.
+    nonisolated public enum RiverEligibilityReasonKind: String, Codable, CaseIterable, Sendable, Equatable {
+        /// Conversation `direct` : aucun compte ne l'ouvrira.
+        case neverEligible
+        /// Type éligible, seuil non atteint — ou compte INCONNU (`current == nil`).
+        case belowThreshold
+        /// Seuil franchi ; la porte est ouverte par la loi.
+        case eligible
+    }
+
+    /// Raison structurée pour le libellé grisé — trois formes depuis
+    /// l'amendement S1 : « jamais en conversation directe », « s'ouvrira à N
+    /// personnes actives » (compte inconnu), « s'ouvrira à N — M aujourd'hui ».
     nonisolated public struct RiverEligibilityReason: Sendable, Equatable {
         public let threshold: Int
-        public let current: Int
+        /// `nil` = compte de participants actifs INCONNU — PAS « zéro ».
+        /// Aucune surface client n'expose de décompte d'actifs par
+        /// conversation aujourd'hui (livrable gateway G-123) ; rendre `0`
+        /// faisait AFFICHER « 0 aujourd'hui », un chiffre fabriqué.
+        public let current: Int?
+        public let riverReason: RiverEligibilityReasonKind
 
-        public init(threshold: Int, current: Int) {
+        public init(threshold: Int, current: Int?, riverReason: RiverEligibilityReasonKind) {
             self.threshold = threshold
             self.current = current
+            self.riverReason = riverReason
         }
     }
 
@@ -307,14 +329,20 @@ nonisolated public enum ReadingModeOrchestrator {
         /// TS (absent ⇒ `false`).
         public let isRiverFlagEnabled: Bool
         public let conversationType: ConversationType
-        public let activeParticipantCount: Int
+        /// `nil` = INCONNU (amendement S1, REV-3/B3) — miroir du
+        /// `number | null` TS. Rétro-compatible : un appelant qui connaît le
+        /// compte passe toujours un `Int` (promotion implicite vers `Int?`) et
+        /// la loi se comporte exactement comme avant. Un compte inconnu ne
+        /// rend JAMAIS éligible : faux négatif temporaire toléré, faux positif
+        /// interdit.
+        public let activeParticipantCount: Int?
 
         public init(
             identity: ReadingModeIdentity,
             isFlagEnabled: Bool,
             isRiverFlagEnabled: Bool = false,
             conversationType: ConversationType,
-            activeParticipantCount: Int
+            activeParticipantCount: Int?
         ) {
             self.identity = identity
             self.isFlagEnabled = isFlagEnabled
@@ -343,15 +371,36 @@ nonisolated public enum ReadingModeOrchestrator {
     ///
     /// `riverEligibilityReason` est servie dans TOUS les cas — y compris
     /// drapeau éteint et conversation inéligible.
+    ///
+    /// AMENDEMENT S1 (REV-3/B3) : la raison se TRIFURQUE (`riverReason`) et le
+    /// compte devient faillible (`current: Int?`). `direct` ⇒ `.neverEligible`
+    /// (« jamais en conversation directe ») ; compte connu sous le seuil ⇒
+    /// `.belowThreshold` avec ses deux nombres ; compte INCONNU ⇒
+    /// `.belowThreshold` avec `current == nil`, et le libellé se tait sur le
+    /// nombre au lieu d'afficher un « 0 aujourd'hui » fabriqué.
     nonisolated public static func resolveCapabilities(
         _ input: ResolveCapabilitiesInput
     ) -> ReadingModeCapabilities {
+        let activeParticipantCount = input.activeParticipantCount
+        let isNeverEligible = input.conversationType == .direct
+        // `nil` (compte inconnu) ⇒ `false` : un compte qu'on ne connaît pas ne
+        // franchit aucun seuil. Miroir exact du `count !== null && count >= …`
+        // TypeScript.
+        let riverEligible = !isNeverEligible
+            && (activeParticipantCount.map { $0 >= riverEligibilityThreshold } ?? false)
+
+        // AMENDEMENT S1 (REV-3/B3) : trois raisons, jamais une seule formule.
+        // `direct` d'abord — c'est la seule branche que le compte ne peut PAS
+        // renverser, et la seule à laquelle « s'ouvrira à 5 » mentait.
+        let riverReason: RiverEligibilityReasonKind = isNeverEligible
+            ? .neverEligible
+            : (riverEligible ? .eligible : .belowThreshold)
+
         let riverEligibilityReason = RiverEligibilityReason(
             threshold: riverEligibilityThreshold,
-            current: input.activeParticipantCount
+            current: activeParticipantCount,
+            riverReason: riverReason
         )
-        let riverEligible = input.activeParticipantCount >= riverEligibilityThreshold
-            && input.conversationType != .direct
 
         if !input.isFlagEnabled {
             return ReadingModeCapabilities(

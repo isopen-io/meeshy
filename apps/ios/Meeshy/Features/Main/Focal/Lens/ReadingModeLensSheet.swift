@@ -21,8 +21,16 @@ import MeeshyUI
 /// aucun équivalent n'a encore tourné). Signalé, pas improvisé.
 
 /// Une ligne de la feuille — contrat §WS-7 « Types purs à extraire ».
-/// Un mode INDISPONIBLE porte `reasonKey` ET `thresholdValue`/`currentValue`
-/// (critère §7 « Un mode indisponible n'est jamais un écran vide »).
+/// Un mode INDISPONIBLE porte `reasonKey` ET, quand elles ont un sens,
+/// `thresholdValue`/`currentValue` (critère §7 « Un mode indisponible n'est
+/// jamais un écran vide »).
+///
+/// AMENDEMENT S1 (REV-3/B3) : `thresholdValue`/`currentValue` sont désormais
+/// `nil` de façon SIGNIFIANTE, pas seulement « ligne disponible ».
+/// `reasonKey` porte la trifurcation :
+///   - `reading_mode.river.never` — jamais éligible (`direct`), aucun nombre ;
+///   - `reading_mode.river.threshold_only` — compte inconnu, le SEUIL seul ;
+///   - `reading_mode.river.unavailable_reason` — les deux nombres, inchangé.
 struct LensRowModel: Equatable, Identifiable {
     let mode: ConversationReadingMode
     var id: ConversationReadingMode { mode }
@@ -52,13 +60,39 @@ enum ReadingModeLensCatalog {
         displayOrder.map { mode in
             if mode == .river {
                 let available = capabilities.availableModes.contains(.river)
+                let reason = capabilities.riverEligibilityReason
+                guard !available else {
+                    return LensRowModel(
+                        mode: mode,
+                        isCurrent: currentMode == .river,
+                        isAvailable: true,
+                        reasonKey: nil,
+                        thresholdValue: nil,
+                        currentValue: nil
+                    )
+                }
+                // AMENDEMENT S1 (REV-3/B3) — même trifurcation que
+                // `LentilleModeLabels.riverReason` côté liste : le fil et la
+                // liste ne racontent pas deux histoires de la même Rivière.
+                if reason.riverReason == .neverEligible {
+                    return LensRowModel(
+                        mode: mode,
+                        isCurrent: currentMode == .river,
+                        isAvailable: false,
+                        reasonKey: "reading_mode.river.never",
+                        thresholdValue: nil,
+                        currentValue: nil
+                    )
+                }
                 return LensRowModel(
                     mode: mode,
                     isCurrent: currentMode == .river,
-                    isAvailable: available,
-                    reasonKey: available ? nil : "reading_mode.river.unavailable_reason",
-                    thresholdValue: available ? nil : capabilities.riverEligibilityReason.threshold,
-                    currentValue: available ? nil : capabilities.riverEligibilityReason.current
+                    isAvailable: false,
+                    reasonKey: reason.current == nil
+                        ? "reading_mode.river.threshold_only"
+                        : "reading_mode.river.unavailable_reason",
+                    thresholdValue: reason.threshold,
+                    currentValue: reason.current
                 )
             }
             let available = capabilities.availableModes.contains(mode)
@@ -93,13 +127,46 @@ enum ReadingModeLensCatalog {
         }
     }
 
-    /// « La Rivière s'ouvrira à 5 personnes actives — 3 aujourd'hui »
-    /// (critère §7) : la VRAIE valeur courante (`thresholdValue`/`currentValue`
-    /// du `LensRowModel`), jamais un placeholder.
+    /// Le sous-titre d'une ligne indisponible dit la VRAIE raison (critère
+    /// §7), jamais un placeholder — et depuis l'amendement S1 (REV-3/B3), il
+    /// dit LAQUELLE des trois :
+    ///
+    /// 1. « Jamais en conversation directe » — la Rivière n'a pas de porte ici,
+    ///    aucun nombre n'a de sens. Annoncer « s'ouvrira à 5 » à un duo était
+    ///    une promesse fabriquée.
+    /// 2. « S'ouvrira à 5 personnes actives » — le compte d'actifs est
+    ///    INCONNU (`currentValue == nil`, G-123 non livré) : on cite le seuil,
+    ///    on se tait sur le reste plutôt qu'afficher « 0 aujourd'hui ».
+    /// 3. « S'ouvrira à 5 personnes actives — 3 aujourd'hui » — les deux
+    ///    nombres réels, INCHANGÉ.
     static func subtitle(for row: LensRowModel) -> String {
-        guard !row.isAvailable, let threshold = row.thresholdValue, let current = row.currentValue else {
+        guard !row.isAvailable, let reasonKey = row.reasonKey else {
             return defaultSubtitle(for: row.mode)
         }
+
+        if reasonKey == "reading_mode.river.never" {
+            return String(
+                localized: "reading_mode.river.never",
+                defaultValue: "Jamais en conversation directe",
+                bundle: .main
+            )
+        }
+
+        guard let threshold = row.thresholdValue else {
+            return defaultSubtitle(for: row.mode)
+        }
+
+        guard let current = row.currentValue else {
+            return String(
+                format: String(
+                    localized: "reading_mode.river.threshold_only",
+                    defaultValue: "S'ouvrira à %d personnes actives",
+                    bundle: .main
+                ),
+                threshold
+            )
+        }
+
         return String(
             format: String(
                 localized: "reading_mode.river.unavailable_reason",

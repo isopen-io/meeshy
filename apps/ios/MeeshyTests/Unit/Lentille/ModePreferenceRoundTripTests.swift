@@ -8,8 +8,8 @@ import MeeshySDK
 /// préférences »).
 ///
 /// **Suite COMPLÉTÉE par I-073** : couvre le round-trip lui-même
-/// (`LentilleModeMenuActions.select` → `LocalReadingModePreferenceStore`) et
-/// sa conséquence sur la décision affichée (`LentilleReadingModeContext
+/// (`LentilleModeMenuActions.select` → le magasin de préférence) et sa
+/// conséquence sur la décision affichée (`LentilleReadingModeContext
 /// .decision`). La bascule multi-appareils réelle reste hors périmètre du
 /// store LOCAL de M-048, qui devient un cache optimiste devant le canal
 /// serveur seulement à LWS-3.
@@ -17,11 +17,15 @@ import MeeshySDK
 /// **I-073 ajoute** : les deux branches manquantes de
 /// `resolveOrchestratorDecision` traversées bout en bout (`.staleAbsence`,
 /// `.default` — les quatre branches non-`flagDisabled` sont désormais
-/// toutes couvertes par ce fichier), et une re-preuve d'ancrage documentant
-/// que « séparation par (scope, conversationId) » n'est PAS un fait
-/// testable sur le store M-048 que LWS-8 possède réellement (aucune notion
-/// de `scope` sur ce protocole — voir §4 ci-dessous, qui pointe vers la
-/// collision de nom non résolue documentée par `LentilleProviders.swift`).
+/// toutes couvertes par ce fichier).
+///
+/// **REV-3/B2 met à jour** : le magasin de la liste n'est plus
+/// `LocalReadingModePreferenceStore` (clé nue, retiré) mais
+/// `LentilleScopedReadingModePreferenceStore`, adaptateur par-dessus le
+/// magasin SCOPÉ de F-080. « Séparation par (scope, conversationId) », que
+/// l'ancien §4 documentait comme non testable faute d'arbitrage, EST
+/// désormais un fait — §5 le prouve, et §6 garde la source contre le retour
+/// d'une clé sans identité.
 ///
 /// **Nommage** — aucun jeton de `FINAL_PHASE_CLASS_PATTERN`
 /// (`apps/ios/meeshy.sh:1591`) : `ModePreferenceRoundTripTests`, phase 1
@@ -35,10 +39,28 @@ final class ModePreferenceRoundTripTests: XCTestCase {
     /// un résidu visible au lancement suivant, `MeeshyTests` étant hébergé
     /// dans `Meeshy.app`.
     private func withIsolatedStore(_ body: (ReadingModePreferenceStoring) async -> Void) async {
+        await withIsolatedStores { center, _, _ in await body(center) }
+    }
+
+    /// REV-3/B2 — le magasin de la liste N'EST PLUS un second `UserDefaults`
+    /// à clé nue : c'est `LentilleScopedReadingModePreferenceStore`, un
+    /// adaptateur par-dessus le magasin scopé de F-080. Ce décor rend les
+    /// TROIS pièces (l'adaptateur Lentille, le magasin Focal sous-jacent, le
+    /// scope) pour que les témoins croisés puissent écrire d'un côté et lire
+    /// de l'autre — la seule façon de prouver « un seul magasin » plutôt que
+    /// de la reposter.
+    private func withIsolatedStores(
+        scope: ReadingModePreferenceScope = .registered(userId: "viewer-1"),
+        _ body: (ReadingModePreferenceStoring, FocalReadingModePreferenceStoring, ReadingModePreferenceScope) async -> Void
+    ) async {
         let suiteName = "ModePreferenceRoundTripTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
-        let store = LocalReadingModePreferenceStore(defaults: defaults)
-        await body(store)
+        let focalStore = ReadingModePreferenceStore(defaults: defaults)
+        let center = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { scope }
+        )
+        await body(center, focalStore, scope)
         defaults.removePersistentDomain(forName: suiteName)
     }
 
@@ -270,70 +292,212 @@ final class ModePreferenceRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - 4. « Scope » — anchor re-proved, PAS testable dans ce périmètre
+    // MARK: - 4. UN SEUL magasin — aller-retour CROISÉ liste ⇄ fil (REV-3/B2)
 
-    /// I-073 : la mission demande une séparation par « (scope, conversationId)
-    /// — deux conversations, deux scopes ». Re-preuve d'ancrage (§0) : le
-    /// magasin que LWS-8 possède réellement (`LocalReadingModePreferenceStore`,
-    /// M-048, `Lentille/Core/LentilleProviders.swift`) ne connaît QU'UNE clé,
-    /// `conversationId` — `test_store_isolatesPreferenceByConversation`
-    /// ci-dessus en est le témoin. Aucune notion de « scope » n'existe sur ce
-    /// protocole aujourd'hui.
-    ///
-    /// Un SECOND protocole, de MÊME NOM `ReadingModePreferenceStoring` mais de
-    /// forme différente — clé `(conversationId, scope)`, synchrone, `AnyObject`
-    /// — est décrit par `focal-implementation-contract.md` §WS-1 (F-080,
-    /// `Focal/Core/ReadingModePreferenceStoring.swift`). Ce fichier N'EXISTE
-    /// PAS ENCORE dans ce worktree (vérifié ci-dessous) : la collision de nom
-    /// que `LentilleProviders.swift` documente lui-même (« l'arbitrage du nom
-    /// entre les deux revient à Fable à l'intégration V3 ») reste non résolue.
-    /// Tant qu'elle l'est, « deux scopes » n'est un fait testable NULLE PART
-    /// dans le graphe de dépendances de LWS-8 — ce témoin verrouille
-    /// l'ABSENCE du concept côté M-048 plutôt que d'inventer un paramètre que
-    /// le store réel ne porte pas.
-    ///
-    /// DÉFAUT/AMBIGUÏTÉ RÉEL DOCUMENTÉ, NON CORRIGÉ : rapporté tel quel, la
-    /// résolution appartenant à Fable (arbitrage explicitement délégué par le
-    /// commentaire source), pas à cette micro-tâche de tests.
-    func test_scopeConversationIdSeparation_isNotYetAConceptOnTheM048StoreLWS8Owns() throws {
-        let providersCode = try String(
-            contentsOf: Self.iosRoot.appendingPathComponent(
-                "Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift"
-            ),
-            encoding: .utf8
+    /// Écrit par le centre Lentille (la liste), relu par le magasin Focal (le
+    /// fil ouvert) — même scope, même conversation. Avant l'arbitrage B2, ce
+    /// témoin était IMPOSSIBLE : les deux côtés visaient des clés `UserDefaults`
+    /// différentes (`meeshy_readmode_<scopeKey>_<id>` d'un côté, une clé nue de
+    /// l'autre), et un mode choisi dans la liste n'existait tout simplement pas
+    /// pour le fil.
+    func test_crossRoundTrip_writtenByTheLentilleCenter_isReadByTheFocalStore() async {
+        await withIsolatedStores { center, focalStore, scope in
+            await center.set(conversationId: "conv-x", value: .riviere, optimistic: true)
+
+            XCTAssertEqual(
+                focalStore.mode(for: "conv-x", scope: scope), .river,
+                "Le fil doit LIRE le choix fait dans la liste — c'est la définition de " +
+                "« un seul magasin ». `.riviere` (préférence, mots du menu) est mémorisé " +
+                "en `.river` (mode RENDU), la seule traduction que le magasin scopé connaisse."
+            )
+        }
+    }
+
+    /// Réciproque : écrit par le fil (`ReadingModePreferenceStore`, l'API que
+    /// `ReadingModeController.select` utilise), relu par le centre Lentille.
+    /// Les deux sens comptent — un adaptateur qui n'écrirait au bon endroit
+    /// qu'à l'aller laisserait la liste afficher `.auto` sur une conversation
+    /// que le lecteur a figée depuis le fil.
+    func test_crossRoundTrip_writtenByTheFocalStore_isReadByTheLentilleCenter() async {
+        await withIsolatedStores { center, focalStore, scope in
+            focalStore.setMode(.summary, for: "conv-y", scope: scope)
+
+            let observed = await center.get(conversationId: "conv-y")
+            XCTAssertEqual(
+                observed, .resume,
+                "La liste doit LIRE le choix fait dans le fil. `.summary` (mode rendu) se " +
+                "relit `.resume` (le mot du menu) — `ReadingModePreferenceMapping`, l'unique " +
+                "table de traduction de l'app."
+            )
+        }
+    }
+
+    /// « Revenir en Auto » depuis la liste doit EFFACER la clé scopée, pas
+    /// écrire un troisième état : le fil interprète `nil` comme « rendre la
+    /// main à l'orchestrateur » (§WS-1), et un marqueur « auto » en dur y
+    /// serait relu comme un mode inconnu.
+    func test_crossRoundTrip_backToAuto_clearsTheScopedKeyForTheThread() async {
+        await withIsolatedStores { center, focalStore, scope in
+            await center.set(conversationId: "conv-z", value: .script, optimistic: true)
+            XCTAssertEqual(focalStore.mode(for: "conv-z", scope: scope), .script, "Prérequis : le forçage a pris.")
+
+            await center.set(conversationId: "conv-z", value: .auto, optimistic: true)
+            XCTAssertNil(
+                focalStore.mode(for: "conv-z", scope: scope),
+                "Auto = ABSENCE de clé côté fil, jamais une valeur « auto » écrite en dur."
+            )
+        }
+    }
+
+    // MARK: - 5. Séparation par IDENTITÉ — deux scopes, deux valeurs (REV-3/B2)
+
+    /// La raison d'être du préfixe d'identité (fuite privacy multi-comptes du
+    /// 2026-05-26, `ReadingModePreferenceStore` §60-63) : deux lecteurs du
+    /// MÊME appareil, sur la MÊME conversation, ne partagent pas leur mode.
+    /// C'était exactement ce que la clé nue de l'ancien magasin de liste ne
+    /// savait pas faire — ce témoin est le contre-poison.
+    func test_identitySeparation_twoScopes_holdTwoDistinctPreferences() async {
+        let suiteName = "ModePreferenceRoundTripTests-identity-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let focalStore = ReadingModePreferenceStore(defaults: defaults)
+        let alice = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { .registered(userId: "alice") }
         )
-        let normalizedProviders = AppSourceGuard.stripComments(providersCode)
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        let bob = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { .registered(userId: "bob") }
+        )
 
-        XCTAssertTrue(
-            normalizedProviders.contains("func get(conversationId: String) async -> ReadingModePreference"),
-            "Le protocole M-048 doit garder sa signature à un seul paramètre — c'est " +
-            "l'ancrage que ce témoin re-prouve avant de conclure à l'absence de `scope`."
+        await alice.set(conversationId: "shared-conv", value: .script, optimistic: true)
+        await bob.set(conversationId: "shared-conv", value: .resume, optimistic: true)
+
+        let aliceValue = await alice.get(conversationId: "shared-conv")
+        let bobValue = await bob.get(conversationId: "shared-conv")
+
+        XCTAssertEqual(aliceValue, .script)
+        XCTAssertEqual(bobValue, .resume)
+        XCTAssertNotEqual(
+            aliceValue, bobValue,
+            "Discrimination (leçon 266) : si les deux scopes rendaient la même valeur, ce " +
+            "témoin serait vert avec une clé NON scopée — c'est-à-dire vert sur le défaut " +
+            "qu'il est censé interdire."
+        )
+    }
+
+    /// Un invité et un inscrit du même appareil sont eux aussi séparés — et
+    /// l'identifiant anonyme n'apparaît JAMAIS en clair au repos (hash
+    /// tronqué, `ReadingModePreferenceScope.storageKey`). Le troisième lecteur
+    /// ci-dessous n'a jamais rien écrit : il doit voir `.auto`, pas l'héritage
+    /// d'un autre compte.
+    func test_identitySeparation_anonymousAndRegistered_doNotShareAPreference() async {
+        let suiteName = "ModePreferenceRoundTripTests-identity-anon-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let focalStore = ReadingModePreferenceStore(defaults: defaults)
+        let guest = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { .anonymous(participantId: "participant-42") }
+        )
+        let member = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { .registered(userId: "participant-42") }
+        )
+        let otherGuest = LentilleScopedReadingModePreferenceStore(
+            store: focalStore,
+            scopeProvider: { .anonymous(participantId: "participant-99") }
+        )
+
+        await guest.set(conversationId: "c", value: .focal, optimistic: true)
+
+        let guestValue = await guest.get(conversationId: "c")
+        let memberValue = await member.get(conversationId: "c")
+        let otherGuestValue = await otherGuest.get(conversationId: "c")
+
+        XCTAssertEqual(guestValue, .focal)
+        XCTAssertEqual(
+            memberValue, .auto,
+            "Un `userId` inscrit et un `participantId` anonyme de MÊME texte ne doivent pas " +
+            "collider : les préfixes `u_`/`a_` du `storageKey` les séparent."
         )
         XCTAssertEqual(
-            normalizedProviders.components(separatedBy: "scope").count - 1, 0,
-            "« scope » apparaît dans le CODE (hors commentaires) de `LentilleProviders.swift` " +
-            "— soit le protocole M-048 a gagné un paramètre de portée sans que ce témoin " +
-            "(et le commentaire de collision qu'il re-prouve) ait été mis à jour, soit la " +
-            "collision documentée avec F-080 vient d'être résolue autrement : dans les deux " +
-            "cas, ce test doit être relu avant d'être simplement rendu vert."
+            otherGuestValue, .auto,
+            "Deux sessions invitées du même appareil restent étanches — le cas nommé par la " +
+            "fuite du 2026-05-26."
         )
 
-        let focalReadingModeStoreExists = FileManager.default.fileExists(
-            atPath: Self.iosRoot.appendingPathComponent(
-                "Meeshy/Features/Main/Focal/Core/ReadingModePreferenceStoring.swift"
-            ).path
-        )
+        let storedKeys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("meeshy_readmode_") }
+        XCTAssertEqual(storedKeys.count, 1, "Une seule écriture, une seule clé.")
         XCTAssertFalse(
-            focalReadingModeStoreExists,
-            "`Focal/Core/ReadingModePreferenceStoring.swift` (F-080, protocole `(conversationId, " +
-            "scope)`) existe désormais : la collision de nom que `LentilleProviders.swift` " +
-            "signale comme NON résolue a été tranchée (ou a atterri sans être tranchée — un " +
-            "conflit de redéclaration romprait alors la compilation du module `Meeshy`). Ce " +
-            "témoin doit être mis à jour ou retiré une fois l'arbitrage de Fable connu ; " +
-            "« deux scopes » redevient alors un fait testable, ce qu'il n'est pas aujourd'hui."
+            storedKeys.contains { $0.contains("participant-42") },
+            "L'identifiant anonyme ne doit JAMAIS apparaître en clair au repos — hash SHA-256 " +
+            "tronqué (`ReadingModePreferenceScope.truncatedHash`)."
+        )
+    }
+
+    // MARK: - 6. Garde source — plus AUCUNE clé de mode sans scope (REV-3/B2)
+
+    /// L'arbitrage B2 est tranché : le magasin scopé de F-080 est LE magasin.
+    /// Cette garde verrouille l'état d'arrivée — plus aucune ligne de CODE de
+    /// l'app ne nomme une clé `UserDefaults` de mode de lecture dépourvue de
+    /// préfixe d'identité. Elle remplace le témoin précédent, qui verrouillait
+    /// l'ABSENCE d'arbitrage (« deux scopes n'est un fait testable nulle part »)
+    /// — une vérité qui a cessé de l'être.
+    ///
+    /// Commentaires exclus (`AppSourceGuard.stripComments`) : le commentaire
+    /// pierre tombale de `LentilleProviders.swift` et la décision de
+    /// non-migration de `LentilleReadingModeContext.swift` CITENT l'ancien
+    /// préfixe pour expliquer sa disparition. Un texte n'écrit pas une clé ;
+    /// c'est le code qui est gardé.
+    func test_sourceGuard_noUnscopedReadingModeUserDefaultsKeyRemains() throws {
+        let appRoot = Self.iosRoot.appendingPathComponent("Meeshy")
+        var offenders: [String] = []
+
+        let enumerator = try XCTUnwrap(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil)
+        )
+        var scanned = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            scanned += 1
+            if code.contains("meeshy.readingMode.") {
+                offenders.append(url.lastPathComponent)
+            }
+        }
+
+        XCTAssertGreaterThan(scanned, 100, "Prérequis : l'énumération doit avoir vu l'arborescence de l'app.")
+        XCTAssertEqual(
+            offenders, [],
+            "Une clé de mode de lecture SANS préfixe d'identité est réapparue dans " +
+            "\(offenders) — c'est la fuite privacy multi-comptes du 2026-05-26 qui revient, " +
+            "et le second magasin disjoint que REV-3/B2 a fermé."
+        )
+    }
+
+    /// Contre-épreuve de la garde ci-dessus (elle passerait toute seule sur une
+    /// arborescence vide) : le préfixe SCOPÉ, lui, doit bien être présent — et
+    /// dans un SEUL fichier, celui qui possède le calcul de clé.
+    func test_sourceGuard_theScopedPrefixLivesInExactlyOneFile() throws {
+        let appRoot = Self.iosRoot.appendingPathComponent("Meeshy")
+        var holders: [String] = []
+
+        let enumerator = try XCTUnwrap(
+            FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil)
+        )
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            if code.contains("meeshy_readmode_") {
+                holders.append(url.lastPathComponent)
+            }
+        }
+
+        XCTAssertEqual(
+            holders, ["ReadingModePreferenceStore.swift"],
+            "Le préfixe de clé scopé doit rester l'affaire exclusive du magasin qui le " +
+            "calcule. L'adaptateur Lentille passe par lui, il ne recopie pas la clé."
         )
     }
 
