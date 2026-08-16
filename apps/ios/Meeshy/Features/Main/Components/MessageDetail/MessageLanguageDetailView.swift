@@ -50,8 +50,8 @@ struct MessageLanguageDetailView: View {
     var body: some View {
         content
             .onAppear { Task { await loadExistingTranslations() } }
-            .onChange(of: textTranslations) { _ in syncTranslationsFromProps() }
-            .onChange(of: translatedAudios) { _ in syncTranslatedAudiosFromProps() }
+            .adaptiveOnChange(of: textTranslations) { _, _ in syncTranslationsFromProps() }
+            .adaptiveOnChange(of: translatedAudios) { _, _ in syncTranslatedAudiosFromProps() }
             .onReceive(
                 (translationRequestFailedPublisher ?? Empty().eraseToAnyPublisher())
                     .filter { $0.messageId == message.id }
