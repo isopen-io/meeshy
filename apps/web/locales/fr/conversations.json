@@ -737,8 +737,11 @@
         "resume": "Résumé",
         "riviere": "Rivière",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "s'ouvrira à {threshold} personnes actives — {current} aujourd'hui",
-        "riviereLockedDirect": "réservée aux groupes"
+        "river": {
+          "never": "jamais en conversation directe",
+          "thresholdOnly": "s'ouvrira à {threshold} personnes actives",
+          "reason": "s'ouvrira à {threshold} personnes actives — {current} aujourd'hui"
+        }
       },
       "typing": {
         "one": "{name} écrit…"

@@ -735,8 +735,11 @@
         "resume": "Resumo",
         "riviere": "Rio",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "abrirá com {threshold} pessoas ativas — {current} hoje",
-        "riviereLockedDirect": "reservado para grupos"
+        "river": {
+          "never": "nunca em uma conversa direta",
+          "thresholdOnly": "abrirá com {threshold} pessoas ativas",
+          "reason": "abrirá com {threshold} pessoas ativas — {current} hoje"
+        }
       },
       "typing": {
         "one": "{name} está digitando…"

@@ -733,8 +733,11 @@
         "resume": "Summary",
         "riviere": "River",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "will open at {threshold} active people — {current} today",
-        "riviereLockedDirect": "reserved for groups"
+        "river": {
+          "never": "never in a direct conversation",
+          "thresholdOnly": "opens at {threshold} active people",
+          "reason": "opens at {threshold} active people — {current} today"
+        }
       },
       "typing": {
         "one": "{name} is typing…"

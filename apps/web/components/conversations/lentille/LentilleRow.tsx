@@ -47,6 +47,7 @@ import { formatConversationDate } from '@/utils/date-format';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } from './lentille-row-utils';
 import { LentilleBridgeLine } from './LentilleBridgeLine';
+import { LentillePeek } from './LentillePeek';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
 
 export interface LentilleRowDraft {
@@ -200,9 +201,16 @@ export const LentilleRow = memo(function LentilleRow({
       {/* Wrapper interne de perspective (WL-104) — SEUL destinataire de
           `opacity`/`transform` écrits par `useLentillePerspective`. La
           racine ci-dessus (hauteur/marges/padding/radius) n'est JAMAIS
-          touchée par la passe de perspective (invariant §4.1). */}
-      <div
-        ref={perspectiveRef}
+          touchée par la passe de perspective (invariant §4.1). Ce wrapper
+          EST désormais `LentillePeek` (WL-106, LWS-11) : `wrapperRef` reçoit
+          exactement le même ref-setter que l'ancien `<div ref={perspectiveRef}>`
+          — le portillon opacity/transform est inchangé, `LentillePeek` ajoute
+          les gestionnaires de geste (clic droit, appui long, ⋮ au survol)
+          SANS toucher à la géométrie ni au ciblage de la perspective. */}
+      <LentillePeek
+        conversation={conversation}
+        t={t}
+        wrapperRef={perspectiveRef}
         data-testid="lentille-row-perspective-wrapper"
         className="flex items-center gap-3 h-full w-full"
         style={{
@@ -302,7 +310,7 @@ export const LentilleRow = memo(function LentilleRow({
             }}
           />
         )}
-      </div>
+      </LentillePeek>
     </div>
   );
 });
