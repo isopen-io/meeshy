@@ -100,11 +100,31 @@ final class ModeMenuModelTests: XCTestCase {
         let reasonThree = try XCTUnwrap(try entry(.riviere, in: modelThree).disabledReason)
         let reasonZero = try XCTUnwrap(try entry(.riviere, in: modelZero).disabledReason)
 
+        // Valeur attendue composée par le MÊME format que la production
+        // (`LentilleModeLabels.riverReason`, clé `lentille.mode.river.reason`),
+        // résolu par catalogue au moment du test (même patron que
+        // `A11yLabelComposerTests`/`CallsViewModelTests`) — sous la locale
+        // `en` du CI il rend l'anglais, plus le repli `defaultValue` français.
+        // La langue est donc libre ; ce qui reste verrouillé (leçon 264/266)
+        // est que les DEUX nombres vivants (seuil, compte réel) apparaissent
+        // dans la chaîne rendue.
+        let format = String(
+            localized: "lentille.mode.river.reason",
+            defaultValue: "s'ouvrira à %d personnes actives — %d aujourd'hui",
+            bundle: .main
+        )
+        let expectedReasonThree = String(format: format, ReadingModeOrchestrator.riverEligibilityThreshold, 3)
         XCTAssertEqual(
             reasonThree,
-            "s'ouvrira à \(ReadingModeOrchestrator.riverEligibilityThreshold) personnes actives — 3 aujourd'hui",
-            "Exemple du contrat, mot pour mot (avec le seuil du miroir, jamais « 5 » écrit " +
-            "en dur ici) : « s'ouvrira à 5 personnes actives — 3 aujourd'hui »."
+            expectedReasonThree,
+            "Composée depuis le MÊME format que la production, avec le seuil du miroir " +
+            "(jamais « 5 » écrit en dur ici) et le compte réel (3)."
+        )
+        XCTAssertTrue(
+            reasonThree.contains("\(ReadingModeOrchestrator.riverEligibilityThreshold)")
+                && reasonThree.contains("3"),
+            "Les DEUX seuils vivants (le plancher et le compte réel) doivent apparaître " +
+            "dans la raison rendue, quelle que soit la langue résolue."
         )
         XCTAssertNotEqual(
             reasonThree, reasonZero,
@@ -144,9 +164,18 @@ final class ModeMenuModelTests: XCTestCase {
         let model = LentilleModeMenuModel.build(capabilities: directCaps, currentPreference: .auto)
         let reason = try XCTUnwrap(try entry(.riviere, in: model).disabledReason)
 
+        // Même patron que le témoin ci-dessus : la langue vient du catalogue
+        // (résolue au moment du test, pas figée), les deux nombres vivants
+        // restent verrouillés.
+        let format = String(
+            localized: "lentille.mode.river.reason",
+            defaultValue: "s'ouvrira à %d personnes actives — %d aujourd'hui",
+            bundle: .main
+        )
+        let expectedReason = String(format: format, ReadingModeOrchestrator.riverEligibilityThreshold, 3)
         XCTAssertEqual(
             reason,
-            "s'ouvrira à \(ReadingModeOrchestrator.riverEligibilityThreshold) personnes actives — 3 aujourd'hui",
+            expectedReason,
             "Comportement RÉEL, verrouillé : la raison d'une conversation directe est " +
             "composée par la MÊME formule qu'un groupe sous le seuil — le miroir gelé ne " +
             "distingue pas « inéligible par nature » de « inéligible par manque de " +
