@@ -143,7 +143,7 @@ function cssVarPrefix(section: 'list' | 'thread', family: string): string {
 // inutile si elle ne re-prouvait que le web). La preuve iOS : grep de
 // `LentilleMetrics.<X>` / `FocalMetrics.<X>` sur `apps/ios/Meeshy` HORS
 // fichiers de définition et HORS `MeeshyTests` — zéro site dans les DEUX cas
-// pour les trois familles ci-dessous (2026-08-16).
+// pour les deux familles ci-dessous (2026-08-16).
 //
 // `list.tags` et `list.muted` (les deux AUTRES tokens que REV-4 soupçonnait
 // morts côté web, avec `thread.hiddenChrome`) ont été VÉRIFIÉS VIVANTS côté
@@ -152,6 +152,17 @@ function cssVarPrefix(section: 'list' | 'thread', family: string): string {
 // `LentilleMetrics.Muted` (opacité de sourdine, `LentilleConversationRow.swift`)
 // sont bien consommés. Ils NE FIGURENT PAS ici — la garde les couvre par le
 // chemin normal (consommateur iOS trouvé).
+//
+// **`thread.hiddenChrome` a rejoint ce cas le 2026-08-16, quelques heures
+// après avoir été exclue** : WS-6, le propriétaire annoncé, a branché le
+// token — `FocalMetrics.HiddenChrome.easeOut` cadence désormais la
+// disparition du header entier dans `ConversationView.swift`
+// (`.animation(.easeOut(duration:), value: hidesEntireHeaderForScroll)`).
+// Son entrée a donc été retirée, exactement comme le message d'échec de
+// `it.each` le demande. C'est le premier passage de cette garde du côté
+// « l'exclusion est devenue périmée », et il valide sa raison d'être : sans
+// ce contre-test, l'exclusion aurait survécu à sa cause et couvert un
+// retrait futur du consommateur en silence.
 interface DeadFamilyExclusion {
   readonly family: string;
   readonly since: string;
@@ -184,16 +195,6 @@ const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
       'surfaces agent restent un stub (`agent_grammar` OFF — contrat Focal WS-10, notes REV-3 ' +
       'de la ligne V3). Mort des deux côtés. Attend le même chantier que la réserve R-e ' +
       '(drapeau agent_grammar orphelin), hors périmètre de ce lot.',
-  },
-  {
-    family: 'thread.hiddenChrome',
-    since: '2026-08-16',
-    owner: 'Fable — WS-6 iOS (hôte de défilement Focal) + WL-10x web',
-    reason:
-      'FocalMetrics.HiddenChrome documente lui-même « non consommée par WS-3/WS-4 » ; ' +
-      're-preuve confirme zéro site RÉEL (WS-6, le propriétaire annoncé, ne la branche pas ' +
-      'encore). REV-4 l\'avait déjà signalée morte côté web (`--lentille-thread-hidden-chrome-*` ' +
-      '— fichier CSS inerte). Mort des deux côtés, confirmé.',
   },
 ];
 
