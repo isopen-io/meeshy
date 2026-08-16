@@ -458,8 +458,10 @@ public actor ConversationStore {
     /// champ — un payload tout en `null` ne survit à aucun `if let`.
     ///
     /// Fields unrelated to message ordering (e.g. `title`) are still applied
-    /// regardless. No-op for an unknown conversation (the next list refresh
-    /// will catch up).
+    /// regardless — à une exception près, `title` sur une conversation
+    /// `.direct`, dont le titre client n'est pas celui de la base (voir le
+    /// commentaire au point d'application). No-op for an unknown conversation
+    /// (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
         guard let conv = conversations[event.conversationId],
               let merged = Self.merging(conv, with: event) else { return }
@@ -541,7 +543,27 @@ public actor ConversationStore {
                 }
             }
         }
-        if let v = event.title { conv.title = v; changed = true }
+        // Un DM ne porte JAMAIS le titre de la base : `APIConversation
+        // .toConversation` l'écarte explicitement et pose à la place le nom du
+        // participant d'en face. Le payload socket, lui, porte le titre BRUT —
+        // `PUT /conversations/:id` n'interdit pas de renommer une conversation
+        // `direct`, et le rôle `creator` que reçoit l'auteur d'un DM à sa
+        // création suffit à passer son contrôle d'accès.
+        //
+        // L'écran porte cette garde depuis le 2026-07-04 (« sandra raveloson »
+        // → « Sany », `ConversationListViewModel`). Elle manquait ICI, et c'est
+        // cette copie-ci qui écrit le CACHE DISQUE (`ConversationSyncEngine
+        // .applyingConversationUpdate` délègue à cette même fonction) : le nom
+        // greffé survivait au redémarrage, et revenait à l'écran avant même
+        // celui-ci, la réécriture du cache rediffusant la liste par
+        // `conversationsDidChange`. La garde de l'écran ne protégeait donc que
+        // le chemin socket direct, pas celui qui la contournait par le cache.
+        //
+        // Miroir exact de `merging(_:withUserUpdate:)` vingt lignes plus bas,
+        // qui dérive DÉJÀ le titre d'un DM du contact d'en face : les deux
+        // règles de fusion de ce fichier disent enfin la même chose du même
+        // champ.
+        if let v = event.title, conv.type != .direct { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
         if let v = event.description { conv.description = v; changed = true }
         if let v = event.banner { conv.banner = v; changed = true }

@@ -113,6 +113,24 @@ final class ConversationStoreTests: XCTestCase {
         )
     }
 
+    /// Jumeau RENOMMABLE de `makeConv`. Le type par défaut du fixture est
+    /// `.direct` — choix hérité, sans rapport avec les tests qui l'utilisent —
+    /// et le titre d'un DM n'est PAS celui de la base (`merging` l'ignore
+    /// désormais, cf. `test_merging_directConversation_neverTakesTheRawTitle`).
+    /// Tout test dont le sujet est « une métadonnée s'applique » doit donc
+    /// partir d'ici, pas de `makeConv`.
+    private func makeGroupConv(id: String = "conv-1", version: Int = 5) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id,
+            identifier: id,
+            type: .group,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(version: version)
+        )
+    }
+
     // MARK: - Hydration
 
     func test_hydrate_seedsConversationAndPublishesList() async {
@@ -840,7 +858,7 @@ final class ConversationStoreTests: XCTestCase {
     // alors que rien du dernier message n'a changé.
     func test_applyConversationUpdated_unchangedTranslations_leavesPrismAlone() async {
         let (store, _, _, _) = makeStore()
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageTranslations = ["fr": "Bonjour"]
         conv.lastMessageOriginalLanguage = "en"
         await store.hydrate(conv)
@@ -880,7 +898,7 @@ final class ConversationStoreTests: XCTestCase {
     func test_applyConversationUpdated_staleLastMessageAt_unrelatedFieldsStillApplied() async {
         let (store, _, _, _) = makeStore()
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageAt = t0
         await store.hydrate(conv)
 
@@ -1000,7 +1018,7 @@ final class ConversationStoreTests: XCTestCase {
     /// défaut symétrique, et bien plus visible que celui qu'on ferme ici.
     func test_applyConversationUpdated_metadataOnly_leavesThePreviewGroupAlone() async {
         let (store, _, _, _) = makeStore()
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageId = "msg-only"
         conv.lastMessagePreview = "le seul message"
         conv.lastMessageTranslations = ["fr": "le seul message"]
@@ -1039,9 +1057,71 @@ final class ConversationStoreTests: XCTestCase {
                      "le second n'a plus rien à vider — il ne doit pas republier la ligne")
     }
 
+    // MARK: - `title` sur un DM — le titre de la base n'est pas celui de la ligne
+
+    /// Le titre client d'un DM est le nom du participant d'en face
+    /// (`APIConversation.toConversation` écarte explicitement le titre de la
+    /// base). Le payload socket porte le titre BRUT : le greffer remplace le nom
+    /// affiché par un libellé que personne ne voit ailleurs.
+    ///
+    /// `ConversationListViewModel` garde ce cas depuis le 2026-07-04. Cette
+    /// copie-ci ne le gardait pas — et c'est elle qui écrit le CACHE DISQUE via
+    /// `ConversationSyncEngine.applyingConversationUpdate`, donc celle qui
+    /// gagnait : le cache réécrit rediffuse la liste à l'écran, et le nom greffé
+    /// survivait au redémarrage.
+    func test_merging_directConversation_neverTakesTheRawTitle() {
+        var conv = makeConv(id: "conv-1")
+        conv.title = "Sandra Raveloson"
+
+        let merged = ConversationStore.merging(
+            conv,
+            with: ConversationUpdatedStoreEvent(conversationId: "conv-1", title: "Sany")
+        )
+
+        XCTAssertNil(
+            merged,
+            "un renommage seul ne change RIEN sur un DM — la ligne ne doit même pas être republiée"
+        )
+    }
+
+    /// Contre-épreuve indispensable : la garde vise le TITRE d'un DM, pas les
+    /// métadonnées d'un DM en général. Un avatar de groupe partagé, un mode
+    /// lent, une bannière continuent de s'appliquer — sinon on remplacerait un
+    /// nom écrasé par un DM entièrement sourd aux métadonnées.
+    func test_merging_directConversation_stillTakesEveryOtherMetadataField() throws {
+        var conv = makeConv(id: "conv-1")
+        conv.title = "Sandra Raveloson"
+
+        let merged = try XCTUnwrap(ConversationStore.merging(
+            conv,
+            with: ConversationUpdatedStoreEvent(
+                conversationId: "conv-1",
+                title: "Sany",
+                avatar: "https://cdn.meeshy.me/a.jpg",
+                slowModeSeconds: 12
+            )
+        ))
+
+        XCTAssertEqual(merged.title, "Sandra Raveloson", "le nom du participant survit au payload")
+        XCTAssertEqual(merged.avatar, "https://cdn.meeshy.me/a.jpg")
+        XCTAssertEqual(merged.slowModeSeconds, 12)
+    }
+
+    /// L'autre moitié de la garde : une conversation RENOMMABLE prend bien son
+    /// titre. Sans ce témoin, poser `conv.type != .direct` à l'envers — ou
+    /// supprimer la branche — passerait au vert.
+    func test_merging_groupConversation_takesTheIncomingTitle() {
+        let merged = ConversationStore.merging(
+            makeGroupConv(id: "conv-1"),
+            with: ConversationUpdatedStoreEvent(conversationId: "conv-1", title: "Équipe Produit")
+        )
+
+        XCTAssertEqual(merged?.title, "Équipe Produit")
+    }
+
     func test_applyConversationUpdated_titleAndAvatar_applied() async {
         let (store, _, _, _) = makeStore()
-        await store.hydrate(makeConv(id: "conv-1"))
+        await store.hydrate(makeGroupConv(id: "conv-1"))
 
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
@@ -1069,7 +1149,7 @@ final class ConversationStoreTests: XCTestCase {
 
     func test_applyConversationUpdated_allNilFields_doesNotMutateExistingState() async {
         let (store, _, _, _) = makeStore()
-        await store.hydrate(makeConv(id: "conv-1"))
+        await store.hydrate(makeGroupConv(id: "conv-1"))
         // Establish a known title.
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",

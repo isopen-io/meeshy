@@ -49,9 +49,13 @@ nonisolated enum FocalFocusCurve {
     // MARK: - Constantes gelées (miroir de FOCUS_CURVE_CONSTANTS)
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — RÉSERVE 1, revue REV-1.
-    static let threadMaxDistance: CGFloat = 380
-    static let threadScaleDecay: CGFloat = 0.4
-    static let threadAlphaDecay: CGFloat = 0.82
+    static let threadMaxDistance: CGFloat = 520
+    static let threadScaleDecay: CGFloat = 0.38
+    static let threadAlphaDecay: CGFloat = 0.78
+    /// Pivot HORIZONTAL de l'échelle, en fraction de largeur — `transform-origin:
+    /// "18% bottom"` de la maquette de référence
+    /// (`docs/design/2026-08-15-conversation-modes-verdict.html`).
+    static let threadHorizontalPivot: CGFloat = 0.18
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.list`.
     static let listMaxDistance: CGFloat = 520

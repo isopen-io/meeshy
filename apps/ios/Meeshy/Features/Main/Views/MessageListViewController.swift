@@ -289,6 +289,15 @@ final class MessageListViewController: UIViewController {
     /// comme hors périmètre WS-4/WS-5, « à mirrorer par WS-6 » (contrat §3.11).
     private static let estimatedFlatRowHeight: CGFloat = 64
 
+    /// Estimations de layout — voir `configureCollectionView` pour le
+    /// raisonnement. À DISTINGUER de `estimatedFlatRowHeight` ci-dessus, qui
+    /// sert au calcul du `headInset` (§4.5) et pas au layout.
+    ///
+    /// Focal : en-tête focale réservée (34) + créneau de la barre (28) +
+    /// une ligne de texte + marges. Bulle : la valeur historique, inchangée.
+    private static let estimatedFlatRowLayoutHeight: CGFloat = 150
+    private static let estimatedBubbleRowLayoutHeight: CGFloat = 80
+
     /// Points d'accès de test (WS-6, F-085) — `internal`, lus par
     /// `@testable import Meeshy`, jamais par une autre cible app.
     var focalCollectionViewForTesting: UICollectionView? { collectionView }
@@ -686,18 +695,34 @@ final class MessageListViewController: UIViewController {
     /// heure » du message en haut visible, même approche que
     /// `updateStickyDayLabel` (jour seul) mais `createdAt` complet : la
     /// pilule a besoin de l'heure en plus du jour.
+    /// Appelée à CHAQUE frame de `scrollViewDidScroll`.
+    ///
+    /// **Le calcul du libellé a été retiré — c'était du travail MORT.** Il
+    /// résolvait le message du haut de l'écran (`indexPathsForVisibleItems
+    /// .max()` + `store.message(for:)`) puis formatait « jour · heure »
+    /// (`MessageDayLabel` + `TimeStringCache`) pour alimenter
+    /// `ScrollTimePillState.label` — c'est-à-dire une pilule qui n'est PLUS
+    /// MONTÉE nulle part depuis que les heures sont revenues aux rangées.
+    /// Une résolution de message et deux formatages par frame de défilement,
+    /// pour un état que plus aucune vue n'observait.
+    ///
+    /// La LOI, elle, reste alimentée : c'est elle qui décide de la fenêtre du
+    /// révélé, et son horloge doit continuer de recevoir chaque événement.
+    /// Seul l'étiquetage disparaît.
+    ///
+    /// L'horodatage est pris UNE fois et partagé par les deux consommateurs :
+    /// deux appels à `nowMs()` dans la même frame produisaient deux instants
+    /// différents pour un seul et même événement.
     private func noteScrollTimePillActivity() {
         guard readingMode != .bubbles else { return }
-        let label = topVisibleMessageDate().map {
-            ScrollTimePillLabelFormatter.label(for: $0, now: Date(), calendar: .current, locale: .current)
-        }
-        scrollTimePillState.note(.scrolled(at: Double(Self.nowMs())), label: label)
-        // Même événement, même horloge, même loi — l'autre consommateur
-        // (§WS-2 amendement A4 : « une loi, deux libellés », ici un
-        // troisième support). C'est ce qui garantit que les heures des
-        // rangées s'ouvrent et se referment EXACTEMENT sur le tempo qu'avait
-        // la pilule, sans réimplémenter la fenêtre.
-        timestampReveal.note(.scrolled(at: Double(Self.nowMs())))
+        let now = Double(Self.nowMs())
+        scrollTimePillState.note(.scrolled(at: now))
+        // Même événement, même horloge, même loi — §WS-2 amendement A4
+        // (« une loi, deux libellés »), ici un troisième support. C'est ce
+        // qui garantit que les heures des rangées s'ouvrent et se referment
+        // EXACTEMENT sur le tempo qu'avait la pilule, sans réimplémenter la
+        // fenêtre.
+        timestampReveal.note(.scrolled(at: now))
     }
 
     private func topVisibleMessageDate() -> Date? {
@@ -779,15 +804,39 @@ final class MessageListViewController: UIViewController {
     // MARK: - CollectionView Setup
 
     private func configureCollectionView() {
-        let layout = UICollectionViewCompositionalLayout { _, _ in
+        // **L'estimation doit coller au mode rendu.**
+        //
+        // `.estimated(h)` est la hauteur que le layout SUPPOSE avant qu'une
+        // cellule ne se mesure. Chaque écart entre cette supposition et la
+        // hauteur réelle produit une correction de `contentSize` au moment où
+        // la cellule se réalise — et dans une liste INVERSÉE, une correction
+        // au-dessus de la zone visible fait RECULER le contenu sous le doigt.
+        //
+        // Mesuré sur un film utilisateur : au milieu d'un geste régulier
+        // (−7, −7, −6, −6, −5…), le contenu repart à +9, +3, +3, +4 avant de
+        // reprendre. Ce n'est pas une saccade de rendu, c'est le contenu qui
+        // recule.
+        //
+        // `80` convenait à la bulle. La rangée Focal, elle, réserve désormais
+        // en permanence la hauteur d'en-tête focale (34) ET le créneau de la
+        // barre de contrôles (28), plus ses marges : elle tourne autour de
+        // 150. Supposer 80 garantissait donc une correction de ~70 pt par
+        // cellule réalisée, à chaque fois qu'on remonte le fil.
+        //
+        // Le provider est rappelé à chaque invalidation de layout, il peut
+        // donc lire le mode courant — `applyReadingModeChange` invalide déjà.
+        let layout = UICollectionViewCompositionalLayout { [weak self] _, _ in
+            let estimate = (self?.readingMode.usesFlatRow ?? false)
+                ? Self.estimatedFlatRowLayoutHeight
+                : Self.estimatedBubbleRowLayoutHeight
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(80)
+                heightDimension: .estimated(estimate)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
             let groupSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(80)
+                heightDimension: .estimated(estimate)
             )
             let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
             let section = NSCollectionLayoutSection(group: group)
@@ -2199,7 +2248,29 @@ extension MessageListViewController: UICollectionViewDelegate {
             .filter { snapshot.indexOfItem($0) != nil }
         guard !items.isEmpty else { return }
         snapshot.reconfigureItems(items)
-        dataSource.apply(snapshot, animatingDifferences: false)
+        // FocalPassCallSite.snapshotApplyCompletion — OBLIGATOIRE, et il
+        // manquait ici.
+        //
+        // « Toute réalisation ou re-mesure de cellule EFFACE la perspective »
+        // (`FocalScrollPass`, §4.8) : appliquer ce snapshot réécrit les
+        // `layoutAttributes` des deux cellules reconfigurées, donc remet leur
+        // `layer.transform` à l'identité. Sans repose, elles restaient à
+        // l'échelle 1 et à l'opacité 1 jusqu'au geste suivant — c'est-à-dire
+        // pendant TOUT le temps où l'utilisateur regarde, puisque cette
+        // méthode ne se déclenche qu'à l'ARRÊT du défilement.
+        //
+        // Symptôme observé : d'une capture à l'autre, les mêmes messages
+        // apparaissaient tantôt progressivement réduits, tantôt tous à taille
+        // pleine. La courbe n'était pas en cause — l'échelle disparaissait.
+        //
+        // Défaut PRÉEXISTANT : ce chemin appelle `apply` depuis qu'il existe,
+        // et n'a jamais reposé le pass. Il passait inaperçu tant que la
+        // reconfiguration produisait un contenu identique (aucun champ de
+        // focus sur `FocalRowInput` avant ce chantier) : seule la perspective
+        // sautait, sans que rien ne change par ailleurs.
+        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
+            self?.applyFocalPassIfEnabled()
+        }
     }
 }
 
