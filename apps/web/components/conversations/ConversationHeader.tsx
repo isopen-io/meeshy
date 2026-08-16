@@ -82,7 +82,14 @@ export function ConversationHeader({
       {showCallBanner && currentCall && (
         <OngoingCallBanner
           callId={currentCall.id}
-          participantCount={currentCall.participants?.length || 0}
+          // `currentCall.participants` (REST `GET .../active-call`) keeps every
+          // CallParticipant row Prisma ever attached to the session — a leave-
+          // then-rejoin (network blip, tab reload, a group-call member leaving
+          // while others stay on) inserts a fresh row and leaves the departed
+          // one in place forever, so a raw `.length` only ever grows. Filter on
+          // `!leftAt`, mirroring VideoCallInterface.tsx's own
+          // `participants.filter(p => !p.leftAt).length` for the same reason.
+          participantCount={currentCall.participants?.filter((p) => !p.leftAt).length || 0}
           duration={callDuration}
           onJoin={handleJoinCall}
           onDismiss={handleDismissCallBanner}
