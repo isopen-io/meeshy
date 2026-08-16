@@ -159,7 +159,15 @@ final class LentilleFocusCardTests: XCTestCase {
         let forcedText = LentilleModeLabels.notchText(decision: baseDecision, preference: .resume)
 
         XCTAssertNotEqual(autoText, forcedText)
-        XCTAssertEqual(forcedText, "Résumé")
+        // Valeur attendue résolue par CATALOGUE au moment du test (même patron
+        // que `A11yLabelComposerTests`/`CallsViewModelTests`) — sous la locale
+        // `en` du CI la clé rend l'anglais, plus le repli `defaultValue`
+        // français : c'est le CÂBLAGE (le chip du mode forcé nomme bien
+        // `lentille.mode.name.resume`) qui est verrouillé, jamais la langue.
+        XCTAssertEqual(
+            forcedText,
+            String(localized: "lentille.mode.name.resume", defaultValue: "Résumé", bundle: .main)
+        )
     }
 
     // MARK: - 2bis. Reduce motion ⇒ fond seul (ring)
