@@ -60,6 +60,10 @@
     <string name="conversations_delete_for_me_confirm_title">Excluir conversa?</string>
     <string name="conversations_delete_for_me_confirm_message">\"%1$s\" será excluída permanentemente apenas dos seus dispositivos. Os outros participantes a mantêm.</string>
     <string name="conversations_delete_for_me_confirm_button">Excluir</string>
+    <string name="conversations_action_delete_for_all">Excluir para todos</string>
+    <string name="conversations_delete_for_all_confirm_title">Excluir para todos?</string>
+    <string name="conversations_delete_for_all_confirm_message">\"%1$s\" será fechada para todos os participantes. Ninguém mais poderá escrever.</string>
+    <string name="conversations_delete_for_all_confirm_button">Excluir para todos</string>
     <string name="conversations_action_more">Mais ações</string>
     <string name="conversations_badge_pinned">Fixada</string>
     <string name="conversations_badge_muted">Silenciada</string>

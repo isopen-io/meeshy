@@ -72,6 +72,7 @@ jest.mock('../../../validation/messages-schemas', () => ({
 
 import messageRoutes from '../../../routes/messages';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ describe('GET /messages/:messageId — les accusés du détail d\'un message', (
   beforeEach(() => {
     // Le cache d'opt-out a la portée du PROCESSUS : une entrée laissée par un
     // test fausserait le suivant.
-    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
+    clearPrivacyPreferencesCache();
   });
 
   it('rend les compteurs RÉELS, pas les colonnes dénormalisées à zéro', async () => {

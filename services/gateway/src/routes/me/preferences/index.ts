@@ -7,6 +7,7 @@ import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
+import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
 import { categoriesRoutes } from './categories';
 import {
   PrivacyPreferenceSchema,
@@ -154,6 +155,11 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
             application: null
           }
         });
+
+        // La remise à zéro globale efface AUSSI `privacy` : le cache partagé
+        // des portes de diffusion doit l'apprendre, comme sur une écriture
+        // ciblée (cf. `services/preferences/privacy-cache`).
+        invalidatePrivacyPreferences(userId);
 
         return sendSuccess(reply, undefined, { message: 'All preferences reset to defaults' });
       } catch (error: any) {

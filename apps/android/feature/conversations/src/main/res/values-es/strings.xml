@@ -60,6 +60,10 @@
     <string name="conversations_delete_for_me_confirm_title">¿Eliminar conversación?</string>
     <string name="conversations_delete_for_me_confirm_message">«%1$s» se eliminará permanentemente solo de tus dispositivos. Los demás participantes la conservan.</string>
     <string name="conversations_delete_for_me_confirm_button">Eliminar</string>
+    <string name="conversations_action_delete_for_all">Eliminar para todos</string>
+    <string name="conversations_delete_for_all_confirm_title">¿Eliminar para todos?</string>
+    <string name="conversations_delete_for_all_confirm_message">«%1$s» se cerrará para todos los participantes. Nadie podrá volver a escribir.</string>
+    <string name="conversations_delete_for_all_confirm_button">Eliminar para todos</string>
     <string name="conversations_action_more">Más acciones</string>
     <string name="conversations_badge_pinned">Fijada</string>
     <string name="conversations_badge_muted">Silenciada</string>
