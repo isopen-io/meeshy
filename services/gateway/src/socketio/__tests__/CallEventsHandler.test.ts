@@ -4431,6 +4431,7 @@ describe('CallEventsHandler', () => {
       expect(toEmit).toHaveBeenCalledWith('call:screen-capture-alert', {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
+        userId: USER_ID,
         isCapturing: true,
       });
     });
@@ -4448,6 +4449,7 @@ describe('CallEventsHandler', () => {
       expect(toEmit).toHaveBeenCalledWith('call:screen-capture-alert', {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
+        userId: USER_ID,
         isCapturing: false,
       });
     });

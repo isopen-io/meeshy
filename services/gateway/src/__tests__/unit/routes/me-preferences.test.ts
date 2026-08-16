@@ -54,6 +54,16 @@ jest.mock('../../../utils/socket-broadcast', () => ({
   broadcastToUser: jest.fn(),
 }));
 
+// Le cache serveur des préférences de confidentialité — on observe qu'il est
+// bien purgé par chaque écriture, pas ce qu'il contient (cf. son propre témoin,
+// `__tests__/unit/services/preferences/privacy-cache.test.ts`).
+const mockInvalidatePrivacyPreferences = jest.fn();
+
+jest.mock('../../../services/preferences/privacy-cache', () => ({
+  invalidatePrivacyPreferences: (...args: unknown[]) =>
+    mockInvalidatePrivacyPreferences(...(args as [string])),
+}));
+
 // Consent service — by default no violations
 const mockValidatePreferences = jest.fn<() => Promise<never[]>>().mockResolvedValue([]);
 
@@ -204,7 +214,7 @@ async function buildApp(prismaOpts: PrismaOpts = {}, authMode: AuthMode = 'regis
 
 /** Build a lightweight app with just one preference category router (no sub-plugins) */
 async function buildCategoryApp(
-  category: 'privacy',
+  category: 'privacy' | 'audio',
   prismaOpts: PrismaOpts = {},
   authMode: AuthMode = 'registered',
 ): Promise<FastifyInstance> {
@@ -940,5 +950,99 @@ describe('userPreferencesRoutes — missing prisma guard', () => {
     ).resolves.not.toThrow();
 
     await appNoPrisma.close();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Purge du cache serveur à l'écriture — cycle 47
+//
+// Le cycle 46 a raccordé l'écran Confidentialité au rangement que les portes de
+// diffusion lisent. Restait ceci : ces portes mémoïsent, cinq minutes. Couper
+// ses accusés de lecture prenait donc effet jusqu'à cinq minutes plus tard —
+// une fenêtre pendant laquelle le serveur continue de diffuser exactement ce que
+// l'utilisateur vient de demander de taire, en lui confirmant l'inverse à
+// l'écran.
+//
+// Ces témoins verrouillent que CHAQUE porte d'écriture purge, et qu'une écriture
+// d'une AUTRE catégorie ne purge pas (le cache ne parle que de confidentialité).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('écriture de préférences — purge du cache serveur', () => {
+  beforeEach(() => {
+    mockInvalidatePrivacyPreferences.mockClear();
+  });
+
+  it('PUT /me/preferences/privacy purge le cache', async () => {
+    const app = await buildCategoryApp('privacy');
+
+    await app.inject({
+      method: 'PUT',
+      url: '/me/preferences/privacy',
+      headers: AUTH,
+      payload: { ...PRIVACY_PREFERENCE_DEFAULTS, showReadReceipts: false },
+    });
+
+    expect(mockInvalidatePrivacyPreferences).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('PATCH /me/preferences/privacy purge le cache', async () => {
+    const app = await buildCategoryApp('privacy');
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/me/preferences/privacy',
+      headers: AUTH,
+      payload: { showReadReceipts: false },
+    });
+
+    expect(mockInvalidatePrivacyPreferences).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('DELETE /me/preferences/privacy purge le cache', async () => {
+    const app = await buildCategoryApp('privacy');
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences/privacy', headers: AUTH });
+
+    expect(mockInvalidatePrivacyPreferences).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('DELETE /me/preferences purge le cache — la remise à zéro globale efface aussi privacy', async () => {
+    const app = await buildApp();
+
+    await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
+
+    expect(mockInvalidatePrivacyPreferences).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it("une écriture d'une autre catégorie ne purge PAS le cache de confidentialité", async () => {
+    const app = await buildCategoryApp('audio');
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/me/preferences/audio',
+      headers: AUTH,
+      payload: {},
+    });
+
+    expect(mockInvalidatePrivacyPreferences).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("une écriture qui ÉCHOUE ne purge pas le cache", async () => {
+    const app = await buildCategoryApp('privacy', { upsertError: new Error('db down') });
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/me/preferences/privacy',
+      headers: AUTH,
+      payload: { showReadReceipts: false },
+    });
+
+    expect(mockInvalidatePrivacyPreferences).not.toHaveBeenCalled();
+    await app.close();
   });
 });

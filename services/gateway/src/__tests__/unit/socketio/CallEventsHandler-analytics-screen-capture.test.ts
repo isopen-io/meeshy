@@ -312,6 +312,68 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       );
     });
 
+    // Vague 132 — the alert only carried `participantId` (a `Participant.id`,
+    // CallParticipant's FK), never `userId`. `VideoCallInterface`'s roster
+    // lookup for a registered peer is keyed by `User.id`
+    // (`p.userId || p.participantId`, where the client's `.participantId` is
+    // never populated by the gateway) — without `userId` on this event, the
+    // privacy pill's name could never resolve for a registered caller.
+    it('also relays the reporter\'s userId, distinct from the legacy participantId', async () => {
+      const emitSpy = jest.fn();
+      const prisma = makePrisma();
+      const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);
+      socket.to = jest.fn().mockReturnValue({ emit: emitSpy });
+
+      const mockCallService = {
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { participantId: 'participant-mine', participant: { userId: USER_ID }, leftAt: null },
+          ],
+        }),
+      };
+
+      const handler = new CallEventsHandler(prisma, mockCallService as any);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
+        callId: VALID_CALL_ID,
+        participantId: 'participant-mine',
+        isCapturing: true,
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        CALL_EVENTS.SCREEN_CAPTURE_ALERT,
+        expect.objectContaining({ participantId: 'participant-mine', userId: USER_ID })
+      );
+    });
+
+    it('falls back userId to participantId for an anonymous reporter (no User row)', async () => {
+      const emitSpy = jest.fn();
+      const prisma = makePrisma();
+      const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);
+      socket.to = jest.fn().mockReturnValue({ emit: emitSpy });
+
+      const mockCallService = {
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          participants: [{ participantId: 'participant-anon', participant: undefined, leftAt: null }],
+        }),
+      };
+
+      const handler = new CallEventsHandler(prisma, mockCallService as any);
+      handler.setupCallEvents(socket as any, io as any, () => 'participant-anon');
+
+      await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
+        callId: VALID_CALL_ID,
+        participantId: 'participant-anon',
+        isCapturing: true,
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        CALL_EVENTS.SCREEN_CAPTURE_ALERT,
+        expect.objectContaining({ participantId: 'participant-anon', userId: 'participant-anon' })
+      );
+    });
+
     it('drops the event when the caller has no active participant record in the call', async () => {
       const prisma = makePrisma();
       const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);

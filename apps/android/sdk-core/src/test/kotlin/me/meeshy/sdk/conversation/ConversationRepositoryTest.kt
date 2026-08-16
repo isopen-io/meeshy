@@ -43,6 +43,7 @@ private class FakeConversationApi(
 
     override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
     override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingSettingsApi(
@@ -73,6 +74,7 @@ private class RecordingSettingsApi(
     }
     override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
     override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingLeaveApi(
@@ -101,6 +103,7 @@ private class RecordingLeaveApi(
         return response
     }
     override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingDeleteForMeApi(
@@ -126,6 +129,36 @@ private class RecordingDeleteForMeApi(
     ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
     override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun deleteForMe(id: String): ApiResponse<Unit> {
+        lastId = id
+        return response
+    }
+    override suspend fun deleteForAll(id: String) = ApiResponse<Unit>(success = false)
+}
+
+private class RecordingDeleteForAllApi(
+    private val response: ApiResponse<Unit>,
+) : ConversationApi {
+    var lastId: String? = null
+
+    override suspend fun list(offset: Int?, limit: Int?) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
+    override suspend fun create(body: CreateConversationRequest) =
+        ApiResponse<ApiConversation>(success = false)
+    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
+    override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun deleteForMe(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun deleteForAll(id: String): ApiResponse<Unit> {
         lastId = id
         return response
     }
@@ -590,5 +623,27 @@ class ConversationRepositoryTest {
         assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
         assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message)
             .isEqualTo("Not a participant")
+    }
+
+    @Test
+    fun `deleteForAll forwards the id and returns Success`() = runTest {
+        val api = RecordingDeleteForAllApi(ApiResponse(success = true, data = Unit))
+        val repo = repository(api)
+
+        val result = repo.deleteForAll("c1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `deleteForAll folds an unsuccessful envelope into a Failure`() = runTest {
+        val repo = repository(RecordingDeleteForAllApi(ApiResponse(success = false, error = "Only the creator can do this")))
+
+        val result = repo.deleteForAll("c1")
+
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
+        assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message)
+            .isEqualTo("Only the creator can do this")
     }
 }

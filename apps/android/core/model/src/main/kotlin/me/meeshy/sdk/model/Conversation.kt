@@ -40,6 +40,16 @@ data class ApiConversation(
         get() = preferences ?: userPreferences.firstOrNull()
 }
 
+/**
+ * The signed-in user's own [MemberRole] within this conversation — looked up
+ * from [ApiConversation.participants] by [currentUserId], defaulting to
+ * [MemberRole.MEMBER] (matching [MemberRole.from]) when the id is absent or
+ * not found in the roster. Gates creator-only affordances (e.g. deleting the
+ * conversation for every participant) without a separate member-list fetch.
+ */
+fun ApiConversation.currentUserRole(currentUserId: String?): MemberRole =
+    MemberRole.from(participants.firstOrNull { it.userId == currentUserId }?.role)
+
 @Serializable
 data class ApiParticipant(
     val id: String,
