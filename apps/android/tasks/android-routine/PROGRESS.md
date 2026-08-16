@@ -1,5 +1,61 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Story-viewer realtime room shipped — the last of three deferred room-join
+> follow-ups, all now closed** (slice `story-viewer-realtime-room`). `gh pr list --state open
+> --search "apps/android OR apps/ios"` showed one concurrent PR (#3096, realtime/gateway+iOS+web)
+> that does not touch `apps/android` — no collision risk.
+>
+> **Re-proved the gap and its shape before writing anything.** `grep` for `joinPostRoom`/
+> `leavePostRoom` in `StoryViewerViewModel.kt` came back empty — the same "modeled the listener,
+> never opened the door" gap the other two rooms had (it already listens to `story:reacted`/
+> `story:unreacted`, just never joined the room those events are scoped to). Unlike the plain
+> open/close of `feed-comments-realtime-room`, this one is a **slide-to-slide transition** —
+> confirmed by reading iOS `StoryViewerView.swift` directly rather than trusting a paraphrase:
+> `transitionPostRoom(from:to:)` (lines 1188-1195) leaves the old story's room and joins the new
+> one on every slide change, with an initial join/final leave on `.onAppear`/`.onDisappear`
+> (lines 569/600) — the same shape `ReelsViewModel.setCurrentReel` already established on
+> Android, not the `PostDetailViewModel`/`feed-comments-realtime-room` shape.
+>
+> **Wired into `emit()` rather than an externally-driven setter** (a deliberate difference from
+> `ReelsViewModel`, not an oversight): `StoryViewerViewModel.emit()` is the ViewModel's own single
+> "state changed" checkpoint, already recomputing `currentId = playback.currentSlide?.id` on every
+> call (from `load()`, `advance()`, `back()`, `onSwipe()`, `react()`, `onImageResolved()`,
+> `toggleLanguageOverride()`). New `transitionPostRoom(nextId)` — idempotent, `nextId ==
+> currentRoomStoryId` short-circuits — is called at the top of `emit()`, so the room transition
+> fires exactly when the displayed slide actually changes and is a silent no-op for every other
+> reason `emit()` runs. `ReelsViewModel`'s shape (an externally-driven `setCurrentReel(reelId)`)
+> would not have fit here: the reels pager's position is genuinely UI-owned (`snapshotFlow`), but
+> the story viewer's current slide is entirely internal to the ViewModel's own playback engine —
+> there is no external cursor to drive it from.
+>
+> **+3 tests**: initial join on load; `leavePostRoom`/`joinPostRoom` pair on `advance()` (old →
+> new); and — the one worth calling out — `react()` (which re-emits without changing the current
+> slide) verified to call neither `leavePostRoom` nor a second `joinPostRoom`, proving the
+> idempotency guard actually holds against the ViewModel's busiest non-navigation emit path.
+>
+> **Verified**: Android SDK available in this container again — `./apps/android/meeshy.sh check`
+> (assembleDebug + testDebugUnitTest, all modules) green locally before any push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time (see the note on this pattern in the
+> `reels-realtime-room` entry below for why it matters when multiple Android runs land the same
+> day) → unchanged from before this PR's CI wait (`streak=1`), so this run advances it cleanly to
+> `lane=ANDROID android_streak=2 last_run=story-viewer-realtime-room`.
+>
+> **`Test shared` failed on this PR's CI too, again confirmed pre-existing and unrelated** — this
+> time `focus-curve.test.ts` (a Focal-feature curve-math test), verified broken on `main`'s own CI
+> at the exact commit this branch forked from (`723c8ce8c`, run 31965746061, job `Test shared` →
+> `failure`) before merging past it. A concurrent session fixed it independently
+> (`packages/shared/utils/focus-curve.ts` + `FocalFocusCurve.swift` both landed on `main` between
+> this PR opening and merging) — not this routine's fix, not this routine's problem, but worth
+> naming: this is the SECOND time in two consecutive Android runs that an unrelated `Focal`/
+> `packages/shared` regression from concurrent iOS work has shown up as a red `Test shared` check
+> on an `apps/android`-only PR. `Android` (the actual merge gate) was green both times.
+>
+> **All three deferred room-join follow-ups are now closed** (`post-detail-realtime-room` →
+> `reels-realtime-room` → `feed-comments-realtime-room` → `story-viewer-realtime-room`). No further
+> named candidate remains from that list; the next run picks fresh from `feature-parity.md`
+> (candidates already surfaced elsewhere in this file: "Conversation info sheet" §C, "Add member").
+
 > On 2026-08-16 **Feed-comments-sheet realtime room shipped** (slice `feed-comments-realtime-room`)
 > — the second of the three follow-ups `post-detail-realtime-room` named and `reels-realtime-room`
 > picked up first: this routine's standing rule is to build on the prior run's own named list

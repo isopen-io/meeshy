@@ -34,12 +34,12 @@ export type FocusCurveResult = {
  * introspecter les constantes sans les redéclarer en dur (garde R15).
  */
 export const FOCUS_CURVE_CONSTANTS = {
-  thread: { maxDistance: 740, scaleDecay: 0.4, alphaDecay: 0.82 },
+  thread: { maxDistance: 520, scaleDecay: 0.38, alphaDecay: 0.78 },
   list: { maxDistance: 520, alphaDecay: 0.45, scaleDecay: 0.04 },
   belowBand: { distance: 160, alphaCap: 0.35 },
 } as const
 
-/** Fil (Focal) : `f = min(1, d/740)`, `scale = 1 − 0.40f`, `alpha = 1 − 0.82f`. */
+/** Fil (Focal) : `f = min(1, d/520)`, `scale = 1 − 0.38f`, `alpha = 1 − 0.78f`. */
 export const THREAD_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.thread.maxDistance
 export const THREAD_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.thread.scaleDecay
 export const THREAD_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.thread.alphaDecay

@@ -289,6 +289,15 @@ final class MessageListViewController: UIViewController {
     /// comme hors périmètre WS-4/WS-5, « à mirrorer par WS-6 » (contrat §3.11).
     private static let estimatedFlatRowHeight: CGFloat = 64
 
+    /// Estimations de layout — voir `configureCollectionView` pour le
+    /// raisonnement. À DISTINGUER de `estimatedFlatRowHeight` ci-dessus, qui
+    /// sert au calcul du `headInset` (§4.5) et pas au layout.
+    ///
+    /// Focal : en-tête focale réservée (34) + créneau de la barre (28) +
+    /// une ligne de texte + marges. Bulle : la valeur historique, inchangée.
+    private static let estimatedFlatRowLayoutHeight: CGFloat = 150
+    private static let estimatedBubbleRowLayoutHeight: CGFloat = 80
+
     /// Points d'accès de test (WS-6, F-085) — `internal`, lus par
     /// `@testable import Meeshy`, jamais par une autre cible app.
     var focalCollectionViewForTesting: UICollectionView? { collectionView }
@@ -795,15 +804,39 @@ final class MessageListViewController: UIViewController {
     // MARK: - CollectionView Setup
 
     private func configureCollectionView() {
-        let layout = UICollectionViewCompositionalLayout { _, _ in
+        // **L'estimation doit coller au mode rendu.**
+        //
+        // `.estimated(h)` est la hauteur que le layout SUPPOSE avant qu'une
+        // cellule ne se mesure. Chaque écart entre cette supposition et la
+        // hauteur réelle produit une correction de `contentSize` au moment où
+        // la cellule se réalise — et dans une liste INVERSÉE, une correction
+        // au-dessus de la zone visible fait RECULER le contenu sous le doigt.
+        //
+        // Mesuré sur un film utilisateur : au milieu d'un geste régulier
+        // (−7, −7, −6, −6, −5…), le contenu repart à +9, +3, +3, +4 avant de
+        // reprendre. Ce n'est pas une saccade de rendu, c'est le contenu qui
+        // recule.
+        //
+        // `80` convenait à la bulle. La rangée Focal, elle, réserve désormais
+        // en permanence la hauteur d'en-tête focale (34) ET le créneau de la
+        // barre de contrôles (28), plus ses marges : elle tourne autour de
+        // 150. Supposer 80 garantissait donc une correction de ~70 pt par
+        // cellule réalisée, à chaque fois qu'on remonte le fil.
+        //
+        // Le provider est rappelé à chaque invalidation de layout, il peut
+        // donc lire le mode courant — `applyReadingModeChange` invalide déjà.
+        let layout = UICollectionViewCompositionalLayout { [weak self] _, _ in
+            let estimate = (self?.readingMode.usesFlatRow ?? false)
+                ? Self.estimatedFlatRowLayoutHeight
+                : Self.estimatedBubbleRowLayoutHeight
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(80)
+                heightDimension: .estimated(estimate)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
             let groupSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(80)
+                heightDimension: .estimated(estimate)
             )
             let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
             let section = NSCollectionLayoutSection(group: group)

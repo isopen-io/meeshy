@@ -185,18 +185,30 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         let tx: CGFloat
         switch horizontalAnchor {
         case .leading:
-            tx = (isRightToLeft ? 1 : -1) * (cellSize.width / 2) * shrink
+            // Pivot horizontal à `18 %` de la largeur — PAS au bord gauche.
+            //
+            // La maquette de référence l'écrit littéralement
+            // (`docs/design/2026-08-15-conversation-modes-verdict.html` :
+            // `transform-origin: "18% bottom"`). `anchorPoint` restant au
+            // centre (0,5) — il n'est JAMAIS touché, cf. écart #2 ci-dessus —
+            // la compensation vaut `(0,5 − 0,18)` de la largeur, et non
+            // `0,5` : ancrer à `0,5` fait pivoter autour du bord GAUCHE
+            // (0 %), et la rangée s'effondre vers l'extrême bord au lieu de
+            // se contracter vers sa colonne d'avatar, qui doit rester en
+            // place.
+            let pivot = FocalFocusCurve.threadHorizontalPivot
+            tx = (isRightToLeft ? 1 : -1) * (cellSize.width * (0.5 - pivot)) * shrink
         case .center:
             tx = 0
         }
 
         return FocalCellTransform(
             scale: scale,
-            // Plancher AVANT plafond : un message en vol garde son plafond
-            // `optimisticAlphaCeiling` (0,7) — le plancher relève les voisins
-            // trop effacés, il ne peut jamais rendre une rangée PLUS opaque
-            // que son plafond ne l'autorise.
-            alpha: min(alphaCeiling, max(FocalPassConstants.neighbourAlphaFloor, curve.alpha)),
+            // AUCUN plancher : la maquette de référence n'en a pas, et sa
+            // décroissance d'opacité (0,78 au lieu de 0,82) suffit à garder
+            // les voisins lisibles. Un plancher local recréerait un écart
+            // avec la cinématique qu'on transpose.
+            alpha: min(alphaCeiling, curve.alpha),
             translation: CGSize(width: tx, height: ty)
         )
     }
