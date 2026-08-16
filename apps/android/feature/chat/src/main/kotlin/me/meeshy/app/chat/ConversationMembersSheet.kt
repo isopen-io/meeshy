@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +77,7 @@ fun ConversationMembersSheet(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var pendingRemoval by remember { mutableStateOf<PaginatedParticipant?>(null) }
+    var showAddSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
     LaunchedEffect(state.actionFailed) {
@@ -94,12 +96,27 @@ fun ConversationMembersSheet(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.lg)) {
-            Text(
-                text = stringResource(R.string.conversation_members_title, state.memberCount),
-                style = MaterialTheme.typography.titleMedium,
-                color = MeeshyTheme.tokens.textPrimary,
-                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.conversation_members_title, state.memberCount),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MeeshyTheme.tokens.textPrimary,
+                )
+                if (state.viewerRole.hasMinimumRole(MemberRole.MODERATOR)) {
+                    IconButton(onClick = { showAddSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.PersonAdd,
+                            contentDescription = stringResource(R.string.conversation_members_add_a11y),
+                        )
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = state.searchQuery,
@@ -191,6 +208,16 @@ fun ConversationMembersSheet(
                     Text(stringResource(R.string.conversation_members_remove_cancel))
                 }
             },
+        )
+    }
+
+    if (showAddSheet) {
+        AddParticipantSheet(
+            conversationId = conversationId,
+            existingMemberIds = state.members.mapNotNull { it.userId ?: it.id }.toSet(),
+            accentColor = accentColor,
+            onDismiss = { showAddSheet = false },
+            onAdded = { viewModel.refresh() },
         )
     }
 }
