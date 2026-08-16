@@ -8621,3 +8621,71 @@ comme feature multi-fichiers nécessitant une décision produit d'UI, pas un bug
   (décision produit) ; mesh iOS/Android mono-PC potentiellement affecté du même bug étoile-vs-maillage
   que le fix web de la Vague 126 (à auditer avec toolchain disponible) ; W6 (grille adaptative,
   roster mute/vidéo) et W7 (i18n groupe restant) toujours à traiter.
+
+## Vague 130 — `OngoingCallBanner` comptait aussi les participants déjà partis (web) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Session dédiée à
+(1) faire aboutir le travail de la routine précédente resté ouvert (rebase + merge des PR #3046/#3051/
+#3059 sur `main` actualisé, conflits résolus à la main) et (2) trouver un correctif chirurgical neuf,
+vérifiable dans ce sandbox (ni Xcode ni Android/Gradle utilisables ici — `dl.google.com` bloqué par la
+politique d'egress, confirmé de nouveau, même limitation que la Vague 70). Audit dédié (subagent lecture
+directe, périmètre gateway/web) mandaté pour ne pas dupliquer les 129 vagues précédentes.
+
+- **Root cause** : `ConversationHeader.tsx` calculait `participantCount={currentCall.participants?.length
+  || 0}` pour `OngoingCallBanner` (bannière « Appel en cours — rejoindre ? » montrée aux membres de la
+  conversation pas encore dans l'appel) à partir du tableau BRUT, non filtré, renvoyé par `GET
+  .../active-call`. Cet endpoint REST garde CHAQUE ligne `CallParticipant` jamais attachée à la session —
+  `joinCall` ne réutilise une ligne que si `leftAt` est encore `null` ; tout cycle quitter-puis-rejoindre
+  (coupure réseau, rechargement d'onglet, un participant qui quitte un appel de groupe pendant que
+  d'autres restent) insère une ligne fraîche et laisse l'ancienne pour toujours. Le compte ne pouvait donc
+  QUE croître, jamais décroître — ex. « 4 participants » affiché quand une seule personne est encore
+  réellement en ligne. C'est exactement le mode de défaillance que la Vague 127
+  (`services/gateway/src/utils/call-session-response.ts`) visait à corriger, et le commentaire de doc de
+  ce correctif nommait explicitement `OngoingCallBanner` comme « premier concerné » — mais la Vague 127
+  n'a ajouté le champ `participantCount` correctement filtré QUE côté forme de réponse REST du gateway ;
+  rien dans le type TypeScript partagé `CallSession` n'exposait ce champ, aucun client ne pouvait donc le
+  lire de façon typée, et ce site d'appel précis (`ConversationHeader.tsx`, qui alimente
+  `OngoingCallBanner`) n'a jamais été mis à jour. `VideoCallInterface.tsx` (l'overlay in-call piloté par
+  socket) faisait déjà le bon `participants.filter(p => !p.leftAt).length` pour son propre compte — c'était
+  le seul site client que le correctif précédent avait manqué.
+- **Fix** : `ConversationHeader.tsx` fait maintenant `currentCall.participants?.filter((p) => !p.leftAt)
+  .length || 0`, miroir exact de l'idiome déjà établi dans `VideoCallInterface.tsx`. Changement de deux
+  lignes, aucun changement de type partagé ni de gateway nécessaire (`CallParticipant.leftAt` était déjà
+  sur le type), zéro nouvelle surface.
+- **Tests** (TDD, RED confirmé) : nouveau cas dans `ConversationHeader.test.tsx` — `currentCall
+  .participants` avec un participant actif et un participant horodaté `leftAt`, comptage attendu à `1`
+  (2 avant correctif, 1 après). Suite du fichier : 31/31 verts (+1 net). Sweep
+  `--testPathPatterns="[Cc]all"` (apps/web) : 53 suites / 486 tests verts, 0 régression. Sweep
+  `--testPathPatterns="conversations"` : 62 suites / 1339 tests verts, 0 régression. `npx tsc --noEmit` :
+  diff `git stash`/`stash pop` — 1768 erreurs préexistantes identiques avant/après, 0 nouvelle.
+- **Non fait volontairement** (candidats audités et écartés cette session, périmètre gateway/web) :
+  `call-schemas.ts` (relu intégralement, rien trouvé) ; `callHistory.ts`/`CallService.listHistory` (relu
+  intégralement, dérivation direction/durée correcte) ; le commit récent `broadcastParticipantLeft`
+  (tracé de bout en bout route → `CallService.leaveCall` → événement partagé → listener
+  `VideoCallInterface.tsx`, cohérent) ; `use-webrtc-p2p.ts` (1139 lignes relues intégralement, mesh/
+  négociation/reconnect/TURN dense mais cohérent) ; `DraggableParticipantOverlay.tsx` (suspicion de
+  chevauchement de position pour les participants excédentaires, infirmée — `VideoCallInterface.tsx`
+  décale déjà `initialPosition` par index).
+- **Merge du backlog de la routine précédente** : trois PR ouvertes de la session antérieure
+  (#3046 web/screen-capture Vague 129, #3051 gateway+iOS signal-size/end-reason/swallowed-failures,
+  #3059 gateway+iOS call:signal crash/quality-ladder-leak/timedOutPerforming) rebasées à la main sur
+  `main` actualisé (conflit de numérotation `tasks/lessons.md` Leçon 270 résolu par renumérotation
+  276, seul conflit des trois) ; suites gateway/web concernées rejouées vertes post-rebase avant push.
+  iOS CI restait rouge sur les trois AVANT ce rebase pour une raison confirmée sans rapport avec leurs
+  diffs : `Focal/Core/LivingSummaryModels.swift` (fonctionnalité WS-8, atterrie le jour même) référence
+  `PresenceState` (MeeshySDK) sans `import MeeshySDK` — casse `Build for testing` pour TOUT PR iOS,
+  corrigé en drive-by ce cycle (un import, zéro risque). `FocalAttachmentBlock.swift`/
+  `FocalAudioBlock.swift`/`Focal/Core/FocalRowInput.swift`/`Lentille/Mode/LentilleModeMenu.swift` portent
+  des erreurs de compilation SÉPARÉES et sans rapport (visibilité d'API publique fuitant des types
+  internes ; isolation main-actor Swift 6), issues du même chantier Focal/Lentille encore en cours (commits
+  du jour même jusqu'à 20:38) — hors périmètre de cette routine, laissées à l'équipe propriétaire de cette
+  feature.
+- **Reste ouvert** (reconduit) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; busy-path `reportNewIncomingCall` UI-only (Vague 63/64) ;
+  les 6 trouvailles Android de la Vague 70 (toujours bloquées — `dl.google.com` refusé par la politique
+  d'egress de ce sandbox, confirmé de nouveau) ; piste `CXSetHeldCallAction` vs. `supportsHolding = false`
+  (Vague 84, on-device requis) ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; sélection réelle
+  de périphérique de sortie audio (`setSinkId`, décision produit requise) ; `MAX_CALL_PARTICIPANTS = 9999`
+  sans plafond effectif (décision produit) ; mesh iOS/Android potentiellement affecté du même bug étoile-
+  vs-maillage que la Vague 126 (à auditer avec toolchain) ; W6/W7 grille adaptative + i18n groupe restant ;
+  erreurs de build Focal/Lentille (voir ci-dessus, hors périmètre calling).
