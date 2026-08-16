@@ -18,7 +18,7 @@ import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
-import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
+import { loadStoredPrivacyPreferences } from './preferences/privacy-storage';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import {
   NO_PERSONAL_HIDING,
@@ -1224,18 +1224,16 @@ export class MessageReadStatusService {
     if (unresolved.length === 0) return excluded;
 
     try {
-      const optedOut = await this.prisma.userPreference.findMany({
-        where: {
-          userId: { in: unresolved },
-          key: PRIVACY_KEY_MAPPING.showReadReceipts,
-          value: "false",
-        },
-        select: { userId: true },
-      });
+      // Même résolveur que `PrivacyPreferencesService` : la règle « où la
+      // préférence est-elle rangée ? » n'a qu'un seul endroit. La lire ici en
+      // propre l'avait déjà fait diverger une fois (cf. `decisions.md`
+      // § 2026-08-13) — et une seconde fois en silence, en n'interrogeant que
+      // les lignes clé/valeur héritées que l'application n'écrit plus
+      // (`decisions.md` § 2026-08-16).
+      const stored = await loadStoredPrivacyPreferences(this.prisma, unresolved);
 
-      const optedOutIds = new Set(optedOut.map((row) => row.userId));
       for (const userId of unresolved) {
-        const isOptOut = optedOutIds.has(userId);
+        const isOptOut = stored.get(userId)?.showReadReceipts === false;
         MessageReadStatusService.readReceiptOptOutCache.set(userId, isOptOut);
         if (isOptOut) exclude(userId);
       }

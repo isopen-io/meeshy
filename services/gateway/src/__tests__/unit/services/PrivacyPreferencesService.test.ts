@@ -27,10 +27,37 @@ function makeStoredPrefs(overrides: Array<{ key: string; value: string }> = []) 
   return overrides;
 }
 
-function makePrisma(storedPrefs: Array<{ key: string; value: string }> = []) {
+/**
+ * Le double modélise les DEUX rangements que le dépôt possède :
+ *
+ *  - `userPreferences.privacy` — le document JSON qu'écrivent
+ *    `PUT/PATCH /me/preferences/privacy`, seule porte que les clients
+ *    appellent (web `user-preferences-store`, iOS `OutboxDispatcher`) ;
+ *  - `userPreference` — les lignes clé/valeur héritées de l'endpoint
+ *    `/user-preferences/privacy` retiré en janvier 2026.
+ *
+ * Un double qui n'en modélise qu'un seul ne peut pas voir la panne : c'est
+ * exactement pour ça qu'elle a survécu.
+ */
+function makePrisma(
+  storedPrefs: Array<{ key: string; value: string }> = [],
+  privacyByUser: Record<string, unknown> = {}
+) {
+  const idsOf = (where: any): string[] =>
+    Array.isArray(where?.userId?.in) ? where.userId.in : [where?.userId].filter(Boolean);
+
   return {
+    userPreferences: {
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: any) =>
+        idsOf(where)
+          .filter((id) => privacyByUser[id] !== undefined)
+          .map((userId) => ({ userId, privacy: privacyByUser[userId] }))
+      ),
+    },
     userPreference: {
-      findMany: jest.fn<any>().mockResolvedValue(storedPrefs),
+      findMany: jest.fn<any>().mockImplementation(async ({ where }: any) =>
+        idsOf(where).flatMap((userId) => storedPrefs.map((p) => ({ ...p, userId })))
+      ),
     },
   } as unknown as PrismaClient;
 }
@@ -109,6 +136,9 @@ describe('PrivacyPreferencesService', () => {
 
     it('falls back to defaults on DB error', async () => {
       const prisma = {
+        userPreferences: {
+          findMany: jest.fn<any>().mockRejectedValue(new Error('db error')),
+        },
         userPreference: {
           findMany: jest.fn<any>().mockRejectedValue(new Error('db error')),
         },
@@ -118,6 +148,81 @@ describe('PrivacyPreferencesService', () => {
       const prefs = await sut.getPreferences('user-1');
 
       expect(prefs).toEqual(sut.getDefaultPreferences());
+    });
+  });
+
+  // ── Le rangement que les clients écrivent VRAIMENT ────────────────────────
+
+  describe('getPreferences — document JSON `userPreferences.privacy`', () => {
+    it('honore un opt-out posé par PATCH /me/preferences/privacy', async () => {
+      const sut = makeSut(makePrisma([], { 'user-1': { showReadReceipts: false } }));
+
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showReadReceipts).toBe(false);
+    });
+
+    it('honore showOnlineStatus, showLastSeen et showTypingIndicator du même document', async () => {
+      const sut = makeSut(
+        makePrisma([], {
+          'user-1': {
+            showOnlineStatus: false,
+            showLastSeen: false,
+            showTypingIndicator: false,
+          },
+        })
+      );
+
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showOnlineStatus).toBe(false);
+      expect(prefs.showLastSeen).toBe(false);
+      expect(prefs.showTypingIndicator).toBe(false);
+    });
+
+    it('le document JSON prime sur les lignes clé/valeur héritées', async () => {
+      const sut = makeSut(
+        makePrisma(
+          [{ key: 'show-read-receipts', value: 'false' }],
+          { 'user-1': { showReadReceipts: true } }
+        )
+      );
+
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showReadReceipts).toBe(true);
+    });
+
+    it('les lignes héritées restent servies quand aucun document JSON n’existe', async () => {
+      const sut = makeSut(makePrisma([{ key: 'show-read-receipts', value: 'false' }], {}));
+
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showReadReceipts).toBe(false);
+    });
+
+    it('un document vide n’efface pas les lignes héritées', async () => {
+      const sut = makeSut(
+        makePrisma([{ key: 'show-read-receipts', value: 'false' }], { 'user-1': {} })
+      );
+
+      const prefs = await sut.getPreferences('user-1');
+
+      expect(prefs.showReadReceipts).toBe(false);
+    });
+  });
+
+  describe('getPreferencesForUsers — document JSON `userPreferences.privacy`', () => {
+    it('honore un opt-out par lot, et ne l’applique qu’à son auteur', async () => {
+      const sut = makeSut(makePrisma([], { 'user-1': { showReadReceipts: false } }));
+
+      const prefs = await sut.getPreferencesForUsers([
+        { id: 'user-1', isAnonymous: false },
+        { id: 'user-2', isAnonymous: false },
+      ]);
+
+      expect(prefs.get('user-1')?.showReadReceipts).toBe(false);
+      expect(prefs.get('user-2')?.showReadReceipts).toBe(true);
     });
   });
 

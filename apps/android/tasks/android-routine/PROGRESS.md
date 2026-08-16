@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-08-16 **Shared `LanguagePickerDialog` extracted to `:sdk-ui`** (slice
+> `sdk-ui-language-picker-dialog`) — first ANDROID slice after the IOS_DETTE bascule (streak
+> reset to 0 following the critical Focal/Lentille iOS build-break fix, see
+> `tasks/ios-debt-routine-progress.md`). Picked from the standing candidate noted in the prior
+> ANDROID run's log ("a shared `:sdk-ui` `LanguagePickerDialog` (3 near-identical picker UIs now
+> exist)") — re-proved against real code before starting (per convention): `feature:settings`'s
+> `InterfaceLanguageDialog` and `RegionalLanguageDialog` (`SettingsScreen.kt`) both hand-rolled the
+> same `AlertDialog` + scrollable radio-row-list shape, sharing the private `LanguageOptionRow`
+> between them; `feature:feed`'s `ComposerLanguagePickerDialog` is the confirmed third
+> near-identical dialog (its own doc comment explicitly says it "mirrors `SettingsScreen`'s own
+> `RegionalLanguageDialog` shape") but is **deliberately left untouched this slice** — migrating
+> three call sites across three feature modules in one pass was judged oversized for "one slice";
+> the Settings pair (same file, same module, easiest safe first step) proves the shared component
+> out with a real production consumer, and Feed's dialog is a natural, well-scoped follow-up.
+>
+> **New `LanguagePickerDialog` + `LanguagePickerOption`** (`:sdk-ui/component/`), matching the
+> established SDK-purity convention already set by `LanguageQuickStrip`/`LanguageQuickOption` in
+> the same package: opaque parameters only (a pre-formatted `label: String`, a nullable `code:
+> String?` so a "use device default" sentinel option needs no SDK-side special-casing, and
+> `isSelected: Boolean`), zero knowledge of `AppLanguage`/`RegionalLanguageOption`/any app model.
+> Search is opt-in (`searchQuery`/`onSearchQueryChange` both nullable — omitted ⇒ plain list,
+> present ⇒ search field + empty-state text), matching the real split between the two migrated
+> call sites. Filtering itself stays exactly where it already lived (`RegionalLanguageSelection`,
+> app-side pure object) — the SDK component never decides "how to filter", only renders whatever
+> `options` it is handed, per the grain test.
+>
+> **Behaviour-preserving refactor, no new pure logic** — the two call sites now build a
+> `List<LanguagePickerOption>` from the exact same source data (`AppLanguage.supportedLanguages` +
+> a synthetic system option; `RegionalLanguageSelection.build(...).options` mapped 1:1) and pass it
+> to the shared dialog; `RegionalLanguageDialog`'s `onSelect: (String) -> Unit` is bridged to the
+> SDK's nullable `(String?) -> Unit` via `{ code -> code?.let(onSelect) }` (regional options never
+> carry a null code in practice, so this is a safe, non-lossy bridge). `LanguageOptionRow` retired
+> (its only two callers are gone). Two now-genuinely-unused imports removed (`RadioButton`,
+> `heightIn`) — every other import touched by the diff was checked for remaining uses elsewhere in
+> the (large, multi-section) `SettingsScreen.kt` file before removal, not assumed unused.
+>
+> **No new tests**: `@Composable` UI functions are exempt from the coverage rubric
+> (`TDD-COVERAGE.md`) and this slice adds no new pure logic — the existing `SettingsViewModel`/
+> `RegionalLanguageSelection` tests already cover 100% of the logic the dialog renders, and stay
+> green unchanged (the refactor only moves *how* the same data gets drawn).
+>
+> **Verified**: `./apps/android/meeshy.sh check` → **`BUILD SUCCESSFUL`** in 49s, all existing
+> tests green, zero regressions. Reviewer (`REVIEWER.md`) self-run: **PASS** — diff is exactly 2
+> files, both under `apps/android` (`git diff --stat main...HEAD`); SDK purity confirmed (opaque
+> parameters, no singleton/domain-model coupling); SSOT respected (reuses
+> `AppLanguage`/`RegionalLanguageSelection`, zero re-implementation); no coverage floor lowered, no
+> test weakened.
+>
+> `tasks/lane-cursor.md` → `lane=ANDROID android_streak=1 last_run=sdk-ui-language-picker-dialog`.
+
 > On 2026-08-16 **DataStore-Flow test timeout flake fixed** (slice `datastore-test-timeout-flake`,
 > PR #3058, merged `88997097c`) — this session's 5th ANDROID slice in a row, closing out the
 > streak before the streak≥5 bascule to IOS_DETTE. Escalated from "flag as systemic" (prior run's

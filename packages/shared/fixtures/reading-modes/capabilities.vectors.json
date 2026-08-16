@@ -1,0 +1,448 @@
+[
+  {
+    "_label": "direct-3-actifs-jamais-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "direct",
+      "activeParticipantCount": 3
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 3,
+        "riverReason": "neverEligible"
+      }
+    }
+  },
+  {
+    "_label": "direct-99-actifs-jamais-eligible-le-compte-ne-renverse-rien",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "direct",
+      "activeParticipantCount": 99
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 99,
+        "riverReason": "neverEligible"
+      }
+    }
+  },
+  {
+    "_label": "direct-compte-inconnu-jamais-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "direct",
+      "activeParticipantCount": null
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": null,
+        "riverReason": "neverEligible"
+      }
+    }
+  },
+  {
+    "_label": "direct-invite-drapeau-riviere-off-jamais-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": true
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": false,
+      "conversationType": "direct",
+      "activeParticipantCount": 2
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 2,
+        "riverReason": "neverEligible"
+      }
+    }
+  },
+  {
+    "_label": "groupe-compte-inconnu-seuil-seul",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": null
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": null,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "public-compte-inconnu-seuil-seul",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "public",
+      "activeParticipantCount": null
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": null,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "groupe-compte-inconnu-invite-seuil-seul",
+    "input": {
+      "identity": {
+        "isAnonymous": true
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": null
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": null,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "groupe-compte-inconnu-drapeau-lentille-off",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": false,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": null
+    },
+    "expected": {
+      "availableModes": [
+        "bubbles"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": null,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "groupe-0-actif-sous-le-seuil",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 0
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 0,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "groupe-4-actifs-borne-basse-du-seuil",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 4
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 4,
+        "riverReason": "belowThreshold"
+      }
+    }
+  },
+  {
+    "_label": "groupe-5-actifs-borne-exacte-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 5
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary",
+        "river"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 5,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "groupe-10-actifs-eligible-riviere-au-catalogue",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 10
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary",
+        "river"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 10,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "groupe-10-actifs-invite-eligible-riviere-accordee",
+    "input": {
+      "identity": {
+        "isAnonymous": true
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 10
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "river"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 10,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "groupe-10-actifs-drapeau-riviere-off-eligible-mais-hors-catalogue",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": false,
+      "conversationType": "group",
+      "activeParticipantCount": 10
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 10,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "global-8-actifs-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "global",
+      "activeParticipantCount": 8
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary",
+        "river"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 8,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "broadcast-8-actifs-eligible",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": true,
+      "isRiverFlagEnabled": true,
+      "conversationType": "broadcast",
+      "activeParticipantCount": 8
+    },
+    "expected": {
+      "availableModes": [
+        "focal",
+        "script",
+        "summary",
+        "river"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 8,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "drapeau-lentille-off-groupe-10-actifs",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": false,
+      "isRiverFlagEnabled": true,
+      "conversationType": "group",
+      "activeParticipantCount": 10
+    },
+    "expected": {
+      "availableModes": [
+        "bubbles"
+      ],
+      "riverEligible": true,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 10,
+        "riverReason": "eligible"
+      }
+    }
+  },
+  {
+    "_label": "drapeau-lentille-off-direct-2-actifs",
+    "input": {
+      "identity": {
+        "isAnonymous": false
+      },
+      "isFlagEnabled": false,
+      "isRiverFlagEnabled": false,
+      "conversationType": "direct",
+      "activeParticipantCount": 2
+    },
+    "expected": {
+      "availableModes": [
+        "bubbles"
+      ],
+      "riverEligible": false,
+      "riverEligibilityReason": {
+        "threshold": 5,
+        "current": 2,
+        "riverReason": "neverEligible"
+      }
+    }
+  }
+]

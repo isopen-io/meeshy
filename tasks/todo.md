@@ -701,3 +701,50 @@ qui double un gate de lecture ne fait que détruire, le piège de l'acteur nomm�
 les deux options écartées, et la piste du cycle 46 : `_loadReadReceiptOptOuts`
 ignore les participants sans `userId` — établir si une session anonyme peut
 atteindre `PATCH /me/preferences/privacy` avant de conclure.
+
+# Cycle 46 — l'écran Confidentialité écrivait dans un tiroir que le serveur n'ouvrait pas
+
+## Constat
+
+- [x] Question héritée du cycle 45 TRANCHÉE : `PATCH /me/preferences/privacy`
+      est INATTEIGNABLE pour une session anonyme (`allowAnonymous: false`,
+      `routes/me/preferences/index.ts`) — la piste se referme sans correctif
+- [x] Défaut trouvé en l'établissant : les deux moitiés du chemin visent des
+      tables DIFFÉRENTES. L'app écrit `UserPreferences.privacy` (document JSON) ;
+      les six portes de diffusion lisent `UserPreference` (clé/valeur héritée)
+- [x] Le seul écrivain du rangement lu, `PreferencesService.updatePrivacyPreferences`,
+      n'a AUCUN appelant — fichier intégralement orphelin
+- [x] Portée : `showReadReceipts`, `showOnlineStatus`, `showLastSeen`,
+      `showTypingIndicator` — QUATRE préférences inertes côté serveur
+- [x] Invisible par somme de trois causes : le `GET` relit le document (l'écran
+      dit vrai), le défaut vaut `true` (aucun symptôme), les doubles ne
+      modélisaient qu'un rangement (3e cycle consécutif sur ce motif)
+
+## Correctifs
+
+- [x] Résolveur unique `services/preferences/privacy-storage.ts` : document
+      d'abord, lignes héritées seulement pour les utilisateurs sans document
+- [x] Les DEUX lecteurs y passent — `PrivacyPreferencesService` cesse de
+      réimplémenter la règle, `_loadReadReceiptOptOuts` aussi
+- [x] `buildPreferences` réduit à `{ ...défauts, ...stocké }`
+- [x] `PreferencesService.updatePrivacyPreferences` nommé en commentaire comme
+      non branché et à ne pas rebrancher tel quel
+
+## Gates
+
+- [x] 6 RED discriminants vus rouges avant correctif
+- [x] Gardes de non-régression dans les deux sens (document prime / lignes
+      héritées servies en son absence / `{}` ne fait pas taire le repli)
+- [x] Doubles corrigés pour modéliser les DEUX rangements
+- [x] `bunx tsc --noEmit` gateway : 0
+- [x] Suite gateway complète verte
+- [x] CHANGELOG + ADR `services/gateway/decisions.md` + journal (cycle46) + leçon 283
+
+## Revue
+
+Voir `tasks/realtime-sync-audit-2026-08-15-cycle46.md` — le tableau des deux
+rangements, les trois causes d'invisibilité, pourquoi le repli hérité est
+conservé, les trois options écartées, et les pistes du cycle 47 : supprimer le
+`PreferencesService` orphelin, invalider les caches à l'écriture (un réglage met
+aujourd'hui jusqu'à 5 min à prendre effet), et verrouiller `allowAnonymous: false`
+par un témoin.

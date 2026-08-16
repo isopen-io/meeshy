@@ -141,6 +141,7 @@ function buildApp(scenario: Scenario): { app: FastifyInstance; prisma: any } {
     conversationReadCursor: { findMany: jest.fn().mockResolvedValue([]) },
     messageStatusEntry: { findMany: jest.fn().mockResolvedValue([]) },
     userPreference: { findMany: jest.fn().mockResolvedValue([]) },
+    userPreferences: { findMany: jest.fn().mockResolvedValue([]) },
     userConversationPreferences: {
       findFirst: jest.fn().mockResolvedValue(
         scenario.clearHistoryBefore === undefined

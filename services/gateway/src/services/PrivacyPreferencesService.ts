@@ -14,11 +14,11 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PRIVACY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import {
-  PRIVACY_PREFERENCES_DEFAULTS,
-  PRIVACY_KEY_MAPPING,
-  PrivacyPreferencesDefaults
-} from '../config/user-preferences-defaults';
+  loadStoredPrivacyPreferences,
+  type StoredPrivacyPreferences,
+} from './preferences/privacy-storage';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'PrivacyPreferencesService' });
@@ -128,19 +128,8 @@ export class PrivacyPreferencesService {
    */
   private async fetchFromDatabase(userId: string): Promise<PrivacyPreferences> {
     try {
-      // Récupérer toutes les clés privacy en une seule requête
-      const dbKeys = Object.values(PRIVACY_KEY_MAPPING);
-      const storedPreferences = await this.prisma.userPreference.findMany({
-        where: {
-          userId,
-          key: { in: dbKeys }
-        }
-      });
-
-      // Construire le map des valeurs stockées
-      const storedMap = new Map(storedPreferences.map(p => [p.key, p.value]));
-
-      return this.buildPreferences(storedMap);
+      const stored = await loadStoredPrivacyPreferences(this.prisma, [userId]);
+      return this.buildPreferences(stored.get(userId));
     } catch (error) {
       logger.error('privacy preferences fetch from database failed', { userId, error });
       // En cas d'erreur, retourner les valeurs par défaut
@@ -149,20 +138,15 @@ export class PrivacyPreferencesService {
   }
 
   /**
-   * Assemble les préférences à partir des valeurs stockées, en complétant par
-   * les défauts. Partagé par la lecture unitaire et la lecture groupée.
+   * Complète par les défauts ce que la base porte réellement. Partagé par la
+   * lecture unitaire et la lecture groupée.
+   *
+   * Les deux jeux de clés étant les mêmes, la fusion suffit : énumérer les huit
+   * champs à la main n'ajoutait qu'un endroit de plus à tenir à jour lors d'un
+   * ajout de préférence — et un endroit de plus où oublier de le faire.
    */
-  private buildPreferences(storedMap: Map<string, string>): PrivacyPreferences {
-    return {
-      showOnlineStatus: this.getBooleanValue(storedMap, 'show-online-status', 'showOnlineStatus'),
-      showLastSeen: this.getBooleanValue(storedMap, 'show-last-seen', 'showLastSeen'),
-      showReadReceipts: this.getBooleanValue(storedMap, 'show-read-receipts', 'showReadReceipts'),
-      showTypingIndicator: this.getBooleanValue(storedMap, 'show-typing-indicator', 'showTypingIndicator'),
-      allowContactRequests: this.getBooleanValue(storedMap, 'allow-contact-requests', 'allowContactRequests'),
-      allowGroupInvites: this.getBooleanValue(storedMap, 'allow-group-invites', 'allowGroupInvites'),
-      saveMediaToGallery: this.getBooleanValue(storedMap, 'save-media-to-gallery', 'saveMediaToGallery'),
-      allowAnalytics: this.getBooleanValue(storedMap, 'allow-analytics', 'allowAnalytics'),
-    };
+  private buildPreferences(stored: StoredPrivacyPreferences | undefined): PrivacyPreferences {
+    return { ...this.getDefaultPreferences(), ...stored };
   }
 
   /**
@@ -173,41 +157,13 @@ export class PrivacyPreferencesService {
   private async fetchManyFromDatabase(
     userIds: string[]
   ): Promise<Map<string, PrivacyPreferences>> {
-    const dbKeys = Object.values(PRIVACY_KEY_MAPPING);
-    const rows = await this.prisma.userPreference.findMany({
-      where: { userId: { in: userIds }, key: { in: dbKeys } },
-    });
-
-    const storedByUser = new Map<string, Map<string, string>>();
-    for (const row of rows) {
-      let forUser = storedByUser.get(row.userId);
-      if (!forUser) {
-        forUser = new Map<string, string>();
-        storedByUser.set(row.userId, forUser);
-      }
-      forUser.set(row.key, row.value);
-    }
+    const storedByUser = await loadStoredPrivacyPreferences(this.prisma, userIds);
 
     const result = new Map<string, PrivacyPreferences>();
     for (const userId of userIds) {
-      result.set(userId, this.buildPreferences(storedByUser.get(userId) ?? new Map()));
+      result.set(userId, this.buildPreferences(storedByUser.get(userId)));
     }
     return result;
-  }
-
-  /**
-   * Récupère une valeur booléenne depuis le map stocké ou le défaut
-   */
-  private getBooleanValue(
-    storedMap: Map<string, string>,
-    dbKey: string,
-    defaultKey: keyof PrivacyPreferencesDefaults
-  ): boolean {
-    const stored = storedMap.get(dbKey);
-    if (stored !== undefined) {
-      return stored === 'true';
-    }
-    return PRIVACY_PREFERENCES_DEFAULTS[defaultKey];
   }
 
   /**
