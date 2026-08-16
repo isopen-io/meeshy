@@ -321,7 +321,7 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
 
       expect(callService.recordHeartbeat).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(
-        'resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized',
+        'resolveActiveCallParticipant: getCallSession failed, treating caller as unauthorized',
         expect.objectContaining({ userId: USER_ID, callId: VALID_CALL_ID, error: 'Mongo connection lost' })
       );
     });
@@ -342,7 +342,7 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
 
       expect(callService.persistCallStats).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(
-        'resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized',
+        'resolveActiveCallParticipant: getCallSession failed, treating caller as unauthorized',
         expect.objectContaining({ userId: USER_ID, callId: VALID_CALL_ID, error: 'Mongo connection lost' })
       );
     });
@@ -396,10 +396,34 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
         expect.objectContaining({
           callId: VALID_CALL_ID,
           participantId: 'participant-1',
+          // Vague 132 — a registered roster entry is keyed by User.id, never
+          // by the legacy `Participant.id`-space `participantId` alone; the
+          // overlay could never resolve a name for the reporter without this.
+          userId: USER_ID,
           metric: 'rtt',
           value: 400,
           threshold: 300,
         })
+      );
+    });
+
+    it('falls back userId to participantId for an anonymous reporter (no User row)', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [{ participantId: 'participant-anon', userId: undefined, leftAt: null }],
+      });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => 'participant-anon');
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      const roomEmit = (socket.to as jest.Mock).mock.results[0]?.value?.emit as jest.Mock;
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.QUALITY_ALERT,
+        expect.objectContaining({ participantId: 'participant-anon', userId: 'participant-anon' })
       );
     });
 
