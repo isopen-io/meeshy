@@ -319,6 +319,74 @@ describe('GET /conversations — attache du pont ✦ (G-123)', () => {
     });
   });
 
+  describe('G-127 — étage agent : le pont `kind: agent` survit au schéma fast-json-stringify', () => {
+    it('porte `text` + la paire E7 (`translations`/`originalLanguage`) JUSQU’AU PAYLOAD HTTP RÉEL', async () => {
+      const bridge = {
+        kind: 'agent',
+        unreadCount: 5,
+        suggestedMode: 'resume',
+        text: "Alice et Bruno ont réglé l'horaire de vendredi.",
+        translations: { en: 'Alice and Bruno settled the Friday schedule.' },
+        originalLanguage: 'fr',
+      };
+      mockGetUnreadCountsForUser.mockResolvedValue(new Map([[CONV_A, 5]]));
+      mockBuildBridgeData.mockResolvedValue(new Map([[CONV_A, { bridge }]]));
+
+      const prisma = makePrisma([makeConversation()]);
+      const app = await buildApp(prisma);
+      const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+      const body = res.json();
+
+      expect(body.data[0].bridge).toEqual(bridge);
+      expect(body.data[0].bridge.data).toBeUndefined();
+
+      await app.close();
+    });
+
+    it("E7 honnête : `text` seul (translations/originalLanguage ABSENTS) — le fast-json-stringify ne les fabrique pas non plus", async () => {
+      const bridge = {
+        kind: 'agent',
+        unreadCount: 2,
+        suggestedMode: 'focal',
+        text: 'Une phrase agent sans langue déclarée.',
+      };
+      mockGetUnreadCountsForUser.mockResolvedValue(new Map([[CONV_A, 2]]));
+      mockBuildBridgeData.mockResolvedValue(new Map([[CONV_A, { bridge }]]));
+
+      const prisma = makePrisma([makeConversation()]);
+      const app = await buildApp(prisma);
+      const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+      const body = res.json();
+
+      expect(body.data[0].bridge.text).toBe('Une phrase agent sans langue déclarée.');
+      expect('translations' in body.data[0].bridge).toBe(false);
+      expect('originalLanguage' in body.data[0].bridge).toBe(false);
+
+      await app.close();
+    });
+
+    it('porte `isComplete: false` sur un pont `agent` (partialité traversant le changement d’étage, G-127)', async () => {
+      const bridge = {
+        kind: 'agent',
+        unreadCount: 5,
+        suggestedMode: 'focal',
+        isComplete: false,
+        text: 'Résumé sur une fenêtre tronquée.',
+      };
+      mockGetUnreadCountsForUser.mockResolvedValue(new Map([[CONV_A, 5]]));
+      mockBuildBridgeData.mockResolvedValue(new Map([[CONV_A, { bridge }]]));
+
+      const prisma = makePrisma([makeConversation()]);
+      const app = await buildApp(prisma);
+      const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+      const body = res.json();
+
+      expect(body.data[0].bridge.isComplete).toBe(false);
+
+      await app.close();
+    });
+  });
+
   it('reste vert — aucun pont — quand le service échoue (le pont est un confort, la liste est le produit)', async () => {
     mockGetUnreadCountsForUser.mockResolvedValue(new Map([[CONV_A, 2]]));
     mockBuildBridgeData.mockRejectedValue(new Error('bridge down'));

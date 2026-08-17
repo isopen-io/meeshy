@@ -737,12 +737,30 @@
         "script": "Roteiro",
         "resume": "Resumo",
         "riviere": "Rio",
+        "bubbles": "Balões",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "abrirá com {threshold} pessoas ativas — {current} hoje",
-        "riviereLockedDirect": "reservado para grupos"
+        "river": {
+          "never": "nunca em uma conversa direta",
+          "thresholdOnly": "abrirá com {threshold} pessoas ativas",
+          "reason": "abrirá com {threshold} pessoas ativas — {current} hoje"
+        }
       },
       "typing": {
         "one": "{name} está digitando…"
+      },
+      "draft": "✎ Rascunho",
+      "sections": {
+        "pinned": "Fixadas",
+        "live": "Ao vivo",
+        "today": "Hoje",
+        "yesterday": "Ontem",
+        "thisWeek": "Esta semana",
+        "older": "Mais antigo"
+      }
+    },
+    "focal": {
+      "row": {
+        "you": "Você"
       }
     },
     "lens": {

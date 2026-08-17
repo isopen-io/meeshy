@@ -537,6 +537,10 @@ struct AudioMediaView: View, Equatable {
     let visualAttachments: [MessageAttachment]
     let isDark: Bool
     let accentColor: String
+    /// Tenue de rendu du player (voir `AudioPlayerChrome`) — `.card` par
+    /// défaut, aucun site d'appel historique ne change. Le mode Focal
+    /// passe les tenues plates via `FocalAudioBlock`.
+    var chrome: AudioPlayerChrome = .card
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
@@ -633,6 +637,7 @@ struct AudioMediaView: View, Equatable {
             && lhs.translatedAudios.count == rhs.translatedAudios.count
             && lhs.translatedAudios.map(\.url) == rhs.translatedAudios.map(\.url)
             && lhs.voiceConsentMissing == rhs.voiceConsentMissing
+            && lhs.chrome == rhs.chrome
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload
@@ -946,6 +951,7 @@ struct AudioMediaView: View, Equatable {
                 attachmentId: attachment.id,
                 attachment: attachment,
                 accentColorHex: contactColor,
+                chrome: chrome,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
@@ -979,6 +985,7 @@ struct AudioMediaView: View, Equatable {
                 attachmentId: attachment.id,
                 attachment: attachment,
                 accentColorHex: contactColor,
+                chrome: chrome,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
@@ -1011,6 +1018,7 @@ struct AudioMediaView: View, Equatable {
                 attachmentId: attachment.id,
                 attachment: attachment,
                 accentColorHex: contactColor,
+                chrome: chrome,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,

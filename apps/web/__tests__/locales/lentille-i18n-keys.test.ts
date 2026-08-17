@@ -55,10 +55,29 @@ const LENTILLE_KEYS = [
   'lentille.modes.script',
   'lentille.modes.resume',
   'lentille.modes.riviere',
+  // WL-108 : nom du mode `bubbles` — la décision du drapeau ÉTEINT. Rend
+  // `decisionModeLabel` (`components/conversations/lentille/lentille-mode-labels.ts`)
+  // exhaustif sur `ConversationReadingMode` plutôt que de prétendre un cas
+  // inatteignable ; pendant du `lentille.mode.name.bubbles` iOS.
+  'lentille.modes.bubbles',
   'lentille.modes.autoBadge',
-  'lentille.modes.riviereLocked',
-  'lentille.modes.riviereLockedDirect',
+  // Trifurcation amendée (REV-3/B3, S1) — WL-106/LWS-11 : la raison Rivière
+  // grisée n'est plus une formule unique (l'ancienne paire
+  // `riviereLocked`/`riviereLockedDirect`, dishonnête sur `direct` et sur un
+  // compte inconnu — voir `packages/shared/utils/reading-modes.ts`,
+  // `RiverEligibilityReasonKind`). Trois clés, patron `lentille.mode.river.*`
+  // de `apps/ios/Meeshy/Localizable.xcstrings`, transposé en camelCase JSON.
+  'lentille.modes.river.never',
+  'lentille.modes.river.thresholdOnly',
+  'lentille.modes.river.reason',
   'lentille.typing.one',
+  'lentille.draft',
+  'lentille.sections.pinned',
+  'lentille.sections.live',
+  'lentille.sections.today',
+  'lentille.sections.yesterday',
+  'lentille.sections.thisWeek',
+  'lentille.sections.older',
 ];
 
 describe('lentille namespace i18n keys — reachable via useI18n(\'conversations\') scoping (REV-1 réserve 12b)', () => {

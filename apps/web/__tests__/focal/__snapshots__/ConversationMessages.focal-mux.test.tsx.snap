@@ -1,0 +1,11 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`ConversationMessages — mux Focal rend un contenu bit-à-bit stable au point de greffe (snapshot de référence) 1`] = `
+<div
+  class="px-2"
+>
+  <div
+    data-testid="messages-display"
+  />
+</div>
+`;

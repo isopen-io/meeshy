@@ -226,3 +226,82 @@ describe('invalidateCache', () => {
     await expect(sut.invalidateCache({})).resolves.toBeDefined();
   });
 });
+
+// ─── getRangeSummary (G-127) ────────────────────────────────────────────────
+
+describe('getRangeSummary', () => {
+  it('calls GET /api/agent/conversations/:id/range-summary with encoded query params', async () => {
+    mockFetch(
+      makeFetchResponse({
+        success: true,
+        data: {
+          conversationId: 'conv-1',
+          summary: 'Une phrase.',
+          fromMessageId: 'm1',
+          toMessageId: 'm2',
+          messageCount: 2,
+        },
+      })
+    );
+    const sut = makeSut();
+
+    const result = await sut.getRangeSummary({
+      conversationId: 'conv-1',
+      fromMessageId: 'm1',
+      toMessageId: 'm2',
+    });
+
+    expect(result).toEqual({
+      conversationId: 'conv-1',
+      summary: 'Une phrase.',
+      fromMessageId: 'm1',
+      toMessageId: 'm2',
+      messageCount: 2,
+    });
+    const url = (global.fetch as jest.Mock<any>).mock.calls[0][0];
+    expect(url).toBe(`${BASE_URL}/api/agent/conversations/conv-1/range-summary?fromMessageId=m1&toMessageId=m2`);
+  });
+
+  it('relaie `data: null` (agent muet, G-126) sans le convertir en erreur', async () => {
+    mockFetch(makeFetchResponse({ success: true, data: null }));
+    const sut = makeSut();
+
+    await expect(
+      sut.getRangeSummary({ conversationId: 'conv-1', fromMessageId: 'm1', toMessageId: 'm2' })
+    ).resolves.toBeNull();
+  });
+
+  it('URL-encode les identifiants', async () => {
+    mockFetch(makeFetchResponse({ success: true, data: null }));
+    const sut = makeSut();
+
+    await sut.getRangeSummary({ conversationId: 'conv/1', fromMessageId: 'm 1', toMessageId: 'm2' });
+
+    const url = (global.fetch as jest.Mock<any>).mock.calls[0][0];
+    expect(url).toContain('conv%2F1');
+    expect(url).toContain('m%201');
+  });
+
+  it('timeout court (1500 ms) — n’attend pas plus longtemps qu’invalidateCache', async () => {
+    mockFetch(makeFetchResponse({ success: true, data: null }));
+    const sut = makeSut();
+
+    await expect(
+      sut.getRangeSummary({ conversationId: 'conv-1', fromMessageId: 'm1', toMessageId: 'm2' })
+    ).resolves.toBeNull();
+    const call = (global.fetch as jest.Mock<any>).mock.calls[0];
+    // Le contrôleur d'abandon est câblé (même mécanique que `request`) —
+    // vérifié indirectement par le comportement AbortError déjà couvert
+    // ci-dessus pour `request`; ce test garde la forme de l'appel réseau.
+    expect(call[0]).toContain('/range-summary');
+  });
+
+  it('service en panne (network error) ⇒ AgentUnavailableError, comme tout autre appel', async () => {
+    mockFetchThrow(new TypeError('Failed to fetch'));
+    const sut = makeSut();
+
+    await expect(
+      sut.getRangeSummary({ conversationId: 'conv-1', fromMessageId: 'm1', toMessageId: 'm2' })
+    ).rejects.toBeInstanceOf(AgentUnavailableError);
+  });
+});

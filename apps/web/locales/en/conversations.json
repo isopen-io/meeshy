@@ -735,12 +735,30 @@
         "script": "Script",
         "resume": "Summary",
         "riviere": "River",
+        "bubbles": "Bubbles",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "will open at {threshold} active people — {current} today",
-        "riviereLockedDirect": "reserved for groups"
+        "river": {
+          "never": "never in a direct conversation",
+          "thresholdOnly": "opens at {threshold} active people",
+          "reason": "opens at {threshold} active people — {current} today"
+        }
       },
       "typing": {
         "one": "{name} is typing…"
+      },
+      "draft": "✎ Draft",
+      "sections": {
+        "pinned": "Pinned",
+        "live": "Live",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This week",
+        "older": "Older"
+      }
+    },
+    "focal": {
+      "row": {
+        "you": "You"
       }
     },
     "lens": {

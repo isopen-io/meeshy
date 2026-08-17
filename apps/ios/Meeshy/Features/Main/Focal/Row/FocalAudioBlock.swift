@@ -132,6 +132,9 @@ struct FocalAudioBlock: View, Equatable {
     let content: BubbleContent
     let accentHex: String
     let isDark: Bool
+    /// Élection de la rangée (`FocalRowInput.isFocused`) — décide la tenue
+    /// du bloc plat : minimale (ordinaire) ou enrichie (élue).
+    var isFocused: Bool = false
     /// Contrat §3.6 : `FocalRowInput.allAudioItems`.
     let allAudioItems: [ConversationViewModel.AudioItem]
     let translatedAudios: [MessageTranslatedAudio]
@@ -151,11 +154,18 @@ struct FocalAudioBlock: View, Equatable {
         lhs.content == rhs.content
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
+            && lhs.isFocused == rhs.isFocused
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
             && lhs.conversationName == rhs.conversationName
             && lhs.voiceConsentMissing == rhs.voiceConsentMissing
+    }
+
+    /// La décision « quelle tenue pour quelle rangée » vit ICI (app), le SDK
+    /// ne fait que rendre la tenue reçue (SDK Purity).
+    nonisolated static func chrome(isFocused: Bool) -> AudioPlayerChrome {
+        isFocused ? .flatFocused : .flatMinimal
     }
 
     private var mode: FocalAudioMode { FocalAudioRouting.mode(for: content) }
@@ -234,6 +244,7 @@ struct FocalAudioBlock: View, Equatable {
                     visualAttachments: visuals,
                     isDark: isDark,
                     accentColor: accentHex,
+                    chrome: Self.chrome(isFocused: isFocused),
                     transcription: audioItem(for: attachment.id)?.transcription,
                     translatedAudios: audioItem(for: attachment.id)?.translatedAudios ?? translatedAudios,
                     allAudioItems: allAudioItems,

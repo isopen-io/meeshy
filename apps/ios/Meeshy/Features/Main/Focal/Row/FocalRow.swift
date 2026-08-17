@@ -370,6 +370,7 @@ struct FocalRow: View {
                 content: content,
                 accentHex: input.accentHex,
                 isDark: input.isDark,
+                isFocused: input.isFocused,
                 allAudioItems: input.allAudioItems,
                 translatedAudios: input.translatedAudios,
                 mentionDisplayNames: input.mentionDisplayNames,

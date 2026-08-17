@@ -79,4 +79,33 @@ export class AgentHttpClient {
       timeoutMs: 1500,
     });
   }
+
+  /**
+   * G-127 — le débouché de lecture G-126 (`GET
+   * /api/agent/conversations/:id/range-summary`). Même posture bornée que
+   * `invalidateCache` : timeout court (1500 ms), le pont ✦ est un confort,
+   * jamais un risque de latence pour la liste. `data: null` de la route
+   * (agent muet, plage introuvable, modèle en panne) ressort ici comme
+   * `null` — ce client ne fabrique jamais de résumé, il relaie l'absence.
+   */
+  async getRangeSummary(params: {
+    conversationId: string;
+    fromMessageId: string;
+    toMessageId: string;
+  }): Promise<RangeSummaryResponse | null> {
+    const query = `?fromMessageId=${encodeURIComponent(params.fromMessageId)}&toMessageId=${encodeURIComponent(params.toMessageId)}`;
+    return this.request<RangeSummaryResponse | null>(
+      `/api/agent/conversations/${encodeURIComponent(params.conversationId)}/range-summary${query}`,
+      { timeoutMs: 1500 }
+    );
+  }
 }
+
+/** Forme exacte rendue par `services/agent/src/routes/reading.ts` (G-126). */
+export type RangeSummaryResponse = {
+  conversationId: string;
+  summary: string;
+  fromMessageId: string;
+  toMessageId: string;
+  messageCount: number;
+};

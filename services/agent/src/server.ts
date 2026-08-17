@@ -21,6 +21,8 @@ import { ReactiveHandler } from './reactive/reactive-handler';
 import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { deliveryRoutes } from './routes/delivery';
+import { readingRoutes } from './routes/reading';
+import { createBridgeReadingOutlet, messageReaderFromStore } from './reading/bridge-reading-outlet';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
 import { startProfileRefreshCron } from './cron/profile-refresh';
@@ -163,6 +165,17 @@ async function start() {
   }, stateManager);
   deliveryQueue.startPolling(10_000);
   server.register((instance) => deliveryRoutes(instance, deliveryQueue));
+  // G-126 — débouché de LECTURE du pont ✦ (contrat §5.1, C3). Adossé à l'observer, il lit la
+  // fenêtre glissante par un port réduit à la seule lecture et rend une ligne bornée à une plage.
+  // Il ne traverse ni `generator` ni la file de livraison, n'emprunte aucune identité, et ne fait
+  // rien tant que personne ne l'appelle : ni scan, ni abonnement, ni horloge. `agent_grammar`
+  // reste OFF — rien ici ne l'allume.
+  const bridgeReadingOutlet = createBridgeReadingOutlet({
+    llm,
+    reader: messageReaderFromStore(stateManager),
+  });
+  server.register((instance) => readingRoutes(instance, bridgeReadingOutlet));
+
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);
 

@@ -10,8 +10,10 @@
 /* Import des styles de conversations */
 @import url('../styles/conversations-layout.css');
 
-/* Lentille — cotes générées depuis packages/shared/design/lentille-tokens.json,
-   puis le mode Focal qui les consomme (rangée plate + carte de focus). */
+/* Tokens Lentille (LWS-10, M-049) — cotes normatives §4.3 du contrat, générées
+   depuis packages/shared/design/lentille-tokens.json, consommées par les
+   composants sous drapeau `lentille_list`, jamais recopiées en dur (garde R15).
+   Puis le mode Focal qui les consomme (rangée plate + carte de focus). */
 @import url('../styles/lentille-tokens.css');
 @import url('../styles/focal-row.css');
 

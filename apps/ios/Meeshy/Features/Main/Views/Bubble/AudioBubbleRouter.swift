@@ -46,6 +46,7 @@ struct AudioBubbleRouter: View {
     let attachmentId: String
     let attachment: MessageAttachment
     let accentColorHex: String
+    let chrome: AudioPlayerChrome
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
     let initialTranscriptionLanguage: String?
@@ -81,6 +82,7 @@ struct AudioBubbleRouter: View {
         attachmentId: String,
         attachment: MessageAttachment,
         accentColorHex: String,
+        chrome: AudioPlayerChrome = .card,
         transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
         initialTranscriptionLanguage: String? = nil,
@@ -99,6 +101,7 @@ struct AudioBubbleRouter: View {
         self.attachmentId = attachmentId
         self.attachment = attachment
         self.accentColorHex = accentColorHex
+        self.chrome = chrome
         self.transcription = transcription
         self.translatedAudios = translatedAudios
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
@@ -139,6 +142,7 @@ struct AudioBubbleRouter: View {
         AudioBubbleContent(
             attachment: attachment,
             accentColorHex: accentColorHex,
+            chrome: chrome,
             transcription: transcription,
             translatedAudios: translatedAudios,
             initialTranscriptionLanguage: initialTranscriptionLanguage,
@@ -174,6 +178,7 @@ struct AudioBubbleRouter: View {
 private struct AudioBubbleContent: View {
     let attachment: MessageAttachment
     let accentColorHex: String
+    let chrome: AudioPlayerChrome
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
     let initialTranscriptionLanguage: String?
@@ -200,6 +205,7 @@ private struct AudioBubbleContent: View {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
+                chrome: chrome,
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
@@ -220,6 +226,7 @@ private struct AudioBubbleContent: View {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
+                chrome: chrome,
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
@@ -239,6 +246,7 @@ private struct AudioBubbleContent: View {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
+                chrome: chrome,
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
@@ -258,6 +266,7 @@ private struct AudioBubbleContent: View {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
+                chrome: chrome,
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,

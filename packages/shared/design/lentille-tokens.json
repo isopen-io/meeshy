@@ -156,5 +156,32 @@
         "radius": 14
       }
     }
+  },
+  "river": {
+    "$source": "R-131 (tasks/lentille-workshop-execution.md §7/§7bis/§7ter) — cotes de PIXELS de la peau Rivière, relevées sur la maquette normative docs/design/2026-08-17-riviere-navigation.html (variables JS commentées « appartiennent à la peau, jamais à la loi »). N'inclut JAMAIS une constante de LOI (RIVER_MAX_LANES/RIVER_MIN_VOICES/RIVER_HEADER_FADE_RANKS/RIVER_LANE_SILENCE_WINDOW_MS restent dans packages/shared/utils/river-lanes.ts, jamais dupliquées ici).",
+    "line": {
+      "width": 2.5,
+      "$note": "trait vertical d'une branche ET bordure de la bulle (même épaisseur — le contour de la bulle EST un segment de la ligne, amendement R)."
+    },
+    "lane": {
+      "widthReference": 300,
+      "gutter": 28,
+      "$note": "widthReference = largeur de couloir de référence (§7ter, ~300px pour qu'une bulle rende tout son texte) ; gutter = écart de chaque côté de la bulle dans son couloir, où la ligne passe. maxLanes reste un PARAMÈTRE d'entrée de la loi (RiverLaneResolver.maxLanes) — une peau étroite peut le baisser, jamais tronquer le texte pour gagner une colonne."
+    },
+    "bubble": {
+      "detourRadius": 14,
+      "baseGap": 8,
+      "$note": "detourRadius = rayon de contournement de bulle (le trait épouse ce rayon en abordant/quittant la bulle) ; baseGap = écart horizontal de la ligne de base où vit l'heure (amendement R : « l'heure vit en base de bulle »)."
+    },
+    "connector": {
+      "strokeWidth": 1.4,
+      "minBow": 34,
+      "bowRatio": 0.5,
+      "$note": "courbe des connecteurs de réponse — trait plus fin que la branche elle-même, en pointillé côté peau. bow = max(minBow, |Δcouloir| * bowRatio), le contrôle de la courbe de Bézier."
+    },
+    "laneHeader": {
+      "height": 38,
+      "$note": "hauteur de la bande d'en-tête de couloirs, en PIXELS — distincte de RIVER_HEADER_FADE_RANKS (loi, en RANGS) : la loi dit qui/quelle opacité, ce token dit la hauteur de la bande qui l'affiche (§7ter B)."
+    }
   }
 }

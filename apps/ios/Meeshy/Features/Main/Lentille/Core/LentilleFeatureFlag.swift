@@ -52,11 +52,26 @@ import Foundation
 nonisolated enum LentilleFeatureFlag {
     case lentilleList
     case readingModes
+    /// R-133 — le troisième drapeau annoncé par la doc de tête : couvre
+    /// UNIQUEMENT la sélectionnabilité de la peau Rivière. Défaut OFF, DEUX
+    /// étages seulement (env → `defaults.bool`), comme `lentilleList` —
+    /// jamais de cascade bêta (réservée à `readingModes`, docstring
+    /// ci-dessus, second amendement I-075) : activer le programme bêta
+    /// n'ouvre JAMAIS la Rivière tout seul, elle reste un choix séparé.
+    /// Consommé comme `isRiverFlagEnabled` de
+    /// `ReadingModeOrchestrator.ResolveCapabilitiesInput` (amendement R) —
+    /// AUCUN site de montage ne câble encore cette entrée (R-135, hors
+    /// périmètre de ce lot) : à drapeau OFF ou ON, `resolveCapabilities`
+    /// reçoit son défaut `false` tant que ce câblage n'existe pas, donc le
+    /// mode ne s'ouvre nulle part — snapshot OFF identique par construction,
+    /// pas par gate applicatif.
+    case riviereMode
 
     var userDefaultsKey: String {
         switch self {
         case .lentilleList: return "meeshy.flag.lentille_list"
         case .readingModes: return "meeshy.flag.reading_modes"
+        case .riviereMode: return "meeshy.flag.riviere_mode"
         }
     }
 
@@ -64,6 +79,7 @@ nonisolated enum LentilleFeatureFlag {
         switch self {
         case .lentilleList: return "MEESHY_FLAG_LENTILLE_LIST"
         case .readingModes: return "MEESHY_FLAG_READING_MODES"
+        case .riviereMode: return "MEESHY_FLAG_RIVIERE_MODE"
         }
     }
 
@@ -107,5 +123,9 @@ nonisolated enum LentilleFeatureFlag {
 
     static var isReadingModesEnabled: Bool {
         LentilleFeatureFlag.readingModes.isEnabled()
+    }
+
+    static var isRiviereModeEnabled: Bool {
+        LentilleFeatureFlag.riviereMode.isEnabled()
     }
 }
