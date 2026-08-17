@@ -113,6 +113,7 @@ fun StatusBarView(
 
                 is StatusBarCell.Pill -> {
                     LaunchedEffect(cell.entry.id) { viewModel.loadMoreIfNeeded(cell.entry.id) }
+                    LaunchedEffect(cell.entry.id) { viewModel.trackImpression(cell.entry.id) }
                     StatusPill(
                         emoji = cell.entry.moodEmoji,
                         label = cell.entry.username,
@@ -123,7 +124,10 @@ fun StatusBarView(
                             cell.entry.moodEmoji,
                             cell.entry.username,
                         ),
-                        onClick = { selected = cell.entry },
+                        onClick = {
+                            selected = cell.entry
+                            viewModel.markStatusViewed(cell.entry.id)
+                        },
                     )
                 }
 
