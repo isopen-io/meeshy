@@ -27,17 +27,18 @@
  *    `Button(.plain)` »). Le fil web ne l'était PAS : ni la pastille ni le
  *    nom n'ouvraient quoi que ce soit.
  *
- *    RE-PREUVE avant d'écrire (exigence « réutilise, jamais une copie ») :
- *    il n'existe AUCUNE modale de profil sur le web — `grep -rn
- *    "UserProfileModal\|ProfileModal\|MiniProfile\|UserSheet" apps/web` ne
- *    rend rien. L'affordance de profil de l'app EST la route `/u/{username}`,
- *    ouverte par un `next/link` : c'est exactement ce que fait la vue Bulles
- *    (`bubble-message/MessageNameDate.tsx:44`, le nom au-dessus de la bulle)
- *    et l'aperçu de réponse (`MessageReplyPreview.tsx:72`). C'est donc CETTE
- *    affordance-là qui est réutilisée ici, avec le MÊME gabarit d'URL et le
- *    MÊME `stopPropagation` (le fil porte des gestes de rangée au-dessus).
- *    Une MODALE serait un écran neuf, pas une réutilisation : elle est
- *    nommée comme écart dans le rapport, pas bâclée ici.
+ *    DIRECTIVE PRODUIT DU 2026-08-17 (suite à ce lot) : « l'auteur d'un
+ *    message doit être clickable pour afficher son profil EN MODALE ».
+ *    `UserProfileModal` (`components/profile/UserProfileModal.tsx`) existe
+ *    désormais — le lien `/u/{username}` ci-dessous reste un VRAI `<Link>`
+ *    (href réel, atteignable au clavier, clic droit "ouvrir dans un nouvel
+ *    onglet" natif), mais son clic GAUCHE SIMPLE est intercepté
+ *    (`isPlainLeftClick`, `lib/profile-link-click.ts`) pour ouvrir la modale
+ *    via `onOpenProfile` plutôt que de naviguer — l'accès à la page complète
+ *    reste au bout du lien « Voir le profil complet » DANS la modale, jamais
+ *    perdu. Un clic modifié (⌘/Ctrl/Maj/molette) traverse intact vers le
+ *    navigateur. `onOpenProfile` non fourni (appelant qui ne monte pas la
+ *    modale) ⇒ comportement de lien inchangé, navigation directe.
  *
  *    Sans `username` (participant anonyme, expéditeur non résolu), l'identité
  *    reste un simple texte : un lien vers `/u/undefined` serait un bouton
@@ -59,6 +60,7 @@ import { getMessageInitials } from '@/lib/avatar-utils';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { DeliveryIndicator } from '@/components/common/bubble-message/DeliveryIndicator';
 import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
+import { isPlainLeftClick } from '@/lib/profile-link-click';
 
 /** Teinte "Toi" — MeeshyColors.indigo500, §WS-4. */
 const YOU_INDIGO_HEX = '#6366F1';
@@ -76,6 +78,13 @@ export interface FocalIdentityHeaderProps {
    * (« Voir le profil de {nom} ») — la feuille ne consulte aucun i18n.
    */
   readonly openProfileLabel?: string;
+  /**
+   * Ouvre `UserProfileModal` pour ce `username` — remonté par `FocalThread`
+   * (l'état d'ouverture vit LÀ, un seul par fil, jamais une modale montée par
+   * rangée). Non fourni ⇒ le lien garde son comportement de navigation
+   * directe (repli honnête, jamais un clic mort).
+   */
+  readonly onOpenProfile?: (username: string) => void;
 }
 
 export function FocalIdentityHeader({
@@ -86,6 +95,7 @@ export function FocalIdentityHeader({
   messageId,
   conversationId,
   openProfileLabel,
+  onOpenProfile,
 }: FocalIdentityHeaderProps) {
   const displayName = isMe ? youLabel : getUserDisplayName(sender, youLabel);
   /**
@@ -151,7 +161,19 @@ export function FocalIdentityHeader({
           // futur menu contextuel) : le lien de profil ne doit pas les
           // déclencher au passage. MÊME `stopPropagation` que
           // `conversation-participants.tsx:198` et `MessageNameDate.tsx:47`.
-          onClick={(event) => event.stopPropagation()}
+          //
+          // DIRECTIVE PRODUIT 2026-08-17 — clic gauche simple ⇒ modale
+          // (`onOpenProfile`, `preventDefault` sur LA NAVIGATION seulement) ;
+          // clic modifié (⌘/Ctrl/Maj/molette) ⇒ comportement natif du lien
+          // intact (nouvel onglet). `isPlainLeftClick`, loi PARTAGÉE avec
+          // `AvatarAffordance` (rang Lentille) — jamais deux implémentations.
+          onClick={(event) => {
+            event.stopPropagation();
+            if (onOpenProfile && isPlainLeftClick(event)) {
+              event.preventDefault();
+              onOpenProfile(username);
+            }
+          }}
           className="flex min-w-0 items-center gap-2 hover:opacity-80 transition-opacity"
         >
           {avatarNode}

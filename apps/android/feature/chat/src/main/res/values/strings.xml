@@ -86,6 +86,7 @@
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="chat_date_day_before_yesterday">Two days ago</string>
     <string name="chat_scroll_to_bottom">Scroll to latest</string>
+    <string name="chat_offline">Offline</string>
     <string name="chat_unread_photo">Photo</string>
     <string name="chat_unread_attachment">Attachment</string>
     <string name="chat_unread_new_message">New message</string>

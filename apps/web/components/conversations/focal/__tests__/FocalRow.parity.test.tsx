@@ -112,6 +112,13 @@ function expectRowNotEmpty() {
 
 describe('parité — aucun TYPE de message ne rend une rangée vide', () => {
   BOTH_DENSITIES.forEach((density) => {
+    // behaviour-matrix:F07 — « AudioPlayerView … rendu nu dans la rangée
+    // sans conteneur bulle … » : `FocalMediaBlock` route désormais les
+    // pièces jointes non-image vers `MessageAttachments` (RÉUTILISÉ,
+    // MÊME lecteur audio/waveform que la vue Bulles, jamais une copie) —
+    // Q-140, re-preuve 2026-08-17. La géométrie exacte du lecteur n'est
+    // pas re-testée ici (déjà couverte par les suites `MessageAttachments`
+    // elles-mêmes) ; ce témoin garde la DONNÉE à l'écran, jamais vide.
     it(`[${density}] un vocal/audio SEUL est rendu (il rendait vide)`, () => {
       renderRow(
         makeMessage({
@@ -180,6 +187,14 @@ describe('parité — aucun TYPE de message ne rend une rangée vide', () => {
       expect(screen.getByTestId('focal-attachment-block')).toBeInTheDocument();
     });
 
+    // Q-140 (2026-08-17) — pas un jeton behaviour-matrix:F15 : la matrice
+    // ouvre F15 sur « les effets (bitfield) s'appliquent au bloc contenu »
+    // (absent côté web — re-preuve : `grep -rn 'effects\\b' apps/web/components/conversations/focal`
+    // → 0 hit hors props inutilisées) et « hashtags gardent leurs tokens »
+    // (aucun rendu hashtag distinct de mention, non vérifié). Seule la
+    // clause « notices d'appel deviennent des rangées … plates » est
+    // réelle ici (CallSystemMessage réutilisé). F15 reste classé
+    // non-couvert ci-dessous, raison mise à jour pour cette exception.
     it(`[${density}] un résumé d'appel monte CallSystemMessage (il rendait vide)`, () => {
       renderRow(
         makeMessage({
@@ -217,6 +232,14 @@ describe('parité — aucun TYPE de message ne rend une rangée vide', () => {
 
 describe('parité — le chrome de données de la vue Bulles est à l’écran', () => {
   BOTH_DENSITIES.forEach((density) => {
+    // behaviour-matrix:F05 — « les réactions live deviennent une pilule
+    // plate en méta … » : la DONNÉE est désormais réelle (`MessageReactions`
+    // réutilisé, jamais une copie) — Q-140, re-preuve 2026-08-17. Écart
+    // VÉRIFIÉ et assumé : le composant réutilisé garde son habillage
+    // « bulle » d'origine (fond blanc/gris, ombre, anneau au survol) —
+    // il n'a pas été restylé en pilule plate à jetons `--lentille-thread-*`
+    // (`backgroundSecondary`/`inputBorder`) comme le décrit la matrice ;
+    // seule la PRÉSENCE des réactions est prouvée ici, pas leur habillage.
     it(`[${density}] les réactions posées sont visibles`, () => {
       renderRow(
         makeMessage({ reactionSummary: { '👍': 2 }, reactionCount: 2 }),
@@ -225,17 +248,35 @@ describe('parité — le chrome de données de la vue Bulles est à l’écran',
       expect(screen.getByTestId('focal-reactions')).toBeInTheDocument();
     });
 
+    // behaviour-matrix:F04 — « les accusés ✓/✓✓/lu se déplacent dans
+    // l'identité des messages « Toi » … » : réel et testé — `DeliveryIndicator`
+    // (RÉUTILISÉ, même règle de réciprocité `showReadReceipts`) est monté
+    // DANS `focal-identity-header`, jamais en pied de rangée — Q-140,
+    // re-preuve 2026-08-17.
     it(`[${density}] un message de MOI porte l’indicateur de livraison/lecture DANS l’identité`, () => {
       renderRow(makeMessage({ senderId: 'me' }), density);
       const identity = screen.getByTestId('focal-identity-header');
       expect(within(identity).getByTestId('focal-delivery')).toBeInTheDocument();
     });
 
+    // Q-140 (2026-08-17) — pas un jeton behaviour-matrix:F11 : la matrice
+    // exige les badges (éphémère/épinglé/transféré) « au-dessus de
+    // l'identité » ; ce badge « transféré » vit dans `FocalMetaRow`, SOUS
+    // le contenu — position inverse de la matrice — et les 3 autres badges
+    // (éphémère/épinglé/flou-vue-unique) restent absents. F11 reste
+    // classé non-couvert ci-dessous, raison mise à jour pour cette seule
+    // exception réelle mais mal placée.
     it(`[${density}] un message TRANSFÉRÉ le dit`, () => {
       renderRow(makeMessage({ forwardedFromId: 'src-1' }), density);
       expect(screen.getByTestId('focal-forwarded')).toBeInTheDocument();
     });
 
+    // Q-140 (2026-08-17) — pas un jeton behaviour-matrix:F10 : la matrice
+    // liste TROIS comportements sous F10 (menu long-press, « modifié »,
+    // rangée fantôme supprimée) — seul « modifié » est réel ici ; ni le
+    // menu contextuel ni la rangée fantôme ne sont construits côté web
+    // Focal (re-preuve : `grep -n isDeleted apps/web/components/conversations/focal` → 0 hit).
+    // F10 reste classé non-couvert ci-dessous, raison mise à jour.
     it(`[${density}] un message ÉDITÉ le dit`, () => {
       renderRow(
         makeMessage({ isEdited: true, editedAt: new Date('2026-08-17T10:05:00Z') }),

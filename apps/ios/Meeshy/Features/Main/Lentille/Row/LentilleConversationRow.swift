@@ -152,11 +152,59 @@ struct LentilleConversationRow: View {
     /// construire une instance jetable pour la LIRE n'édite pas ce fichier
     /// interdit, ça le CONSOMME, exactement comme le reste du chantier
     /// consomme `Lentille/Core` gelé.
-    private var accessibilityLabel: String {
-        ThemedConversationRow(
+    ///
+    /// Q-140/L16-iOS — trou découvert par la recette Q-140 : ce libellé
+    /// hérité ignore TOUJOURS le pont ✦ (`ThemedConversationRow` n'a même
+    /// pas connaissance du concept), alors que la ligne 2 visible du rang
+    /// plat le rend à sa place dès `showsBridge` (`line2`, cas `.bridge`
+    /// ci-dessus). Inverse symétrique du défaut web corrigé par V4ter/B1
+    /// (`LentilleRow.tsx`, commit e55961fa) : là-bas l'aria retombait
+    /// toujours sur `lastMessage.content` sous `hasBridge` ; ici elle
+    /// retombe toujours sur le libellé du rang historique, qui ne sait
+    /// composer QUE `typing > brouillon > préview` (jamais `pont`). Même
+    /// remède : dériver l'aria du pont de la MÊME source que son rendu
+    /// visuel (`LentilleBridgeLine.resolveAriaText`, extraite par ce lot de
+    /// `LentilleBridgeLine.resolvedText` — une seule résolution, deux
+    /// consommateurs), jamais une seconde loi de langue. Le segment remplacé
+    /// est le SEUL que la ligne 2 remplace visuellement — la préview
+    /// résolue (`resolvedPreviewText`, MÊME propriété que `previewLine`
+    /// utilise) — épinglé dans le libellé hérité par
+    /// `accessibility.last_message_preview`/`…_ephemeral` (`ThemedConversationRow.swift`,
+    /// `%@` positionnel portant `resolvedPreview` verbatim). Pont absent ⇒
+    /// `base` retourné TEL QUEL, caractère pour caractère (témoins hérités
+    /// de `ThemedConversationRowAccessibilityLabelTests` inchangés).
+    ///
+    /// Internal (pas `private`) : même convention que
+    /// `ThemedConversationRow.conversationAccessibilityLabel` (voir son
+    /// commentaire ci-dessus) — lue directement par
+    /// `LentilleFlatRowBridgeAriaTests` via `@testable import`.
+    var accessibilityLabel: String {
+        let base = ThemedConversationRow(
             conversation: conversation,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
+
+        guard showsBridge, let bridge = conversation.bridge else { return base }
+        let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: preferredContentLanguages)
+        guard !bridgeText.isEmpty else { return base }
+
+        let preview = resolvedPreviewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preview.isEmpty, base.contains(preview) {
+            // Cas nominal : le segment préview épinglé dans `base` existe et
+            // se reconnaît verbatim (`%@` positionnel des clés
+            // `accessibility.last_message_preview`/`…_ephemeral`) — remplacé
+            // par le texte du pont, exactement comme la ligne 2 le remplace
+            // à l'écran.
+            return base.replacingOccurrences(of: preview, with: bridgeText)
+        }
+        // Repli sûr : rien à remplacer proprement (préview vide, message
+        // position-seule/expiré/masqué/vue-unique — states dont le libellé
+        // hérité ne compose aucun `%@` de contenu à retrouver). Le pont
+        // n'est JAMAIS un donnée fabriquée qu'on tairait faute de pouvoir
+        // remplacer : il complète le libellé en fin de chaîne plutôt que de
+        // rester muet (contrat « le lecteur d'écran doit entendre ce que
+        // l'œil voit »).
+        return base + ", " + bridgeText
     }
 
     // MARK: - Avatar — 44 (`.conversationHeaderCollapsed`) + anneau accent

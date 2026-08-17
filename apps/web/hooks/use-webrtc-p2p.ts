@@ -181,6 +181,42 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     }
   }, []);
 
+  /**
+   * Replay/staleness guard for a renegotiation signal on an
+   * ALREADY-ESTABLISHED connection (security audit 2026-08-17). Unlike the
+   * initial offer/answer, `handleRenegotiationOffer`/`setRemoteAnswer` apply
+   * straight to the live `RTCPeerConnection` with no epoch check of their
+   * own — without this guard, a captured older signal (replayed by a
+   * misbehaving client, or delivered out of order by the relay) is applied
+   * as if it were current, forcing a spurious renegotiation with stale
+   * codec/direction state against an established call.
+   *
+   * Compares against the per-peer high-water mark BEFORE this signal would
+   * raise it (`trackIncomingNegotiationId` only ever raises, never rejects).
+   * Gated on `priorEpoch > 0` so a signal is only ever judged stale once
+   * we've tracked at least one real epoch for this peer — an older/legacy
+   * sender that never stamps `negotiationId` (`undefined`) is treated as
+   * fresh, unchanged from the pre-existing default behavior.
+   *
+   * Offers and answers are NOT symmetric here. A renegotiation OFFER always
+   * represents a NEW epoch bumped by its sender (`bumpOutgoingNegotiationId`)
+   * — anything at or below what we've already tracked is a duplicate/replay,
+   * so `<=` is stale. An ANSWER instead ECHOES the epoch of the offer it's
+   * responding to (`onLocalDescription` above sends `currentNegotiationId`,
+   * never a bump) — exactly matching our own last-sent offer epoch is the
+   * expected, fresh case; only a STRICTLY older epoch (superseded by an
+   * offer we've since sent) is stale.
+   */
+  const isStaleNegotiation = useCallback(
+    (peerId: string, negotiationId: number | undefined, signalType: 'offer' | 'answer'): boolean => {
+      if (negotiationId === undefined) return false;
+      const priorEpoch = negotiationIdsRef.current.get(peerId) ?? 0;
+      if (priorEpoch === 0) return false;
+      return signalType === 'offer' ? negotiationId <= priorEpoch : negotiationId < priorEpoch;
+    },
+    []
+  );
+
   /** Emits `call:request-ice-servers`; the response is applied by the
    * `call:ice-servers-refreshed` listener registered below. */
   const requestFreshTurnCredentials = useCallback(() => {
@@ -1047,6 +1083,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           // (A/V switch or ICE restart) — apply it in place (glare-safe)
           // instead of tearing down and rebuilding the peer connection.
           if (existingService && isEstablished) {
+            if (isStaleNegotiation(signal.from, signal.negotiationId, 'offer')) {
+              logger.warn('[useWebRTCP2P]', 'Dropped stale/replayed renegotiation offer', {
+                from: signal.from,
+                negotiationId: signal.negotiationId,
+                callId,
+              });
+              break;
+            }
             // Track BEFORE handing off — the resulting answer (emitted via
             // the service's onLocalDescription callback) echoes whatever
             // currentNegotiationId(peer) holds at that point.
@@ -1077,6 +1121,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         case 'answer':
           // Answer to one of our renegotiation offers vs. the initial answer.
           if (existingService && isEstablished) {
+            if (isStaleNegotiation(signal.from, signal.negotiationId, 'answer')) {
+              logger.warn('[useWebRTCP2P]', 'Dropped stale/replayed renegotiation answer', {
+                from: signal.from,
+                negotiationId: signal.negotiationId,
+                callId,
+              });
+              break;
+            }
             trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation answer', { error, from: signal.from });
@@ -1109,7 +1161,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     return () => {
       socket.off(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
     };
-  }, [callId, handleOffer, handleAnswer, handleIceCandidate, trackIncomingNegotiationId]);
+  }, [callId, handleOffer, handleAnswer, handleIceCandidate, trackIncomingNegotiationId, isStaleNegotiation]);
 
   /**
    * TURN credential refresh (see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc

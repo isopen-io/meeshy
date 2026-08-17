@@ -4,8 +4,14 @@
  * behaviour-matrix:F03 — dot de présence sur la pastille 22 de l'identité,
  * "offline = pas de dot" inchangé (RÉUTILISE `ParticipantPresenceIndicator`
  * verbatim, MÊME composant que la Lentille liste — WL-102).
+ *
+ * MISE À JOUR — DIRECTIVE PRODUIT DU 2026-08-17 (« le profil s'ouvre en
+ * modale ») : le describe « profil en modale » ci-dessous couvre
+ * `onOpenProfile`, ajouté par ce même lot — le lien `/u/{username}` reste
+ * réel (témoins existants inchangés), mais son clic gauche simple est
+ * désormais intercepté quand un appelant (`FocalThread`) fournit ce rappel.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { FocalIdentityHeader } from '../FocalIdentityHeader';
 import type { Participant } from '@meeshy/shared/types/participant';
 
@@ -76,5 +82,67 @@ describe('FocalIdentityHeader — présence (behaviour-matrix:F03)', () => {
     mockStoredUser = { id: 'u1', isOnline: true, lastActiveAt: new Date() };
     render(<FocalIdentityHeader sender={sender} isMe time="10:00" youLabel="Toi" />);
     expect(screen.queryByTestId('focal-identity-presence-dot')).not.toBeInTheDocument();
+  });
+});
+
+const senderWithUsername = {
+  id: 'u1',
+  conversationId: 'c1',
+  type: 'user',
+  displayName: 'Alice',
+  user: { username: 'alice' },
+} as unknown as Participant;
+
+describe('FocalIdentityHeader — le profil s’ouvre EN MODALE (directive produit 2026-08-17)', () => {
+  beforeEach(() => {
+    mockStoredUser = null;
+  });
+
+  it('clic gauche simple avec `onOpenProfile` fourni : la navigation est empêchée, le rappel reçoit le username', () => {
+    const onOpenProfile = jest.fn();
+    render(
+      <FocalIdentityHeader
+        sender={senderWithUsername}
+        isMe={false}
+        time="10:00"
+        youLabel="Toi"
+        onOpenProfile={onOpenProfile}
+      />
+    );
+
+    const link = screen.getByTestId('focal-identity-profile-link');
+    expect(link).toHaveAttribute('href', '/u/alice');
+
+    const notPrevented = fireEvent.click(link);
+    expect(notPrevented).toBe(false);
+    expect(onOpenProfile).toHaveBeenCalledWith('alice');
+  });
+
+  it('sans `onOpenProfile` : le lien navigue toujours directement (repli, comportement inchangé)', () => {
+    render(
+      <FocalIdentityHeader sender={senderWithUsername} isMe={false} time="10:00" youLabel="Toi" />
+    );
+
+    const link = screen.getByTestId('focal-identity-profile-link');
+    const notPrevented = fireEvent.click(link);
+    expect(notPrevented).toBe(true);
+  });
+
+  it('clic MODIFIÉ (⌘/Ctrl) : jamais intercepté — nouvel onglet natif préservé', () => {
+    const onOpenProfile = jest.fn();
+    render(
+      <FocalIdentityHeader
+        sender={senderWithUsername}
+        isMe={false}
+        time="10:00"
+        youLabel="Toi"
+        onOpenProfile={onOpenProfile}
+      />
+    );
+
+    const link = screen.getByTestId('focal-identity-profile-link');
+    const notPrevented = fireEvent.click(link, { metaKey: true });
+    expect(notPrevented).toBe(true);
+    expect(onOpenProfile).not.toHaveBeenCalled();
   });
 });

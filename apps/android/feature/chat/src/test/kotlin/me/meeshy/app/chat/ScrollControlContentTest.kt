@@ -127,4 +127,62 @@ class ScrollControlContentTest {
 
         assertThat(content).isInstanceOf(ScrollControlContent.Unread::class.java)
     }
+
+    // --- Offline indicator (port of iOS ConversationScrollControlsView's `isOffline` branch —
+    // priority: typing/unread > offline > plain chevron) ---
+
+    @Test
+    fun scrolled_away_offline_with_nothing_unread_and_nobody_typing_shows_the_offline_state() {
+        val content = ScrollControlContent.of(
+            affordance = ScrollAffordanceState(isAtBottom = false, unreadCount = 0),
+            typing = emptyList(),
+            isOffline = true,
+        )
+
+        assertThat(content).isEqualTo(ScrollControlContent.Offline)
+    }
+
+    @Test
+    fun unread_takes_priority_over_offline() {
+        val content = ScrollControlContent.of(
+            affordance = unreadState(count = 2),
+            typing = emptyList(),
+            isOffline = true,
+        )
+
+        assertThat(content).isInstanceOf(ScrollControlContent.Unread::class.java)
+    }
+
+    @Test
+    fun typing_takes_priority_over_offline() {
+        val content = ScrollControlContent.of(
+            affordance = ScrollAffordanceState(isAtBottom = false),
+            typing = listOf(typist("u1", "Alice")),
+            isOffline = true,
+        )
+
+        assertThat(content).isEqualTo(ScrollControlContent.Typing(TypingLabel.One("Alice")))
+    }
+
+    @Test
+    fun online_with_nothing_unread_and_nobody_typing_shows_the_plain_chevron_not_offline() {
+        val content = ScrollControlContent.of(
+            affordance = ScrollAffordanceState(isAtBottom = false, unreadCount = 0),
+            typing = emptyList(),
+            isOffline = false,
+        )
+
+        assertThat(content).isEqualTo(ScrollControlContent.Plain)
+    }
+
+    @Test
+    fun at_the_bottom_the_control_is_hidden_even_while_offline() {
+        val content = ScrollControlContent.of(
+            affordance = ScrollAffordanceState(isAtBottom = true),
+            typing = emptyList(),
+            isOffline = true,
+        )
+
+        assertThat(content).isEqualTo(ScrollControlContent.Hidden)
+    }
 }

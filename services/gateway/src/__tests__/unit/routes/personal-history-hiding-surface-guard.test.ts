@@ -161,17 +161,23 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
    * non lus : exactement l'ensemble que le badge compte, donc exactement le
-   * même masquage. `applyPersonalHistoryHiding` couvre `buildBridgeData`
-   * (N conversations × 1 lecteur, `where` bâti à la ligne ~390) — sa SEULE
-   * application, d'où `applications: 1`. `reads: 2` depuis REV-5/B2
-   * (fan-out socket) : `buildBridgeDataForViewers` (1 conversation ×
-   * N lecteurs) ajoute une DEUXIÈME `findMany`, déclarée séparément ci-dessous
-   * dans `IN_MEMORY_HIDING_SURFACES` — une fenêtre partagée par des lecteurs
-   * dont le masquage diffère ne peut pas se filtrer dans UN `where` commun ;
-   * elle se resserre PAR LECTEUR après coup (`hiddenMessageIds?.has(row.id)`,
-   * `exclusiveFloorMsFor`), invisible à ce balayage `applyPersonalHistoryHiding(`
-   * — même forme que `MessageReadStatusService.ts` ci-dessous.
+   * même masquage. Sans l'application, un auteur dont le lecteur a effacé
+   * l'historique reviendrait le nommer dans la phrase du rang : la fuite que le
+   * compteur, lui, ne fait plus depuis le cycle 109.
+   *
+   * `reads: 2` — une fenêtre agrégée par CHEMIN, jamais une lecture par
+   * conversation ni par lecteur, ce qui reste l'invariant que ce compte garde :
+   *   1. le chemin par lecteur (`applyPersonalHistoryHiding`, compté ci-dessous)
+   *   2. le chemin BATCHÉ des viewers (REV-5/B2), qui lit UNE fenêtre commune
+   *      pour N lecteurs puis la resserre par lecteur EN MÉMOIRE
+   *
+   * Le second n'appelle donc pas `applyPersonalHistoryHiding` — il n'aurait rien
+   * à y faire, le masquage étant personnel et la requête commune — d'où
+   * `applications: 1` et une déclaration dans `IN_MEMORY_HIDING_SURFACES`, seule
+   * forme que le balayage puisse prouver sur ce chemin.
    */
+  // Faute de cette déclaration, ce fichier passerait pour un lecteur à moitié
+  // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
@@ -204,10 +210,28 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
-  // REV-5/B2 — `buildBridgeDataForViewers`'s shared per-conversation window
-  // (see SERVICE_LAYER_SURFACES entry above): masking resolved per-viewer,
-  // in memory, on the SAME two primitives as the surface above it reuses.
-  'ConversationBridgeService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor(', 'hiddenMessageIds?.has('],
+
+  /**
+   * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME
+   * forme : une fenêtre commune à tous les destinataires, donc un masquage qui
+   * ne peut pas entrer dans la clause SQL. Il est appliqué en mémoire, lecteur
+   * par lecteur. Ses deux coupes personnelles sont exigées SÉPARÉMENT parce
+   * qu'elles se perdent séparément — `exclusiveFloorMsFor` fond la coupure
+   * d'historique dans le plancher de lecture, `hiddenMessageIds?.has` écarte les
+   * messages effacés un par un. Retirer l'un de ces trois marqueurs, c'est faire
+   * fuiter dans le pont ✦ d'un lecteur des messages qu'il a effacés pour lui.
+   *
+   * `hiddenMessageIds?.has(` et non `hiddenMessageIds` : le nom seul est
+   * satisfait par la CONSTRUCTION de l'ensemble, vingt lignes plus haut, et
+   * survit donc à la suppression de son USAGE — vérifié, le marqueur large reste
+   * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
+   * ce qu'il garde.
+   */
+  'ConversationBridgeService.ts': [
+    'loadPersonalHistoryHidingByUser(',
+    'exclusiveFloorMsFor(',
+    'hiddenMessageIds?.has(',
+  ],
 };
 
 const walk = (dir: string): string[] =>

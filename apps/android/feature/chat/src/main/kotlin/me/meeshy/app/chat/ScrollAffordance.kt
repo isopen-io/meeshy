@@ -102,10 +102,12 @@ object ScrollAffordance {
 /**
  * What the scroll-to-bottom control renders, decided in pure code so the Composable
  * only maps a variant to its pill. Mirrors iOS `ConversationScrollControlsView`, whose
- * four states are: hidden (at the bottom), a typing preview, an unread count + preview,
- * and a plain jump chevron. The **typing indicator takes priority over the unread
- * count** — when a peer is composing, the control shows who is typing rather than the
- * badge (iOS parity).
+ * states are: hidden (at the bottom), a typing preview, an unread count + preview, an
+ * offline indicator, and a plain jump chevron. The **typing indicator takes priority
+ * over the unread count** — when a peer is composing, the control shows who is typing
+ * rather than the badge (iOS parity) — and **typing/unread both take priority over
+ * offline**, mirroring iOS's `isSearchingQuotedMessage > hasUnreadContent > isOffline >
+ * plain chevron` (Android has no quoted-message search state, so the top tier is unused).
  */
 sealed interface ScrollControlContent {
     /** The reader is at the bottom; the control is hidden. */
@@ -117,6 +119,9 @@ sealed interface ScrollControlContent {
     /** Incoming messages arrived while the reader was scrolled away. */
     data class Unread(val count: Int, val preview: UnreadPreview?) : ScrollControlContent
 
+    /** Scrolled away, offline, and nothing unread/nobody typing to show instead. */
+    data object Offline : ScrollControlContent
+
     /** Scrolled away with nothing unread and nobody typing — a bare jump control. */
     data object Plain : ScrollControlContent
 
@@ -124,14 +129,15 @@ sealed interface ScrollControlContent {
         fun of(
             affordance: ScrollAffordanceState,
             typing: List<TypingParticipant>,
+            isOffline: Boolean = false,
         ): ScrollControlContent {
             if (!affordance.isVisible) return Hidden
             return when (val label = TypingLabel.of(typing)) {
                 TypingLabel.None ->
-                    if (affordance.hasUnread) {
-                        Unread(affordance.unreadCount, affordance.preview)
-                    } else {
-                        Plain
+                    when {
+                        affordance.hasUnread -> Unread(affordance.unreadCount, affordance.preview)
+                        isOffline -> Offline
+                        else -> Plain
                     }
                 else -> Typing(label)
             }
