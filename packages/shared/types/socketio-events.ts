@@ -178,7 +178,12 @@ export const SERVER_EVENTS = {
   CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
-  REACTION_SYNC: 'reaction:sync',
+  // Pas de `REACTION_SYNC` : l'instantané de réactions voyage dans l'ACK de
+  // `CLIENT_EVENTS.REACTION_REQUEST_SYNC`, jamais en diffusion. Le déclarer ici
+  // affirmait un canal serveur→client sans émetteur, et un client s'y était
+  // abonné en versant l'instantané dans le seau incrémental de
+  // `reaction:added`. Le nom `reaction:sync` ne subsiste que comme étiquette de
+  // journal et préfixe de quota côté gateway.
   ATTACHMENT_REACTION_ADDED: 'attachment:reaction-added',
   ATTACHMENT_REACTION_REMOVED: 'attachment:reaction-removed',
   MENTION_CREATED: 'mention:created',
@@ -1698,7 +1703,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
-  [SERVER_EVENTS.REACTION_SYNC]: (data: ReactionSyncEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_ADDED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.CALL_INITIATED]: (data: CallInitiatedEvent) => void;

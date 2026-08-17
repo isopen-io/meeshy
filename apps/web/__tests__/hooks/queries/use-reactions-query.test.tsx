@@ -28,6 +28,14 @@ const mockSocket = {
 const mockOnReactionAdded = jest.fn();
 const mockOnReactionRemoved = jest.fn();
 
+// Canal d'état de connexion pilotable : les tests de réconciliation ont besoin
+// de faire varier la joignabilité du socket ET de notifier, comme le fait
+// `ConnectionService.emitStatusChange`.
+const mockStatusChangeHandlers = new Set<() => void>();
+const mockEmitStatusChange = () => {
+  mockStatusChangeHandlers.forEach(handler => handler());
+};
+
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockSocketConnected ? mockSocket : null,
@@ -39,7 +47,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       mockOnReactionRemoved(handler);
       return jest.fn(); // Return unsubscribe function
     },
-    onStatusChange: jest.fn(() => () => {}),
+    onStatusChange: (handler: () => void) => {
+      mockStatusChangeHandlers.add(handler);
+      return () => mockStatusChangeHandlers.delete(handler);
+    },
   },
 }));
 
@@ -120,6 +131,7 @@ function createWrapperWithClient() {
 describe('useReactionsQuery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStatusChangeHandlers.clear();
     mockSocketConnected = true;
     mockSocket.connected = true;
   });
@@ -240,8 +252,11 @@ describe('useReactionsQuery', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      // Should return empty state when socket not connected
+      // Rien à rendre — mais l'absence de canal n'est PAS mémorisée comme une
+      // absence de réaction : la requête est en échec, pas en succès vide.
+      // Cf. « Reconciliation on connection restore » plus bas.
       expect(result.current.reactions).toEqual([]);
+      expect(result.current.error).not.toBeNull();
     });
   });
 
@@ -2040,6 +2055,134 @@ describe('useReactionsQuery', () => {
       }>(msgCacheKey);
       const msg = msgData?.pages[0].messages.find(m => m.id === '507f1f77bcf86cd799439011');
       expect(msg?.reactionSummary?.['❤️']).toBe(1);
+    });
+  });
+
+  // ─── Réconciliation au retour de la connexion ──────────────────────────────
+  //
+  // `ReactionHandler` (gateway) répète cinq fois la même promesse de
+  // rattrapage — « peers reconcile on the next reaction:sync » — pour ses
+  // chemins best-effort. Encore faut-il qu'un sync suivant existe : la requête
+  // tourne en `staleTime: Infinity`, donc `reaction:request-sync` ne partait
+  // qu'une fois, au montage, et jamais plus.
+  describe('Reconciliation on connection restore', () => {
+    const messageId = '507f1f77bcf86cd799439011';
+
+    const respondWith = (payload: { reactions: ReactionAggregation[]; userReactions: string[] }) => {
+      mockSocketEmit.mockImplementation((event, _messageId, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
+          callback({ success: true, data: payload });
+        }
+      });
+    };
+
+    const dropAndRestoreConnection = () => {
+      mockSocketConnected = false;
+      mockSocket.connected = false;
+      act(() => { mockEmitStatusChange(); });
+
+      mockSocketConnected = true;
+      mockSocket.connected = true;
+      act(() => { mockEmitStatusChange(); });
+    };
+
+    it('asks again once the socket becomes reachable after a cold mount', async () => {
+      // Le montage du fil précède couramment la poignée de main du socket.
+      mockSocketConnected = false;
+      mockSocket.connected = false;
+      respondWith(mockReactionState);
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId, currentUserId: 'user-1' }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.reactions).toEqual([]);
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+      // Rien n'a pu être demandé : la requête est en ÉCHEC, elle n'a pas
+      // mémorisé un « aucune réaction » comme une réponse du serveur.
+      expect(result.current.error).not.toBeNull();
+
+      mockSocketConnected = true;
+      mockSocket.connected = true;
+      act(() => { mockEmitStatusChange(); });
+
+      await waitFor(() => expect(result.current.reactions).toEqual(mockReactions));
+      expect(result.current.userReactions).toEqual(['❤️']);
+    });
+
+    it('re-requests the snapshot after a drop, adopting what changed while away', async () => {
+      respondWith(mockReactionState);
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId, currentUserId: 'user-1' }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => expect(result.current.reactions).toEqual(mockReactions));
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+
+      // Une réaction posée pendant la coupure. `reaction:added` n'est pas
+      // rejoué au retour — seul l'instantané la porte.
+      const afterOutage: ReactionAggregation[] = [
+        { emoji: '👍', count: 6, participantIds: ['user-1', 'user-2', 'user-9'], hasCurrentUser: false },
+        { emoji: '❤️', count: 3, participantIds: ['user-3'], hasCurrentUser: true },
+        { emoji: '🎉', count: 1, participantIds: ['user-7'], hasCurrentUser: false },
+      ];
+      respondWith({ reactions: afterOutage, userReactions: ['❤️'] });
+
+      dropAndRestoreConnection();
+
+      await waitFor(() => expect(result.current.reactions).toEqual(afterOutage));
+      expect(mockSocketEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('stays silent when the status changes without crossing into reachable', async () => {
+      respondWith(mockReactionState);
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId, currentUserId: 'user-1' }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => expect(result.current.reactions).toEqual(mockReactions));
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+
+      // Le socket ne bouge pas : `emitStatusChange` part à chaque `connect()`,
+      // chaque changement de visibilité d'onglet, chaque tentative avortée.
+      act(() => { mockEmitStatusChange(); mockEmitStatusChange(); });
+
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-request for a not-yet-persisted (cid_) message id', async () => {
+      respondWith(mockReactionState);
+
+      renderHook(
+        () => useReactionsQuery({
+          messageId: 'cid_123e4567-e89b-42d3-a456-426614174000',
+          currentUserId: 'user-1',
+        }),
+        { wrapper: createWrapper() }
+      );
+
+      dropAndRestoreConnection();
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('does not re-request while the hook is disabled', async () => {
+      respondWith(mockReactionState);
+
+      renderHook(
+        () => useReactionsQuery({ messageId, currentUserId: 'user-1', enabled: false }),
+        { wrapper: createWrapper() }
+      );
+
+      dropAndRestoreConnection();
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
     });
   });
 });
