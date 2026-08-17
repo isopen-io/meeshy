@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef, useEffect, memo, useDeferredValue } from 'react';
+import { useState, useCallback, useMemo, memo, useDeferredValue } from 'react';
 import dynamic from 'next/dynamic';
-import { MessageSquare, Link2, Loader2 } from 'lucide-react';
+import { MessageSquare, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { CommunityFilter } from './CommunityCarousel';
 import { CreateLinkButton } from './create-link-button';
 import { ConversationSearchBar } from './conversation-search';
-import { ConversationGroup, EmptyConversations } from './conversation-groups';
+import { ConversationGroup, ConversationListLoadMore, EmptyConversations } from './conversation-groups';
 import { ConversationItem } from './conversation-item';
 import {
   useConversationPreferences,
   useConversationFiltering,
-  useConversationSorting
+  useConversationSorting,
+  useLoadMoreSentinel
 } from './hooks';
 import { useFeatureFlags } from '@/hooks/use-feature-flags';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
@@ -89,8 +90,11 @@ export const ConversationList = memo(function ConversationList({
   const { isFeatureEnabled } = useFeatureFlags();
   const lentilleListActive = isFeatureEnabled('lentille_list');
 
-  // Refs
-  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  // Sentinelle de pagination — UN SEUL observateur, quel que soit le chemin de
+  // rendu (REV-4/B2). Le ref-setter descend soit dans le pied historique, soit
+  // dans le point de montage Lentille : la pagination n'appartient pas à une
+  // peau, elle appartient à la liste.
+  const loadMoreSentinelRef = useLoadMoreSentinel({ hasMore, isLoadingMore, onLoadMore });
 
   // Custom hooks
   const {
@@ -127,32 +131,6 @@ export const ConversationList = memo(function ConversationList({
   const handleSelectConversation = useCallback((conversation: Conversation) => {
     onSelectConversation(conversation);
   }, [onSelectConversation]);
-
-  // Détection du scroll infini avec Intersection Observer
-  useEffect(() => {
-    if (!onLoadMore || !hasMore || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting) {
-          onLoadMore();
-        }
-      },
-      { threshold: 0.1, rootMargin: '50px' }
-    );
-
-    const trigger = loadMoreTriggerRef.current;
-    if (trigger) {
-      observer.observe(trigger);
-    }
-
-    return () => {
-      if (trigger) {
-        observer.unobserve(trigger);
-      }
-    };
-  }, [onLoadMore, hasMore, isLoadingMore]);
 
   // Rendu du contenu principal
   const renderContent = useMemo(() => {
@@ -227,35 +205,13 @@ export const ConversationList = memo(function ConversationList({
           );
         })}
 
-        {/* Bouton "Charger plus" visible */}
-        {hasMore && onLoadMore && (
-          <div className="flex flex-col items-center gap-2 py-4 px-4">
-            <Button
-              onClick={onLoadMore}
-              disabled={isLoadingMore}
-              variant="outline"
-              className="w-full max-w-xs"
-            >
-              {isLoadingMore ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  {t('loadingMore')}
-                </>
-              ) : (
-                t('loadMore')
-              )}
-            </Button>
-          </div>
-        )}
-
-        {/* Trigger pour le chargement automatique infini (optionnel) */}
-        {hasMore && !isLoadingMore && (
-          <div
-            ref={loadMoreTriggerRef}
-            className="h-4 w-full"
-            aria-hidden="true"
-          />
-        )}
+        <ConversationListLoadMore
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={onLoadMore}
+          t={t}
+          sentinelRef={loadMoreSentinelRef}
+        />
       </div>
     );
   }, [
@@ -275,7 +231,9 @@ export const ConversationList = memo(function ConversationList({
     onShowDetails,
     isMobile,
     isLoadingMore,
-    hasMore
+    hasMore,
+    onLoadMore,
+    loadMoreSentinelRef
   ]);
 
   return (
@@ -337,10 +295,23 @@ export const ConversationList = memo(function ConversationList({
               conversations={filteredConversations}
               selectedConversationId={selectedConversation?.id ?? null}
               onSelectConversation={handleSelectConversation}
+              /* REV-4/B3 — « réglages » du ⋮ de rang : le même rappel que le
+                 rang historique reçoit, jamais un second chemin. */
+              onShowDetails={onShowDetails}
               preferencesMap={preferencesMap}
               categories={categories}
               isLoading={isLoading || isLoadingPreferences}
               t={t}
+              /* REV-4/B2 — ce que `renderContent` portait et que le Mount
+                 perdait : la branche vide (qui doit distinguer « recherche
+                 sans résultat » d'« aucune conversation ») et la pagination
+                 (bouton + cible de la sentinelle de l'observateur unique
+                 ci-dessus). */
+              searchQuery={searchQuery}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={onLoadMore}
+              loadMoreSentinelRef={loadMoreSentinelRef}
             />
           </FeatureErrorBoundary>
         ) : (

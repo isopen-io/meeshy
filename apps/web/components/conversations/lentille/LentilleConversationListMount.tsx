@@ -32,6 +32,8 @@ import { useLentilleBridges } from '@/hooks/lentille/use-lentille-bridges';
 import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useLentillePerspective } from '@/hooks/lentille/use-lentille-perspective';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
+import { ConversationListLoadMore } from '../conversation-groups/ConversationListLoadMore';
+import { EmptyConversations } from '../conversation-groups/EmptyConversations';
 import { LentilleRow, type LentilleRowTranslate } from './LentilleRow';
 import { LentilleSticker } from './LentilleSticker';
 import { SectionScrollPill } from './SectionScrollPill';
@@ -45,11 +47,30 @@ export interface LentilleConversationListMountProps {
   conversations: readonly Conversation[];
   selectedConversationId: string | null;
   onSelectConversation: (conversation: Conversation) => void;
+  /** REV-4/B3 — l'action « réglages » du menu de rang, remontée telle quelle depuis le mux. */
+  onShowDetails?: (conversation: Conversation) => void;
   preferencesMap: ReadonlyMap<string, UserConversationPreferences>;
   categories: readonly UserConversationCategory[];
   /** Chargement initial — le squelette n'apparaît QUE si aucune conversation n'est encore en cache. */
   isLoading: boolean;
   t: LentilleRowTranslate;
+  /**
+   * REV-4/B2 — la recherche courante, transmise telle quelle à la branche
+   * vide HISTORIQUE (`EmptyConversations`), qui distingue « aucun résultat
+   * pour cette recherche » d'« aucune conversation ». La peau ne réinvente
+   * pas cette distinction : elle monte le même composant.
+   */
+  searchQuery?: string;
+  /** REV-4/B2 — pagination : les mêmes drapeaux que le chemin historique. */
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  /**
+   * Ref-setter de l'UNIQUE observateur de pagination
+   * (`useLoadMoreSentinel`, chez `ConversationList`) — la peau porte la
+   * CIBLE, jamais un second observateur.
+   */
+  loadMoreSentinelRef?: (element: HTMLDivElement | null) => void;
 }
 
 const SKELETON_ROW_COUNT = 8;
@@ -87,10 +108,16 @@ export function LentilleConversationListMount({
   conversations,
   selectedConversationId,
   onSelectConversation,
+  onShowDetails,
   preferencesMap,
   categories,
   isLoading,
   t,
+  searchQuery = '',
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  loadMoreSentinelRef,
 }: LentilleConversationListMountProps) {
   const typingByConversation = useLentilleListTyping(currentUserId);
   const draftMessages = useConversationUIStore((state) => state.draftMessages);
@@ -173,6 +200,9 @@ export function LentilleConversationListMount({
   const activeSectionLabel = activeSection ? sectionLabel(activeSection, categories, t) : '';
 
   const showSkeleton = isLoading && conversations.length === 0;
+  // REV-4/B2 — même prédicat que `renderContent` (« zéro conversation après
+  // filtrage »), même composant, même distinction recherche/vide.
+  const showEmptyBranch = !showSkeleton && conversations.length === 0;
 
   return (
     <div ref={rootRef} data-testid="lentille-list-mount">
@@ -188,6 +218,12 @@ export function LentilleConversationListMount({
             <LentilleSkeletonRow key={index} />
           ))}
         </div>
+      ) : showEmptyBranch ? (
+        // behaviour-matrix:L17 — la branche vide HISTORIQUE, montée telle
+        // quelle : c'est le même résolveur de message (recherche vs vide), le
+        // même marquage, la même i18n. Le drapeau change la peau des rangs,
+        // jamais ce que la liste dit quand elle n'a rien à montrer.
+        <EmptyConversations searchQuery={searchQuery} t={t as (key: string) => string} />
       ) : (
         sections.map((section) => {
           const key = sectionKey(section);
@@ -213,11 +249,26 @@ export function LentilleConversationListMount({
                   t={t}
                   perspectiveRef={registerRow(conversation.id)}
                   election={election}
+                  onShowDetails={onShowDetails}
                 />
               ))}
             </div>
           );
         })
+      )}
+
+      {/* behaviour-matrix:L17 — le pied de pagination historique, monté par
+          la peau : même bouton, même indicateur, même CIBLE de sentinelle.
+          L'observateur reste unique et vit chez `ConversationList`
+          (`useLoadMoreSentinel`) — la peau n'en possède que la cible. */}
+      {!showSkeleton && !showEmptyBranch && (
+        <ConversationListLoadMore
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={onLoadMore}
+          t={t as (key: string) => string}
+          sentinelRef={loadMoreSentinelRef}
+        />
       )}
     </div>
   );

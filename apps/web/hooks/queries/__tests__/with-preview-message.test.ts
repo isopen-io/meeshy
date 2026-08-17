@@ -240,7 +240,10 @@ describe('withPreviewMessage — tous les écrivains du cache y passent', () => 
   );
 
   it('use-conversations-v2 route son écriture par le geste commun', () => {
-    expect(v2Source).toContain('withPreviewMessage({ conversation: conv, message })');
+    // `withArrivedMessage` EST ce geste, plus la garde monotone : les trois
+    // écrivains d'une ARRIVÉE (`message:new` ×2, `link:message:new`) y passent,
+    // et lui seul appelle `withPreviewMessage` pour eux.
+    expect(v2Source).toContain('withArrivedMessage({ conversation: conv, message })');
   });
 
   it("use-conversations-v2 n'écrit plus `lastMessage` à la main", () => {

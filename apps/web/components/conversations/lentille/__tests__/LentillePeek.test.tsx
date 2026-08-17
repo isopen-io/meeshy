@@ -38,6 +38,32 @@ jest.mock('@/stores/reading-mode-preference-store', () => ({
   }),
 }));
 
+/**
+ * REV-4/B3 — depuis que le ⋮ monte AUSSI les six actions historiques du rang
+ * (`ConversationActionMenuItems`, dans la MÊME instance de menu), ce fichier
+ * doit doubler le magasin de préférences de conversation et les primitives de
+ * menu qu'utilisent ces entrées. Aucune assertion de ce fichier n'est
+ * affaiblie : il continue de ne prouver que les gestes du peek — le
+ * comportement des actions est prouvé par `LentillePeek.actions.test.tsx`.
+ */
+jest.mock('@/stores/conversation-preferences-store', () => ({
+  useConversationPreference: () => undefined,
+  useConversationPreferencesActions: () => ({
+    togglePin: jest.fn().mockResolvedValue(undefined),
+    toggleMute: jest.fn().mockResolvedValue(undefined),
+    toggleArchive: jest.fn().mockResolvedValue(undefined),
+    setReaction: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), error: jest.fn() },
+}));
+
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 jest.mock('@/components/ui/dropdown-menu', () => {
   const ReactLib = require('react');
   const Ctx = ReactLib.createContext<{ open: boolean; onOpenChange: (open: boolean) => void }>({
@@ -71,6 +97,14 @@ jest.mock('@/components/ui/dropdown-menu', () => {
     },
     DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
+    DropdownMenuItem: ({ children, onClick }: any) => (
+      <button type="button" role="menuitem" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    DropdownMenuSub: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuSubTrigger: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
     DropdownMenuRadioGroup: ({ children, value, onValueChange }: any) =>
       ReactLib.Children.map(children, (child: any) =>
         ReactLib.cloneElement(child, { __groupValue: value, __onValueChange: onValueChange })

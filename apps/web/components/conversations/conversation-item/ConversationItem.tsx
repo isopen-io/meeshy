@@ -5,14 +5,12 @@ import { Pin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { copyToClipboard } from '@/lib/clipboard';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
-import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
-import { toast } from 'sonner';
 import { formatConversationDate } from '@/utils/date-format';
 import { ParticipantPresenceIndicator } from './ParticipantPresenceIndicator';
 import { ConversationItemActions } from './ConversationItemActions';
+import { useConversationItemActions } from './use-conversation-item-actions';
 import { usePrefetchOnHover } from '@/hooks/use-prefetch-on-hover';
 import { useI18n } from '@/hooks/use-i18n';
 import {
@@ -55,16 +53,32 @@ export const ConversationItem = memo(function ConversationItem({
   tags = [],
   isMobile = false
 }: ConversationItemProps) {
-  // Store global des préférences de conversation (réactif, abonné à CETTE conversation uniquement)
+  // Store global des préférences de conversation (réactif, abonné à CETTE
+  // conversation uniquement) + les six handlers d'action — extraits dans
+  // `useConversationItemActions` par REV-4/B3 pour que la peau Lentille monte
+  // EXACTEMENT les mêmes, jamais une copie. Précédence inchangée : le magasin
+  // d'abord, les props en repli.
   const { t: tCommon } = useI18n('common');
-  const storePrefs = useConversationPreference(conversation.id);
-  const { togglePin, toggleMute, toggleArchive, setReaction } = useConversationPreferencesActions();
-
-  // Utiliser les valeurs du store si disponibles, sinon les props
-  const localIsPinned = storePrefs?.isPinned ?? isPinned;
-  const localIsMuted = storePrefs?.isMuted ?? isMuted;
-  const localIsArchived = storePrefs?.isArchived ?? isArchived;
-  const localReaction = storePrefs?.reaction ?? reaction;
+  const {
+    isPinned: localIsPinned,
+    isMuted: localIsMuted,
+    isArchived: localIsArchived,
+    reaction: localReaction,
+    onTogglePin: handleTogglePin,
+    onToggleMute: handleToggleMute,
+    onToggleArchive: handleToggleArchive,
+    onSetReaction: handleSetReaction,
+    onShowDetails: handleShowDetails,
+    onShareConversation: handleShareConversation,
+  } = useConversationItemActions({
+    conversation,
+    t,
+    onShowDetails,
+    isPinned,
+    isMuted,
+    isArchived,
+    reaction,
+  });
 
   // Prisme Linguistique de la ligne de liste (cycle 61). `getUserLanguagePreferences`
   // est le seul point d'entrée autorisé côté web — il délègue à
@@ -79,85 +93,6 @@ export const ConversationItem = memo(function ConversationItem({
       currentUser.deviceLocale
     ]
   );
-
-  // Actions du menu - utilisent le store pour la réactivité
-  const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await togglePin(conversation.id, !localIsPinned);
-      toast.success(localIsPinned ? t('conversationHeader.unpinned') : t('conversationHeader.pinned'));
-    } catch (error) {
-      console.error('Error toggling pin:', error);
-      toast.error(t('conversationHeader.pinError'));
-    }
-  }, [conversation.id, localIsPinned, togglePin]);
-
-  const handleToggleMute = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await toggleMute(conversation.id, !localIsMuted);
-      toast.success(localIsMuted ? t('conversationHeader.unmuted') : t('conversationHeader.muted'));
-    } catch (error) {
-      console.error('Error toggling mute:', error);
-      toast.error(t('conversationHeader.muteError'));
-    }
-  }, [conversation.id, localIsMuted, toggleMute]);
-
-  const handleToggleArchive = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await toggleArchive(conversation.id, !localIsArchived);
-      toast.success(localIsArchived ? t('conversationHeader.unarchived') : t('conversationHeader.archived'));
-    } catch (error) {
-      console.error('Error toggling archive:', error);
-      toast.error(t('conversationHeader.archiveError'));
-    }
-  }, [conversation.id, localIsArchived, toggleArchive]);
-
-  const handleSetReaction = useCallback(async (e: React.MouseEvent, emoji: string) => {
-    e.stopPropagation();
-    try {
-      const newReaction = localReaction === emoji ? null : emoji;
-      await setReaction(conversation.id, newReaction);
-      toast.success(newReaction ? t('conversationDetails.reactionAdded').replace('{emoji}', emoji) : t('conversationDetails.reactionRemoved'));
-    } catch (error) {
-      console.error('Error setting reaction:', error);
-      toast.error(t('conversationDetails.reactionError'));
-    }
-  }, [conversation.id, localReaction, setReaction]);
-
-  const handleShowDetails = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onShowDetails?.(conversation);
-  }, [conversation, onShowDetails]);
-
-  const handleShareConversation = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const url = `${window.location.origin}/conversations/${conversation.id}`;
-    const shareText = t('conversationHeader.shareMessage');
-    const fullMessage = `${shareText}\n\n${url}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          text: fullMessage,
-        });
-      } else {
-        const { success } = await copyToClipboard(fullMessage);
-        if (success) {
-          toast.success(t('conversationHeader.linkCopied'));
-        } else {
-          toast.error(t('conversationHeader.linkCopyError'));
-        }
-      }
-    } catch (error: unknown) {
-      if (error.name === 'AbortError') {
-        return;
-      }
-      console.error('Error sharing:', error);
-      toast.error(t('conversationHeader.linkCopyError'));
-    }
-  }, [conversation.id, t]);
 
   // Helper pour obtenir l'autre participant dans une conversation directe
   const getOtherParticipantUser = useCallback(() => {

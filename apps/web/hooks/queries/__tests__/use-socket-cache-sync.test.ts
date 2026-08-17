@@ -1265,3 +1265,109 @@ describe('useSocketCacheSync — la carte du Prisme suit le message que la ligne
     expect(cachedConversations(queryClient)[0].lastMessage?.id).toBe('m-incoming');
   });
 });
+
+/**
+ * La ligne de liste ne recule pas — le chemin `message:new`.
+ *
+ * Le témoin de la règle vit dans `preview-monotonicity.test.ts` ; celui-ci
+ * prouve qu'elle est bien CÂBLÉE sur le handler, à l'endroit où le désordre
+ * arrive vraiment : deux messages rapides dans une conversation dont la ligne
+ * décrit déjà le plus récent.
+ */
+describe('useSocketCacheSync — la ligne de liste ne recule pas sur un `message:new` tardif', () => {
+  beforeEach(() => {
+    capturedMessageListener = null;
+    jest.clearAllMocks();
+  });
+
+  const NEWER_AT = new Date('2026-08-17T10:00:05.000Z');
+  const OLDER_AT = new Date('2026-08-17T10:00:00.000Z');
+
+  function seedRowDescribingNewest(queryClient: QueryClient): void {
+    seedConversations(queryClient, [
+      {
+        id: 'conv-1',
+        type: 'group',
+        lastMessageAt: NEWER_AT,
+        lastMessage: makeMessage({
+          id: 'm-newer',
+          conversationId: 'conv-1',
+          content: 'Le plus récent',
+          createdAt: NEWER_AT,
+        }),
+      } as unknown as Conversation,
+      { id: 'conv-2', type: 'group', lastMessageAt: NEWER_AT } as unknown as Conversation,
+    ]);
+  }
+
+  it('garde l’aperçu, le rang et la position quand le message arrivé est plus ancien', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedRowDescribingNewest(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessageListener!(
+        makeMessage({
+          id: 'm-older',
+          conversationId: 'conv-1',
+          content: 'L’ancien',
+          createdAt: OLDER_AT,
+        })
+      );
+    });
+
+    const [first] = cachedConversations(queryClient);
+    expect(first.lastMessage?.id).toBe('m-newer');
+    expect(first.lastMessageAt).toEqual(NEWER_AT);
+    expect(cachedConversations(queryClient).map((c) => c.id)).toEqual(['conv-1', 'conv-2']);
+  });
+
+  it('écrit toujours le message dans le fil, même quand la ligne ne bouge pas', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedRowDescribingNewest(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessageListener!(
+        makeMessage({ id: 'm-older', conversationId: 'conv-1', createdAt: OLDER_AT })
+      );
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
+    expect(cached.pages[0].messages.map((m: Message) => m.id)).toContain('m-older');
+  });
+
+  it('applique et remonte la conversation quand le message arrivé est le plus récent', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-2', type: 'group', lastMessageAt: NEWER_AT } as unknown as Conversation,
+      {
+        id: 'conv-1',
+        type: 'group',
+        lastMessageAt: OLDER_AT,
+        lastMessage: makeMessage({
+          id: 'm-older',
+          conversationId: 'conv-1',
+          content: 'L’ancien',
+          createdAt: OLDER_AT,
+        }),
+      } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessageListener!(
+        makeMessage({
+          id: 'm-newer',
+          conversationId: 'conv-1',
+          content: 'Le plus récent',
+          createdAt: NEWER_AT,
+        })
+      );
+    });
+
+    const cached = cachedConversations(queryClient);
+    expect(cached.map((c) => c.id)).toEqual(['conv-1', 'conv-2']);
+    expect(cached[0].lastMessage?.id).toBe('m-newer');
+  });
+});
