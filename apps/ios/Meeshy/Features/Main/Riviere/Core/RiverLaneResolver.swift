@@ -269,13 +269,17 @@ nonisolated public enum RiverLaneResolver {
 
     /// Miroir des deux formats de rejeu ISO 8601 croisés par les fixtures
     /// (`…T09:00:00.000Z` avec millisecondes ; sans, défensivement).
-    private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
+    // `nonisolated(unsafe)` : `ISO8601DateFormatter` n'est pas `Sendable` aux
+    // yeux du compilateur mais est documenté thread-safe (contrairement à
+    // `DateFormatter` d'avant iOS 7) — sans l'annotation, la stored static
+    // d'un type non isolé ne compile pas sous Swift 6.
+    private nonisolated(unsafe) static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    private static let iso8601WithoutFractionalSeconds: ISO8601DateFormatter = {
+    private nonisolated(unsafe) static let iso8601WithoutFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
