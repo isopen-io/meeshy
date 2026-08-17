@@ -3184,6 +3184,221 @@ describe('MeeshySocketIOManager', () => {
       ).resolves.toBeUndefined();
       expect(socket.emit).not.toHaveBeenCalled();
     });
+
+    /**
+     * ── Le pont ✦ à la reconnexion (cycle 62) ────────────────────────────
+     *
+     * `conversation:unread-updated` a DEUX émetteurs, et ils n'émettaient pas
+     * la même forme :
+     *   - le fan-out d'envoi (`emitUnreadCountsToRecipients`) attache `bridge`
+     *     à tout destinataire dont le compteur repasse au-dessus de zéro ;
+     *   - cet instantané de reconnexion émettait la forme COURTE, toujours.
+     *
+     * Or les deux clients traitent un `bridge` absent comme une AFFIRMATION du
+     * serveur, pas comme un silence — c'est écrit dans les deux, en toutes
+     * lettres : `ConversationSyncEngine.handleUnreadUpdated`
+     * (`updated[idx].bridge = event.bridge`, `nil` compris) et le relais web
+     * (`setConversationUnreadInCache(..., { bridge: data.bridge })`,
+     * REV-5/B1 : « un pont ABSENT du payload wire DOIT effacer un pont déjà
+     * en cache »).
+     *
+     * La forme courte n'était donc pas une omission : c'était un ORDRE
+     * D'EFFACEMENT. Chaque reconnexion — bascule Wi-Fi/cellulaire, retour de
+     * l'arrière-plan, déploiement du serveur — supprimait le pont de TOUTES
+     * les lignes du lecteur, y compris celles où il avait des non-lus et où
+     * le pont est précisément ce qu'il cherche : « où j'en étais ». Rien ne
+     * le remettait avant le prochain message reçu dans cette conversation
+     * (la liste web tourne en `staleTime: Infinity`, aucun refetch ne repasse
+     * derrière).
+     *
+     * Le défaut est NÉ de REV-5/B1 : tant que le web ignorait `bridge`, la
+     * forme courte ne coûtait rien. Le jour où le champ est devenu autoritatif
+     * côté client, l'émetteur muet est devenu destructeur — sans qu'aucun
+     * témoin ne change de couleur, puisque les deux émetteurs sont testés
+     * séparément et qu'aucun ne connaissait la règle de l'autre.
+     *
+     * La passe utilisée est celle par CONVERSATIONS (`buildBridgeData`) et non
+     * celle par lecteurs : ici il y a UN lecteur et N conversations — l'image
+     * exactement miroir du fan-out. Elle coûte un nombre CONSTANT de requêtes,
+     * la même que `GET /conversations` paie déjà.
+     */
+    describe('le pont ✦ voyage aussi sur la forme de reconnexion', () => {
+      const bridgeOf = (conversationId: string) =>
+        ({
+          conversationId,
+          messageCount: 3,
+          mode: 'catchup',
+          suggestedMode: 'catchup',
+          isComplete: true,
+          window: [],
+        }) as any;
+
+      function bridgePass(entries: Record<string, unknown>) {
+        const pass = jest
+          .fn()
+          .mockResolvedValue(
+            new Map(Object.entries(entries).map(([id, bridge]) => [id, { bridge }]))
+          );
+        (manager as any).bridgeService.buildBridgeData = pass;
+        return pass;
+      }
+
+      it('attaches the bridge built FOR THIS reader to a conversation with unread', async () => {
+        prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-bridged' }]);
+        unreadCounts({ 'conv-bridged': 5 });
+        const pass = bridgePass({ 'conv-bridged': bridgeOf('conv-bridged') });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-bridge', false);
+
+        expect(pass).toHaveBeenCalledWith(
+          expect.objectContaining({
+            viewerId: 'user-bridge',
+            candidates: [{ conversationId: 'conv-bridged', unreadCount: 5 }],
+          })
+        );
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-bridged',
+          unreadCount: 5,
+          bridge: bridgeOf('conv-bridged'),
+        });
+      });
+
+      // L'effacement reste LÉGITIME quand la passe n'a rien à annoncer : le
+      // client doit alors bien retirer son pont périmé. Ce que le défaut
+      // rendait impossible, c'est de DISTINGUER les deux cas.
+      it('emits the short form for a conversation the pass returns nothing for', async () => {
+        prisma.participant.findMany.mockResolvedValue([
+          { conversationId: 'conv-with' },
+          { conversationId: 'conv-without' },
+        ]);
+        unreadCounts({ 'conv-with': 2, 'conv-without': 7 });
+        bridgePass({ 'conv-with': bridgeOf('conv-with') });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-partial', false);
+
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-without',
+          unreadCount: 7,
+        });
+      });
+
+      // Contrat gelé §3.2 : un compteur à zéro n'a pas de pont. Il n'entre donc
+      // pas dans la passe — même premier étage que le fan-out et que
+      // `GET /conversations`.
+      it('never submits a zero count to the bridge pass', async () => {
+        prisma.participant.findMany.mockResolvedValue([
+          { conversationId: 'conv-zero' },
+          { conversationId: 'conv-unread' },
+        ]);
+        unreadCounts({ 'conv-zero': 0, 'conv-unread': 1 });
+        const pass = bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-zero', false);
+
+        expect(pass).toHaveBeenCalledWith(
+          expect.objectContaining({
+            candidates: [{ conversationId: 'conv-unread', unreadCount: 1 }],
+          })
+        );
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-zero',
+          unreadCount: 0,
+        });
+      });
+
+      // Aucun non-lu ⇒ AUCUN appel. Le cas le plus fréquent d'une reconnexion
+      // (tout est lu) ne doit rien coûter du tout.
+      it('does not call the bridge pass at all when nothing is unread', async () => {
+        prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-clean' }]);
+        unreadCounts({ 'conv-clean': 0 });
+        const pass = bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-clean', false);
+
+        expect(pass).not.toHaveBeenCalled();
+        expect(socket.emit).toHaveBeenCalledTimes(1);
+      });
+
+      // UN seul appel pour N conversations — la garde jumelle de celle du
+      // fan-out (`emitUnreadCountsToRecipients.cost.test.ts`), qui existe
+      // parce que la version par-destinataire y avait déjà reconstitué un N+1
+      // sur le chemin chaud (REV-5/B2).
+      it('asks for every bridge in ONE batched pass', async () => {
+        prisma.participant.findMany.mockResolvedValue([
+          { conversationId: 'c1' },
+          { conversationId: 'c2' },
+          { conversationId: 'c3' },
+        ]);
+        unreadCounts({ c1: 1, c2: 2, c3: 3 });
+        const pass = bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-batch-bridge', false);
+
+        expect(pass).toHaveBeenCalledTimes(1);
+        expect(pass.mock.calls[0][0].candidates).toHaveLength(3);
+      });
+
+      // Un invité de lien partagé est adressé par son `Participant.id` — même
+      // clé de lecteur que `getUnreadCountsForUser`, que la file hors-ligne et
+      // que l'instantané de présence.
+      it('builds bridges for an anonymous reader under its participant-id viewer key', async () => {
+        prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-link' }]);
+        unreadCounts({ 'conv-link': 4 });
+        const pass = bridgePass({ 'conv-link': bridgeOf('conv-link') });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-7', true);
+
+        expect(pass).toHaveBeenCalledWith(
+          expect.objectContaining({ viewerId: 'anon-part-7' })
+        );
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-link',
+          unreadCount: 4,
+          bridge: bridgeOf('conv-link'),
+        });
+      });
+
+      // Le pont est un confort, la pastille est le produit : une passe qui
+      // tombe ne doit priver personne de son compteur. Même posture d'échec
+      // que le fan-out et que `GET /conversations`.
+      it('still emits every count when the bridge pass fails', async () => {
+        prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-degraded' }]);
+        unreadCounts({ 'conv-degraded': 9 });
+        (manager as any).bridgeService.buildBridgeData = jest
+          .fn()
+          .mockRejectedValue(new Error('bridge pass down'));
+        const socket = socketDouble();
+
+        await expect(
+          (manager as any)._emitUnreadCountsSnapshot(socket, 'user-degraded', false)
+        ).resolves.toBeUndefined();
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-degraded',
+          unreadCount: 9,
+        });
+      });
+
+      // G-127 : l'étage agent est réservé à `GET /conversations`. Un chemin
+      // socket qui le passerait ferait payer un aller-retour HTTP par
+      // reconnexion — et une reconnexion touche TOUTES les conversations du
+      // lecteur d'un coup.
+      it('never opens the agent stage on this socket path', async () => {
+        prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-agentless' }]);
+        unreadCounts({ 'conv-agentless': 1 });
+        const pass = bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-agentless', false);
+
+        expect(pass.mock.calls[0][0].agent).toBeUndefined();
+      });
+    });
   });
 
   // -------------------------------------------------------------------------

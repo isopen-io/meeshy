@@ -52,6 +52,7 @@ import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { ConversationBridgeService } from '../services/ConversationBridgeService';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -1130,8 +1131,56 @@ export class MeeshySocketIOManager {
       // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
       // au-dessus qui ne connaissait qu'une colonne.
       const unreadCounts = await this.readStatusService.getUnreadCountsForUser(readerKey, conversationIds);
+
+      // Le pont ✦ voyage sur CE même événement (G-123). Il manquait ici, et
+      // l'omission n'était pas neutre : les deux clients recopient
+      // INCONDITIONNELLEMENT `bridge`, `undefined`/`nil` compris
+      // (`ConversationSyncEngine.handleUnreadUpdated`, et côté web
+      // `setConversationUnreadInCache(..., { bridge: data.bridge })` depuis
+      // REV-5/B1). La forme courte n'était donc pas un silence mais un ORDRE
+      // D'EFFACEMENT : chaque reconnexion — bascule réseau, retour d'arrière-
+      // plan, déploiement — retirait le pont de TOUTES les lignes du lecteur,
+      // y compris celles où il a des non-lus et où le pont est précisément ce
+      // qu'il cherche. Rien ne le remettait avant le prochain message reçu
+      // (la liste web tourne en `staleTime: Infinity`).
+      //
+      // Passe par CONVERSATIONS (`buildBridgeData`) et non par lecteurs : ici
+      // UN lecteur et N conversations, l'image miroir du fan-out d'envoi. Coût
+      // CONSTANT, celui que `GET /conversations` paie déjà — jamais une passe
+      // par conversation (le N+1 que REV-5/B2 a dû retirer du fan-out).
+      //
+      // Aucun `agent` (G-127) : l'étage agent reste réservé à
+      // `GET /conversations`. Une reconnexion touche toutes les conversations
+      // du lecteur d'un coup ; lui ouvrir un aller-retour HTTP par pont ferait
+      // payer le réveil du réseau au moment exact où il est le plus fragile.
+      const bridgeCandidates = [...unreadCounts]
+        .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
+        .filter(candidate => candidate.unreadCount > 0);
+
+      let bridgeByConversation: ReadonlyMap<string, { bridge: ConversationBridge }> = new Map();
+      if (bridgeCandidates.length > 0) {
+        try {
+          bridgeByConversation = await this.bridgeService.buildBridgeData({
+            viewerId: readerKey,
+            candidates: bridgeCandidates,
+          });
+        } catch (error) {
+          // Best-effort, même posture que le fan-out et que la liste REST : un
+          // pont qui ne se calcule pas ne doit priver personne de sa pastille.
+          logger.warn('bridge attach failed on reconnect snapshot, serving counts alone', {
+            readerKey,
+            error,
+          });
+        }
+      }
+
       for (const [conversationId, unreadCount] of unreadCounts) {
-        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
+        const bridge = bridgeByConversation.get(conversationId)?.bridge;
+        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount,
+          ...(bridge ? { bridge } : {}),
+        });
       }
     } catch (error) {
       logger.warn('unread counts snapshot failed on reconnect', { readerKey, isAnonymous, error });
