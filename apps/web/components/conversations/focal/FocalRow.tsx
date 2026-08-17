@@ -19,23 +19,65 @@
  *     typographie TOUJOURS 15 (jamais de bump — la densité Script n'anime
  *     rien, elle scanne).
  *
- * Prisme : `resolveFocalMessageText` (`focal-row-utils.ts`) EXCLUSIVEMENT —
- * aucune seconde loi de langue (mission WF-110).
+ * Prisme : `resolveFocalMessageDisplay` (`focal-row-utils.ts`) EXCLUSIVEMENT —
+ * UN SEUL appel à `resolveLastMessagePreview`, aucune seconde loi de langue
+ * (mission WF-110). La langue SERVIE est LUE de ce même appel, pas recalculée.
  *
  * Optimiste (§4.4) : la rangée NE POSE PAS `opacity` elle-même (« deux
  * écrivains sur `opacity` est le bug n°1 documenté du contrat ») — elle
  * publie le plafond au PASS via `setAlphaCeiling`, dans un effet réagissant
  * à `isOptimistic` (jamais pendant le rendu).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PARITÉ DE DONNÉES — DIRECTIVE PRODUIT DU 2026-08-17
+ * ═══════════════════════════════════════════════════════════════════════════
+ * « Certains messages de Script et Focal ont le contenu VIDE, pourtant en mode
+ * Bulles on y voit quelque chose. » La rangée ne savait rendre que DEUX
+ * choses : le texte du Prisme et les pièces jointes IMAGE. Tout message dont
+ * le contenu ne vit pas dans le champ texte rendait une rangée littéralement
+ * vide. Trois branches manquaient, dans l'ordre où la vue Bulles les prend :
+ *
+ *   1. RÉSUMÉ D'APPEL — `messageSource: 'system'` + `metadata.kind` ∈
+ *      {`call`, `call-live`}. `BubbleMessage` court-circuite tout son rendu
+ *      pour monter `CallSystemMessage` ; le fil ne regardait pas `metadata`.
+ *      Le `content` d'un résumé d'appel est vide PAR CONSTRUCTION : la rangée
+ *      était donc toujours vide. → `CallSystemMessage` RÉUTILISÉ.
+ *   2. PIÈCES JOINTES NON-IMAGE — vocal, audio, vidéo, PDF, document, code,
+ *      fichier. → `MessageAttachments` RÉUTILISÉ (voir `FocalMediaBlock`).
+ *   3. AUCUN CONTENU AFFICHABLE — un repli descriptif, jamais du vide.
+ *      « Au pire un repli, jamais une rangée vide » est le critère dur.
+ *
+ * S'y ajoute le chrome de DONNÉES que la vue Bulles montrait et que le fil
+ * taisait — mentions cliquables, liens, « voir plus », traduction affichée,
+ * réactions, accusés de livraison/lecture, transfert, édition : tout part
+ * dans `FocalMetaRow` et `ExpandableMessageText`, composants RÉUTILISÉS.
+ *
+ * HORS PÉRIMÈTRE, NOMMÉ : la BARRE D'ACTIONS (`MessageActionsBar`) et la
+ * feuille d'accusés (`MessageReadStatusDetails`) ne sont PAS montées. Ce
+ * n'est pas de la DONNÉE portée par le message, c'est de l'interaction, et
+ * elle exige des rappels (édition, suppression, signalement, permissions)
+ * que `FocalThread` ne reçoit pas aujourd'hui. C'est un lot distinct.
  */
 'use client';
 
 import { useEffect, useMemo, memo } from 'react';
 import { cn } from '@/lib/utils';
 import type { Message } from '@meeshy/shared/types';
+import { mentionsToLinks } from '@meeshy/shared/types/mention';
+import { useI18n } from '@/hooks/use-i18n';
+import { getUserDisplayName } from '@/utils/user-display-name';
+import { ExpandableMessageText } from '@/components/common/bubble-message/ExpandableMessageText';
+import { CallSystemMessage } from '@/components/common/bubble-message/CallSystemMessage';
 import { FocalIdentityHeader } from './FocalIdentityHeader';
 import { FocalQuotedReply } from './FocalQuotedReply';
 import { FocalMediaBlock } from './FocalMediaBlock';
-import { resolveFocalMessageText, isFirstInFocalGroup } from './focal-row-utils';
+import { FocalMetaRow } from './FocalMetaRow';
+import {
+  resolveFocalMessageDisplay,
+  resolveFocalCallMetadata,
+  splitFocalAttachments,
+  isFirstInFocalGroup,
+} from './focal-row-utils';
 import { FOCAL_OPTIMISTIC_ALPHA_CEILING, FOCAL_CONFIRMED_ALPHA } from './focal-metrics';
 
 export type FocalDensity = 'focal' | 'script';
@@ -60,6 +102,18 @@ export interface FocalRowProps {
   readonly registerRow?: (id: string) => (el: HTMLElement | null) => void;
   readonly setAlphaCeiling?: (id: string, ceiling: number) => void;
   readonly onQuoteJump?: (messageId: string) => void;
+  /**
+   * Identité de la conversation — exigée par les composants de DONNÉES
+   * réutilisés (réactions, accusés, rappel d'appel). Repli sur
+   * `message.conversationId`, comme le fait déjà `MessageContent`.
+   */
+  readonly conversationId?: string;
+  readonly conversationType?: React.ComponentProps<typeof CallSystemMessage>['conversationType'];
+  readonly isAnonymous?: boolean;
+  readonly currentAnonymousUserId?: string;
+  /** Jeton porté jusqu'à `MessageAttachments` (suppression de pièce jointe), comme la vue Bulles. */
+  readonly token?: string;
+  readonly onImageClick?: (attachmentId: string) => void;
 }
 
 export const FocalRow = memo(function FocalRow({
@@ -75,18 +129,75 @@ export const FocalRow = memo(function FocalRow({
   registerRow,
   setAlphaCeiling,
   onQuoteJump,
+  conversationId,
+  conversationType,
+  isAnonymous = false,
+  currentAnonymousUserId,
+  token,
+  onImageClick,
 }: FocalRowProps) {
+  const { t } = useI18n('conversations');
   const isMe = message.senderId === currentUser.id;
+  const effectiveConversationId = conversationId ?? message.conversationId;
 
   // Densité Script = « densité uniforme » : l'en-tête d'identité est
   // TOUJOURS visible, jamais collapsé par groupe (mission WF-110).
   const showsIdentityHeader =
     density === 'script' || isFirstInFocalGroup(message, previousMessage);
 
-  const text = useMemo(
-    () => resolveFocalMessageText(message, preferredLanguages),
+  // UN SEUL appel au Prisme — texte ET langue servie viennent du même verdict.
+  const { text, language: displayedLanguage } = useMemo(
+    () => resolveFocalMessageDisplay(message, preferredLanguages),
     [message, preferredLanguages]
   );
+
+  // Mentions → liens : MÊME loi partagée que `useMessageDisplay`
+  // (`mentionsToLinks`, `packages/shared/types/mention.ts`), appliquée au
+  // texte DÉJÀ résolu par le Prisme. Ce n'est pas une loi de langue, c'est une
+  // décoration de handles — le Prisme reste unique.
+  const textWithMentions = useMemo(
+    () => (text ? mentionsToLinks(text, '/u/{username}', [...(message.validatedMentions ?? [])]) : ''),
+    [text, message.validatedMentions]
+  );
+
+  const callMetadata = useMemo(() => resolveFocalCallMetadata(message), [message]);
+  const { images, others } = useMemo(
+    () => splitFocalAttachments(message.attachments),
+    [message.attachments]
+  );
+
+  const hasText = Boolean(text && text.trim());
+  const hasAttachments = images.length > 0 || others.length > 0;
+  // Le critère DUR de la directive : si rien de tout cela n'est vrai, la
+  // rangée rendrait du vide — un repli descriptif prend le relais.
+  const hasAnyContent = hasText || hasAttachments || !!message.replyTo || !!callMetadata;
+
+  const hasReactions =
+    (message.reactionSummary != null && Object.keys(message.reactionSummary).length > 0) ||
+    (message.reactionCount ?? 0) > 0;
+
+  const senderName = isMe ? youLabel : getUserDisplayName(message.sender, youLabel);
+
+  /**
+   * Le « {contenu} » du libellé d'assistance (maquette §4/§6) — TOUJOURS le
+   * même verdict que l'œil reçoit, jamais une seconde résolution :
+   *   - texte présent      → le texte du Prisme (celui qui est rendu) ;
+   *   - résumé d'appel     → le mot que la rangée montre à sa place ;
+   *   - pièces jointes     → le nombre de pièces, la seule chose que la
+   *                          rangée puisse annoncer sans dupliquer la loi de
+   *                          description de chaque bloc (les blocs réutilisés
+   *                          portent déjà leurs propres textes alternatifs) ;
+   *   - rien               → EXACTEMENT le repli descriptif affiché.
+   * Aucune branche ne peut donc annoncer ce que l'écran ne montre pas.
+   */
+  const attachmentCount = images.length + others.length;
+  const ariaContent = hasText
+    ? (text as string)
+    : callMetadata
+      ? t('focal.row.callSummary', 'Résumé d’appel')
+      : attachmentCount > 0
+        ? `${t('focal.row.attachments', 'Pièces jointes')} (${attachmentCount})`
+        : t('focal.row.emptyContent', 'Message sans contenu affichable');
 
   // §4.4 : le plafond d'alpha optimiste est publié au PASS, jamais posé ici.
   // Densité `script` n'a « zéro perspective » : rien à plafonner.
@@ -106,41 +217,124 @@ export const FocalRow = memo(function FocalRow({
       data-density={density}
       data-message-id={message.id}
       data-optimistic={isOptimistic}
+      // MAQUETTE §4 (« VoiceOver → chaque cellule lit "{Pseudo}, {heure},
+      // {contenu}" ») et §6 (« Rangée = un groupe aria ("{Nom}, {heure},
+      // message") »). Le libellé est COMPOSÉ DES MÊMES VALEURS que le rendu :
+      // `senderName` et `time` sont ceux que `FocalIdentityHeader` affiche,
+      // `ariaContent` sort de l'UNIQUE résolution Prisme de la rangée (ou du
+      // même repli descriptif que l'œil voit). Aucune seconde résolution,
+      // donc aucune dérive possible entre le vu et le lu.
+      role="group"
+      aria-label={`${senderName}, ${time}, ${ariaContent}`}
       style={{
         padding: 'var(--lentille-thread-row-padding-vertical) var(--lentille-thread-row-padding-horizontal)',
       }}
     >
       <div ref={wrapperRef} data-testid="focal-row-perspective-wrapper">
-        {showsIdentityHeader && (
-          <FocalIdentityHeader sender={message.sender} isMe={isMe} time={time} youLabel={youLabel} />
-        )}
-
-        <div style={{ paddingLeft: 'var(--lentille-thread-line2-indent)' }}>
-          {message.replyTo && (
-            <FocalQuotedReply
-              quoted={message.replyTo}
-              preferredLanguages={preferredLanguages}
-              onJumpToMessage={onQuoteJump}
+        {/*
+          Le résumé d'appel court-circuite le rendu standard — MÊME arbitrage
+          que `BubbleMessage` (« bypasses the view-mode machine ») : ce message
+          n'a ni texte, ni pièce jointe, ni réaction à montrer, et son
+          `CallSystemMessage` porte déjà son identité et son heure.
+        */}
+        {callMetadata ? (
+          <div data-testid="focal-call-message">
+            <CallSystemMessage
+              metadata={callMetadata}
+              currentUserId={currentUser.id}
+              conversationId={effectiveConversationId}
+              conversationType={conversationType}
+              isAnonymous={isAnonymous}
             />
-          )}
+          </div>
+        ) : (
+          <>
+            {showsIdentityHeader && (
+              <FocalIdentityHeader
+                sender={message.sender}
+                isMe={isMe}
+                time={time}
+                youLabel={youLabel}
+                messageId={message.id}
+                conversationId={effectiveConversationId}
+                openProfileLabel={t('focal.row.openProfile', 'Voir le profil') + ` — ${senderName}`}
+              />
+            )}
 
-          {text && (
-            <p
-              data-testid="focal-row-text"
-              className={cn('whitespace-pre-wrap break-words')}
-              style={{
-                fontSize: density === 'focal' && isFocused ? FOCUSED_TEXT_SIZE_PX : 'var(--lentille-thread-line2-size)',
-                lineHeight: 'var(--lentille-thread-line2-line-height)',
-              }}
-            >
-              {text}
-            </p>
-          )}
+            <div style={{ paddingLeft: 'var(--lentille-thread-line2-indent)' }}>
+              {message.replyTo && (
+                <FocalQuotedReply
+                  quoted={message.replyTo}
+                  preferredLanguages={preferredLanguages}
+                  onJumpToMessage={onQuoteJump}
+                />
+              )}
 
-          {message.attachments && message.attachments.length > 0 && (
-            <FocalMediaBlock attachments={message.attachments} />
-          )}
-        </div>
+              {hasText && (
+                <div
+                  data-testid="focal-row-text"
+                  className={cn('break-words')}
+                  style={{
+                    fontSize: density === 'focal' && isFocused ? FOCUSED_TEXT_SIZE_PX : 'var(--lentille-thread-line2-size)',
+                    lineHeight: 'var(--lentille-thread-line2-line-height)',
+                  }}
+                >
+                  {/*
+                    `ExpandableMessageText` RÉUTILISÉ (bubble-message) : c'est
+                    lui qui apporte au fil plat le Markdown, les liens, les
+                    mentions cliquables et le « voir plus » au-delà du seuil —
+                    tout ce qu'un `<p>{text}</p>` brut perdait silencieusement.
+                    `isOwnMessage={false}` : le fil plat n'a pas de bulle
+                    teintée, donc jamais la palette « sur fond indigo ».
+                  */}
+                  <ExpandableMessageText content={textWithMentions} isOwnMessage={false} />
+                </div>
+              )}
+
+              {hasAttachments && (
+                <FocalMediaBlock
+                  attachments={message.attachments ?? []}
+                  currentUserId={isAnonymous ? currentAnonymousUserId : currentUser.id}
+                  token={token}
+                  isOwnMessage={isMe}
+                  onImageClick={onImageClick}
+                />
+              )}
+
+              {!hasAnyContent && (
+                <p
+                  data-testid="focal-row-empty"
+                  className="italic text-muted-foreground"
+                  style={{ fontSize: 'var(--lentille-thread-line2-size)' }}
+                >
+                  {t('focal.row.emptyContent', 'Message sans contenu affichable')}
+                </p>
+              )}
+
+              <FocalMetaRow
+                messageId={message.id}
+                conversationId={effectiveConversationId}
+                currentUserId={currentUser.id}
+                currentAnonymousUserId={currentAnonymousUserId}
+                isAnonymous={isAnonymous}
+                isOwnMessage={isMe}
+                showsDeliveryIndicator={isMe && !showsIdentityHeader}
+                hasReactions={hasReactions}
+                isForwarded={!!message.forwardedFromId}
+                isEdited={!!message.isEdited}
+                originalLanguage={message.originalLanguage}
+                displayedLanguage={displayedLanguage}
+                // L'heure n'est répétée en méta que si l'en-tête ne la porte
+                // pas déjà (rangée de suite de groupe) — précédent iOS
+                // `FocalMetaRow`, monté pour `!isFirstInGroup` uniquement.
+                time={showsIdentityHeader ? undefined : time}
+                forwardedLabel={t('focal.row.forwarded', 'Transféré')}
+                editedLabel={t('focal.row.edited', 'Modifié')}
+                translatedLabel={t('focal.row.translated', 'Traduit')}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

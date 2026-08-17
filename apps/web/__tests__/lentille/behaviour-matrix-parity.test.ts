@@ -131,10 +131,13 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
     covered: true,
     reason:
       "badge de type absorbé par la focus card (chip groupe/canal/bot + memberCount, anneau accent) : réel et testé (`LentilleFocusCard.tsx`, " +
-      "`LentilleFocusCard.test.tsx`). Écart VÉRIFIÉ : les tags utilisateur (≤3 pastilles 6px après le nom) NE sont PAS construits — re-preuve " +
-      "`grep -rn 'tags' apps/web/components/conversations/lentille/LentilleRow.tsx` → 0 rendu de pastille (2026-08-17) ; le token `list.tags` existe " +
-      "(`lentille-tokens.json`) et vit côté iOS (`LentilleMetrics.Tags`) mais reste mort côté web. Trou documenté, réserve R4-2 (« L08 tags non " +
-      "implémentés (tokens morts) », workshop §8 ligne V4), non soldée par ce lot.",
+      "`LentilleFocusCard.test.tsx`). SECONDE part — les tags utilisateur, « au plus 3 pastilles de 6 px après le nom » — désormais RÉELLE : réserve " +
+      "R4-2 (« L08 tags non implémentés (tokens morts) », workshop §8 ligne V4) SOLDÉE le 2026-08-17. `LentilleRow.tsx` lit les tags du MÊME magasin que " +
+      "pin/sourdine/favori (`useConversationPreference` — aucune prop neuve à faire traverser le montage, aucune seconde source), les plafonne par " +
+      "`LENTILLE_LIST_TAGS_MAX_COUNT` (miroir de `list.tags.maxCount`, gardé contre la dérive par `lentille-tags-max-count.parity.test.ts`) et les rend " +
+      "à la cote `--lentille-list-tags-size` : les tokens `list.tags.{size,maxCount,emojiSize}`, vivants côté iOS (`LentilleMetrics.Tags`) et morts côté " +
+      "web, sont branchés. Teinte par `getTagColor`, le MÊME hachage que le rang historique — une seule loi de couleur de tag dans le dépôt. Testé : " +
+      "`LentilleRow.line1-grammar.test.tsx`, describe « pastilles de tags » (plafond, cote, teintes distinctes, absence sans tag).",
   },
   L09: {
     covered: false,

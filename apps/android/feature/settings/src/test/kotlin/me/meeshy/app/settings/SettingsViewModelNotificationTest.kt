@@ -104,6 +104,18 @@ class SettingsViewModelNotificationTest {
     }
 
     @Test
+    fun setEmailEnabled_persists() = runTest(dispatcher) {
+        val store = InMemoryNotificationPreferencesStore()
+        val vm = vm(notificationStore = store)
+        advanceUntilIdle()
+
+        vm.setEmailEnabled(false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.emailEnabled).isFalse()
+    }
+
+    @Test
     fun setVibrationEnabled_persists() = runTest(dispatcher) {
         val store = InMemoryNotificationPreferencesStore()
         val vm = vm(notificationStore = store)

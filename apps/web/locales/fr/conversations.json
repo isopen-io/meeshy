@@ -761,12 +761,21 @@
       },
       "a11y": {
         "unreadOne": "{count} message non lu",
-        "unreadOther": "{count} messages non lus"
+        "unreadOther": "{count} messages non lus",
+        "openProfile": "Voir le profil de {name}",
+        "openConversationInfo": "Infos de la conversation {name}"
       }
     },
     "focal": {
       "row": {
-        "you": "Toi"
+        "you": "Toi",
+        "emptyContent": "Message sans contenu affichable",
+        "forwarded": "Transféré",
+        "edited": "Modifié",
+        "translated": "Traduit",
+        "openProfile": "Voir le profil",
+        "callSummary": "Résumé d’appel",
+        "attachments": "Pièces jointes"
       }
     },
     "lens": {

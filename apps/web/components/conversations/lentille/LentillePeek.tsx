@@ -86,6 +86,24 @@ const LONG_PRESS_DURATION_MS = 420;
 /** "Annulé par... mouvement (>quelques px)" — pas de cote normative connue ; seuil documenté ici. */
 const LONG_PRESS_CANCEL_DISTANCE_PX = 8;
 
+/**
+ * behaviour-matrix:L12 — « … exclusion avatar 70 pt … conservée ».
+ *
+ * Zone d'exclusion des DEUX gestes d'aperçu (appui long ET clic droit) : un
+ * descendant qui porte ce marqueur possède son propre geste, et l'aperçu du
+ * rang ne doit pas le lui voler. Posé aujourd'hui par l'affordance d'avatar
+ * de `LentilleRow` (profil d'un DM / infos de conversation) — la transposition
+ * web des 70 pt d'iOS, qui sont une géométrie de zone tactile sans équivalent
+ * ici : un marqueur suit l'élément quel que soit son habillage, une mesure en
+ * pixels dériverait au premier changement de gabarit.
+ */
+const PRESS_EXEMPT_ATTRIBUTE = 'data-lentille-press-exempt';
+
+function isPressExempt(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest(`[${PRESS_EXEMPT_ATTRIBUTE}]`) !== null;
+}
+
 export interface LentillePeekProps {
   readonly conversation: Conversation;
   readonly t: LentilleRowTranslate;
@@ -275,6 +293,9 @@ export function LentillePeek({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
+      // Zone d'exclusion (L12) — la pression commence sur un élément qui a
+      // son propre geste : rien n'est armé, donc rien n'est à annuler.
+      if (isPressExempt(event.target)) return;
       pointerStartRef.current = { x: event.clientX, y: event.clientY };
       attachScrollCancel();
       longPressTimerRef.current = setTimeout(() => {
@@ -304,6 +325,10 @@ export function LentillePeek({
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent) => {
+      // Zone d'exclusion (L12) — sur l'avatar, le clic droit reste celui du
+      // navigateur (ouvrir le profil dans un nouvel onglet, copier le lien) :
+      // ni `preventDefault`, ni aperçu.
+      if (isPressExempt(event.target)) return;
       event.preventDefault();
       clearLongPressTimer();
       openPeek(false);

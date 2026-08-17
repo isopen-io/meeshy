@@ -2,7 +2,9 @@
 
 /**
  * `useThreadReadingMode` — REV-4bis/B2. Le point OÙ le fil ouvert obéit au
- * magasin autoritatif.
+ * magasin autoritatif, et — depuis le 2026-08-17 — LE POINT DE DÉCISION du
+ * défaut « Bulles » (voir `PROVISIONAL_DEFAULT_RENDER`, plus bas : décision
+ * produit PROVISOIRE, datée, retirable d'une ligne).
  *
  * ═══════════════════════════════════════════════════════════════════════════
  * CE QU'IL RÉSOUT, ET POURQUOI PAR LA LOI PLUTÔT QU'À LA MAIN
@@ -93,16 +95,57 @@ const NEUTRAL_UNREAD_COUNT = 0;
 const NEUTRAL_LAST_OPENED_AT = null;
 
 /**
- * La densité que le fil ouvert doit rendre pour cette conversation.
- *
- * `conversationId` absent ⇒ `'focal'`, le plancher de la loi : un fil sans
- * identité n'a pas de préférence à porter, et surtout pas celle d'un autre.
+ * Ce que le fil ouvert MONTE — les deux densités plates de `FocalThread`, ou
+ * la vue à bulles historique (`MessagesDisplay` en lentille `bubble`).
  */
-export function useThreadReadingDensity(conversationId: string | undefined): FocalDensity {
+export type ThreadReadingRender = FocalDensity | 'bubbles';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DÉCISION PRODUIT PROVISOIRE — 2026-08-17
+ * ═══════════════════════════════════════════════════════════════════════════
+ * « Mettre le mode Bulle par défaut POUR LE MOMENT. »
+ *
+ * Sans choix explicite du lecteur, le fil rend « Bulles » — au lieu de la
+ * résolution `auto → focal` que l'orchestrateur produit. C'est un DÉFAUT DE
+ * RENDU, pas une préférence : RIEN n'est écrit dans le magasin (le magasin
+ * continue de répondre `auto`, et la Lentille continue d'afficher « Auto »).
+ * La préférence stockée `bulles` — amendement S1, un mot que le lecteur peut
+ * réellement choisir — reste une chose DISTINCTE, qui passe par la loi comme
+ * avant.
+ *
+ * POUR LA RETIRER : supprimer cette constante et la branche `auto` ci-dessous.
+ * Le hook redevient un pur appel à `resolveOrchestratorDecision`, et le
+ * comportement d'avant le 2026-08-17 revient sans autre geste. Aucune loi
+ * partagée n'a été amendée pour cette décision — c'est précisément pourquoi
+ * elle se retire d'une ligne.
+ *
+ * CE QU'ELLE NE TOUCHE PAS :
+ *   - le chemin drapeau ÉTEINT, qui rendait DÉJÀ les bulles et reste
+ *     bit-à-bit identique (il ne consulte même pas ce hook) ;
+ *   - un choix EXPLICITE (`focal`, `script`, `resume`, `riviere`, `bulles`),
+ *     qui garde exactement le pouvoir qu'il avait ;
+ *   - iOS, qui n'est pas concerné.
+ */
+const PROVISIONAL_DEFAULT_RENDER: ThreadReadingRender = 'bubbles';
+
+/**
+ * Ce que le fil ouvert doit rendre pour cette conversation.
+ *
+ * `conversationId` absent ⇒ le défaut : un fil sans identité n'a pas de
+ * préférence à porter, et surtout pas celle d'un autre.
+ */
+export function useThreadReadingRender(conversationId: string | undefined): ThreadReadingRender {
   const preference = useReadingModePreference(conversationId ?? '');
 
   return useMemo(() => {
-    if (!conversationId) return 'focal';
+    if (!conversationId) return PROVISIONAL_DEFAULT_RENDER;
+
+    // Décision produit provisoire 2026-08-17 — voir PROVISIONAL_DEFAULT_RENDER.
+    // `auto` EST l'absence de choix : c'est la valeur que le magasin rend
+    // quand rien n'a été mémorisé pour cette conversation
+    // (`DEFAULT_PREFERENCE`, `reading-mode-preference-store.ts`).
+    if (preference === 'auto') return PROVISIONAL_DEFAULT_RENDER;
 
     const decision = resolveOrchestratorDecision({
       unreadCount: NEUTRAL_UNREAD_COUNT,
