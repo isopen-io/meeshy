@@ -1072,6 +1072,69 @@ final class ConversationStoreTests: XCTestCase {
                        "la carte du message supprimé ne doit plus pouvoir gagner : le résolveur la PRÉFÈRE à l'aperçu")
     }
 
+    /// Le défaut jumeau du précédent, et son exact contraire : le remplaçant
+    /// EST un message position-seule.
+    ///
+    /// `adoptLastMessage` remet l'épingle à neutre — c'est son contrat — à
+    /// charge pour l'appelant de reposer aussitôt ce que le payload porte
+    /// VRAIMENT. Le payload porte la position depuis le cycle 50 (les trois
+    /// émetteurs la hissent depuis `metadata.location` du message qu'ils
+    /// nomment), mais le mapping manuel du pont ne la transmettait pas et la
+    /// fusion ne la reposait donc jamais.
+    ///
+    /// Ce que ça rendait : un message position-seule a un `content` vide, donc
+    /// un `lastMessagePreview` vide par construction. Sans l'épingle, il ne
+    /// reste RIEN — la ligne est littéralement blanche, et VoiceOver n'annonce
+    /// que l'horodatage (cf. la branche `.standard` de `ThemedConversationRow`,
+    /// qui se rabat sur `lastMessageLocation` précisément quand l'aperçu est
+    /// vide).
+    func test_applyConversationUpdated_replacementIsAPositionMessage_carriesItsPin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        conv.lastMessageId = "msg-texte"
+        conv.lastMessagePreview = "salut"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_100),
+            lastMessage: .replaced("msg-position"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-position")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "l'aperçu d'un message position-seule est VIDE : sans son épingle, la ligne n'affiche plus rien du tout")
+    }
+
+    /// La borne du geste ci-dessus : un événement qui ne NOMME aucun message ne
+    /// parle pas de l'épingle non plus.
+    ///
+    /// C'est le chemin des métadonnées (renommage, avatar, mode lent), et il
+    /// ne porte jamais `location`. Écrire l'épingle hors de la branche
+    /// d'identité effacerait donc celle du dernier message à chaque renommage —
+    /// même classe de défaut que celui qu'on ferme, par la porte opposée.
+    func test_applyConversationUpdated_renameDoesNotTouchThePin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeGroupConv(id: "conv-1")
+        conv.lastMessageId = "msg-position"
+        conv.lastMessageLocation = SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Nouveau titre"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.title, "Nouveau titre")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "un renommage ne dit rien du dernier message — il ne doit pas lui retirer son épingle")
+    }
+
     /// La contre-épreuve qui borne le geste, et sans laquelle il serait
     /// destructeur : une ÉDITION et une TRADUCTION nomment le MÊME message.
     /// Ses pièces jointes, son auteur et ses drapeaux restent vrais — le

@@ -5,7 +5,14 @@ import CoreLocation
 /// retour. Un seul type pour les quatre surfaces (message, commentaire, post,
 /// story) : les rendus divergeaient auparavant parce que chacune reconstruisait
 /// sa propre notion de « position ».
-public struct SharedPlace: Codable, Equatable, Sendable {
+/// `Hashable` (synthèse : les cinq champs stockés le sont déjà) pour que les
+/// types VALEUR qui transportent un lieu puissent l'être aussi —
+/// `ConversationUpdatedStoreEvent` en tête, dont le `Hashable` synthétisé
+/// serait sinon impossible dès qu'il porte l'épingle du dernier message.
+/// À ne pas confondre avec le hash MANUEL de `MeeshyConversation`, qui ne
+/// combine volontairement que `name` : c'est un hash de DIFFING SwiftUI,
+/// délibérément partiel, pas l'absence de conformance ici.
+public struct SharedPlace: Codable, Equatable, Hashable, Sendable {
     public let latitude: Double
     public let longitude: Double
     /// Nom du POI ou du lieu. `nil` pour un point posé à la main dont le

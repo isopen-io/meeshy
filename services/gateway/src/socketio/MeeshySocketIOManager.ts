@@ -2527,6 +2527,22 @@ export class MeeshySocketIOManager {
             lastMessageId: message.id,
             // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
             // avec le reste de la paire, sous le même plafond qu'elle.
+            // Un message position-seule a un `content` vide, donc un aperçu
+            // vide : `location` est alors la SEULE chose dont la ligne de liste
+            // dispose pour composer son libellé. Hissée ici comme les deux
+            // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
+            // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
+            // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
+            // laissait la ligne littéralement blanche.
+            //
+            // Clé ABSENTE quand le message n'a pas de position, jamais présente
+            // à `null` : les clients écrivent `location` AVEC l'identité du
+            // message, donc une clé nulle sur le chemin le plus fréquenté du
+            // service effacerait une épingle correcte à chaque message texte.
+            ...((): Record<string, unknown> => {
+              const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+              return place ? { location: place } : {};
+            })(),
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
