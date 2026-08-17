@@ -2,6 +2,54 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Real-time notification socket wiring shipped** (slice
+> `notification-realtime-socket`, feature-parity §M). `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed three concurrent PRs (#3096, #3106, #3108), none touching
+> `apps/android`. `df -h /` showed 9.0-11 Gi free, stable.
+>
+> **Landed after two rejected candidates, both re-proved fresh and found to be multi-slice
+> epics rather than one-shots** — documented in `feature-parity.md` rather than silently
+> dropped: "Code attachment viewer" (§P) needs ~30-language detection + a hand-rolled tokenizer
+> + 2 themes + 3 UI surfaces (compact card, preview, fullscreen+copy), AND has no "file
+> attachment" UI hook to attach to yet (the neighbouring "Document viewer" item is also `[ ]`);
+> "In-app real-time notification toast" (§M) turned out to be exactly 3 sub-slices — data feed,
+> dedup+dismiss+suppression orchestrator, UI mount+navigation — of which only the FIRST was
+> genuinely bounded for one run. Chose to ship that first sub-slice on its own rather than force
+> the whole epic or walk away with nothing.
+>
+> **The wiring itself mirrors an already-proven pattern exactly**: `MessageSocketManager`
+> already has 26 listened events behind one generic `listen<T>(event, flow)` helper — adding
+> `notification:new` was mechanical (`buf<ApiNotification>()`, expose as `SharedFlow`, one
+> `listen(...)` line in `attach()`). Confirmed the gateway's socket payload (`NotificationService
+> .ts`: `{ ...formatted, title, subtitle }` via `emitWithSeq`) is a strict superset of the
+> already-existing `ApiNotification` REST shape (extra `title`/`subtitle`/`_seq` fields exist
+> only for iOS's toast) — `MeeshyApi.json`'s `ignoreUnknownKeys = true` makes decoding straight
+> into `ApiNotification` safe, so no separate wire-only type was needed.
+>
+> **`NotificationsViewModel` had zero live-update path before this** — `load()` was a one-shot
+> REST call, `unreadCount` was never even populated from the server (still true after this
+> slice — out of scope, not touched). Now `observeRealtime()` collects the new flow and
+> prepends fresh notifications, deduping by id (a REST-list race or duplicate delivery is a
+> no-op) and only bumping `unreadCount` when the incoming row isn't already read.
+>
+> **New test file, not a backfill**: `MessageSocketManager` has no existing test suite at all
+> despite 26 events (unlike `SocialSocketManagerTest`/`CategorySocketManagerTest`, which do
+> exist) — added `MessageSocketManagerNotificationTest` scoped to ONLY the new event, following
+> `SocialSocketManagerTest`'s established Robolectric+Turbine harness pattern, rather than
+> either skipping coverage or scope-creeping into the other 25 untested events.
+>
+> **+4 tests total**: `MessageSocketManagerNotificationTest` (payload decode);
+> `NotificationsViewModelTest` ×3 (prepend+unread-bump, already-read doesn't bump, duplicate id
+> is a no-op — extended the existing 3-test file's constructor call sites for the new
+> `MessageSocketManager` dependency).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules) green.
+>
+> **Still open on this item**: SWR cache for the notification list (today's `list()` is plain
+> REST, no `CacheResult`/Room layer) and pagination/unread-only filter; the toast UI itself
+> (dedup+dismiss+suppression orchestrator + mount) — 2 of the 3 sub-slices identified above.
+
 > On 2026-08-17 **Share-target lot 2 (image/video attachments) shipped** (slice
 > `share-target-media-attachments`), closing out the Android Share-Sheet receiver started by the
 > previous run's lot 1. `gh pr list --state open --search "apps/android OR apps/ios"` showed

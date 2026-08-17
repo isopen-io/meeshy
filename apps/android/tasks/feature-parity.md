@@ -5227,10 +5227,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
       contacts, groups, calls, translations, system)
-- [ ] Notification list — stale-while-revalidate cache + real-time socket updates, paginated, unread-only filter
+- [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
+      `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
+      (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
+      `title`/`subtitle`/`_seq` fields, silently dropped by `Json.ignoreUnknownKeys` — no separate
+      wire type needed) and exposes it as `SharedFlow<ApiNotification>`, mirroring iOS
+      `MessageSocketManager.notificationReceived`. `NotificationsViewModel` collects it and
+      prepends the fresh row live (dedup by id — a REST-list race or a duplicate delivery is a
+      no-op), bumping `unreadCount` only when the incoming notification isn't already read. +4
+      tests (`MessageSocketManagerNotificationTest`: payload decode; `NotificationsViewModelTest`
+      ×3: prepend+bump, already-read doesn't bump, duplicate id is a no-op). **Still open:
+      stale-while-revalidate cache** (today's `list()` is a plain REST call, no `CacheResult`/Room
+      layer) and pagination/unread-only filter — this slice was data-plumbing only, scoped
+      narrowly after finding the item's actual size during re-proof (see below).
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
-- [ ] In-app real-time notification toast
+- [ ] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
+      epic, not a one-shot**: iOS's reference (`NotificationToastManager.swift` +
+      `NotificationToastView.swift`) needs (1) the real-time data feed — **now landed above**,
+      (2) an orchestrator with 2s APN/socket dedup, 7s auto-dismiss timer, and suppression when
+      the arriving notification's `conversationId`/`postId` matches the currently-open
+      conversation/post (no redundant toast for a chat you're already in) — Android has **zero**
+      of this, and (3) UI mount + tap-to-navigate — the presentational atom already exists
+      (`MeeshyNotificationToast` in `:sdk-ui`'s `MeeshyToast.kt`, unused) but nothing calls it.
+      Sub-slices (2) and (3) remain unstarted.
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
