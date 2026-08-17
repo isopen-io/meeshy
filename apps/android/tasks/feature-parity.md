@@ -5242,15 +5242,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       narrowly after finding the item's actual size during re-proof (see below).
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
-- [ ] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
+- [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
       epic, not a one-shot**: iOS's reference (`NotificationToastManager.swift` +
-      `NotificationToastView.swift`) needs (1) the real-time data feed — **now landed above**,
-      (2) an orchestrator with 2s APN/socket dedup, 7s auto-dismiss timer, and suppression when
-      the arriving notification's `conversationId`/`postId` matches the currently-open
-      conversation/post (no redundant toast for a chat you're already in) — Android has **zero**
-      of this, and (3) UI mount + tap-to-navigate — the presentational atom already exists
-      (`MeeshyNotificationToast` in `:sdk-ui`'s `MeeshyToast.kt`, unused) but nothing calls it.
-      Sub-slices (2) and (3) remain unstarted.
+      `NotificationToastView.swift`) needs (1) the real-time data feed — **shipped**, (2) an
+      orchestrator with 2s APN/socket dedup, 7s auto-dismiss timer, and suppression when the
+      arriving notification's `conversationId`/`postId` matches the currently-open
+      conversation/post, and (3) UI mount + tap-to-navigate — the presentational atom already
+      exists (`MeeshyNotificationToast` in `:sdk-ui`'s `MeeshyToast.kt`, unused) but nothing
+      calls it.
+      **Sub-slice (2), PURE decision core only, shipped 2026-08-17** (slice
+      `notification-toast-policy`): `NotificationToastPolicy.decide(notification,
+      activeConversationId, activePostId, isDuplicateDelivery, preferences, now) →
+      NotificationToastDecision` (`:core:model`) — a genuine EXTRACTION from iOS's own impure
+      guard-chain (iOS has no isolated pure version of this logic to port 1:1) covering:
+      suppress-if-active-conversation-or-post (wins over everything else), dedup (the "was this
+      id already shown in the last 2s" boolean is precomputed by the caller — inherently
+      stateful, not this pure function's job), then push-enabled + DND-window gating (both reuse
+      already-existing pure predicates, `UserNotificationPreferences.pushEnabled`/
+      `DndWindow.isActive`). +8 tests. **Deliberately narrower than iOS's own gate**: the
+      PER-TYPE toggle check (iOS `isTypeEnabled`, an 80-case switch over `MeeshyNotificationType`)
+      is NOT ported — Android has no raw-wire-type→toggle resolver to reuse
+      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum);
+      building one is real, separate work, left open rather than invented under this slice's
+      budget. Until then every type passes once push+DND clear.
+      **Still open**: the STATEFUL wiring (dedup-window bookkeeping, the 7s dismiss timer, a
+      Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
+      called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
+      `ConversationSocketHandler.init`/`deinit` today), the per-type toggle resolver noted
+      above, and sub-slice (3) (UI mount + navigation).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
