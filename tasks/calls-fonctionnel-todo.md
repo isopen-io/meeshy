@@ -9387,3 +9387,63 @@ Swift/Kotlin non testable.
   latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre
   `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps
   d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 139 — call:signal's answer-received cleanup swept the whole call, not just the two participants whose negotiation just finished (gateway) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+candidat explicitement flaggé par les Vagues 137 et 138 dans leur section « Non fait
+volontairement » — « l'`answer` reçue pourrait en théorie, elle aussi, sur-nettoyer dans un appel
+de groupe à 3+ paires simultanées en cours de négociation » — sans y avoir été retracé jusqu'ici.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (TypeScript
+pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : `call:signal`, branche `data.signal.type === 'answer'` relayée avec succès
+  (target atteint en direct, pas de buffering) — au moment où la négociation entre l'appelant et
+  l'appelé vient de se conclure, le handler appelait `clearBufferedOffer(data.callId)`, le
+  balayage TOTAL de l'appel, en raisonnant « négociation terminée, l'offre bufferisée n'est plus
+  nécessaire ». Ce raisonnement tient pour un appel 1:1 (seule forme qui existait quand §4.6 a été
+  écrit), mais est faux dès qu'un appel de GROUPE a 3+ participants en train de négocier des paires
+  indépendantes en parallèle : le buffer est keyé PAR DESTINATAIRE (`${callId}:${to}`, doc comment
+  de `bufferOffer`), donc l'offre bufferisée d'un TROISIÈME participant totalement étranger à cette
+  paire (ex. son socket n'a pas encore (re)rejoint la room) partage exactement zéro rapport avec
+  CETTE négociation qui vient de se conclure — et un balayage total la supprime quand même. Même
+  classe de bug que les Vagues 137/138 (`call:leave`, `call:force-leave`, `call:end` groupe-continue,
+  `call:join` stale-sender), sur un cinquième site.
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel
+  (Vague 126). A envoie une offre à B ET une offre à C — le socket de C n'a pas encore fini de
+  rejoindre la room (réseau lent), donc l'offre vers C est bufferisée (`${callId}:C`). B répond
+  immédiatement (`answer` relayé en direct, cible = A) : le handler concluait « négociation
+  terminée » et appelait `clearBufferedOffer(callId)`, supprimant AUSSI `${callId}:C` — sans aucun
+  rapport avec la négociation A↔B. Quand le socket de C rejoint enfin et appelle `call:join`,
+  `bufferedOfferFor` ne trouve plus rien à rejouer : la connexion mesh A↔C ne se forme jamais, C
+  reste spectateur silencieux dans le roster pour le reste de l'appel.
+- **Fix** : le nettoyage post-`answer` utilise désormais `clearBufferedOfferFor(callId, userId,
+  senderParticipant.participantId, targetUserId, targetParticipant.participantId)` — scope la purge
+  aux DEUX identités de la paire dont la négociation vient de se conclure (l'appelant ET l'appelé,
+  dans les deux espaces d'identité `userId`/`participantId`, comme `bufferedOfferFor` le fait déjà en
+  lecture), au lieu du balayage total. Le buffer étant strictement per-recipient (une seule entrée
+  possible par clé, dernier écrivain gagnant — jamais partagée entre plusieurs paires), purger les
+  deux slots de LA paire ne peut jamais toucher le slot d'un tiers. Les 4 autres sites d'appel à
+  `clearBufferedOffer` (balayage total) restent inchangés : les 3 corrigés par les Vagues 137/138
+  utilisent déjà `clearBufferedOfferFor`, et le seul balayage total restant — la branche terminale de
+  `call:end` où l'appel finit VRAIMENT pour tout le monde — reste correct par construction (aucun
+  autre participant ne survit à ce nettoyage).
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production) :
+  `CallEventsHandler-answer-buffered-offer-scope.test.ts` (nouveau fichier) — 3 cas : NE nettoie PAS
+  le slot d'un bystander toujours actif et non lié à cette négociation (RED confirmé : échouait
+  contre le code non corrigé) ; nettoie le slot de l'appelé (espace `userId`) ; nettoie le slot de
+  l'appelant (espace `userId`) — les deux derniers passent trivialement par construction avant comme
+  après (le balayage total les incluait déjà). **3/3** verts après fix.
+  Sweep gateway `--testPathPatterns="[Cc]all"` : **54 suites / 1227 tests** verts (+1 suite/+3 tests
+  nets, 0 régression — ce compte n'inclut pas encore la Vague 138, dont la PR n'était pas fusionnée
+  au moment de cette vague). Suite gateway COMPLÈTE (`jest --config=jest.config.json`, toutes
+  suites) : **739 suites / 17923 tests**, 100% vert. `npx tsc --noEmit` (services/gateway) :
+  **0 erreur**.
+- **Non fait volontairement** : le seul site restant, `call:end` branche terminale (l'appel finit
+  vraiment pour tout le monde), reste intentionnellement un balayage total — correct par
+  construction, aucun survivant à protéger. Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde
+  `!isAnonymous` (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment`
+  (web + iOS) sans filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur,
+  Vague 135) ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.

@@ -3447,8 +3447,26 @@ export class CallEventsHandler {
         if (data.signal.type === 'answer') {
           // Phase 1 fix P2 — answer signal transitions ringing → active
           this.callService.clearRingingTimeout(data.callId);
-          // §4.6 — negotiation complete, the buffered offer is no longer needed.
-          this.clearBufferedOffer(data.callId);
+          // §4.6 — negotiation between the answerer (userId) and the offerer
+          // (targetUserId) is complete, so any buffered offer left over on
+          // EITHER of their own two slots is now stale. Vague 139 — this used
+          // to call whole-call `clearBufferedOffer(data.callId)`, the exact
+          // same over-clear bug fixed for call:leave/call:force-leave/
+          // call:end/call:join (Vague 137/138): the buffer is keyed strictly
+          // per RECIPIENT (`bufferOffer`'s doc comment), so a THIRD, unrelated
+          // participant's own still-pending buffered offer on the SAME call
+          // (e.g. their socket hasn't (re)joined the room yet) has nothing to
+          // do with THIS pair's negotiation finishing and must survive it —
+          // a call-wide sweep here silently starves that third participant's
+          // mesh connection, `bufferedOfferFor` finding nothing left to
+          // replay on their own eventual `call:join`.
+          this.clearBufferedOfferFor(
+            data.callId,
+            userId,
+            senderParticipant.participantId,
+            targetUserId,
+            targetParticipant.participantId
+          );
           // `callSession` was read (line ~2302) BEFORE this update — its
           // `answeredAt` is the true pre-update value, so this correctly
           // identifies the FIRST answer (never a later renegotiation answer,
