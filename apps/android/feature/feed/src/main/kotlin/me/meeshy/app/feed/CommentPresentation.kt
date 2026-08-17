@@ -29,6 +29,7 @@ data class CommentPresentation(
     val parentId: String?,
     val isReply: Boolean,
     val isPending: Boolean,
+    val isOwn: Boolean,
 )
 
 object CommentProjection {
@@ -44,6 +45,9 @@ object CommentProjection {
      *   strip's active chip both follow it; an unknown/content-less override is ignored
      *   and the default resolution stands. Mirror of [FeedPostBuilder.build], keyed per
      *   comment rather than per post.
+     * @param currentUserId the signed-in viewer's id, used to derive [CommentPresentation.isOwn]
+     *   (author id match) — gates the delete affordance to the viewer's own comments, mirror of
+     *   iOS `FeedCommentsSheet.deleteHandler`'s `c.authorId == me` check.
      */
     fun build(
         comment: ApiPostComment,
@@ -52,6 +56,7 @@ object CommentProjection {
         isPending: Boolean = false,
         likeState: CommentLikeState = CommentLikeState(),
         activeLanguageCode: String? = null,
+        currentUserId: String? = null,
     ): CommentPresentation {
         val originalCode = comment.originalLanguage.normalizedCode()
         val isTranslated = comment.isTranslated(preferences)
@@ -80,6 +85,7 @@ object CommentProjection {
             parentId = comment.parentId?.takeIf { it.isNotBlank() },
             isReply = !comment.parentId.isNullOrBlank(),
             isPending = isPending,
+            isOwn = currentUserId != null && comment.author?.id == currentUserId,
         )
     }
 
