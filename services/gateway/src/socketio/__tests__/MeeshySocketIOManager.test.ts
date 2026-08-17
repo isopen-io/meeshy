@@ -3384,6 +3384,52 @@ describe('MeeshySocketIOManager', () => {
         });
       });
 
+      // ── La borne ───────────────────────────────────────────────────────
+      // C'est la différence essentielle avec le fan-out d'envoi, qui porte UNE
+      // conversation quand cet instantané les porte TOUTES. Un compte qui suit
+      // 300 conversations soumettrait 300 branches `OR` à la fenêtre du
+      // service, à CHAQUE reconnexion — alors que `GET /conversations` ne lui
+      // en soumet jamais plus d'une page. Sans cette borne, le correctif du
+      // pont aurait échangé un défaut d'affichage contre un défaut de charge,
+      // et précisément à l'instant où le réseau est le plus fragile.
+      it('caps the bridge pass at one list page, keeping the MOST RECENT conversations', async () => {
+        const many = Array.from({ length: 42 }, (_, i) => ({
+          conversationId: `conv-${i}`,
+          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
+        }));
+        prisma.participant.findMany.mockResolvedValue(many);
+        unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
+        const pass = bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-many', false);
+
+        const candidates = pass.mock.calls[0][0].candidates;
+        expect(candidates).toHaveLength(30);
+        // Les 30 PLUS RÉCENTES — l'ordre de la liste elle-même, donc les lignes
+        // que le lecteur a sous les yeux au retour du réseau.
+        expect(candidates[0].conversationId).toBe('conv-41');
+        expect(candidates.map((c: any) => c.conversationId)).not.toContain('conv-0');
+      });
+
+      // Le COMPTEUR n'est jamais borné : c'est lui qui éteint une pastille
+      // menteuse, et une pastille menteuse sur la 200e conversation ment
+      // autant que sur la première.
+      it('never caps the COUNTS — only the bridges', async () => {
+        const many = Array.from({ length: 42 }, (_, i) => ({
+          conversationId: `conv-${i}`,
+          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
+        }));
+        prisma.participant.findMany.mockResolvedValue(many);
+        unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
+        bridgePass({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-many-counts', false);
+
+        expect(socket.emit).toHaveBeenCalledTimes(42);
+      });
+
       // G-127 : l'étage agent est réservé à `GET /conversations`. Un chemin
       // socket qui le passerait ferait payer un aller-retour HTTP par
       // reconnexion — et une reconnexion touche TOUTES les conversations du
