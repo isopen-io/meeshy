@@ -2,6 +2,49 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Reply @-mention auto-prefill shipped** (slice `reply-mention-prefill`,
+> feature-parity's `Threaded comments` composite line, "still open" reply-composition sub-gap).
+> `gh pr list --state open --search "apps/android OR apps/ios"` showed two unrelated open PRs
+> (#3156, #3167 — web/gateway cycles, neither touching `apps/android`). `df -h /` showed 8.9 Gi
+> free, stable.
+>
+> **Found via the "read feature-parity.md directly for a `[~]` line with a named sub-gap" strategy**
+> (an Explore agent's fresh sweep), then independently re-proved before coding: read
+> `PostCommentsViewModel.beginReply(commentId)` directly — it only sets the "Replying to…" chip
+> (`composer.value = ReplyTarget(parentId, name)`), never touches the composer draft. Read the iOS
+> reference `FeedCommentsSheet.beginReply(to:)` (`apps/ios/.../FeedCommentsSheet.swift:1765`) in
+> full and grepped every `prefilledMention`/`replyingTo = nil` site in the file to confirm the exact
+> algorithm and its edges: the cancel-reply "X" chip button (line 1396) and the post-send reset
+> (line 1822) neither touch `prefilledMention` nor `composerText` — only `beginReply` itself
+> strips/injects. Confirmed this is genuinely the small half of the candidate (no oversized hidden
+> scope, unlike `PostRepository.requestTranslation`/the notification category-filter-bar deferred
+> in earlier runs this session).
+>
+> **New pure `ReplyMentionPrefill.apply(currentText, previousMention, replyToParentId,
+> authorUsername)`** (`:feature:feed`) — takes primitives, not SDK models, so it needs no fixture
+> construction in tests. Injects `@username ` only when `replyToParentId` is non-blank (the
+> *targeted* comment is itself a reply — flat 2-level threading reparents the new reply to the
+> root, so without the mention the addressed person is never notified, only the thread's root
+> author would be) and the author has a non-blank username; strips the exact previously-injected
+> prefix when retargeting to a different reply (idempotent re-tap — no double prefix on repeat
+> taps); an edited-away prefix (text no longer starts with it) is left alone, mirroring iOS's
+> `hasPrefix` guard exactly. `beginReply` gained `private var prefilledMention: String? = null` and
+> calls the helper right after positioning `composer.value`, folding the result into
+> `composerDraft`. `cancelReply` deliberately left untouched — matches iOS, which also never
+> touches `composerText`/`prefilledMention` on cancel.
+>
+> **+8 `ReplyMentionPrefillTest`** (pure: inject on reply-to-reply, no inject on top-level target,
+> no inject on blank parentId, no inject without a username, strip-old-inject-new on retarget,
+> strip-to-nothing when retargeting to top-level, idempotent re-tap, edited-away prefix left alone)
+> **+ 3 `PostCommentsViewModelTest`** (prefill on reply-to-reply, no prefill on top-level, retarget
+> replaces the previous prefill).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=4 last_run=reply-mention-prefill`.
+
 > On 2026-08-17 **Notification list pagination shipped** (slice `notifications-pagination`,
 > feature-parity §M). `gh pr list --state open --search "apps/android OR apps/ios"` showed one
 > unrelated open PR (#3156, wrong branch naming for this routine, untouched). `df -h /` showed

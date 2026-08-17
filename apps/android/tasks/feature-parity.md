@@ -3844,7 +3844,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rows through `ReplyThread`'s existing reuse of that composable. +9 tests [`CommentProjectionTest` ×2:
       isOwn true/false by author id; `PostCommentsViewModelTest` ×6: top-level delete, reply delete +
       parent count decrement, rollback + error on failure, and the three inert guards — blank postId, blank
-      commentId, unknown comment id]) **done**;
+      commentId, unknown comment id]) **done** + **reply @-mention auto-prefill** (slice
+      `reply-mention-prefill`, 2026-08-17 — replying to a comment that is *itself* a reply now
+      prefills `@username ` into the composer, port of iOS `FeedCommentsSheet.beginReply(to:)`:
+      flat 2-level threading reparents the new reply to the root comment, so without the mention
+      the addressed person is never notified — only the thread's root author would be. New pure
+      `ReplyMentionPrefill.apply(currentText, previousMention, replyToParentId, authorUsername)`
+      [`:feature:feed`] — injects only when `replyToParentId` is non-blank [the target comment is
+      a reply, not top-level] and the author has a username; strips the exact previously-injected
+      prefix when retargeting to a different reply [idempotent re-tap, no double prefix; an
+      edited-away prefix is left alone, mirroring iOS's `hasPrefix` guard]. `beginReply` now tracks
+      `prefilledMention` and calls the helper right after positioning `composer.value`. Replying to
+      a top-level comment, or canceling a reply [`cancelReply`], never touches the draft — matches
+      iOS, which also leaves `composerText` untouched on cancel. +8 `ReplyMentionPrefillTest`
+      [pure] + 3 `PostCommentsViewModelTest` [prefill on reply-to-reply, no prefill on top-level,
+      retargeting replaces the previous prefill]) **done**;
       effects/blur still open
 - [~] Post / comment pin-unpin; repost / quote-repost / share; report — **post pin shipped
       2026-08-17** (slice `feed-pin-own-post`). Re-proof found `PostRepository.pinPost`/

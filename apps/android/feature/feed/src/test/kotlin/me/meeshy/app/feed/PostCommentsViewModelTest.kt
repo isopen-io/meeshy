@@ -522,6 +522,49 @@ class PostCommentsViewModelTest {
     }
 
     @Test
+    fun `beginReply on a reply row prefills the composer with the author's handle`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("r1", parentId = "c1", name = "Bob")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+
+        vm.beginReply("r1")
+
+        assertThat(vm.state.value.draft).isEqualTo("@bob ")
+    }
+
+    @Test
+    fun `beginReply on a top-level comment does not prefill a mention`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        val vm = viewModel()
+
+        vm.beginReply("c1")
+
+        assertThat(vm.state.value.draft).isEqualTo("")
+    }
+
+    @Test
+    fun `beginReply on a new reply-to-reply target replaces the previous prefill`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(
+                listOf(
+                    authored("r1", parentId = "c1", name = "Bob"),
+                    authored("r2", parentId = "c1", name = "Carol"),
+                ),
+            )
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.beginReply("r1")
+
+        vm.beginReply("r2")
+
+        assertThat(vm.state.value.draft).isEqualTo("@carol ")
+    }
+
+    @Test
     fun `beginReply is inert for a blank commentId`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
         val vm = viewModel()
