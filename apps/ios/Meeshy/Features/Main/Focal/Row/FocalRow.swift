@@ -158,6 +158,7 @@ struct FocalRow: View {
 
             visualBlock
             audioBlock
+            nonMediaBlock
             textOrEmojiBlock
             // Hors focus, les réactions gardent leur place habituelle sous le
             // contenu. En focus, elles MIGRENT dans la barre de base, où elles
@@ -383,6 +384,41 @@ struct FocalRow: View {
                 onStoryReplyTap: actions.onStoryReplyTap,
                 audioQueueTailProvider: actions.audioQueueTailProvider,
                 onTapConsentNotice: actions.onTapConsentNotice
+            )
+        }
+    }
+
+    /// Pièces jointes non-média (fichier) de `content.attachments`, panier
+    /// `.nonMedia`/`.mixed` — même switch que `visualBlock`/`audioBlock`
+    /// (`FocalAudioRouting`), un accesseur pur par consommateur, patron
+    /// déjà établi trois fois dans ce chantier (`BubbleStandardLayout`,
+    /// `MessageAccessibilityLabelComposer`, ici).
+    private var nonMediaAttachments: [MessageAttachment] {
+        switch content.attachments {
+        case .nonMedia(let items): return items
+        case .mixed(_, _, let items): return items
+        case .none, .visualGrid, .audio: return []
+        }
+    }
+
+    /// Lieu partagé (`content.location`) et fichiers (`nonMediaAttachments`)
+    /// — corrige la rangée VIDE d'un message « lieu seul »/« fichier seul »
+    /// (voir doc de tête de `FocalNonMediaBlock`). Même garde que
+    /// `textOrEmojiBlock` : `audioMode == .hostsCaption` ⇒ la bulle
+    /// n'atteint jamais `textBubbleContent` non plus (elle héberge la
+    /// légende DANS le widget audio) — parité bulle assumée, pas une
+    /// correction inventée pour ce cas résiduel.
+    @ViewBuilder
+    private var nonMediaBlock: some View {
+        if FocalNonMediaGate.shouldRender(
+            hasSharedPlace: content.location != nil,
+            nonMediaCount: nonMediaAttachments.count,
+            audioMode: audioMode
+        ) {
+            FocalNonMediaBlock(
+                hasSharedPlace: content.location != nil,
+                items: nonMediaAttachments,
+                isDark: input.isDark
             )
         }
     }

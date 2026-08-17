@@ -139,7 +139,17 @@ enum MessageAccessibilityLabelComposer {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
-    private static func nonMediaAccessibilityParts(
+    /// `internal` (pas `private`) : `FocalNonMediaBlock` (`Row/`, correctif
+    /// « rangée vide » 2026-08-17) appelle cette MÊME loi pour son repli
+    /// visuel — jamais une seconde résolution du couple lieu/fichier. Élargir
+    /// l'accès plutôt que dupliquer une troisième fois ce que
+    /// `BubbleStandardLayout.nonMediaAccessibilityParts` (§1.3, la loi
+    /// d'origine) porte déjà : `FocalRow.swift`/`Focal/**` ne peuvent PAS
+    /// référencer `BubbleStandardLayout` en code (garde plein-arbre
+    /// `FocalNoBubbleSourceGuardTests.test_noBubbleAnywhereInFocal`, « aucune
+    /// bulle nulle part ») — ce miroir WS-1, déjà dans `Focal/`, est le SEUL
+    /// point d'accès légal à cette loi pour tout consommateur du chantier.
+    static func nonMediaAccessibilityParts(
         hasSharedPlace: Bool,
         nonMedia: [MeeshyMessageAttachment]
     ) -> [String] {
