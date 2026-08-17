@@ -1694,7 +1694,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
-- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+- [x] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
       `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
       (2026-08-12, slice `conversation-list-live-presence`)**; **row dot shipped 2026-08-17** (slice
       `conversation-list-presence-dot`). Confirmed a real, categorical gap: `ApiConversation.participants`
@@ -1717,9 +1717,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       shape as the earlier `contacts-mood-emoji-presence` slice). Pure Compose glue — no new logic to
       test (`TDD-COVERAGE.md`'s documented exemption: `@Composable` param threading is out of the JVM
       gate; the testable decision, `presenceStateFor`, already has its 5 dedicated `ConversationListViewModelTest`
-      cases from the foundation slice). **Chat header dot remains open** — a separate call site, not
-      attempted this run. +9 tests carried over unchanged from the foundation slice (4 `ConversationAccentTest`,
-      5 `ConversationListViewModelTest`), mutation-proven on the direct-type gate and the snapshot merge.
+      cases from the foundation slice). +9 tests carried over unchanged from the foundation slice (4
+      `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the direct-type
+      gate and the snapshot merge. **Chat header dot shipped 2026-08-17** (slice
+      `chat-header-presence-dot`) — port of iOS `ConversationView.headerPresenceState`; unlike iOS,
+      Android's chat header has no avatar to dot (`ChatScreen`'s existing 10dp circle next to the
+      title is an unconditional conversation-accent identity marker, not a presence indicator), so a
+      new small 8dp dot is added ADJACENT to it — additive, never replacing the accent dot — shown
+      only for a direct conversation and only while `meeshyPresenceDotColor` returns non-null (offline
+      = no dot, same rule everywhere else). `ChatUiState` gains `directPeerUserId` (computed via the
+      same `otherParticipantUserId(currentUserId)` reused verbatim) + `presenceByUserId` +
+      `headerPresence(nowEpochMillis): PresenceState?`, mirroring `ConversationListUiState
+      .presenceStateFor` exactly. `ChatViewModel.observePresence()` is a byte-for-byte mirror of
+      `ConversationListViewModel`'s identically-named function, called from `init`. +3
+      `ChatViewModelTest` (live presence resolves in a direct conversation, null for a group even
+      with live data, null before any presence data arrives).
 - [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
       badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
       Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above

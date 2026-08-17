@@ -71,11 +71,14 @@ import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.PinAction
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -89,6 +92,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import me.meeshy.ui.component.bubble.MessageDetailExplorer
@@ -173,6 +177,14 @@ data class ChatUiState(
     /** When the viewer last sent a message in this conversation (epoch millis),
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,
+    /** The other participant's userId in a direct conversation (`null` for a group,
+     * or before the conversation has loaded) — the key [headerPresence] resolves
+     * against [presenceByUserId]. Port of iOS `ConversationView.headerPresenceState`'s
+     * `conversation?.participantUserId` guard. */
+    val directPeerUserId: String? = null,
+    /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
+     * `ConversationListUiState.presenceByUserId`. */
+    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
 
@@ -227,6 +239,19 @@ data class ChatUiState(
      */
     val replyThreadOverlay: ReplyThreadOverlayModel? get() =
         replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
+
+    /**
+     * The chat header's live presence dot, or `null` for a group conversation or before any
+     * presence data has arrived for the peer — mirrors
+     * `ConversationListUiState.presenceStateFor`. Port of iOS
+     * `ConversationView.headerPresenceState`; unlike iOS the Android header has no avatar to
+     * dot, so this drives a small standalone indicator instead (see `ChatScreen`).
+     */
+    fun headerPresence(nowEpochMillis: Long): PresenceState? {
+        val id = directPeerUserId ?: return null
+        val event = presenceByUserId[id] ?: return null
+        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
+    }
 }
 
 /**
@@ -433,10 +458,13 @@ class ChatViewModel @Inject constructor(
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
                         encryptionMode = conversation.encryptionMode,
+                        directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                     )
                 }
             }
         }
+
+        observePresence()
 
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
@@ -697,6 +725,28 @@ class ChatViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Overlays live `user:status`/`presence:snapshot` frames into
+     * [ChatUiState.presenceByUserId] — feeds the chat header's presence dot
+     * ([ChatUiState.headerPresence]). Mirrors [ConversationListViewModel]'s identically-named
+     * function; started eagerly (not lazily on first header render) since
+     * [MessageSocketManager]'s flows are hot `SharedFlow`s with no replay.
+     */
+    private fun observePresence() {
+        viewModelScope.launch {
+            messageSocketManager.userStatus.collect { event ->
+                _state.update { it.copy(presenceByUserId = it.presenceByUserId + (event.userId to event)) }
+            }
+        }
+        viewModelScope.launch {
+            messageSocketManager.presenceSnapshot.collect { snapshot ->
+                _state.update {
+                    it.copy(presenceByUserId = it.presenceByUserId + snapshot.users.associateBy { u -> u.userId })
+                }
+            }
         }
     }
 
