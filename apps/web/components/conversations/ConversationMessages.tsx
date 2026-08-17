@@ -605,6 +605,11 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
                 density={threadDensity}
                 scrollContainerRef={scrollAreaRef}
                 onNavigateToMessage={onNavigateToMessage}
+                conversationId={conversationId}
+                conversationType={conversationType || 'direct'}
+                isAnonymous={isAnonymous}
+                currentAnonymousUserId={currentAnonymousUserId}
+                onImageClick={onImageClick}
               />
             </FeatureErrorBoundary>
           );

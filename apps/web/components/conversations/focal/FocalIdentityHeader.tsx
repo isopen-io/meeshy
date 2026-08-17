@@ -15,13 +15,49 @@
  * VERBATIM (WL-102 l'utilise déjà pour la Lentille, MÊME composant, MÊME
  * abonnement `useLiveUserStatus` par userId) : rend `null` hors ligne, donc
  * jamais un dot fabriqué.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * FIDÉLITÉ À LA MAQUETTE — 2026-08-17
+ * `docs/design/2026-08-15-focal-spec-integration.html`
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 1. L'AUTEUR EST CLIQUABLE. La maquette pose l'identité en tête de rangée
+ *    (`.fident` : pastille + nom + point médian + heure) et la spec iOS
+ *    correspondante fait de l'en-tête un `Button(.plain)` `onOpenProfile`
+ *    (`FocalRow.swift` : « `FocalIdentityHeader` (profil) est un
+ *    `Button(.plain)` »). Le fil web ne l'était PAS : ni la pastille ni le
+ *    nom n'ouvraient quoi que ce soit.
+ *
+ *    RE-PREUVE avant d'écrire (exigence « réutilise, jamais une copie ») :
+ *    il n'existe AUCUNE modale de profil sur le web — `grep -rn
+ *    "UserProfileModal\|ProfileModal\|MiniProfile\|UserSheet" apps/web` ne
+ *    rend rien. L'affordance de profil de l'app EST la route `/u/{username}`,
+ *    ouverte par un `next/link` : c'est exactement ce que fait la vue Bulles
+ *    (`bubble-message/MessageNameDate.tsx:44`, le nom au-dessus de la bulle)
+ *    et l'aperçu de réponse (`MessageReplyPreview.tsx:72`). C'est donc CETTE
+ *    affordance-là qui est réutilisée ici, avec le MÊME gabarit d'URL et le
+ *    MÊME `stopPropagation` (le fil porte des gestes de rangée au-dessus).
+ *    Une MODALE serait un écran neuf, pas une réutilisation : elle est
+ *    nommée comme écart dans le rapport, pas bâclée ici.
+ *
+ *    Sans `username` (participant anonyme, expéditeur non résolu), l'identité
+ *    reste un simple texte : un lien vers `/u/undefined` serait un bouton
+ *    menteur.
+ *
+ * 2. LES ACCUSÉS ✓/✓✓ VIVENT DANS L'IDENTITÉ. Maquette, ligne de rendu de la
+ *    rangée : `<div class="fident">… ${me ? '<span class="chk">✓✓</span>' :
+ *    ''}</div>`, et §5 de la spec : « Accusés ✓/✓✓/lu … Déplacés dans
+ *    l'identité des messages "Toi" ». `DeliveryIndicator` (bubble-message)
+ *    est RÉUTILISÉ tel quel — y compris sa règle de réciprocité
+ *    `showReadReceipts`, jamais réécrite.
  */
 'use client';
 
+import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { getMessageInitials } from '@/lib/avatar-utils';
 import type { Participant } from '@meeshy/shared/types/participant';
+import { DeliveryIndicator } from '@/components/common/bubble-message/DeliveryIndicator';
 import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
 
 /** Teinte "Toi" — MeeshyColors.indigo500, §WS-4. */
@@ -32,10 +68,73 @@ export interface FocalIdentityHeaderProps {
   readonly isMe: boolean;
   readonly time: string;
   readonly youLabel: string;
+  /** Accusés dans l'identité (maquette `.fident .chk`) — servis seulement pour « Toi ». */
+  readonly messageId?: string;
+  readonly conversationId?: string;
+  /**
+   * Libellé accessible du lien de profil, déjà traduit par l'appelant
+   * (« Voir le profil de {nom} ») — la feuille ne consulte aucun i18n.
+   */
+  readonly openProfileLabel?: string;
 }
 
-export function FocalIdentityHeader({ sender, isMe, time, youLabel }: FocalIdentityHeaderProps) {
+export function FocalIdentityHeader({
+  sender,
+  isMe,
+  time,
+  youLabel,
+  messageId,
+  conversationId,
+  openProfileLabel,
+}: FocalIdentityHeaderProps) {
   const displayName = isMe ? youLabel : getUserDisplayName(sender, youLabel);
+  /**
+   * Le handle qui fait l'URL de profil. `Participant` le porte SOUS `user`
+   * (`ParticipantUserSchema.username`, `packages/shared/types/participant.ts`)
+   * — la vue Bulles, elle, lit `sender.username` à plat parce que son type
+   * `MessageSender` est plus lâche. Les deux formes circulent sur le fil
+   * selon l'origine de la charge (REST vs socket) : on lit la forme TYPÉE
+   * d'abord, la forme plate en repli, et l'absence des deux laisse
+   * l'identité en simple texte plutôt qu'en lien vers `/u/undefined`.
+   */
+  const username =
+    sender?.user?.username ?? (sender as { username?: string } | undefined)?.username;
+
+  const avatarNode = (
+    <div
+      className="relative flex-shrink-0"
+      style={{ width: 'var(--lentille-thread-avatar-size)', height: 'var(--lentille-thread-avatar-size)' }}
+    >
+      <Avatar className="h-full w-full">
+        <AvatarImage src={sender?.avatar} />
+        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+          {getMessageInitials({ sender })}
+        </AvatarFallback>
+      </Avatar>
+      {!isMe && (
+        <ParticipantPresenceIndicator
+          userId={sender?.userId ?? sender?.id}
+          fallbackUser={{ isOnline: sender?.isOnline, lastActiveAt: sender?.lastActiveAt }}
+          size="sm"
+          className="absolute -bottom-0.5 -right-0.5"
+        />
+      )}
+    </div>
+  );
+
+  const nameNode = (
+    <span
+      className="truncate"
+      data-testid="focal-identity-name"
+      style={{
+        fontSize: 'var(--lentille-thread-name-size)',
+        fontWeight: 'var(--lentille-thread-name-weight)',
+        color: isMe ? YOU_INDIGO_HEX : undefined,
+      }}
+    >
+      {displayName}
+    </span>
+  );
 
   return (
     <div
@@ -43,37 +142,27 @@ export function FocalIdentityHeader({ sender, isMe, time, youLabel }: FocalIdent
       data-testid="focal-identity-header"
       style={{ paddingBottom: '2px' }}
     >
-      <div
-        className="relative flex-shrink-0"
-        style={{ width: 'var(--lentille-thread-avatar-size)', height: 'var(--lentille-thread-avatar-size)' }}
-      >
-        <Avatar className="h-full w-full">
-          <AvatarImage src={sender?.avatar} />
-          <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
-            {getMessageInitials({ sender })}
-          </AvatarFallback>
-        </Avatar>
-        {!isMe && (
-          <ParticipantPresenceIndicator
-            userId={sender?.userId ?? sender?.id}
-            fallbackUser={{ isOnline: sender?.isOnline, lastActiveAt: sender?.lastActiveAt }}
-            size="sm"
-            className="absolute -bottom-0.5 -right-0.5"
-          />
-        )}
-      </div>
-
-      <span
-        className="truncate"
-        data-testid="focal-identity-name"
-        style={{
-          fontSize: 'var(--lentille-thread-name-size)',
-          fontWeight: 'var(--lentille-thread-name-weight)',
-          color: isMe ? YOU_INDIGO_HEX : undefined,
-        }}
-      >
-        {displayName}
-      </span>
+      {username ? (
+        <Link
+          href={`/u/${username}`}
+          data-testid="focal-identity-profile-link"
+          aria-label={openProfileLabel ?? displayName}
+          // Le fil porte ses propres gestes de rangée (saut de citation,
+          // futur menu contextuel) : le lien de profil ne doit pas les
+          // déclencher au passage. MÊME `stopPropagation` que
+          // `conversation-participants.tsx:198` et `MessageNameDate.tsx:47`.
+          onClick={(event) => event.stopPropagation()}
+          className="flex min-w-0 items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          {avatarNode}
+          {nameNode}
+        </Link>
+      ) : (
+        <>
+          {avatarNode}
+          {nameNode}
+        </>
+      )}
 
       <span
         className="text-muted-foreground flex-shrink-0"
@@ -85,6 +174,16 @@ export function FocalIdentityHeader({ sender, isMe, time, youLabel }: FocalIdent
       >
         {time}
       </span>
+
+      {isMe && messageId && conversationId && (
+        <span data-testid="focal-delivery" className="flex-shrink-0">
+          <DeliveryIndicator
+            isOwnMessage
+            messageId={messageId}
+            conversationId={conversationId}
+          />
+        </span>
+      )}
     </div>
   );
 }

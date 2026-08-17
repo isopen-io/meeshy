@@ -762,7 +762,14 @@
     },
     "focal": {
       "row": {
-        "you": "You"
+        "you": "You",
+        "emptyContent": "Message with no displayable content",
+        "forwarded": "Forwarded",
+        "edited": "Edited",
+        "translated": "Translated",
+        "openProfile": "View profile",
+        "callSummary": "Call summary",
+        "attachments": "Attachments"
       }
     },
     "lens": {

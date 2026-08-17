@@ -764,7 +764,14 @@
     },
     "focal": {
       "row": {
-        "you": "Tú"
+        "you": "Tú",
+        "emptyContent": "Mensaje sin contenido visible",
+        "forwarded": "Reenviado",
+        "edited": "Editado",
+        "translated": "Traducido",
+        "openProfile": "Ver perfil",
+        "callSummary": "Resumen de llamada",
+        "attachments": "Archivos adjuntos"
       }
     },
     "lens": {

@@ -766,7 +766,14 @@
     },
     "focal": {
       "row": {
-        "you": "Toi"
+        "you": "Toi",
+        "emptyContent": "Message sans contenu affichable",
+        "forwarded": "Transféré",
+        "edited": "Modifié",
+        "translated": "Traduit",
+        "openProfile": "Voir le profil",
+        "callSummary": "Résumé d’appel",
+        "attachments": "Pièces jointes"
       }
     },
     "lens": {
