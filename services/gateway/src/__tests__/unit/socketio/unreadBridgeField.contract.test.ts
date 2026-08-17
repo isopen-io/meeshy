@@ -216,30 +216,21 @@ describe('conversation:unread-updated — le troisième état du pont ✦', () =
   // 2. La resynchronisation du LECTEUR après un accusé de lecture
   // ---------------------------------------------------------------------------
   /**
-   * Piste n°1 du cycle 62, tranchée ici — et pas dans le sens qu'elle
-   * anticipait.
+   * Piste n°1 du cycle 62, fermée par la RENCONTRE de deux passes le même jour.
    *
-   * Le cycle 62 la posait comme un arbitrage de PRIX : « le pont devrait être
-   * recalculé sur le nouveau curseur, il est effacé à la place ; le corriger
-   * coûterait les requêtes de la passe à chaque accusé de lecture ». Cette
-   * formulation supposait que garder le pont valait mieux que l'effacer, et que
-   * seul le coût s'y opposait.
+   * L'une a livré le RECALCUL : après une lecture partielle, le pont est
+   * reconstruit sur le curseur qui vient de bouger, pour quatre requêtes et non
+   * cinq — le curseur que la passe irait relire est celui que cette fonction
+   * vient de lire pour son compteur, et il lui est passé.
    *
-   * Le contrat gelé dit le contraire, et il le dit dans le type : le pont PORTE
-   * son propre `unreadCount`, et le rang n'affiche plus aucun autre chiffre
-   * (« le chiffre vit ICI, plus dans un badge » — L06 a supprimé le badge
-   * chiffré). Une lecture partielle qui fait passer l'arriéré de 12 à 5
-   * INVALIDE donc le pont qu'elle annonce : le garder ferait lire « Alice ·
-   * 12 messages » à un lecteur qui n'en a plus que 5.
-   *
-   * Le serveur SAIT que l'ancien pont est void — c'est l'acte même qu'il
-   * diffuse qui l'a rendu tel. `null` n'est donc pas ici un pis-aller de coût :
-   * c'est la seule affirmation vraie. La piste n°1 se ferme sans payer une
-   * seule requête, parce que la bonne question n'était pas « combien coûte le
-   * recalcul » mais « que sait-on, au juste ».
+   * L'autre a livré le VOCABULAIRE, et c'est ce que ces témoins gardent : un
+   * pont calculable n'est pas la seule issue de ce site, et les deux autres ne
+   * doivent pas se ressembler. Le compteur à zéro AFFIRME l'absence de pont
+   * (`null`) ; une passe TOMBÉE ne dit rien du tout, pour ne pas détruire le
+   * pont en cache sur la foi d'un incident.
    */
-  describe('broadcastReadStatus — la lecture INVALIDE le pont qu’elle annonce', () => {
-    function readStatusDeps(unreadCount: number) {
+  describe('broadcastReadStatus — le quatrième émetteur déclare, lui aussi', () => {
+    function readStatusDeps(unreadCount: number, bridgeService?: unknown) {
       const emit = jest.fn<any>();
       const to = jest.fn<any>(() => ({ emit }));
       return {
@@ -248,7 +239,9 @@ describe('conversation:unread-updated — le troisième état du pont ✦', () =
           io: { to } as any,
           prisma: {
             conversationReadCursor: {
-              findUnique: jest.fn<any>().mockResolvedValue({ lastReadAt: new Date() }),
+              findUnique: jest
+                .fn<any>()
+                .mockResolvedValue({ lastReadAt: new Date(), lastReadMessageCreatedAt: new Date() }),
             },
             participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
           } as any,
@@ -259,14 +252,13 @@ describe('conversation:unread-updated — le troisième état du pont ✦', () =
           privacyPreferencesService: {
             shouldShowReadReceipts: jest.fn<any>().mockResolvedValue(false),
           },
+          ...(bridgeService ? { bridgeService } : {}),
         },
       };
     }
 
-    it('efface EXPLICITEMENT le pont après une lecture partielle', async () => {
-      const { emit, deps } = readStatusDeps(5);
-
-      await broadcastReadStatus(deps, {
+    const runRead = async (deps: any) =>
+      broadcastReadStatus(deps, {
         conversationId: CONV_ID,
         participantId: PEER_PART_ID,
         userId: PEER_USER_ID,
@@ -274,12 +266,53 @@ describe('conversation:unread-updated — le troisième état du pont ✦', () =
         type: 'read',
       });
 
-      const payload = emit.mock.calls.find(
+    const badge = (emit: jest.Mock<any>) =>
+      emit.mock.calls.find(
         ([event]: any) => event === 'conversation:unread-updated'
       )![1] as Record<string, unknown>;
 
-      expect(payload).toHaveProperty('bridge', null);
-      expect(payload).toMatchObject({ conversationId: CONV_ID, unreadCount: 5 });
+    it('affirme `null` quand la lecture a TOUT rattrapé — fait connu, zéro requête', async () => {
+      const buildBridgeData = jest.fn<any>();
+      const { emit, deps } = readStatusDeps(0, { buildBridgeData });
+
+      await runRead(deps);
+
+      expect(buildBridgeData).not.toHaveBeenCalled();
+      expect(badge(emit)).toHaveProperty('bridge', null);
+    });
+
+    it('porte le pont RECALCULÉ après une lecture partielle', async () => {
+      const buildBridgeData = jest
+        .fn<any>()
+        .mockResolvedValue(new Map([[CONV_ID, { bridge: A_BRIDGE }]]));
+      const { emit, deps } = readStatusDeps(5, { buildBridgeData });
+
+      await runRead(deps);
+
+      expect(buildBridgeData).toHaveBeenCalledTimes(1);
+      expect(badge(emit)).toMatchObject({ unreadCount: 5, bridge: A_BRIDGE });
+    });
+
+    // LE témoin du troisième état sur ce site : sans lui, un incident de passe
+    // effacerait le pont que le lecteur a déjà — sur l'un des chemins les plus
+    // chauds du service, et à chaque accusé de lecture.
+    it("NE DIT RIEN quand la passe tombe — un incident ne détruit pas le pont en cache", async () => {
+      const buildBridgeData = jest.fn<any>().mockRejectedValue(new Error('bridge down'));
+      const { emit, deps } = readStatusDeps(5, { buildBridgeData });
+
+      await runRead(deps);
+
+      const payload = badge(emit);
+      expect(Object.keys(payload)).not.toContain('bridge');
+      expect(payload).toEqual({ conversationId: CONV_ID, unreadCount: 5 });
+    });
+
+    it('NE DIT RIEN sans constructeur de pont — ignorer le pont n’est pas le nier', async () => {
+      const { emit, deps } = readStatusDeps(5);
+
+      await runRead(deps);
+
+      expect(Object.keys(badge(emit))).not.toContain('bridge');
     });
   });
 });

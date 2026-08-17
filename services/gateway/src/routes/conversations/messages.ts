@@ -53,6 +53,7 @@ import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
@@ -323,6 +324,8 @@ export function registerMessagesRoutes(
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = fastify.socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
+  // G-123 — cf. la même attache aux trois portes de `routes/message-read-status.ts`.
+  const bridgeService = new ConversationBridgeService(prisma);
 
   // `MessagingService` is stateless across requests, so it is built once and
   // reused. The POST /messages handler previously re-imported the module and
@@ -1560,7 +1563,13 @@ export function registerMessagesRoutes(
       // de l'acteur, et recale le badge sur les DEUX branches de la préférence.
       try {
         await broadcastReadStatus(
-          { io: socketIOHandler?.getManager?.()?.getIO(), prisma, readStatusService, privacyPreferencesService },
+          {
+            io: socketIOHandler?.getManager?.()?.getIO(),
+            prisma,
+            readStatusService,
+            privacyPreferencesService,
+            bridgeService
+          },
           {
             conversationId,
             participantId: currentParticipant.id,
@@ -1894,7 +1903,13 @@ export function registerMessagesRoutes(
       await readStatusService.markMessagesAsRead(membership.id, conversationId);
       try {
         await broadcastReadStatus(
-          { io: socketIOHandler?.getManager?.()?.getIO(), prisma, readStatusService, privacyPreferencesService },
+          {
+            io: socketIOHandler?.getManager?.()?.getIO(),
+            prisma,
+            readStatusService,
+            privacyPreferencesService,
+            bridgeService
+          },
           {
             conversationId,
             participantId: membership.id,

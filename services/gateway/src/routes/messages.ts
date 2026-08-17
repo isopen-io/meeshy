@@ -10,6 +10,7 @@ import { emitToConversationParticipants } from '../socketio/emitToConversationPa
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
+import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -71,6 +72,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   const translationService = fastify.translationService;
   const socketIOHandler = fastify.socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
+  // G-123 — cf. la même attache aux trois portes de `routes/message-read-status.ts`.
+  const bridgeService = new ConversationBridgeService(prisma);
   const trackingLinkService = new TrackingLinkService(prisma);
 
   // Middleware d'authentification requis pour les messages
@@ -776,7 +779,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               io: socketIOHandler.getManager()?.getIO(),
               prisma,
               readStatusService,
-              privacyPreferencesService
+              privacyPreferencesService,
+              bridgeService
             },
             {
               conversationId: message.conversationId,
