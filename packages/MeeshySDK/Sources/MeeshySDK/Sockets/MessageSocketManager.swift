@@ -231,8 +231,12 @@ public struct UnreadUpdateEvent: Decodable, Sendable {
             self.announcement = .notComputed
             return
         }
-        if let decoded = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge),
-           let bridge = decoded {
+        // `try?` APLATIT l'optionnel imbriqué (SE-0230) : `try?` d'un
+        // `ConversationBridge?` rend un `ConversationBridge?`, pas un double.
+        // Ce `if let` ne réussit donc QUE sur un pont réellement décodé — un
+        // `null` comme une erreur de décodage tombent tous deux dans le `else`,
+        // où `decodeNil` les sépare.
+        if let bridge = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge) {
             self.announcement = .bridge(bridge)
         } else if (try? c.decodeNil(forKey: .bridge)) == true {
             self.announcement = .cleared
