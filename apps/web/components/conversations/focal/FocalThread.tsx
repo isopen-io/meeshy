@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAuth } from '@/hooks/use-auth';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useFocalPerspective } from '@/hooks/lentille/use-focal-perspective';
@@ -58,6 +59,20 @@ export interface FocalThreadProps {
   readonly density?: FocalDensity;
   readonly scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   readonly onNavigateToMessage?: (messageId: string) => void;
+  /**
+   * Parité de données 2026-08-17 — l'identité de conversation et du lecteur,
+   * portée jusqu'aux composants du tronc que la rangée monte désormais
+   * (réactions, accusés, pièces jointes, rappel d'appel). `ConversationMessages`
+   * les tient déjà et les passe VERBATIM à `MessagesDisplay` sur le chemin
+   * historique : la branche Focal reçoit exactement les mêmes, ni plus ni
+   * moins — sans quoi un lecteur anonyme perdait ses réactions et la
+   * suppression de pièce jointe n'avait pas de jeton.
+   */
+  readonly conversationId?: string;
+  readonly conversationType?: React.ComponentProps<typeof FocalRow>['conversationType'];
+  readonly isAnonymous?: boolean;
+  readonly currentAnonymousUserId?: string;
+  readonly onImageClick?: (attachmentId: string) => void;
 }
 
 function isOptimisticMessage(message: Message): boolean {
@@ -70,8 +85,18 @@ export function FocalThread({
   density = 'focal',
   scrollContainerRef,
   onNavigateToMessage,
+  conversationId,
+  conversationType,
+  isAnonymous,
+  currentAnonymousUserId,
+  onImageClick,
 }: FocalThreadProps) {
   const { t, locale } = useI18n('conversations');
+  // Jeton porté jusqu'à `MessageAttachments` (suppression de pièce jointe) —
+  // MÊME lecture que la vue Bulles (`BubbleMessageNormalView`,
+  // `bubble-message/FocalRow`) : un magasin d'auth, jamais une requête (la
+  // garde WF-113 « aucun useQuery dans la peau Focal » reste vraie).
+  const { token } = useAuth();
 
   // Cast ciblé : `getUserLanguagePreferences` est typé contre l'alias `User`
   // de `@/types` (un troisième alias, distinct de `SocketIOUser` ET du
@@ -167,6 +192,12 @@ export function FocalThread({
               registerRow={registerRow}
               setAlphaCeiling={setAlphaCeiling}
               onQuoteJump={onQuoteJump}
+              conversationId={conversationId}
+              conversationType={conversationType}
+              isAnonymous={isAnonymous}
+              currentAnonymousUserId={currentAnonymousUserId}
+              token={token || undefined}
+              onImageClick={onImageClick}
             />
           </div>
         );

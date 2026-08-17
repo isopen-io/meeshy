@@ -5153,7 +5153,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `UPDATE_SETTINGS` sender. `SettingsViewModel.updateNotifications` now persists to the device-local store
       instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
       so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
-      online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
+      online-only. **Email channel toggle shipped 2026-08-17** (slice
+      `settings-email-notification-toggle`): `UserNotificationPreferences.emailEnabled` already
+      synced end-to-end through `NotificationPreferenceSyncBody` — the field just had no
+      `SettingsViewModel` intent and no `SettingsScreen` row. New `setEmailEnabled(enabled)`
+      (mirrors `setSoundEnabled`'s `updateNotifications { it.copy(...) }` shape) + a
+      `NotificationToggleRow` placed right after Push, matching iOS `NotificationSettingsView`'s
+      order (Push → Email → Sound → Vibration). Unlike Sound/Vibration/NewMessage on Android
+      (gated `enabled = notifications.pushEnabled`), the Email row is **not** gated on push —
+      iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
+      genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
+      across EN/FR/ES/PT.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**

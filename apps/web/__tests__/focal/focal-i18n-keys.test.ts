@@ -23,7 +23,19 @@ const loadScopedConversations = (locale: string): Record<string, unknown> => {
   return scopeToNamespace(data.default ?? data, 'conversations');
 };
 
-const FOCAL_KEYS = ['focal.row.you'];
+// Parité 2026-08-17 — chaque libellé neuf de la rangée plate est ATTEIGNABLE
+// dans les quatre locales (sinon le repli en dur du code deviendrait la
+// version « officielle » d'un mot d'interface, dans une seule langue).
+const FOCAL_KEYS = [
+  'focal.row.you',
+  'focal.row.emptyContent',
+  'focal.row.forwarded',
+  'focal.row.edited',
+  'focal.row.translated',
+  'focal.row.openProfile',
+  'focal.row.callSummary',
+  'focal.row.attachments',
+];
 
 describe('focal namespace i18n keys — reachable via useI18n(\'conversations\')', () => {
   LOCALES.forEach((locale) => {

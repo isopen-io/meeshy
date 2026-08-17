@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=2 last_run=chat-header-presence-dot
+lane=ANDROID android_streak=3 last_run=settings-email-notification-toggle
