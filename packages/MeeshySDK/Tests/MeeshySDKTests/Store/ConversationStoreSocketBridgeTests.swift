@@ -137,6 +137,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         title: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
@@ -145,6 +146,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             lastMessageAt: lastMessageAt,
             lastMessage: lastMessage,
             lastMessagePreview: lastMessagePreview,
+            location: location,
             updatedAt: "2024-01-01T00:00:00.000Z",
             previewRecalculated: previewRecalculated
         )
@@ -212,6 +214,37 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         XCTAssertTrue(applied,
                       "the bridge must forward previewRecalculated — a flag decoded but not mapped is inert")
         XCTAssertNotEqual(t0, previous)
+    }
+
+    /// L'autre moitié du chemin, celle qu'un test de `merging` seul ne peut pas
+    /// voir — et c'est exactement là que l'épingle se perdait.
+    ///
+    /// `ConversationUpdatedEvent` DÉCODE `location` depuis le cycle 50, mais
+    /// `mapConversationUpdated` ne recopie qu'un sous-ensemble des champs
+    /// décodés : le champ arrivait sur le fil, était décodé, puis tombait au
+    /// passage du pont. Aussi inerte qu'un champ absent — même défaut que celui
+    /// que le témoin du drapeau `previewRecalculated` ci-dessus existe pour
+    /// interdire.
+    func test_conversationUpdated_positionMessage_pinCrossesTheBridge() async {
+        let store = makeStore()
+        var c1 = makeConv(id: "c1")  // lastMessageAt = t0
+        c1.lastMessageId = "msg-texte"
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_002_000),
+            lastMessage: .replaced("msg-position"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        ))
+
+        let applied = await waitUntil {
+            (await store.conversation(id: "c1"))?.lastMessageLocation?.name == "Tour Eiffel"
+        }
+        XCTAssertTrue(applied,
+                      "le pont doit transmettre location — un champ décodé mais non mappé est inerte")
     }
 
     func test_conversationUpdated_lastMessageId_andPreview_applied() async {

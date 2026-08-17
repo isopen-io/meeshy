@@ -2439,6 +2439,64 @@ describe('MeeshySocketIOManager', () => {
       expect(payload.lastMessagePreview).toHaveLength(LAST_MESSAGE_PREVIEW_MAX_LENGTH);
     });
 
+    // Jumeau EXACT du témoin de `MessageHandler.broadcastNewMessage`, et pour la
+    // même raison : un message position-seule a un `content` vide, donc son
+    // `lastMessagePreview` l'est aussi. `location` est alors la SEULE chose dont
+    // la ligne de liste dispose pour composer son libellé — sans elle, la ligne
+    // est littéralement blanche, et VoiceOver n'annonce que l'horodatage.
+    //
+    // Les deux autres émetteurs de ce payload la hissaient déjà
+    // (`MessageHandler.ts`, `emitConversationPreviewUpdate.ts`) ; ce chemin-ci —
+    // REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu — ne l'a
+    // jamais fait.
+    it('hisse metadata.location dans CONVERSATION_UPDATED (jumeau du chemin socket)', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: '',
+        metadata: { location: { latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel', address: null, category: null } },
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const payload = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-recipient'));
+      expect(payload.location).toEqual(
+        expect.objectContaining({ latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel' })
+      );
+    });
+
+    // La contre-épreuve, jumelle elle aussi : l'ABSENCE de clé est ce qui
+    // distingue « ce message n'a pas de position » de « position inconnue ».
+    // Les clients écrivent `location` AVEC l'identité du message — une clé
+    // présente à `null` sur le chemin le plus fréquenté du service effacerait
+    // une épingle correcte à chaque message texte.
+    it('sans position, CONVERSATION_UPDATED ne porte AUCUNE clé location', async () => {
+      const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      const sent = recordEmitChains(ioState);
+      try {
+        await manager.broadcastMessage(msg, 'conv-123456789012');
+      } finally {
+        sent.restore();
+      }
+
+      const payload = sent.payloadFor(SERVER_EVENTS.CONVERSATION_UPDATED, ROOMS.user('user-recipient'));
+      expect('location' in payload).toBe(false);
+    });
+
     it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {
       const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
       prisma.conversation.findUnique.mockResolvedValue(null);
