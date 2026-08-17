@@ -187,10 +187,18 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// par-dessus la courbe gelée, jamais écrite dedans (écart iOS assumé,
     /// spec Magnificence 2026-08-17 — même précédent que le retrait du
     /// fondu d'alpha ; zéro collision avec le chantier web V4).
-    func magnification(signedDistance: CGFloat) -> CGFloat {
+    /// RÈGLE STRICTE (user 17/08 soir) : zone = bande exacte (rayon =
+    /// demi-bande), et croissance plafonnée en POINTS absolus par
+    /// `magnificationMaxGrowth` — le pic effectif d'une rangée est
+    /// `min(pic, 1 + maxGrowth/h)`.
+    func magnification(signedDistance: CGFloat, rowHeight: CGFloat) -> CGFloat {
         let t = max(0, 1 - abs(signedDistance) / magnificationRadius)
         let smooth = t * t * (3 - 2 * t)
-        return 1 + (magnificationPeak - 1) * smooth
+        let cappedPeak = min(
+            magnificationPeak,
+            1 + FocalPassConstants.magnificationMaxGrowth / max(rowHeight, 1)
+        )
+        return 1 + (cappedPeak - 1) * smooth
     }
 
     /// Distance SIGNÉE à la ligne de focus (positive au-dessus, négative en
@@ -204,15 +212,21 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// gelée reçoit la distance clampée (son domaine), la loupe la distance
     /// signée ; l'échelle rendue est le produit des deux, l'élévation
     /// `zPosition` suit la loupe seule.
+    /// `isMagnifiable` (règle stricte) : SEULS LES MESSAGES prennent la
+    /// loupe — pilule de jour, typing, début de conversation suivent la
+    /// perspective de RÉDUCTION mais ne grossissent jamais.
     func transform(
         signedDistance: CGFloat,
         cellSize: CGSize,
         horizontalAnchor: FocalHorizontalAnchor,
         isRightToLeft: Bool,
-        alphaCeiling: CGFloat
+        alphaCeiling: CGFloat,
+        isMagnifiable: Bool
     ) -> FocalCellTransform {
         let curve = FocalFocusCurve.focusCurve(distance: max(0, signedDistance), variant: .thread)
-        let loupe = magnification(signedDistance: signedDistance)
+        let loupe = isMagnifiable
+            ? magnification(signedDistance: signedDistance, rowHeight: cellSize.height)
+            : 1
         return anchoredTransform(
             scale: curve.scale * loupe,
             cellSize: cellSize,

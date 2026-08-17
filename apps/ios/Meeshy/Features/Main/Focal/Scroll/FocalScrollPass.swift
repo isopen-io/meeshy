@@ -302,7 +302,8 @@ final class FocalScrollPass {
                     cellSize: cell.bounds.size,
                     isRightToLeft: isRightToLeft,
                     alphaCeiling: descriptor.alphaCeiling,
-                    usesPerspective: usesPerspective
+                    usesPerspective: usesPerspective,
+                    isMagnifiable: descriptor.localId != nil
                 ),
                 to: cell
             )
@@ -418,7 +419,8 @@ final class FocalScrollPass {
                 cellSize: cell.bounds.size,
                 isRightToLeft: collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft,
                 alphaCeiling: descriptor.alphaCeiling,
-                usesPerspective: rendering == .perspective
+                usesPerspective: rendering == .perspective,
+                isMagnifiable: descriptor.localId != nil
             ),
             to: cell
         )
@@ -532,7 +534,8 @@ final class FocalScrollPass {
         cellSize: CGSize,
         isRightToLeft: Bool,
         alphaCeiling: CGFloat,
-        usesPerspective: Bool
+        usesPerspective: Bool,
+        isMagnifiable: Bool
     ) -> FocalCellTransform {
         guard usesPerspective else {
             return geometry.flatTransform(alphaCeiling: alphaCeiling)
@@ -542,7 +545,8 @@ final class FocalScrollPass {
             cellSize: cellSize,
             horizontalAnchor: horizontalAnchor,
             isRightToLeft: isRightToLeft,
-            alphaCeiling: alphaCeiling
+            alphaCeiling: alphaCeiling,
+            isMagnifiable: isMagnifiable
         )
     }
 
