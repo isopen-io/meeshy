@@ -225,7 +225,7 @@ final class MediaSaveCoordinator: ObservableObject {
     nonisolated static func discardStagingDirectory(of file: URL) {
         let directory = file.deletingLastPathComponent()
         guard directory.lastPathComponent.hasPrefix("meeshy-branded-") else { return }
-        try? FileManager.default.removeItem(at: directory)
+        FileManager.default.removeItemLogging(at: directory, context: "media-save staging cleanup")
     }
 
     /// Nom de fichier d'export : nom suggéré assaini, sinon dernier segment
