@@ -57,8 +57,17 @@ final class FocalFocusDecorationTests: XCTestCase {
         )
         XCTAssertTrue(card.superlayer === cell.contentView.layer,
                       "la carte doit vivre dans cell.contentView.layer (§4.6)")
-        XCTAssertEqual(cell.contentView.layer.sublayers?.first, card,
-                       "la carte doit être insérée à l'index 0 — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
+        // Depuis `85cf1ec4` la carte n'est plus SEULE derrière le contenu :
+        // un halo (`focal.focus.halo`, débord d'accent dilué) vit encore
+        // DESSOUS — index 0 au halo, index 1 à la carte (doc
+        // `haloLayer(for:)` : « Le halo vit SOUS la carte »). L'invariant
+        // §4.6 est inchangé : la décoration ENTIÈRE reste derrière le
+        // contenu SwiftUI hébergé, jamais par-dessus.
+        let sublayers = cell.contentView.layer.sublayers ?? []
+        XCTAssertEqual(sublayers.first?.name, "focal.focus.halo",
+                       "le halo doit occuper l'index 0 — tout au fond, même sous la carte")
+        XCTAssertEqual(sublayers.dropFirst().first, card,
+                       "la carte doit vivre juste au-dessus du halo (index 1) — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
         XCTAssertEqual(card.cornerRadius, FocalMetrics.FocusCard.radius,
                        "rayon de la carte = FocalMetrics.FocusCard.radius (token thread.focusCard.radius), jamais un littéral")
         XCTAssertEqual(card.borderWidth, FocalMetrics.FocusCard.ringSize,
@@ -174,8 +183,8 @@ final class FocalFocusDecorationTests: XCTestCase {
         XCTAssertNil(decoration.flashLayer(attachedTo: cell),
                      "FocalFocusDecoration.clear doit retirer le layer de flash")
         XCTAssertTrue(
-            (cell.contentView.layer.sublayers ?? []).allSatisfy { $0.name != "focal.focus.card" && $0.name != "focal.focus.flash" },
-            "aucun layer de décoration ne doit survivre à clear(_:)"
+            (cell.contentView.layer.sublayers ?? []).allSatisfy { ($0.name ?? "").hasPrefix("focal.focus.") == false },
+            "aucun layer de décoration `focal.focus.*` (carte, halo, flash) ne doit survivre à clear(_:)"
         )
     }
 
