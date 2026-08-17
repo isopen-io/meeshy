@@ -739,6 +739,22 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun state_isOffline_mirrors_the_same_network_reading_that_drives_the_pending_hourglass() = runTest(dispatcher) {
+        val h = harness(stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)), offline = true)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isOffline).isTrue()
+    }
+
+    @Test
+    fun state_isOffline_is_false_while_online() = runTest(dispatcher) {
+        val h = harness(stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)), offline = false)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.isOffline).isFalse()
+    }
+
+    @Test
     fun empty_result_shows_the_skeleton() = runTest(dispatcher) {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()

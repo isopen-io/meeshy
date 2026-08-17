@@ -82,6 +82,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -701,6 +702,7 @@ fun ChatScreen(
                     ScrollToBottomControl(
                         affordance = scrollAffordance,
                         typingParticipants = state.typingParticipants,
+                        isOffline = state.isOffline,
                         accentColor = accentColor,
                         onClick = {
                             scrollAffordance = ScrollAffordance.next(
@@ -1332,11 +1334,12 @@ private fun ReplyCountPill(
 private fun ScrollToBottomControl(
     affordance: ScrollAffordanceState,
     typingParticipants: List<TypingParticipant>,
+    isOffline: Boolean,
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val content = ScrollControlContent.of(affordance, typingParticipants)
+    val content = ScrollControlContent.of(affordance, typingParticipants, isOffline)
     androidx.compose.animation.AnimatedVisibility(
         visible = content != ScrollControlContent.Hidden,
         modifier = modifier,
@@ -1349,6 +1352,7 @@ private fun ScrollToBottomControl(
                     content.preview?.let { preview ->
                         UnreadPreviewPill(preview = preview, accentColor = accentColor, onClick = onClick)
                     }
+                is ScrollControlContent.Offline -> OfflinePill(onClick = onClick)
                 else -> Unit
             }
             val badgeCount = (content as? ScrollControlContent.Unread)?.count ?: 0
@@ -1460,6 +1464,47 @@ private fun TypingPill(label: TypingLabel, accentColor: Color, onClick: () -> Un
                 text = text,
                 style = MaterialTheme.typography.labelSmall,
                 color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Port of iOS `ConversationScrollControlsView`'s `isOffline` branch — a neutral (not
+ * accent-tinted) pill, since the offline state signals connectivity, not conversation
+ * identity. Mirrors [TypingPill]'s structure.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfflinePill(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        modifier = Modifier
+            .padding(bottom = MeeshySpacing.sm)
+            .widthIn(max = 220.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MeeshySpacing.md,
+                vertical = MeeshySpacing.xs,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.WifiOff,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = stringResource(R.string.chat_offline),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

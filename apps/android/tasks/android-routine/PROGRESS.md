@@ -2,6 +2,59 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Chat scroll-to-bottom offline indicator shipped** (slice
+> `chat-scroll-offline-indicator`, feature-parity's scroll-control composite line, "offline
+> indicator" sub-gap). `gh pr list --state open --search "apps/android OR apps/ios"` showed two
+> unrelated open PRs. `df -h /` showed 22 Gi free.
+>
+> **Pivoted away from the Explore agent's #2-ranked candidate (drag-to-dismiss on the fullscreen
+> image viewer) after re-assessing the risk, not the reward**: composing THREE independent Compose
+> gesture detectors on one node (existing tap + existing pinch/pan/zoom + a new vertical
+> drag-to-dismiss, active only at rest scale) carries a real risk of pointer-event-consumption
+> conflicts between sibling `pointerInput` blocks — this session has no established way to
+> interactively verify an Android gesture on-device or in an emulator (unlike iOS's idb+simulator
+> tooling), and this exact codebase's own memory index documents a cluster of gesture bugs that
+> shipped fully broken without unit tests catching them. Chose the mechanically safer #3 candidate
+> instead — no gesture composition, a pure sealed-interface extension over already-established
+> infrastructure.
+>
+> **Re-proved the gap and the exact iOS priority by reading the SDK source directly**, not an
+> agent's paraphrase: `ChatViewModel` already computed `isOffline` from `NetworkConditionMonitor`
+> but only fed it into `toBubbles` (the per-message hourglass, already shipped) — never exposed at
+> the `ChatUiState` top level, never passed to `ScrollControlContent.of`. Read
+> `ConversationScrollControlsView.swift` end to end: the real priority is
+> `isSearchingQuotedMessage > hasUnreadContent (unread OR typing) > isOffline > plain chevron` —
+> Android has no quoted-message-search state, so only the Typing/Unread > Offline > Plain tier
+> applies, which slots in exactly at the position the already-shipped Typing-over-Unread rule
+> already established.
+>
+> **New `ScrollControlContent.Offline`** variant + `of(affordance, typing, isOffline: Boolean =
+> false)` (default preserves every existing call site/test unchanged). **`ChatUiState.isOffline`**
+> fed from the exact same collector that already computes the reading for the hourglass — zero new
+> plumbing, just one more field on an existing `.copy()`. New **`OfflinePill`** composable mirrors
+> `TypingPill`'s structure exactly, but deliberately neutral-tinted (`textSecondary`, not the
+> conversation accent) since offline signals connectivity, not conversation identity — matches
+> iOS's own `contentColor`/`tint` special-casing for the offline branch.
+>
+> **Surpasses iOS, worth flagging explicitly**: iOS's `ConversationScrollControlsView` fully
+> implements and tests the `isOffline` branch, but its ONE call site
+> (`ConversationView+ScrollIndicators.swift`) hardcodes `isOffline: false` — the indicator is
+> dead code in the shipped iOS app today. Android wires it to a real, live
+> `NetworkConditionMonitor` reading, so this is a case where faithfully porting the SDK component's
+> tested behavior produces MORE functionality than iOS currently exposes, not less.
+>
+> **+5 `ScrollControlContentTest`** (offline alone shows the state, unread beats offline, typing
+> beats offline, online with nothing else shows Plain not Offline, hidden even while offline) **+ 2
+> `ChatViewModelTest`** (`state.isOffline` mirrors the same network reading already tested for the
+> hourglass, both offline and online cases). Strings ×4 (`chat_offline`) across EN/FR/ES/PT.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=4 last_run=chat-scroll-offline-indicator`. **streak reaches 4 → the NEXT ANDROID
+> run will be the last before the IOS_DETTE bascule (streak=5).**
+
 > On 2026-08-17 **Email notification toggle shipped** (slice
 > `settings-email-notification-toggle`, feature-parity's notification-preferences composite line,
 > "still open" email-channel-toggle sub-gap). `gh pr list --state open --search "apps/android OR

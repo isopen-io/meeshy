@@ -2590,8 +2590,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `AffordanceMessageMappingTest` 5 mapping). Typing-in-control now live: pure `ScrollControlContent.of`
       (Hidden/Typing/Unread/Plain) folds the typing roster into the control with **typing taking priority
       over the unread count** (iOS `ConversationScrollControlsView` rule), rendered as a `TypingPill`
-      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Pending:** offline
-      indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
+      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Offline indicator shipped
+      2026-08-17** (slice `chat-scroll-offline-indicator`): `ChatViewModel` already computed
+      `isOffline` from `NetworkConditionMonitor`, but only fed it to `toBubbles` (the per-message
+      hourglass) — never exposed at the top level or passed to `ScrollControlContent.of`. New
+      `ScrollControlContent.Offline` variant, priority confirmed by reading iOS
+      `ConversationScrollControlsView.swift` directly (not a paraphrase): `isSearchingQuotedMessage
+      > hasUnreadContent (unread OR typing) > isOffline > plain chevron` — Android has no
+      quoted-message-search state, so the relevant tier is Typing/Unread > Offline > Plain,
+      consistent with the already-shipped Typing-over-Unread rule. `ChatUiState.isOffline` fed from
+      the SAME collector that already computes it for the hourglass. New `OfflinePill` (mirrors
+      `TypingPill`, `Icons.Filled.WifiOff`, neutral `textSecondary` tint rather than accent — signals
+      connectivity, not conversation identity). **Surpasses iOS**: the SDK's `ConversationScrollControlsView`
+      fully supports `isOffline`, but its one call site (`ConversationView+ScrollIndicators.swift`)
+      hardcodes `false` — the indicator never actually shows in the live iOS app today; Android wires
+      it to a real `NetworkConditionMonitor` reading. +5 `ScrollControlContentTest` + 2
+      `ChatViewModelTest`. Strings ×4 EN/FR/ES/PT. **Still open:** slow-scroll search state (a
+      separate, unrelated sub-gap — the search TopAppBar's own local-vs-remote posture, not
+      attempted this run).
 - [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
       keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
       self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
