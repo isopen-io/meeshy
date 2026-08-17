@@ -120,6 +120,7 @@
     <string name="feed_action_repost">Repostar</string>
     <string name="feed_action_bookmark">Salvar</string>
     <string name="feed_action_unbookmark">Remover dos salvos</string>
+    <string name="feed_action_pin">Fixar</string>
     <string name="feed_action_report">Denunciar</string>
     <string name="feed_action_delete">Excluir</string>
     <string name="feed_delete_confirm_title">Excluir esta publicação?</string>

@@ -10,6 +10,7 @@ enum class PostAction {
     Repost,
     Bookmark,
     Unbookmark,
+    Pin,
     Report,
     Delete,
 }
@@ -25,8 +26,10 @@ data class PostActionContext(
  * « quelle action, dans quel ordre ». La card n'est qu'un rendu de cette liste.
  *
  * Regles : partager/copier/reposter valent pour tout post ; le signalement ne
- * vise que le contenu D'AUTRUI ; la suppression ne vise que le SIEN — et ferme
- * la liste, comme toute action destructrice.
+ * vise que le contenu D'AUTRUI ; l'epinglage et la suppression ne visent que
+ * le SIEN — port fidele d'iOS (`ProfileUserPostsList.swift`/
+ * `PostDetailViewModel.swift`, `onPin` gate sur `isOwnPost` exactement comme
+ * `onDelete`) ; la suppression ferme la liste, comme toute action destructrice.
  */
 object PostActionMenu {
     fun actions(ctx: PostActionContext): List<PostAction> = buildList {
@@ -38,6 +41,7 @@ object PostActionMenu {
             add(PostAction.Report)
         }
         if (ctx.isOwn) {
+            add(PostAction.Pin)
             add(PostAction.Delete)
         }
     }

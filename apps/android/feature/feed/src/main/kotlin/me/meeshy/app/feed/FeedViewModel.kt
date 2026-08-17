@@ -311,6 +311,22 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Epingle un de SES PROPRES posts (feature-parity §F) — port fidele d'iOS
+     * (`PostDetailViewModel.pinPost`/`ProfileUserPostsList.pinPost`), qui n'expose
+     * jamais de contrepartie "unpin" dans son UI ; `PostRepository.unpinPost`
+     * existe côté SDK mais reste sans appelant sur les deux plateformes, donc
+     * pas branche ici. Refresh apres succes pour faire remonter `isPinned`.
+     */
+    fun pinPost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.pinPost(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
     /** Suppression confirmee cote UI ; le refresh retire le post du flux. */
     fun deletePost(postId: String) {
         viewModelScope.launch {

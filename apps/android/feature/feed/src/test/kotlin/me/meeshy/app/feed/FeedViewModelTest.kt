@@ -149,6 +149,30 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `pinPost delegates to repository and refreshes on success`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.pinPost("p1") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel()
+        vm.pinPost("p1")
+
+        coVerify(exactly = 1) { repository.pinPost("p1") }
+        coVerify(exactly = 1) { repository.refresh() }
+    }
+
+    @Test
+    fun `pinPost surfaces the error and does not refresh on failure`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+        coEvery { repository.pinPost("p1") } returns NetworkResult.Failure(ApiError("offline"))
+
+        val vm = viewModel()
+        vm.pinPost("p1")
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        coVerify(exactly = 0) { repository.refresh() }
+    }
+
+    @Test
     fun `hasMore is reflected from repository`() = runTest {
         every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(post("1")), 0L))
 

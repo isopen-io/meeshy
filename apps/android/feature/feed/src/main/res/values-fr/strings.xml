@@ -120,6 +120,7 @@
     <string name="feed_action_repost">Reposter</string>
     <string name="feed_action_bookmark">Enregistrer</string>
     <string name="feed_action_unbookmark">Retirer des enregistrés</string>
+    <string name="feed_action_pin">Épingler</string>
     <string name="feed_action_report">Signaler</string>
     <string name="feed_action_delete">Supprimer</string>
     <string name="feed_delete_confirm_title">Supprimer ce post ?</string>
