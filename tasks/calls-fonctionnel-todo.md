@@ -9764,3 +9764,71 @@ bitrate/tier. Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; 
   scoping (l'autre moitié du follow-up PR #3182, non traitée ici) ; dette lint systémique
   `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (mesurée cette vague, non corrigée — chantier
   distinct, décision d'équipe requise sur la portée du refactor).
+
+## Vague 144 — ICE-restart backoff/rate-limit scoping (web, follow-up to PR #3182) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+l'autre moitié du follow-up explicitement noté par PR #3182 (« ICE-restart backoff/rate-limit
+scoping ... were also flagged by the same audit pass and are left for follow-up PRs »), non
+traitée par la Vague 143 (qui a traité le bitrate/tier). Toolchains iOS/Android toujours hors
+d'atteinte dans ce sandbox ; fix scopé web (TypeScript pur).
+
+- **Root cause** : `WebRTCService.oniceconnectionstatechange` appelait `restartIce()` sans aucune
+  limite — immédiatement sur `'failed'`, et depuis la Vague existante après le délai de grâce sur
+  `'disconnected'` (`ICE_DISCONNECT_GRACE_MS`, 3s). Aucun des deux chemins ne portait de backoff
+  ni de plafond de tentatives. Un transport durablement cassé (réseau réellement coupé, TURN
+  injoignable) fait typiquement re-échouer l'ICE juste après chaque restart — la collecte de
+  candidats retente aussitôt STUN/TURN, en boucle serrée, sans jamais ralentir ni s'arrêter :
+  gaspillage batterie/réseau réel et pression inutile sur les serveurs STUN/TURN pendant toute la
+  durée de la panne.
+- **Fix** : `scheduleIceRestart()` (nouveau, privé) remplace l'appel direct à `restartIce()` sur
+  les deux chemins (`'failed'` immédiat, grace-timer expiré sur `'disconnected'`). Première
+  tentative d'un épisode d'échec : délai 0 (comportement inchangé, restart immédiat). Chaque
+  tentative suivante DANS LE MÊME épisode non résolu : backoff exponentiel
+  (`ICE_RESTART_BASE_BACKOFF_MS * 2^(attempts-1)`, plafonné à `ICE_RESTART_MAX_BACKOFF_MS` = 16s).
+  Après `ICE_RESTART_MAX_CONSECUTIVE_ATTEMPTS` (5) tentatives consécutives sans reconnexion
+  réussie entre-temps, les restarts s'arrêtent (log `logger.error`, pas de nouvel appel) jusqu'à
+  ce que la connectivité revienne réellement. Un timer déjà en attente rend tout déclenchement
+  dupliqué (`'failed'` qui flappe, grace-timer qui expire pendant qu'un `'failed'` vient d'arriver)
+  un no-op — jamais un second timer empilé. `oniceconnectionstatechange` sur `'connected'`/
+  `'completed'` remet `iceRestartAttempts` à 0 et annule un backoff en attente : une reconnexion
+  réussie clôt l'épisode, l'échec suivant repart avec un restart immédiat, pas la queue du
+  backoff précédent. `close()` nettoie aussi le timer de backoff (même politique que
+  `clearDisconnectGraceTimer()`), pour qu'aucun restart ne se déclenche après la fermeture de la
+  connexion.
+- **Périmètre délibérément exclu** : pas de callback dédié « restarts épuisés » vers la couche
+  UI/hook — `use-webrtc-p2p.ts` toaste déjà « Connection failed. Retrying... » sur la transition
+  agrégée `'failed'` (une fois par appel, pas par pair) et cet appel-ci ne change ni ce
+  comportement ni son contrat ; ajouter une distinction UI « on a arrêté de réessayer » est un
+  changement de produit séparé, hors du scope strict backoff/rate-limit demandé par le suivi de
+  PR #3182.
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 5 cas neufs dans `webrtc-service.coverage.test.ts` —
+  - un deuxième `'failed'` consécutif dans le même épisode n'émet PAS de nouvelle offre avant
+    l'expiration du backoff (500ms : rien ; +600ms : l'offre part) ;
+  - au-delà du plafond de 5 tentatives consécutives sans reconnexion, une 6e défaillance ne
+    programme plus rien ;
+  - une reconnexion (`'connected'`) remet le compteur à 0 — l'épisode suivant restart de nouveau
+    immédiatement (0ms), pas avec la queue du backoff précédent ;
+  - deux déclenchements `'failed'` dupliqués dans la même fenêtre de backoff ne produisent
+    qu'UNE seule offre programmée, jamais deux ;
+  - `close()` annule un backoff en attente — aucune offre après fermeture même une fois le délai
+    écoulé.
+  RED confirmé sur les 3 premiers cas (les 2 restants passaient déjà par accident sur l'ancien
+  comportement synchrone-immédiat, mais restent des assertions de comportement correctes et
+  couvrent des chemins nouveaux — `close()` nettoyant un timer qui n'existait pas avant). Sweep
+  web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 773 tests** verts, 0 régression.
+  `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** — comparé avant/après (`git stash`) sur les
+  deux fichiers touchés, 24 erreurs préexistantes dans les deux cas (mêmes lignes, juste décalées
+  par l'ajout de tests). `eslint` (binaire du projet, `./node_modules/.bin/eslint`) : 6
+  avertissements `Unused eslint-disable directive` préexistants dans les deux cas (identiques,
+  lignes décalées), 0 nouveau, 0 erreur sur `webrtc-service.ts` (fichier de production propre).
+- **Non fait volontairement** : callback UI dédié « restarts épuisés » (raison ci-dessus).
+  Reconduits (inchangés) : suspend/resume audio-only par-pair (Vague 143) ; dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans
+  garde `!isAnonymous` (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment`
+  sans filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague
+  135) ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ;
+  dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (mesurée Vague 143, non
+  corrigée).

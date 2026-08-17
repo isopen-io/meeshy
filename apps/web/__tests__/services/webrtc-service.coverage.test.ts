@@ -428,6 +428,110 @@ describe('createPeerConnection — event handlers', () => {
     expect(pc.createOffer.mock.calls.length).toBe(offerCount);
   });
 
+  it('backs off before a second consecutive ICE restart in the same failure episode', async () => {
+    // Rate-limit scoping (follow-up to PR #3182): a restart that doesn't fix
+    // the transport re-triggers 'failed' almost immediately — the second
+    // attempt in the same unresolved episode must wait a backoff window
+    // instead of hammering restartIce() again right away.
+    jest.useFakeTimers();
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(0);
+    const afterFirst = pc.createOffer.mock.calls.length;
+
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(500);
+    expect(pc.createOffer.mock.calls.length).toBe(afterFirst);
+
+    await jest.advanceTimersByTimeAsync(600);
+    expect(pc.createOffer.mock.calls.length).toBeGreaterThan(afterFirst);
+
+    jest.useRealTimers();
+  });
+
+  it('stops retrying once the consecutive-attempt cap is reached without a recovery', async () => {
+    jest.useFakeTimers();
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    // Drive the episode through the full attempt cap (5): each 'failed'
+    // lands after the previous backoff has elapsed, so it always finds no
+    // timer pending and schedules the next attempt.
+    for (let i = 0; i < 5; i++) {
+      pc.iceConnectionState = 'failed';
+      pc.oniceconnectionstatechange!();
+      await jest.advanceTimersByTimeAsync(20_000);
+    }
+    const callsAtCap = pc.createOffer.mock.calls.length;
+
+    // One more failure beyond the cap must not schedule anything further.
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(pc.createOffer.mock.calls.length).toBe(callsAtCap);
+
+    jest.useRealTimers();
+  });
+
+  it('resets the attempt counter on recovery — a later failure episode restarts immediately again', async () => {
+    jest.useFakeTimers();
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    // First episode: two consecutive failures (second one backs off)...
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(0);
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(1_100);
+
+    // ...then recovers.
+    pc.iceConnectionState = 'connected';
+    pc.oniceconnectionstatechange!();
+    const callsAfterRecovery = pc.createOffer.mock.calls.length;
+
+    // A brand-new failure episode restarts immediately (0ms) again, not
+    // backed off as if it were a continuation of the resolved episode.
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(pc.createOffer.mock.calls.length).toBeGreaterThan(callsAfterRecovery);
+
+    jest.useRealTimers();
+  });
+
+  it('does not queue a second restart while one is already pending in the backoff window', async () => {
+    jest.useFakeTimers();
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(0);
+    const afterFirst = pc.createOffer.mock.calls.length;
+
+    // Two duplicate 'failed' triggers land inside the same 1s backoff
+    // window (a flapping ICE state) — must produce exactly one scheduled
+    // restart, not one per trigger.
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(1_100);
+    expect(pc.createOffer.mock.calls.length).toBe(afterFirst + 1);
+
+    jest.useRealTimers();
+  });
+
   it('does not fire onIceConnectionStateChange if iceConnectionState is empty', () => {
     const { onIceConnectionStateChange } = setup();
     const service2 = new WebRTCService({ onIceConnectionStateChange });
@@ -1586,6 +1690,29 @@ describe('close', () => {
 
     // Even after timer would fire, no restart because close cleared the timer
     await jest.advanceTimersByTimeAsync(3001);
+    expect(pc.createOffer.mock.calls.length).toBe(offerCountBefore);
+
+    jest.useRealTimers();
+  });
+
+  it('clears a pending ICE restart backoff timer during close', async () => {
+    jest.useFakeTimers();
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    // First failure fires immediately; second is scheduled onto the backoff
+    // window and still pending when close() runs.
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+    await jest.advanceTimersByTimeAsync(0);
+    pc.iceConnectionState = 'failed';
+    pc.oniceconnectionstatechange!();
+
+    const offerCountBefore = pc.createOffer.mock.calls.length;
+    service.close();
+
+    await jest.advanceTimersByTimeAsync(2_000);
     expect(pc.createOffer.mock.calls.length).toBe(offerCountBefore);
 
     jest.useRealTimers();
