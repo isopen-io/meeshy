@@ -359,6 +359,9 @@ export const LentilleRow = memo(function LentilleRow({
   const isTyping = typingUser !== null;
   const hasDraft = !isTyping && !!draft && draft.content.trim() !== '';
   const hasBridge = !isTyping && !hasDraft && hasUnread && !!bridge;
+  // Maquette (`rowHtml`) : la classe `unread` — celle qui renforce la
+  // ligne 2 — n'est posée que si `c.unread && !c.typing`.
+  const showsUnreadLine2 = hasUnread && !isTyping;
 
   const getSenderName = (message: unknown): string | null => {
     if (!message) return null;
@@ -646,8 +649,18 @@ export const LentilleRow = memo(function LentilleRow({
             )}
           </div>
 
+          {/* Ligne 2 — la maquette la veut TERTIAIRE au repos
+              (`.crow .l2{color:var(--ink3)}`) et PRIMAIRE, plus grasse, sur un
+              rang non lu (`.crow.unread .l2{color:var(--m-text);
+              font-weight:600}`). La classe `unread` du rendu de la maquette
+              n'est posée que si `c.unread && !c.typing` : quelqu'un qui écrit
+              maintenant l'emporte sur le compte de non-lus. */}
           <div
-            className="truncate mt-0.5 text-muted-foreground"
+            data-testid="lentille-row-line2"
+            className={cn(
+              'truncate mt-0.5',
+              showsUnreadLine2 ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            )}
             style={{ fontSize: 'var(--lentille-list-line2-size)' }}
           >
             {isTyping ? (
@@ -667,7 +680,17 @@ export const LentilleRow = memo(function LentilleRow({
                 <span data-testid="lentille-row-draft-content">{draft!.content}</span>
               </span>
             ) : hasBridge && bridge ? (
-              <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />
+              <LentilleBridgeLine
+                bridge={bridge}
+                accentHex={accent}
+                preferredLanguages={preferredLanguages}
+                // Maquette §1, table « État du rang » : « Sourdine — Rang à
+                // 55 % d'opacité, PONT GRISÉ ». Le rendu de la maquette le
+                // dit deux fois : hors sourdine `<span class="pont">`
+                // (teinté accent), en sourdine `✦ ${pont}` NU. Le texte du
+                // pont reste lu ; c'est sa teinte qui s'efface.
+                tinted={!isMuted}
+              />
             ) : (
               previewNode
             )}
