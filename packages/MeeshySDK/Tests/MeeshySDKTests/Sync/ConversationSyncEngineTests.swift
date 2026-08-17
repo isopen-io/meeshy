@@ -1055,7 +1055,7 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         let row = cached.first(where: { $0.id == "bridge-c3" })
-        XCTAssertEqual(row?.unreadCount, 3, "le compteur, lui, est bien appliqué")
+        XCTAssertEqual(row?.userState.unreadCount, 3, "le compteur, lui, est bien appliqué")
         XCTAssertEqual(
             row?.bridge, known,
             "clé `bridge` absente du payload ⇒ l'émetteur n'a pas calculé ⇒ le pont en cache SURVIT"
