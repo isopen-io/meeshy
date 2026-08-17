@@ -14,7 +14,13 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
+// Le contrat RÉEL, dont on ne remplace que les deux entrées que ces témoins
+// épinglent. La fabrique recopiait auparavant une table PARTIELLE : toute
+// constante partagée que le handler se met à lire vaut alors `undefined` ici, et
+// l'échec ne nomme pas sa cause (`RATE_LIMIT_REFUSAL_MESSAGE` l'a fait). Un mock
+// qui part du module réel ne peut plus diverger de lui.
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
+  ...(jest.requireActual('@meeshy/shared/types/socketio-events') as object),
   SERVER_EVENTS: {
     REACTION_ADDED: 'reaction:added',
     REACTION_REMOVED: 'reaction:removed',
