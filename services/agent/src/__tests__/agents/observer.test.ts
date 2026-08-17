@@ -1,5 +1,6 @@
-import { createObserverNode } from '../../agents/observer';
+import { createObserverNode, resolveMessageRangeWindow, summarizeMessageRange } from '../../agents/observer';
 import type { LlmProvider } from '../../llm/types';
+import type { MessageEntry } from '../../graph/state';
 
 const mockLlm: LlmProvider = {
   name: 'mock',
@@ -207,5 +208,136 @@ describe('Observer Agent', () => {
     const result = await observe(baseState);
     expect(result).toEqual(expect.objectContaining({ summary: '' }));
     consoleSpy.mockRestore();
+  });
+});
+
+// G-125 — résumé borné à une plage de messages explicite + format une ligne.
+// Distinct de `createObserverNode` : ce résumé sert le pont ✦ (contrat §5.1), jamais le digest
+// glissant ≤200 mots. Il ne doit JAMAIS s'appuyer sur « toute la conversation ».
+describe('résumé borné à une plage de messages (G-125)', () => {
+  const rangeMessages: MessageEntry[] = [
+    { id: 'm1', senderId: 'user1', senderName: 'Alice', content: 'Salut tout le monde', timestamp: 1 },
+    { id: 'm2', senderId: 'user2', senderName: 'Bob', content: 'On avance sur la maquette', timestamp: 2 },
+    { id: 'm3', senderId: 'user1', senderName: 'Alice', content: 'Je valide la maquette demain', timestamp: 3 },
+    { id: 'm4', senderId: 'user2', senderName: 'Bob', content: 'Parfait, je prepare la demo', timestamp: 4 },
+    { id: 'm5', senderId: 'user1', senderName: 'Alice', content: 'On se voit vendredi alors', timestamp: 5 },
+  ];
+
+  function makeLlm(content: string): { llm: LlmProvider; chat: jest.Mock } {
+    const chat = jest.fn().mockResolvedValue({
+      content,
+      usage: { inputTokens: 10, outputTokens: 5 },
+      model: 'mock',
+      latencyMs: 1,
+    });
+    return { llm: { name: 'mock', chat }, chat };
+  }
+
+  describe('resolveMessageRangeWindow', () => {
+    it('isole exactement la plage [fromMessageId, toMessageId], bornes incluses', () => {
+      const { window, isComplete } = resolveMessageRangeWindow(rangeMessages, {
+        fromMessageId: 'm2',
+        toMessageId: 'm4',
+      });
+      expect(isComplete).toBe(true);
+      expect(window.map((m) => m.id)).toEqual(['m2', 'm3', 'm4']);
+    });
+
+    it('rend une fenetre vide et incomplete si une borne est introuvable — jamais un sous-ensemble invente', () => {
+      const result = resolveMessageRangeWindow(rangeMessages, {
+        fromMessageId: 'm2',
+        toMessageId: 'introuvable',
+      });
+      expect(result.isComplete).toBe(false);
+      expect(result.window).toEqual([]);
+    });
+
+    it('rend une fenetre vide et incomplete si les bornes sont inversees', () => {
+      const result = resolveMessageRangeWindow(rangeMessages, {
+        fromMessageId: 'm4',
+        toMessageId: 'm2',
+      });
+      expect(result.isComplete).toBe(false);
+      expect(result.window).toEqual([]);
+    });
+  });
+
+  describe('summarizeMessageRange', () => {
+    it('n\'envoie au LLM que les messages de la plage — jamais toute la conversation', async () => {
+      const { llm, chat } = makeLlm('La maquette est validee pour vendredi.');
+      await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm2', toMessageId: 'm4' });
+
+      const sentContent = chat.mock.calls[0][0].messages[0].content as string;
+      expect(sentContent).toContain('On avance sur la maquette');
+      expect(sentContent).toContain('Je valide la maquette demain');
+      expect(sentContent).toContain('je prepare la demo');
+      expect(sentContent).not.toContain('Salut tout le monde');
+      expect(sentContent).not.toContain('On se voit vendredi alors');
+    });
+
+    it('ne fabrique aucun resume et n\'appelle pas le LLM si une borne est introuvable', async () => {
+      const { llm, chat } = makeLlm('peu importe');
+      const result = await summarizeMessageRange(llm, rangeMessages, {
+        fromMessageId: 'm2',
+        toMessageId: 'jamais-vu',
+      });
+      expect(result).toBeNull();
+      expect(chat).not.toHaveBeenCalled();
+    });
+
+    it('pose la contrainte d\'une ligne sur la generation elle-meme — prompt dedie et budget de tokens court', async () => {
+      const { llm, chat } = makeLlm('Une phrase.');
+      await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm1', toMessageId: 'm2' });
+
+      const params = chat.mock.calls[0][0];
+      expect(params.systemPrompt).toMatch(/UNE SEULE ligne/);
+      expect(params.systemPrompt).not.toMatch(/Retourne UNIQUEMENT du JSON/); // pas le prompt du résumé glissant (JSON, profils…)
+      expect(typeof params.maxTokens).toBe('number');
+      expect(params.maxTokens).toBeLessThan(200); // borné, sans rapport avec les 3072 du résumé glissant
+    });
+
+    it('aplatit une reponse multi-lignes en une seule ligne, sans re-troncature du contenu', async () => {
+      const { llm } = makeLlm('Premiere partie de la phrase.\nSeconde partie de la phrase.\n\n');
+      const result = await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm1', toMessageId: 'm2' });
+
+      expect(result).not.toBeNull();
+      expect(result!.summary).not.toContain('\n');
+      expect(result!.summary).toBe('Premiere partie de la phrase. Seconde partie de la phrase.');
+    });
+
+    it('ne retaille pas une phrase deja sur une ligne, meme longue — la contrainte vient du prompt, pas d\'ici', async () => {
+      const longSingleLine = 'Alice et Bob ont avance sur la maquette et se sont mis d\'accord pour la presenter vendredi apres une derniere relecture'.repeat(1);
+      const { llm } = makeLlm(longSingleLine);
+      const result = await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm1', toMessageId: 'm2' });
+
+      expect(result!.summary).toBe(longSingleLine);
+    });
+
+    it('ne fabrique aucun resume si le LLM ne rend qu\'un contenu vide', async () => {
+      const { llm } = makeLlm('   \n  \n ');
+      const result = await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm1', toMessageId: 'm2' });
+      expect(result).toBeNull();
+    });
+
+    it('remonte le compte exact de messages couverts, jamais deduit', async () => {
+      const { llm } = makeLlm('Resume court.');
+      const result = await summarizeMessageRange(llm, rangeMessages, { fromMessageId: 'm2', toMessageId: 'm4' });
+      expect(result!.messageCount).toBe(3);
+      expect(result!.fromMessageId).toBe('m2');
+      expect(result!.toMessageId).toBe('m4');
+    });
+
+    it('se degrade sans lever si le LLM echoue — le plancher deterministe (C1) reste a la gateway', async () => {
+      const throwingLlm: LlmProvider = {
+        name: 'error',
+        async chat() {
+          throw new Error('Network timeout');
+        },
+      };
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const result = await summarizeMessageRange(throwingLlm, rangeMessages, { fromMessageId: 'm1', toMessageId: 'm2' });
+      expect(result).toBeNull();
+      consoleSpy.mockRestore();
+    });
   });
 });
