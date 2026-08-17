@@ -351,7 +351,10 @@ describe('LentilleRow — rang', () => {
       />
     );
     const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
-    const time = screen.getByTestId('lentille-row').querySelector('h3')?.nextSibling?.textContent ?? '';
+    // L'heure est lue par SON marqueur, non par sa position : `h3.nextSibling`
+    // valait tant que la ligne 1 était « nom | heure » ; la grammaire
+    // « Nom · heure » de la maquette (§3) y intercale le point médian.
+    const time = screen.getByTestId('lentille-row-time').textContent ?? '';
     expect(label).toBe(`Équipe produit, ${time}, 3 messages non lus, Salut !`);
   });
 

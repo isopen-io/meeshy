@@ -35,6 +35,17 @@ export interface LentilleBridgeLineProps {
   /** Accent de la conversation (`conversation-colors.ts`, LWS-2), hex `#RRGGBB`. */
   accentHex: string;
   preferredLanguages: readonly string[];
+  /**
+   * Le pont porte-t-il sa teinte d'accent ? Maquette §1, table « État du
+   * rang » : « **Sourdine** — Rang à 55 % d'opacité, **pont grisé** » — et son
+   * rendu, qui n'entoure le texte de `<span class="pont">` (la teinte) que
+   * `!c.muted`, contre un `✦ ${pont}` NU en sourdine. `false` ⇒ aucune couleur
+   * n'est écrite : le pont HÉRITE de la ligne 2 (texte primaire d'un rang non
+   * lu), donc il ne perd pas en lisibilité — c'est le contraste de la ligne 2,
+   * déjà conforme, qui s'applique. Défaut `true` : un appelant qui ne sait
+   * rien de la sourdine garde le pont teinté.
+   */
+  tinted?: boolean;
 }
 
 /** Marqueur visuel du pont — reprend le glyphe du contrat (§3.2, §5.2). */
@@ -102,11 +113,19 @@ export function resolveLentilleBridgeAriaText(
   return partial ? `${phrase} · ${partial}` : phrase;
 }
 
-export function LentilleBridgeLine({ bridge, accentHex, preferredLanguages }: LentilleBridgeLineProps) {
+export function LentilleBridgeLine({
+  bridge,
+  accentHex,
+  preferredLanguages,
+  tinted = true,
+}: LentilleBridgeLineProps) {
   const { t } = useI18n('conversations');
   const theme = useResolvedTheme();
 
-  const color = useMemo(() => resolveBridgeTintColor(accentHex, theme), [accentHex, theme]);
+  const color = useMemo(
+    () => (tinted ? resolveBridgeTintColor(accentHex, theme) : undefined),
+    [accentHex, theme, tinted]
+  );
 
   const phrase = useMemo(
     () => resolveBridgePhrase(bridge, t as BridgeTranslate, preferredLanguages),

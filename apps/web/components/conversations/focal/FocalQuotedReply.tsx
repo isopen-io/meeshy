@@ -50,11 +50,16 @@ export function FocalQuotedReply({ quoted, preferredLanguages, onJumpToMessage }
       data-testid="focal-quoted-reply"
       onClick={() => onJumpToMessage?.(quoted.id)}
       className={cn(
-        'block w-full text-left truncate mb-1 pl-2 text-muted-foreground',
-        'bg-transparent border-0 cursor-pointer'
+        'block w-full text-left truncate mb-1 text-muted-foreground',
+        // Maquette `.fquote` : fond LÉGER (pas une bulle — un simple liseré de
+        // matière) et coins arrondis du seul côté opposé au filet.
+        'bg-muted/55 border-0 cursor-pointer'
       )}
       style={{
         borderLeft: `var(--lentille-thread-quote-border-size) solid ${accent}`,
+        borderRadius: 'var(--lentille-thread-quote-radius)',
+        padding: 'var(--lentille-thread-quote-padding)',
+        fontSize: 'var(--lentille-thread-quote-size)',
       }}
     >
       <span className="font-medium mr-1" style={{ color: textColor }}>

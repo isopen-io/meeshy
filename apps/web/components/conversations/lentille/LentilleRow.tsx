@@ -36,6 +36,7 @@
 'use client';
 
 import { memo, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -52,8 +53,14 @@ import {
 } from '../conversation-item/conversation-utils';
 import { formatLastMessage } from '../conversation-item/message-formatting';
 import { formatConversationDate } from '@/utils/date-format';
+import { getTagColor } from '@/utils/tag-colors';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
-import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } from './lentille-row-utils';
+import {
+  resolveLentilleAvatarTarget,
+  resolveLentillePresenceEntries,
+  resolveOtherDirectParticipantUser,
+  type LentilleAvatarTarget,
+} from './lentille-row-utils';
 import { LentilleBridgeLine, resolveLentilleBridgeAriaText } from './LentilleBridgeLine';
 import type { BridgeTranslate } from '@meeshy/shared/utils/conversation-bridge';
 import { LentillePeek } from './LentillePeek';
@@ -133,10 +140,109 @@ function pickDeterministicTypingUser(
 const UNREAD_ARIA_ONE_KEY = 'lentille.a11y.unreadOne';
 const UNREAD_ARIA_OTHER_KEY = 'lentille.a11y.unreadOther';
 
+/**
+ * Miroir de `packages/shared/design/lentille-tokens.json` → `list.tags.maxCount`
+ * (= `--lentille-list-tags-max-count`, M-049) — un NOMBRE, nécessaire au
+ * `.slice()`, donc impossible à ne garder qu'en CSS. Gardé contre la dérive
+ * par `__tests__/lentille-tags-max-count.parity.test.ts`, même discipline que
+ * `LENTILLE_LIST_RAIL_MAX_ENTRIES` (`LivesRail.tsx`).
+ */
+export const LENTILLE_LIST_TAGS_MAX_COUNT = 3;
+
 function resolveUnreadAriaSegment(unreadCount: number, t: LentilleRowTranslate): string | null {
   if (unreadCount <= 0) return null;
   const key = unreadCount === 1 ? UNREAD_ARIA_ONE_KEY : UNREAD_ARIA_OTHER_KEY;
   return t(key, { count: unreadCount });
+}
+
+/**
+ * behaviour-matrix:L12 — l'avatar du rang porte SON geste, et la « zone
+ * d'exclusion avatar » qui va avec.
+ *
+ * TROIS invariants, chacun éprouvé par un témoin dédié
+ * (`__tests__/LentilleRow.avatar-affordance.test.tsx`) :
+ *
+ *  1. **Le clic n'ouvre jamais la conversation.** La racine du rang est un
+ *     `role="button"` avec `onClick`/`onKeyDown` ; sans `stopPropagation` sur
+ *     les DEUX (le clavier autant que la souris — `Enter` sur un lien remonte
+ *     jusqu'au `onKeyDown` du rang), ouvrir un profil ouvrirait AUSSI le fil.
+ *  2. **Atteignable au clavier avec un nom accessible.** `<Link>` rend un
+ *     `<a href>` et le bouton de groupe un `<button>` : tous deux
+ *     naturellement tabulables, chacun nommé par `aria-label` — jamais un
+ *     `div` cliquable.
+ *  3. **Exempté de l'appui long.** `data-lentille-press-exempt` : `LentillePeek`
+ *     n'arme ni son minuteur de 420 ms ni son aperçu quand la pression
+ *     commence ici. C'est la transposition web de l'« exclusion avatar 70 pt »
+ *     d'iOS (une géométrie de zone tactile n'aurait aucun sens ici : le
+ *     marqueur suit l'élément, quelle que soit son habillage).
+ *
+ * `target === null` ⇒ rien à ouvrir ⇒ le conteneur reste un simple `div`,
+ * la rangée redevient une cible unique. Aucun contrôle inerte n'est rendu.
+ */
+const AVATAR_BOX_STYLE: React.CSSProperties = {
+  width: 'var(--lentille-list-avatar-size)',
+  height: 'var(--lentille-list-avatar-size)',
+};
+
+const AVATAR_BOX_CLASS = 'relative flex-shrink-0 block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
+function AvatarAffordance({
+  target,
+  t,
+  onOpenConversationInfo,
+  children,
+}: {
+  readonly target: LentilleAvatarTarget | null;
+  readonly t: LentilleRowTranslate;
+  readonly onOpenConversationInfo: () => void;
+  readonly children: React.ReactNode;
+}) {
+  const stopKeyboardPropagation = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+  }, []);
+
+  if (target === null) {
+    return (
+      <div className="relative flex-shrink-0" style={AVATAR_BOX_STYLE}>
+        {children}
+      </div>
+    );
+  }
+
+  if (target.kind === 'profile') {
+    return (
+      <Link
+        href={target.href}
+        data-testid="lentille-row-avatar-affordance"
+        data-lentille-press-exempt="true"
+        aria-label={t('lentille.a11y.openProfile', { name: target.name })}
+        className={AVATAR_BOX_CLASS}
+        style={AVATAR_BOX_STYLE}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={stopKeyboardPropagation}
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="lentille-row-avatar-affordance"
+      data-lentille-press-exempt="true"
+      aria-label={t('lentille.a11y.openConversationInfo', { name: target.name })}
+      className={AVATAR_BOX_CLASS}
+      style={AVATAR_BOX_STYLE}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpenConversationInfo();
+      }}
+      onKeyDown={stopKeyboardPropagation}
+    >
+      {children}
+    </button>
+  );
 }
 
 export const LentilleRow = memo(function LentilleRow({
@@ -173,6 +279,14 @@ export const LentilleRow = memo(function LentilleRow({
   const rowPreference = useConversationPreference(conversation.id);
   const isPinned = rowPreference?.isPinned ?? false;
   const isMuted = rowPreference?.isMuted ?? false;
+  // Maquette §3 — « tags et émoji favori vivent après le nom ». MÊME magasin
+  // que pin/sourdine (`useConversationPreference`), donc aucune prop neuve à
+  // faire traverser le montage et aucune seconde source de vérité.
+  const favoriteReaction = rowPreference?.reaction ?? null;
+  const tagDots = useMemo(
+    () => (rowPreference?.tags ?? []).slice(0, LENTILLE_LIST_TAGS_MAX_COUNT),
+    [rowPreference?.tags]
+  );
   const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -219,6 +333,25 @@ export const LentilleRow = memo(function LentilleRow({
     [conversation, currentUser?.id]
   );
 
+  // behaviour-matrix:L12 — la cible du geste d'avatar (profil pour un DM,
+  // infos de conversation sinon), résolue par la MÊME loi que le nom/avatar
+  // du rang (`resolveOtherDirectParticipantUser`), jamais un second chemin.
+  const avatarTarget = useMemo(
+    () =>
+      resolveLentilleAvatarTarget({
+        conversation,
+        currentUserId: currentUser?.id,
+        conversationName,
+        hasConversationInfo: !!onShowDetails,
+      }),
+    [conversation, currentUser?.id, conversationName, onShowDetails]
+  );
+
+  const handleOpenConversationInfo = useCallback(
+    () => onShowDetails?.(conversation),
+    [onShowDetails, conversation]
+  );
+
   const unreadCount = conversation.unreadCount ?? 0;
   const hasUnread = unreadCount > 0;
 
@@ -226,6 +359,9 @@ export const LentilleRow = memo(function LentilleRow({
   const isTyping = typingUser !== null;
   const hasDraft = !isTyping && !!draft && draft.content.trim() !== '';
   const hasBridge = !isTyping && !hasDraft && hasUnread && !!bridge;
+  // Maquette (`rowHtml`) : la classe `unread` — celle qui renforce la
+  // ligne 2 — n'est posée que si `c.unread && !c.typing`.
+  const showsUnreadLine2 = hasUnread && !isTyping;
 
   const getSenderName = (message: unknown): string | null => {
     if (!message) return null;
@@ -354,8 +490,16 @@ export const LentilleRow = memo(function LentilleRow({
           transformOrigin: 'var(--lentille-list-row-transform-origin-x) var(--lentille-list-row-transform-origin-y)',
         }}
       >
-        {/* Avatar 44 + anneau accent */}
-        <div className="relative flex-shrink-0" style={{ width: 'var(--lentille-list-avatar-size)', height: 'var(--lentille-list-avatar-size)' }}>
+        {/* Avatar 44 + anneau accent — enveloppé dans SON PROPRE geste
+            (behaviour-matrix:L12) quand une cible existe : profil pour un DM,
+            infos de conversation sinon. `AvatarAffordance` ci-dessous porte
+            l'arrêt de propagation (clic ET clavier) et le marqueur
+            d'exclusion d'appui long lu par `LentillePeek`. */}
+        <AvatarAffordance
+          target={avatarTarget}
+          t={t}
+          onOpenConversationInfo={handleOpenConversationInfo}
+        >
           <Avatar
             className="h-full w-full"
             style={{
@@ -393,41 +537,130 @@ export const LentilleRow = memo(function LentilleRow({
               }}
             />
           )}
-        </div>
+        </AvatarAffordance>
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+          {/* Ligne 1 — grammaire « Nom · heure » de la maquette (§3, figure
+              cotée : « nom 15 extrabold · point médian · heure 12 » ; rendu
+              `.l1{display:flex; align-items:baseline}` avec `.mid` entre
+              `.nm` et `.tm`). L'heure est ACCOLÉE au nom : pas de
+              `justify-between`, qui la renverrait au bord droit — c'est la
+              grammaire du rang historique, celle que la Lentille remplace.
+              Ordre de la maquette (`rowHtml`) : 📌 · nom · favori · tags ·
+              🔕 · point médian · heure. */}
+          <div data-testid="lentille-row-line1" className="flex items-baseline gap-1.5">
+            {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
+            {isPinned && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-pin-glyph"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
+              >
+                📌
+              </span>
+            )}
+
             <h3
-              className="truncate"
+              data-testid="lentille-row-name"
+              className="truncate min-w-0"
               style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
             >
-              {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
-              {isPinned && (
-                <span aria-hidden="true" data-testid="lentille-row-pin-glyph">
-                  📌{' '}
-                </span>
-              )}
               {conversationName}
-              {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
-              {isMuted && (
-                <span aria-hidden="true" data-testid="lentille-row-mute-glyph" className="ml-1">
-                  🔕
-                </span>
-              )}
             </h3>
-            {conversation.lastMessage && (
+
+            {/* Émoji favori — maquette §3 (« tags et émoji favori vivent
+                après le nom », rendu `.fav`) et parité iOS
+                (`LentilleConversationRow.swift`, `userState.reaction` à la
+                taille `LentilleMetrics.Tags.emojiSize`). MÊME magasin que
+                pin/sourdine : aucune seconde source. */}
+            {favoriteReaction && (
               <span
-                className="text-muted-foreground flex-shrink-0"
-                style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+                aria-hidden="true"
+                data-testid="lentille-row-favorite"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
               >
-                {time}
+                {favoriteReaction}
               </span>
+            )}
+
+            {/* behaviour-matrix:L08 (part tags, réserve REV-4/R4-2) — « les
+                tags utilisateur deviennent au plus 3 pastilles de 6 px après
+                le nom ». Teinte par `getTagColor`, le MÊME hachage que le
+                rang historique (`ConversationItem`) : une seule loi de
+                couleur de tag dans le dépôt, jamais une seconde. La classe
+                porte la teinte (`text-…`), la pastille la peint
+                (`currentColor`) — les nuances 700/300 de la palette sont
+                lisibles sur 6 px dans les deux thèmes, là où les fonds
+                `bg-…-100` de la capsule historique disparaîtraient. */}
+            {tagDots.length > 0 && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-tag-dots"
+                className="flex shrink-0 items-center gap-[3px]"
+              >
+                {tagDots.map((tag) => (
+                  <i
+                    key={tag}
+                    data-testid="lentille-row-tag-dot"
+                    className={cn('inline-block rounded-full', getTagColor(tag).text)}
+                    style={{
+                      width: 'var(--lentille-list-tags-size)',
+                      height: 'var(--lentille-list-tags-size)',
+                      backgroundColor: 'currentColor',
+                    }}
+                  />
+                ))}
+              </span>
+            )}
+
+            {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
+            {isMuted && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-mute-glyph"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
+              >
+                🔕
+              </span>
+            )}
+
+            {conversation.lastMessage && (
+              <>
+                <span
+                  aria-hidden="true"
+                  data-testid="lentille-row-time-separator"
+                  className="text-muted-foreground shrink-0"
+                  style={{ fontSize: 'var(--lentille-list-time-size)' }}
+                >
+                  ·
+                </span>
+                <span
+                  data-testid="lentille-row-time"
+                  className="text-muted-foreground shrink-0"
+                  style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+                >
+                  {time}
+                </span>
+              </>
             )}
           </div>
 
+          {/* Ligne 2 — la maquette la veut TERTIAIRE au repos
+              (`.crow .l2{color:var(--ink3)}`) et PRIMAIRE, plus grasse, sur un
+              rang non lu (`.crow.unread .l2{color:var(--m-text);
+              font-weight:600}`). La classe `unread` du rendu de la maquette
+              n'est posée que si `c.unread && !c.typing` : quelqu'un qui écrit
+              maintenant l'emporte sur le compte de non-lus. */}
           <div
-            className="truncate mt-0.5 text-muted-foreground"
+            data-testid="lentille-row-line2"
+            className={cn(
+              'truncate mt-0.5',
+              showsUnreadLine2 ? 'text-foreground font-semibold' : 'text-muted-foreground'
+            )}
             style={{ fontSize: 'var(--lentille-list-line2-size)' }}
           >
             {isTyping ? (
@@ -447,7 +680,17 @@ export const LentilleRow = memo(function LentilleRow({
                 <span data-testid="lentille-row-draft-content">{draft!.content}</span>
               </span>
             ) : hasBridge && bridge ? (
-              <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />
+              <LentilleBridgeLine
+                bridge={bridge}
+                accentHex={accent}
+                preferredLanguages={preferredLanguages}
+                // Maquette §1, table « État du rang » : « Sourdine — Rang à
+                // 55 % d'opacité, PONT GRISÉ ». Le rendu de la maquette le
+                // dit deux fois : hors sourdine `<span class="pont">`
+                // (teinté accent), en sourdine `✦ ${pont}` NU. Le texte du
+                // pont reste lu ; c'est sa teinte qui s'efface.
+                tinted={!isMuted}
+              />
             ) : (
               previewNode
             )}

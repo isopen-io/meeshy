@@ -759,12 +759,21 @@
       },
       "a11y": {
         "unreadOne": "{count} mensaje no leído",
-        "unreadOther": "{count} mensajes no leídos"
+        "unreadOther": "{count} mensajes no leídos",
+        "openProfile": "Ver el perfil de {name}",
+        "openConversationInfo": "Información de la conversación {name}"
       }
     },
     "focal": {
       "row": {
-        "you": "Tú"
+        "you": "Tú",
+        "emptyContent": "Mensaje sin contenido visible",
+        "forwarded": "Reenviado",
+        "edited": "Editado",
+        "translated": "Traducido",
+        "openProfile": "Ver perfil",
+        "callSummary": "Resumen de llamada",
+        "attachments": "Archivos adjuntos"
       }
     },
     "lens": {

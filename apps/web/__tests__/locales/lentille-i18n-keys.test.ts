@@ -85,6 +85,11 @@ const LENTILLE_KEYS = [
   // (`resolveUnreadAriaSegment`).
   'lentille.a11y.unreadOne',
   'lentille.a11y.unreadOther',
+  // behaviour-matrix:L12 — noms accessibles de l'affordance d'avatar (le geste
+  // PROPRE de l'avatar : profil d'un DM, infos de conversation d'un groupe).
+  // Consommées par `LentilleRow.tsx` (`AvatarAffordance`).
+  'lentille.a11y.openProfile',
+  'lentille.a11y.openConversationInfo',
 ];
 
 describe('lentille namespace i18n keys — reachable via useI18n(\'conversations\') scoping (REV-1 réserve 12b)', () => {

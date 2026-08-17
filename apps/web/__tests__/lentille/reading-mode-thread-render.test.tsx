@@ -176,14 +176,23 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('mux du fil — le menu Lentille gouverne le rendu', () => {
-  it("préférence `auto` (rien de choisi) ⇒ le fil s'ouvre en Focal", async () => {
+  /**
+   * MIS À JOUR EXPRÈS — décision produit PROVISOIRE du 2026-08-17 : « mettre
+   * le mode Bulle par défaut pour le moment ». Ce témoin affirmait
+   * l'ancienne résolution `auto → focal` ; il affirme désormais le nouveau
+   * défaut. La LOI partagée, elle, n'a pas bougé (elle dit toujours `focal`
+   * pour `auto`) — la preuve en est rejouée dans
+   * `reading-mode-default-bubbles.test.tsx`, qui possède cette décision.
+   */
+  it('préférence `auto` (rien de choisi) ⇒ le fil s’ouvre en BULLES (décision produit 2026-08-17)', async () => {
     mockFocalActive = true;
     render(<ConversationMessages {...defaultProps} reverseOrder />);
 
-    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
-      'data-density',
-      'focal'
+    expect(await screen.findByTestId('messages-display')).toHaveAttribute(
+      'data-reading-mode',
+      'bubble'
     );
+    expect(screen.queryByTestId('focal-thread-mount')).not.toBeInTheDocument();
   });
 
   it('« Script » choisi dans le menu Lentille ⇒ le fil rend la densité Script', async () => {
@@ -198,17 +207,23 @@ describe('mux du fil — le menu Lentille gouverne le rendu', () => {
     );
   });
 
-  it('un changement de préférence PENDANT que le fil est monté le fait suivre', async () => {
+  /**
+   * MIS À JOUR EXPRÈS (2026-08-17) : l'état de DÉPART n'est plus « Focal » mais
+   * « Bulles » (le nouveau défaut). Ce que le témoin prouve est inchangé et
+   * même renforcé : une écriture de préférence fait suivre le fil DÉJÀ MONTÉ,
+   * y compris quand elle le fait basculer du rendu historique vers le fil plat.
+   */
+  it('un changement de préférence PENDANT que le fil est monté le fait suivre (départ : Bulles par défaut)', async () => {
     mockFocalActive = true;
     render(<ConversationMessages {...defaultProps} reverseOrder />);
-    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
-      'data-density',
-      'focal'
+    expect(await screen.findByTestId('messages-display')).toHaveAttribute(
+      'data-reading-mode',
+      'bubble'
     );
 
     await writeFromLentilleMenu('script');
 
-    expect(screen.getByTestId('focal-thread-mount')).toHaveAttribute(
+    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
       'data-density',
       'script'
     );
@@ -247,16 +262,26 @@ describe('mux du fil — LensSwitcher et le menu Lentille sont indiscernables', 
     );
   });
 
-  it('`Aa` (bascule de densité) fait basculer le fil ouvert', async () => {
+  /**
+   * MIS À JOUR EXPRÈS (2026-08-17) : le fil part désormais en Bulles (défaut).
+   * `Aa` reste un CHOIX explicite — la façade lit `auto`, le traduit en
+   * `focal` et écrit `script` — donc il continue de gouverner, et le fait
+   * ici SORTIR du défaut. C'est exactement la réversibilité que la décision
+   * provisoire devait préserver.
+   */
+  it('`Aa` (bascule de densité) fait sortir le fil du défaut Bulles vers Script', async () => {
     mockFocalActive = true;
     render(<ConversationMessages {...defaultProps} reverseOrder />);
-    await screen.findByTestId('focal-thread-mount');
+    await screen.findByTestId('messages-display');
 
     act(() => {
       useReadingModeStore.getState().toggleDensity(CONVERSATION_ID);
     });
 
-    expect(screen.getByTestId('focal-thread-mount')).toHaveAttribute(
+    // `findBy` et non `getBy` : le module Focal est chargé par `next/dynamic`,
+    // donc son premier montage — qui n'a plus lieu au rendu initial depuis le
+    // défaut Bulles — passe par une résolution asynchrone.
+    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
       'data-density',
       'script'
     );

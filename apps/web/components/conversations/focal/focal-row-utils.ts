@@ -17,6 +17,8 @@
  * pour la forme tableau du message.
  */
 import type { Message, MessageTranslation } from '@meeshy/shared/types';
+import type { Attachment } from '@meeshy/shared/types/attachment';
+import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
 import { conversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
 import { startOfLocalDayMs } from '@meeshy/shared/utils/calendar-date';
@@ -48,6 +50,84 @@ export function resolveFocalMessageText(
     originalLanguage: message.originalLanguage,
     preferredLanguages,
   });
+}
+
+/**
+ * Le texte du fil AVEC la langue réellement servie — parité 2026-08-17.
+ *
+ * Le Prisme reste UNIQUE : `resolveLastMessagePreview` est appelé UNE fois,
+ * ici, et son résultat est la seule source du texte affiché. La langue
+ * servie n'est pas une SECONDE loi : elle est LUE du résultat de la première
+ * (l'entrée du dictionnaire qui a gagné), jamais recalculée par une règle
+ * parallèle. Sans elle, le fil ne pouvait pas dire « affiché en fr, écrit en
+ * en » — l'information que la vue Bulles montre dans sa méta et que le fil
+ * plat taisait.
+ *
+ * `language === originalLanguage` ⇒ rien n'a été traduit : c'est exactement
+ * ce que `resolveLastMessagePreview` signifie en renvoyant `preview`.
+ */
+export function resolveFocalMessageDisplay(
+  message: Pick<Message, 'content' | 'originalLanguage' | 'translations'>,
+  preferredLanguages: readonly string[]
+): { readonly text: string | null | undefined; readonly language: string | undefined } {
+  const record = buildFocalTranslationsRecord(message.translations);
+  const text = resolveLastMessagePreview({
+    preview: message.content,
+    translations: record,
+    originalLanguage: message.originalLanguage,
+    preferredLanguages,
+  });
+
+  if (!record || text == null || text === message.content) {
+    return { text, language: message.originalLanguage };
+  }
+
+  const served = Object.entries(record).find(([, value]) => value === text)?.[0];
+  return { text, language: served ?? message.originalLanguage };
+}
+
+/**
+ * Le résumé d'appel — MÊME prédicat que la vue Bulles
+ * (`components/common/BubbleMessage.tsx`, branche `callMetadata`) : un
+ * message `messageSource: 'system'` dont `metadata.kind` vaut `call` ou
+ * `call-live`. La vue Bulles court-circuite alors tout son rendu pour monter
+ * `CallSystemMessage` ; le fil plat, lui, ne regardait PAS `metadata` du tout
+ * et rendait donc une rangée vide (le `content` d'un résumé d'appel est
+ * vide — l'information vit entièrement dans `metadata`).
+ *
+ * Le prédicat est ré-exprimé ici plutôt qu'importé parce qu'il n'existe nulle
+ * part comme fonction : dans `BubbleMessage.tsx` il est INLINE. Le rendu, lui,
+ * est RÉUTILISÉ tel quel (`CallSystemMessage`), jamais recopié.
+ */
+export function resolveFocalCallMetadata(
+  message: Pick<Message, 'messageSource' | 'metadata'>
+): CallSummaryMetadata | null {
+  if (message.messageSource !== 'system') return null;
+  const kind = (message.metadata as CallSummaryMetadata | undefined)?.kind;
+  if (kind !== 'call' && kind !== 'call-live') return null;
+  return message.metadata as CallSummaryMetadata;
+}
+
+/**
+ * Sépare les pièces jointes IMAGE du reste — parité 2026-08-17.
+ *
+ * Les images gardent la grille NUE au radius 16 que le contrat Focal §WS-3
+ * exige (`FocalMediaBlock`) ; tout le reste — vocal, audio, vidéo, PDF,
+ * document, code, fichier — part vers le renderer de la vue Bulles
+ * (`components/attachments/MessageAttachments`), RÉUTILISÉ VERBATIM. Avant
+ * ce lot, « le reste » était simplement JETÉ : un vocal seul, une vidéo
+ * seule, un PDF seul rendaient une rangée littéralement vide.
+ */
+export function splitFocalAttachments(
+  attachments: readonly Attachment[] | undefined
+): { readonly images: readonly Attachment[]; readonly others: readonly Attachment[] } {
+  if (!attachments || attachments.length === 0) return { images: [], others: [] };
+  const images: Attachment[] = [];
+  const others: Attachment[] = [];
+  for (const attachment of attachments) {
+    (attachment.mimeType?.startsWith('image/') ? images : others).push(attachment);
+  }
+  return { images, others };
 }
 
 /**
