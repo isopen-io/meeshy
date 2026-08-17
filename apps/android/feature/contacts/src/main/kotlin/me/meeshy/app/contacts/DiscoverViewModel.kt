@@ -47,6 +47,7 @@ data class DiscoverUiState(
     val emailText: String = "",
     val isSendingInvite: Boolean = false,
     val inviteErrorMessage: String? = null,
+    val phoneText: String = "",
 ) {
     /** True when the trimmed query is long enough that a network search is in play. */
     val isSearchActive: Boolean
@@ -275,6 +276,16 @@ class DiscoverViewModel @Inject constructor(
                     }
             }
         }
+    }
+
+    /**
+     * Port of iOS `DiscoverViewModel.phoneText` — SMS invite card. Unlike the email card, the
+     * send itself has no network call (it just opens the native SMS composer, app-side glue in
+     * `DiscoverTab.kt`), so this field is never cleared on send — mirrors iOS, which also leaves
+     * `phoneText` untouched after presenting the composer sheet, since the viewer may cancel it.
+     */
+    fun onPhoneTextChanged(text: String) {
+        _state.update { it.copy(phoneText = text) }
     }
 
     private fun observeFriendshipCache() {

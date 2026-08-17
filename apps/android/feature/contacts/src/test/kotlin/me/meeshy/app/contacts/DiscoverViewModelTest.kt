@@ -533,4 +533,16 @@ class DiscoverViewModelTest {
         coVerify(exactly = 1) { friendRepository.sendEmailInvitation(any()) }
         pending.complete(NetworkResult.Success(mockk(relaxed = true)))
     }
+
+    // Port of iOS DiscoverViewModel.phoneText — SMS invite card (feature-parity §J). The
+    // actual send is a native SMS-composer intent (app-side, coverage-exempt glue in
+    // DiscoverTab.kt), so the ViewModel's only responsibility is holding the draft.
+    @Test
+    fun `onPhoneTextChanged updates the phone field`() = runTest {
+        val vm = viewModel()
+
+        vm.onPhoneTextChanged("+1 555 0100")
+
+        assertThat(vm.state.value.phoneText).isEqualTo("+1 555 0100")
+    }
 }

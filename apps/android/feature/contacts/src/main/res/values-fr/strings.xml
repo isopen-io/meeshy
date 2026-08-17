@@ -35,6 +35,10 @@
     <string name="contacts_discover_email_send">Envoyer</string>
     <string name="contacts_discover_email_send_a11y">Envoyer l\'invitation par email</string>
     <string name="contacts_discover_email_error">Impossible d\'envoyer l\'invitation</string>
+    <string name="contacts_discover_sms_title">Inviter par SMS</string>
+    <string name="contacts_discover_sms_placeholder">Numéro de téléphone</string>
+    <string name="contacts_discover_sms_send">Envoyer</string>
+    <string name="contacts_discover_sms_send_a11y">Envoyer l\'invitation par SMS</string>
     <string name="contacts_blocked_empty">Aucun utilisateur bloqué</string>
     <string name="contacts_blocked_error">Échec du chargement des utilisateurs bloqués</string>
     <string name="contacts_blocked_unblock">Débloquer</string>
