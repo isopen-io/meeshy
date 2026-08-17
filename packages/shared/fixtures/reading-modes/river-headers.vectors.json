@@ -1,0 +1,946 @@
+{
+  "$format": "{lanes, focusRank, fadeRanks?} -> RiverLaneHeader[] — resolveRiverLaneHeaders(resolveRiverLanes(lanes), …) (amendement R3) — généré en exécutant la loi (C-023)",
+  "vectors": [
+    {
+      "_label": "trois-couloirs-nommes-a-la-hauteur-lue",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 3
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 1
+        }
+      ]
+    },
+    {
+      "_label": "le-nom-s-allume-sur-son-premier-rang",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 2
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 0.5
+        }
+      ]
+    },
+    {
+      "_label": "le-nom-est-plein-au-rang-suivant",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 3
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 1
+        }
+      ]
+    },
+    {
+      "_label": "rang-fractionnaire-le-fondu-suit-le-defilement",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 2.5
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 0.75
+        }
+      ]
+    },
+    {
+      "_label": "aucune-branche-pas-encore-nee",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 0
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 0.5
+        }
+      ]
+    },
+    {
+      "_label": "fondu-instantane-quand-l-appelant-le-demande",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 2,
+        "fadeRanks": 0
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 1
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 1
+        }
+      ]
+    },
+    {
+      "_label": "hors-fenetre-il-n-y-a-rien-a-nommer",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 99
+      },
+      "expected": []
+    },
+    {
+      "_label": "colonne-eteinte-aucun-nom-sur-les-rangs-du-vide",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:40:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:41:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T11:00:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 1.5
+      },
+      "expected": [
+        {
+          "laneIndex": 1,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 0.75
+        },
+        {
+          "laneIndex": 2,
+          "laneId": "tom",
+          "colorSeed": "Tom",
+          "isViewer": false,
+          "alpha": 0.25
+        }
+      ]
+    },
+    {
+      "_label": "colonne-eteinte-le-nom-revient-a-la-renaissance",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:40:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "tom",
+              "createdAt": "2026-08-17T09:41:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T11:00:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 3
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 0.5
+        }
+      ]
+    },
+    {
+      "_label": "relais-en-fondu-croise-entre-deux-voix-successives",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "m0",
+              "senderId": "p0",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m1",
+              "senderId": "p1",
+              "createdAt": "2026-08-17T09:35:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m2",
+              "senderId": "p2",
+              "createdAt": "2026-08-17T10:10:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m3",
+              "senderId": "p3",
+              "createdAt": "2026-08-17T10:45:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m4",
+              "senderId": "p4",
+              "createdAt": "2026-08-17T11:20:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m5",
+              "senderId": "p5",
+              "createdAt": "2026-08-17T11:55:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m6",
+              "senderId": "p6",
+              "createdAt": "2026-08-17T12:30:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m7",
+              "senderId": "p7",
+              "createdAt": "2026-08-17T13:05:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m8",
+              "senderId": "p8",
+              "createdAt": "2026-08-17T13:40:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "m9",
+              "senderId": "p9",
+              "createdAt": "2026-08-17T14:15:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "p0",
+              "displayName": "P0"
+            },
+            {
+              "id": "p1",
+              "displayName": "P1"
+            },
+            {
+              "id": "p2",
+              "displayName": "P2"
+            },
+            {
+              "id": "p3",
+              "displayName": "P3"
+            },
+            {
+              "id": "p4",
+              "displayName": "P4"
+            },
+            {
+              "id": "p5",
+              "displayName": "P5"
+            },
+            {
+              "id": "p6",
+              "displayName": "P6"
+            },
+            {
+              "id": "p7",
+              "displayName": "P7"
+            },
+            {
+              "id": "p8",
+              "displayName": "P8"
+            },
+            {
+              "id": "p9",
+              "displayName": "P9"
+            }
+          ],
+          "viewerId": "absent"
+        },
+        "focusRank": 3.5
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "p3",
+          "colorSeed": "P3",
+          "isViewer": false,
+          "alpha": 0.25
+        },
+        {
+          "laneIndex": 0,
+          "laneId": "p4",
+          "colorSeed": "P4",
+          "isViewer": false,
+          "alpha": 0.25
+        }
+      ]
+    },
+    {
+      "_label": "serialise-le-nom-traverse-en-fondu-croise",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 0.5
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 0.25
+        },
+        {
+          "laneIndex": 0,
+          "laneId": "sarah",
+          "colorSeed": "Sarah",
+          "isViewer": false,
+          "alpha": 0.25
+        }
+      ]
+    },
+    {
+      "_label": "serialise-un-seul-nom-au-coeur-d-un-groupe",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "sarah",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 0
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "mia",
+          "colorSeed": "Mia",
+          "isViewer": false,
+          "alpha": 0.5
+        }
+      ]
+    },
+    {
+      "_label": "riviere-vide-aucun-nom",
+      "input": {
+        "lanes": {
+          "messages": [],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 0
+      },
+      "expected": []
+    }
+  ]
+}

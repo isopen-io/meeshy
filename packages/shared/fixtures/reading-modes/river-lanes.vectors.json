@@ -1,0 +1,3568 @@
+{
+  "$format": "ResolveRiverLanesInput -> RiverGeometry (packages/shared/utils/river-lanes.ts, R-130) — généré en exécutant la loi (C-023)",
+  "vectors": [
+    {
+      "_label": "riviere-vide-aucune-branche",
+      "input": {
+        "messages": [],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [],
+        "bubbles": [],
+        "connectors": [],
+        "rankCount": 0,
+        "laneCount": 0,
+        "voiceCount": 0,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "un-seul-message-une-branche-ouverte",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 0,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 1,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "meme-instant-trois-branches-cote-a-cote",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "tom",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Tom",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "tom",
+            "laneIndex": 2,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "lecteur-en-colonne-0-meme-en-parlant-en-dernier",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "me",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "me",
+            "laneIndex": 0,
+            "isViewer": true,
+            "colorSeed": "Moi",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 1,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 2,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "me",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": true,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "silence-coupe-la-branche-puis-elle-renait-dans-sa-colonne",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:40:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              },
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786959600000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "interpellation-fait-reparaitre-la-branche-sans-bulle",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:35:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T09:36:00.000Z",
+            "replyToMessageId": "a"
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 0,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              },
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "addressed",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "tom",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Tom",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "rank": 1,
+            "createdAtMs": 1786959300000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "tom",
+            "laneIndex": 2,
+            "rank": 2,
+            "createdAtMs": 1786959360000,
+            "isViewer": false,
+            "replyToMessageId": "a",
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [
+          {
+            "fromMessageId": "c",
+            "toMessageId": "a",
+            "fromLaneIndex": 2,
+            "toLaneIndex": 0,
+            "fromRank": 2,
+            "toRank": 0
+          }
+        ],
+        "rankCount": 3,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "connecteur-croise-entre-deux-couloirs",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "me",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": "a"
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "me",
+            "laneIndex": 0,
+            "isViewer": true,
+            "colorSeed": "Moi",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 1,
+                    "kind": "addressed",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "me",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": true,
+            "replyToMessageId": "a",
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [
+          {
+            "fromMessageId": "b",
+            "toMessageId": "a",
+            "fromLaneIndex": 0,
+            "toLaneIndex": 0,
+            "fromRank": 1,
+            "toRank": 0
+          }
+        ],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "connecteur-jamais-pendant-cible-hors-fenetre",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "me",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": "m-d-avant-hier"
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "me",
+            "laneIndex": 0,
+            "isViewer": true,
+            "colorSeed": "Moi",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "me",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": true,
+            "replyToMessageId": "m-d-avant-hier",
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "reponse-a-soi-meme-reste-dans-son-couloir",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": "a"
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": "a",
+            "isFirstInGroup": false
+          }
+        ],
+        "connectors": [
+          {
+            "fromMessageId": "b",
+            "toMessageId": "a",
+            "fromLaneIndex": 0,
+            "toLaneIndex": 0,
+            "fromRank": 1,
+            "toRank": 0
+          }
+        ],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "ordre-d-entree-melange-et-egalite-d-horodatage",
+      "input": {
+        "messages": [
+          {
+            "id": "b2",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T09:04:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "a1",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "tom",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Tom",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a1",
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b2",
+            "laneId": "mia",
+            "laneIndex": 1,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "tom",
+            "laneIndex": 2,
+            "rank": 2,
+            "createdAtMs": 1786957440000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "participant-sorti-du-groupe-graine-de-couleur-par-identifiant",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "ghost",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "ghost",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "ghost",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "ghost",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "horodatage-illisible-ecarte",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "casse",
+            "senderId": "sarah",
+            "createdAt": "pas-une-date",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 0,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 1,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "fenetre-de-silence-fournie-par-l-appelant",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me",
+        "silenceWindowMs": 60000
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 0,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              },
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": false
+          }
+        ],
+        "connectors": [],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 60000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "ardeche-deux-episodes-neuf-messages-cinq-branches",
+      "input": {
+        "messages": [
+          {
+            "id": "m1",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m2",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m3",
+            "senderId": "me",
+            "createdAt": "2026-08-17T09:03:00.000Z",
+            "replyToMessageId": "m1"
+          },
+          {
+            "id": "m4",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T09:05:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m5",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:07:00.000Z",
+            "replyToMessageId": "m4"
+          },
+          {
+            "id": "m6",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T10:10:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m7",
+            "senderId": "me",
+            "createdAt": "2026-08-17T10:12:00.000Z",
+            "replyToMessageId": "m6"
+          },
+          {
+            "id": "m8",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T10:15:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m9",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T10:20:00.000Z",
+            "replyToMessageId": "m2"
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "me",
+            "laneIndex": 0,
+            "isViewer": true,
+            "colorSeed": "Moi",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 4,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "m3"
+                  }
+                ]
+              },
+              {
+                "startRank": 6,
+                "endRank": 8,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 6,
+                    "kind": "bubble",
+                    "messageId": "m7"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "mia",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 4,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "m1"
+                  },
+                  {
+                    "rank": 2,
+                    "kind": "addressed",
+                    "messageId": "m3"
+                  },
+                  {
+                    "rank": 4,
+                    "kind": "bubble",
+                    "messageId": "m5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 4,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "m2"
+                  }
+                ]
+              },
+              {
+                "startRank": 8,
+                "endRank": 8,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 8,
+                    "kind": "addressed",
+                    "messageId": "m9"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "tom",
+            "laneIndex": 3,
+            "isViewer": false,
+            "colorSeed": "Tom",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 4,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "m4"
+                  },
+                  {
+                    "rank": 4,
+                    "kind": "addressed",
+                    "messageId": "m5"
+                  }
+                ]
+              },
+              {
+                "startRank": 8,
+                "endRank": 8,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 8,
+                    "kind": "bubble",
+                    "messageId": "m9"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "lena",
+            "laneIndex": 4,
+            "isViewer": false,
+            "colorSeed": "Lena",
+            "spans": [
+              {
+                "startRank": 5,
+                "endRank": 8,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 5,
+                    "kind": "bubble",
+                    "messageId": "m6"
+                  },
+                  {
+                    "rank": 6,
+                    "kind": "addressed",
+                    "messageId": "m7"
+                  },
+                  {
+                    "rank": 7,
+                    "kind": "bubble",
+                    "messageId": "m8"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "m1",
+            "laneId": "mia",
+            "laneIndex": 1,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m2",
+            "laneId": "sarah",
+            "laneIndex": 2,
+            "rank": 1,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m3",
+            "laneId": "me",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957380000,
+            "isViewer": true,
+            "replyToMessageId": "m1",
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m4",
+            "laneId": "tom",
+            "laneIndex": 3,
+            "rank": 3,
+            "createdAtMs": 1786957500000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m5",
+            "laneId": "mia",
+            "laneIndex": 1,
+            "rank": 4,
+            "createdAtMs": 1786957620000,
+            "isViewer": false,
+            "replyToMessageId": "m4",
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m6",
+            "laneId": "lena",
+            "laneIndex": 4,
+            "rank": 5,
+            "createdAtMs": 1786961400000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m7",
+            "laneId": "me",
+            "laneIndex": 0,
+            "rank": 6,
+            "createdAtMs": 1786961520000,
+            "isViewer": true,
+            "replyToMessageId": "m6",
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m8",
+            "laneId": "lena",
+            "laneIndex": 4,
+            "rank": 7,
+            "createdAtMs": 1786961700000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m9",
+            "laneId": "tom",
+            "laneIndex": 3,
+            "rank": 8,
+            "createdAtMs": 1786962000000,
+            "isViewer": false,
+            "replyToMessageId": "m2",
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [
+          {
+            "fromMessageId": "m3",
+            "toMessageId": "m1",
+            "fromLaneIndex": 0,
+            "toLaneIndex": 1,
+            "fromRank": 2,
+            "toRank": 0
+          },
+          {
+            "fromMessageId": "m5",
+            "toMessageId": "m4",
+            "fromLaneIndex": 1,
+            "toLaneIndex": 3,
+            "fromRank": 4,
+            "toRank": 3
+          },
+          {
+            "fromMessageId": "m7",
+            "toMessageId": "m6",
+            "fromLaneIndex": 0,
+            "toLaneIndex": 4,
+            "fromRank": 6,
+            "toRank": 5
+          },
+          {
+            "fromMessageId": "m9",
+            "toMessageId": "m2",
+            "fromLaneIndex": 3,
+            "toLaneIndex": 2,
+            "fromRank": 8,
+            "toRank": 1
+          }
+        ],
+        "rankCount": 9,
+        "laneCount": 5,
+        "voiceCount": 5,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "deux-voix-la-riviere-se-serialise-en-vertical",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "interpelle-sans-parler-ne-compte-pas-comme-une-voix",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": "a"
+          },
+          {
+            "id": "c",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 1,
+                    "kind": "addressed",
+                    "messageId": "b"
+                  },
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": "a",
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [
+          {
+            "fromMessageId": "b",
+            "toMessageId": "a",
+            "fromLaneIndex": 0,
+            "toLaneIndex": 0,
+            "fromRank": 1,
+            "toRank": 0
+          }
+        ],
+        "rankCount": 3,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "sept-voix-dans-le-meme-instant-sept-couloirs",
+      "input": {
+        "messages": [
+          {
+            "id": "m0",
+            "senderId": "p0",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m1",
+            "senderId": "p1",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m2",
+            "senderId": "p2",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m3",
+            "senderId": "p3",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m4",
+            "senderId": "p4",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m5",
+            "senderId": "p5",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m6",
+            "senderId": "p6",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "p0",
+            "displayName": "P0"
+          },
+          {
+            "id": "p1",
+            "displayName": "P1"
+          },
+          {
+            "id": "p2",
+            "displayName": "P2"
+          },
+          {
+            "id": "p3",
+            "displayName": "P3"
+          },
+          {
+            "id": "p4",
+            "displayName": "P4"
+          },
+          {
+            "id": "p5",
+            "displayName": "P5"
+          },
+          {
+            "id": "p6",
+            "displayName": "P6"
+          }
+        ],
+        "viewerId": "absent"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "p0",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P0",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "m0"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p1",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "P1",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "m1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p2",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "P2",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "m2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p3",
+            "laneIndex": 3,
+            "isViewer": false,
+            "colorSeed": "P3",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "m3"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p4",
+            "laneIndex": 4,
+            "isViewer": false,
+            "colorSeed": "P4",
+            "spans": [
+              {
+                "startRank": 4,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 4,
+                    "kind": "bubble",
+                    "messageId": "m4"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p5",
+            "laneIndex": 5,
+            "isViewer": false,
+            "colorSeed": "P5",
+            "spans": [
+              {
+                "startRank": 5,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 5,
+                    "kind": "bubble",
+                    "messageId": "m5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p6",
+            "laneIndex": 6,
+            "isViewer": false,
+            "colorSeed": "P6",
+            "spans": [
+              {
+                "startRank": 6,
+                "endRank": 6,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 6,
+                    "kind": "bubble",
+                    "messageId": "m6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "m0",
+            "laneId": "p0",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m1",
+            "laneId": "p1",
+            "laneIndex": 1,
+            "rank": 1,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m2",
+            "laneId": "p2",
+            "laneIndex": 2,
+            "rank": 2,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m3",
+            "laneId": "p3",
+            "laneIndex": 3,
+            "rank": 3,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m4",
+            "laneId": "p4",
+            "laneIndex": 4,
+            "rank": 4,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m5",
+            "laneId": "p5",
+            "laneIndex": 5,
+            "rank": 5,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m6",
+            "laneId": "p6",
+            "laneIndex": 6,
+            "rank": 6,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 7,
+        "laneCount": 7,
+        "voiceCount": 7,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "huit-voix-dans-le-meme-instant-serialise-en-vertical",
+      "input": {
+        "messages": [
+          {
+            "id": "m0",
+            "senderId": "p0",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m1",
+            "senderId": "p1",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m2",
+            "senderId": "p2",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m3",
+            "senderId": "p3",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m4",
+            "senderId": "p4",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m5",
+            "senderId": "p5",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m6",
+            "senderId": "p6",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m7",
+            "senderId": "p7",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "p0",
+            "displayName": "P0"
+          },
+          {
+            "id": "p1",
+            "displayName": "P1"
+          },
+          {
+            "id": "p2",
+            "displayName": "P2"
+          },
+          {
+            "id": "p3",
+            "displayName": "P3"
+          },
+          {
+            "id": "p4",
+            "displayName": "P4"
+          },
+          {
+            "id": "p5",
+            "displayName": "P5"
+          },
+          {
+            "id": "p6",
+            "displayName": "P6"
+          },
+          {
+            "id": "p7",
+            "displayName": "P7"
+          }
+        ],
+        "viewerId": "absent"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "p0",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P0",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "m0"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p1",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P1",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "m1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p2",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P2",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "m2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p3",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P3",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "m3"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p4",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P4",
+            "spans": [
+              {
+                "startRank": 4,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 4,
+                    "kind": "bubble",
+                    "messageId": "m4"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p5",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P5",
+            "spans": [
+              {
+                "startRank": 5,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 5,
+                    "kind": "bubble",
+                    "messageId": "m5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p6",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P6",
+            "spans": [
+              {
+                "startRank": 6,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 6,
+                    "kind": "bubble",
+                    "messageId": "m6"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p7",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P7",
+            "spans": [
+              {
+                "startRank": 7,
+                "endRank": 7,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 7,
+                    "kind": "bubble",
+                    "messageId": "m7"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "m0",
+            "laneId": "p0",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m1",
+            "laneId": "p1",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m2",
+            "laneId": "p2",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m3",
+            "laneId": "p3",
+            "laneIndex": 0,
+            "rank": 3,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m4",
+            "laneId": "p4",
+            "laneIndex": 0,
+            "rank": 4,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m5",
+            "laneId": "p5",
+            "laneIndex": 0,
+            "rank": 5,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m6",
+            "laneId": "p6",
+            "laneIndex": 0,
+            "rank": 6,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m7",
+            "laneId": "p7",
+            "laneIndex": 0,
+            "rank": 7,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 8,
+        "laneCount": 1,
+        "voiceCount": 8,
+        "layout": "serialized",
+        "serializationReason": "aboveMaximum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "dix-voix-qui-ne-se-croisent-jamais-partagent-une-colonne",
+      "input": {
+        "messages": [
+          {
+            "id": "m0",
+            "senderId": "p0",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m1",
+            "senderId": "p1",
+            "createdAt": "2026-08-17T09:35:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m2",
+            "senderId": "p2",
+            "createdAt": "2026-08-17T10:10:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m3",
+            "senderId": "p3",
+            "createdAt": "2026-08-17T10:45:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m4",
+            "senderId": "p4",
+            "createdAt": "2026-08-17T11:20:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m5",
+            "senderId": "p5",
+            "createdAt": "2026-08-17T11:55:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m6",
+            "senderId": "p6",
+            "createdAt": "2026-08-17T12:30:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m7",
+            "senderId": "p7",
+            "createdAt": "2026-08-17T13:05:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m8",
+            "senderId": "p8",
+            "createdAt": "2026-08-17T13:40:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "m9",
+            "senderId": "p9",
+            "createdAt": "2026-08-17T14:15:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "p0",
+            "displayName": "P0"
+          },
+          {
+            "id": "p1",
+            "displayName": "P1"
+          },
+          {
+            "id": "p2",
+            "displayName": "P2"
+          },
+          {
+            "id": "p3",
+            "displayName": "P3"
+          },
+          {
+            "id": "p4",
+            "displayName": "P4"
+          },
+          {
+            "id": "p5",
+            "displayName": "P5"
+          },
+          {
+            "id": "p6",
+            "displayName": "P6"
+          },
+          {
+            "id": "p7",
+            "displayName": "P7"
+          },
+          {
+            "id": "p8",
+            "displayName": "P8"
+          },
+          {
+            "id": "p9",
+            "displayName": "P9"
+          }
+        ],
+        "viewerId": "absent"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "p0",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P0",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 0,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "m0"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p1",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P1",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 1,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "m1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p2",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P2",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 2,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "m2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p3",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P3",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 3,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "m3"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p4",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P4",
+            "spans": [
+              {
+                "startRank": 4,
+                "endRank": 4,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 4,
+                    "kind": "bubble",
+                    "messageId": "m4"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p5",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P5",
+            "spans": [
+              {
+                "startRank": 5,
+                "endRank": 5,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 5,
+                    "kind": "bubble",
+                    "messageId": "m5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p6",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P6",
+            "spans": [
+              {
+                "startRank": 6,
+                "endRank": 6,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 6,
+                    "kind": "bubble",
+                    "messageId": "m6"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p7",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P7",
+            "spans": [
+              {
+                "startRank": 7,
+                "endRank": 7,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 7,
+                    "kind": "bubble",
+                    "messageId": "m7"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p8",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P8",
+            "spans": [
+              {
+                "startRank": 8,
+                "endRank": 8,
+                "isOpen": false,
+                "nodes": [
+                  {
+                    "rank": 8,
+                    "kind": "bubble",
+                    "messageId": "m8"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "p9",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "P9",
+            "spans": [
+              {
+                "startRank": 9,
+                "endRank": 9,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 9,
+                    "kind": "bubble",
+                    "messageId": "m9"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "m0",
+            "laneId": "p0",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m1",
+            "laneId": "p1",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786959300000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m2",
+            "laneId": "p2",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786961400000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m3",
+            "laneId": "p3",
+            "laneIndex": 0,
+            "rank": 3,
+            "createdAtMs": 1786963500000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m4",
+            "laneId": "p4",
+            "laneIndex": 0,
+            "rank": 4,
+            "createdAtMs": 1786965600000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m5",
+            "laneId": "p5",
+            "laneIndex": 0,
+            "rank": 5,
+            "createdAtMs": 1786967700000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m6",
+            "laneId": "p6",
+            "laneIndex": 0,
+            "rank": 6,
+            "createdAtMs": 1786969800000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m7",
+            "laneId": "p7",
+            "laneIndex": 0,
+            "rank": 7,
+            "createdAtMs": 1786971900000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m8",
+            "laneId": "p8",
+            "laneIndex": 0,
+            "rank": 8,
+            "createdAtMs": 1786974000000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "m9",
+            "laneId": "p9",
+            "laneIndex": 0,
+            "rank": 9,
+            "createdAtMs": 1786976100000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 10,
+        "laneCount": 1,
+        "voiceCount": 10,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "tete-de-groupe-deux-messages-consecutifs-un-seul-en-tete",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "c",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "d",
+            "senderId": "tom",
+            "createdAt": "2026-08-17T09:03:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 2,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "tom",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Tom",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "d"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": false
+          },
+          {
+            "messageId": "c",
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "d",
+            "laneId": "tom",
+            "laneIndex": 2,
+            "rank": 3,
+            "createdAtMs": 1786957380000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 4,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "changement-de-jour-rouvre-un-groupe-selon-le-calendrier-du-lecteur",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "mia",
+            "createdAt": "2026-08-18T05:00:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me",
+        "silenceWindowMs": 86400000,
+        "dayBoundaryOffsetMinutes": -480
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 1,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true
+          },
+          {
+            "messageId": "b",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1787029200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": false
+          }
+        ],
+        "connectors": [],
+        "rankCount": 2,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 86400000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    }
+  ]
+}
