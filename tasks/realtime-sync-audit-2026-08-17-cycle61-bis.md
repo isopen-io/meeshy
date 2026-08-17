@@ -222,9 +222,19 @@ le résolveur partagé — résout correctement les deux identités. Les lookups
 1. **Replier `presenceSnapshot.test.ts` dans le harnais du vrai manager** (§7).
    Nouvelle, entièrement instruite ce cycle, et c'est la piste la plus utile du
    carnet : elle ne corrige pas un défaut, elle retire un dispositif qui
-   FABRIQUE des défauts verts. Le critère est mécanique et grep-able : tout
-   helper de test nommé `*Impl` qui recopie un corps de méthode de production.
-   Vérifier s'il en existe d'autres dans le dépôt fait partie de la piste.
+   FABRIQUE des défauts verts.
+
+   **Le dépouillement est FAIT** — la piste est donc bornée, pas exploratoire.
+   Balayage sur `services/gateway/src`, `apps/web`, `packages/shared` :
+   `grep -rln "Impl = async function\|Impl = function\|Impl: async function"`
+   ne rend **qu'un seul fichier**, celui-ci. Le balayage large
+   (`"inline logic test"`, `re-implement`, `réimplémente`) ne rend aucun autre
+   fichier de TEST — les autres occurrences sont des commentaires de production
+   légitimes (dont `calls-routes.test.ts:614`, qui parle d'une règle de route, pas
+   d'une copie). Le repli ne concerne donc que **deux** helpers,
+   `_emitPresenceSnapshotImpl` et `_emitUnreadCountsSnapshotImpl`, et 13 témoins.
+   Ce cycle a déjà démontré que le harnais du vrai manager les accepte : ses 7
+   nouvelles gardes y tournent contre un vrai `MeeshySocketIOManager`.
 2. **Identifier le flake de `packages/shared`** (§7). Observé une fois, non
    reproduit en quatre exécutions. La piste utile n'est pas de le chercher à
    l'aveugle mais de faire en sorte que le prochain le NOMME : lancer avec un
