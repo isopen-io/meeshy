@@ -254,6 +254,56 @@ export function mergeConversationUpdate(
   return previewed.decided ? { ...merged, lastMessage: previewed.lastMessage } : merged;
 }
 
+/**
+ * Installe sur la ligne de liste le message qu'elle doit décrire — et périme,
+ * dans la MÊME écriture, la carte du Prisme qui décrivait le précédent.
+ *
+ * La carte (`lastMessageTranslations` / `lastMessageOriginalLanguage`) vit au
+ * niveau CONVERSATION, pas sur le message : le gateway l'y pose parce que sa
+ * forme compacte `{ langue: aperçu }` n'est pas celle de `Message.translations`.
+ * Elle n'est donc PAS emportée par un `{ ...conv, lastMessage }`, et
+ * `formatLastMessage` la PRÉFÈRE à `lastMessage.content` — réécrire l'objet seul
+ * laissait la ligne rendre l'auteur et l'horodatage du nouveau message avec le
+ * TEXTE de l'ancien. C'est le défaut que le cycle 53 a fermé sur le chemin du
+ * fan-out serveur ; ceci le ferme sur les cinq chemins LOCAUX, dont
+ * `link:message:new`, le seul qui n'ait aucun jumeau serveur pour le rattraper.
+ *
+ * **L'identité décide**, jamais le contenu : quand la ligne décrit déjà ce
+ * message, la carte reste vraie et la garder est le no-op qui borne le
+ * correctif. Sans lui, le `conversation:updated` jumeau qui suit chaque
+ * `message:new` — même id — dépouillerait sa propre ligne du Prisme qu'il vient
+ * d'installer, sur le chemin le plus fréquenté du service.
+ *
+ * `textChanged` est la seule exception, et elle est DÉCLARÉE par l'écrivain :
+ * une édition garde le même id tout en remettant `Message.translations` à `null`
+ * côté serveur, ce que l'identité ne peut pas révéler.
+ *
+ * Ne décide ni du rang de la ligne (`lastMessageAt`) ni de sa date de mise à
+ * jour : les appelants n'en font pas le même usage.
+ */
+export function withPreviewMessage(params: {
+  conversation: Conversation;
+  message: Message;
+  textChanged?: boolean;
+}): Conversation {
+  const { conversation, message, textChanged = false } = params;
+
+  const stillDescribed = conversation.lastMessage?.id === message.id && !textChanged;
+  if (stillDescribed) return { ...conversation, lastMessage: message };
+
+  const originalLanguage =
+    typeof message.originalLanguage === 'string' && message.originalLanguage !== ''
+      ? message.originalLanguage
+      : undefined;
+
+  return {
+    ...conversation,
+    lastMessage: message,
+    lastMessageTranslations: undefined,
+    lastMessageOriginalLanguage: originalLanguage,
+  };
+}
+
 function updateInfiniteConversationCache(
   queryClient: ReturnType<typeof useQueryClient>,
   updater: (conversations: Conversation[]) => Conversation[]
@@ -283,7 +333,10 @@ function advanceConversationPreviewOnDelete(
 ): void {
   const replace = (conv: Conversation): Conversation =>
     conv.id === conversationId && conv.lastMessage?.id === deletedMessageId
-      ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
+      ? {
+          ...withPreviewMessage({ conversation: conv, message: replacement }),
+          lastMessageAt: replacement.createdAt,
+        }
       : conv;
 
   updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
@@ -464,7 +517,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         const rest: Conversation[] = [];
         for (const conv of convs) {
           if (conv.id === targetConversationId) {
-            updated = { ...conv, lastMessage: message, lastMessageAt: message.createdAt, updatedAt: message.createdAt };
+            updated = {
+              ...withPreviewMessage({ conversation: conv, message }),
+              lastMessageAt: message.createdAt,
+              updatedAt: message.createdAt,
+            };
           } else {
             rest.push(conv);
           }
@@ -492,8 +549,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 // might have inserted while we were awaiting the API.
                 const filtered = convs.filter((c) => c.id !== targetConversationId);
                 const enriched: Conversation = {
-                  ...fetched,
-                  lastMessage: message,
+                  ...withPreviewMessage({ conversation: fetched, message }),
                   lastMessageAt: message.createdAt,
                   updatedAt: message.createdAt,
                 };
@@ -548,7 +604,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           conv.id === targetConversationId &&
           conv.lastMessage?.id === message.id &&
           !isStaleEdit(conv.lastMessage, message)
-            ? { ...conv, lastMessage: message }
+            ? withPreviewMessage({ conversation: conv, message, textChanged: true })
             : conv
         )
       );
@@ -1119,7 +1175,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
-        const updated: Conversation = { ...convs[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
+        // Le seul des cinq écrivains sans jumeau serveur : `broadcastLinkMessage`
+        // n'émet PAS de `conversation:updated`, délibérément, parce que « le
+        // handler web applique déjà l'aperçu depuis cet événement ». Vrai de
+        // l'objet, faux de la carte du Prisme — d'où une ligne durablement
+        // fausse sur les conversations de lien partagé, que rien ne repassait
+        // corriger.
+        const updated: Conversation = {
+          ...withPreviewMessage({ conversation: convs[idx], message: linkLastMessage }),
+          lastMessageAt: linkLastMessageAt,
+        };
         return [updated, ...convs.filter((_, i) => i !== idx)];
       });
     };

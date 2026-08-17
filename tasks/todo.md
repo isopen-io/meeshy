@@ -1,75 +1,58 @@
-# Cycle 53 — la ligne de liste web décrivait un mélange de deux messages
+# Cycle 54 — la carte du Prisme suit le message que la ligne décrit (web)
 
-## Piste
+## La piste
 
-- [x] Reprise de la piste n°1 du cycle 52, qu'il qualifie lui-même de « la plus
-      grosse » et que son CHANGELOG nomme : « Web non traité, défaut réel et
-      documenté […] son correctif demande une décision de RENDU »
-- [x] `main` frais (cycle 52 atterri), la piste est prise
+- [x] La leçon 212 (cycle 53) laisse une question mécanique : *quels sont TOUS
+      les écrivains de ce que la ligne AFFICHE ?* — posée ici au reste du fichier
 
-## Constat
+## Le constat
 
-- [x] `conversation:updated` porte **huit** champs d'aperçu ; le web en lisait
-      **trois** (`lastMessageAt` + la paire du Prisme)
-- [x] `lastMessageId` n'était traité que dans sa forme NULLE ; sa forme PLEINE —
-      celle qui nomme un remplaçant — était ignorée
-- [x] `lastMessagePreview`, `senderId`, `previewRecalculated`, `location` étaient
-      recopiés sur la conversation, où `Conversation` ne les déclare pas et où
-      personne ne les lit — un champ fantôme par ligne, à chaque message
-- [x] La ligne rend l'OBJET `conversation.lastMessage`, que rien ne réécrivait —
-      pendant que la carte du Prisme du NOUVEAU message, elle, entrait bien
-- [x] **Les deux moitiés de la ligne sont écrites par des chemins différents**,
-      et le résolveur PRÉFÉRANT la traduction à l'aperçu brut, c'est le champ
-      patché qui gagne à l'écran : « Windie : Bonsoir », où « Bonsoir » est le
-      texte du remplaçant et « Windie », l'heure et la vignette celles du
-      message masqué
-
-## Les deux chemins qui restaient faux
-
-- [x] **Masquage PERSONNEL** — aucun `message:deleted` ne part (le message reste
-      vivant pour les autres), `refreshPersonalConversationPreview` n'émet que
-      ce `conversation:updated`, et seul le serveur connaît le remplaçant
-- [x] **Suppression POUR TOUS, conversation non ouverte** —
-      `handleMessageDeleted` balaie un cache vide et renonce délibérément,
-      refusant une ambiguïté que l'événement d'à côté avait déjà tranchée
-- [x] Rien ne corrige ensuite : la conversation n'a plus aucune raison d'émettre
+- [x] La ligne compose son texte de DEUX moitiés qui ne vivent pas au même
+      endroit : `conversation.lastMessage` (objet) et la carte du Prisme
+      (`lastMessageTranslations` / `lastMessageOriginalLanguage`, scalaires au
+      niveau conversation)
+- [x] `resolveLastMessagePreview` PRÉFÈRE la carte au contenu brut — c'est elle
+      qui gagne à l'écran
+- [x] **Cinq** écrivains locaux réécrivaient l'objet, **zéro** ne touchait la
+      carte : `message:new`, sa branche `fetched`, `message:edited`,
+      `message:deleted`, `link:message:new`
+- [x] Quatre ont un `conversation:updated` jumeau qui rattrape — mélange
+      transitoire
+- [x] **`link:message:new` n'en a pas, délibérément** (`broadcastLinkMessage` :
+      « the clients already applied it » — vrai de l'objet, faux de la carte) ⇒
+      ligne DURABLEMENT fausse sur les conversations de lien partagé
+- [x] Le cycle 52 avait conclu l'inverse (« l'atomicité vient du modèle ») — vrai
+      de l'objet, et la carte n'est pas dans l'objet
 
 ## Correctif
 
-- [x] `mergeConversationUpdate(conversation, raw)` — point d'entrée du cache,
-      applique la règle de la **leçon 211** écrite au cycle précédent pour iOS
-- [x] Quatre formes : clé absente ⇒ rien ; `null` ⇒ vider ; même id ⇒ réécrire
-      le TEXTE et rien d'autre ; autre id ⇒ message NEUTRE depuis le payload
-- [x] **Neutre, pas hérité** — l'auteur et les pièces jointes du précédent sont
-      exactement le mélange qu'on ferme. Ligne INCOMPLÈTE et corrigible plutôt
-      que FAUSSE et durable, comme `LastMessageFacet` côté iOS
-- [x] **La borne fait le correctif** : sans le no-op « même id », chaque message
-      reçu dépouillerait sa propre ligne (le chemin de l'envoi)
-- [x] Pas d'horodatage lisible ⇒ on ne compose rien (« Invalid Date »)
-- [x] `normalizeConversationPatch` reste PURE ; les cinq champs du groupe
-      d'aperçu sont consommés par la fusion, plus recopiés
+- [x] `withPreviewMessage({ conversation, message, textChanged? })` — geste
+      unique, pur, exporté ; les cinq écrivains y passent
+- [x] **L'identité décide, jamais le contenu** : même id ⇒ la carte reste vraie
+- [x] `textChanged` déclaré par l'écrivain — une édition garde l'id et périme les
+      traductions côté serveur, l'identité ne peut pas le dire
+- [x] Carte périmée ⇒ `lastMessageOriginalLanguage` réaligné sur le message
+      installé (règle #3 du Prisme : la langue d'origine concourt à son RANG)
+- [x] **Périmer, pas recomposer** : dériver la carte de `message.translations`
+      dupliquerait dans le client les 4 exclusions serveur + le plafond de 300
+- [x] Ne touche ni `lastMessageAt` ni `updatedAt` — les 5 appelants n'en font pas
+      le même usage
 
 ## Gates
 
-- [x] Suite web COMPLÈTE : 580 suites, 12 430 témoins verts, 21 ignorés, 0 échec
-- [x] `bun run test:coverage` — seuils tenus (exit 0)
-- [x] `tsc --noEmit` — aucune erreur sur les 3 fichiers touchés (le dépôt en
-      porte une trentaine par ailleurs, préexistantes, comparées fichier par
-      fichier plutôt que sur le code de sortie)
-- [x] Gardes CI `check-law-literals.sh` et `check-swift-viewbuilder.sh` vertes
-- [x] `packages/shared` reconstruit avant la campagne — `moduleNameMapper` pointe
-      sur `dist/`, et un `dist` périmé faisait échouer une suite à la RÉSOLUTION,
-      sur `main` comme sur la branche (vérifié des deux côtés)
-- [x] `main` refusionné à la main avant push — merge propre, suite relancée verte
-- [x] CHANGELOG racine + ADR `apps/web/decisions.md` + journal cycle 53 +
-      leçon 212
+- [x] Suite web COMPLÈTE : 581 suites, 12 445 témoins verts, 21 ignorés, 0 échec
+- [x] 14 témoins neufs — 10 sur le geste pur, 4 d'intégration (un par handler),
+      posés sur la sortie de `resolveLastMessagePreview`, pas sur le champ brut
+- [x] **Preuve par mutation dans les deux sens** : neutraliser le correctif tue
+      10 témoins, le sur-doser en tue 2 (la borne)
+- [x] `tsc --noEmit` — aucune erreur sur les 2 fichiers touchés (le dépôt en
+      porte 1234 par ailleurs, préexistantes, comparées fichier par fichier)
+- [x] `prisma generate` + `packages/shared` reconstruit avant la campagne
+- [x] `main` refusionné à la main avant push
+- [x] CHANGELOG racine + journal cycle 54 + leçon 214
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-16-cycle53.md` — pourquoi le cycle 52
-avait conclu le web « indemne par structure » (vrai du recalcul LOCAL, faux du
-fan-out SERVEUR), pourquoi le mélange se cache à la jointure de deux modèles
-(un objet d'un côté, des scalaires frères de l'autre), et les quatre pistes du
-cycle 54.
-
-PR #3111.
+Voir `tasks/realtime-sync-audit-2026-08-17-cycle54.md` — le tableau des cinq
+écrivains, pourquoi le chemin des liens partagés était le seul sans filet, et
+les quatre pistes du cycle 55.
