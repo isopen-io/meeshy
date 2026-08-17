@@ -186,6 +186,154 @@ const FROZEN_MODE_MENUS = [
   'components/conversations/reading/LensSwitcher.tsx',
 ];
 
+// ---------------------------------------------------------------------------
+// [Q-146/R5-4] TÉMOIN (f) — scan STRUCTUREL, robuste au renommage
+// ---------------------------------------------------------------------------
+//
+// RED prouvé (R5-4) : le témoin (d) ci-dessus ne surveille que CINQ
+// MARQUEURS NOMMÉS (le préfixe de clé, la clé legacy, le nom de classe du
+// substitut, et `zustand/middleware` — mais UNIQUEMENT sur des fichiers dont
+// le NOM matche déjà `reading-mode.*store\.ts$`). Un troisième magasin qui
+// n'emprunte AUCUN de ces cinq noms — clé `zustand/persist` inventée, nom de
+// fichier qui ne contient pas la sous-chaîne `reading-mode` — traverse (d)
+// sans faire rougir un seul de ses cinq témoins.
+//
+// Deux scans INDÉPENDANTS ferment ce trou, l'un sur la CLÉ, l'autre sur la
+// FORME du fichier — délibérément redondants, pour rester vrais même si l'un
+// des deux angles est contourné à son tour :
+//
+//   (f1) toute clé passée à `persist(...)` — le second argument `{ name:
+//        '...' }` de la config — qui matche `/reading|mode|lens/i` : la clé
+//        elle-même trahit l'intention, quel que soit le nom du fichier ou de
+//        l'export.
+//   (f2) tout fichier sous `stores/` qui IMPORTE `zustand` ET dont le CODE
+//        (commentaires retirés) nomme un mode de lecture (`readingMode`,
+//        `reading-mode`) ou la Lentille (`lens`) — que ce fichier utilise ou
+//        non `persist`, que sa clé soit suspecte ou totalement neutre. C'est
+//        la forme la PLUS ROBUSTE au renommage : renommer la clé de
+//        persistance ne change ni l'import `zustand`, ni le vocabulaire du
+//        domaine que le fichier doit bien porter quelque part pour être
+//        utile.
+//
+// Contre-épreuve jouée à l'écriture (même discipline que (d)/(e)) : un
+// magasin `stores/lens-mode-cache-store.ts` (clé `lens-mode-cache-v1`,
+// aucun des cinq marqueurs de (d)) fait rougir (f1) ET (f2) — retiré après
+// la preuve.
+
+const AUTHORITATIVE_STORE_ABSOLUTE = path.join(WEB_ROOT, AUTHORITATIVE_STORE);
+
+/** Fichiers sources, hors tests — même périmètre que `walk`/`filesMatching`. */
+function allSourceFiles(): string[] {
+  return walk(WEB_ROOT);
+}
+
+/**
+ * Les clés de TOUS les appels `persist(...)` du dépôt web, avec leur fichier
+ * d'origine. Fenêtre de recherche bornée après chaque occurrence de
+ * `persist(` : le `name:` d'une config `persist` est toujours à proximité de
+ * l'appel dans ce code, jamais à des centaines de lignes.
+ */
+function persistKeysByFile(): Array<{ file: string; key: string }> {
+  const found: Array<{ file: string; key: string }> = [];
+  for (const file of allSourceFiles()) {
+    const code = stripComments(fs.readFileSync(file, 'utf8'));
+    const persistCalls = [...code.matchAll(/persist\(/g)];
+    for (const call of persistCalls) {
+      const windowStart = call.index! + call[0].length;
+      const window = code.slice(windowStart, windowStart + 800);
+      const nameMatch = window.match(/name:\s*['"]([^'"]+)['"]/);
+      if (nameMatch) {
+        found.push({ file: path.relative(WEB_ROOT, file), key: nameMatch[1] });
+      }
+    }
+  }
+  return found;
+}
+
+describe('[Q-146/R5-4] garde — scan structurel, robuste au renommage', () => {
+  it('(f1) aucune clé `persist(...)` ne matche reading|mode|lens — le magasin autoritatif n\'utilise PAS zustand/persist (témoin (d) #4)', () => {
+    // Le magasin autoritatif gère lui-même sa persistance (`localStoragePersistence`
+    // ci-contre dans `reading-mode-preference-store.ts`), précisément pour rester
+    // versionné/optimiste — voir témoin (d) #4 : `zustand/persist` n'est branché sur
+    // AUCUN magasin de mode de lecture. Une clé `persist(...)` qui matche
+    // reading|mode|lens n'a donc AUCUN propriétaire légitime aujourd'hui.
+    const suspiciousKeys = persistKeysByFile().filter(({ key }) => /reading|mode|lens/i.test(key));
+
+    expect(suspiciousKeys.map((entry) => entry.file)).toEqual([]);
+  });
+
+  it('(f1-sanity) le scan trouve bien des clés `persist` — anti-silence', () => {
+    expect(persistKeysByFile().length).toBeGreaterThan(0);
+  });
+
+  it('(f2) aucun fichier de stores/ (hors le magasin autoritatif) n\'importe zustand ET ne nomme un mode de lecture', () => {
+    const storesDir = path.join(WEB_ROOT, 'stores');
+    const offenders = walk(storesDir)
+      .filter((file) => path.resolve(file) !== AUTHORITATIVE_STORE_ABSOLUTE)
+      .filter((file) => {
+        const code = stripComments(fs.readFileSync(file, 'utf8'));
+        const importsZustand = /from ['"]zustand/.test(code);
+        const namesReadingModeOrLens = /reading[-_]?mode|\blens\b/i.test(code) || /reading[-_]?mode|\blens\b/i.test(path.basename(file));
+        return importsZustand && namesReadingModeOrLens;
+      })
+      .map((file) => path.relative(WEB_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('(f2-sanity) le magasin autoritatif lui-même importe bien zustand et nomme un mode de lecture — la garde ne se vide pas en silence', () => {
+    const code = stripComments(fs.readFileSync(AUTHORITATIVE_STORE_ABSOLUTE, 'utf8'));
+    expect(/from ['"]zustand/.test(code)).toBe(true);
+    expect(/reading[-_]?mode/i.test(code)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [Q-146/R5-4] TÉMOIN (g) — les points d'entrée LÉGITIMES hors périmètre,
+// nommés plutôt que supposés
+// ---------------------------------------------------------------------------
+//
+// REV-5 (V5) : la surface a grandi. G-121 (route gateway + colonne Prisma
+// `UserConversationPreferences.readingMode`) et G-124 (injection iOS)
+// donnent au système, AUJOURD'HUI, quatre points d'entrée légitimes sur la
+// préférence de mode de lecture — dont UN SEUL relève de cette garde. Les
+// nommer ici, avec un témoin qui vérifie qu'ils existent bien à l'adresse
+// annoncée, évite que « un seul magasin » soit lu comme une exclusivité
+// SYSTÈME plutôt que comme le périmètre réel de cette suite (apps/web
+// uniquement) — et fait rougir CE témoin, pas une intuition, le jour où l'un
+// de ces chemins bouge de fichier.
+describe('[Q-146/R5-4] les 4 points d\'entrée légitimes, nommés', () => {
+  it('1. le magasin web autoritatif — GOUVERNÉ par cette garde', () => {
+    expect(fs.existsSync(AUTHORITATIVE_STORE_ABSOLUTE)).toBe(true);
+  });
+
+  it('2. le magasin iOS device-scopé — sa propre famille de gardes (ModePreferenceRoundTripTests)', () => {
+    const iosStore = path.join(
+      WEB_ROOT,
+      '../ios/Meeshy/Features/Main/Focal/Preferences/ReadingModePreferenceStore.swift'
+    );
+    expect(fs.existsSync(iosStore)).toBe(true);
+  });
+
+  it('3. la route serveur G-121 — écrit `UserConversationPreferences.readingMode`, hors apps/web', () => {
+    const gatewayRoute = path.join(
+      WEB_ROOT,
+      '../../services/gateway/src/routes/conversation-preferences.ts'
+    );
+    expect(fs.existsSync(gatewayRoute)).toBe(true);
+    expect(fs.readFileSync(gatewayRoute, 'utf8')).toContain('readingMode');
+  });
+
+  it('4. la lecture serveur du choix collant — alimente `suggestedMode` (G-121/G-123), hors apps/web', () => {
+    const gatewayCore = path.join(
+      WEB_ROOT,
+      '../../services/gateway/src/routes/conversations/core.ts'
+    );
+    expect(fs.existsSync(gatewayCore)).toBe(true);
+    expect(fs.readFileSync(gatewayCore, 'utf8')).toContain('prefs?.readingMode');
+  });
+});
+
 describe('garde — la duplication restante est gelée (FocalRow ×2, menus de mode ×2)', () => {
   it('EXACTEMENT deux `FocalRow` — ni un troisième, ni une unification silencieuse', () => {
     const found = walk(WEB_ROOT)
