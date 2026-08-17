@@ -49,9 +49,25 @@ final class CallDetailRoutingTests: XCTestCase {
         return nil
     }
 
+    /// **Recalibré — déplacé par `f9eb73d3` (« l'appui long élève la CELLULE
+    /// VIVANTE, plus jamais une bulle reconstruite »), l'invariant est
+    /// inchangé : l'appui long branche sur `callSummary`, jamais sur le
+    /// `messageSource == .system` d'avant.**
+    ///
+    /// Ce commit a donné un SECOND paramètre à la fermeture — `focalPreview`,
+    /// les pixels de la cellule vivante que l'overlay élève au lieu d'en
+    /// reconstruire une. Le marqueur `onLongPress: { messageId in` ne
+    /// désignait donc plus rien : le témoin échouait sur son `guard`, sans
+    /// même avoir regardé le routage qu'il protège.
+    ///
+    /// Le marqueur suit la signature ; le corps recherché, lui, est inchangé
+    /// mot pour mot. Même leçon que le passage de la fenêtre de 700 caractères
+    /// à l'équilibrage d'accolades, documenté juste au-dessus : une garde qui
+    /// épingle la FORME de la déclaration se périme au premier paramètre
+    /// ajouté, alors que ce qu'elle protège n'a pas bougé d'un signe.
     func test_conversationView_onLongPress_branchesOnCallSummary_notMessageSourceSystem() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
-        guard let body = closureBody(after: "onLongPress: { messageId in", in: view) else {
+        guard let body = closureBody(after: "onLongPress: { messageId, focalPreview in", in: view) else {
             XCTFail("ConversationView must define the onLongPress closure"); return
         }
         XCTAssertTrue(

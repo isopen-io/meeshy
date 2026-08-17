@@ -24,21 +24,85 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try source())
     }
 
-    // MARK: - Montage effectif, SOUS DRAPEAU
+    // MARK: - Le SUPPORT a changé, la loi F-081 doit toujours atteindre l'œil
 
-    func test_scrollTimePillOverlay_isMounted() throws {
+    /// **Recalibré — déplacé par `85cf1ec4` (« ressuscite la magnification du
+    /// message élu et rend l'heure aux messages »), l'invariant est
+    /// inchangé : la loi F-081 ne doit pas rester orpheline.**
+    ///
+    /// Ce commit a démonté la pilule flottante, inconditionnellement, et le
+    /// motif est écrit : elle datait un POINT DE L'ÉCRAN (« Mercredi · 17:42 »
+    /// figé en haut) pendant que le sticker de jour occupait déjà la bande
+    /// au-dessus et que chaque rangée portait son heure — trois chromes
+    /// temporels concurrents pour une seule question, « quand ce message-ci ? »,
+    /// à laquelle seule la rangée répond.
+    ///
+    /// L'ancien témoin exigeait le MONTAGE, c'est-à-dire le support de la
+    /// veille. Or ce que F-086bis avait arbitré n'était pas « il faut une
+    /// pilule » : c'était « la loi F-081, livrée puis laissée sans aucun
+    /// consommateur, doit atteindre le lecteur — et sans observateur neuf ».
+    /// Cette exigence-là SURVIT au changement de support, et c'est elle que le
+    /// témoin éprouve maintenant : l'état est toujours alimenté, et il est
+    /// toujours LU — par `timestampReveal`, qui porte désormais l'information.
+    /// Un démontage qui laisserait la loi orpheline (un état qu'on nourrit et
+    /// que plus personne ne lit) fait tomber ce test, exactement comme
+    /// l'absence de montage faisait tomber le précédent.
+    ///
+    /// Les gardes « aucun observateur neuf » (site 1 unique, zéro `Timer`
+    /// supplémentaire) sont INTACTES plus bas : le changement de support ne
+    /// les concerne pas.
+    func test_scrollTimePillLaw_stillReachesTheReader_evenUnmounted() throws {
         let code = try strippedSource()
+
+        // 1. Le démontage est INCONDITIONNEL — décision de `85cf1ec4`, gelée
+        //    ici pour qu'un remontage accidentel se signale.
         XCTAssertTrue(
-            code.contains("ScrollTimePillOverlay(state: scrollTimePillState)"),
-            "MessageListViewController doit monter `ScrollTimePillOverlay(state: scrollTimePillState)` — F-081 livrait la vue, personne ne la montait (arbitrage F-086bis)."
+            code.contains("private func updateScrollTimePillMounting() {\n        teardownScrollTimePillOverlay()\n    }"),
+            "`updateScrollTimePillMounting` doit se réduire au démontage INCONDITIONNEL — la pilule flottante n'est plus montée nulle part (`85cf1ec4`), et un contrôleur recyclé depuis un mode antérieur ne doit pas en garder une à l'écran."
+        )
+
+        // 2. Le monteur survit en CODE MORT (restauration en une ligne, même
+        //    discipline que `FocalFocusDecoration.drawsFocusCard`) : il ne
+        //    doit avoir AUCUN site d'appel. C'est la forme la plus dure de
+        //    « flag off ⇒ aucun UIHostingController enfant supplémentaire »
+        //    que portait l'ancien témoin — plus dure, car elle vaut pour TOUS
+        //    les modes et non pour `.bubbles` seul.
+        let mounterOccurrences = code.components(separatedBy: "configureScrollTimePillOverlay()").count - 1
+        XCTAssertEqual(
+            mounterOccurrences, 1,
+            "`configureScrollTimePillOverlay()` apparaît \(mounterOccurrences) fois — UNE seule attendue, sa DÉCLARATION. Toute occurrence supplémentaire est un site d'appel, donc un remontage de la pilule (`85cf1ec4` l'a retirée de tous les modes)."
+        )
+
+        // 3. La loi n'est pas orpheline — l'état est toujours alimenté…
+        XCTAssertTrue(
+            code.contains("scrollTimePillState.note(.scrolled(at:"),
+            "`ScrollTimePillState` doit continuer de recevoir `.scrolled` — la loi F-081 reste la source de vérité du « quand », seul son SUPPORT a changé (`85cf1ec4`)."
         )
         XCTAssertTrue(
-            code.contains("private func updateScrollTimePillMounting() {\n        if readingMode != .bubbles {"),
-            "Le montage doit être gardé par `readingMode != .bubbles` — flag off ⇒ aucun UIHostingController enfant supplémentaire (contrat §WS-6)."
+            code.contains("scrollTimePillState.note(.tick(at:"),
+            "`ScrollTimePillState` doit continuer de recevoir `.tick` — sans quoi sa loi ne s'éteindrait jamais et le signal resterait figé."
+        )
+
+        // 4. … et il est LU. C'est ce couple alimenté/consommé qui interdit
+        //    la « loi livrée que personne ne consomme » — le défaut même que
+        //    l'arbitrage F-086bis avait fait corriger.
+        XCTAssertTrue(
+            code.contains("timestampReveal.note(.scrolled(at:"),
+            "`timestampReveal` doit recevoir `.scrolled` — c'est lui qui porte désormais l'information de la pilule (l'heure, sur la rangée elle-même). Sans ce relais, la loi F-081 redeviendrait orpheline."
         )
         XCTAssertTrue(
-            code.contains("teardownScrollTimePillOverlay()"),
-            "Un retour à `.bubbles` doit DÉMONTER l'overlay — pas seulement le masquer."
+            code.contains("timestampReveal.note(.tick(at:"),
+            "`timestampReveal` doit recevoir `.tick` — même loi, même extinction : le relais consomme la loi ENTIÈRE, pas la moitié."
+        )
+
+        // 5. … par une VUE. Un relais qu'on alimente et qui n'est injecté nulle
+        //    part serait un second orphelin remplaçant le premier : la garde
+        //    tomberait dans le défaut qu'elle existe pour attraper. C'est le
+        //    dernier maillon de « la loi atteint le lecteur », et le seul qui
+        //    aille jusqu'à l'écran.
+        XCTAssertTrue(
+            code.contains(".environmentObject(timestampReveal)"),
+            "`timestampReveal` doit être injecté dans la hiérarchie des rangées (`.environmentObject`) — sinon la loi F-081 serait simplement passée d'un orphelin à un autre, et l'arbitrage F-086bis resterait à refaire."
         )
     }
 
