@@ -125,7 +125,9 @@ sacrifiée, N bulles convergent en N × 500 ms. Pas de troncature silencieuse.
 - **Suite web complète** : **582 suites / 12 472 témoins verts**, 21 ignorés,
   0 échec (`bun x jest`, 224 s). Base cycle 56 : 12 464 → **+5 témoins de ce
   cycle**, le reste venant de `main`.
-- **Suite gateway complète** : voir §4.1.
+- **Suite gateway complète** : **740 suites / 17 938 témoins verts**, 0 échec
+  (`bun run test:coverage`, 3 253 s ; lignes 95,8 %). Base cycle 56 : 17 928 →
+  +10 témoins venus de `main`.
 - **Preuve par mutation, dans les deux sens** — chaque mutation tue exactement
   les témoins qui la visent :
 
@@ -140,16 +142,47 @@ sacrifiée, N bulles convergent en N × 500 ms. Pas de troncature silencieuse.
 - **`tsc --noEmit` web** : **1234 erreurs avant, 1234 après** — mesuré sur le
   même arbre, `main` puis la branche. **Zéro erreur nouvelle.** (Même dette
   préexistante qu'aux cycles 55 et 56.)
-- **`tsc --noEmit` gateway** : voir §4.1.
+- **`tsc --noEmit` gateway** : **0 erreur**.
 - **Parité locale** : `bun install --frozen-lockfile --ignore-scripts`,
   `prisma generate --generator client`, puis `packages/shared` reconstruit avant
   chaque campagne (`moduleNameMapper` pointe sur `dist/`).
 
-### 4.1 Résultats gateway
+### 4.1 Une campagne gateway à jeter, et pourquoi elle ne comptait pas
 
-Renseigné à la fin du run — voir la section « Gates » du commit.
+La PREMIÈRE campagne gateway a rendu 3 suites rouges sur 740. Une seule était
+réelle (§5) ; les deux autres — `posts.removal-broadcast`, `me-index` — ont
+rendu :
 
-## 5. Découvert en chemin, NON traité
+```
+● Test suite failed to run
+  A jest worker process (pid=…) was terminated by another process:
+  signal=SIGKILL, exitCode=null.
+```
+
+Pas un témoin faux : un ouvrier **tué avant d'exécuter le moindre corps de
+test**, par le tueur de MOO du conteneur — trois campagnes jest et deux `tsc`
+lancés en parallèle par ce cycle. C'est le seul cas où relancer EST le
+diagnostic, et non une façon de l'éviter : les deux suites passent 9/9 isolées,
+et la campagne rejouée seule rend **740/740, 17 938/17 938, sortie 0**. C'est ce
+chiffre-là qui est reporté ci-dessus ; le premier est jeté, pas moyenné.
+
+## 5. Découvert en chemin, TRAITÉ ici
+
+**`ReactionHandler.test.ts` recopiait une table PARTIELLE du contrat partagé**
+dans sa fabrique `jest.mock`. `RATE_LIMIT_REFUSAL_MESSAGE` y valait `undefined`,
+et les trois témoins de limitation ont échoué sur `error: undefined` — un échec
+qui ne nomme pas sa cause. La fabrique part désormais de `jest.requireActual` et
+ne remplace que les deux entrées que ces témoins épinglent : elle ne peut plus
+diverger du module réel. C'est une nouvelle occurrence de la piste n°3 du cycle
+56 (« combien d'autres suites recopient un contrat qu'elles n'utilisent pas »),
+cette fois attrapée par la suite plutôt que par relecture — et non inerte,
+contrairement à celle de `presence.service.test.ts`.
+
+Les deux suites soeurs qui partagent ce motif de mock (`CommentReactionHandler`,
+`PostReactionHandler`) sont vertes (65/65) : aucune ne dépendait de l'ABSENCE
+d'une constante du contrat réel.
+
+## 6. Découvert en chemin, NON traité
 
 **Sept événements client→serveur déclarés sans handler gateway ET sans émetteur
 client** : `user:status`, `call:audio-chunk`, `call:quality-feedback`,
@@ -178,7 +211,7 @@ la user-room comme l'atténuation, ce qui ne couvre que les appareils connectés
 à CET instant. Réel, mais la correction est une file par appareil — une
 instruction à part entière.
 
-## 6. Écarté délibérément
+## 7. Écarté délibérément
 
 **Un `reaction:request-sync` par lot (N messageIds en une demande).** C'est la
 correction qui supprimerait la rafale au lieu de la cadencer, et elle est
@@ -196,7 +229,7 @@ que le dépôt s'interdit.
 lecteur client. Déplacer la table entière aurait touché huit fichiers gateway
 pour une seule ligne utile.
 
-## 7. Pistes pour le cycle 58 — repérées, NON livrées
+## 8. Pistes pour le cycle 58 — repérées, NON livrées
 
 1. **Le garde de source « tout `CLIENT_EVENTS` a un handler gateway »** (§5) —
    la seule direction où il est sans faux positif, et la duplication
