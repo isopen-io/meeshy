@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
+import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { MarkReadBodySchema } from '../validation/messages-schemas.js';
@@ -34,6 +35,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   const prisma = fastify.prisma;
   const readStatusService = new MessageReadStatusService(prisma);
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
+  // G-123 — le pont ✦ voyage sur le badge que `broadcastReadStatus` renvoie aux
+  // appareils du lecteur. Fourni aux QUATRE portes, pas seulement à celles qui
+  // marquent `read` aujourd'hui : c'est l'unité partagée qui décide si le pont
+  // se calcule (compteur > 0 après une lecture), et un `type` qui changerait ici
+  // ne doit pas perdre le pont en silence.
+  const bridgeService = new ConversationBridgeService(prisma);
 
   // Middleware d'authentification.
   //
@@ -264,7 +271,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             io: fastify.socketIOHandler?.getManager?.()?.getIO(),
             prisma,
             readStatusService,
-            privacyPreferencesService
+            privacyPreferencesService,
+            bridgeService
           },
           {
             conversationId,
@@ -335,7 +343,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             io: fastify.socketIOHandler?.getManager?.()?.getIO(),
             prisma,
             readStatusService,
-            privacyPreferencesService
+            privacyPreferencesService,
+            bridgeService
           },
           {
             conversationId,
@@ -434,7 +443,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             io: fastify.socketIOHandler?.getManager?.()?.getIO(),
             prisma,
             readStatusService,
-            privacyPreferencesService
+            privacyPreferencesService,
+            bridgeService
           },
           {
             conversationId,
