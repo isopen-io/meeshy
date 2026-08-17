@@ -628,6 +628,52 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Masquage PERSONNEL — CE lecteur a retiré des messages de SA vue depuis
+        // un autre de ses appareils.
+        //
+        // Le canal existe parce qu'un filtre de LECTURE ne rétrécit que ce qu'une
+        // NOUVELLE requête renvoie : il n'a aucune prise sur une ligne que le
+        // client détient déjà. Sans ce consommateur, la bulle restait affichée
+        // pour toute la session — la ligne de liste, elle, était bien corrigée
+        // par le `conversation:updated` jumeau, si bien que l'aperçu et le fil
+        // se contredisaient.
+        //
+        // Pas `markDeleted` : le message reste VIVANT pour les autres
+        // participants, et une pierre tombale « ce message a été supprimé »
+        // resterait affichée à vie puisque le serveur ne renverra plus jamais ce
+        // message à ce lecteur. Il doit disparaître sans trace — d'où la purge.
+        //
+        // Les références qui nomment un AUTRE fil sont laissées à leur propre
+        // handler : ce dernier n'existe que si la conversation est ouverte, et
+        // sinon le prochain chargement REST (déjà filtré côté serveur) suffit.
+        socketManager.messageHiddenForMe
+            .map { event in
+                event.messages
+                    .filter { ref in ref.conversationId == convId }
+                    .map(\.messageId)
+            }
+            .filter { ids in !ids.isEmpty }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] hiddenIds in
+                guard let self else { return }
+                if let persistence = self.persistence {
+                    Task {
+                        do {
+                            try await persistence.purgeMessages(ids: hiddenIds)
+                        } catch {
+                            Logger.messages.warning("[ConversationSocket] purgeMessages failed \(hiddenIds.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                }
+                // Même raison que pour la suppression pour tous : un message
+                // retiré de la vue ne peut pas rester dans les favoris, où son
+                // instantané figé survivrait au retrait.
+                for messageId in hiddenIds {
+                    StarredMessagesStore.shared.remove(messageId: messageId)
+                }
+            }
+            .store(in: &cancellables)
+
         // Pinned messages — un autre participant (ou un autre device) epingle un
         // message. Write-through persistence; l'observation du store surface le pin.
         socketManager.messagePinned
