@@ -125,4 +125,41 @@ final class AgentGrammarGateTests: XCTestCase {
             XCTAssertFalse(stripped.contains(forbidden), "\(forbidden) n'existe nulle part côté serveur — ne doit apparaître dans aucune chaîne de ce fichier")
         }
     }
+
+    // MARK: - R6-2 — le site d'appel `MessageListViewController` est câblé sur le vrai drapeau
+
+    /// Le site (`MessageListViewController.swift:1387` avant ce correctif)
+    /// figeait `showsAgentGrammar: false` sous un commentaire qui affirmait
+    /// « WS-10 n'a pas livré `isAgentGrammarEnabled` » — FAUX,
+    /// `MeeshyFeatureFlags.swift:69` l'expose depuis F-089. Ce témoin garde
+    /// LE BRANCHEMENT (lecture du vrai drapeau), PAS son activation : le
+    /// drapeau lui-même reste OFF par défaut (`isAgentGrammarEnabled`
+    /// injectable, testé plus haut) — décision produit écrite exigée avant
+    /// tout changement de ce défaut (§5.2/WS-10).
+    func test_messageListViewController_wiresShowsAgentGrammarToTheRealFlag() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Focal
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let stripped = AppSourceGuard.stripComments(raw)
+
+        XCTAssertTrue(
+            stripped.contains("showsAgentGrammar: MeeshyFeatureFlags.isAgentGrammarEnabled"),
+            "le site d'appel doit lire MeeshyFeatureFlags.isAgentGrammarEnabled — jamais un OFF codé en dur (R6-2)"
+        )
+        XCTAssertFalse(
+            stripped.contains("showsAgentGrammar: false"),
+            "R6-2 : plus aucun site de production ne doit figer showsAgentGrammar à false"
+        )
+        // Re-preuve sur la source BRUTE (commentaires compris) : le
+        // commentaire faux qui justifiait le OFF en dur a disparu, pas
+        // seulement contourné par du code qui le laisserait mentir à côté.
+        XCTAssertFalse(
+            raw.contains("n'a pas encore livré"),
+            "le commentaire faux (« WS-10 n'a pas livré isAgentGrammarEnabled ») doit être retiré, pas seulement le code"
+        )
+    }
 }
