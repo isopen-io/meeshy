@@ -4,6 +4,7 @@
 
 import { buildApiUrl } from './config';
 import { copyToClipboard } from './clipboard';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 export interface ShareLinkOptions {
   type: 'affiliate' | 'conversation' | 'join' | 'default';
@@ -41,13 +42,13 @@ export function generateShareLink(options: ShareLinkOptions): string {
       if (!options.linkId) {
         throw new Error('LinkId requis pour ce type de lien');
       }
-      return `${baseUrl}/join/${options.linkId}`;
+      return buildShareLinkUrl(options.linkId, baseUrl);
     
     case 'join':
       if (!options.linkId) {
         throw new Error('LinkId requis pour ce type de lien');
       }
-      return `${baseUrl}/join/${options.linkId}`;
+      return buildShareLinkUrl(options.linkId, baseUrl);
     
     case 'default':
     default:

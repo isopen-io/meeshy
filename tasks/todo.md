@@ -1,233 +1,213 @@
-# Cycle 58 — la socket des notifications pouvait mourir DÉFINITIVEMENT, en silence
+# Livraison — `/chat/:sharedId` en vue courante + Lentille (Focal / Script)
 
-## La piste
+Branche : `claude/shared-conversation-modes-m5kktb`
+Sources : `docs/design/2026-08-15-conversation-modes-verdict.html` (vol. 3),
+`docs/design/2026-08-15-focal-spec-integration.html` (vol. 4).
 
-- [x] Piste ouverte par la relecture de la stratégie de reconnexion (PHASE 2 :
-      « reconnection strategy, exponential backoff »). Le couloir principal
-      (`socketio/connection.service.ts`) porte DEUX corrections documentées ;
-      sa jumelle `notification-socketio.singleton.ts` n'en porte AUCUNE des deux
+## Verdict retenu pour cette livraison
 
-## Le constat — deux défauts jumeaux, dont le premier ARME le second
+| Mode | Décision vol. 3 | Cette livraison |
+|------|-----------------|-----------------|
+| **Focal** | Garder (défaut) | ✅ livré — rangée plate, perspective au scroll, carte de focus |
+| **Script** | Densité de Focal (`Aa`) | ✅ livré — même rangée, sans perspective |
+| **Lentille** | 2–3 choix + appel | ✅ livré — Focal / Script / Bulles (héritage) |
+| **Scène** | Garder · couche live | ⏭️ déjà couverte par la couche d'appel existante (`video-call`) |
+| **Résumé Vivant** | Garder | ⏭️ hors périmètre — dépend de l'API observer `assist:*` (absente du gateway) |
+| **Rivière** | Sursis | ⏭️ hors périmètre — doit gagner son procès sur prototype |
 
-- [x] **(a) Le jeton du handshake est un LITTÉRAL** : `auth: { token }`, figé à
-      la construction. Socket.IO rejoue `auth` à CHAQUE tentative de
-      reconnexion — toutes re-présentent donc le jeton d'origine. Après un
-      rafraîchissement silencieux (chemin 401 REST), chaque tentative présente
-      des identifiants que la gateway refuse
-- [x] **(b) `reconnect_failed` n'est écouté par personne.** La boucle interne de
-      Socket.IO abandonne DÉFINITIVEMENT après `reconnectionAttempts: 5`. Rien
-      ne la relance : `connect()` n'est appelé que par un `useEffect` monté sur
-      l'authentification (`use-notifications-manager-rq.tsx:128`), qui ne
-      re-tourne pas sur un échec de socket
-- [x] (a) fait tomber (b) en ROUTINE et non seulement sur une longue coupure :
-      un rafraîchissement de jeton suffit à brûler les 5 tentatives
-- [x] `reconnectionDelay: 5000` sans `reconnectionDelayMax` ⇒ les 5 tentatives
-      tiennent ~25 s. Une coupure réseau de 30 s tue le canal
-- [x] Conséquence : plus AUCUN `notification:new`, `read`, `deleted`, `counts`
-      pour le reste de la session d'onglet. La pastille gèle. Et le rattrapage
-      ne part pas non plus — `emitDesync('reconnect')` ne peut plus jamais
-      être émis, alors que le fichier documente lui-même que React Query est en
-      `staleTime: Infinity` et n'a « aucune autre voie de rattrapage »
-- [x] `this.reconnectAttempts++` (dans `connect_error`) est un compteur ÉCRIT et
-      JAMAIS LU — il donne l'apparence d'une gestion de tentatives qui n'existe pas
+## Objectif produit
 
-## Correctif — mirroir de la jumelle, plus une subtilité qu'elle n'avait pas
+1. `meeshy.me/chat/<ID_PARTAGE>` charge la conversation partagée **dans la vue courante**
+   (responsive téléphone / tablette / ordinateur), plus jamais dans une page à part.
+2. Visiteur non connecté → **modale** de connexion / création de compte / rejoindre en anonyme.
+   La page `/join/<linkId>` disparaît (redirection permanente) ; son contenu vit dans la modale.
+3. La Lentille (Focal / Script) est disponible dans cette vue.
 
-- [x] **(a)** `auth` devient un RÉSOLVEUR appelé à chaque handshake
-      (`authManager.getAuthToken()`, repli sur le jeton confié à `connect()`
-      pour les porteurs sans localStorage) — exactement `resolveHandshakeToken()`
-      de la jumelle
-- [x] **(b)** `reconnect_failed` passe la main à une boucle de backoff manuelle
-      (exponentielle, plafonnée, avec gigue), qui reconstruit la socket
-- [x] **La subtilité propre à ce fichier** : la reprise ne doit PAS passer par
-      `disconnect()`. Celui-ci remet `hasConnectedBefore = false` et réinitialise
-      `syncSeq` — donc la reconnexion réparée n'émettrait PAS `desync('reconnect')`
-      et perdrait le curseur `_seq`. Or ce signal EST le rattrapage. Séparer le
-      démontage TECHNIQUE du reset SÉMANTIQUE
-- [x] Aligner `reconnectionDelay`/`Max`/`randomizationFactor` sur la jumelle
-      (1000 → 30000, gigue 0.5) : la boucle interne couvre alors une coupure
-      bien plus longue avant de céder la main
-- [x] Retirer le compteur mort, ou l'utiliser réellement pour le backoff
+## Increments TDD (tous livrés)
 
-## Gates
+### Gateway
+- [x] G1 — RED/GREEN : `GET /links/:identifier` expose `requireAccount` + `requireBirthday`
+      (déclarés côté web dans `LinkConversationData`, mais retirés par la sérialisation Fastify).
+- [x] G2 — RED/GREEN : `GET /links/:identifier` — un utilisateur **authentifié non membre**
+      reçoit aujourd'hui `403`. Il doit retomber sur la règle d'aperçu public
+      (`isActive && allowViewHistory`) pour voir l'aperçu + la modale « Rejoindre ».
 
-- [x] Suite web ciblée verte, témoins neufs
-- [x] `tsc --noEmit` web : zéro erreur NOUVELLE (dette préexistante mesurée sur main)
-- [x] Preuve par mutation dans les deux sens
-- [x] `main` refusionné à la main avant push
-- [x] CHANGELOG + journal de cycle + leçon
+### Web — accès partagé
+- [x] W1 — `useSharedConversationAccess` : résout l'identité (`member` | `anonymous` | `visitor` | erreur).
+- [x] W2 — `JoinConversationModal` : reprend `LoginForm`, `RegisterForm` (avec `linkId`,
+      donc l'inscription rejoint en une étape) et `AnonymousForm` (nom/prénom, pseudo +
+      vérification de disponibilité, email, anniversaire selon `require*`).
+      `JoinHeader` / `JoinInfo` / `JoinActions` / `JoinLoading` étaient le chrome de la
+      page d'accueil : supprimés, la modale porte ce rôle.
+- [x] W3 — `/chat/[id]` : membre → `ConversationLayout` (vue app complète) ;
+      anonyme → surface conversation ; visiteur → aperçu + modale.
+- [x] W4 — `/join/[linkId]` → redirection permanente vers `/chat/[linkId]`.
+- [x] W5 — tout producteur de lien de partage émet `/chat/<linkId>`.
 
-## Revue
+### Web — Lentille
+- [x] L1 — `useFocalScroller` : `focusY = bas − 150`, `f = min(1, d/380)`,
+      échelle `1 − 0.40f`, opacité `1 − 0.82f`, transform/opacity seulement, neutralisé par
+      `prefers-reduced-motion`.
+- [x] L2 — `FocalRow` : rangée plate, tête de groupe `Pseudo · HH:mm`, retrait 29, aucune bulle.
+- [x] L3 — `DateSticker` (collant) + `ScrollTimePill` (auto-effacement 900 ms).
+- [x] L4 — `LensSwitcher` dans le header + persistance collante par conversation.
+- [x] L5 — `--conv-accent` depuis `conversationAccentPalette()` (`packages/shared`).
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle58.md` — le tableau des deux
-sockets web, pourquoi (a) arme (b), et la subtilité du §3-3 (rendre la socket
-SANS rendre le rattrapage) sur laquelle une reprise « évidente » se serait
-trompée en silence. Huit pistes pour le cycle 59.
-
-Gates constatés : **suite web complète 582 suites / 12 485 témoins verts**, le
-fichier visé de 55 à **65 témoins**, `tsc --noEmit` à **1234 sur `main` contre
-1233 sur la branche** (zéro nouvelle, une préexistante supprimée), et
-**6 mutations** — 5 sous-dosages tous rouges, 1 sur-dosage vert qui a fait
-RETIRER une garde inatteignable plutôt que l'habiller d'un témoin.
-
-Deux témoins écrits d'abord passaient à VIDE (ils émettaient sur la socket
-d'origine) ; corrigés par une assertion d'identité posée avant l'émission.
-Leçon 222.
-Gates constatés : **740 suites / 17 937 témoins verts**, `tsc --noEmit` à 0
-erreur sur tout le gateway, `conversationWriteAdmission.ts` à 100 % (lignes,
-branches, fonctions), 9 témoins neufs, 4 mutations (2 sous-dosages, 2
-sur-dosages) toutes rouges comme attendu.
-
----
-
-# Cycle 54-bis — la carte du Prisme suit le message que la ligne décrit (web)
-
-## La piste
-
-- [x] La leçon 212 (cycle 53) laisse une question mécanique : *quels sont TOUS
-      les écrivains de ce que la ligne AFFICHE ?* — posée ici au reste du fichier
-
-## Le constat
-
-- [x] La ligne compose son texte de DEUX moitiés qui ne vivent pas au même
-      endroit : `conversation.lastMessage` (objet) et la carte du Prisme
-      (`lastMessageTranslations` / `lastMessageOriginalLanguage`, scalaires au
-      niveau conversation)
-- [x] `resolveLastMessagePreview` PRÉFÈRE la carte au contenu brut — c'est elle
-      qui gagne à l'écran
-- [x] **Six** écrivains locaux réécrivaient l'objet, **zéro** ne touchait la
-      carte : `message:new`, sa branche `fetched`, `message:edited`,
-      `message:deleted`, `link:message:new`, et `use-conversations-v2` — un
-      SECOND écouteur du même `message:new` sur le MÊME cache
-- [x] Cinq ont un `conversation:updated` jumeau qui rattrape — mélange
-      transitoire
-- [x] **`link:message:new` n'en a pas, délibérément** (`broadcastLinkMessage` :
-      « the clients already applied it » — vrai de l'objet, faux de la carte) ⇒
-      ligne DURABLEMENT fausse sur les conversations de lien partagé
-- [x] Le cycle 52 avait conclu l'inverse (« l'atomicité vient du modèle ») — vrai
-      de l'objet, et la carte n'est pas dans l'objet
-
-## Correctif
-
-- [x] `withPreviewMessage({ conversation, message, textChanged? })` — geste
-      unique, pur, exporté ; les six écrivains y passent
-- [x] **L'identité décide, jamais le contenu** : même id ⇒ la carte reste vraie
-- [x] `textChanged` déclaré par l'écrivain — une édition garde l'id et périme les
-      traductions côté serveur, l'identité ne peut pas le dire
-- [x] Carte périmée ⇒ `lastMessageOriginalLanguage` réaligné sur le message
-      installé (règle #3 du Prisme : la langue d'origine concourt à son RANG)
-- [x] **Périmer, pas recomposer** : dériver la carte de `message.translations`
-      dupliquerait dans le client les 4 exclusions serveur + le plafond de 300
-- [x] Ne touche ni `lastMessageAt` ni `updatedAt` — les 6 appelants n'en font pas
-      le même usage
-- [x] Témoin de SOURCE sur `use-conversations-v2.ts` : deux écouteurs sans ordre
-      garanti ⇒ la règle d'identité n'est sûre que si TOUS y passent
-
-## Gates
-
-- [x] Suite web COMPLÈTE : 581 suites, 12 445 témoins verts, 21 ignorés, 0 échec
-- [x] 16 témoins neufs — 10 sur le geste pur, 2 de source, 4 d'intégration,
-      posés sur la sortie de `resolveLastMessagePreview`, pas sur le champ brut
-- [x] **Preuve par mutation dans les deux sens** : neutraliser le correctif tue
-      10 témoins, le sur-doser en tue 2 (la borne)
-- [x] `tsc --noEmit` — aucune erreur sur les 2 fichiers touchés (le dépôt en
-      porte 1234 par ailleurs, préexistantes, comparées fichier par fichier)
-- [x] `prisma generate` + `packages/shared` reconstruit avant la campagne
-- [x] `main` refusionné à la main avant push
-- [x] CHANGELOG racine + journal cycle 54 + leçon 215
+### Livraison
+- [x] D1 — `tsc` + tests web & gateway verts, `next build` vert, **ESLint réparé et vert
+      sur les fichiers de la livraison**.
+- [ ] D2 — images Docker : **non construites dans cette session**, le proxy sortant
+      bloque tous les blobs Docker Hub (403). Construites par
+      `.github/workflows/docker.yml` au push. Détail en Revue.
+- [x] D3 — commit + push sur la branche.
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle54-bis.md` — le tableau des six
-écrivains, pourquoi le chemin des liens partagés était le seul sans filet, et
-les quatre pistes du cycle 55.
+### Gateway — 2 correctifs demandés + 3 bugs trouvés en chemin
 
----
+`GET /links/:identifier` était la route dont dépend toute la vue partagée. En
+écrivant les tests du nouveau flux, cinq défauts sont sortis :
 
-# Cycle 54 — le canal que le serveur diffusait pour un client qui n'écoutait pas
+1. **`requireAccount` / `requireBirthday` absents du schéma de réponse.** Déclarés
+   côté web dans `LinkConversationData`, mais retirés par la sérialisation
+   Fastify — la modale ne pouvait pas savoir quels champs afficher.
+2. **Un compte connecté non membre recevait `403`.** Être identifié donnait donc
+   MOINS d'accès que la navigation privée. Il retombe maintenant sur l'aperçu
+   public (`isActive && allowViewHistory`), puis la modale propose « Rejoindre ».
+3. **`currentUser`, `members` et `anonymousParticipants` étaient sérialisés `{}`.**
+   Déclarés `{ type: 'object' }` sans `properties`, fast-json-stringify les
+   vidait. La conversation partagée arrivait au client sans savoir qui parle.
+   Même famille de panne que celle documentée au-dessus de
+   `linkMessageSenderSchema`.
+4. **Aucun membre n'était jamais reconnu.** Le `select` Prisma ne projetait pas
+   `isActive` (un `where: { isActive: true }` ne PROJETTE pas le champ), donc
+   `member.isActive` valait `undefined` et `userType: 'member'` était
+   inatteignable en production — masqué par un mock de test qui, lui, portait le
+   champ.
+5. **L'identité des participants anonymes était lue à plat.** Le modèle Prisma
+   `Participant` ne porte ni `username` ni `firstName` ni `canSend*` : tout vit
+   dans `anonymousSession.profile` et `permissions`. Le `select` est restreint à
+   `profile` — `session` porte le hash de jeton, l'IP et l'empreinte appareil,
+   qui ne sortent jamais d'une route consultable sans authentification (test de
+   non-fuite ajouté).
 
-## Piste
+### Web — un écran, trois rendus, zéro navigation
 
-- [x] Les quatre pistes du cycle 53 ré-instruites — trois RÉTROGRADÉES : les
-      handlers de suppression web convergent dans les deux ordres d'arrivée, et
-      la garde monotone du web n'a rien à protéger tant qu'aucun recul non
-      autoritatif n'existe
-- [x] Piste retenue ailleurs : un **diff de couverture d'événements** entre les
-      deux clients, sur les 180+ entrées de `SERVER_EVENTS`
-- [x] Le premier passage rend un tableau FAUX — le web s'abonne par la
-      CONSTANTE, iOS par le LITTÉRAL ; les deux formes se cherchent séparément
+`SharedConversationExperience` remplace la paire `/chat` + `/join` qui se
+renvoyait la balle par `router.push`. Trois gardes `sessionStorage` avaient été
+empilées pour contenir la boucle (Safari → app iOS → Safari, sans fin) : elles
+disparaissent avec la cause. `use-auth` ne redirige plus sur `/chat/*` non plus.
 
-## Constat
+Deux défauts trouvés par les tests d'intégration, corrigés :
+- la modale s'ouvrait **une frame après** le premier rendu (état synchronisé par
+  un effet) → le visiteur voyait l'aperçu nu clignoter. Elle est maintenant
+  **dérivée** de l'accès résolu.
+- le chargement du lien **rebouclait** : `t` de `useI18n` change d'identité à
+  chaque rendu et figurait dans les dépendances de l'effet. Le message d'erreur
+  est traduit au rendu, plus au chargement.
 
-- [x] `message:hidden-for-me` : web abonné, **iOS aucun abonné**
-- [x] `message:restored-for-me` : web abonné, **iOS aucun abonné**
-- [x] `personalMessageVisibilitySync.ts` a été écrit pour fermer exactement ça —
-      son en-tête décrit l'état d'iOS, quatorze cycles plus tard
-- [x] La raison est celle de `delta-tombstones.ts` : **un filtre de LECTURE ne
-      rétrécit que ce qu'une NOUVELLE requête renvoie ; il n'a aucune prise sur
-      une ligne que le client détient déjà**
-- [x] À l'écran : la bulle restait affichée dans le fil iOS pour toute la
-      session, pendant que la ligne de liste, corrigée par le
-      `conversation:updated` jumeau, annonçait le remplaçant — **l'aperçu et le
-      fil se contredisaient franchement**
-- [x] Seul un rechargement à froid (`GET /sync`, tombstones `hidden` fusionnées
-      dans `deleted`) refermait l'écart
+`/chat/[id]` : **1,18 Mo → 217 ko** de First Load JS. Les trois surfaces sont
+exclusives, elles sont donc chargées via `next/dynamic` — un visiteur sans compte
+ne télécharge plus la vue applicative complète.
 
-## Pourquoi PAS `markDeleted`
+Les métadonnées riches (titre, créateur, participants, image OG générée) ont
+déménagé de `/join/[linkId]/layout.tsx` vers `/chat/[id]/layout.tsx` : `/chat`
+est désormais l'URL collée dans WhatsApp, elle doit porter l'aperçu.
 
-- [x] Le web route bien `hidden-for-me` vers son chemin de suppression — parce
-      que ce chemin FILTRE le message hors du cache
-- [x] iOS pose une **pierre tombale** : `deletedAt` + contenu vidé, « ce message
-      a été supprimé »
-- [x] Juste pour une suppression POUR TOUS ; faux ici — le message reste VIVANT
-      pour les autres participants
-- [x] Et **durable** : le serveur ne renverra plus jamais ce message à ce
-      lecteur, donc aucune relecture n'effacerait la pierre. On aurait échangé
-      une bulle fantôme contre une tombstone à vie
+Sept endroits fabriquaient l'URL de partage à la main → une seule source,
+`buildShareLinkUrl()`. `/chat/*` ajouté à l'AASA iOS (Universal Links).
 
-## Correctif
+### Lentille
 
-- [x] SDK — `MessageHiddenForMeEvent` + `PersonalMessageVisibilityRef`, publisher
-      `messageHiddenForMe` au protocole, `socket.on` correspondant
-- [x] Une LISTE, pas un id (la route en lot en accepte cent) ; `hiddenAt`
-      optionnel — il n'arbitre rien, son absence ne doit pas perdre le retrait
-- [x] SDK — `MessagePersistenceActor.purgeMessages(ids:)`, le pendant DUR de
-      `markDeleted` : la ligne PART
-- [x] Résolution par `localId` **OU** `serverId`, comme `markDeleted` —
-      l'événement nomme l'id serveur, la ligne locale peut porter son id
-      optimiste
-- [x] Tables filles balayées depuis les lignes RETROUVÉES, jamais depuis les ids
-      reçus (elles sont clées sur le `localId` réel)
-- [x] Un refresh PAR conversation touchée — les observateurs de `MessageStore`
-      filtrent par `conversationId`
-- [x] App — `ConversationSocketHandler` borne le lot au fil qu'il tient ; le
-      retrait des favoris accompagne la purge
+Les cotes ne sont pas réinventées : `styles/lentille-tokens.css`, généré depuis
+`packages/shared/design/lentille-tokens.json`, existait déjà mais n'était importé
+nulle part (« Wiring belongs to future work (WL-100+) »). C'était ce travail.
+De même, `conversationAccentPalette()` (portage TS de `ColorGeneration.swift`)
+existait sans aucun consommateur web — l'indigo était codé en dur. Il alimente
+maintenant `--conv-accent`.
 
-## Portée assumée
+`FocalRow` est une **sœur** de `BubbleMessageNormalView`, pas un remplacement :
+elle réutilise les mêmes hooks (`useReactionsQuery`, `useMessageInteractions`,
+`useMessageDisplay`) et les mêmes enfants, avec un chrome plat. La vue à bulles
+reste intacte, à un tap via la Lentille. Réaction, langue, édition, suppression
+et signalement sont identiques dans toutes les lentilles.
 
-- [x] `message:restored-for-me` NON traité — une APPARITION ne s'écrit pas comme
-      une tombstone inversée, et iOS n'expose aucun geste de masquage par message
-- [x] Consommateur per-conversation, pas global — les autres fils se réparent au
-      prochain chargement REST, déjà filtré côté serveur
-- [x] `local_attachments` orpheline : fuite PRÉEXISTANTE (`deleteAll` non plus ne
-      la balaie), non introduite ici
+Piège évité : la perspective ne peut PAS être écrite sur l'élément mesuré par
+`tanstack-virtual`. Le rectangle mesuré rétrécirait, la courbe recalculerait une
+autre échelle, et la liste tremblerait d'une frame à l'autre. D'où la séparation
+ancre de géométrie (`data-focal-row`) / cible de transformation
+(`data-focal-scale`), pinnée par un test.
 
-## Gates
+### ESLint — réparé (demande de suivi)
 
-- [x] Guards CI locales vertes : `check-law-literals.sh`,
-      `check-swift-viewbuilder.sh` (2547 fichiers Swift)
-- [x] 10 témoins neufs — 3 de décodage, 5 sur la purge, 2 sur le handler
-- [x] Aucun fichier TypeScript touché : suites web/gateway/shared non concernées
-- [x] Compilation et exécution Swift déléguées à la CI (`iOS` macos-15,
-      `SDK Tests`) — aucun toolchain Swift sur l'hôte de cette routine
-- [x] CHANGELOG racine + ADR `packages/MeeshySDK/decisions.md` + journal cycle 54
-      + leçon 221
+Le blocage rapporté d'abord comme « hors périmètre » ne l'était pas. Trois causes
+empilées, aucune dans le code du dépôt :
 
-## Revue
+1. **`FlatCompat` sur des configs déjà plates.** `eslint-config-next@16` exporte
+   des `Linter.Config[]`. Les passer à `FlatCompat.extends()` fait valider un objet
+   plat par le validateur *eslintrc*, qui `JSON.stringify` la config pour formater
+   ses erreurs et bute sur le cycle `plugins.react → configs → plugins`. Le message
+   parlait de JSON parce que la panne était dans le formateur d'erreur. Les presets
+   sont maintenant importés et étalés directement.
+2. **ESLint 10 est inutilisable avec la stack Next.** `eslint-plugin-react@7.37.5`
+   (dernière version publiée, dépendance DURE de `eslint-config-next`) appelle encore
+   `context.getFilename()`, retiré en ESLint 10, et plafonne son peer à `^9.7`. Le
+   `"eslint": "^10.8.0"` d'`apps/web` était donc le bug → pin `^9.39.5`, plus un
+   `ignore` Dependabot motivé dans les deux blocs npm concernés pour que le prochain
+   bump automatique ne rendorme pas le gate.
+3. **`.eslintrc.local.json` était mort.** ESLint 9+ n'ouvre plus le format eslintrc :
+   son interdiction des imports barrel ne s'appliquait à rien depuis des mois. Reprise
+   dans la config plate — mais avec `paths` et non `patterns`, dont la sémantique
+   gitignore faisait couvrir `@/components/ui/**` par `@/components/ui`, si bien que
+   la règle interdisait exactement l'import direct que son message recommande.
 
-Voir `tasks/realtime-sync-audit-2026-08-16-cycle54.md` — pourquoi un canal sans
-écouteur survit à des audits successifs (rien ne casse qui se voie), le piège de
-méthode des deux formes d'abonnement qui a failli faire abandonner la piste, et
-les cinq pistes du cycle 55.
+`apps/web` passe aussi de `next lint` (déprécié, supprimé dans Next 16) à `eslint .`,
+la migration recommandée par Next.
 
-PR #3113.
+**Ce que le linter a immédiatement trouvé dans le code du jour** — deux vrais
+défauts, corrigés en retirant le contournement : un `eslint-disable-next-line
+react-hooks/exhaustive-deps` devenu mensonger (les dépendances étaient exhaustives
+depuis que `t` était sorti du corps de l'effet) et un `useMemo` dépendant de champs
+non déclarés (`use-conversation-accent`).
+
+**Ce que le linter révèle sur l'existant** : 1 750 fichiers analysés,
+**3 756 erreurs / 246 avertissements** sur 594 fichiers, dont **2 631
+`no-explicit-any`** — contre la règle « No `any` types - ever » du CLAUDE.md. Un
+gate qui plante n'est pas indisponible : il est désarmé, et le code dérive derrière.
+Non corrigé ici (la CI ne bloque pas : `continue-on-error: true`), mais mesuré et
+consigné — leçon 222.
+
+### Vérification
+
+| Gate | Résultat |
+|------|----------|
+| `jest` web | **591 suites / 12 505 tests** verts |
+| Couverture web | 57,7 % lignes (seuil 42) |
+| `next build` | ✅ — `/chat/[id]` à 217 ko |
+| `tsc --noEmit` web | **0 erreur ajoutée** (base pré-existante de 890 inchangée) |
+| `jest` gateway | **740 suites / 17 927 tests** verts (une suite tuée par l'OOM du conteneur, verte seule) |
+| `tsc` gateway | ✅ `dist/src/server.js` produit |
+
+### Non livré, et pourquoi
+
+- **Résumé Vivant** — dépend de l'API observer `assist:*` côté gateway, qui
+  n'existe pas. Le volume 4 le pose explicitement comme indépendant des PR 1-4.
+- **Rivière** — en sursis par le verdict : elle doit gagner son procès sur
+  prototype (« Deux non — on coupe, la Rampe hérite »).
+- **Scène** — déjà couverte par la couche d'appel existante (`video-call`) ; ce
+  n'est pas une lentille de lecture.
+- **Images Docker** — non construites *dans cette session* : le proxy sortant
+  renvoie 403 sur tous les blobs Docker Hub
+  (`production.cloudfront.docker.com`), donc aucune image de base n'est
+  téléchargeable ici. À la place, tout ce dont dépend le build d'image a été
+  vérifié : `next build` (sortie `standalone`) et `tsc` gateway (`dist/`).
+  `.github/workflows/docker.yml` construit et pousse `meeshy-web` et
+  `meeshy-gateway` automatiquement — les deux chemins surveillés
+  (`apps/web/**`, `services/gateway/**`) sont touchés par cette livraison.
+- **Les 3 756 erreurs ESLint pré-existantes** — révélées, pas corrigées (voir
+  ci-dessous). La CI ne les bloque pas (`continue-on-error: true`), et les
+  corriger ici noierait la livraison.
+- **`lint` de `services/gateway`, `packages/shared`, `services/agent`** — ces trois
+  scripts sont `eslint src/` alors qu'aucun des trois n'a jamais eu ESLint ni de
+  config (et `packages/shared` n'a même pas de `src/`). Leur donner une stack
+  TypeScript-ESLint est un chantier distinct, à décider par l'équipe.

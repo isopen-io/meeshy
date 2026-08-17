@@ -26,6 +26,12 @@
       "unableToLoadConversation": "Não foi possível carregar os dados da conversa. Verifique suas permissões ou tente fazer login.",
       "linkNoLongerActive": "Este link não está mais ativo. Solicite um novo link ao proprietário da conversa.",
       "linkExpired": "Este link expirou. Solicite um novo link ao proprietário da conversa."
+    },
+    "preview": {
+      "readOnly": "Pré-visualização — junte-se para participar",
+      "messages": "Pré-visualização das mensagens",
+      "historyHidden": "O histórico desta conversa é privado.",
+      "joinToReply": "Juntar-se para responder"
     }
   }
 }

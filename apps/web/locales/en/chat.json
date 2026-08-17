@@ -26,7 +26,12 @@
       "unableToLoadConversation": "Unable to load conversation data. Please check your permissions or try logging in.",
       "linkNoLongerActive": "This link is no longer active. Please request a new link from the conversation owner.",
       "linkExpired": "This link has expired. Please request a new link from the conversation owner."
+    },
+    "preview": {
+      "readOnly": "Preview — join to take part",
+      "messages": "Message preview",
+      "historyHidden": "This conversation's history is private.",
+      "joinToReply": "Join to reply"
     }
   }
 }
-

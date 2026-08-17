@@ -30,6 +30,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { copyToClipboard } from '@/lib/clipboard';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { toast } from 'sonner';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 // Extended types for properties that backend returns but aren't yet in shared types
 interface ExtendedConversation extends Conversation {
@@ -52,7 +53,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
   const { t, locale } = useI18n('links');
 
   const handleCopyLink = async () => {
-    const linkUrl = `${window.location.origin}/join/${link.linkId}`;
+    const linkUrl = buildShareLinkUrl(link.linkId);
     const result = await copyToClipboard(linkUrl);
     if (result.success) {
       toast.success(t('success.linkCopied'));
@@ -137,7 +138,7 @@ export function LinkDetailsModal({ link, isOpen, onClose }: LinkDetailsModalProp
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="text"
-                  value={`${window.location.origin}/join/${link.linkId}`}
+                  value={buildShareLinkUrl(link.linkId)}
                   readOnly
                   className="bg-muted px-2 py-1 rounded text-xs flex-1 min-w-0 max-w-[300px] border-0 focus:ring-0 focus:outline-none"
                   onClick={(e) => e.currentTarget.select()}
