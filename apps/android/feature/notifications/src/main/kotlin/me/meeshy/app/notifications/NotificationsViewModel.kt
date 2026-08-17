@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import javax.inject.Inject
@@ -23,6 +23,14 @@ data class NotificationsUiState(
     val errorMessage: String? = null,
 )
 
+/**
+ * Cache-first (ARCHITECTURE.md §4, feature-parity §M): [NotificationRepository.notificationsStream]
+ * and [NotificationRepository.unreadCountStream] are the single source of truth — this ViewModel
+ * only projects them into [NotificationsUiState], it never holds a second copy of the list.
+ * `markAsRead`/`markAllRead`/a live socket arrival ([observeRealtime]) all mutate the SAME
+ * repository-owned cache, so every consumer of the stream (a pull-to-refresh, another screen)
+ * stays in sync without a manual merge here.
+ */
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
@@ -33,76 +41,74 @@ class NotificationsViewModel @Inject constructor(
     val state: StateFlow<NotificationsUiState> = _state.asStateFlow()
 
     init {
-        load()
+        observeNotifications()
+        observeUnreadCount()
         observeRealtime()
+    }
+
+    private fun observeNotifications() {
+        viewModelScope.launch {
+            notificationRepository.notificationsStream(
+                onSyncError = { error -> _state.update { it.copy(isSyncing = false, errorMessage = error.message) } },
+            ).collect { result ->
+                _state.update {
+                    when (result) {
+                        is CacheResult.Empty -> it.copy(isLoading = true, isSyncing = true)
+                        is CacheResult.Fresh -> it.copy(notifications = result.value, isLoading = false, isSyncing = false)
+                        is CacheResult.Stale -> it.copy(notifications = result.value, isLoading = false, isSyncing = true)
+                        is CacheResult.Syncing -> it.copy(
+                            notifications = result.value ?: it.notifications,
+                            isLoading = false,
+                            isSyncing = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeUnreadCount() {
+        viewModelScope.launch {
+            notificationRepository.unreadCountStream.collect { count ->
+                _state.update { it.copy(unreadCount = count) }
+            }
+        }
     }
 
     /**
      * A `notification:new` arriving while this screen is alive/backing the badge is prepended
-     * live — an already-known id (REST list beat the socket, or a duplicate delivery) is a
-     * no-op rather than a second row. Mirrors iOS `NotificationCoordinator`'s optimistic
+     * live into the shared repository cache — an already-known id (REST list beat the socket, or
+     * a duplicate delivery) is a no-op rather than a second row (see
+     * [NotificationRepository.prependLive]). Mirrors iOS `NotificationCoordinator`'s optimistic
      * unread increment, minus the toast/dedup-window machinery (feature-parity §M — the toast
      * itself is a separate, not-yet-scoped slice; this is real-time DATA only).
      */
     private fun observeRealtime() {
         viewModelScope.launch {
             messageSocketManager.notificationReceived.collect { notification ->
-                _state.update { s ->
-                    if (s.notifications.any { it.id == notification.id }) return@update s
-                    s.copy(
-                        notifications = listOf(notification) + s.notifications,
-                        unreadCount = if (notification.state.isRead) s.unreadCount else s.unreadCount + 1,
-                    )
-                }
+                notificationRepository.prependLive(notification)
             }
         }
     }
 
+    /** Forces a revalidation regardless of freshness — the pull-to-refresh entry point. */
     fun load() {
-        _state.update { it.copy(isLoading = it.notifications.isEmpty(), isSyncing = true) }
         viewModelScope.launch {
             try {
-                when (val result = notificationRepository.list()) {
-                    is NetworkResult.Success -> _state.update {
-                        it.copy(
-                            notifications = result.data,
-                            isLoading = false,
-                            isSyncing = false,
-                        )
-                    }
-                    is NetworkResult.Failure -> _state.update {
-                        it.copy(isLoading = false, isSyncing = false, errorMessage = result.error.message)
-                    }
-                }
+                notificationRepository.refresh()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, isSyncing = false, errorMessage = e.message) }
+                _state.update { it.copy(isSyncing = false, errorMessage = e.message) }
             }
         }
     }
 
     fun markAsRead(notificationId: String) {
-        viewModelScope.launch {
-            notificationRepository.markAsRead(notificationId)
-            _state.update { s ->
-                s.copy(notifications = s.notifications.map {
-                    if (it.id == notificationId) it.copy(state = it.state.copy(isRead = true))
-                    else it
-                })
-            }
-        }
+        viewModelScope.launch { notificationRepository.markAsRead(notificationId) }
     }
 
     fun markAllRead() {
-        viewModelScope.launch {
-            notificationRepository.markAllAsRead()
-            _state.update { s ->
-                s.copy(
-                    notifications = s.notifications.map { it.copy(state = it.state.copy(isRead = true)) },
-                    unreadCount = 0,
-                )
-            }
-        }
+        viewModelScope.launch { notificationRepository.markAllAsRead() }
     }
 }
