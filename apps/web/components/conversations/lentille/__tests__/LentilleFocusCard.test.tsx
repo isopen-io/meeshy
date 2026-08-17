@@ -12,6 +12,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Conversation } from '@meeshy/shared/types';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import type { OrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 
 import { LentilleFocusCard } from '../LentilleFocusCard';
@@ -58,6 +59,17 @@ const t = (key: string, params?: Record<string, unknown> | string): string => {
 };
 
 const AUTO_DECISION: OrchestratorDecision = { mode: 'focal', reason: 'default' };
+
+/**
+ * R6-5 — un pont minimal portant `suggestedMode`, seul champ que ces témoins
+ * font varier (le reste est inerte pour l'encoche).
+ */
+const bridgeWith = (suggestedMode: ConversationBridge['suggestedMode']): ConversationBridge => ({
+  kind: 'fallback',
+  unreadCount: 3,
+  suggestedMode,
+  data: { authors: ['Ada'], extraAuthorCount: 0, messageCount: 3 },
+});
 
 const baseProps = {
   conversation: conv(),
@@ -176,6 +188,41 @@ describe('LentilleFocusCard', () => {
       expect(screen.getByTestId('lentille-focus-card-notch')).toHaveAttribute(
         'aria-label',
         'Focal'
+      );
+    });
+
+    describe('R6-5 — suggestedMode du pont prime sur le recalcul local', () => {
+      it(
+        'bridge.suggestedMode PRÉSENT (`resume`) ⇒ l\'encoche l\'affiche MÊME QUAND le ' +
+          'recalcul local (decision.mode) dirait `focal` — le cas discriminant',
+        () => {
+          render(
+            <LentilleFocusCard
+              {...baseProps}
+              conversation={conv({ bridge: bridgeWith('resume') })}
+              decision={{ mode: 'focal', reason: 'default' }}
+            />
+          );
+          const notch = screen.getByTestId('lentille-focus-card-notch');
+          expect(notch.textContent).toBe('AUTO · Résumé');
+          // Même source rendu/aria — un seul calcul, deux consommateurs.
+          expect(notch).toHaveAttribute('aria-label', 'AUTO · Résumé');
+        }
+      );
+
+      it(
+        'bridge.suggestedMode ABSENT (aucun pont) ⇒ le repli local reste EXACTEMENT ' +
+          'ce qu\'il était avant le branchement (garde de non-régression)',
+        () => {
+          render(
+            <LentilleFocusCard
+              {...baseProps}
+              conversation={conv()}
+              decision={{ mode: 'focal', reason: 'default' }}
+            />
+          );
+          expect(screen.getByTestId('lentille-focus-card-notch').textContent).toBe('AUTO · Focal');
+        }
       );
     });
   });

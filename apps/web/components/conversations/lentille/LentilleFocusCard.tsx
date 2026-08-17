@@ -64,7 +64,13 @@ export interface LentilleFocusCardProps {
   readonly conversation: Conversation;
   /** Préférence mémorisée pour CETTE conversation — `auto` tant que rien n'est mémorisé. */
   readonly preference: ReadingModePreference;
-  /** Décision de `resolveOrchestratorDecision` sur les données de CETTE conversation. */
+  /**
+   * Décision de `resolveOrchestratorDecision` sur les données de CETTE
+   * conversation — repli LOCAL. R6-5 : `notchText` (`lentille-mode-labels.ts`)
+   * lui préfère `conversation.bridge?.suggestedMode` quand ce champ est
+   * présent ; cette prop ne reste la source affichée que pour les
+   * conversations sans pont.
+   */
   readonly decision: OrchestratorDecision;
   readonly t: LentilleRowTranslate;
   /** Tap sur l'encoche — le montage y branche l'ouverture du menu de mode. */
@@ -104,7 +110,11 @@ export function LentilleFocusCard({
 }: LentilleFocusCardProps) {
   const TypeIcon = TYPE_ICON[conversation.type] ?? Users;
   const showTypeChip = conversation.type !== 'direct';
-  const label = notchText(decision, preference, t);
+  // R6-5 — le SEUL branchement attendu : `conversation.bridge?.suggestedMode`
+  // (le champ précalculé par le serveur/le substitut, cf. `notchText`) prime
+  // sur `decision` (le recalcul local que `LentillePeek` continue de fournir
+  // en repli) — jamais un second calcul dans cette carte.
+  const label = notchText(decision, preference, t, conversation.bridge?.suggestedMode);
 
   return (
     <>
