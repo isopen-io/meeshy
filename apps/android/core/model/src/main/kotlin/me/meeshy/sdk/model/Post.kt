@@ -93,6 +93,7 @@ data class ApiPost(
     val commentCount: Int? = null,
     val repostCount: Int? = null,
     val viewCount: Int? = null,
+    val impressionCount: Int? = null,
     val bookmarkCount: Int? = null,
     val shareCount: Int? = null,
     val reactionSummary: Map<String, Int>? = null,

@@ -29,6 +29,8 @@ class FeedPostBuilderTest {
         media: List<ApiPostMedia>? = null,
         translations: Map<String, ApiPostTranslationEntry>? = null,
         moodEmoji: String? = null,
+        viewCount: Int? = null,
+        impressionCount: Int? = null,
     ) = ApiPost(
         id = "p1",
         content = content,
@@ -43,6 +45,8 @@ class FeedPostBuilderTest {
         translations = translations,
         moodEmoji = moodEmoji,
         originalLanguage = "fr",
+        viewCount = viewCount,
+        impressionCount = impressionCount,
     )
 
     @Test
@@ -260,5 +264,41 @@ class FeedPostBuilderTest {
         assertThat(embed?.id).isEqualTo("orig-1")
         assertThat(embed?.authorName).isEqualTo("Origen")
         assertThat(embed?.content).isEqualTo("Hola")
+    }
+
+    // --- Author-only reach stats (view count / impression count / isAuthor / username) ---
+
+    @Test
+    fun build_coercesNullViewAndImpressionCountsToZero() {
+        val result = FeedPostBuilder.build(post(viewCount = null, impressionCount = null), Prefs(), null)
+        assertThat(result.viewCount).isEqualTo(0)
+        assertThat(result.impressionCount).isEqualTo(0)
+    }
+
+    @Test
+    fun build_carriesViewAndImpressionCountsThrough() {
+        val result = FeedPostBuilder.build(post(viewCount = 1_200, impressionCount = 3_400), Prefs(), null)
+        assertThat(result.viewCount).isEqualTo(1_200)
+        assertThat(result.impressionCount).isEqualTo(3_400)
+    }
+
+    @Test
+    fun build_exposesTheRawAuthorUsername() {
+        val result = FeedPostBuilder.build(post(), Prefs(), null)
+        assertThat(result.authorUsername).isEqualTo("alice")
+    }
+
+    @Test
+    fun build_isAuthorWhenAuthorIdMatchesCurrentUser() {
+        val result = FeedPostBuilder.build(post(), Prefs(), null, currentUserId = "u1")
+        assertThat(result.isAuthor).isTrue()
+    }
+
+    @Test
+    fun build_isNotAuthorWhenAuthorIdDiffersOrCurrentUserIsUnknown() {
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null, currentUserId = "someone-else").isAuthor).isFalse()
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null, currentUserId = null).isAuthor).isFalse()
+        val noAuthor = post(author = null)
+        assertThat(FeedPostBuilder.build(noAuthor, Prefs(), null, currentUserId = "u1").isAuthor).isFalse()
     }
 }

@@ -3891,6 +3891,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
       overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
       `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      **Post view recording + author-only reach stats shipped 2026-08-17** (slice
+      `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
+      fully implemented, tested, and unwired, same gap pattern as impression batching but a
+      genuinely distinct endpoint [confirmed by reading both: `viewPost` records a single
+      deduplicated per-viewer view, `recordImpressions` is the separate batched engagement metric
+      already shipped — no overlap, both real iOS network calls fired independently]. Mirror of
+      iOS `PostDetailView`'s `.task { try? await PostService.shared.viewPost(...) }`: fires once
+      per detail-view session regardless of whether the post fetch itself succeeds, failure
+      silently ignored. Paired with the visible half of the feature — iOS's `PostReachFormatter`
+      author-only "@pseudo · views · impressions" line (`PostDetailView.authorRevealView`) — since
+      wiring the write with nothing to show for it would be a dead end. New pure
+      `PostReachFormatter` (`compact()` 1.2k/3.4M formatting, `components()` gated on `isAuthor`)
+      + `FeedPostPresentation.viewCount`/`impressionCount`/`isAuthor`/`authorUsername` [new
+      `ApiPost.impressionCount` field alongside the pre-existing `viewCount`] + a `PostReachLine`
+      composable in `PostDetailScreen`, rendered only for the post's own author. +14 tests
+      (`PostReachFormatterTest` ×6, `FeedPostBuilderTest` ×5, `PostDetailViewModelTest` ×3: view
+      fires once, blank postId never records, a failed record doesn't disturb the loaded post).
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
       done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
       dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`
