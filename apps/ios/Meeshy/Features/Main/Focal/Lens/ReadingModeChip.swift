@@ -1,28 +1,32 @@
 import SwiftUI
 import MeeshyUI
 
-/// F-086bis (WS-7, arbitrage coordinateur — §WS-7 était dans le périmètre,
-/// initialement exclu à tort) — le chip de mode et le bouton « Aa » de la
-/// coquille de conversation. Contrat §WS-7 travaux 3 (« Chip de mode inséré
-/// dans headerButtonsCluster, APRÈS expandedHeaderSearchButton ») et 4
-/// (« Bouton Aa (44×30, MeeshyRadius.full) → controller.select(mode
-/// .toggledDensity) »).
+/// P2 du chantier Focal (spec Magnificence 2026-08-17) — LE chip de mode,
+/// seule affordance du header : **tap = cycle** des modes disponibles
+/// (préférence collante via le contrôleur gelé F-080), **appui long = menu**
+/// natif listant tous les modes (`.contextMenu`, rendu Liquid Glass sur
+/// iOS 26). Le bouton « Aa » et la feuille Lentille ont disparu avec ce lot —
+/// le catalogue (`ReadingModeLensCatalog`) reste la seule source des
+/// libellés et des lignes.
 ///
-/// **RE-PREUVE (§0)** : `ConversationReadingMode.toggledDensity` (contrat
-/// §3.1) n'existe pas sur le miroir GELÉ réel
-/// (`ReadingModeOrchestrator.ConversationReadingMode`, 5 cas bruts, aucune
-/// computed property — RE-PREUVE identique à F-080/F-085 : `usesFlatRow`/
-/// `usesPerspective` avaient le même sort). Ajoutée ICI (fichier propriété
-/// WS-7), même patron que l'extension `usesFlatRow`/`usesPerspective` de
-/// WS-6 (`MessageListViewController.swift`) : un simple regroupement de
-/// cas, aucune loi, aucune constante numérique (garde R15).
-extension ConversationReadingMode {
-    var toggledDensity: ConversationReadingMode {
-        switch self {
-        case .focal: return .script
-        case .script: return .focal
-        default: return self
+/// Vue PURE : primitifs et value types uniquement, aucun `@State` (même
+/// règle que `FocalIdentityHeader`, WS-4). Le chevauchement « AUTO »/mode
+/// historique est réglé par `.fixedSize()` sur les deux textes — le chip ne
+/// se comprime plus, il tronque proprement en amont (lineLimit).
+
+/// Loi PURE du cycle de modes — le tap avance dans l'ordre du catalogue,
+/// boucle en fin de liste, repart au premier si le mode courant n'est plus
+/// listé, et rend `nil` (no-op) quand il n'y a rien vers quoi cycler.
+nonisolated enum ReadingModeCycle {
+    static func next(
+        after current: ConversationReadingMode,
+        availableInOrder: [ConversationReadingMode]
+    ) -> ConversationReadingMode? {
+        guard availableInOrder.count > 1 else { return nil }
+        guard let index = availableInOrder.firstIndex(of: current) else {
+            return availableInOrder.first
         }
+        return availableInOrder[(index + 1) % availableInOrder.count]
     }
 }
 
@@ -37,25 +41,29 @@ struct ReadingModeChipModel: Equatable {
     let isAuto: Bool
 }
 
-/// Puce de mode dans le header du fil — ENTRÉE du menu Lentille
-/// (`ReadingModeLensSheet`). Vue PURE : primitifs uniquement, aucun `@State`
-/// (même règle que `FocalIdentityHeader`, WS-4).
 struct ReadingModeChip: View {
     let model: ReadingModeChipModel
-    let onTap: () -> Void
+    /// Lignes du menu d'appui long — bâties par l'appelant depuis le
+    /// catalogue et les capacités STOCKÉES (jamais une seconde résolution).
+    let menuRows: [LensRowModel]
+    let onCycle: () -> Void
+    let onSelect: (ConversationReadingMode) -> Void
+    let onAuto: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button(action: onCycle) {
             HStack(spacing: 4) {
                 if model.isAuto {
                     Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
                         .font(MeeshyFont.relative(9, weight: .heavy))
                         .foregroundColor(.white.opacity(0.65))
+                        .fixedSize()
                 }
                 Text(model.label)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
@@ -64,6 +72,7 @@ struct ReadingModeChip: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu { menuContent }
         .meeshyTapTarget()
         .accessibilityLabel(
             String(
@@ -75,31 +84,38 @@ struct ReadingModeChip: View {
                 model.label
             )
         )
-        .accessibilityHint(String(localized: "reading_mode.chip.a11y_hint", defaultValue: "Ouvre le choix du mode de lecture", bundle: .main))
+        .accessibilityHint(String(
+            localized: "reading_mode.chip.a11y_hint_cycle",
+            defaultValue: "Passe au mode suivant. Appui long pour la liste des modes.",
+            bundle: .main
+        ))
     }
-}
 
-/// Bouton « Aa » — bascule DIRECTE Focal ⇄ Script, sans passer par la feuille
-/// (contrat §WS-7 travail 4, critère §7 « Aa bascule Focal ⇄ Script
-/// instantanément » : `select` écrit la préférence ET publie le mode dans
-/// la MÊME boucle — `ReadingModeController.select`, GELÉ F-080, le fait déjà).
-/// Masqué hors `.focal`/`.script` (Résumé/Rivière n'ont pas de densité).
-struct ReadingModeDensityButton: View {
-    let isDark: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            Text("Aa")
-                .font(MeeshyFont.relative(13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 44, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.full, style: .continuous)
-                        .fill(Color.white.opacity(0.16))
-                )
+    /// Un mode indisponible reste LISTÉ mais désactivé — jamais retiré
+    /// (amendement R : « un mode indisponible n'est jamais un écran vide »).
+    /// Le mode courant porte sa coche.
+    @ViewBuilder
+    private var menuContent: some View {
+        ForEach(menuRows) { row in
+            Button {
+                onSelect(row.mode)
+            } label: {
+                if row.isCurrent {
+                    Label(ReadingModeLensCatalog.title(for: row.mode), systemImage: "checkmark")
+                } else {
+                    Text(ReadingModeLensCatalog.title(for: row.mode))
+                }
+            }
+            .disabled(!row.isAvailable || row.isCurrent)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "reading_mode.density_button.a11y_label", defaultValue: "Basculer la densité d'affichage", bundle: .main))
+        Divider()
+        Button {
+            onAuto()
+        } label: {
+            Label(
+                String(localized: "reading_mode.menu.auto", defaultValue: "Automatique", bundle: .main),
+                systemImage: "wand.and.stars"
+            )
+        }
     }
 }

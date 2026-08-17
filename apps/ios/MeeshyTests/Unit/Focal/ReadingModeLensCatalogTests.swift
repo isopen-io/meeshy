@@ -233,29 +233,4 @@ final class ReadingModeLensCatalogTests: XCTestCase {
         let subtitle = ReadingModeLensCatalog.subtitle(for: riverRow)
         XCTAssertTrue(subtitle.contains("5") && subtitle.contains("3"), "Les DEUX nombres vivants, comme avant l'amendement.")
     }
-
-    // MARK: - `toggledDensity` — bascule Focal⇄Script UNIQUEMENT
-
-    func test_toggledDensity_focalBecomesScript() {
-        XCTAssertEqual(ConversationReadingMode.focal.toggledDensity, .script)
-    }
-
-    func test_toggledDensity_scriptBecomesFocal() {
-        XCTAssertEqual(ConversationReadingMode.script.toggledDensity, .focal)
-    }
-
-    func test_toggledDensity_summaryIsUnchanged() {
-        XCTAssertEqual(
-            ConversationReadingMode.summary.toggledDensity, .summary,
-            "Résumé n'a pas de densité — `toggledDensity` doit être un no-op en dehors de Focal/Script."
-        )
-    }
-
-    func test_toggledDensity_riverIsUnchanged() {
-        XCTAssertEqual(ConversationReadingMode.river.toggledDensity, .river)
-    }
-
-    func test_toggledDensity_bubblesIsUnchanged() {
-        XCTAssertEqual(ConversationReadingMode.bubbles.toggledDensity, .bubbles)
-    }
 }

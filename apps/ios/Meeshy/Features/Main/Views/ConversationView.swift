@@ -316,10 +316,6 @@ struct ConversationView: View {
     /// retirée de la liste (critère §7 « un mode indisponible n'est jamais
     /// un écran vide »).
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
-    /// Présentation de la feuille Lentille (§WS-7 travail 5, arbitrage
-    /// F-086bis) — ouverte par `ReadingModeChip`, jamais par le bouton Aa
-    /// (qui bascule Focal⇄Script directement, sans feuille).
-    @State private var isReadingModeLensPresented = false
     /// « Lire plus » Focal (spec Magnificence §3) — présentée par item :
     /// l'identité du payload est le message.
     @State private var focalReadMorePayload: FocalReadMorePayload?
@@ -847,17 +843,6 @@ struct ConversationView: View {
             // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
             .sheet(item: $focalReadMorePayload) { payload in
                 FocalReadMoreSheet(payload: payload)
-            }
-            .sheet(isPresented: $isReadingModeLensPresented) {
-                ReadingModeLensSheet(
-                    rows: ReadingModeLensCatalog.rows(
-                        capabilities: readingModeCapabilities,
-                        currentMode: readingModeController.mode
-                    ),
-                    isDark: isDark,
-                    onSelect: { readingModeController.select($0) },
-                    onResetToAuto: { readingModeController.resetToAuto() }
-                )
             }
     }
 
@@ -2095,26 +2080,31 @@ struct ConversationView: View {
     /// toujours la pile au 1er rendu (2026-08-17).
     private var readingModeAffordanceCluster: AnyView {
         guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }
-        let chip = ReadingModeChip(model: readingModeChipModel) {
-            HapticFeedback.light()
-            isReadingModeLensPresented = true
-        }
-        guard readingModeController.mode == .focal || readingModeController.mode == .script else {
-            return AnyView(chip)
-        }
-        // Bouton Aa — bascule DIRECTE Focal⇄Script, sans passer par la
-        // feuille (critère §7 : « Aa bascule Focal ⇄ Script
-        // instantanément »). `select` écrit la préférence collante ET
-        // publie le mode dans la même boucle (ReadingModeController,
-        // GELÉ F-080).
+        // P2 (spec Magnificence 17/08) : UN SEUL chip — tap = CYCLE des modes
+        // disponibles (loi pure ReadingModeCycle), appui long = menu natif
+        // listant tous les modes. Le bouton Aa a disparu avec sa bascule de
+        // densité : le cycle parcourt TOUS les modes ouverts par les
+        // capacités, et le menu remplace la feuille Lentille.
         return AnyView(
-            HStack(spacing: 0) {
-                chip
-                ReadingModeDensityButton(isDark: isDark) {
+            ReadingModeChip(
+                model: readingModeChipModel,
+                menuRows: ReadingModeLensCatalog.rows(
+                    capabilities: readingModeCapabilities,
+                    currentMode: readingModeController.mode
+                ),
+                onCycle: {
                     HapticFeedback.light()
-                    readingModeController.select(readingModeController.mode.toggledDensity)
-                }
-            }
+                    guard let next = ReadingModeCycle.next(
+                        after: readingModeController.mode,
+                        availableInOrder: ReadingModeLensCatalog.displayOrder.filter {
+                            readingModeCapabilities.availableModes.contains($0)
+                        }
+                    ) else { return }
+                    readingModeController.select(next)
+                },
+                onSelect: { readingModeController.select($0) },
+                onAuto: { readingModeController.resetToAuto() }
+            )
         )
     }
 
