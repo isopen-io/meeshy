@@ -12,7 +12,6 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_STATS: 'conversation:stats',
     CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     ERROR: 'error',
   },
   ROOMS: {
@@ -373,18 +372,20 @@ describe('ConversationHandler', () => {
       }));
     });
 
-    // Le nom canonique voyage en parallèle depuis ~3 mois — un client migré
-    // n'écoute plus que celui-là, et le rattrapage doit le servir aussi.
-    it('émet AUSSI sous le nom canonique `message:read-status-updated`', async () => {
+    // Le rattrapage de jointure ne part QU'UNE fois. L'alias
+    // `message:read-status-updated` était dual-émis ici et n'a jamais eu de
+    // client — retiré au cycle 64 (tasks/socketio-events-cleanup.md § 3).
+    it('ne sert le rattrapage que sous UN nom', async () => {
       const deps = makeDeps();
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
 
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
 
-      expect(socket.emit).toHaveBeenCalledWith('message:read-status-updated', expect.objectContaining({
-        summary: SUMMARY,
-      }));
+      const readStatusEmits = (socket.emit as jest.Mock).mock.calls.filter(
+        ([event]) => String(event).includes('read-status'),
+      );
+      expect(readStatusEmits.map(([event]) => event)).toEqual(['read-status:updated']);
     });
 
     // `type: 'received'` n'est pas un détail de forme : iOS et Android ne

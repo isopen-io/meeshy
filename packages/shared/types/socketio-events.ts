@@ -220,15 +220,25 @@ export const SERVER_EVENTS = {
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
-  READ_STATUS_UPDATED: 'read-status:updated',
   /**
-   * Same payload as `READ_STATUS_UPDATED`, correctly namespaced under the
-   * `message:` entity per the `entity:action-word` convention (the legacy
-   * name hyphenates the entity itself, `read-status`, which violates it).
-   * Emitted in parallel with `READ_STATUS_UPDATED` for ~3 months so clients
-   * can migrate independently; see tasks/socketio-events-cleanup.md #3.
+   * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
+   *
+   * Le nom hyphène l'ENTITÉ (`read-status`) et déroge donc à la convention
+   * `entity:action-word` que tout le reste de cette map respecte. La dérogation
+   * est ASSUMÉE et documentée ici plutôt que corrigée : un alias correctement
+   * namespacé (`message:read-status-updated`) a été dual-émis à partir du
+   * 2026-07-05 pour permettre aux clients de migrer, et aucun ne l'a jamais
+   * écouté — pas une ligne dans `apps/web`, `packages/MeeshySDK/Sources` ou
+   * `apps/android`, à aucun commit de l'historique. Retiré au cycle 64 : le
+   * renommage n'achetait que de la cosmétique de nommage, et il la faisait
+   * payer en doublant le fan-out le plus fréquent de la messagerie (chaque
+   * remise, chaque lecture, chaque rejeu de file hors ligne, ×2 sur le fil).
+   *
+   * Ne PAS rouvrir sans un consommateur client réel : le raisonnement complet,
+   * y compris ce qui rendrait la migration rentable, est dans
+   * `tasks/socketio-events-cleanup.md` § 3.
    */
-  MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
+  READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
@@ -1769,7 +1779,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
-  [SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;

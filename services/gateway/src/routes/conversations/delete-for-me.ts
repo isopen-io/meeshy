@@ -194,7 +194,7 @@ export function registerDeleteForMeRoutes(
             io,
             conversationId,
             participants: closedAudience,
-            events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+            event: SERVER_EVENTS.CONVERSATION_CLOSED,
             payload: { conversationId, closedBy: userId, closedAt: now.toISOString() },
           })
         }

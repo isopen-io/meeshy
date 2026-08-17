@@ -127,9 +127,10 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     const updateManyArg = mockPrisma.conversationReadCursor.updateMany.mock.calls[0][0];
     expect(updateManyArg.data.lastDeliveredMessageId).toBe(MESSAGE_ID);
 
-    // 2 events: legacy READ_STATUS_UPDATED + the dual-emitted MESSAGE_READ_STATUS_UPDATED
-    // (same payload, correctly-namespaced name — see tasks/socketio-events-cleanup.md #3).
-    expect(emitMock).toHaveBeenCalledTimes(2);
+    // UN seul événement — l'alias `message:read-status-updated` doublait ce
+    // fan-out sans client depuis le 2026-07-05, retiré au cycle 64
+    // (tasks/socketio-events-cleanup.md § 3).
+    expect(emitMock).toHaveBeenCalledTimes(1);
     const [eventName, payload] = emitMock.mock.calls[0];
     expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
     expect(payload).toMatchObject({
@@ -142,9 +143,6 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     // client and would disclose the actor's backlog to peers.
     expect(payload.lastReadAt).toBeUndefined();
     expect(payload.unreadCount).toBeUndefined();
-    const [dualEventName, dualPayload] = emitMock.mock.calls[1];
-    expect(dualEventName).toBe(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED);
-    expect(dualPayload).toEqual(payload);
   });
 
   it('emits the actor read frontier and unread count on a mark-as-read broadcast', async () => {
@@ -158,43 +156,43 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     });
 
     expect(response.statusCode).toBe(200);
-    // 5 events, et c'est le DÉCOUPAGE qui compte : un `read` a deux audiences,
+    // 3 events, et c'est le DÉCOUPAGE qui compte : un `read` a deux audiences,
     // donc deux payloads. L'éventail porte aux pairs ce qui décrit la
     // conversation (le résumé des coches) ; la room personnelle de l'acteur
     // porte en plus ce qui ne décrit que LUI — sa frontière de lecture et son
     // arriéré. Puis la remise à zéro du badge, sur son canal dédié.
-    expect(emitMock).toHaveBeenCalledTimes(5);
+    //
+    // Il y en avait CINQ tant que l'alias `message:read-status-updated`
+    // doublait les deux premiers sans qu'aucun client ne l'écoute (cycle 64,
+    // tasks/socketio-events-cleanup.md § 3) : deux audiences, deux noms.
+    expect(emitMock).toHaveBeenCalledTimes(3);
 
-    // [0][1] — l'éventail, sous les deux noms d'événement.
-    for (const index of [0, 1] as const) {
-      const [eventName, payload] = emitMock.mock.calls[index];
-      expect(eventName).toBe(
-        index === 0 ? SERVER_EVENTS.READ_STATUS_UPDATED : SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED
-      );
+    // [0] — l'éventail : ce que TOUTE la conversation peut savoir.
+    {
+      const [eventName, payload] = emitMock.mock.calls[0];
+      expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
       expect(payload.type).toBe('read');
       expect(payload.lastReadAt).toBeUndefined();
       expect(payload.unreadCount).toBeUndefined();
     }
 
-    // [2][3] — la copie de l'acteur, les deux champs en plus, mêmes deux noms.
-    for (const index of [2, 3] as const) {
-      const [eventName, payload] = emitMock.mock.calls[index];
-      expect(eventName).toBe(
-        index === 2 ? SERVER_EVENTS.READ_STATUS_UPDATED : SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED
-      );
+    // [1] — la copie de l'acteur, les deux champs en plus, même nom.
+    {
+      const [eventName, payload] = emitMock.mock.calls[1];
+      expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
       expect(payload.type).toBe('read');
       expect(payload.lastReadAt).toEqual(frontier);
       expect(payload.unreadCount).toBe(3);
     }
     // Les deux copies ne diffèrent QUE par ces deux champs.
-    expect({ ...emitMock.mock.calls[2][1], lastReadAt: undefined, unreadCount: undefined }).toEqual({
+    expect({ ...emitMock.mock.calls[1][1], lastReadAt: undefined, unreadCount: undefined }).toEqual({
       ...emitMock.mock.calls[0][1], lastReadAt: undefined, unreadCount: undefined
     });
     // Et l'éventail a bien retiré l'acteur, sans quoi il recevrait les deux.
     expect(ioChain.except).toHaveBeenCalled();
 
-    // [4] — Badge reset event goes to the reader's user room.
-    const [badgeEvent, badgePayload] = emitMock.mock.calls[4];
+    // [2] — Badge reset event goes to the reader's user room.
+    const [badgeEvent, badgePayload] = emitMock.mock.calls[2];
     expect(badgeEvent).toBe(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
     expect(badgePayload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: 3 });
   });

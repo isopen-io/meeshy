@@ -6235,15 +6235,18 @@ describe('MeeshySocketIOManager', () => {
         SERVER_EVENTS.READ_STATUS_UPDATED,
         expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
       );
-      // Dual-emitted alongside the legacy name — see tasks/socketio-events-cleanup.md #3.
-      expect(ioState.toEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
-        expect.objectContaining({ conversationId: convId1, userId, type: 'received' })
-      );
-      expect(ioState.toEmit).toHaveBeenCalledWith(
-        SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED,
-        expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
-      );
+      // Une conversation, UN accusé. Le drain dual-émettait sous
+      // `message:read-status-updated` depuis le 2026-07-05 sans qu'aucun client
+      // ne l'écoute — retiré au cycle 64 (tasks/socketio-events-cleanup.md § 3),
+      // et c'est ici que le doublement pesait le plus : le drain part sur CHAQUE
+      // reconnexion, pour chaque conversation ayant un arriéré.
+      const receiptNames = ioState.toEmit.mock.calls
+        .map(([event]: [string]) => event)
+        .filter((event: string) => String(event).includes('read-status'));
+      expect(receiptNames).toEqual([
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+      ]);
     });
 
     it('fans the receipt out to every participant user room, not just the conversation room, so a sender who left the conversation view still gets it', async () => {

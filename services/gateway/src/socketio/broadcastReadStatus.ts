@@ -296,20 +296,16 @@ export async function broadcastReadStatus(
     io,
     conversationId: args.conversationId,
     participants: activeParticipants,
-    events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+    event: SERVER_EVENTS.READ_STATUS_UPDATED,
     payload: peerPayload,
     exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null,
   });
 
   // La version de l'acteur, dans sa seule room personnelle — celle que toutes
-  // ses sessions ont rejointe à l'authentification, compte ou pas. Sous les
-  // DEUX noms d'événement, pour qu'un client migré comme un client historique
-  // recale son curseur.
+  // ses sessions ont rejointe à l'authentification, compte ou pas.
   if (actorReadSync) {
     const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
-    const actorRoom = io.to(ROOMS.user(personalRoomKey));
-    actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
-    actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+    io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
   }
 
   await emitUnreadUpdate();

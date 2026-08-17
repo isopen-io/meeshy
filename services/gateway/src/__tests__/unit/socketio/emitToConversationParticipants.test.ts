@@ -48,7 +48,7 @@ describe('emitToConversationParticipants', () => {
     ]);
   });
 
-  it('emits every event once onto the same chained emitter', () => {
+  it('emits the event exactly once onto the chained emitter', () => {
     const { io, emit } = makeEmitter();
     const payload = { conversationId, type: 'received' };
 
@@ -56,13 +56,15 @@ describe('emitToConversationParticipants', () => {
       io,
       conversationId,
       participants: [{ id: 'p_1', userId: 'u_1' }],
-      events: ['read-status:updated', 'message:read-status-updated'],
+      event: 'read-status:updated',
       payload,
     });
 
-    expect(emit).toHaveBeenCalledTimes(2);
+    // UNE émission, pas « une par nom » : le paramètre est au singulier depuis
+    // le cycle 64, quand le dernier dual-émetteur a été retiré. Une chaîne de
+    // rooms rejouée par nom, c'est autant de fois les octets sur le fil.
+    expect(emit).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenNthCalledWith(1, 'read-status:updated', payload);
-    expect(emit).toHaveBeenNthCalledWith(2, 'message:read-status-updated', payload);
   });
 
   it('joins a room at most once so a socket in two of them receives one copy', () => {

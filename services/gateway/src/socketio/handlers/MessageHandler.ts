@@ -1703,7 +1703,7 @@ export class MessageHandler {
       io: this.io,
       conversationId,
       participants,
-      events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+      event: SERVER_EVENTS.READ_STATUS_UPDATED,
       payload
     });
     handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms, deliveredCount: summary.deliveredCount });

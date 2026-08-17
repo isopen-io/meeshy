@@ -54,7 +54,6 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   },
   ROOMS: {
@@ -488,7 +487,6 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
-    expect(mockEmit).toHaveBeenCalledWith('message:read-status-updated', expect.any(Object));
   });
 
   // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
