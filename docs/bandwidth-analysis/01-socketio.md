@@ -430,6 +430,59 @@ QueryClient) resté armé sur `useInfiniteConversationsQuery` — a été désar
 
 ---
 
+### ~~HAUTE-15bis~~ — Web : le même préfixe destructeur, sur trois déclencheurs SOCKET — **RÉSOLU (cycle 60)**
+
+**Fichier :** `apps/web/hooks/queries/use-socket-cache-sync.ts`
+
+**Description :** MOYENNE-15 n'était pas la seule porte. Trois `invalidateQueries({ queryKey:
+queryKeys.conversations.all })` subsistaient dans les handlers socket du même fichier. **Les deux
+dérogations posées au cycle 59 (`refetchOnWindowFocus: false` + `refetchOnReconnect: false`) ne
+protègent de RIEN contre elles** : elles ne désarment que les déclencheurs GLOBAUX du QueryClient,
+et un appel explicite passe à travers.
+
+1. `handlePendingMessagesDelivered` (`message:pending-delivered`) — **le chemin le plus fréquenté**.
+   Le gateway rejoue d'abord CHAQUE `message:new` en attente, tous déjà fusionnés sans remplacement
+   par `handleNewMessage` — dont le corps porte, en capitales, « DO NOT invalidate here ». Le
+   handler d'à côté invalidait le préfixe PLUS LARGE et effaçait donc ces écritures, à chaque
+   reconnexion suivant une coupure pendant laquelle des messages sont arrivés.
+2. `handleMessagesRestoredForMe` (`message:restored-for-me`) — **entièrement inutile**. Le gateway
+   émet déjà un `conversation:updated` portant l'aperçu PERSONNEL recalculé
+   (`restoreMessageForUser` → `refreshPersonalConversationPreview` →
+   `emitConversationPreviewUpdate`, borné à `onlyForReaderUserId`), fusionné sans remplacer la page.
+3. `handleConversationNew`, dans le `.catch` d'une lecture d'une ligne — **légitime**, dernier
+   recours après échec réseau.
+
+**Taille gaspillée :** N × taille d'une page de `GET /conversations` par occurrence, N = nombre de
+pages scrollées — sur le lien le plus contraint qui existe, un mobile qui vient de revenir.
+
+**Sévérité :** HAUTE — la bande passante est la moins grave des trois conséquences. Comme pour
+MOYENNE-15 : rejeu de TOUTES les pages chargées, écritures socket concurrentes écrasées, et une
+ligne **dupliquée** à la frontière avec une autre **perdue** (pagination OFFSET sur `lastMessageAt`
+DESC). Ici le rejeu efface en plus les écritures que le handler *précédent* venait de poser.
+
+**Correction (livrée, cycle 60) :**
+
+- (1) remplacé par `refreshUnreadCountsFromServer` : une lecture `GET /conversations/:id` par
+  conversation nommée par l'événement et déjà en cache, dont seul l'`unreadCount` est réécrit via
+  `setConversationUnreadInCache`. C'est la SEULE chose que la file ne rejoue pas —
+  `_drainedEventName` ne mappe que des événements de MESSAGE, sans aucun cas
+  `conversation:unread-updated`. Plafonné à 10 lectures, dépassement tracé.
+- (2) **supprimé** : redondant avec la diffusion serveur, qui fait le travail mieux (prisme du
+  lecteur) et sans remplacement de cache.
+- (3) conservé, documenté comme dernier recours.
+
+Le delta borné de `useConversationsDeltaSync` ne pouvait PAS servir (1) : son watermark est déduit
+du cache, et `handleNewMessage` vient de l'avancer au-delà du changement à rattraper — un
+`updatedSince` en borne stricte ne rendrait rien. Corollaire à retenir de la garantie « une écriture
+socket ne peut que faire AVANCER le watermark » : elle rend le delta **aveugle aux faits serveur
+attachés au même changement que la socket n'a pas portés**.
+
+**Reste à faire (cycle 61) :** émettre `conversation:unread-updated` depuis le gateway sur la
+vidange de file supprimerait tout besoin de lecture cliente, donc `refreshUnreadCountsFromServer`
+et son plafond. Les jumeaux iOS/Android ont le même trou.
+
+---
+
 ### MOYENNE-16 — iOS `syncMissedMessages` : re-fetch de 30 messages à chaque reconnexion
 
 **Fichier :** `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` lignes 2336–2368
