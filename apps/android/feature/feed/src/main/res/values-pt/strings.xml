@@ -42,6 +42,7 @@
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_reply_badge">Resposta</string>
     <string name="post_comments_reply_action">Responder</string>
+    <string name="post_comments_delete_action">Excluir comentário</string>
     <string name="post_comments_replying_to">A responder a %1$s</string>
     <string name="post_comments_replying_to_generic">A responder…</string>
     <string name="post_comments_cancel_reply">Cancelar resposta</string>
