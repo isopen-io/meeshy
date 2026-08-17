@@ -67,6 +67,7 @@ import { LentillePeek } from './LentillePeek';
 import { useConversationPreference } from '@/stores/conversation-preferences-store';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
 import { useIsFocusedRow, type LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
+import { isPlainLeftClick } from '@/lib/profile-link-click';
 
 export interface LentilleRowDraft {
   readonly content: string;
@@ -117,6 +118,14 @@ export interface LentilleRowProps {
    * `LentillePeek`, qui monte la section d'actions du rang historique.
    */
   readonly onShowDetails?: (conversation: Conversation) => void;
+  /**
+   * Directive produit 2026-08-17 — ouvre `UserProfileModal` pour l'avatar
+   * d'un DM. Rappel STABLE reçu de `LentilleConversationListMount` (même
+   * invariant que `onSelect` : une fermeture littérale ici rendrait le
+   * `memo` de ce rang décoratif). Non fourni ⇒ l'avatar garde son
+   * comportement de navigation directe vers `/u/{username}`.
+   */
+  readonly onOpenProfile?: (username: string) => void;
 }
 
 /** Sélection déterministe du typeur affiché (L01) : ordre alphabétique du nom, pas l'ordre d'arrivée socket. */
@@ -178,6 +187,14 @@ function resolveUnreadAriaSegment(unreadCount: number, t: LentilleRowTranslate):
  *
  * `target === null` ⇒ rien à ouvrir ⇒ le conteneur reste un simple `div`,
  * la rangée redevient une cible unique. Aucun contrôle inerte n'est rendu.
+ *
+ * DIRECTIVE PRODUIT 2026-08-17 — « le profil s'ouvre en modale » : la
+ * branche `profile` reste un VRAI `<Link href="/u/{username}">` (nom
+ * accessible, clic droit "nouvel onglet" natif, atteignable au clavier),
+ * mais son clic GAUCHE SIMPLE est intercepté (`isPlainLeftClick`, loi
+ * PARTAGÉE avec `FocalIdentityHeader`) pour ouvrir `UserProfileModal` via
+ * `onOpenProfile` plutôt que de naviguer. `onOpenProfile` non fourni ⇒ repli
+ * sur la navigation directe (comportement inchangé).
  */
 const AVATAR_BOX_STYLE: React.CSSProperties = {
   width: 'var(--lentille-list-avatar-size)',
@@ -190,11 +207,14 @@ function AvatarAffordance({
   target,
   t,
   onOpenConversationInfo,
+  onOpenProfile,
   children,
 }: {
   readonly target: LentilleAvatarTarget | null;
   readonly t: LentilleRowTranslate;
   readonly onOpenConversationInfo: () => void;
+  /** Directive produit 2026-08-17 — voir docstring de fichier au-dessus de ce composant. */
+  readonly onOpenProfile?: (username: string) => void;
   readonly children: React.ReactNode;
 }) {
   const stopKeyboardPropagation = useCallback((event: React.KeyboardEvent) => {
@@ -218,7 +238,13 @@ function AvatarAffordance({
         aria-label={t('lentille.a11y.openProfile', { name: target.name })}
         className={AVATAR_BOX_CLASS}
         style={AVATAR_BOX_STYLE}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (onOpenProfile && isPlainLeftClick(event)) {
+            event.preventDefault();
+            onOpenProfile(target.username);
+          }
+        }}
         onKeyDown={stopKeyboardPropagation}
       >
         {children}
@@ -257,6 +283,7 @@ export const LentilleRow = memo(function LentilleRow({
   perspectiveRef,
   election,
   onShowDetails,
+  onOpenProfile,
 }: LentilleRowProps) {
   // behaviour-matrix:L11 — « la sélection … devient le style de la focus card
   // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
@@ -499,6 +526,7 @@ export const LentilleRow = memo(function LentilleRow({
           target={avatarTarget}
           t={t}
           onOpenConversationInfo={handleOpenConversationInfo}
+          onOpenProfile={onOpenProfile}
         >
           <Avatar
             className="h-full w-full"

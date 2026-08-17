@@ -176,6 +176,8 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * `applications: 1` et une déclaration dans `IN_MEMORY_HIDING_SURFACES`, seule
    * forme que le balayage puisse prouver sur ce chemin.
    */
+  // Faute de cette déclaration, ce fichier passerait pour un lecteur à moitié
+  // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
@@ -210,12 +212,20 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
 
   /**
-   * Le pont ✦ batché (REV-5/B2) a la MÊME forme : une fenêtre commune pour N
-   * lecteurs, resserrée par lecteur en mémoire. Ses deux coupes personnelles y
-   * sont exigées séparément parce qu'elles se perdent séparément —
-   * `exclusiveFloorMsFor` fond la coupure d'historique dans le plancher de
-   * lecture, `hiddenMessageIds` écarte les messages effacés un par un. Retirer
-   * l'une laisserait l'autre verte.
+   * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME
+   * forme : une fenêtre commune à tous les destinataires, donc un masquage qui
+   * ne peut pas entrer dans la clause SQL. Il est appliqué en mémoire, lecteur
+   * par lecteur. Ses deux coupes personnelles sont exigées SÉPARÉMENT parce
+   * qu'elles se perdent séparément — `exclusiveFloorMsFor` fond la coupure
+   * d'historique dans le plancher de lecture, `hiddenMessageIds?.has` écarte les
+   * messages effacés un par un. Retirer l'un de ces trois marqueurs, c'est faire
+   * fuiter dans le pont ✦ d'un lecteur des messages qu'il a effacés pour lui.
+   *
+   * `hiddenMessageIds?.has(` et non `hiddenMessageIds` : le nom seul est
+   * satisfait par la CONSTRUCTION de l'ensemble, vingt lignes plus haut, et
+   * survit donc à la suppression de son USAGE — vérifié, le marqueur large reste
+   * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
+   * ce qu'il garde.
    */
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',

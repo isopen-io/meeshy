@@ -114,6 +114,14 @@ export interface FocalRowProps {
   /** Jeton porté jusqu'à `MessageAttachments` (suppression de pièce jointe), comme la vue Bulles. */
   readonly token?: string;
   readonly onImageClick?: (attachmentId: string) => void;
+  /**
+   * Directive produit 2026-08-17 — remonté tel quel jusqu'à
+   * `FocalIdentityHeader`. Callback STABLE fourni par `FocalThread` (une
+   * seule `UserProfileModal` par fil, jamais une par rangée) ; `FocalRow`
+   * n'y ajoute aucune fermeture littérale, sous peine de rendre son `memo`
+   * décoratif (même invariant que `LentilleRow.onSelect`).
+   */
+  readonly onOpenProfile?: (username: string) => void;
 }
 
 export const FocalRow = memo(function FocalRow({
@@ -135,6 +143,7 @@ export const FocalRow = memo(function FocalRow({
   currentAnonymousUserId,
   token,
   onImageClick,
+  onOpenProfile,
 }: FocalRowProps) {
   const { t } = useI18n('conversations');
   const isMe = message.senderId === currentUser.id;
@@ -258,6 +267,7 @@ export const FocalRow = memo(function FocalRow({
                 messageId={message.id}
                 conversationId={effectiveConversationId}
                 openProfileLabel={t('focal.row.openProfile', 'Voir le profil') + ` — ${senderName}`}
+                onOpenProfile={onOpenProfile}
               />
             )}
 

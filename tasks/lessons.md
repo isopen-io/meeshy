@@ -9967,6 +9967,26 @@ garde rien. Seul un témoin qui mesure l'effet garde. Quand on trouve une règle
 énoncée en commentaire, **vérifier ses voisins immédiats** — c'est là qu'elle est
 le plus souvent violée, parce que la proximité a fait croire qu'elle était lue.
 
+### Un champ optionnel devient obligatoire le jour où un client le lit autoritairement
+
+`bridge` est OPTIONNEL sur `conversation:unread-updated`. Les deux clients le
+recopient inconditionnellement, `undefined`/`nil` compris — donc un émetteur qui
+l'omet n'est pas muet : il ORDONNE UN EFFACEMENT. Le cycle qui a rendu le champ
+autoritatif côté web n'a instruit qu'UN des quatre émetteurs serveur ; les trois
+autres se sont mis à effacer sans qu'une seule de leurs lignes ne change, et sans
+qu'un seul témoin ne rougisse — chaque émetteur a ses propres tests, et aucun ne
+connaît la règle de l'autre.
+
+Règle : **quand on rend un champ wire autoritatif côté client, on énumère TOUS les
+émetteurs serveur du même événement dans le MÊME lot**, et on statue explicitement
+sur chacun (attache / n'attache pas, et pourquoi). Un `grep` sur la constante
+d'événement suffit à produire la liste ; ne pas la produire, c'est livrer un
+défaut par émetteur non instruit.
+
+Corollaire sur les témoins : un `toHaveBeenCalledWith` sur le payload ENTIER gèle
+la forme courte comme un acquis. Quand la forme longue existe ailleurs pour le
+même événement, ce témoin ne protège plus — il garantit la divergence.
+
 ## Leçon 231 — un témoin qui ne peut pas tomber ne protège rien : il ATTESTE, et son attestation survit au démenti (2026-08-17, routine messagerie, cycle 62)
 
 Numérotée 231 et non 228 : `tasks/lessons.md` s'arrête à la 227, mais six sites de
@@ -10014,3 +10034,4 @@ constantes recopiée dans une fabrique `jest.mock('@meeshy/shared/*')` d'`apps/w
 qui n'intercepte rien (vérifié : une valeur remplacée par une chaîne absurde ne
 fait tomber aucun des 53 témoins). Un contrat recopié dérive ; recopié dans un
 dispositif inerte, il dérive ET fait autorité.
+
