@@ -1,11 +1,26 @@
+/**
+ * Le contrat PUBLIC de `reading-mode-store`, inchangé — vérifié APRÈS que ce
+ * module soit devenu une façade au-dessus du magasin du contrat (REV-4bis/B2).
+ * C'est tout l'intérêt de laisser ce fichier tel quel : ses assertions n'ont
+ * pas bougé d'un caractère, seule la remise à zéro a changé d'adresse, parce
+ * que la façade n'a plus d'état à remettre à zéro. Un comportement identique
+ * prouvé par des témoins écrits AVANT le changement vaut mieux qu'un témoin
+ * réécrit après.
+ *
+ * L'architecture de la façade, elle, est prouvée par
+ * `__tests__/lentille/reading-mode-facade.test.ts` (aller-retour croisé,
+ * migration, absence de seconde persistance).
+ */
 import { DEFAULT_READING_MODE, READING_MODES, isReadingMode } from '@/lib/conversations/reading-mode';
 import { useReadingModeStore } from '../reading-mode-store';
+import { useReadingModePreferenceStore } from '../reading-mode-preference-store';
 
 const CONVERSATION_A = '507f1f77bcf86cd799439021';
 const CONVERSATION_B = '507f1f77bcf86cd799439022';
 
 beforeEach(() => {
-  useReadingModeStore.setState({ modes: {} });
+  window.localStorage.clear();
+  useReadingModePreferenceStore.getState().reset();
 });
 
 describe('reading mode — le verdict des modes', () => {
