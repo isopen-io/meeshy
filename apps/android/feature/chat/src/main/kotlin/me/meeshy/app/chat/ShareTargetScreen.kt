@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,11 +24,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshyPalette
@@ -36,21 +40,32 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
 /**
- * "Share into Meeshy" target screen (feature-parity §O, lot 1 — text/URL). Hosted by a thin
- * `ShareTargetActivity` (`:app`, `ACTION_SEND` receiver) so this stays coverage-exempt Compose
- * glue: every rule it renders (picker filtering, send-once guard, error surfacing) lives in the
- * tested [ShareTargetViewModel].
+ * "Share into Meeshy" target screen (feature-parity §O — text/URL lot 1, image/video lot 2).
+ * Hosted by a thin `ShareTargetActivity` (`:app`, `ACTION_SEND` receiver) so this stays
+ * coverage-exempt Compose glue: every rule it renders (picker filtering, send-once guard, error
+ * surfacing) lives in the tested [ShareTargetViewModel]. Reading [sharedAttachmentUri]'s bytes is
+ * the one piece of Android-framework glue that belongs here rather than the ViewModel — the exact
+ * same [readPickedAttachment] helper the chat composer's own attachment picker uses, off the main
+ * thread so a large shared video never blocks the screen from drawing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareTargetScreen(
     sharedText: String,
     onFinished: () -> Unit,
+    sharedAttachmentUri: Uri? = null,
+    sharedAttachmentMimeType: String? = null,
     viewModel: ShareTargetViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(sharedText) { viewModel.load(sharedText) }
+    LaunchedEffect(sharedAttachmentUri) {
+        val uri = sharedAttachmentUri ?: return@LaunchedEffect
+        val picked = withContext(Dispatchers.IO) { readPickedAttachment(context, uri) } ?: return@LaunchedEffect
+        viewModel.loadAttachment(picked.bytes, picked.fileName, picked.mimeType ?: sharedAttachmentMimeType)
+    }
     LaunchedEffect(state.isFinished) { if (state.isFinished) onFinished() }
 
     Scaffold(

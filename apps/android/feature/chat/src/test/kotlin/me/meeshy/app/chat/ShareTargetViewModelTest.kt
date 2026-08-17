@@ -18,6 +18,8 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.session.SessionRepository
@@ -49,6 +51,7 @@ class ShareTargetViewModelTest {
         val vm: ShareTargetViewModel,
         val messages: MessageRepository,
         val workManager: WorkManager,
+        val mediaQueue: MediaUploadQueue,
     )
 
     private fun harness(
@@ -62,8 +65,10 @@ class ShareTargetViewModelTest {
         val session = mockk<SessionRepository>(relaxed = true)
         every { session.currentUser } returns MutableStateFlow(currentUser)
         val workManager = mockk<WorkManager>(relaxed = true)
-        val vm = ShareTargetViewModel(conversationRepo, messages, session, workManager)
-        return Harness(vm, messages, workManager)
+        val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
+        io.mockk.coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        val vm = ShareTargetViewModel(conversationRepo, messages, session, workManager, mediaQueue)
+        return Harness(vm, messages, workManager, mediaQueue)
     }
 
     @Test
@@ -162,5 +167,90 @@ class ShareTargetViewModelTest {
         assertThat(h.vm.state.value.sendingConversationId).isNull()
         assertThat(h.vm.state.value.errorMessage).isEqualTo("offline")
         assertThat(h.vm.state.value.isFinished).isFalse()
+    }
+
+    @Test
+    fun loadAttachment_then_sendTo_uploads_it_and_sends_an_image_message() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("")
+        h.vm.loadAttachment("PNG".toByteArray(), "photo.png", "image/png")
+        advanceUntilIdle()
+
+        h.vm.sendTo("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any<MediaUploadItem>()) }
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1",
+                content = "",
+                originalLanguage = any(),
+                sender = me,
+                messageType = "image",
+                attachmentUploadCmids = listOf("upload-cmid"),
+                attachments = any(),
+            )
+        }
+        assertThat(h.vm.state.value.isFinished).isTrue()
+    }
+
+    @Test
+    fun sendTo_with_an_attachment_and_no_shared_text_still_sends() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("   ")
+        h.vm.loadAttachment("MP4".toByteArray(), "clip.mp4", "video/mp4")
+        advanceUntilIdle()
+
+        h.vm.sendTo("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1",
+                content = "",
+                originalLanguage = any(),
+                sender = me,
+                messageType = "video",
+                attachmentUploadCmids = any(),
+                attachments = any(),
+            )
+        }
+    }
+
+    @Test
+    fun loadAttachment_resolves_the_mime_from_the_file_name_when_no_type_is_declared() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("")
+        h.vm.loadAttachment("DATA".toByteArray(), "clip.mp4", declaredMimeType = null)
+        advanceUntilIdle()
+
+        h.vm.sendTo("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(
+                conversationId = "c1",
+                content = "",
+                originalLanguage = any(),
+                sender = me,
+                messageType = "video",
+                attachmentUploadCmids = any(),
+                attachments = any(),
+            )
+        }
+    }
+
+    @Test
+    fun loadAttachment_with_empty_bytes_is_a_noop() = runTest(dispatcher) {
+        val h = harness()
+        h.vm.load("   ")
+        h.vm.loadAttachment(ByteArray(0), "photo.png", "image/png")
+        advanceUntilIdle()
+
+        h.vm.sendTo("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any()) }
     }
 }
