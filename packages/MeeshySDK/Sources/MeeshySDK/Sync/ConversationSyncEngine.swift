@@ -1437,6 +1437,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
+                // G-124 — le pont ✦ voyage sur CE même événement (G-123,
+                // `ConversationUnreadUpdatedEventData.bridge`, payload optionnel).
+                // Avant ce lot, seul `unreadCount` était appliqué : un pont reçu
+                // par socket restait invisible jusqu'au prochain rechargement REST
+                // complet (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact
+                // que R-c dénonçait (« pont invisible drapeau ON »). `event.bridge`
+                // remplace TOUJOURS l'ancien, y compris `nil` : le serveur omet le
+                // champ précisément quand `unreadCount == 0` ou qu'il n'a rien à
+                // annoncer (contrat §3.2) — garder un pont périmé serait une
+                // affirmation fabriquée, l'inverse de la règle du fichier.
+                updated[idx].bridge = event.bridge
             }
             return updated
         }

@@ -601,7 +601,13 @@ export interface CallModeChangedEvent {
  */
 export interface CallMediaToggleEvent {
   readonly callId: string;
-  readonly participantId: string;
+  readonly participantId: string;      // Database Participant ID (legacy) — the FK
+  // `CallParticipant.participantId`, NEVER the roster entry's own
+  // `CallParticipant.id`. A client matching a roster entry by `.id` (the
+  // primary key `call-store.ts`'s `updateParticipant` keys on) never finds
+  // this value — only `.userId`/`.participantId` roster lookups do.
+  /** See `CallScreenCaptureEvent.userId` — same rationale, added Vague 140. */
+  readonly userId?: string;
   readonly mediaType: 'audio' | 'video';
   readonly enabled: boolean;
 }

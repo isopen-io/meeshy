@@ -1521,8 +1521,8 @@ export class CallEventsHandler {
       // `participantId` (Participant.id ObjectId), NOT userId. Passing
       // userId here matched nothing and the toggle silently failed.
       // Resolve to the real participantId before calling the service.
-      const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-      if (!participantId) {
+      const resolved = await this.resolveActiveCallParticipant(userId, data.callId);
+      if (!resolved) {
         socket.emit(CALL_EVENTS.ERROR, {
           code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
           message: 'You are not a participant in this call',
@@ -1530,6 +1530,7 @@ export class CallEventsHandler {
         } as CallError);
         return;
       }
+      const { participantId } = resolved;
       await this.callService.updateParticipantMedia(
         data.callId,
         participantId,
@@ -1542,9 +1543,19 @@ export class CallEventsHandler {
       // iOS treats any received call:media-toggled as the REMOTE peer's state
       // (drives the muted indicator / avatar placeholder). `socket.to`
       // excludes the sender; `io.to` would include it.
+      //
+      // Vague 140 — `participantId` alone (CallParticipant.participantId, the
+      // FK to Participant.id) never matches a web roster entry's `.id`
+      // (CallParticipant.id, its own PK) NOR its `.userId`/`.participantId`
+      // lookup fields (the latter is never populated client-side) for a
+      // registered peer — `updateParticipant` silently no-op'd on every
+      // remote mute/camera toggle, leaving the peer's indicator permanently
+      // stale. Include `userId`, same fix/rationale as `call:quality-alert`/
+      // `call:screen-capture-alert` (Vague 132).
       const toggleEvent: CallMediaToggleEvent = {
         callId: data.callId,
         participantId,
+        userId: resolved.userId,
         mediaType,
         enabled: data.enabled
       };

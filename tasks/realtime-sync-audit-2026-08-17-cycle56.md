@@ -200,7 +200,15 @@ autorisation.
    dernière des trois colonnes « WRITE PERMISSIONS » à n'avoir aucun exécuteur.
 6. **`PUT /conversations/:id` n'accepte pas les identifiants que son schéma
    annonce** (§5).
-7. **La question que ce cycle généralise** : pour chaque réglage de CONTENEUR
+7. **`tasks/lessons.md` porte DEUX « Leçon 215 »** — constat de l'intégration
+   manuelle de `main` de ce cycle. La routine *calling* (cycle 140) a numéroté sa
+   leçon en parallèle de la routine *messagerie* (cycle 54-bis) : deux couloirs
+   qui numérotent depuis leur propre lecture du fichier collisionnent dès qu'ils
+   livrent le même jour. Les deux textes sont conservés VERBATIM, chacun gardant
+   son numéro — renuméroter la leçon d'un autre couloir casserait les renvois de
+   son propre CHANGELOG. La dette est le compteur PARTAGÉ, pas l'une des deux
+   leçons ; à trancher pour lui-même.
+8. **La question que ce cycle généralise** : pour chaque réglage de CONTENEUR
    appliqué par une garde, quels TYPES de conteneur peuvent légitimement le
    porter ? Le tableau §2.6 l'a posée à l'écriture de trois champs ; les
    préférences de communauté et les droits de lien de partage ne l'ont jamais
