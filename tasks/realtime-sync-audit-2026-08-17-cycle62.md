@@ -96,10 +96,37 @@ Posture d'échec inchangée et alignée sur ses deux voisins (le fan-out et la
 liste REST) : le pont est un confort, la pastille est le produit. Une passe qui
 tombe ne prive personne de son compteur.
 
+### 3 bis. La borne — ce que le correctif aurait coûté sans elle
+
+Le fan-out d'envoi porte **UNE** conversation ; cet instantané porte **TOUTES**
+celles du lecteur. La différence n'est pas cosmétique : la fenêtre du service
+construit **une branche `OR` par conversation candidate**. Attacher le pont sans
+borne aurait donc soumis 300 branches pour un compte qui suit 300 conversations,
+à **chaque reconnexion** — quand `GET /conversations` ne lui en soumet jamais
+plus d'une page. Et une reconnexion de masse (redémarrage du serveur) les fait
+toutes partir en même temps.
+
+C'était échanger un défaut d'affichage contre un défaut de charge, à l'instant
+précis où le réseau est le plus fragile. La borne fait partie du correctif, pas
+d'un durcissement ultérieur :
+
+- candidats triés par `lastMessageAt` **décroissant** — l'ordre de la liste
+  elle-même, obtenu sans requête supplémentaire (le champ est sélectionné sur la
+  lecture de participants qui existait déjà) ;
+- plafonnés à **30**, la taille de page par défaut de `GET /conversations` : le
+  pont ne se voit que sur une ligne AFFICHÉE, et c'est cette page-là que le
+  lecteur a sous les yeux au retour du réseau ;
+- les conversations plus anciennes gardent leur **compteur exact** ; seul leur
+  pont attend le `GET /conversations` qui rendra leur ligne — c'est-à-dire
+  l'instant où il devient visible.
+
+Le **compteur n'est jamais borné**, et un témoin le gèle : une pastille menteuse
+sur la 200e conversation ment autant que sur la première.
+
 Aucun changement client. Les deux plateformes lisent déjà `bridge` sur cet
 événement — c'est l'émetteur qui ne le remplissait pas.
 
-## 4. Témoins (8 nouveaux, contre le VRAI manager)
+## 4. Témoins (10 nouveaux, contre le VRAI manager)
 
 Dans `socketio/__tests__/MeeshySocketIOManager.test.ts`, harnais du vrai
 `MeeshySocketIOManager` — celui que le cycle 61 bis a désigné comme le seul
@@ -115,9 +142,14 @@ endroit où poser une garde de comportement.
 | `builds bridges for an anonymous reader under its participant-id viewer key` | l'invité de lien partagé, population dominante de ce transport |
 | `still emits every count when the bridge pass fails` | le pont est un confort, la pastille est le produit |
 | `never opens the agent stage on this socket path` | G-127 — pas d'aller-retour HTTP sur le chemin socket |
+| `caps the bridge pass at one list page, keeping the MOST RECENT…` | la borne, et son critère (récence, pas hasard) |
+| `never caps the COUNTS — only the bridges` | le compteur reste intégral, toujours |
 
 RED d'abord : 5 échecs sur 8 avant correctif (les 3 autres décrivent la forme
-courte, qui reste correcte là où elle est correcte).
+courte, qui reste correcte là où elle est correcte). Les 2 témoins de la borne
+ont été écrits après son implémentation puis **vérifiés rouges en la retirant**
+(`42` candidats au lieu de `30`) — garde prouvée, mais ordre TDD non respecté sur
+ce second incrément, et consigné comme tel.
 
 ## 5. Balayage des jumeaux — les trois autres émetteurs
 
