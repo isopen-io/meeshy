@@ -57,21 +57,19 @@ final class FocalFocusDecorationTests: XCTestCase {
         )
         XCTAssertTrue(card.superlayer === cell.contentView.layer,
                       "la carte doit vivre dans cell.contentView.layer (§4.6)")
-        // Depuis `85cf1ec4` la carte n'est plus SEULE derrière le contenu :
-        // un halo (`focal.focus.halo`, débord d'accent dilué) vit encore
-        // DESSOUS — index 0 au halo, index 1 à la carte (doc
-        // `haloLayer(for:)` : « Le halo vit SOUS la carte »). L'invariant
-        // §4.6 est inchangé : la décoration ENTIÈRE reste derrière le
-        // contenu SwiftUI hébergé, jamais par-dessus.
+        // Spec Magnificence 2026-08-17 : la rangée élue porte un FOND
+        // accentué, jamais un bord. La carte est le PREMIER sublayer
+        // (index 0, derrière le contenu SwiftUI hébergé) — le halo n'existe
+        // plus.
         let sublayers = cell.contentView.layer.sublayers ?? []
-        XCTAssertEqual(sublayers.first?.name, "focal.focus.halo",
-                       "le halo doit occuper l'index 0 — tout au fond, même sous la carte")
-        XCTAssertEqual(sublayers.dropFirst().first, card,
-                       "la carte doit vivre juste au-dessus du halo (index 1) — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
+        XCTAssertEqual(sublayers.first, card,
+                       "le fond doit occuper l'index 0 — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
         XCTAssertEqual(card.cornerRadius, FocalMetrics.FocusCard.radius,
-                       "rayon de la carte = FocalMetrics.FocusCard.radius (token thread.focusCard.radius), jamais un littéral")
-        XCTAssertEqual(card.borderWidth, FocalMetrics.FocusCard.ringSize,
-                       "anneau de la carte = FocalMetrics.FocusCard.ringSize (token thread.focusCard.ringSize)")
+                       "rayon du fond = FocalMetrics.FocusCard.radius (token thread.focusCard.radius), jamais un littéral")
+        XCTAssertEqual(card.borderWidth, 0,
+                       "FOND accentué, JAMAIS un bord (choix user, spec Magnificence) — borderWidth doit rester 0")
+        XCTAssertNotNil(card.backgroundColor,
+                        "le fond porte la teinte accent translucide — c'est LUI qui signale l'élu")
         XCTAssertEqual(
             card.frame,
             cell.contentView.bounds.insetBy(
@@ -81,6 +79,38 @@ final class FocalFocusDecorationTests: XCTestCase {
             "cadre de la carte = bounds − marges thread.focusCard (FocalMetrics.FocusCard.margin*)"
         )
         XCTAssertEqual(card.opacity, 1, accuracy: 0.0001, "la carte de la rangée focalisée est visible")
+    }
+
+    func test_update_neverInstallsAHalo() {
+        decoration.update(cell: cell, isFocused: true, accentHex: accent, isDark: false)
+        let names = (cell.contentView.layer.sublayers ?? []).compactMap(\.name)
+        XCTAssertFalse(
+            names.contains("focal.focus.halo"),
+            "le halo appartenait au design à BORDURE — le fond accentué vit seul (spec Magnificence)"
+        )
+    }
+
+    func test_productionSwitch_drawsTheAccentBackground() {
+        XCTAssertTrue(
+            FocalFocusDecoration.drawsFocusCard,
+            "l'essai « sans décoration » est terminé : la spec Magnificence rallume la décoration sous sa nouvelle forme — fond accentué sans bord"
+        )
+    }
+
+    func test_update_focusTransition_fadesSoftly() throws {
+        decoration.update(cell: cell, isFocused: true, accentHex: accent, isDark: false)
+        let card = try XCTUnwrap(decoration.cardLayer(attachedTo: cell))
+        XCTAssertNotNil(
+            card.animation(forKey: "focal.focus.fade"),
+            "l'apparition du fond est FONDUE (spec : « fondu doux à l'entrée/sortie ») — jamais un flip sec d'opacité"
+        )
+
+        decoration.update(cell: cell, isFocused: false, accentHex: accent, isDark: false)
+        XCTAssertNotNil(
+            card.animation(forKey: "focal.focus.fade"),
+            "la disparition aussi est fondue"
+        )
+        XCTAssertEqual(card.opacity, 0, accuracy: 0.0001, "la valeur MODÈLE tombe bien à 0 — l'animation n'est qu'un habillage")
     }
 
     /// La cellule ne doit pas accumuler un layer par passe : la carte est

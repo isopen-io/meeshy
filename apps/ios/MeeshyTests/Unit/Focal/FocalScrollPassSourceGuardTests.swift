@@ -248,9 +248,11 @@ final class FocalScrollPassSourceGuardTests: XCTestCase {
 
     func test_decoration_readsItsGeometryFromFocalMetrics() throws {
         let code = try strippedSource("FocalFocusDecoration.swift")
+        // `ringSize` a quitté la liste avec le design à bordure (spec
+        // Magnificence 2026-08-17 : fond accentué, jamais un bord) — les
+        // cotes restantes du token continuent de faire foi.
         for symbol in [
             "FocalMetrics.FocusCard.radius",
-            "FocalMetrics.FocusCard.ringSize",
             "FocalMetrics.FocusCard.marginHorizontal",
             "FocalMetrics.FocusCard.marginVertical"
         ] {

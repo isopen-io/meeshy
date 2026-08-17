@@ -38,8 +38,8 @@ retombée exacte sur la courbe gelée ; C1 partout (smoothstep). Sous la bande
   largeur magnifiée à `A` tienne dans l'écran avec pivot `p = 0.18` et inset
   leading `L = 12` : `L + Wc·(p + (1−p)·A) ≤ W` ⇒
   `Wc ≤ (W − L)/(p + (1−p)·A)`. À `W = 390` : `Wc ≤ 329` ⇒ réserve trailing
-  ≈ **49 pt** (le « ~30 pt » du design conversationnel était une estimation
-  basse — la formule fait foi, exposée par une fonction pure
+  ≈ **49 pt**, CONFIRMÉ à l'implémentation (le « ~30 pt » du design
+  conversationnel était une estimation basse — la formule fait foi, exposée par une fonction pure
   `magnifiedTrailingReserve(viewportWidth:)` et appliquée par le provider de
   section en mode Focal uniquement ; `.bubbles` garde 12). Côté leading, le
   débord du pivot (−11.3 pt) tient dans l'inset de 12.
@@ -58,11 +58,15 @@ bord d'écran est naturel ; elle protégeait un CADRE ouvert).
 
 ## 3. « Lire plus »
 
-- Tout texte Focal rendu au-delà de **12 lignes** est tronqué
-  (`lineLimit(12)`) avec un bouton « Lire plus » teinté accent. Détection de
-  troncature par MESURE réelle (double rendu texte caché, jamais un compte de
-  caractères — Dynamic Type). Le cap vaut pour TOUTES les rangées, élu
-  compris : c'est lui qui en a le plus besoin (magnification + atterrissage).
+- Tout texte Focal au-delà du seuil est tronqué avec un bouton
+  « Lire plus ». **Écart d'implémentation assumé** : le seuil réutilise le
+  mécanisme ÉPROUVÉ de `BubbleExpandableText` — 512 caractères, troncature
+  AU MOT — plutôt qu'une mesure de lignes (512 caractères ≈ les 12 lignes
+  visées à corps 15 ; le mécanisme existant est localisé, accessible et déjà
+  en production côté bulle ; `maximize reuse`). Le tap est DÉTOURNÉ
+  (`onExpandOverride`) : en Focal il n'étend JAMAIS inline. Le cap vaut pour
+  TOUTES les rangées, élu compris : c'est lui qui en a le plus besoin
+  (magnification + atterrissage).
 - Tap → **sheet grand detent** : en-tête expéditeur + heure, contenu
   intégral **directement scrollable** dans la langue du Prisme (le même
   texte effectif que la rangée), drapeaux en pied, fermeture au swipe.

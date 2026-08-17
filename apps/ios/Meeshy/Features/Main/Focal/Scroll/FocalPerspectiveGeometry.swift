@@ -9,13 +9,17 @@ nonisolated struct FocalCellTransform: Equatable, Sendable {
     let scale: CGFloat
     let alpha: CGFloat
     let translation: CGSize
+    /// Élévation `layer.zPosition` — la rangée magnifiée par la loupe
+    /// recouvre ses voisines (spec Magnificence). `0` hors bande.
+    let zPosition: CGFloat
 
     static let identity = FocalCellTransform(scale: 1, alpha: 1, translation: .zero)
 
-    init(scale: CGFloat, alpha: CGFloat, translation: CGSize) {
+    init(scale: CGFloat, alpha: CGFloat, translation: CGSize, zPosition: CGFloat = 0) {
         self.scale = scale
         self.alpha = alpha
         self.translation = translation
+        self.zPosition = zPosition
     }
 }
 
@@ -92,6 +96,13 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     let focusTolerance: CGFloat
     /// Borne haute de l'inset de tête, en fraction du viewport.
     let headInsetMaxRatio: CGFloat
+
+    /// Loupe (spec Magnificence 2026-08-17) — valeurs PAR DÉFAUT (hors
+    /// init memberwise : aucun site de construction ne change). Le pic
+    /// vient de `FocalPassConstants`, le rayon est DÉRIVÉ du miroir gelé.
+    let magnificationPeak: CGFloat = FocalPassConstants.magnificationPeak
+    let magnificationRadius: CGFloat =
+        FocalFocusCurve.focusBandHalfHeight * FocalPassConstants.magnificationRadiusFactor
 
     /// La seule instance du produit. Injectable pour les tests, comme le
     /// contrat §WS-5 le prévoyait avec `FocalFocusCurve.standard`.
@@ -170,6 +181,59 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// `FocalPassConstants.optimisticAlphaCeiling` pour un envoi optimiste
     /// (§4.4). C'est un `min`, jamais une substitution — le plafond ne RELÈVE
     /// jamais une rangée déjà estompée par la distance.
+    /// La LOUPE : terme positionnel C1 (smoothstep), pic à la ligne de
+    /// focus, retombée EXACTE à 1 au rayon, symétrique au-dessus/en dessous
+    /// — donc continue pendant que le défilement traverse la bande. COMPOSÉE
+    /// par-dessus la courbe gelée, jamais écrite dedans (écart iOS assumé,
+    /// spec Magnificence 2026-08-17 — même précédent que le retrait du
+    /// fondu d'alpha ; zéro collision avec le chantier web V4).
+    func magnification(signedDistance: CGFloat) -> CGFloat {
+        let t = max(0, 1 - abs(signedDistance) / magnificationRadius)
+        let smooth = t * t * (3 - 2 * t)
+        return 1 + (magnificationPeak - 1) * smooth
+    }
+
+    /// Distance SIGNÉE à la ligne de focus (positive au-dessus, négative en
+    /// dessous) — l'entrée de la loupe, là où `distance` (clampée) reste
+    /// celle de la courbe gelée.
+    func signedDistance(visualMidY: CGFloat, focusY: CGFloat) -> CGFloat {
+        focusY - visualMidY
+    }
+
+    /// Transform complet AVEC loupe — le chemin nominal du pass. La courbe
+    /// gelée reçoit la distance clampée (son domaine), la loupe la distance
+    /// signée ; l'échelle rendue est le produit des deux, l'élévation
+    /// `zPosition` suit la loupe seule.
+    func transform(
+        signedDistance: CGFloat,
+        cellSize: CGSize,
+        horizontalAnchor: FocalHorizontalAnchor,
+        isRightToLeft: Bool,
+        alphaCeiling: CGFloat
+    ) -> FocalCellTransform {
+        let curve = FocalFocusCurve.focusCurve(distance: max(0, signedDistance), variant: .thread)
+        let loupe = magnification(signedDistance: signedDistance)
+        return anchoredTransform(
+            scale: curve.scale * loupe,
+            cellSize: cellSize,
+            horizontalAnchor: horizontalAnchor,
+            isRightToLeft: isRightToLeft,
+            alphaCeiling: alphaCeiling,
+            zPosition: (loupe - 1) * FocalPassConstants.magnificationElevationSpan
+        )
+    }
+
+    /// Réserve trailing des rangées en perspective : la plus grande largeur
+    /// de contenu telle qu'une rangée PLEINE LARGEUR magnifiée au pic tienne
+    /// dans l'écran (pivot 18 % fixe) : `L + Wc·(p + (1−p)·A) ≤ W`. Le
+    /// débord leading du pivot (≈ p·Wc·(A−1) ≈ 11 pt) tient dans l'inset 12.
+    func magnifiedTrailingReserve(viewportWidth: CGFloat, leadingInset: CGFloat) -> CGFloat {
+        let p = FocalFocusCurve.threadHorizontalPivot
+        let growth = p + (1 - p) * magnificationPeak
+        let maxContentWidth = (viewportWidth - leadingInset) / growth
+        return max(0, (viewportWidth - leadingInset - maxContentWidth).rounded(.up))
+    }
+
     func transform(
         distance: CGFloat,
         cellSize: CGSize,
@@ -178,7 +242,24 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         alphaCeiling: CGFloat
     ) -> FocalCellTransform {
         let curve = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
-        let scale = curve.scale
+        return anchoredTransform(
+            scale: curve.scale,
+            cellSize: cellSize,
+            horizontalAnchor: horizontalAnchor,
+            isRightToLeft: isRightToLeft,
+            alphaCeiling: alphaCeiling,
+            zPosition: 0
+        )
+    }
+
+    private func anchoredTransform(
+        scale: CGFloat,
+        cellSize: CGSize,
+        horizontalAnchor: FocalHorizontalAnchor,
+        isRightToLeft: Bool,
+        alphaCeiling: CGFloat,
+        zPosition: CGFloat
+    ) -> FocalCellTransform {
         let shrink = 1 - scale
 
         let ty = -(cellSize.height / 2) * shrink
@@ -214,7 +295,8 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
             // gelée continue de calculer son alpha, il n'est simplement plus
             // consommé ici.
             alpha: alphaCeiling,
-            translation: CGSize(width: tx, height: ty)
+            translation: CGSize(width: tx, height: ty),
+            zPosition: zPosition
         )
     }
 
