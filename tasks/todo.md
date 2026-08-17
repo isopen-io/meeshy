@@ -13,10 +13,11 @@
       niveau conversation)
 - [x] `resolveLastMessagePreview` PRÉFÈRE la carte au contenu brut — c'est elle
       qui gagne à l'écran
-- [x] **Cinq** écrivains locaux réécrivaient l'objet, **zéro** ne touchait la
+- [x] **Six** écrivains locaux réécrivaient l'objet, **zéro** ne touchait la
       carte : `message:new`, sa branche `fetched`, `message:edited`,
-      `message:deleted`, `link:message:new`
-- [x] Quatre ont un `conversation:updated` jumeau qui rattrape — mélange
+      `message:deleted`, `link:message:new`, et `use-conversations-v2` — un
+      SECOND écouteur du même `message:new` sur le MÊME cache
+- [x] Cinq ont un `conversation:updated` jumeau qui rattrape — mélange
       transitoire
 - [x] **`link:message:new` n'en a pas, délibérément** (`broadcastLinkMessage` :
       « the clients already applied it » — vrai de l'objet, faux de la carte) ⇒
@@ -27,7 +28,7 @@
 ## Correctif
 
 - [x] `withPreviewMessage({ conversation, message, textChanged? })` — geste
-      unique, pur, exporté ; les cinq écrivains y passent
+      unique, pur, exporté ; les six écrivains y passent
 - [x] **L'identité décide, jamais le contenu** : même id ⇒ la carte reste vraie
 - [x] `textChanged` déclaré par l'écrivain — une édition garde l'id et périme les
       traductions côté serveur, l'identité ne peut pas le dire
@@ -35,13 +36,15 @@
       installé (règle #3 du Prisme : la langue d'origine concourt à son RANG)
 - [x] **Périmer, pas recomposer** : dériver la carte de `message.translations`
       dupliquerait dans le client les 4 exclusions serveur + le plafond de 300
-- [x] Ne touche ni `lastMessageAt` ni `updatedAt` — les 5 appelants n'en font pas
+- [x] Ne touche ni `lastMessageAt` ni `updatedAt` — les 6 appelants n'en font pas
       le même usage
+- [x] Témoin de SOURCE sur `use-conversations-v2.ts` : deux écouteurs sans ordre
+      garanti ⇒ la règle d'identité n'est sûre que si TOUS y passent
 
 ## Gates
 
 - [x] Suite web COMPLÈTE : 581 suites, 12 445 témoins verts, 21 ignorés, 0 échec
-- [x] 14 témoins neufs — 10 sur le geste pur, 4 d'intégration (un par handler),
+- [x] 16 témoins neufs — 10 sur le geste pur, 2 de source, 4 d'intégration,
       posés sur la sortie de `resolveLastMessagePreview`, pas sur le champ brut
 - [x] **Preuve par mutation dans les deux sens** : neutraliser le correctif tue
       10 témoins, le sur-doser en tue 2 (la borne)
@@ -53,6 +56,6 @@
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle54-bis.md` — le tableau des cinq
+Voir `tasks/realtime-sync-audit-2026-08-17-cycle54-bis.md` — le tableau des six
 écrivains, pourquoi le chemin des liens partagés était le seul sans filet, et
 les quatre pistes du cycle 55.

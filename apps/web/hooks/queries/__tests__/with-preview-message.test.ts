@@ -6,21 +6,24 @@
  * question de suivi, et elle est mécanique : *quels sont TOUS les écrivains de
  * ce que la ligne AFFICHE ?*
  *
- * Réponse, côté web : **cinq**. Un seul écrit la carte du Prisme — le fan-out
- * serveur. Les quatre autres sont locaux, et aucun ne la touchait :
+ * Réponse, côté web : **sept**. Un seul écrit la carte du Prisme — le fan-out
+ * serveur (`mergeConversationUpdate`). Les six autres sont locaux, et aucun ne
+ * la touchait :
  *
  *   1. `message:new` (`handleNewMessage`) — le chemin le plus fréquenté ;
  *   2. la même chose pour une conversation absente du cache (branche `fetched`) ;
  *   3. `message:edited` (`handleMessageEdited`) ;
  *   4. `message:deleted` (`advanceConversationPreviewOnDelete`) ;
- *   5. `link:message:new` (`handleLinkMessageNew`).
+ *   5. `link:message:new` (`handleLinkMessageNew`) ;
+ *   6. `message:new`, encore — `use-conversations-v2.ts`, un SECOND écouteur sur
+ *      le MÊME événement écrivant dans le MÊME cache.
  *
  * Chacun réécrit `conversation.lastMessage` — l'OBJET — en laissant
  * `lastMessageTranslations` décrire le message PRÉCÉDENT. Et `formatLastMessage`
  * PRÉFÈRE cette carte à `lastMessage.content` : la ligne rend donc l'auteur et
  * l'horodatage du nouveau message, avec le TEXTE de l'ancien.
  *
- * Sur quatre de ces cinq chemins le serveur envoie un `conversation:updated`
+ * Sur cinq de ces six chemins le serveur envoie un `conversation:updated`
  * jumeau qui repose la carte juste derrière — le mélange n'y dure que le temps
  * d'une trame. **`link:message:new` n'en a pas**, et c'est délibéré : le gateway
  * documente noir sur blanc qu'il ne l'émet pas parce que « le handler web
@@ -29,6 +32,9 @@
  * leçon 212 décrit. Sur une conversation de lien partagé, la ligne reste donc
  * DURABLEMENT fausse : rien ne repasse jamais.
  */
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { withPreviewMessage } from '../use-socket-cache-sync';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
@@ -209,5 +215,39 @@ describe('withPreviewMessage — ce que la fusion ne touche pas', () => {
     expect(after.title).toBe(before.title);
     expect(after.unreadCount).toBe(before.unreadCount);
     expect(before.lastMessageTranslations).toEqual({ fr: 'Bonsoir' });
+  });
+});
+
+/**
+ * Le SIXIÈME écrivain, et pourquoi un témoin de comportement ne suffit pas ici.
+ *
+ * `use-conversations-v2.ts` écrit dans le MÊME cache
+ * (`queryKeys.conversations.infinite()`) sur le MÊME événement `message:new`,
+ * depuis un autre écouteur. Deux écouteurs, aucun ordre garanti — et l'ordre
+ * décide du texte affiché : si l'écrivain v2 passe en premier avec un simple
+ * `{ ...conv, lastMessage }`, la ligne décrit DÉJÀ le nouveau message quand
+ * `useSocketCacheSync` la reprend, qui garde alors — à raison selon sa propre
+ * règle d'identité — une carte qui décrit l'ancien.
+ *
+ * La règle « l'identité décide » n'est donc sûre que si TOUS les écrivains du
+ * cache la respectent. C'est une propriété du FICHIER, pas d'une valeur : d'où
+ * un témoin de source, qui échoue le jour où un septième écrivain apparaît.
+ */
+describe('withPreviewMessage — tous les écrivains du cache y passent', () => {
+  const v2Source = readFileSync(
+    join(__dirname, '..', '..', 'v2', 'use-conversations-v2.ts'),
+    'utf8'
+  );
+
+  it('use-conversations-v2 route son écriture par le geste commun', () => {
+    expect(v2Source).toContain('withPreviewMessage({ conversation: conv, message })');
+  });
+
+  it("use-conversations-v2 n'écrit plus `lastMessage` à la main", () => {
+    const handWritten = v2Source
+      .split('\n')
+      .filter((line) => /^\s*lastMessage:\s/.test(line));
+
+    expect(handWritten).toEqual([]);
   });
 });

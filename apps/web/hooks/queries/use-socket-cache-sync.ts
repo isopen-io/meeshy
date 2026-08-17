@@ -265,7 +265,7 @@ export function mergeConversationUpdate(
  * `formatLastMessage` la PRÉFÈRE à `lastMessage.content` — réécrire l'objet seul
  * laissait la ligne rendre l'auteur et l'horodatage du nouveau message avec le
  * TEXTE de l'ancien. C'est le défaut que le cycle 53 a fermé sur le chemin du
- * fan-out serveur ; ceci le ferme sur les cinq chemins LOCAUX, dont
+ * fan-out serveur ; ceci le ferme sur les six chemins LOCAUX, dont
  * `link:message:new`, le seul qui n'ait aucun jumeau serveur pour le rattraper.
  *
  * **L'identité décide**, jamais le contenu : quand la ligne décrit déjà ce
@@ -280,6 +280,12 @@ export function mergeConversationUpdate(
  *
  * Ne décide ni du rang de la ligne (`lastMessageAt`) ni de sa date de mise à
  * jour : les appelants n'en font pas le même usage.
+ *
+ * Le sixième appelant vit dans `hooks/v2/use-conversations-v2.ts` — un SECOND
+ * écouteur du même `message:new`, écrivant dans le MÊME cache. La règle
+ * d'identité n'est sûre que si TOUS les écrivains y passent : sans cela l'ordre
+ * des deux écouteurs déciderait du texte affiché. Un témoin de source le
+ * verrouille.
  */
 export function withPreviewMessage(params: {
   conversation: Conversation;

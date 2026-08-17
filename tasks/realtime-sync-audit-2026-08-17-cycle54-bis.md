@@ -35,7 +35,7 @@ posés au niveau CONVERSATION — le gateway l'y met parce que sa forme compacte
 Et `resolveLastMessagePreview` **PRÉFÈRE la carte** au contenu brut. C'est donc
 elle qui gagne à l'écran chaque fois qu'elle porte une langue du lecteur.
 
-### 2.2 Les cinq écrivains
+### 2.2 Les six écrivains locaux
 
 | # | Écrivain | Événement | Écrit `lastMessage` | Écrit la carte |
 |---|---|---|---|---|
@@ -44,10 +44,11 @@ elle qui gagne à l'écran chaque fois qu'elle porte une langue du lecteur.
 | 3 | `handleMessageEdited` | `message:edited` | oui | **non** |
 | 4 | `advanceConversationPreviewOnDelete` | `message:deleted` | oui | **non** |
 | 5 | `handleLinkMessageNew` | `link:message:new` | oui | **non** |
+| 6 | `use-conversations-v2` `handleNewMessage` | `message:new` | oui | **non** |
 | — | `mergeConversationUpdate` | `conversation:updated` | oui | oui |
 
-**Cinq écrivains de ce que la ligne affiche, un seul écrivain de la carte.**
-Chacun des cinq réécrivait l'objet en laissant la carte décrire le message
+**Six écrivains de ce que la ligne affiche, un seul écrivain de la carte.**
+Chacun des six réécrivait l'objet en laissant la carte décrire le message
 PRÉCÉDENT : la ligne rendait l'auteur et l'horodatage du nouveau message avec le
 TEXTE de l'ancien.
 
@@ -68,7 +69,7 @@ il avait simplement survécu sur les chemins que le cycle 53 ne touchait pas.
 
 ### 2.4 Le chemin que rien ne rattrape
 
-Quatre des cinq écrivains ont un jumeau serveur : le gateway émet un
+Cinq des six écrivains ont un jumeau serveur : le gateway émet un
 `conversation:updated` juste derrière, avec la carte du bon message, et
 `mergeConversationUpdate` la repose. Le mélange n'y dure que le temps d'une
 trame — réel, visible, mais transitoire.
@@ -95,7 +96,18 @@ CHEMIN et un AFFICHAGE.
 ## 3. Le correctif
 
 `withPreviewMessage({ conversation, message, textChanged? })` — un geste unique,
-exporté et pur, par lequel passent les cinq écrivains.
+exporté et pur, par lequel passent les six écrivains.
+
+Le sixième — `use-conversations-v2.ts` — a été trouvé en instruisant, et il
+n'est pas un site de plus : c'est un SECOND écouteur du même `message:new`
+écrivant dans le MÊME cache. Deux écouteurs, aucun ordre garanti, et l'ordre
+décidait du texte affiché — si l'écrivain v2 passait en premier avec un simple
+`{ ...conv, lastMessage }`, la ligne décrivait DÉJÀ le nouveau message quand
+`useSocketCacheSync` la reprenait, qui gardait alors, à raison selon sa propre
+règle d'identité, une carte décrivant l'ancien. **La règle « l'identité décide »
+n'est sûre que si TOUS les écrivains la respectent** : c'est une propriété du
+fichier, pas d'une valeur, d'où un témoin de SOURCE qui échouera le jour où un
+septième écrivain apparaîtra.
 
 **L'identité décide, jamais le contenu.** Quand le message installé est celui que
 la ligne décrit déjà, la carte reste vraie et on la garde ; sinon elle est périmée
@@ -156,7 +168,7 @@ justification qui était trop large d'un cran.
 **Une garde monotone web sur le groupe d'aperçu** (piste n°2 du cycle 53) — reste
 entière, et distincte de ce correctif.
 
-**Toucher `lastMessageAt` / `updatedAt` dans le geste commun.** Les cinq
+**Toucher `lastMessageAt` / `updatedAt` dans le geste commun.** Les six
 appelants n'en font pas le même usage : l'édition n'en pose aucun,
 `link:message:new` dérive le sien d'un payload non typé. Les poser dans le
 helper les écraserait — un témoin dédié l'interdit.
@@ -169,9 +181,10 @@ helper les écraserait — un témoin dédié l'interdit.
 2. **Les deux ÉVÉNEMENTS avant les deux FUSIONS** côté iOS (piste des cycles
    51/52/53) — intacte.
 3. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
-4. **Nouveau : la carte du Prisme n'a qu'UN écrivain, et cinq lecteurs
-   potentiels.** Le correctif la périme correctement, mais rien n'empêche un
-   sixième écrivain de `lastMessage` d'apparaître demain sans passer par
-   `withPreviewMessage`. Une garde structurelle (rendre `lastMessage` inatteignable
-   autrement que par le helper) fermerait la classe entière plutôt que ses
-   instances.
+4. **Le témoin de source ne couvre qu'un fichier.** `use-conversations-v2.ts`
+   est verrouillé par un témoin qui interdit d'y réécrire `lastMessage` à la
+   main ; `use-socket-cache-sync.ts` ne peut pas l'être de la même façon (il
+   contient le geste lui-même et le chemin serveur légitime). Une garde
+   structurelle — rendre `lastMessage` inatteignable autrement que par le helper,
+   par exemple via un type de patch dédié — fermerait la classe entière plutôt
+   que ses instances.
