@@ -42,7 +42,10 @@ struct LentilleFocusCard: View {
     let preference: ReadingModeOrchestrator.ReadingModePreference
     /// Décision de `resolveOrchestratorDecision` sur les données de CETTE
     /// conversation (résolue par `LentilleFocusCardHost`, jamais ici : cette
-    /// vue reste un pur rendu de ce qu'on lui donne).
+    /// vue reste un pur rendu de ce qu'on lui donne) — repli LOCAL. R6-5 :
+    /// `notchText` (ci-dessous) lui préfère `conversation.bridge
+    /// ?.suggestedMode` quand ce champ est présent ; cette propriété ne reste
+    /// la source affichée que pour les conversations sans pont.
     let decision: ReadingModeOrchestrator.OrchestratorDecision
     let isDark: Bool
     let reduceMotion: Bool
@@ -150,8 +153,13 @@ struct LentilleFocusCard: View {
 
     // MARK: - Encoche
 
+    /// R6-5 — le SEUL branchement attendu : `conversation.bridge?.suggestedMode`
+    /// (le champ précalculé par le serveur/le substitut, cf.
+    /// `LentilleModeLabels.notchText`) prime sur `decision` (le recalcul
+    /// local que `LentilleFocusCardHost` continue de fournir en repli) —
+    /// jamais un second calcul dans cette carte.
     private var notchText: String {
-        LentilleModeLabels.notchText(decision: decision, preference: preference)
+        LentilleModeLabels.notchText(decision: decision, preference: preference, suggestedMode: conversation.bridge?.suggestedMode)
     }
 
     private var notch: some View {
