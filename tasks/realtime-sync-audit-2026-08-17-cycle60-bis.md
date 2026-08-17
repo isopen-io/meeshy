@@ -347,6 +347,39 @@ chevauchement sur les 9 fichiers touchés — vérifié par
 L'écart 592→639 suites et 12 534→12 886 témoins vient de `main`, pas de ce
 cycle : la branche n'ajoute que ses 5 témoins.
 
+**Seconde intégration de `origin/main`** (9 commits de plus, dont le cycle 60
+jumeau — voir la note d'intégration en tête). Deux conflits, tous deux dans
+`tasks/`, aucun dans le code :
+
+- `realtime-sync-audit-2026-08-17-cycle60.md` — conflit **add/add** : les deux
+  exécutions avaient choisi le même nom de fichier. Le journal de `main` est
+  conservé tel quel, celui-ci renommé *bis*.
+- `lessons.md` — deux ajouts en fin de fichier. Les DEUX sont conservés ; la
+  leçon d'en face est déjà numérotée 226 sur `main`, celle-ci devient 227.
+
+`use-socket-cache-sync.ts` a fusionné **automatiquement** malgré des
+modifications des deux côtés : le cycle jumeau touche `mergeConversationUpdate`
+et `handleNewMessage` (garde monotone), celui-ci `handlePendingMessagesDelivered`
+et `handleMessagesRestoredForMe`. Vérifié à la main après fusion : la garde
+monotone est bien en place (`raw.previewRecalculated !== true &&`), et il ne reste
+**qu'une** invalidation de `conversations.all` dans tout le fichier — le Site C,
+celle qui se justifie.
+
+| gate | relevé après 2e intégration |
+|---|---|
+| suite web COMPLÈTE | **643 suites / 12 937 témoins verts**, 21 ignorés, sortie 0 |
+| suite `services/agent` | **36 suites / 285 témoins verts**, sortie 0 |
+| suite `use-socket-cache-sync` | 76/76 verts |
+| `packages/shared` build | sortie 0 |
+
+**Note CI.** Deux jobs (`Test web`, `Test agent`) ont échoué sur la première
+passe de cette intégration **sans exécuter un seul témoin** : `codeload.github.com`
+rendait 429/503 sur le téléchargement des actions `setup-bun`, `pnpm/action-setup`
+et `codecov-action`. Diagnostic posé sur les logs, pas supposé — l'échec est
+antérieur au `checkout`. C'est le seul cas où relancer EST le correctif ; les
+suites correspondantes ont par ailleurs été rejouées localement sur le même arbre
+(chiffres ci-dessus).
+
 Le compte de témoins est la vérification la plus utile de la liste : **+4 pour
 4 témoins livrés** prouve que les 3 témoins réécrits l'ont été *en place* (leur
 verdict a changé, pas leur existence) et qu'aucune couverture n'a été retirée en
