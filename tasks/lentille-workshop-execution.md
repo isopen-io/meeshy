@@ -318,6 +318,71 @@ recalculée à façon par une plateforme.
 
 ---
 
+## 7bis. Amendement R2 — deux axes qui se PARCOURENT, des branches qui vivent et meurent (décision produit 2026-08-17)
+
+L'amendement R décrivait une **mise en page** à deux axes (« le temps verticalement, les couloirs
+horizontalement »). La directive du 2026-08-17 en fait une **navigation** : la Rivière est retenue
+comme « possibilité d'interface sur les conversations à plusieurs permettant une navigation
+horizontale ET verticale, où les interlocuteurs ont leurs branches qui apparaissent et disparaissent
+selon les interactions ». Deux ajouts, aucun retrait.
+
+**A. Le cycle de vie d'une branche.** Une branche n'est plus une ligne courant d'un bord à l'autre :
+c'est une **suite de segments**. Elle NAÎT à la première interaction de son propriétaire, COURT tant
+que la conversation l'entretient, MEURT `silenceWindowMs` après sa dernière interaction (défaut
+`RIVER_LANE_SILENCE_WINDOW_MS` = 30 min), et RENAÎT plus tard **dans la même colonne**. Trois règles
+la gouvernent :
+1. **Interagir = parler, ou se voir répondre.** Une réponse fait REPARAÎTRE la branche de la
+   personne visée (nœud `addressed`, sans bulle à elle) : « on vit tant qu'on parle — ou qu'on vous
+   parle ». Sans cette règle, le connecteur de réponse (§7) atterrirait sur une ligne éteinte. Les
+   réactions rejoindront cette liste par l'ENTRÉE de la loi le jour où les clients les portent —
+   jamais par une seconde loi.
+2. **Un segment survit à ses propres bulles.** Il court jusqu'au dernier rang encore contenu dans la
+   fenêtre qui suit la dernière interaction de son propriétaire. C'est ce qui donne à la rivière sa
+   LARGEUR : plusieurs lignes courent côte à côte pendant un même instant, puis s'éteignent l'une
+   après l'autre. Sans cette règle, une branche ne serait qu'un point par message.
+3. **La colonne est RÉSERVÉE à vie.** Le lecteur tient la colonne 0 (« la rive » — le pas latéral
+   part toujours de chez lui) ; les autres prennent leur colonne par ordre de naissance. Une branche
+   morte GARDE sa colonne, une naissance n'en déplace aucune : sinon la rivière tremblerait
+   latéralement à chaque arrivée. `isOpen` distingue « segment éteint ici » (estompage à dessiner)
+   de « segment encore vivant au bas de la fenêtre » (on ne sait pas encore — aucun estompage).
+
+**B. Les deux axes se parcourent** (`resolveRiverStep`, un pas, trois verdicts `moved`/`edge`/`empty`) :
+- **horizontal** (`left`/`right`) : la branche VIVANTE suivante à cette hauteur, les mortes
+  **enjambées** (une branche éteinte n'est pas navigable). L'atterrissage se fait sur la bulle la plus
+  proche **du segment vivant** — donc jamais hors de l'instant en cours ; à égale distance, la plus
+  ANCIENNE (traverser ne fait jamais sauter le lecteur en avant dans un temps qu'il n'a pas lu). Un
+  segment reparu sans bulle garde la hauteur d'où l'on vient.
+- **vertical** (`up`/`down`) : la bulle suivante **de la même personne**, par-dessus la mort de sa
+  branche. C'est le « Suivre Mia » que le procès demandait de prouver
+  (`docs/design/2026-08-15-conversation-modes-verdict.html`) : la trajectoire d'une personne à
+  travers ses disparitions, ce que Focal ne sait pas raconter.
+- Bord d'axe ⇒ `edge`, curseur INCHANGÉ (la peau y colle son rebond). Rivière vide ou colonne
+  inexistante ⇒ `empty` : la loi rend le curseur reçu plutôt que d'en inventer un.
+
+**Ce qui ne change pas** : l'éligibilité (≥ 5 actifs, jamais en `direct`), le drapeau `riviere_mode`
+(défaut OFF), le Prisme, l'ordre du DOM/VoiceOver **strictement chronologique** (`geometry.bubbles`
+EST cet ordre — les traits restent décoratifs), et reduce-motion (aucun tracé animé : une branche
+apparaît/disparaît alors sans transition).
+
+**Livré (2026-08-17)** — R-130 étendu par cet amendement, en avance sur la porte V5 car la loi est
+pure et sans consommateur runtime (aucun drapeau touché, aucune vue montée) :
+- `packages/shared/utils/river-lanes.ts` — `resolveRiverLanes`, `resolveRiverLivingLanes`,
+  `resolveRiverStep`, `RIVER_LANE_SILENCE_WINDOW_MS`. Zéro pixel, zéro `Date.now()`.
+- `packages/shared/fixtures/reading-modes/river-lanes.vectors.json` (14 cas) et
+  `river-step.vectors.json` (14 cas) — générées en EXÉCUTANT la loi (C-023).
+- Suites : `__tests__/river-lanes.test.ts` (34 cas de comportement),
+  `__tests__/vectors/river-lanes.vectors.test.ts`, `__tests__/vectors/river-step.vectors.test.ts`
+  (vecteurs + témoins de couverture, leçon 257).
+
+**Reste à faire, inchangé dans son découpage** : R-131 (tokens `river` — à poser AVEC son premier
+consommateur, sinon `lentille-tokens-consumption-gate` passe au rouge : « token déclaré ⇒ token
+consommé »), R-132 (miroir Swift rejouant ces deux fichiers de vecteurs), R-133/R-134 (peaux iOS et
+web — la navigation à deux axes leur ajoute le geste de balayage horizontal et le suivi de branche),
+R-135, R-136. Aucun de ces livrables ne recalcule la géométrie : ils multiplient les rangs et les
+colonnes par leurs tokens.
+
+---
+
 ## 8. Suivi d'avancement
 
 Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
