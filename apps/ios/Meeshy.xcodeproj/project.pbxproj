@@ -431,6 +431,7 @@
 		5F63753E63DD636E2150E112 /* UniversalComposerBar+Drop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 632460BD80ECAEAC4383687E /* UniversalComposerBar+Drop.swift */; };
 		60217B38DF603F4206000ADB /* AffiliateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5683953E8A118D806C26F400 /* AffiliateView.swift */; };
 		60B2F7A2E0749C34A3242AF9 /* DarkFrameDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FD9669B8E2B44A00E72257 /* DarkFrameDetectorTests.swift */; };
+		60C4BEA8131D319F30336E4E /* MessageListLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97CBCD45029B2BC8D131280 /* MessageListLayout.swift */; };
 		60DABE7780310D29B455CF47 /* ReelsPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0740A2A612B83ACBC3070D /* ReelsPresenterTests.swift */; };
 		60E6862BEEFC02CC1A51F7B9 /* MagicLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EAFD3430D72BCE41298CA22 /* MagicLinkView.swift */; };
 		612C9EA83D6AF01AAF216EF8 /* ConversationReadSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C11F9988D0232CA5748666D2 /* ConversationReadSignal.swift */; };
@@ -762,6 +763,7 @@
 		A983DCDEAF1203319C7F81C4 /* EngagementTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB6093F228F4C856265140E /* EngagementTrackerTests.swift */; };
 		A9F493610E3C2D8BF6EB2F2B /* VideoSurvivalController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 942B416FBE07F772E77F3BBF /* VideoSurvivalController.swift */; };
 		AA0DF9BCD956607E42753A80 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = D623A2A1169AC2D85BD5C39E /* FirebaseAnalytics */; };
+		AA4269E6B7F477E08BC0DAFE /* MessageListLayoutOffsetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42DC3B5888031A797D8F8A37 /* MessageListLayoutOffsetTests.swift */; };
 		AA821A6DF3987A73681B7B6A /* FocalRichBlockEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2363C7DFDC933C371C43E5A7 /* FocalRichBlockEquatableTests.swift */; };
 		AA913A9833E190BB75F1FE9D /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DF8E6311CBC7C72493DEBB /* TermsOfServiceView.swift */; };
 		AB2300548204BDEA7AB55D44 /* FeedViewStoryTrayPlatformGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DEF4E0E43424D8057DCEEB /* FeedViewStoryTrayPlatformGuardTests.swift */; };
@@ -1535,6 +1537,7 @@
 		429BF9F5E551C068635786AB /* StatusRealtimePersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusRealtimePersistenceTests.swift; sourceTree = "<group>"; };
 		42B12F8EA4C69910BF01A0AF /* BackgroundTransitionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionCoordinatorTests.swift; sourceTree = "<group>"; };
 		42BB8424852F43DD94575723 /* MyStoriesTabResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesTabResolverTests.swift; sourceTree = "<group>"; };
+		42DC3B5888031A797D8F8A37 /* MessageListLayoutOffsetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayoutOffsetTests.swift; sourceTree = "<group>"; };
 		42EA7ADA718E12E472A91E7F /* LentilleModeLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleModeLabels.swift; sourceTree = "<group>"; };
 		43178A787FA413CCEAEB1C74 /* ConversationAttachmentFileReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAttachmentFileReadTests.swift; sourceTree = "<group>"; };
 		431DA91335E0D99E752473B2 /* VoIPPushManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManagerTests.swift; sourceTree = "<group>"; };
@@ -2181,6 +2184,7 @@
 		D8EB852270ACE02198984BDD /* PendingStatusQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingStatusQueue.swift; sourceTree = "<group>"; };
 		D90B7446AB64637E3F4CB72E /* CallTypeBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTypeBadgeView.swift; sourceTree = "<group>"; };
 		D93A27A5879703305A73A6E2 /* MediaSaveFlowHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaSaveFlowHost.swift; sourceTree = "<group>"; };
+		D97CBCD45029B2BC8D131280 /* MessageListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListLayout.swift; sourceTree = "<group>"; };
 		D9AFA7C1B9F78435B4ACC444 /* UILanguageOverrideResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UILanguageOverrideResolutionTests.swift; sourceTree = "<group>"; };
 		D9C29086BBE57D590ADE1255 /* LentilleFocusElectionHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFocusElectionHost.swift; sourceTree = "<group>"; };
 		D9C2AB5EF1AE4950D62F8FDE /* ConversationViewLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewLifecycleTests.swift; sourceTree = "<group>"; };
@@ -2905,6 +2909,7 @@
 				ACE62957B911CC263CB3A852 /* FocalVoiceOverParityTests.swift */,
 				9326EF58D9708049B7C1C8EC /* ForcedReadingModeOverrideTests.swift */,
 				46E99EAB14CB0CB7637CFA78 /* LivingSummaryViewModelTests.swift */,
+				42DC3B5888031A797D8F8A37 /* MessageListLayoutOffsetTests.swift */,
 				A95D9F7A7406CE9F5D97DA66 /* NullAssistProviderTests.swift */,
 				E0C0ABE31FC653BEEB2A3B08 /* ReadingModeLensCatalogTests.swift */,
 				033733ACBA7C77CB9E4C175A /* ReadingModePreferenceStoreTests.swift */,
@@ -3408,6 +3413,7 @@
 				100CED2B2F1D7E77195D72C7 /* MediaDoubleTapGestures.swift */,
 				340748FF54D53F9C2BA8494B /* MediaDownloadSettingsView.swift */,
 				047E349B69099B502C3EF463 /* MessageFrameTracker.swift */,
+				D97CBCD45029B2BC8D131280 /* MessageListLayout.swift */,
 				6A8232A5AC3E5A7E537A259C /* MessageListView.swift */,
 				CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */,
 				EDE8B7B94172D69FA4839F82 /* MessageRowEnvelope.swift */,
@@ -4703,6 +4709,7 @@
 				1A527FADB96F0D8FBAF4D659 /* MessageForwardDetailView.swift in Sources */,
 				5519BDD18D94653CC95E1BA8 /* MessageFrameTracker.swift in Sources */,
 				4B46580524E4716E0C6C4D0A /* MessageLanguageDetailView.swift in Sources */,
+				60C4BEA8131D319F30336E4E /* MessageListLayout.swift in Sources */,
 				FA98AEDA092D7450C8C2BFD7 /* MessageListView.swift in Sources */,
 				5C53ADDF6A2349B671C8B606 /* MessageListViewController.swift in Sources */,
 				C1411EE6EB9B7C4CF2B00BA6 /* MessageModels.swift in Sources */,
@@ -5226,6 +5233,7 @@
 				866B9DB1CEDAD02625229DA6 /* MessageFrameTrackerTests.swift in Sources */,
 				97D0E518A8529A89577FA501 /* MessageLanguageDetailViewAdaptiveOnChangeSourceGuardTests.swift in Sources */,
 				91822BC57D513B09623484FA /* MessageLanguageDetailViewAudioRoutingTests.swift in Sources */,
+				AA4269E6B7F477E08BC0DAFE /* MessageListLayoutOffsetTests.swift in Sources */,
 				2F880C6162C186814F408313 /* MessageListPerformanceTests.swift in Sources */,
 				BE3899DA36A61482AD8D7E1C /* MessageListViewControllerTests.swift in Sources */,
 				ECDD75EDD1583EC2BCEDD6B5 /* MessageMoreJumpsToViewsGuardTests.swift in Sources */,
