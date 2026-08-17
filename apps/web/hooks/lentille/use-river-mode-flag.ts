@@ -9,9 +9,17 @@
  * `useEffect` séparé — jamais pendant le rendu (même discipline que WL-100/
  * WF-110).
  *
- * AUCUN appelant n'existe encore (garde `riviere-mode-flag-single-occurrence
- * .test.ts` : zéro occurrence de `useRiverModeFlag(` hors de ce fichier et des
- * tests) — R-134 livre la peau et son drapeau, R-135 branche le menu.
+ * R-135 branche le PREMIER appelant : `LentillePeek.tsx` (défaut de sa prop
+ * `isRiverFlagEnabled`, override explicite conservé pour les tests) — les
+ * TROIS chemins d'entrée du menu de mode (⋮, aperçu, encoche) en héritent
+ * puisqu'ils partagent la MÊME instance de `ReadingModeMenu`. Le mux du fil
+ * ouvert (`ConversationMessages.tsx`, l'écran Rivière lui-même) reste NON
+ * câblé — ce lot livre le dégrisage du menu, pas le montage de l'écran
+ * (rapport R-135, `riviere-screen-not-mounted.test.ts` en garde la preuve) :
+ * la garde `riviere-mode-flag-single-occurrence.test.ts` compte désormais le
+ * nom LITTÉRAL du drapeau (`'riviere_mode'`, jamais le nom du hook) hors de
+ * ce fichier — toujours ZÉRO, `LentillePeek.tsx` n'a besoin d'écrire ce
+ * littéral nulle part pour appeler le hook.
  */
 
 import { useEffect, useMemo } from 'react';

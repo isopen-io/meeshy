@@ -5436,8 +5436,29 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       delegates-when-available/inert-when-exhausted/concurrent-call-guard). **Still open: the
       11-category client-side filter bar** (including "Non lues") — a separate, larger UI feature,
       not attempted this run.
-- [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
-      READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
+- [x] Mark read: ouverture du chat + message entrant → optimistic badge zero +
+      READ_RECEIPT outbox (coalescé) ; **mark-all-read and swipe actions both done** — note was
+      stale on both counts. `markAllRead` (`NotificationRepository.markAllAsRead` +
+      `NotificationsViewModel.markAllRead` + the toolbar button in `NotificationsScreen`) was
+      already fully wired and tested before this run, just never checked off. **Swipe actions
+      shipped 2026-08-17** (slice `notification-swipe-actions`) — port of iOS
+      `NotificationRowView`'s `.swipeActions`: trailing (end-to-start) swipe deletes, leading
+      (start-to-end) swipe marks read, offered ONLY while unread (mirrors iOS's `if
+      !notification.isRead`). `NotificationRepository.delete(id)` existed network-side
+      (`DELETE /notifications/{id}`) but had zero cache mutation and zero callers — made
+      optimistic (removes the row from the shared cache before the network call, decrements
+      `unreadCountStream` when the deleted row was unread, full rollback on failure) mirroring
+      `markAsRead`'s exact shape. `NotificationsViewModel.deleteNotification(id)` — thin
+      delegator. `NotificationsScreen`'s `NotificationItem` wrapped in `SwipeToDismissBox`
+      (mirror of the established `ConversationListScreen` pattern: `confirmValueChange` always
+      returns `false` — the gesture never physically dismisses the row, the cache mutation
+      flowing back through `state` is what removes/re-styles it). New `NotificationSwipeBackground`
+      composable (trash icon + error-tinted background for delete, mark-email-read icon +
+      indigo-tinted background for mark-read, transparent when settled or when the leading
+      direction has nothing to offer on an already-read row). +3 `NotificationRepositoryTest`
+      (delete optimistic + unread decrement, delete on an already-read row leaves the count
+      untouched, rollback on failure) + 1 `NotificationsViewModelTest` (delegation). Strings ×2
+      across EN/FR/ES/PT.
 - [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
       epic, not a one-shot**: iOS's reference (`NotificationToastManager.swift` +
       `NotificationToastView.swift`) needs (1) the real-time data feed — **shipped**, (2) an

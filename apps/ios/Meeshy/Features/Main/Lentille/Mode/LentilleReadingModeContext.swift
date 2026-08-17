@@ -68,19 +68,31 @@ nonisolated enum LentilleReadingModeContext {
 
     // MARK: - Entrées de la loi
 
+    /// R-135 — les TROIS surfaces de menu de la liste (encoche, sous-menu
+    /// contextuel, aperçu) lisent désormais le VRAI drapeau
+    /// `LentilleFeatureFlag.riviereMode` (R-133), au lieu du `false` en dur
+    /// posé par R-133 le temps que ce lot arrive. Paramètre par défaut plutôt
+    /// qu'une lecture interne à `ReadingModeOrchestrator.resolveCapabilities`
+    /// (qui reste pure) : les trois call sites (`LentilleReadingModeSubmenu`,
+    /// `LentilleFocusCard`, `LentillePeekView`) n'ont RIEN à changer — même
+    /// patron que `isLentilleFlagEnabled`, explicite, jamais lu en douce.
+    ///
+    /// INERTE EN PRATIQUE aujourd'hui : `activeParticipantCount(for:)`
+    /// ci-dessous rend TOUJOURS `nil` (compte d'actifs non livré, G-123) —
+    /// `resolveCapabilities` ne rend donc JAMAIS `riverEligible` vrai sur ces
+    /// trois surfaces, drapeau `riviere_mode` ON ou pas. Le dégrisage n'a
+    /// d'effet observable que dans les tests (comptes synthétiques) et le
+    /// jour où G-123 livre un compte réel.
     static func capabilitiesInput(
         for conversation: Conversation,
         isAnonymous: Bool,
-        isLentilleFlagEnabled: Bool
+        isLentilleFlagEnabled: Bool,
+        isRiverFlagEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled
     ) -> ReadingModeOrchestrator.ResolveCapabilitiesInput {
         ReadingModeOrchestrator.ResolveCapabilitiesInput(
             identity: ReadingModeOrchestrator.ReadingModeIdentity(isAnonymous: isAnonymous),
             isFlagEnabled: isLentilleFlagEnabled,
-            // V3 : le drapeau `riviere_mode` n'existe pas encore (amendement
-            // R, R-133 hors périmètre de ce lot) — toujours `false`, jamais
-            // lu depuis un flag ici : Rivière reste TOUJOURS grisée en V3
-            // quel que soit `activeParticipantCount`.
-            isRiverFlagEnabled: false,
+            isRiverFlagEnabled: isRiverFlagEnabled,
             conversationType: orchestratorType(for: conversation.type),
             activeParticipantCount: activeParticipantCount(for: conversation)
         )
@@ -93,6 +105,10 @@ nonisolated enum LentilleReadingModeContext {
         isLentilleFlagEnabled: Bool,
         now: Date
     ) -> ReadingModeOrchestrator.OrchestratorDecisionInput {
+        // NOTE : `capabilities` est déjà résolue par l'appelant (elle porte
+        // `isRiverFlagEnabled` en amont, cf. `capabilitiesInput`) — cette
+        // fonction ne fait que la clamper via `resolveOrchestratorDecision`,
+        // jamais une seconde résolution.
         ReadingModeOrchestrator.OrchestratorDecisionInput(
             unreadCount: conversation.userState.unreadCount,
             // `ConversationUserState` ne porte pas de champ `lastOpenedAt`
@@ -115,10 +131,16 @@ nonisolated enum LentilleReadingModeContext {
     static func capabilities(
         for conversation: Conversation,
         isAnonymous: Bool,
-        isLentilleFlagEnabled: Bool
+        isLentilleFlagEnabled: Bool,
+        isRiverFlagEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled
     ) -> ReadingModeOrchestrator.ReadingModeCapabilities {
         ReadingModeOrchestrator.resolveCapabilities(
-            capabilitiesInput(for: conversation, isAnonymous: isAnonymous, isLentilleFlagEnabled: isLentilleFlagEnabled)
+            capabilitiesInput(
+                for: conversation,
+                isAnonymous: isAnonymous,
+                isLentilleFlagEnabled: isLentilleFlagEnabled,
+                isRiverFlagEnabled: isRiverFlagEnabled
+            )
         )
     }
 

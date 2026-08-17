@@ -4,4 +4,6 @@
     <string name="notifications_mark_all_read">Tout marquer comme lu</string>
     <string name="notifications_empty">Aucune notification</string>
     <string name="notifications_system_sender">Système</string>
+    <string name="notifications_action_delete">Supprimer</string>
+    <string name="notifications_action_mark_read">Lu</string>
 </resources>

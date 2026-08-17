@@ -18,6 +18,15 @@ struct RiverBubbleContent: Equatable {
     let colorSeed: String
     let timeString: String
     let text: String
+    /// §7ter A.6 — verdict de forme de la géométrie source
+    /// (`RiverGeometry.layout`), porté PAR BULLE plutôt qu'en lisant la
+    /// géométrie complète depuis cette vue (même discipline que `bubble`,
+    /// qui porte déjà sa part de la loi). Gouverne l'HABILLAGE du contour :
+    /// `.lanes` ⇒ contour complet coloré (une ligne aborde la bulle) ;
+    /// `.serialized` ⇒ bord gauche + bord bas colorés SEULS, reste neutre —
+    /// aucune ligne n'aborde la bulle en vue sérialisée, un contour complet y
+    /// mimerait une branche que le verdict de forme vient de retirer.
+    let layout: RiverLaneResolver.RiverLayout
     let replyPreview: RiverReplyPreview?
 
     init(
@@ -26,6 +35,7 @@ struct RiverBubbleContent: Equatable {
         colorSeed: String,
         timeString: String,
         text: String,
+        layout: RiverLaneResolver.RiverLayout,
         replyPreview: RiverReplyPreview? = nil
     ) {
         self.bubble = bubble
@@ -33,6 +43,7 @@ struct RiverBubbleContent: Equatable {
         self.colorSeed = colorSeed
         self.timeString = timeString
         self.text = text
+        self.layout = layout
         self.replyPreview = replyPreview
     }
 }
@@ -67,23 +78,48 @@ nonisolated enum RiverBubbleLayout {
 // MARK: - La bulle
 
 /// La bulle Rivière — anatomie GELÉE de la rangée plate du Fil (`thread.*`,
-/// §7ter A2) posée SUR la ligne de son auteur : contour = trait de la
-/// branche (même couleur, même épaisseur — `RiverMetrics.Line.width`),
-/// rayon = `RiverMetrics.Bubble.detourRadius` (« le bord de la bulle EST un
-/// segment de sa ligne », amendement R).
+/// §7ter A2) posée SUR la ligne de son auteur.
+///
+/// **§7ter A.5 (amendement, 2026-08-17) — l'identité est AU-DESSUS de la
+/// bulle, HORS d'elle.** La première forme rendait la pastille+nom+heure
+/// DANS le haut de la bulle, pour éviter que le trait ne traverse un mot :
+/// la vraie réponse n'était pas de déplacer l'identité, c'est de BORNER le
+/// nom à `RiverMetrics.Bubble.identityNameMaxWidth` (~44 % de
+/// `contentWidth`, relevé sur la maquette normative) — la branche descend à
+/// l'aplomb du CENTRE du couloir, donc elle croise TOUJOURS du vide dans la
+/// rangée d'identité, entre le nom borné et l'heure. Une peau n'a AUCUNE
+/// découpe à calculer : le trait (`RiverLaneCanvas`) passe DERRIÈRE (posé en
+/// `.background` du grid par `RiverStreamHost`), et c'est le fond OPAQUE de
+/// `messageBox` qui l'interrompt de lui-même — la rangée d'identité, elle,
+/// n'a pas de fond, donc le trait s'y voit passer, dans le vide entre le nom
+/// et l'heure.
+///
+/// **§7ter A.6 — l'habillage du contour suit le VERDICT DE FORME.** En
+/// couloirs (`layout == .lanes`), une ligne ABORDE la bulle : contour
+/// complet, même couleur/épaisseur que le trait (`RiverMetrics.Line.width`)
+/// — « le bord de la bulle EST un segment de sa ligne » (amendement R). En
+/// vue sérialisée, AUCUNE ligne ne l'aborde (l'axe horizontal a été retiré
+/// par la loi, §7ter C) : un contour complet coloré y mimerait une branche
+/// qui n'existe plus. Restent le bord GAUCHE et le bord BAS (couleur
+/// d'auteur, même épaisseur que le trait), le reste neutre
+/// (`RiverMetrics.Bubble.flatBorderWidth`, 1pt).
 ///
 /// **« Le message en ENTIER »** (§7ter A1) : AUCUN `.lineLimit` sur le texte
 /// principal — c'est ce qui rend la hauteur du rang MESURÉE plutôt que
 /// supposée. La citation d'une réponse, elle, reste UNE ligne tronquée
 /// (`RiverReplyPreview`, A4).
 ///
-/// **Ne mesure pas sa propre position.** Elle publie son cadre via
-/// `MessageFramePreferenceKey` — la MÊME primitive que le Fil
-/// (`Features/Main/Views/MessageFrameTracker.swift`, réutilisée TELLE
-/// QUELLE, jamais un second `PreferenceKey` concurrent) — dans le repère
+/// **Ne mesure pas sa propre position.** Elle publie son cadre — identité
+/// COMPRISE, désormais — via `MessageFramePreferenceKey`, la MÊME primitive
+/// que le Fil (`Features/Main/Views/MessageFrameTracker.swift`, réutilisée
+/// TELLE QUELLE, jamais un second `PreferenceKey` concurrent), sur le
+/// conteneur EXTÉRIEUR de cette vue (identité + bulle) — dans le repère
 /// `RiverCoordinateSpace.name`. `RiverLaneCanvas` LIT ce cadre pour tracer la
 /// ligne ; cette vue ne trace rien, elle pose du texte (garde R15 : aucune
-/// géométrie recalculée ici).
+/// géométrie recalculée ici). C'est cette mesure ÉLARGIE, sans aucun
+/// changement dans `RiverLaneCanvas.swift`, qui fait traverser le trait par
+/// la rangée d'identité : le tracé est déjà, par construction, une ligne
+/// droite du haut du cadre mesuré à sa base.
 struct RiverBubbleView: View, Equatable {
     let content: RiverBubbleContent
     let contentWidth: CGFloat
@@ -103,7 +139,27 @@ struct RiverBubbleView: View, Equatable {
             if content.bubble.isFirstInGroup {
                 identityHeader
             }
+            messageBox
+        }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: MessageFramePreferenceKey.self,
+                    value: [content.bubble.messageId: proxy.frame(in: .named(RiverCoordinateSpace.name))]
+                )
+            }
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
 
+    // MARK: - Corps du message — la bulle proprement dite
+
+    /// Le rectangle qui porte le fond opaque et le contour (§7ter A.6) — SEUL
+    /// à porter `contentWidth`/le padding interne. L'identité (`identityHeader`)
+    /// N'EN FAIT PLUS PARTIE (§7ter A.5).
+    private var messageBox: some View {
+        VStack(alignment: .leading, spacing: RiverMetrics.Bubble.baseGap) {
             if let replyPreview = content.replyPreview {
                 quotedReply(replyPreview)
             }
@@ -127,23 +183,48 @@ struct RiverBubbleView: View, Equatable {
             RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
                 .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
-                .strokeBorder(laneColor, lineWidth: RiverMetrics.Line.width)
-        )
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: MessageFramePreferenceKey.self,
-                    value: [content.bubble.messageId: proxy.frame(in: .named(RiverCoordinateSpace.name))]
-                )
-            }
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
+        .overlay(bubbleOutline)
     }
 
-    // MARK: - En-tête d'identité (tête de groupe seulement)
+    /// §7ter A.6 — l'habillage suit le VERDICT DE FORME, jamais une
+    /// préférence de peau (voir la docstring de tête du fichier).
+    @ViewBuilder
+    private var bubbleOutline: some View {
+        let shape = RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
+        if content.layout == .lanes {
+            shape.strokeBorder(laneColor, lineWidth: RiverMetrics.Line.width)
+        } else {
+            // Vue sérialisée : contour neutre PARTOUT, puis deux barres
+            // droites (gauche/bas) posées PAR-DESSUS en couleur d'auteur —
+            // approximation décorative assumée (deux rectangles, pas une
+            // découpe de coin), jamais éprouvée pixel-à-pixel hors device.
+            ZStack {
+                shape.strokeBorder(neutralOutlineColor, lineWidth: RiverMetrics.Bubble.flatBorderWidth)
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Rectangle()
+                        .fill(laneColor)
+                        .frame(height: RiverMetrics.Line.width)
+                }
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(laneColor)
+                        .frame(width: RiverMetrics.Line.width)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    /// Contour NEUTRE de la vue sérialisée. Aucun système de couleur
+    /// « ligne/séparateur » établi côté iOS pour ce sous-système à ce jour
+    /// (RE-PREUVE : ni `MeeshyColors`, ni `ThemeManager` ne portent de teinte
+    /// nommée « line »/« separator » — écart signalé, pas contourné en
+    /// silence) — équivalent le plus proche : la couleur système de
+    /// séparation, qui s'adapte déjà light/dark sans travail supplémentaire.
+    private var neutralOutlineColor: Color { Color(uiColor: .separator) }
+
+    // MARK: - En-tête d'identité (tête de groupe seulement) — §7ter A.5, HORS de la bulle
 
     private var identityHeader: some View {
         HStack(spacing: 7) {
@@ -156,10 +237,18 @@ struct RiverBubbleView: View, Equatable {
                         .foregroundColor(.white)
                 )
 
+            // §7ter A.5 — borné à la moitié de la largeur de la bulle : la
+            // branche descend à l'aplomb du CENTRE du couloir, cette borne
+            // garantit qu'elle croise du vide ici, jamais un mot. Un nom
+            // plus long s'élide (`.lineLimit(1)`), comme sur le Fil.
             Text(content.senderDisplayName)
                 .font(MeeshyFont.relative(FocalMetrics.Name.size, weight: FocalMetrics.Name.weight))
                 .foregroundColor(laneColor)
                 .lineLimit(1)
+                .frame(
+                    maxWidth: contentWidth * RiverMetrics.Bubble.identityNameMaxWidth,
+                    alignment: .leading
+                )
 
             Spacer(minLength: 0)
 
@@ -172,6 +261,12 @@ struct RiverBubbleView: View, Equatable {
                 .font(FocalMetrics.Time.font)
                 .foregroundColor(metaTint)
         }
+        // Même largeur que `messageBox` (`contentWidth`) : la pastille
+        // s'aligne sur le bord GAUCHE de la bulle, l'heure sur son bord
+        // DROIT — la rangée d'identité partage l'emprise horizontale de la
+        // bulle, exactement comme `.idh`/`.bub`, deux enfants directs de
+        // `.cell` dans la maquette normative.
+        .frame(width: contentWidth, alignment: .leading)
     }
 
     // MARK: - Heure en base de bulle (rangée de suite)

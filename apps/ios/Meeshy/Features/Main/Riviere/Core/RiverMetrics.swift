@@ -21,7 +21,10 @@ import SwiftUI
 /// PIXELS — ils appartiennent à la peau, jamais à la loi », commentaire de
 /// tête du script) : `LANE_W = 300`, `GUTTER = 28`, bordure/trait `2.5`,
 /// rayon de bulle `14`, connecteur `1.4` (bow `max(34, |Δ| · 0.5)`), bande
-/// d'en-tête `38`.
+/// d'en-tête `38`. §7ter A (amendement 2026-08-17, `.idh .nm { max-width:
+/// 44% }` / `.bub.flat { border: 1px … border-left-width: 2.5px;
+/// border-bottom-width: 2.5px }`) : borne du nom `44`, contour neutre
+/// sérialisé `1`.
 ///
 /// @see packages/shared/design/lentille-tokens.json → `river`
 /// @see apps/ios/Meeshy/Features/Main/Riviere/Core/RiverLaneResolver.swift (la LOI, jamais ici)
@@ -56,10 +59,19 @@ nonisolated public enum RiverMetrics {
     /// `river.bubble` — rayon de contournement `14` (le trait épouse ce
     /// rayon en abordant/quittant la bulle), écart de base `8` (la ligne où
     /// vit l'heure quand la bulle n'est pas tête de groupe — amendement R,
-    /// « l'heure vit en base de bulle »).
+    /// « l'heure vit en base de bulle »). §7ter A.5/A.6 (2026-08-17) ajoutent
+    /// `identityNameMaxWidth` (borne du nom en tête de groupe — FRACTION,
+    /// même convention que `LentilleMetrics.Row.transformOriginX` : le JSON
+    /// porte `"44%"`, cette constante porte `0.44` — garantit que la
+    /// branche, à l'aplomb du centre du couloir, croise du vide dans la
+    /// rangée d'identité, jamais un mot) et `flatBorderWidth` (contour
+    /// NEUTRE de la vue sérialisée, hors bord gauche/bas qui restent
+    /// `Line.width`, couleur d'auteur).
     nonisolated public enum Bubble {
         public static let detourRadius: CGFloat = 14
         public static let baseGap: CGFloat = 8
+        public static let identityNameMaxWidth: CGFloat = 0.44
+        public static let flatBorderWidth: CGFloat = 1
     }
 
     // MARK: - Connecteur de réponse
