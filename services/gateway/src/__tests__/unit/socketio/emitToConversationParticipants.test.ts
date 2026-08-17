@@ -37,7 +37,7 @@ describe('emitToConversationParticipants', () => {
         { id: 'p_registered', userId: 'u_registered' },
         { id: 'p_anonymous', userId: null },
       ],
-      events: ['read-status:updated'],
+      event: 'read-status:updated',
       payload: { any: 'thing' },
     });
 
@@ -79,7 +79,7 @@ describe('emitToConversationParticipants', () => {
         { id: 'p_3', userId: null },
         { id: 'p_3', userId: null },
       ],
-      events: ['read-status:updated'],
+      event: 'read-status:updated',
       payload: {},
     });
 
@@ -97,7 +97,7 @@ describe('emitToConversationParticipants', () => {
       io,
       conversationId,
       participants: [{ id: 'p_1', userId: null }],
-      events: ['read-status:updated'],
+      event: 'read-status:updated',
       payload: {},
     });
 
@@ -111,7 +111,7 @@ describe('emitToConversationParticipants', () => {
       io,
       conversationId,
       participants: [],
-      events: ['read-status:updated'],
+      event: 'read-status:updated',
       payload: {},
     });
 
@@ -141,7 +141,7 @@ describe('emitToConversationParticipants', () => {
           { id: 'p_actor', userId: 'u_actor' },
           { id: 'p_peer', userId: 'u_peer' },
         ],
-        events: ['read-status:updated'],
+        event: 'read-status:updated',
         payload: {},
         exceptRoom: 'user:u_actor',
       });
@@ -162,7 +162,7 @@ describe('emitToConversationParticipants', () => {
         io,
         conversationId,
         participants: [{ id: 'p_actor', userId: null }],
-        events: ['read-status:updated'],
+        event: 'read-status:updated',
         payload: {},
         exceptRoom: 'user:p_actor',
       });
@@ -180,7 +180,7 @@ describe('emitToConversationParticipants', () => {
         io,
         conversationId,
         participants: [{ id: 'p_1', userId: 'u_1' }],
-        events: ['read-status:updated'],
+        event: 'read-status:updated',
         payload: {},
       });
 
@@ -195,7 +195,7 @@ describe('emitToConversationParticipants', () => {
         io: null,
         conversationId,
         participants: [{ id: 'p_1', userId: 'u_1' }],
-        events: ['read-status:updated'],
+        event: 'read-status:updated',
         payload: {},
       })
     ).toEqual([]);

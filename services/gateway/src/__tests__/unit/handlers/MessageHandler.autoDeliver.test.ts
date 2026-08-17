@@ -195,12 +195,10 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       messageId
     );
 
-    expect(emit).toHaveBeenCalledTimes(2);
+    // UNE émission — les deux exemplaires qu'attendait ce témoin étaient le
+    // MÊME accusé sous deux noms (cycle 64, tasks/socketio-events-cleanup.md § 3).
+    expect(emit).toHaveBeenCalledTimes(1);
     expect(emit.mock.calls[0][1]).toMatchObject({
-      participantId: onlineParticipantId,
-      userId: onlineUserId
-    });
-    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: onlineParticipantId,
       userId: onlineUserId
     });
@@ -219,12 +217,8 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       conversationId
     );
 
-    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenCalledTimes(1);
     expect(emit.mock.calls[0][1]).toMatchObject({
-      participantId: offlineParticipantId,
-      userId: offlineUserId
-    });
-    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: offlineParticipantId,
       userId: offlineUserId
     });
@@ -420,7 +414,9 @@ describe('MessageHandler — auto-deliver reaches anonymous recipients', () => {
       conversationId
     );
 
-    expect(emit).toHaveBeenCalledTimes(2);
+    // UN seul événement, ici comme partout : l'alias dual-émis a été retiré au
+    // cycle 64 (tasks/socketio-events-cleanup.md § 3).
+    expect(emit).toHaveBeenCalledTimes(1);
     expect(emit.mock.calls[0][1]).toMatchObject({
       conversationId,
       type: 'received',
