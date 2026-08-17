@@ -654,11 +654,12 @@ trois phrases qu'un emetteur peut avoir a tenir :
 | `bridge: null` | j'ai calcule, il n'y en a pas | il EFFACE |
 | cle ABSENTE | je n'ai pas calcule | il GARDE le sien |
 
-`bridgeKnowledgeFromCount()` (`unreadBridgeAnnouncement.ts`) porte la seule
-connaissance GRATUITE : `unreadCount === 0` prouve l'absence de pont (contrat
-gele §3.2) sans ouvrir de requete. Au-dessus de zero, un emetteur qui ne fait pas
-la passe se TAIT — jamais `null`, qui ordonnerait un effacement qu'il n'a pas les
-moyens de justifier.
+`bridgeComputed()` / `bridgeNotComputed()` (`unreadBridgeField.ts`) sont les deux
+seules facons d'ecrire ce champ — aucun emetteur ne construit l'objet a la main.
+`unreadCount === 0` releve du PREMIER : le contrat gele §3.2 prouve l'absence de
+pont sans ouvrir de requete. Une passe qui TOMBE, ou une conversation au-dela de
+la borne de l'instantane de reconnexion, relevent du second — se taire ne coute
+rien, et `null` y ordonnerait un effacement qu'aucun calcul ne justifie.
 
 | Instant | Appelant | Ce qui bouge |
 |---|---|---|

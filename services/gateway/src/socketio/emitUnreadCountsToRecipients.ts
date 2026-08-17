@@ -1,6 +1,6 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
-import { bridgeKnowledgeFromCount } from './unreadBridgeAnnouncement.js';
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 /**
  * A conversation participant, reduced to what the unread fan-out reads.
@@ -186,14 +186,13 @@ export async function emitUnreadCountsToRecipients(params: {
     // §3.2), et un lot vide n'appelle pas le service du tout.
     const viewers = targets.filter((target) => target.unreadCount > 0);
 
-    // `null` — « aucun pont n'a été CALCULÉ », distinct d'une map vide qui dit
-    // « la passe a tourné et n'a rien rendu ». Les deux formes sortent
-    // différemment sur le fil : la première omet la clé `bridge` (le client
-    // garde le sien), la seconde annonce `bridge: null` (le client efface).
-    // Sans bridgeService, l'appelant n'a jamais demandé de pont : rien n'a été
-    // calculé, donc rien n'est annoncé.
-    let bridges: ReadonlyMap<string, { bridge: ConversationBridge; lastReadAt?: Date }> | null =
-      bridgeService ? EMPTY_BRIDGES : null;
+    let bridges: ReadonlyMap<string, { bridge: ConversationBridge; lastReadAt?: Date }> = EMPTY_BRIDGES;
+    // « La passe a-t-elle TOURNÉ ? » — la seule question qui décide entre les
+    // deux formes de fil (cycle 63). Sans bridgeService, il n'y a rien à
+    // demander ; avec, il faut encore qu'elle ne soit pas tombée. Un lot vide
+    // (`viewers.length === 0`) compte comme TOURNÉE : tous les compteurs y sont
+    // à zéro, et un compteur nul est un fait connu, pas une abstention.
+    let bridgePassRan = Boolean(bridgeService);
     if (bridgeService && viewers.length > 0) {
       try {
         // UN appel pour TOUS les destinataires. Le pont reste par lecteur —
@@ -203,27 +202,26 @@ export async function emitUnreadCountsToRecipients(params: {
       } catch (error) {
         // Best-effort : des ponts qui échouent ne doivent priver personne de
         // sa pastille — même posture que le reste du fan-out (cf. le catch
-        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`,
-        // et cette forme courte dit maintenant « je ne sais pas » : une panne
-        // de la passe n'ordonne plus l'effacement des ponts en cache.
-        bridges = null;
+        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`
+        // — et depuis le cycle 63, cette forme courte est un SILENCE et non un
+        // ordre d'effacement : un incident de passe ne détruit plus le pont que
+        // les lecteurs ont déjà en cache.
+        bridgePassRan = false;
         onError?.(error);
       }
     }
 
     for (const target of targets) {
-      // Trois états sur le fil (`ConversationUnreadUpdatedEventData.bridge`) :
-      // un pont, `null` (calculé, il n'y en a pas — c'est le cas d'un
-      // destinataire à zéro non-lu, §3.2, comme d'un lecteur soumis à la passe
-      // qu'elle ne nomme pas), ou la clé absente (rien n'a été calculé).
-      const announcement =
-        bridges === null
-          ? bridgeKnowledgeFromCount(target.unreadCount)
-          : { bridge: bridges.get(target.viewerId)?.bridge ?? null };
       io.to(ROOMS.user(target.viewerId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
         conversationId,
         unreadCount: target.unreadCount,
-        ...announcement,
+        // Le pont ABSENT du Map n'est pas la même chose que le pont NON
+        // DEMANDÉ : le premier est une réponse (« ce lecteur n'en a pas »), le
+        // second une abstention. `bridgeComputed(undefined)` dit la première,
+        // `bridgeNotComputed()` la seconde.
+        ...(bridgePassRan
+          ? bridgeComputed(bridges.get(target.viewerId)?.bridge)
+          : bridgeNotComputed()),
       });
     }
   } catch (error) {

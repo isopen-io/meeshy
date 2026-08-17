@@ -32,12 +32,21 @@ describe('SERVER_EVENTS', () => {
     expect(SERVER_EVENTS.USER_UPDATED).not.toContain('_');
   });
 
-  it('declares MESSAGE_READ_STATUS_UPDATED as the correctly-namespaced sibling of the legacy READ_STATUS_UPDATED', () => {
-    // Legacy name hyphenates the entity itself (`read-status`), violating the
-    // entity:action-word convention — see tasks/socketio-events-cleanup.md #3.
+  it('ne déclare QU’UN nom d’accusé de lecture — la dérogation de nommage est assumée, pas doublée', () => {
+    // Le nom hyphène l'ENTITÉ (`read-status`) et déroge donc à
+    // `entity:action-word`. Un alias conforme (`message:read-status-updated`) a
+    // été dual-émis du 2026-07-05 au cycle 64 pour permettre la migration des
+    // clients ; aucun client ne l'a jamais écouté, et le dual-émission doublait
+    // le fan-out le plus fréquent de la messagerie. La dérogation coûte moins
+    // que sa correction — voir tasks/socketio-events-cleanup.md § 3.
     expect(SERVER_EVENTS.READ_STATUS_UPDATED).toBe('read-status:updated');
-    expect(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED).toBe('message:read-status-updated');
-    expect(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED).toMatch(/^[a-z]+:[a-z-]+$/);
-    expect(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED).not.toContain('_');
+
+    // La garde porte sur le NOMBRE : un second nom d'accusé de lecture ne peut
+    // pas rentrer dans le contrat sans faire rougir ce témoin, quel que soit le
+    // namespace qu'il choisit.
+    const readStatusNames = Object.values(SERVER_EVENTS).filter((name) =>
+      String(name).includes('read-status'),
+    );
+    expect(readStatusNames).toEqual(['read-status:updated']);
   });
 });

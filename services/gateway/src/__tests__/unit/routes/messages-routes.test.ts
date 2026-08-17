@@ -196,7 +196,6 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     MESSAGE_PINNED: 'message:pinned',
     MESSAGE_UNPINNED: 'message:unpinned',
@@ -2509,10 +2508,6 @@ describe('POST /conversations/:id/mark-read — coverage extension', () => {
       'read-status:updated',
       expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
     );
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'message:read-status-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', type: 'read' }),
-    );
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 2 });
   });
 
@@ -2826,10 +2821,6 @@ describe('POST /conversations/:id/mark-read — broadcastReadStatus loop coverag
 
     expect(fastify._mockEmit).toHaveBeenCalledWith(
       'read-status:updated',
-      expect.objectContaining({ type: 'read', unreadCount: 4 })
-    );
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'message:read-status-updated',
       expect.objectContaining({ type: 'read', unreadCount: 4 })
     );
     // Sans l'exclusion, la room de conversation livrerait à l'acteur une
@@ -3801,10 +3792,11 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     await getMarkReadHandler()(makeRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'conversation:unread-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 1 })
-    );
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 1,
+      bridge: null,
+    });
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
@@ -3816,18 +3808,13 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
 
     // Badge reset must fire regardless of showReadReceipts.
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
-    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
-    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
-    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
-    // gèlerait une forme dont ce témoin ne parle pas.
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'conversation:unread-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
-    );
-    // READ_STATUS_UPDATED (peer disclosure) must be suppressed — both the legacy and the
-    // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+      bridge: null,
+    });
+    // READ_STATUS_UPDATED (peer disclosure) must be suppressed.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(fastify._mockEmit).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });
 
@@ -3887,14 +3874,11 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
-    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
-    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
-    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
-    // gèlerait une forme dont ce témoin ne parle pas.
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'conversation:unread-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
-    );
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+      bridge: null,
+    });
   });
 
   it('/read acquitte la conversation de l\'invité', async () => {
@@ -3989,14 +3973,11 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
     expect(fastify._mockTo).not.toHaveBeenCalledWith('user:null');
     expect(fastify._mockTo).not.toHaveBeenCalledWith('user:undefined');
-    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
-    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
-    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
-    // gèlerait une forme dont ce témoin ne parle pas.
-    expect(fastify._mockEmit).toHaveBeenCalledWith(
-      'conversation:unread-updated',
-      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
-    );
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+      bridge: null,
+    });
   });
 
   // NON-RÉGRESSION : un acteur AVEC compte continue de se nommer par son

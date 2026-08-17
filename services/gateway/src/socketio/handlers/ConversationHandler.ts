@@ -8,12 +8,12 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { bridgeKnowledgeFromCount } from '../unreadBridgeAnnouncement.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { bridgeComputed } from '../unreadBridgeField.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -227,17 +227,17 @@ export class ConversationHandler {
         // le chemin anonyme comme le cas courant).
         try {
           const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
-          // Le pont ✦ n'est pas calculé sur ce chemin (rejoindre une
-          // conversation, c'est l'OUVRIR, pas lister). La clé est donc omise —
-          // « je ne sais pas » — sauf quand le compteur retombé à zéro prouve
-          // à lui seul qu'il n'y a plus de pont (§3.2). Omettre a longtemps
-          // voulu dire « il n'y en a pas » : le rang ne rendant jamais de pont
-          // sans non-lu, le dommage restait invisible ici — mais le fil ment
-          // moins cher quand il dit ce qu'il sait.
+          // Pont ✦ : `null` EXPLICITE (cycle 63). On rejoint une conversation
+          // pour la LIRE — l'ouvrir CONSOMME le pont, et c'est un fait que ce
+          // handler connaît sans rien calculer. L'effacement est donc voulu
+          // ici, à la différence de l'instantané de reconnexion qui, lui,
+          // s'abstient. Depuis que l'absence du champ signifie « je n'ai pas
+          // calculé », ne rien dire aurait laissé le pont en place sur une
+          // conversation qu'on vient précisément d'ouvrir.
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
             conversationId: normalizedId,
             unreadCount,
-            ...bridgeKnowledgeFromCount(unreadCount),
+            ...bridgeComputed(undefined),
           });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
@@ -333,10 +333,7 @@ export class ConversationHandler {
         summary,
       };
 
-      // Les DEUX noms : l'historique et le canonique voyagent en parallèle
-      // partout ailleurs, et un client migré n'écoute plus que le second.
       socket.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-      socket.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
     } catch (err) {
       logger.warn('read-status resync failed on join (non-blocking)', { conversationId, error: err });
     }

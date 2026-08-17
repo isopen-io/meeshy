@@ -142,10 +142,13 @@ Cas de référence, `conversation:unread-updated` et son pont ✦
 | `bridge: null` | j'ai calculé, il n'y en a pas | efface |
 | clé absente | je n'ai pas calculé | garde le sien |
 
-`bridgeKnowledgeFromCount()` (`socketio/unreadBridgeAnnouncement.ts`) porte la seule connaissance
-GRATUITE : un `unreadCount` à zéro prouve l'absence de pont (contrat gelé §3.2) sans ouvrir de
-requête. Au-dessus de zéro, un émetteur qui ne fait pas la passe **se tait** — c'est la seule phrase
-honnête, et se taire ne coûte rien alors que la passe coûte 5 requêtes sur des chemins chauds.
+`bridgeComputed()` / `bridgeNotComputed()` (`socketio/unreadBridgeField.ts`) sont les deux seules
+façons d'écrire ce champ — un émetteur ne construit jamais l'objet à la main. `bridgeComputed(x)`
+déclare un savoir (`x` ou `null`) ; `bridgeNotComputed()` déclare l'ignorance et n'émet aucune clé.
+Un `unreadCount` à zéro relève du PREMIER : le contrat gelé §3.2 prouve l'absence de pont sans
+ouvrir de requête. Une passe qui TOMBE, ou une conversation hors de la borne de l'instantané de
+reconnexion, relèvent du second — se taire ne coûte rien, et `null` y ordonnerait un effacement sur
+la foi d'une panne.
 
 Corollaire de lot : **quand on rend un champ autoritatif côté client, on énumère TOUS les émetteurs
 serveur du même événement dans le même lot.**

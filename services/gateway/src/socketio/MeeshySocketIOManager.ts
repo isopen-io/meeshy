@@ -37,7 +37,7 @@ import { buildTranslationEvent } from './buildTranslationEvent';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
-import { bridgeKnowledgeFromCount } from './unreadBridgeAnnouncement';
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
@@ -760,7 +760,7 @@ export class MeeshySocketIOManager {
           io: this.io,
           conversationId,
           participants: convParticipants.get(conversationId) ?? [],
-          events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+          event: SERVER_EVENTS.READ_STATUS_UPDATED,
           payload: drainPayload,
         });
         logger.debug('drain delivery receipt emitted', { readerKey, isAnonymous, conversationId, latestMessageId, rooms });
@@ -1195,11 +1195,23 @@ export class MeeshySocketIOManager {
         )
         .slice(0, BRIDGE_SNAPSHOT_LIMIT);
 
-      // `null` — « aucun pont n'a été CALCULÉ », distinct d'une map vide qui
-      // dit « la passe a tourné et n'a rien rendu ». Voir le tableau des trois
-      // états sur `ConversationUnreadUpdatedEventData.bridge`.
-      let bridgeByConversation: ReadonlyMap<string, { bridge: ConversationBridge }> | null =
-        new Map();
+      // Les conversations RÉELLEMENT soumises à la passe. C'est cet ensemble —
+      // et non le résultat de la passe — qui décide de la forme de fil
+      // (cycle 63) : une conversation au-delà de la borne n'a pas été
+      // interrogée, le serveur n'a donc RIEN à en dire.
+      //
+      // Sans cette distinction, la borne posée au cycle 62 ne différait PAS son
+      // travail comme son commentaire l'annonçait (« seul leur pont attend le
+      // prochain `GET /conversations` ») : elle l'ANNULAIT. Les conversations
+      // hors page émettaient la forme courte, que les deux clients lisaient
+      // comme un ordre d'effacement — si bien que le correctif du cycle 62
+      // avait troqué un effacement GLOBAL contre un effacement de la QUEUE, à
+      // chaque reconnexion, sans que son propre témoin puisse le voir : la
+      // forme émise était identique dans les deux cas.
+      const submittedToPass = new Set(bridgeCandidates.map(candidate => candidate.conversationId));
+
+      let bridgeByConversation: ReadonlyMap<string, { bridge: ConversationBridge }> = new Map();
+      let bridgePassRan = true;
       if (bridgeCandidates.length > 0) {
         try {
           bridgeByConversation = await this.bridgeService.buildBridgeData({
@@ -1208,10 +1220,9 @@ export class MeeshySocketIOManager {
           });
         } catch (error) {
           // Best-effort, même posture que le fan-out et que la liste REST : un
-          // pont qui ne se calcule pas ne doit priver personne de sa pastille.
-          // La passe est tombée : on ne sait RIEN des ponts, et la forme courte
-          // le dit maintenant (clé absente) au lieu d'ordonner leur effacement.
-          bridgeByConversation = null;
+          // pont qui ne se calcule pas ne doit priver personne de sa pastille
+          // — ni, depuis le cycle 63, du pont qu'il a déjà en cache.
+          bridgePassRan = false;
           logger.warn('bridge attach failed on reconnect snapshot, serving counts alone', {
             readerKey,
             error,
@@ -1219,28 +1230,19 @@ export class MeeshySocketIOManager {
         }
       }
 
-      // Ce que la BORNE dit sur le fil. Une conversation hors des candidats
-      // — parce qu'elle est au-delà de `BRIDGE_SNAPSHOT_LIMIT` — n'a pas été
-      // soumise à la passe : son pont n'est pas absent, il est INCONNU, et la
-      // clé ne voyage pas. Sans cette distinction, la borne posée pour
-      // épargner la base effaçait l'affichage qu'elle refusait de calculer.
-      // Une conversation SOUMISE que la passe ne nomme pas, elle, n'a pas de
-      // pont : `null`, et le client efface le sien. Un compteur à zéro relève
-      // du même « je sais » sans passe (§3.2 : pas de pont sans non-lu).
-      const submitted = new Set(bridgeCandidates.map(candidate => candidate.conversationId));
       for (const [conversationId, unreadCount] of unreadCounts) {
-        // Deux façons de SAVOIR : une passe qui a répondu POUR cette
-        // conversation-là, ou — à défaut — ce que le compteur seul prouve
-        // (`bridgeKnowledgeFromCount` : pas de non-lu ⇒ pas de pont, vrai même
-        // si la passe est tombée ou n'a jamais été ouverte pour cette ligne).
-        const answered = submitted.has(conversationId) ? bridgeByConversation : null;
-        const announcement = answered
-          ? { bridge: answered.get(conversationId)?.bridge ?? null }
-          : bridgeKnowledgeFromCount(unreadCount);
+        // Un compteur à ZÉRO n'entre jamais dans la passe (contrat gelé §3.2),
+        // et pourtant le serveur sait parfaitement qu'il n'a pas de pont : tout
+        // a été lu. Il l'affirme, il ne s'abstient pas — sinon un pont périmé
+        // survivrait à la lecture complète de sa conversation.
+        const knowsThereIsNoBridge = unreadCount === 0;
+        const answered = bridgePassRan && submittedToPass.has(conversationId);
         socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount,
-          ...announcement,
+          ...(knowsThereIsNoBridge || answered
+            ? bridgeComputed(bridgeByConversation.get(conversationId)?.bridge)
+            : bridgeNotComputed()),
         });
       }
     } catch (error) {

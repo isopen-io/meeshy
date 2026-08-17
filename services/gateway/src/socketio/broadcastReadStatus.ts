@@ -1,19 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type {
-  ConversationUnreadUpdatedEventData,
-  ReadStatusUpdatedEventData,
-  ReadStatusSummary,
-} from '@meeshy/shared/types/socketio-events';
+import type { ReadStatusUpdatedEventData, ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
 } from './emitToConversationParticipants.js';
-import { bridgeKnowledgeFromCount } from './unreadBridgeAnnouncement.js';
-
-/** Ce qui voyage — ou ne voyage pas — dans le champ `bridge` de l'événement. */
-type BridgeAnnouncement = Pick<ConversationUnreadUpdatedEventData, 'bridge'>;
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 /**
  * Les deux lectures dont la diffusion a besoin, nommées par ce qu'elles
@@ -64,11 +57,10 @@ export interface ReadStatusBroadcastDeps {
   readStatusService: ReadStatusSummarySource;
   privacyPreferencesService: ReadReceiptVisibility;
   /**
-   * Optionnel. Présent : une lecture PARTIELLE (compteur > 0 après le marquage)
-   * emporte aussi son pont ✦, recalculé sur le curseur qui vient de bouger.
-   * Absent : au-dessus de zéro non-lu, l'événement ne dit RIEN du pont — la clé
-   * ne voyage pas, et le client garde le sien (troisième état du contrat,
-   * cycle 63 bis). Cf. le §« Le pont » de la doc de `broadcastReadStatus`.
+   * Optionnel — absent : la forme courte d'avant, `{conversationId,
+   * unreadCount}`. Présent : une lecture PARTIELLE (compteur > 0 après le
+   * marquage) emporte aussi son pont ✦, recalculé sur le curseur qui vient de
+   * bouger. Cf. le §« Le pont » de la doc de `broadcastReadStatus`.
    */
   bridgeService?: ReadStatusBridgeBuilder;
 }
@@ -150,19 +142,6 @@ export interface ReadStatusBroadcastArgs {
  * avec ses propres appareils n'est pas une divulgation, exactement comme le
  * badge qu'elle qualifie (propriété 1 ci-dessus). Posture d'échec identique à
  * ses trois frères : le pont est un confort, la pastille est le produit.
- *
- * ── Et ce que dit le fil quand la passe n'a pas répondu (cycle 63 bis) ──────
- *
- * Deux formes sur le fil ne suffisaient pas à porter trois phrases. Le champ
- * `bridge` en a désormais trois (`ConversationUnreadUpdatedEventData`) : un
- * pont, `bridge: null` (« j'ai la réponse, il n'y en a pas » ⇒ le client
- * efface), la clé ABSENTE (« je n'ai pas calculé » ⇒ le client GARDE le sien).
- *
- * Ce que cela change ici, sur les deux replis que la posture best-effort
- * ci-dessus laisse ouverts : un appelant sans constructeur de pont et une passe
- * qui TOMBE n'ordonnent plus l'effacement — ils se taisent. Le compteur à zéro,
- * lui, dit `null` : c'est une réponse, gratuite, et c'est elle qui nettoie les
- * autres appareils quand on finit de lire sur celui-ci.
  */
 export async function broadcastReadStatus(
   deps: ReadStatusBroadcastDeps,
@@ -218,24 +197,24 @@ export async function broadcastReadStatus(
   const actorReadSync = actorRead?.sync;
 
   /**
-   * Ce que cet émetteur DIT du pont ✦ de CETTE conversation pour CE lecteur —
-   * l'une des trois phrases du contrat (`ConversationUnreadUpdatedEventData`,
-   * cycle 63 bis) : un pont, `bridge: null` (« j'ai la réponse, il n'y en a
-   * pas » ⇒ le client efface), ou la clé ABSENTE (« je n'ai pas calculé » ⇒ le
-   * client garde le sien). Les clients recopient ce champ inconditionnellement :
-   * confondre les deux dernières formes faisait de tout silence un ordre
-   * d'effacement.
+   * Le pont ✦ de CETTE conversation pour CE lecteur — rendu comme le CHAMP
+   * DÉCLARÉ du contrat (cycle 63), jamais comme un `ConversationBridge |
+   * undefined` : cet optionnel-là confondait « il n'y a pas de pont » et « je
+   * n'ai pas calculé », et les deux clients recopient ce champ autoritairement.
    *
-   * Quatre gardes, dans l'ordre où elles éliminent :
-   *   1. aucun `read` ⇒ rien n'est émis du tout, donc rien n'est dit ;
-   *   2. compteur à ZÉRO ⇒ `bridge: null` SANS aucune requête. C'est le cas
-   *      dominant (lire une conversation la vide) et la réponse est connue du
-   *      contrat gelé §3.2 — un compteur nul n'a pas de pont ;
-   *   3. pas de constructeur ⇒ clé absente : au-dessus de zéro, seule la passe
-   *      sait, et l'appelant ne l'a pas fournie ;
-   *   4. la passe tombe ⇒ clé absente. Un `null` ordonnerait l'effacement sur
-   *      la foi d'une panne ; une passe qui a RÉPONDU sans nommer ce pont, au
-   *      contraire, dit bien `null`.
+   * Trois gardes de coût, dans l'ordre où elles éliminent — et chacune déclare
+   * ce qu'elle SAIT :
+   *   1. pas de constructeur ⇒ on ne sait rien, donc `bridgeNotComputed()` :
+   *      le client garde le pont qu'il a. C'est le comportement d'avant G-123,
+   *      enfin exprimé comme un silence plutôt que comme un effacement ;
+   *   2. compteur à ZÉRO ⇒ aucune requête, et pourtant un fait CONNU. C'est le
+   *      cas dominant (lire une conversation la vide) et l'effacement y est
+   *      correct — contrat gelé §3.2 : un compteur nul n'a pas de pont. On
+   *      l'AFFIRME (`bridgeComputed(undefined)` ⇒ `null`) ;
+   *   3. la passe TOMBE ⇒ `bridgeNotComputed()`. C'est la moitié que le
+   *      recalcul seul ne pouvait pas exprimer : rendre `undefined` ici
+   *      effaçait le pont en cache sur la foi d'un incident, et démentait la
+   *      posture best-effort que les quatre émetteurs revendiquent.
    *
    * Le curseur n'est PAS relu : celui que la passe irait chercher est celui que
    * `actorRead` vient de lire. La map est donc TOUJOURS fournie, y compris VIDE
@@ -246,14 +225,12 @@ export async function broadcastReadStatus(
    * vide » là où il n'y a rien — dans les deux cas la passe retombe sur
    * `joinedAt`, mais seule la map vide le fait sans repayer la lecture.
    */
-  const announceActorBridge = async (): Promise<BridgeAnnouncement> => {
-    if (!actorRead) return {};
-    // Ce qu'un compteur seul prouve, gratuitement (§3.2). Le littéral `0` plutôt
-    // que la valeur : la garde vient d'établir qu'il ne reste RIEN à lire, et
-    // c'est cet établissement-là qu'on passe à la règle, pas un chiffre dont on
-    // saurait seulement qu'il n'est pas positif.
-    if (actorRead.sync.unreadCount <= 0) return bridgeKnowledgeFromCount(0);
-    if (!bridgeService) return {};
+  const buildActorBridge = async (): Promise<{ readonly bridge?: ConversationBridge | null }> => {
+    // Ne pas AVOIR de constructeur, c'est ne rien savoir — donc ne rien dire.
+    if (!bridgeService || !actorRead) return bridgeNotComputed();
+    // Un compteur nul, en revanche, est un FAIT connu sans requête (contrat
+    // gelé §3.2) : le lecteur a tout lu, son pont doit tomber. On l'affirme.
+    if (actorRead.sync.unreadCount <= 0) return bridgeComputed(undefined);
     try {
       const bridges = await bridgeService.buildBridgeData({
         viewerId: personalRoomKey,
@@ -264,13 +241,12 @@ export async function broadcastReadStatus(
           actorRead.cursorRow ? [[args.participantId, actorRead.cursorRow]] : []
         ),
       });
-      // La passe a RÉPONDU : un pont, ou `null` si elle n'en nomme aucun.
-      return { bridge: bridges.get(args.conversationId)?.bridge ?? null };
+      return bridgeComputed(bridges.get(args.conversationId)?.bridge);
     } catch {
       // Best-effort, même posture que les trois émetteurs frères : le pont est
-      // un confort, la pastille est le produit. Et la clé ne voyage pas — une
-      // passe tombée ne SAIT pas s'il y a un pont.
-      return {};
+      // un confort, la pastille est le produit. Et depuis le cycle 63, un
+      // incident de passe ne détruit plus le pont déjà en cache : on se tait.
+      return bridgeNotComputed();
     }
   };
 
@@ -282,7 +258,7 @@ export async function broadcastReadStatus(
   // du SITE d'appel, disjointe de celle du callee (§ Critical Gotchas, `void
   // p`) : la promesse peut n'être jamais attendue (aucun `read`), et un rejet
   // sans écouteur tue le process sous Node 22.
-  const actorBridgePromise = announceActorBridge().catch((): BridgeAnnouncement => ({}));
+  const actorBridgePromise = buildActorBridge().catch(() => bridgeNotComputed());
 
   // Synchro interne, pas une divulgation : le badge se recale sur les appareils
   // de l'acteur quelle que soit sa préférence — et le pont qui le qualifie part
@@ -290,13 +266,19 @@ export async function broadcastReadStatus(
   // dur — une lecture exacte ou partielle n'avance le curseur que sur le
   // préfixe contigu déjà lu, donc des messages peuvent légitimement rester non
   // lus, et un zéro viderait à tort le badge sur TOUS ses appareils.
+  //
+  // Le champ `bridge` DÉCLARE lequel des trois états il porte (cycle 63) : un
+  // pont recalculé, un `null` qui affirme qu'il n'y en a pas, ou RIEN quand la
+  // passe n'a pas tourné. Ce dernier cas — pas de constructeur, ou passe tombée
+  // — était jusqu'ici indistinguable du deuxième, et effaçait donc le pont que
+  // le lecteur avait en cache sur la foi d'un incident.
   const emitUnreadUpdate = async () => {
     if (!actorReadSync) return;
-    const announcement = await actorBridgePromise;
+    const bridgeField = await actorBridgePromise;
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
       conversationId: args.conversationId,
       unreadCount: actorReadSync.unreadCount,
-      ...announcement,
+      ...bridgeField,
     });
   };
 
@@ -336,20 +318,16 @@ export async function broadcastReadStatus(
     io,
     conversationId: args.conversationId,
     participants: activeParticipants,
-    events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+    event: SERVER_EVENTS.READ_STATUS_UPDATED,
     payload: peerPayload,
     exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null,
   });
 
   // La version de l'acteur, dans sa seule room personnelle — celle que toutes
-  // ses sessions ont rejointe à l'authentification, compte ou pas. Sous les
-  // DEUX noms d'événement, pour qu'un client migré comme un client historique
-  // recale son curseur.
+  // ses sessions ont rejointe à l'authentification, compte ou pas.
   if (actorReadSync) {
     const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
-    const actorRoom = io.to(ROOMS.user(personalRoomKey));
-    actorRoom.emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
-    actorRoom.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, actorPayload);
+    io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
   }
 
   await emitUnreadUpdate();

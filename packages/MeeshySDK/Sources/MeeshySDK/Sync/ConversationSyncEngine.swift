@@ -1456,22 +1456,24 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
                 // G-124 — le pont ✦ voyage sur CE même événement (G-123,
-                // `ConversationUnreadUpdatedEventData.bridge`). Avant ce lot,
-                // seul `unreadCount` était appliqué : un pont reçu par socket
-                // restait invisible jusqu'au prochain rechargement REST complet
-                // (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact que R-c
-                // dénonçait (« pont invisible drapeau ON »).
+                // `ConversationUnreadUpdatedEventData.bridge`).
                 //
-                // Ce qui est ANNONCÉ remplace l'ancien, `nil` compris : garder un
-                // pont périmé quand le serveur dit qu'il n'y en a plus serait une
-                // affirmation fabriquée. Mais un serveur qui n'a RIEN dit (clé
-                // absente, `BridgeAnnouncement.notComputed`) n'annonce pas une
-                // absence — il se tait, et un silence n'efface rien. Trois des
-                // quatre émetteurs se taisent ainsi, faute d'avoir calculé le
-                // pont ; les lire comme une absence retirait le pont des lignes
-                // que le lecteur regardait pour savoir où reprendre.
-                if case .announced(let announced) = event.bridgeAnnouncement {
-                    updated[idx].bridge = announced
+                // Cycle 63 : on ÉCRIT sur ce qu'annonce le serveur, plus sur la
+                // valeur d'un optionnel. `event.bridge` valait `nil` aussi bien
+                // quand le serveur disait « il n'y a pas de pont » que quand il
+                // ne disait rien du tout, et cette ligne recopiait les deux —
+                // si bien que tout émetteur qui ne calculait pas le pont en
+                // ordonnait l'effacement. C'est ce qui retirait le pont de
+                // TOUTES les lignes du lecteur à chaque reconnexion.
+                //
+                // `.notComputed` ne touche à rien : un silence ne détruit pas.
+                switch event.announcement {
+                case .notComputed:
+                    break
+                case .cleared:
+                    updated[idx].bridge = nil
+                case .bridge(let bridge):
+                    updated[idx].bridge = bridge
                 }
             }
             return updated

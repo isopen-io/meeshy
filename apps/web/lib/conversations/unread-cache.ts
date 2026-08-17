@@ -19,26 +19,25 @@ type InfiniteConversationData = {
 };
 
 /**
- * Le pont ✦ à écrire À CÔTÉ du compteur, si l'appelant en a un à annoncer.
+ * Le pont ✦ à écrire À CÔTÉ du compteur, si l'appelant en a un à recopier.
  *
  * Objet-enveloppe plutôt qu'un 4e paramètre `ConversationBridge | undefined`
  * nu : un pont nu ne distingue pas « je ne sais rien du pont, laisse celui du
- * cache tel quel » (l'enveloppe ABSENTE — repli implicite d'un
- * `ConversationLayout`/`bubble-stream-page` qui ne remet que `unreadCount` à 0
- * à l'ouverture, et du relais socket quand le serveur n'a pas calculé) de
- * « voici la réponse du serveur pour ce pont, `undefined` inclus »
- * (l'enveloppe PRÉSENTE, qui efface).
+ * cache tel quel » de « voici ce que le serveur vient d'annoncer, l'absence de
+ * pont incluse ». L'enveloppe absente dit le premier, l'enveloppe présente le
+ * second.
  *
- * Cette distinction est la MÊME que celle des trois états du wire
- * (`ConversationUnreadUpdatedEventData.bridge`, cycle 63) ; le relais socket
- * la traduit d'un vocabulaire à l'autre :
+ * Cette signature était déjà la bonne — c'est son APPELANT qui, jusqu'au
+ * cycle 63, passait toujours une enveloppe. Le relais socket (REV-5/B1) la
+ * fournissait même quand le fil ne portait aucun `bridge`, si bien que tout
+ * émetteur serveur qui n'avait pas calculé son pont en ordonnait l'effacement.
+ * Le troisième état vit maintenant sur le fil (`bridge` absent ≠ `bridge:
+ * null`, cf. `ConversationUnreadUpdatedEventData`), et le handler ne construit
+ * l'enveloppe que lorsque la clé est là.
  *
- *   wire `bridge: {…}`  → `{ bridge }`         ⇒ écrit
- *   wire `bridge: null` → `{ bridge: undefined }` ⇒ efface
- *   wire clé absente    → enveloppe absente     ⇒ garde
- *
- * Jumeau de `ConversationSyncEngine.handleUnreadUpdated` côté iOS, qui tient
- * la même règle sur `BridgeAnnouncement`.
+ * `bridge: undefined` DANS l'enveloppe reste donc un ordre d'effacement — la
+ * traduction du `null` du fil. Jumeau de `ConversationSyncEngine
+ * .handleUnreadUpdated` côté iOS.
  */
 export interface BridgeCacheUpdate {
   readonly bridge: ConversationBridge | undefined;

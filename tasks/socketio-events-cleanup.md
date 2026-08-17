@@ -43,7 +43,85 @@ risque de désynchronisation string littérale. Rien à reprendre ici.
 
 ---
 
-## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention — ✅ Résolu (2026-07-05)
+## 3. `READ_STATUS_UPDATED` namespace hyphené hors convention — ⛔️ Clos par ABANDON (2026-08-17, cycle 64)
+
+**Verdict** : la dérogation de nommage est ASSUMÉE. `read-status:updated` reste le
+seul nom sur le fil ; l'alias `message:read-status-updated` a été retiré du
+contrat et des cinq points d'émission. Ne pas rouvrir sans un consommateur client
+réel — la section garde ci-dessous ce qui rendrait la migration rentable.
+
+### Ce que six semaines de dual-émission ont montré
+
+Le plan du 2026-07-05 (conservé plus bas) tenait sur une prémisse : « les clients
+migrent pendant la fenêtre de coexistence ». Elle était fausse, et vérifiable :
+
+```
+git log -S "message:read-status-updated" --all -- '*.swift' '*.kt' 'apps/web/**/*.ts*'
+git log -S "message:read-status-updated" --all -- packages/MeeshySDK/Sources
+```
+
+Les deux sont VIDES. Le nouveau nom n'est jamais apparu dans une source cliente —
+pas une fois, à aucun commit de l'historique, donc pas davantage retiré depuis.
+Aucun binaire livré ne peut l'écouter. Les trois clients écoutent `read-status:updated`
+et lui seul : web `services/socketio/presence.service.ts`, iOS
+`MessageSocketManager.swift` (`socket.on("read-status:updated")`), Android
+`MessageSocketManager.kt` (`listen("read-status:updated", …)`).
+
+### Ce que ça coûtait
+
+`emitToConversationParticipants` rejouait la MÊME chaîne de rooms une fois par
+nom (`for (const event of events) emitter.emit(event, payload)`). Deux noms =
+deux fois les octets et deux réveils radio par socket destinataire, sur le
+fan-out le plus fréquent de la messagerie : chaque remise automatique
+(`autoDeliverToOnlineRecipients`, une par message et par destinataire en ligne),
+chaque marquage de lecture, chaque `conversation:join`, et chaque rejeu de file
+hors ligne au drain de reconnexion.
+
+### Pourquoi abandonner plutôt que finir la migration
+
+Le renommage n'achète que de la cosmétique — le nom sur le fil n'a aucun effet
+sémantique. Le finir demandait, lui : un écouteur ajouté sur TROIS plateformes,
+chacun dédupliquant pendant que les deux noms coexistent (un client abonné aux
+deux applique deux fois le même accusé), puis l'attente que tous les binaires
+livrés écoutant l'ancien nom disparaissent du parc — c'est-à-dire des trimestres
+pour une application iOS/Android déjà en magasin. Le prix est payé pendant tout
+ce temps, et il est payé sur le chemin le plus chaud.
+
+La dérogation est donc documentée à sa source (`SERVER_EVENTS.READ_STATUS_UPDATED`
+dans `packages/shared/types/socketio-events.ts`) plutôt que corrigée.
+
+### Ce qui rouvrirait le dossier
+
+Un consommateur client RÉEL du nom conforme — c'est-à-dire une raison autre que
+la convention. À ce moment-là, l'ordre est : écouteur client livré et déployé
+d'abord, dual-émission ensuite, retrait du nom historique quand le parc a tourné.
+Jamais l'inverse, qui est exactement ce qui a produit ce dossier.
+
+### Ce qui a été livré au cycle 64
+
+- `SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED` retiré, ainsi que son entrée dans
+  `ServerToClientEvents` ; la dérogation de nommage est documentée sur
+  `READ_STATUS_UPDATED`.
+- Les cinq points d'émission repassés à un seul nom : `broadcastReadStatus`
+  (éventail + room de l'acteur), `MessageHandler._autoDeliverToOnlineRecipients`,
+  `MeeshySocketIOManager._emitDeliveryForDrainedMessages`,
+  `ConversationHandler` (rattrapage sur `conversation:join`).
+- `emitToConversationParticipants` passe de `events: ReadonlyArray<string>` à
+  `event: string`. Les douze appelants passaient tous un tableau d'un élément une
+  fois l'alias retiré : le pluriel ne servait plus qu'à rendre le doublement
+  d'un fan-out exprimable en un caractère. Un second nom se réintroduit
+  maintenant par un second APPEL, qui se voit en revue.
+- Garde de comportement : `services/gateway/src/socketio/__tests__/readReceiptEventName.test.ts`.
+  Elle porte sur le NOMBRE de noms d'accusé avant de porter sur le nom, donc elle
+  tombe aussi sous un TROISIÈME alias. Jumelle côté contrat dans
+  `packages/shared/__tests__/types/socketio-events.test.ts`.
+
+---
+
+<details>
+<summary>Historique — le plan du 2026-07-05 (dual-émission), conservé pour la trace</summary>
+
+### ~~`READ_STATUS_UPDATED` namespace hyphené hors convention — ✅ Résolu (2026-07-05)~~
 
 **Problème (historique)** :
 ```typescript
@@ -69,6 +147,8 @@ Tests : `packages/shared/__tests__/types/socketio-events.test.ts` (convention),
 `mark-conversation-status.test.ts` (dual-emit + suppression symétrique quand
 `showReadReceipts=false`). Suite gateway ciblée (16 fichiers touchés par le changement) :
 847/847 tests verts.
+
+</details>
 
 ---
 

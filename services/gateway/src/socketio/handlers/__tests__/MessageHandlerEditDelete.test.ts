@@ -1439,15 +1439,12 @@ describe('MessageHandler — handleMessageDelete', () => {
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
     await new Promise((resolve) => setImmediate(resolve));
 
-    // `objectContaining` : le sujet du témoin est la PASTILLE repoussée après
-    // une suppression, pas la forme du pont ✦ que le même payload porte
-    // (`ConversationUnreadUpdatedEventData.bridge`, trois états). Figer le
-    // payload entier ici gèlerait une forme dont ce témoin ne parle pas — le
-    // mécanisme exact qui a laissé la forme courte devenir destructrice au
-    // cycle 62 sans qu'aucun témoin ne change de couleur.
     expect(emitsTo(deps.io, `user:${recipientUserId}`)).toContainEqual([
       'conversation:unread-updated',
-      expect.objectContaining({ conversationId: VALID_CONV_ID, unreadCount: 2 }),
+      // La passe de ponts a tourné et n'annonce rien pour ce destinataire :
+      // `null` AFFIRMÉ, jamais la forme courte, qui signifie désormais « je
+      // n'ai pas calculé » (cycle 63).
+      { conversationId: VALID_CONV_ID, unreadCount: 2, bridge: null },
     ]);
   });
 

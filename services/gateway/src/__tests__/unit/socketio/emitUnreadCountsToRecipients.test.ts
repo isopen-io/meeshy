@@ -79,12 +79,10 @@ describe('emitUnreadCountsToRecipients — la pastille', () => {
       senderId: SENDER_PART_ID,
     });
 
-    // Le sujet du témoin est le COMPTEUR, pas la forme du pont : `objectContaining`,
-    // pour qu'il ne fige pas une forme dont il ne parle pas (leçon du cycle 62).
-    expect(emit).toHaveBeenCalledWith(
-      'conversation:unread-updated',
-      expect.objectContaining({ conversationId: CONV_ID, unreadCount: 0 })
-    );
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 0,
+    });
   });
 });
 
@@ -294,11 +292,9 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       bridgeService,
     });
 
-    // Le service n'est pas appelé — mais la réponse est CONNUE sans lui
-    // (contrat gelé §3.2 : un compteur à zéro n'a pas de pont). L'émetteur
-    // l'ANNONCE donc, `bridge: null`, au lieu de se taire : c'est ce qui
-    // retire le pont périmé de la ligne d'un lecteur qui vient de rattraper.
     expect(bridgeService.buildBridgeDataForViewers).not.toHaveBeenCalled();
+    // Ne PAS appeler la passe n'est pas ne rien savoir : un compteur nul n'a
+    // pas de pont, contrat gelé §3.2. Le serveur l'affirme (cycle 63).
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONV_ID,
       unreadCount: 0,
@@ -340,10 +336,6 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       onError,
     });
 
-    // Le champ est ABSENT — pas `null`. La passe a échoué : l'émetteur ne
-    // sait PAS s'il y a un pont, et l'égalité stricte de `toHaveBeenCalledWith`
-    // prouve ici que la clé ne voyage pas. Un `null` dirait « il n'y en a
-    // pas » et effacerait le pont que le lecteur a peut-être déjà en cache.
     expect(onError).toHaveBeenCalled();
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONV_ID,
@@ -380,82 +372,9 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       ],
     });
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: bridgeForPeer });
-    // Le lecteur absent de la map rendue a été SOUMIS à la passe, qui n'a rien
-    // trouvé pour lui : c'est une réponse, pas un silence.
+    // L'invité est absent de la map RENDUE par une passe qui a bien tourné :
+    // « il n'y en a pas », donc `null` explicite — jamais le silence.
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: null });
-  });
-});
-
-/**
- * Le fil porte TROIS états, pas deux (cycle 63).
- *
- * `bridge` a longtemps eu deux formes sur le fil — présent ou absent — pour
- * exprimer trois choses : « voici le pont », « il n'y en a pas », et « je ne
- * l'ai pas calculé ». Les deux clients recopient le champ INCONDITIONNELLEMENT
- * (`ConversationSyncEngine.handleUnreadUpdated`, `setConversationUnreadInCache`),
- * si bien que le troisième cas — un émetteur qui n'a rien calculé — sortait sur
- * le fil sous la forme du deuxième et EFFAÇAIT le pont en cache.
- *
- * Le vocabulaire manquant, c'est `null` :
- *   - `bridge: <objet>` → voici le pont de CE lecteur ;
- *   - `bridge: null`    → j'ai calculé, il n'y en a pas ⇒ efface ;
- *   - clé ABSENTE       → je n'ai pas calculé ⇒ garde ce que tu as.
- *
- * Ce bloc garde la frontière entre les deux dernières formes sur le fan-out
- * d'envoi ; son jumeau garde l'instantané de reconnexion
- * (`MeeshySocketIOManager.test.ts`, « le pont ✦ voyage aussi sur la forme de
- * reconnexion »).
- */
-describe('emitUnreadCountsToRecipients — « pas de pont » et « je ne sais pas » ne sont pas la même phrase', () => {
-  const bridgeless = () => ({ buildBridgeDataForViewers: jest.fn<any>().mockResolvedValue(new Map()) });
-
-  it('annonce `bridge: null` quand la passe a tourné et n\'a rien rendu pour ce lecteur', async () => {
-    const { io, emit } = makeIO();
-
-    await emitUnreadCountsToRecipients({
-      io,
-      prisma: makePrisma([sender(), peer()]) as any,
-      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 4 }),
-      conversationId: CONV_ID,
-      senderId: SENDER_PART_ID,
-      bridgeService: bridgeless(),
-    });
-
-    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: CONV_ID,
-      unreadCount: 4,
-      bridge: null,
-    });
-  });
-
-  it('omet la clé — jamais `null` — quand la passe a ÉCHOUÉ', async () => {
-    const { io, emit } = makeIO();
-
-    await emitUnreadCountsToRecipients({
-      io,
-      prisma: makePrisma([sender(), peer()]) as any,
-      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 4 }),
-      conversationId: CONV_ID,
-      senderId: SENDER_PART_ID,
-      bridgeService: { buildBridgeDataForViewers: jest.fn<any>().mockRejectedValue(new Error('down')) },
-      onError: jest.fn(),
-    });
-
-    expect(emit.mock.calls[0][1]).not.toHaveProperty('bridge');
-  });
-
-  it('omet la clé quand l\'appelant ne fournit aucun constructeur de pont', async () => {
-    const { io, emit } = makeIO();
-
-    await emitUnreadCountsToRecipients({
-      io,
-      prisma: makePrisma([sender(), peer()]) as any,
-      readStatusService: makeReadStatusService({ [PEER_PART_ID]: 4 }),
-      conversationId: CONV_ID,
-      senderId: SENDER_PART_ID,
-    });
-
-    expect(emit.mock.calls[0][1]).not.toHaveProperty('bridge');
   });
 });
 

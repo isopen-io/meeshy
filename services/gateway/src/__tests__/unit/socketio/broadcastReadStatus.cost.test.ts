@@ -225,13 +225,12 @@ describe('broadcastReadStatus — le coût Prisma du pont sur l\'accusé de lect
       withBridge: false,
     });
 
-    // `bridge: null` — annoncé, pas payé : la réponse vient du contrat gelé
-    // (§3.2), pas d'une requête, et la ligne suivante le prouve.
-    expect(after.badge!.payload).toEqual({
-      conversationId: CONV_ID,
-      unreadCount: 0,
-      bridge: null,
-    });
+    // `bridge: null` AFFIRMÉ sans aucune requête (cycle 63) : le compteur nul
+    // est un fait connu. La variante SANS constructeur, elle, n'émet pas la clé
+    // — même coût, forme différente, et c'est exactement ce que le troisième
+    // état sert à distinguer.
+    expect(after.badge!.payload).toEqual({ conversationId: CONV_ID, unreadCount: 0, bridge: null });
+    expect(without.badge!.payload).not.toHaveProperty('bridge');
     // La comparaison est le témoin : le même chemin, avec et sans constructeur
     // de pont, coûte EXACTEMENT la même chose.
     expect(after.prisma.__total).toBe(without.prisma.__total);

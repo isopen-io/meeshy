@@ -10084,55 +10084,122 @@ Deux notes de méthode, tirées du même lot :
   relire une donnée qu'on tient supprime aussi la fenêtre pendant laquelle une
   écriture concurrente ferait diverger les deux lectures. L'argument de
   justesse survit à l'argument de performance ; le citer d'abord.
-## Leçon 233 — un contrat doit porter autant d'états que l'émetteur a de choses à dire (2026-08-17, routine messagerie, cycle 63 bis)
 
-**Le fait.** `conversation:unread-updated` portait DEUX formes sur le fil — champ
-`bridge` présent, ou absent — pour exprimer TROIS choses qu'un émetteur peut avoir
-à dire : « voici le pont », « il n'y en a pas », « je ne l'ai pas calculé ». Les
-deux clients recopiant le champ inconditionnellement dans leur cache, la troisième
-sortait sous l'apparence de la deuxième et **détruisait** : trois des quatre
-émetteurs ne calculent pas le pont, et leur silence ordonnait donc son effacement.
+### Quand deux sites doivent choisir entre deux mensonges, le défaut est dans le VOCABULAIRE
 
-**Ce que le cycle précédent avait fait, et pourquoi ça ne suffisait pas.** Il avait
-fermé le cas dominant en faisant CALCULER l'émetteur muet. C'est la réponse
-naturelle, et elle ne monte pas en généralité : elle laisse intacts tous les cas où
-calculer est impossible (une passe qui tombe), borné (les 30 lignes de
-`BRIDGE_SNAPSHOT_LIMIT`) ou disproportionné (5 requêtes par accusé de lecture sur
-un chemin chaud). Pire, elle les rend **invisibles** : le chemin nominal étant
-réparé, les chemins de repli continuent d'émettre la forme destructrice sans que
-rien ne les distingue.
+La piste n°1 du cycle 62 était formulée comme un arbitrage de PRIX : « le pont
+devrait être recalculé ici, il est effacé à la place ; le corriger coûterait la
+passe à chaque accusé de lecture ». Trois cycles auraient pu se perdre à mesurer
+ce coût. La vraie question était ailleurs : **le contrat savait-il seulement
+dire ce que ce site voulait dire ?** Il ne le savait pas — `bridge` avait deux
+formes de fil (présent / absent) pour trois faits (voici / il n'y en a pas / je
+n'ai pas calculé). Chaque émetteur était donc forcé de choisir entre deux
+mensonges, et le débat glissait naturellement vers le prix du moins pire.
 
-**La règle.**
+Règle : devant une piste énoncée comme « corriger ici coûterait N requêtes »,
+poser d'abord « que SAIT-ON, au juste, et le contrat peut-il l'exprimer ? ».
+Ici la réponse a fermé la piste à ZÉRO requête — le serveur n'a besoin d'aucune
+lecture pour savoir que l'acte qu'il diffuse vient d'invalider le pont qu'il
+annonce.
 
-> Quand un client fait d'un champ optionnel une lecture AUTORITATIVE, compter les
-> phrases que les émetteurs ont à tenir. S'il y en a plus que le contrat n'a de
-> formes, le lecteur tranchera l'ambiguïté — toujours dans le même sens, donc
-> toujours à tort pour les autres.
+### Le sens du SILENCE doit être le sens INOFFENSIF
 
-Le vocabulaire manquant coûte ici un `| null` : objet = « voici », `null` = « il
-n'y en a pas » (⇒ efface), clé absente = « je n'ai pas calculé » (⇒ garde). **Zéro
-requête ajoutée** ; l'alternative « faire calculer tout le monde » était chiffrée à
-5 requêtes par accusé de lecture.
+Corollaire structurel du même lot. Un protocole où l'OMISSION détruit fabrique
+un défaut à chaque émetteur qui n'a pas été mis au courant — et ces émetteurs-là
+ne se signalent JAMAIS, puisque leur code ne change pas et que leurs témoins
+restent verts. Le cycle 62 a corrigé un émetteur ; il en restait quatre.
 
-**Trois pièges d'implémentation, mesurés :**
+Inverser la polarité (l'effacement devient un ACTE EXPLICITE, `null` ; le
+silence ne fait plus rien) ne corrige pas un défaut de plus : ça retire à la
+classe entière son terrain. Un émetteur futur qui ignore tout du champ ne peut
+plus détruire par omission. Préférer systématiquement cette inversion à la
+correction site par site — elle coûte le même lot et elle ferme la classe.
 
-1. **`decodeIfPresent` (Swift) confond la clé absente et le `null` explicite** — il
-   rend `nil` pour les deux. Le discriminant est `container.contains(.bridge)`. Un
-   type qui NOMME la distinction (`enum BridgeAnnouncement { case notComputed;
-   case announced(T?) }`) vaut mieux qu'un booléen posé à côté d'un optionnel :
-   l'appelant ne peut plus lire la valeur sans avoir vu la question.
-2. **Côté JS, le discriminant est `x === undefined`, PAS `'x' in payload`.**
-   Socket.IO sérialise en JSON, où `undefined` ne voyage pas : une clé absente et
-   une clé présente-valant-`undefined` sont la même phrase une fois le payload
-   parsé, et le discriminant doit être celui que le TRANSPORT peut porter.
-3. **Chercher la connaissance GRATUITE avant de conclure « je ne sais pas ».** Ici
-   un `unreadCount` à zéro prouve l'absence de pont (contrat gelé §3.2) sans
-   ouvrir de requête — ce qui donne, à coût nul, exactement le nettoyage
-   multi-appareils que la piste réclamait. Isolée dans une fonction nommée
-   (`bridgeKnowledgeFromCount`) plutôt que recopiée aux quatre émetteurs.
+Compatibilité, au passage : la valeur EXPLICITE doit reproduire ce que les
+clients déployés faisaient déjà face au silence. Ici `null` = « efface », ce que
+les clients faisaient de l'omission — donc aucune migration, aucun drapeau, et
+un client ancien reste correct partout où l'effacement est voulu.
 
-**Corollaire de témoins**, jumeau de la leçon 231 : un témoin qui fige le payload
-ENTIER alors qu'il parle du lecteur ou du compteur **gèle une forme dont il ne
-parle pas**. C'est le mécanisme exact qui a laissé la forme courte devenir
-destructrice sans qu'aucun témoin ne change de couleur. `objectContaining` pour ce
-dont le témoin parle ; la forme du contrat a ses propres témoins.
+### Un correctif qui BORNE son travail doit dire ce qu'il advient de ce qui est HORS borne
+
+Le cycle 62 a plafonné sa passe de ponts à une page de liste, et a écrit — dans
+le code et dans son carnet — que « les conversations plus anciennes gardent leur
+compteur exact ; seul leur pont attend le prochain `GET /conversations` ».
+Le code ne différait pas ce travail : il l'ANNULAIT. Hors borne, l'émission
+sortait la forme courte, que les clients lisent comme un ordre d'effacement.
+La borne avait donc troqué un effacement GLOBAL contre un effacement de la
+QUEUE — sans qu'aucun témoin ne puisse le voir, la charge émise étant
+RIGOUREUSEMENT identique dans les deux cas.
+
+Règle : quand on pose une borne, le témoin à écrire n'est pas « ce qui est DANS
+la borne est traité » — c'est **« ce qui est DEHORS est INTACT »**. Et si les
+deux cas produisent la même sortie observable, la borne n'est pas bornée : elle
+est destructrice, et il manque un état au contrat.
+
+### Un flake qui ne rougit jamais SEUL est un budget, pas une régression
+
+Piste ouverte quatre cycles (« le flake non identifié de `packages/shared` »),
+fermée en trois runs. `behaviour-matrix.test.ts` parcourt le dépôt ENTIER en
+synchrone : ~4,2 s de temps de test contre le `testTimeout` de 5 s par défaut de
+Vitest. Seul il passe ; en suite complète, les 82 autres fichiers se disputent le
+CPU et il dépasse.
+
+Deux marqueurs suffisent à reconnaître la classe et à éviter la chasse au
+fantôme : (1) le message est « Test timed out », qui ne désigne AUCUNE
+assertion ; (2) le test passe isolément, de façon reproductible. Alors ne pas
+chercher une régression — MESURER le temps du test seul et le comparer au
+timeout. Et retenir que la marge de ces témoins-là se resserre à CHAQUE fichier
+de test ajouté au dépôt : un lot un peu large les fait tomber sans les toucher.
+
+### Deux passes sur la même piste : intégrer les DEUX moitiés, pas choisir un gagnant
+
+Le 2026-08-17, deux passes de la routine ont traité la piste n°1 du cycle 62 le
+même jour, sans se voir. L'une (`…-ndx3vw`) a RECALCULÉ le pont de la lecture
+partielle sur le curseur qui venait de bouger ; l'autre (`…-mz6seg`) a donné au
+contrat le VOCABULAIRE qui lui manquait (le troisième état, « je n'ai pas
+calculé »). Le conflit git portait sur cinq lignes du même émetteur.
+
+Le réflexe — garder « sa » version, ou prendre celle d'en face en bloc — aurait
+perdu la moitié du travail dans les deux sens. Elles répondaient à des questions
+différentes qui se ressemblaient :
+
+- le recalcul montre qu'un pont JUSTE vaut mieux que pas de pont ;
+- le vocabulaire montre qu'un incident de passe ne doit RIEN détruire.
+
+Sans le premier, le site rendait `null` là où un pont exact était calculable
+pour quatre requêtes. Sans le second, `undefined` sur une passe TOMBÉE effaçait
+le pont en cache — la posture best-effort revendiquée par les quatre émetteurs
+(« le pont est un confort, la pastille est le produit ») n'était pas tenue.
+
+Règle : devant un conflit entre deux lots qui visaient la même piste, ne pas
+arbitrer sur l'auteur ni sur l'ancienneté. Écrire ce que CHAQUE version rend
+possible et que l'autre ne rend pas — si les deux listes sont non vides, la
+résolution est une composition, pas un choix. Ici : implémentation de l'un,
+grammaire de l'autre.
+
+Corollaire, sur son propre raisonnement : ce lot avait argumenté que garder
+l'ancien pont est faux (vrai, le pont porte son propre `unreadCount`) et en
+avait conclu qu'il fallait l'effacer. La démonstration était juste et la
+conclusion trop courte — **montrer qu'une option est mauvaise ne prouve pas que
+la sienne est la meilleure**, seulement qu'il en reste au moins une autre.
+
+### Les deux discriminants qui trahissent un troisième état (addendum, cycle 63 ter)
+
+Le troisième état ne tient que si les LECTEURS savent le lire. Deux pièges, un
+par plateforme, et aucun ne se signale à la compilation :
+
+1. **Swift — `decodeIfPresent` seul ne peut PAS porter la distinction.** Il rend
+   `nil` pour une clé absente comme pour un `null` explicite : il aplatit
+   exactement les deux formes qu'on vient de séparer. Le discriminant est
+   `container.contains(.bridge)`.
+2. **JS — le discriminant est la PRÉSENCE de la clé (`'bridge' in data`), pas sa
+   valeur.** `undefined` et l'absence sont indiscernables à la lecture d'une
+   propriété. Corollaire de test, à connaître : un payload fabriqué en mémoire
+   avec `bridge: undefined` PORTE la clé, donc il efface — sur le fil la
+   question ne se pose pas, JSON ne transportant pas `undefined`.
+
+Et un corollaire de témoins, jumeau de la leçon 231 : un témoin qui fige le
+payload ENTIER alors qu'il parle de la room, du lecteur ou du compteur **gèle une
+forme dont il ne parle pas**. C'est le mécanisme exact qui a laissé la forme
+courte devenir destructrice sans qu'aucune couleur ne change. `objectContaining`
+pour ce dont le témoin parle ; la forme du contrat a ses propres témoins.

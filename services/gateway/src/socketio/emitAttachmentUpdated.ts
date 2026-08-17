@@ -83,7 +83,7 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
     io,
     conversationId,
     participants,
-    events: [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED],
+    event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
     payload,
   });
 

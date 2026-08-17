@@ -414,7 +414,7 @@ export function registerParticipantsRoutes(
           io,
           conversationId,
           participants: audience,
-          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED],
+          event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED,
           payload: {
             conversationId,
             userId,
@@ -637,7 +637,7 @@ export function registerParticipantsRoutes(
             io,
             conversationId,
             participants: audience,
-            events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT],
+            event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
             payload: {
               conversationId,
               userId,

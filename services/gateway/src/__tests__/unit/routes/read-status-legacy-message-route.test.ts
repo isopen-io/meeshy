@@ -53,7 +53,12 @@ const ANONYMOUS_PARTICIPANT_ID = '507f1f77bcf86cd799439088';
 const UNREAD_COUNT = 7;
 const LAST_READ_AT = new Date('2026-08-16T10:00:00.000Z');
 
-const READ_STATUS_EVENTS = ['read-status:updated', 'message:read-status-updated'] as const;
+/**
+ * Le SEUL nom d'accusé de lecture sur le fil. L'alias
+ * `message:read-status-updated`, dual-émis du 2026-07-05 au cycle 64, n'a jamais
+ * eu de client — voir tasks/socketio-events-cleanup.md § 3.
+ */
+const READ_STATUS_EVENTS = ['read-status:updated'] as const;
 
 // --- module mocks (le préfixe `mock` est requis par le hoisting de jest) ---
 
@@ -253,14 +258,14 @@ describe('POST /messages/:messageId/status — la quatrième porte des accusés'
     await markRead(app);
 
     const badge = personalSendTo('conversation:unread-updated', `user:${ACTOR_USER_ID}`);
-    expect(badge?.payload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT });
+    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT, bridge: null });
   });
 
   it('recale le badge de l\'acteur avec l\'arriéré RÉEL, pas un zéro écrit en dur', async () => {
     await markRead(app);
 
     const badge = personalSendTo('conversation:unread-updated', `user:${ACTOR_USER_ID}`);
-    expect(badge?.payload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT });
+    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT, bridge: null });
   });
 
   // ─── 3. L'arriéré ne concerne que l'acteur ────────────────────────────────

@@ -1,263 +1,294 @@
 # Audit sync temps réel — cycle 63 bis (2026-08-17)
 
-Branche : `claude/keen-hamilton-qchw0m` — repartie de `origin/main` (485d9a38,
-cycle 62 bis intégralement mergé).
+> Renommé « bis » à l'intégration : une AUTRE passe de la routine a produit son
+> propre cycle 63 (`…-cycle63.md`, branche `claude/keen-hamilton-ndx3vw`) en
+> parallèle de celle-ci. Les deux ont convergé, indépendamment, sur la même
+> piste n°1 du cycle 62 — et par deux chemins différents. Voir §3 bis.
 
-> **Note d'intégration.** Une AUTRE exécution de la routine a livré un cycle 63
-> pendant celui-ci (`claude/keen-hamilton-ndx3vw`, PR #3191 — « le pont ✦
-> survit à une lecture PARTIELLE »). Ce journal est donc renuméroté *bis*,
-> suivant la convention des cycles 54/56/57/60/61/62.
->
-> **Les deux ont pris la MÊME piste — la n°1 du cycle 62 — et l'ont lue
-> différemment. C'est le fait le plus instructif du cycle, et les deux réponses
-> sont justes.** Cette piste posait la question du PRIX (« la passe peut-elle
-> coûter moins qu'une passe complète ? ») et notait, en post-scriptum, que le
-> manque était peut-être ailleurs : « se demander si le manque n'est pas
-> d'abord un manque de vocabulaire dans le contrat gelé ».
->
-> - Le cycle 63 a répondu au PRIX, et a eu raison de le faire : il a démontré
->   que l'arbitrage de coût était **surcompté** — le gate à zéro range le cas
->   dominant du côté gratuit, et la lecture partielle paie QUATRE requêtes, pas
->   cinq, parce que le curseur que la passe irait relire vient d'être lu.
->   `broadcastReadStatus` CALCULE donc son pont, et la question du sur-comptage
->   d'un pont périmé ne se pose plus sur ce chemin.
-> - Ce cycle-ci a répondu au VOCABULAIRE, et il reste nécessaire : trois
->   situations où personne ne calcule survivent au correctif d'à côté — la
->   borne de l'instantané de reconnexion (30 lignes), la passe qui TOMBE, et le
->   `conversation:join`. Aucune ne peut être fermée par un calcul ; toutes le
->   sont par le troisième état.
->
-> **Fusionnées à la main** (§8). Le correctif du cycle 63 est conservé
-> intégralement — c'est lui qui calcule — et le troisième état s'applique à ses
-> deux replis (pas de constructeur, passe tombée), qui ordonnaient encore
-> l'effacement. Ce que ce journal disait en §2.1 bis d'un pont conservé
-> susceptible de sur-compter **ne vaut plus** : sur ce chemin, il est calculé.
+Branche : `claude/keen-hamilton-mz6seg` — repartie de `origin/main` (91e8314c,
+cycle 62 intégralement mergé).
 
-## 1. Le défaut
+Sujet : **piste n°1 du cycle 62**, tranchée — mais pas dans le sens qu'elle
+anticipait, et beaucoup plus loin qu'elle ne le prévoyait.
 
-**`conversation:unread-updated` porte DEUX formes pour dire TROIS choses. Les
-trois émetteurs qui ne calculent pas le pont ✦ ordonnaient donc son
-effacement.**
+## 1. Le défaut : un contrat à DEUX formes pour TROIS faits
 
-Le champ `bridge` (G-123) était optionnel sur le contrat wire. Les deux clients
-ne le lisent pas comme optionnel : ils le recopient INCONDITIONNELLEMENT dans
-leur cache de liste, `undefined`/`nil` compris —
-`ConversationSyncEngine.handleUnreadUpdated` côté iOS,
-`setConversationUnreadInCache(…, { bridge: data.bridge })` côté web. Ce qui
-arrive ÉCRIT, y compris quand rien n'arrive.
+Le cycle 62 a corrigé un émetteur. Il a aussi, en le corrigeant, écrit la phrase
+qui contenait le vrai défaut :
 
-Or un émetteur a trois choses à dire, et n'en avait que deux pour les dire :
+> Le contrat n'a AUCUNE valeur pour dire « je n'ai pas calculé ». Deux états sur
+> le fil (présent / absent) servent à en exprimer trois.
 
-| ce que l'émetteur sait | forme sur le fil (avant) | ce que le client comprenait |
-|---|---|---|
-| voici le pont de ce lecteur | `bridge: {…}` | ✅ écrit |
-| j'ai calculé, il n'y en a pas | clé absente | ✅ efface |
-| **je n'ai pas calculé** | **clé absente** | ❌ **efface** |
+C'était exact, et ce n'était pas une remarque de conception : c'était le
+diagnostic. `conversation:unread-updated` porte un `bridge?` que les deux
+clients recopient **autoritairement** — `updated[idx].bridge = event.bridge`
+côté iOS, `setConversationUnreadInCache(…, { bridge: data.bridge })` côté web.
+Un émetteur qui omet le champ n'est donc pas muet : **il ordonne un
+effacement**. Et comme « je n'ai pas calculé » n'avait pas de mot à lui, il
+empruntait celui de « il n'y en a pas ».
 
-Le cycle 62 a fermé le cas dominant en faisant CALCULER l'instantané de
-reconnexion. Il restait, sous la même forme, tous les cas où calculer n'est pas
-possible — ou pas souhaitable :
+Le cycle 62 a fermé UN site en le forçant à toujours calculer. Il en restait
+quatre où calculer est impossible, trop cher, ou simplement pas fait — et les
+quatre continuaient de détruire :
 
-| Émetteur | Quand il ne calcule pas | Effet avant ce cycle |
-|---|---|---|
-| `broadcastReadStatus` (resynchro du lecteur) | **plus jamais** depuis le cycle 63 d'à côté (il calcule) — restent ses deux replis : appelant sans constructeur, passe tombée | après une lecture PARTIELLE, les autres appareils gardaient un compteur > 0 et **perdaient le pont** qui leur disait où reprendre |
-| `_emitUnreadCountsSnapshot` (reconnexion) | au-delà de `BRIDGE_SNAPSHOT_LIMIT` (30 lignes) | la borne, posée pour épargner la base, **effaçait l'affichage** qu'elle refusait de calculer — sur toutes les conversations sauf les 30 plus récentes, à chaque reconnexion |
-| `_emitUnreadCountsSnapshot` | quand `buildBridgeData` échoue | le repli best-effort **reconstituait le sinistre de masse** que le cycle 62 venait de corriger, sur la foi d'une panne |
-| `ConversationHandler` (`conversation:join`) | toujours | inoffensif (le rang ne rend jamais de pont sans non-lu, et le client clampe la conversation active) — mais dit faux |
+| Site | Situation | Ce qu'il disait | Ce qu'il voulait dire |
+|------|-----------|-----------------|------------------------|
+| `_emitUnreadCountsSnapshot` | conversation **au-delà de la borne** | efface | *je ne l'ai pas calculée* |
+| `_emitUnreadCountsSnapshot` | passe de ponts **tombée** | efface | *je n'ai pas pu* |
+| `emitUnreadCountsToRecipients` | passe **tombée** | efface | *je n'ai pas pu* |
+| `emitUnreadCountsToRecipients` | appelant **sans `bridgeService`** | efface | *je ne sais rien du pont* |
+| `broadcastReadStatus` | après un accusé de lecture | efface | *(voir §3)* |
 
-Rien ne remettait le pont ensuite : la liste web tourne en
-`staleTime: Infinity`, et le seul émetteur qui l'attache est le fan-out
-d'ENVOI — il faut qu'un nouveau message arrive dans cette conversation précise.
+## 2. La trouvaille : le correctif du cycle 62 avait déplacé son propre défaut
 
-## 2. Le correctif : du vocabulaire, pas des requêtes
+La borne posée au cycle 62 — 30 conversations, la taille d'une page de liste —
+est justifiée et le reste. Mais son commentaire annonçait un DIFFÉRÉ :
 
-`bridge?: ConversationBridge | null`, et trois phrases distinctes :
+> les conversations plus anciennes gardent leur compteur exact — seul leur pont
+> attend le prochain `GET /conversations`
 
-```
-bridge: {…}   → voici le pont de CE lecteur       ⇒ le client écrit
-bridge: null  → j'ai calculé, il n'y en a pas     ⇒ le client EFFACE
-clé ABSENTE   → je n'ai pas calculé               ⇒ le client GARDE le sien
-```
+Ce n'est pas ce qui se passait. Une conversation hors borne émettait la forme
+courte, c'est-à-dire l'ordre d'effacement. La borne **n'a pas différé le
+travail : elle l'a annulé.** Le cycle 62 a donc troqué un effacement GLOBAL du
+pont à chaque reconnexion contre un effacement de la QUEUE à chaque
+reconnexion — un progrès réel, et un défaut résiduel décrit dans son propre
+carnet comme une simple attente.
 
-**Ce lot n'ajoute aucune requête, sur aucun chemin** : là où personne ne
-calcule, se taire est gratuit. C'est la moitié du problème que le calcul ne
-peut pas atteindre — la borne d'un instantané, une passe tombée, un chemin qui
-n'a pas de raison de calculer. Le cycle 63 d'à côté a traité l'autre moitié en
-montrant que, sur `broadcastReadStatus`, calculer coûtait moins cher que le
-carnet ne l'avait écrit. Les deux réponses sont vraies et ne se remplacent pas.
+Aucun témoin ne pouvait le voir. La charge émise pour « hors borne » et pour
+« dans la borne, sans pont » était **rigoureusement identique**. C'est la
+définition même du manque de vocabulaire : deux faits distincts, une seule
+phrase.
 
-### 2.1 La seule connaissance gratuite, isolée
+## 3. Ce que la piste n°1 demandait vraiment
 
-Un compteur suffit à trancher UN cas sans ouvrir de requête : le contrat gelé
-(§3.2) interdit un pont sans non-lu, donc `unreadCount === 0` PROUVE l'absence.
-C'est précisément le cas qui doit nettoyer les autres appareils quand on finit
-de lire sur celui-ci.
+Le cycle 62 posait `broadcastReadStatus` comme un arbitrage de **prix** : le
+pont devrait y être recalculé sur le nouveau curseur, il est effacé à la place,
+et le corriger coûterait la passe à chaque accusé de lecture. La formulation
+supposait que **garder** valait mieux qu'**effacer**, et que seul le coût s'y
+opposait.
 
-`bridgeKnowledgeFromCount()` (`socketio/unreadBridgeAnnouncement.ts`) porte
-cette règle une fois, pour les quatre émetteurs : les deux qui ne calculent
-jamais l'utilisent seule, les deux qui calculent l'utilisent en REPLI quand
-leur passe n'a pas d'avis sur cette conversation-là (hors borne, ou tombée).
+Le contrat gelé dit le contraire, et il le dit dans le type : le pont **porte
+son propre `unreadCount`**, et le rang n'affiche plus aucun autre chiffre (L06
+a supprimé le badge chiffré — « le chiffre vit ICI »). Une lecture partielle qui
+fait tomber l'arriéré de 12 à 5 **invalide** donc le pont qu'elle annonce :
+le garder ferait lire « Alice · 12 messages » à un lecteur qui n'en a plus que 5.
 
-Ce que `broadcastReadStatus` gagne concrètement, à coût nul : lire entièrement
-une conversation sur un appareil retire désormais le pont de la ligne sur les
-autres appareils — ce que ni l'ancien silence (qui effaçait tout, y compris à
-tort) ni un mutisme complet n'auraient donné juste.
+Le serveur n'a besoin d'aucune requête pour savoir que l'ancien pont est void —
+c'est l'acte qu'il diffuse qui l'a rendu tel. `null` explicite n'est donc pas
+ici un pis-aller de coût : **c'est la seule affirmation vraie**. La piste se
+ferme à zéro requête, parce que la bonne question n'était pas « combien coûte le
+recalcul » mais « que sait-on, au juste ».
 
-### 2.1 bis L'arbitrage qui restait — et que le cycle voisin a supprimé
+C'est la leçon transversale du cycle : **une piste formulée comme un arbitrage
+de coût cachait un manque de vocabulaire.** Tant que le contrat ne savait pas
+dire trois choses, chaque site était forcé de choisir entre deux mensonges, et
+le débat se déplaçait naturellement sur le prix de celui qu'on préférait.
 
-Ce journal portait ici une réserve : conserver un pont non recalculé peut
-SUR-COMPTER après une lecture **partielle** (« Alice et Bob, 5 messages » sous
-une pastille tombée à 2), et le choix était donc *stale* plutôt qu'*absent*.
+## 3 bis. Deux passes, une piste — et c'est l'AUTRE qui avait raison sur ce site
 
-**Cette réserve n'a plus d'objet, et c'est le cycle voisin qui l'a levée** : sur
-ce chemin, le pont est désormais CALCULÉ, pour quatre requêtes payées seulement
-quand la lecture est partielle. La réserve est conservée ici parce qu'elle
-nomme la propriété générale du troisième état — un pont conservé est exact
-partout où RIEN n'a été lu (borne de l'instantané, passe tombée,
-`conversation:join`), et n'était approximatif que là où le lecteur venait
-justement de consommer une partie de son arriéré. C'est-à-dire au seul endroit
-où quelqu'un avait une raison de calculer.
+Découvert à l'intégration : la passe `…-ndx3vw` a traité la même piste n°1 dans
+la même journée, et l'a tranchée par le RECALCUL — le pont de la lecture
+partielle est reconstruit sur le curseur qui vient de bouger, pour QUATRE
+requêtes et non cinq (le curseur que la passe irait relire est celui que
+`broadcastReadStatus` vient de lire pour son compteur ; il lui est passé par
+`cursorsByParticipant`).
 
-### 2.2 Le discriminant côté web
+Ce lot-ci avait argumenté l'inverse — `null` explicite, zéro requête — sur la
+base que le pont porte son propre `unreadCount` et qu'un pont périmé ment. Le
+raisonnement était juste, la conclusion trop courte : **il montrait que garder
+l'ancien pont est faux, pas qu'aucun pont ne vaut mieux qu'un pont juste.**
+Recalculer satisfait la même objection et rend au lecteur multi-appareils le
+repère que `null` lui retire.
 
-`data.bridge === undefined`, **jamais** `'bridge' in data`. Socket.IO sérialise
-en JSON, où `undefined` ne voyage pas : une clé absente et une clé présente
-valant `undefined` sont la même phrase une fois le payload parsé, et le
-discriminant doit être celui que le transport peut porter. Un témoin fige
-l'équivalence.
+L'intégration retient donc le RECALCUL (implémentation `…-ndx3vw`) et lui
+applique le VOCABULAIRE de ce lot : la fonction ne rend plus
+`ConversationBridge | undefined` — un optionnel qui confondait « pas de pont »
+et « pas calculé » — mais le champ DÉCLARÉ. Les trois issues du site :
 
-### 2.3 Le discriminant côté iOS
+| Situation | Déclare |
+|-----------|---------|
+| compteur à zéro (cas dominant, gratuit) | `bridgeComputed(undefined)` → `null` |
+| lecture partielle, passe tournée | `bridgeComputed(pont)` |
+| aucun constructeur, ou passe TOMBÉE | `bridgeNotComputed()` → absent |
 
-`decodeIfPresent` seul rend `nil` aussi bien pour une clé absente que pour un
-`null` explicite : il confond exactement les deux phrases que ce lot sépare.
-D'où `container.contains(.bridge)`, et un type qui NOMME la distinction plutôt
-qu'un booléen à côté d'un optionnel :
+La troisième ligne est ce que le recalcul seul ne pouvait pas exprimer : sans le
+troisième état, un incident de passe sur ce chemin rendait `undefined` et
+EFFAÇAIT le pont en cache — la posture best-effort revendiquée par les quatre
+émetteurs (« le pont est un confort, la pastille est le produit ») n'était pas
+tenue, puisque l'incident détruisait au passage. Les deux moitiés se complètent
+exactement : l'une calcule mieux, l'autre sait se taire.
 
-```swift
-public enum BridgeAnnouncement: Sendable, Equatable {
-    case notComputed              // clé absente ⇒ le lecteur garde le sien
-    case announced(ConversationBridge?)  // {…} ou null ⇒ le lecteur écrit
-}
-```
+La piste n°8 du §8 est donc close par ce même merge, et non reportée.
 
-`UnreadUpdateEvent.bridge` survit en propriété CALCULÉE (les appelants qui ne
-veulent que la valeur compilent inchangés), documentée comme ne portant pas la
-distinction — pour écrire dans un cache, on lit `bridgeAnnouncement`.
+## 4. Le correctif : le troisième état
 
-## 3. Les témoins
+`ConversationUnreadUpdatedEventData.bridge` devient
+`ConversationBridge | null | undefined`, et les deux formes de fil expriment
+enfin trois faits :
 
-RED prouvé sur les deux moitiés du contrat, mutation par mutation :
+| Fil | Sens | Le client doit |
+|-----|------|----------------|
+| objet | « voici le pont » | remplacer |
+| `null` | « j'ai calculé : il n'y en a pas » | EFFACER |
+| absent | « je n'ai pas calculé » | GARDER ce qu'il a |
 
-| mutation | témoins tombés |
-|---|---|
-| web : `bridgeUpdate = { bridge: data.bridge ?? undefined }` (l'ancien inconditionnel) | 2 — « GARDE le pont en cache » et « clé `undefined` = clé absente » |
-| gateway : forme courte inconditionnelle sur le fan-out | 3 — les trois phrases du nouveau bloc |
+**La polarité est inversée, et c'est tout l'intérêt.** L'effacement était le
+comportement par DÉFAUT du silence ; il devient un ACTE EXPLICITE. Un émetteur
+futur qui ignore tout du pont ne peut plus, par sa seule omission, détruire
+celui d'un lecteur — la classe de défaut du cycle 62 devient **structurellement
+impossible**, au lieu d'être corrigée site par site.
 
-Ajoutés :
+Compatibilité : `null` reproduit exactement ce que faisaient les clients
+déployés face à l'omission (ils effaçaient). Un client ancien reste donc correct
+partout où l'effacement est voulu ; il ne perd que le bénéfice du troisième
+état. Aucune migration, aucun drapeau.
 
-- **gateway / fan-out** — `bridge: null` quand la passe a tourné sans rien
-  rendre ; clé absente quand elle a ÉCHOUÉ ; clé absente sans constructeur de
-  pont ; `bridge: null` pour un destinataire à zéro non-lu.
-- **gateway / reconnexion** — `says NOTHING about the bridges it deliberately
-  did not compute` : sur 42 conversations, `conv-0` (hors borne) n'a pas de clé
-  `bridge`, `conv-40` (soumise, sans réponse) porte `bridge: null`, `conv-41`
-  porte son pont. Plus l'absence de clé quand la passe tombe.
-- **gateway / `broadcastReadStatus`** — fichier neuf
-  (`broadcastReadStatus.bridge.test.ts`, 4 témoins), retargeté à la fusion sur
-  les deux REPLIS que le correctif du cycle 63 laisse ouverts : sans
-  constructeur de pont, lecture partielle ⇒ pas de clé ; compteur à zéro ⇒
-  `bridge: null` ; même règle sur la branche « accusés masqués » ; aucun
-  compteur — donc aucune phrase — sur un `received`. Trois témoins du cycle 63
-  ont été portés au troisième état (§8).
-- **web** — `bridge: null` efface, clé absente garde, `undefined` ≡ absente.
-- **iOS/SDK** — `notComputed` garde le pont en cache (et applique quand même le
-  compteur) ; décodage : clé absente ⇒ `.notComputed`, `null` explicite ⇒
-  `.announced(nil)`, objet ⇒ `.announced(pont)`.
+### Les émetteurs, tous instruits dans le MÊME lot (règle du cycle 62 §8)
 
-### 3.1 Trois témoins existants sont passés en `objectContaining`
+`services/gateway/src/socketio/unreadBridgeField.ts` porte le vocabulaire —
+`bridgeComputed()` / `bridgeNotComputed()` — et sa doc énumère les sites. Chacun
+DÉCLARE :
 
-Les trois témoins d'IDENTITÉ de `_emitUnreadCountsSnapshot` figeaient le
-payload ENTIER alors qu'ils parlent du lecteur et du compteur. C'est exactement
-le mécanisme qui a gelé la forme courte comme un acquis au cycle 62, jusqu'à ce
-qu'elle devienne destructrice sans qu'aucun témoin ne change de couleur. La
-forme du pont a ses propres témoins ; ceux-là n'ont plus à la connaître.
+| Émetteur | Situation | Déclare |
+|----------|-----------|---------|
+| fan-out d'envoi | compteur à zéro (§3.2) | `bridgeComputed(undefined)` → `null` |
+| fan-out d'envoi | passe tournée | `bridgeComputed(...)` |
+| fan-out d'envoi | passe échouée / aucun service | `bridgeNotComputed()` → absent |
+| instantané de reconnexion | conversation **soumise** à la passe | `bridgeComputed(...)` |
+| instantané de reconnexion | compteur à zéro | `bridgeComputed(undefined)` → `null` |
+| instantané de reconnexion | **hors borne**, ou passe échouée | `bridgeNotComputed()` → absent |
+| `conversation:join` | ouvrir CONSOMME le pont | `bridgeComputed(undefined)` → `null` |
+| `broadcastReadStatus` | la lecture INVALIDE le pont (§3) | `bridgeComputed(undefined)` → `null` |
 
-Même geste sur le témoin de COÛT (`emitUnreadCountsToRecipients.cost.test.ts`),
-dont l'assertion de forme devient `bridge === null` — annoncé, mais toujours
-pas payé : la ligne qui compte les requêtes est inchangée (5).
+Le critère de l'instantané est l'ensemble **SOUMIS** à la passe, jamais son
+résultat : c'est la seule lecture qui distingue « j'ai demandé, il n'y en a
+pas » de « je n'ai pas demandé ».
 
-## 4. Vérification
+### Côté clients
+
+- **Web** — `handleUnreadUpdated` teste `'bridge' in data` (et non la valeur :
+  `undefined` et l'absence sont indiscernables à la lecture d'une propriété,
+  ce qui est exactement la distinction à tenir), puis ne construit l'enveloppe
+  `BridgeCacheUpdate` que si la clé est là. L'enveloppe existait déjà et disait
+  déjà la bonne chose — c'est son appelant qui en fournissait toujours une.
+- **iOS** — `UnreadUpdateEvent.bridge` (un `ConversationBridge?` qui confondait
+  les deux silences) devient `announcement: BridgeAnnouncement`, énum à trois
+  cas. Le décodage sépare les silences par `container.contains(.bridge)` — seul
+  prédicat qui le peut, `decodeIfPresent` rendant `nil` dans les deux cas.
+  `ConversationSyncEngine.handleUnreadUpdated` `switch` dessus : `.notComputed`
+  ne touche à rien.
+
+- **Android** — aucun changement, et vérifié plutôt que supposé : son
+  `UnreadUpdateEvent` (`core/model/.../SocketEvents.kt`) ne modélise PAS
+  `bridge`. Il n'a donc jamais participé à la classe de défaut, et le `null`
+  neuf est pour lui un champ inconnu qu'il ignore.
+
+**Durcissement collatéral, iOS** : un pont **malformé** rend désormais
+`.notComputed` et non `.cleared`. Le décodage reste tolérant (l'événement entier
+survit, G-124), mais **ne pas savoir lire n'autorise pas à détruire**. C'est le
+même principe que le reste du lot, appliqué au seul cas qui n'est pas un choix
+d'émetteur.
+
+## 5. Témoins
+
+**Ordre TDD respecté** sur l'incrément principal : le fichier de contrat a été
+écrit et vérifié ROUGE (4 échecs / 3 verts) avant toute ligne de production.
+
+`services/gateway/src/__tests__/unit/socketio/unreadBridgeField.contract.test.ts`
+— **nouveau, et son existence est le point** : la classe du cycle 62 ne vivait
+pas dans un émetteur mais dans l'espace ENTRE les émetteurs, où aucun fichier
+de test par émetteur ne pouvait la voir. Ce garde les convoque tous et énonce le
+vocabulaire une fois pour tous. Le témoin central — « distingue, dans le même
+fan-out, *la passe ne dit rien* de *je ne calcule pas* » — fait coexister les
+deux situations dans UN appel et n'est vert que si elles sortent différemment.
+
+Côté instantané (`MeeshySocketIOManager.test.ts`), trois témoins neufs, dont
+celui qui **aurait rougi au cycle 62** : `conv-0` (hors borne) n'a pas la clé,
+`conv-41` (soumise, sans réponse) porte `bridge: null`.
+
+Côté web, `use-socket-cache-sync.test.tsx` monte le VRAI handler sur le VRAI
+cache et exerce les trois états. Côté SDK, quatre témoins de décodage + le
+témoin de synchro `notComputed_keepsTheCachedBridge`.
+
+**Onze témoins pré-existants ont dû être retournés** — tous des
+`toHaveBeenCalledWith` sur le payload ENTIER, exactement l'anti-patron que le
+carnet du cycle 62 avait nommé en le quittant (« un `toHaveBeenCalledWith` sur
+le payload ENTIER gèle la forme courte comme un acquis »). Ils gelaient la forme
+à deux états. Un témoin iOS portait la règle fausse jusque dans son NOM
+(`absentBridge_clearsPreviouslyKnownBridge`), renommé
+`explicitlyClearedBridge_…`.
+
+## 6. Trouvaille collatérale — le flake `packages/shared`, NOMMÉ
+
+Piste n°3, ouverte depuis le cycle 61 bis (quatre cycles) : « le prochain run de
+CI rouge doit le NOMMER ». Il est nommé.
+
+`__tests__/vectors/behaviour-matrix.test.ts` — le garde « déclarés == couverts »
+**parcourt le dépôt ENTIER en synchrone** (`walk` récursif + `readFileSync` sur
+chaque fichier de test). Mesuré ici : **~4,2 s de temps de test contre le
+`testTimeout` de 5 s par défaut de Vitest**. Seul, il passe (3 runs sur 3).
+En suite complète, les 82 autres fichiers se disputent le CPU et il dépasse.
+
+D'où un flake qui ne rougit JAMAIS isolément, et dont le message — « Test timed
+out in 5000ms » — ne désigne aucune régression. Il n'y en avait pas : le témoin
+fait un travail d'I/O que 5 s ne payent pas.
+
+Sa marge se resserre à **chaque fichier de test ajouté au dépôt** — ce lot en
+ajoute un et en modifie plusieurs, ce qui l'a fait tomber ici. Budget porté à
+60 s, avec la mesure écrite à côté. Un ordre de grandeur de marge, sans masquer
+quoi que ce soit : un balayage d'une minute signalerait un tout autre problème.
+
+## 7. Vérification
 
 | Gate | Résultat |
 |------|----------|
-| `jest` gateway | **745 suites / 18 053 tests** verts, après fusion |
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `tsc --noEmit` shared | ✅ 0 erreur |
-| `jest` web | **691 suites / 13 437 tests** verts |
-| `tsc --noEmit` web | 0 erreur sur les fichiers touchés (base pré-existante inchangée) |
-| SDK Swift | compilé et exécuté par la CI (`sdk-tests.yml`, Xcode 26.1.1 / simulateur iOS 18.2) — aucun toolchain Swift dans ce conteneur |
+| gateway — `src/socketio`, `src/__tests__/unit/socketio`, `src/__tests__/unit/handlers` | ✅ 103 suites / 2405 tests |
+| gateway — **suite complète + couverture** | ✅ **744 suites / 18 043 tests**, 95,15 % lignes |
+| `packages/shared` | ✅ **83 suites / 2168 tests** (le flake §6 inclus) |
+| web — suites pont/lentille/cache | ✅ 36 suites / 374 tests |
+| web — **suite complète** | ✅ **687 suites / 13 381 tests** (21 skipped) |
+| iOS / SDK | **non compilable ici** — ni `swift` ni Xcode dans ce conteneur. Vérifié par `sdk-tests.yml`, déclenché sur `packages/MeeshySDK/**` en PR. |
 
-## 5. Ce que ce cycle NE fait pas
+## 8. Pistes pour le cycle 64
 
-- **Aucune requête de plus, nulle part.** L'arbitrage de coût du cycle 62 tient
-  toujours : `broadcastReadStatus` ne fera pas la passe. Il dit simplement
-  qu'il ne l'a pas faite.
-- **Android** ne modélise pas `bridge` et l'ignore (`ignoreUnknownKeys = true`,
-  `SdkModule.kt`) : un `null` lui est aussi transparent qu'un objet. Vérifié
-  avant écriture, aucun changement nécessaire.
-- **`GET /conversations`** (l'autre porteur du pont) est hors sujet : une
-  réponse REST porte le pont ou ne le porte pas, et n'a pas de cache à écraser.
-
-## 6. La leçon, généralisée
-
-Le cycle 62 a nommé la classe : *un champ optionnel dont le client fait une
-lecture autoritative n'est plus optionnel pour l'émetteur*. Ce cycle en tire la
-règle de conception qui manquait :
-
-> **Un contrat doit porter autant d'états que l'émetteur a de choses à dire.**
-> Deux formes pour trois phrases n'est pas une économie : c'est une confusion
-> déléguée au lecteur, qui la tranchera toujours dans le même sens — et donc
-> toujours à tort pour un tiers des cas.
-
-Le corollaire opérationnel, et il est peu coûteux : quand un émetteur ne
-calcule pas ce qu'un autre calcule, **le contrat doit lui donner les mots pour
-le dire**. Le réflexe inverse — faire calculer tout le monde — était ici
-disponible, chiffré, et **cinq fois plus cher** que le vocabulaire.
-
-## 7. Pistes pour le cycle 64
-
-1. **Le flake non identifié de `packages/shared`** (cycle 61 bis §7) — intacte.
-   Le prochain run de CI rouge doit le NOMMER (`--reporter=json --outputFile`).
-2. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte.
-3. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte.
-4. **`attachment:reaction-*` et `message:consumed` sans lecteur web** (cycle 57
+1. **`message:new` — 13 sites sur 2 transports** (cycle 62 §7 bis). Le seul
+   événement multi-émetteur que le balayage n'a pas déplié. Redevient le premier
+   candidat maintenant que la classe « un émetteur non instruit » a reçu son
+   garde structurel : c'est là qu'elle aurait le plus de place pour se cacher.
+2. **Le mock inerte de `presence.service.test.ts`** (cycle 56 §5) — intacte.
+3. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte.
+4. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte.
+5. **`attachment:reaction-*` et `message:consumed` sans lecteur web** (cycle 57
    §8-3) — décision produit, intacte.
-5. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
+6. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
    intacte, bloquée sur l'absence de Xcode.
-6. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
-7. **Nouvelle : balayer les AUTRES champs autoritatifs à émetteurs multiples.**
-   La règle du §6 est écrite ; le balayage du cycle 62 §7 bis ne portait que
-   sur la parité des émetteurs, pas sur le nombre d'ÉTATS que chaque champ
-   optionnel doit porter. Candidats à instruire, dans cet ordre : `location`
-   sur `conversation:updated` (hissé « clé absente, jamais `null` » — donc la
-   même question s'y pose déjà, et la réponse actuelle y est peut-être juste
-   pour une autre raison), puis les champs optionnels de `message:new`.
+7. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
+8. ~~**Le pont sur `broadcastReadStatus`, deuxième temps.**~~ **CLOSE au merge**
+   — la passe `…-ndx3vw` l'a livrée le même jour (recalcul sur le curseur qui
+   vient de bouger, quatre requêtes). Voir §3 bis.
 
-## 8. La fusion, faite à la main
+## 9. La leçon, généralisée
 
-Les deux cycles 63 touchaient `broadcastReadStatus.ts` et se sont croisés sur
-`CHANGELOG.md`, `tasks/lessons.md` et le nom même du journal. Résolution, point
-par point :
+> **Quand deux sites doivent choisir entre deux mensonges, le défaut n'est pas
+> dans les sites : il est dans le vocabulaire.** Une piste formulée comme un
+> arbitrage de coût — « corriger ici coûterait N requêtes » — mérite d'abord la
+> question « le contrat sait-il seulement dire ce que ce site voudrait dire ? ».
+> Ici la réponse était non, et le correctif a coûté zéro requête.
 
-| Site | Résolution |
-|---|---|
-| `broadcastReadStatus.ts` | **leur version est conservée** — c'est elle qui CALCULE. `buildActorBridge` devient `announceActorBridge` et rend l'une des trois phrases : pont, `null` (compteur à zéro, ou passe qui a répondu sans nommer de pont), clé absente (pas de constructeur, ou passe TOMBÉE). Leurs deux replis n'ordonnent donc plus l'effacement. |
-| `broadcastReadStatus.test.ts` (leur fichier) | 3 témoins portés au troisième état : « compteur à zéro » et « la passe n'annonce rien » deviennent `bridge: null` ; « la passe tombe » gagne un `not.toHaveProperty('bridge')` — la distinction que le nouveau contrat introduit ENTRE ces deux-là. |
-| `broadcastReadStatus.cost.test.ts` (leur fichier) | l'assertion de forme du cas gratuit devient `bridge: null` ; **les lignes qui comptent les requêtes sont inchangées** — annoncé, toujours pas payé. |
-| `broadcastReadStatus.bridge.test.ts` (ce cycle) | retargeté sur les deux replis, pour ne pas doubler leur fichier. |
-| `tasks/lessons.md` | les deux leçons gardées ; la nôtre renumérotée **233** (leur 232 est arrivée la première). |
-| `CHANGELOG.md` | les deux entrées gardées, chacune pointant sur son journal. |
-| journal | le leur garde `cycle63.md`, celui-ci devient `cycle63-bis.md`. |
+Corollaire, sur la polarité des valeurs par défaut :
 
-Aucune ligne de leur correctif n'a été perdue : le seul changement apporté à
-leur code est la troisième phrase sur les chemins où ils n'en avaient que deux.
+> **Le sens du SILENCE doit être le sens INOFFENSIF.** Un protocole où
+> l'omission détruit fabrique un défaut à chaque émetteur qui n'a pas été mis au
+> courant — et ces émetteurs-là ne se signalent jamais, puisque leur code ne
+> change pas. Rendre l'effacement explicite ne corrige pas un défaut : ça retire
+> à la classe entière son terrain.
+
+Et une leçon sur les cycles eux-mêmes :
+
+> **Un correctif qui BORNE son travail doit dire ce qu'il advient de ce qui est
+> hors borne.** Le cycle 62 a écrit « leur pont attend » là où le code disait
+> « leur pont est effacé », parce que les deux sortaient la même charge sur le
+> fil. Quand une borne est posée, le témoin à écrire n'est pas « ce qui est dans
+> la borne est traité » — c'est **« ce qui est dehors est INTACT »**.

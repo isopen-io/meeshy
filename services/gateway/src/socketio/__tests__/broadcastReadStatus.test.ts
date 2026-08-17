@@ -145,15 +145,15 @@ describe('broadcastReadStatus — le pont ✦ sur la resynchro du lecteur', () =
 
     // Le cas dominant : lire une conversation la vide. Contrat gelé §3.2 — un
     // compteur nul n'a pas de pont, donc l'effacement client est CORRECT ici.
-    // Et il est ANNONCÉ (`bridge: null`) plutôt que sous-entendu par un silence
-    // (cycle 63 bis) : la clé absente est réservée à « je n'ai pas calculé »,
-    // ce qui n'est pas le cas ici — la réponse est connue SANS requête.
+    //
+    // Il est désormais AFFIRMÉ (`bridge: null`) et non laissé à l'omission
+    // (cycle 63) : sur ce même site, l'omission est réservée à « la passe n'a
+    // pas tourné » (voir le témoin de l'incident plus bas), et les deux ne
+    // doivent pas se ressembler. N'appeler AUCUNE requête ne veut pas dire ne
+    // rien savoir — ici on sait, sans payer.
     expect(buildBridgeData).not.toHaveBeenCalled();
-    expect(io._payloadFor(UNREAD_UPDATED)).toEqual({
-      conversationId: CONVERSATION_ID,
-      unreadCount: 0,
-      bridge: null,
-    });
+    const payload = io._payloadFor(UNREAD_UPDATED);
+    expect(payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: 0, bridge: null });
   });
 
   it('never reads the cursor twice — the pass gets the one this broadcast already read', async () => {
@@ -181,19 +181,18 @@ describe('broadcastReadStatus — le pont ✦ sur la resynchro du lecteur', () =
     expect(params.cursorsByParticipant.has(ACTOR_PARTICIPANT_ID)).toBe(false);
   });
 
-  // La passe a RÉPONDU sans nommer de pont : c'est une réponse, pas un silence.
-  // `bridge: null` ⇒ le client efface le sien. À distinguer du témoin suivant,
-  // où la passe TOMBE et où la clé ne voyage pas (cycle 63 bis).
-  it('announces `bridge: null` when the pass announces nothing for this conversation', async () => {
+  // La passe a TOURNÉ et n'a rien à annoncer : c'est une réponse, pas une
+  // abstention. `null` explicite (cycle 63) — à comparer au témoin suivant, où
+  // la passe TOMBE et où le serveur se tait pour ne rien détruire. Ces deux cas
+  // sortaient la même charge avant ce lot, et c'est ce qui a coûté au cycle 62
+  // le pont de toutes les lignes du lecteur.
+  it('emits an EXPLICIT null when the pass announces nothing for this conversation', async () => {
     const { io, deps } = makeHarness({ unreadCount: 3, bridges: new Map() });
 
     await broadcastReadStatus(deps as any, readArgs());
 
-    expect(io._payloadFor(UNREAD_UPDATED)).toEqual({
-      conversationId: CONVERSATION_ID,
-      unreadCount: 3,
-      bridge: null,
-    });
+    const payload = io._payloadFor(UNREAD_UPDATED);
+    expect(payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: 3, bridge: null });
   });
 
   it('still emits the count when the bridge pass throws', async () => {
@@ -202,9 +201,9 @@ describe('broadcastReadStatus — le pont ✦ sur la resynchro du lecteur', () =
     await expect(broadcastReadStatus(deps as any, readArgs())).resolves.toBeUndefined();
 
     // Le pont est un confort, la pastille est le produit — même posture que le
-    // fan-out d'envoi et que l'instantané de reconnexion. Et la clé est ABSENTE,
-    // jamais `null` : une passe tombée ne SAIT pas s'il y a un pont, et `null`
-    // ordonnerait son effacement sur la foi d'une panne (cycle 63 bis).
+    // fan-out d'envoi et que l'instantané de reconnexion. Et la posture est
+    // enfin TENUE : la clé ne part pas du tout (cycle 63), donc l'incident ne
+    // détruit pas non plus le pont que le lecteur avait déjà en cache.
     const payload = io._payloadFor(UNREAD_UPDATED);
     expect(payload).toEqual({
       conversationId: CONVERSATION_ID,

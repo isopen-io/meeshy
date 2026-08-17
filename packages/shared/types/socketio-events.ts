@@ -220,15 +220,25 @@ export const SERVER_EVENTS = {
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
-  READ_STATUS_UPDATED: 'read-status:updated',
   /**
-   * Same payload as `READ_STATUS_UPDATED`, correctly namespaced under the
-   * `message:` entity per the `entity:action-word` convention (the legacy
-   * name hyphenates the entity itself, `read-status`, which violates it).
-   * Emitted in parallel with `READ_STATUS_UPDATED` for ~3 months so clients
-   * can migrate independently; see tasks/socketio-events-cleanup.md #3.
+   * L'accusé de remise et de lecture — le SEUL nom sous lequel il voyage.
+   *
+   * Le nom hyphène l'ENTITÉ (`read-status`) et déroge donc à la convention
+   * `entity:action-word` que tout le reste de cette map respecte. La dérogation
+   * est ASSUMÉE et documentée ici plutôt que corrigée : un alias correctement
+   * namespacé (`message:read-status-updated`) a été dual-émis à partir du
+   * 2026-07-05 pour permettre aux clients de migrer, et aucun ne l'a jamais
+   * écouté — pas une ligne dans `apps/web`, `packages/MeeshySDK/Sources` ou
+   * `apps/android`, à aucun commit de l'historique. Retiré au cycle 64 : le
+   * renommage n'achetait que de la cosmétique de nommage, et il la faisait
+   * payer en doublant le fan-out le plus fréquent de la messagerie (chaque
+   * remise, chaque lecture, chaque rejeu de file hors ligne, ×2 sur le fil).
+   *
+   * Ne PAS rouvrir sans un consommateur client réel : le raisonnement complet,
+   * y compris ce qui rendrait la migration rentable, est dans
+   * `tasks/socketio-events-cleanup.md` § 3.
    */
-  MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
+  READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
@@ -925,34 +935,32 @@ export interface ConversationUnreadUpdatedEventData {
    * deux destinataires du même événement source (un `message:new`) ne portent
    * jamais le même `bridge`.
    *
-   * ── TROIS états, pas deux (cycle 63) ────────────────────────────────────
-   * Les deux clients recopient ce champ INCONDITIONNELLEMENT dans leur cache
-   * de liste (`ConversationSyncEngine.handleUnreadUpdated` côté iOS,
-   * `setConversationUnreadInCache` côté web). Ce qui arrive ici ÉCRIT, y
-   * compris quand rien n'arrive. Le champ doit donc pouvoir dire les trois
-   * choses que l'émetteur peut avoir à dire, et pas seulement deux :
+   * TROIS ÉTATS, et c'est le cœur du contrat (cycle 63). Ce champ a longtemps
+   * eu deux formes de fil pour exprimer trois faits, et le troisième —
+   * « je n'ai pas calculé » — n'avait aucun mot. Les émetteurs qui ne
+   * calculaient pas empruntaient donc le mot de « il n'y en a pas », et les
+   * deux clients, qui recopient ce champ AUTORITAIREMENT, lisaient un ORDRE
+   * D'EFFACEMENT là où le serveur ne voulait dire que son silence.
    *
-   * | forme sur le fil | ce que ça veut dire        | ce que le client fait |
-   * |------------------|----------------------------|-----------------------|
-   * | `bridge: {…}`    | voici le pont de CE lecteur | il l'écrit           |
-   * | `bridge: null`   | j'ai calculé, il n'y en a pas | il EFFACE          |
-   * | clé ABSENTE      | je n'ai pas calculé         | il GARDE le sien     |
+   * | Fil | Sens | Le client doit |
+   * |-----|------|----------------|
+   * | objet | « voici le pont » | remplacer |
+   * | `null` | « j'ai calculé : il n'y en a pas » | EFFACER |
+   * | absent | « je n'ai pas calculé » | GARDER ce qu'il a |
    *
-   * L'absence était auparavant confondue avec `null`. Trois émetteurs sur
-   * quatre ne calculent pas le pont — la resynchro du lecteur
-   * (`broadcastReadStatus`), le `conversation:join`, et l'instantané de
-   * reconnexion au-delà de sa borne ou quand sa passe tombe — et leur silence
-   * partait donc sur le fil comme un ORDRE D'EFFACEMENT. Le cycle 62 avait
-   * fermé le cas dominant en faisant CALCULER l'instantané ; il restait, sous
-   * la même forme, tous les cas où calculer n'est pas possible ou pas
-   * souhaitable. Ce n'était pas un manque de calcul, c'était un manque de
-   * vocabulaire.
+   * L'ABSENCE EST DÉSORMAIS INOFFENSIVE, et c'est délibéré : le défaut du
+   * cycle 62 est né d'un émetteur qui se taisait sans savoir que son silence
+   * détruisait. Un émetteur futur qui ignore tout du pont ne peut plus, par sa
+   * seule omission, effacer celui d'un lecteur. L'effacement devient un ACTE
+   * EXPLICITE (`bridge: null`), qu'on ne pose qu'en sachant ce qu'on dit.
    *
-   * Corollaire pour un nouvel émetteur : n'écrire `null` que si l'on SAIT
-   * qu'il n'y a pas de pont (typiquement `unreadCount === 0`, contrat gelé
-   * §3.2, ou une passe qui a tourné et n'a rien rendu). Dans le doute, omettre
-   * la clé — un pont périmé se corrige au prochain message, un pont effacé à
-   * tort ne revient jamais (la liste web tourne en `staleTime: Infinity`).
+   * Compatibilité : `null` reproduit EXACTEMENT ce que faisaient les clients
+   * déployés face à l'omission (ils effaçaient). Un client ancien reste donc
+   * correct partout où l'effacement est voulu, et ne perd que le bénéfice du
+   * troisième état.
+   *
+   * @see services/gateway/src/socketio/unreadBridgeField.ts — les quatre
+   *      émetteurs et le fait que chacun déclare.
    */
   readonly bridge?: ConversationBridge | null;
 }
@@ -1796,7 +1804,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
-  [SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;

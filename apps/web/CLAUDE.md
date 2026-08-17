@@ -208,11 +208,17 @@ ABSENTE est leur silence, et un silence n'efface rien :
 | `bridge: null` | EFFACE le pont en cache |
 | clé absente / `undefined` | GARDE le pont en cache |
 
-Le discriminant est `data.bridge === undefined`, jamais `'bridge' in data` : Socket.IO sérialise en
-JSON, où `undefined` ne voyage pas — les deux formes sont la même phrase une fois le payload parsé.
-`BridgeCacheUpdate` (`lib/conversations/unread-cache.ts`) porte la même distinction côté cache
-(enveloppe absente = garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
-`BridgeAnnouncement` + `ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
+Le discriminant est **`'bridge' in data`** — la PRÉSENCE de la clé, jamais sa valeur : `undefined` et
+l'absence sont indiscernables à la lecture d'une propriété, et c'est précisément la distinction à
+tenir. Conséquence à connaître en test : un payload construit à la main avec `bridge: undefined`
+porte la clé, donc il EFFACE. Sur le fil la question ne se pose pas (Socket.IO sérialise en JSON, où
+`undefined` ne voyage pas) — elle ne se pose que pour un objet fabriqué en mémoire.
+
+`null` est traduit en `undefined` au passage : le cache ne stocke que « pont ou rien », le troisième
+état est une grammaire de FIL, jamais un état de cache. `BridgeCacheUpdate`
+(`lib/conversations/unread-cache.ts`) porte la même distinction côté cache (enveloppe absente =
+garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
+`ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
 
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
