@@ -106,10 +106,9 @@ export function SharedConversationExperience({ linkId }: SharedConversationExper
     if (linkId) void load();
 
     return () => { cancelled = true; };
-    // `t` est volontairement HORS des dépendances : `useI18n` en renvoie une
-    // nouvelle identité à chaque rendu, et l'y mettre relançait la requête en
-    // boucle. Le message d'erreur est traduit au rendu, pas au chargement.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Le corps de cet effet ne lit PAS `t` : le message d'erreur est traduit au
+    // rendu. C'est délibéré — `useI18n` renvoie une nouvelle identité de `t` à
+    // chaque rendu, donc en dépendre relançait la requête en boucle.
   }, [linkId, reloadToken]);
 
   // La modale est DÉRIVÉE de l'accès, pas synchronisée par un effet : un effet

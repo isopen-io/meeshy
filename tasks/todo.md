@@ -54,8 +54,8 @@ Sources : `docs/design/2026-08-15-conversation-modes-verdict.html` (vol. 3),
 - [x] L5 — `--conv-accent` depuis `conversationAccentPalette()` (`packages/shared`).
 
 ### Livraison
-- [x] D1 — `tsc` + tests web & gateway verts, `next build` vert.
-      **Lint : non exécutable** — ESLint est cassé à l'échelle du dépôt (voir Revue).
+- [x] D1 — `tsc` + tests web & gateway verts, `next build` vert, **ESLint réparé et vert
+      sur les fichiers de la livraison**.
 - [ ] D2 — images Docker : **non construites dans cette session**, le proxy sortant
       bloque tous les blobs Docker Hub (403). Construites par
       `.github/workflows/docker.yml` au push. Détail en Revue.
@@ -138,6 +138,45 @@ autre échelle, et la liste tremblerait d'une frame à l'autre. D'où la sépara
 ancre de géométrie (`data-focal-row`) / cible de transformation
 (`data-focal-scale`), pinnée par un test.
 
+### ESLint — réparé (demande de suivi)
+
+Le blocage rapporté d'abord comme « hors périmètre » ne l'était pas. Trois causes
+empilées, aucune dans le code du dépôt :
+
+1. **`FlatCompat` sur des configs déjà plates.** `eslint-config-next@16` exporte
+   des `Linter.Config[]`. Les passer à `FlatCompat.extends()` fait valider un objet
+   plat par le validateur *eslintrc*, qui `JSON.stringify` la config pour formater
+   ses erreurs et bute sur le cycle `plugins.react → configs → plugins`. Le message
+   parlait de JSON parce que la panne était dans le formateur d'erreur. Les presets
+   sont maintenant importés et étalés directement.
+2. **ESLint 10 est inutilisable avec la stack Next.** `eslint-plugin-react@7.37.5`
+   (dernière version publiée, dépendance DURE de `eslint-config-next`) appelle encore
+   `context.getFilename()`, retiré en ESLint 10, et plafonne son peer à `^9.7`. Le
+   `"eslint": "^10.8.0"` d'`apps/web` était donc le bug → pin `^9.39.5`, plus un
+   `ignore` Dependabot motivé dans les deux blocs npm concernés pour que le prochain
+   bump automatique ne rendorme pas le gate.
+3. **`.eslintrc.local.json` était mort.** ESLint 9+ n'ouvre plus le format eslintrc :
+   son interdiction des imports barrel ne s'appliquait à rien depuis des mois. Reprise
+   dans la config plate — mais avec `paths` et non `patterns`, dont la sémantique
+   gitignore faisait couvrir `@/components/ui/**` par `@/components/ui`, si bien que
+   la règle interdisait exactement l'import direct que son message recommande.
+
+`apps/web` passe aussi de `next lint` (déprécié, supprimé dans Next 16) à `eslint .`,
+la migration recommandée par Next.
+
+**Ce que le linter a immédiatement trouvé dans le code du jour** — deux vrais
+défauts, corrigés en retirant le contournement : un `eslint-disable-next-line
+react-hooks/exhaustive-deps` devenu mensonger (les dépendances étaient exhaustives
+depuis que `t` était sorti du corps de l'effet) et un `useMemo` dépendant de champs
+non déclarés (`use-conversation-accent`).
+
+**Ce que le linter révèle sur l'existant** : 1 750 fichiers analysés,
+**3 756 erreurs / 246 avertissements** sur 594 fichiers, dont **2 631
+`no-explicit-any`** — contre la règle « No `any` types - ever » du CLAUDE.md. Un
+gate qui plante n'est pas indisponible : il est désarmé, et le code dérive derrière.
+Non corrigé ici (la CI ne bloque pas : `continue-on-error: true`), mais mesuré et
+consigné — leçon 222.
+
 ### Vérification
 
 | Gate | Résultat |
@@ -165,6 +204,10 @@ ancre de géométrie (`data-focal-row`) / cible de transformation
   `.github/workflows/docker.yml` construit et pousse `meeshy-web` et
   `meeshy-gateway` automatiquement — les deux chemins surveillés
   (`apps/web/**`, `services/gateway/**`) sont touchés par cette livraison.
-- **ESLint** — cassé à l'échelle du dépôt (`Converting circular structure to
-  JSON`, ESLint 10 contre config héritée), y compris sur des fichiers non
-  touchés. Hors périmètre.
+- **Les 3 756 erreurs ESLint pré-existantes** — révélées, pas corrigées (voir
+  ci-dessous). La CI ne les bloque pas (`continue-on-error: true`), et les
+  corriger ici noierait la livraison.
+- **`lint` de `services/gateway`, `packages/shared`, `services/agent`** — ces trois
+  scripts sont `eslint src/` alors qu'aucun des trois n'a jamais eu ESLint ni de
+  config (et `packages/shared` n'a même pas de `src/`). Leur donner une stack
+  TypeScript-ESLint est un chantier distinct, à décider par l'équipe.

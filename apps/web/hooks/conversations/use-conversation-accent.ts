@@ -55,8 +55,16 @@ export function conversationAccentStyle(
 export function useConversationAccent(
   conversation: Parameters<typeof conversationAccentStyle>[0]
 ): ConversationAccentStyle | undefined {
+  // Les trois champs sont extraits AVANT le mémo : l'accent ne dépend que
+  // d'eux, et dépendre de l'objet recalculerait à chaque nouvelle identité
+  // renvoyée par React Query — pour un résultat identique.
+  const id = conversation?.id;
+  const title = conversation?.title;
+  const type = conversation?.type;
+  const language = conversation?.language;
+
   return useMemo(
-    () => conversationAccentStyle(conversation),
-    [conversation?.id, conversation?.title, conversation?.type]
+    () => (id ? conversationAccentStyle({ id, title, type, language } as never) : undefined),
+    [id, title, type, language]
   );
 }

@@ -1,3 +1,4 @@
+import { createElement, useEffect, useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { SharedConversationExperience } from '../SharedConversationExperience';
 import type { LinkConversationData } from '@/services/link-conversation.service';
@@ -54,15 +55,15 @@ jest.mock('@/components/join', () => ({
 // ci-dessus restent l'implémentation servie.
 jest.mock('next/dynamic', () => (loader: () => Promise<unknown>) => {
   const LazyComponent = (props: Record<string, unknown>) => {
-    const [Resolved, setResolved] = require('react').useState(null);
-    require('react').useEffect(() => {
+    const [Resolved, setResolved] = useState<unknown>(null);
+    useEffect(() => {
       let alive = true;
       void Promise.resolve(loader()).then((mod: unknown) => {
-        if (alive) setResolved(() => mod as never);
+        if (alive) setResolved(() => mod);
       });
       return () => { alive = false; };
     }, []);
-    return Resolved ? require('react').createElement(Resolved, props) : null;
+    return Resolved ? createElement(Resolved as never, props) : null;
   };
   return LazyComponent;
 });
