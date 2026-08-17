@@ -260,7 +260,11 @@ export function LentilleConversationListMount({
                   conversation={conversation}
                   currentUser={currentUser}
                   isSelected={selectedConversationId === conversation.id}
-                  onClick={() => onSelectConversation(conversation)}
+                  /* REV-4/R4-6 — le rappel STABLE reçu du mux, transmis TEL
+                     QUEL : c'est le rang qui referme sur sa conversation
+                     (`useCallback` chez lui). Une fermeture littérale ici
+                     rendrait le `memo` de `LentilleRow` décoratif. */
+                  onSelect={onSelectConversation}
                   typingUsers={typingByConversation.get(conversation.id)}
                   draft={draftMessages[conversation.id]}
                   bridge={resolveRowBridge(conversation, bridgesByConversation)}

@@ -91,14 +91,19 @@ const t = (key: string, params?: Record<string, unknown> | string) => {
 };
 
 describe('LentilleRow — rang', () => {
-  it('rend role=button avec tabIndex, et déclenche onClick au clic', () => {
-    const onClick = jest.fn();
+  // R4-6 — `onClick: () => void` est devenu `onSelect: (conversation) => void`
+  // (rappel STABLE + donnée, pour que le `memo` du rang serve à quelque chose).
+  // Le témoin y gagne : il vérifie désormais AUSSI que le rang referme sur SA
+  // conversation, ce que l'ancienne fermeture littérale rendait invérifiable.
+  it('rend role=button avec tabIndex, et déclenche onSelect(conversation) au clic', () => {
+    const onSelect = jest.fn();
+    const conversation = makeConversation();
     render(
       <LentilleRow
-        conversation={makeConversation()}
+        conversation={conversation}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={onClick}
+        onSelect={onSelect}
         t={t}
       />
     );
@@ -107,17 +112,19 @@ describe('LentilleRow — rang', () => {
     expect(row).toHaveAttribute('role', 'button');
     expect(row).toHaveAttribute('tabindex', '0');
     row.click();
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(conversation);
   });
 
-  it('Enter et Espace déclenchent onClick (a11y clavier)', () => {
-    const onClick = jest.fn();
+  it('Enter et Espace déclenchent onSelect(conversation) (a11y clavier)', () => {
+    const onSelect = jest.fn();
+    const conversation = makeConversation();
     render(
       <LentilleRow
-        conversation={makeConversation()}
+        conversation={conversation}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={onClick}
+        onSelect={onSelect}
         t={t}
       />
     );
@@ -125,7 +132,8 @@ describe('LentilleRow — rang', () => {
     row.focus();
     row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
-    expect(onClick).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith(conversation);
   });
 
   it('behaviour-matrix:L06 — aucun badge chiffré : point accent 8px si non-lu, rien si zéro', () => {
@@ -134,7 +142,7 @@ describe('LentilleRow — rang', () => {
         conversation={makeConversation({ unreadCount: 4 })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -147,7 +155,7 @@ describe('LentilleRow — rang', () => {
         conversation={makeConversation({ unreadCount: 0 })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -162,7 +170,7 @@ describe('LentilleRow — rang', () => {
         })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         typingUsers={[{ userId: 'user-2', displayName: 'Bob' }]}
         t={t}
       />
@@ -186,7 +194,7 @@ describe('LentilleRow — rang', () => {
         })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         draft={{ content: 'en cours de rédaction' }}
         bridge={bridge}
         t={t}
@@ -211,7 +219,7 @@ describe('LentilleRow — rang', () => {
         })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         bridge={bridge}
         t={t}
       />
@@ -227,7 +235,7 @@ describe('LentilleRow — rang', () => {
         })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -244,7 +252,7 @@ describe('LentilleRow — rang', () => {
         })}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -268,7 +276,7 @@ describe('LentilleRow — présence (behaviour-matrix:L10)', () => {
         })}
         currentUser={makeUser({ id: 'user-1' })}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -291,7 +299,7 @@ describe('LentilleRow — focus card (WL-108)', () => {
         conversation={makeConversation()}
         currentUser={makeUser()}
         isSelected={false}
-        onClick={jest.fn()}
+        onSelect={jest.fn()}
         t={t}
         {...props}
       />

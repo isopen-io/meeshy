@@ -36,11 +36,11 @@ jest.mock('@/stores/conversation-ui-store', () => ({
 const rowElections = new Map<string, unknown>();
 const rowShowDetails = new Map<string, unknown>();
 jest.mock('../LentilleRow', () => ({
-  LentilleRow: ({ conversation, onClick, election, onShowDetails }: any) => {
+  LentilleRow: ({ conversation, onSelect, election, onShowDetails }: any) => {
     rowElections.set(conversation.id, election);
     rowShowDetails.set(conversation.id, onShowDetails);
     return (
-      <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
+      <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={() => onSelect(conversation)}>
         {conversation.title}
       </div>
     );
