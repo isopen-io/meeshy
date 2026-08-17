@@ -255,6 +255,7 @@ fun FeedScreen(
                             },
                             onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
                             onRepost = { viewModel.repost(post.id) },
+                            onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
                         )
@@ -458,6 +459,7 @@ private fun PostCard(
     onShare: () -> Unit = {},
     onCopyLink: () -> Unit = {},
     onRepost: () -> Unit = {},
+    onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
@@ -516,6 +518,7 @@ private fun PostCard(
                     onCopyLink = onCopyLink,
                     onRepost = onRepost,
                     onBookmarkToggle = onBookmark,
+                    onPin = onPin,
                     onReport = onReport,
                     onDelete = onDelete,
                 )
@@ -848,6 +851,7 @@ private fun PostOptionsButton(
     onCopyLink: () -> Unit,
     onRepost: () -> Unit,
     onBookmarkToggle: () -> Unit,
+    onPin: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -868,6 +872,7 @@ private fun PostOptionsButton(
                     PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
                     PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to onBookmarkToggle
                     PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to onBookmarkToggle
+                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to onPin
                     PostAction.Report -> stringResource(R.string.feed_action_report) to onReport
                     PostAction.Delete -> stringResource(R.string.feed_action_delete) to onDelete
                 }

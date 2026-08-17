@@ -3825,7 +3825,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
       dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
       effects/blur still open
-- [ ] Post / comment pin-unpin; repost / quote-repost / share; report
+- [~] Post / comment pin-unpin; repost / quote-repost / share; report — **post pin shipped
+      2026-08-17** (slice `feed-pin-own-post`). Re-proof found `PostRepository.pinPost`/
+      `unpinPost` (`POST`/`DELETE /posts/{id}/pin`) already fully implemented and TESTED at the
+      repository level, with ZERO call sites anywhere in `apps/android` — ready backend, never
+      wired to a screen. Confirmed against the iOS reference (`PostService.pinPost`/`unpinPost`,
+      `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift`) that iOS itself only
+      ever calls `pinPost` — `unpinPost` has **zero call sites in the iOS app too** (`onPin` is
+      gated `isOwnPost ? {...} : nil` in `ProfileUserPostsList.swift`/`PostDetailViewModel.swift`,
+      exactly like `onDelete`, with no matching `onUnpin`). Ported faithfully: `PostAction.Pin`
+      added to the existing pure `PostActionMenu` (own-post-only, ordered right before Delete),
+      `FeedViewModel.pinPost(postId)` mirrors the established `repost()`/`deletePost()` shape
+      (call → `postRepository.refresh()` on success to pick up the server's `isPinned`, surface
+      `errorMessage` on failure). `unpinPost` deliberately left unwired — no UI reference on
+      either platform to port. +5 tests (`PostActionMenuTest` ×3: own-post ordering now includes
+      `Pin`, someone-else's post never offers it; `FeedViewModelTest` ×2: delegates + refreshes
+      on success, surfaces error without refreshing on failure). EN/FR/ES/PT strings.
+      **Still open**: comment pin-unpin (separate surface, not investigated this slice);
+      quote-repost's own composer UI (the `isQuote`/`content` params already exist on
+      `PostRepository.repost`, but `FeedScreen`'s current `onRepost` always calls the SIMPLE
+      repost path — a quote-with-commentary UI, if one exists at all, wasn't confirmed).
 - [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
       tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
       `PostApi.recordImpressions`/`PostRepository.recordImpressions(postIds, source)`

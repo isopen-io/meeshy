@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Post pin (own posts) shipped** (slice `feed-pin-own-post`, feature-parity §F).
+> `gh pr list --state open --search "apps/android OR apps/ios"` showed three concurrent PRs
+> (#3123, #3096, #3108), none touching `apps/android`. `df -h /` showed 10 Gi free, stable.
+>
+> **Found via the same "ready backend, never wired" heuristic that worked twice already this
+> session** — this time via an Explore agent search across every `sdk-core` repository for
+> public methods with zero call sites anywhere in `apps/android/feature`/`apps/android/app`.
+> Returned several candidates; `PostRepository.pinPost`/`unpinPost` was the strongest: small
+> scope, an existing tested hook point (`PostActionMenu`, already pure and covered), and a real
+> user-visible action (not an internal-only endpoint). The agent also surfaced and I independently
+> rejected: the entire `CommunityRepository` (zero screens exist for Communities at all — a whole
+> sub-app, far too large), `UserService.getProfileByPhone`'s Android analogue (needs a dial-pad
+> tab that doesn't exist), and `FriendRepository.sendEmailInvitation` (needs real new UI on the
+> Discover screen — medium, kept as a candidate for a future run, not chosen this time).
+>
+> **RE-PROVED before assuming symmetry**: the checklist line says "pin-unpin" together, so the
+> first assumption was a toggle (Pin ↔ Unpin, mirroring `Bookmark`/`Unbookmark`). Reading the
+> iOS reference directly disproved this — `unpinPost` exists in `PostService` (the SDK protocol)
+> but has **zero call sites anywhere in the iOS app** (`grep` confirmed). `onPin` is wired
+> exactly like `onDelete` — `isOwnPost ? {...} : nil`, unconditional on the post's current pinned
+> state, no unpin counterpart. Ported this exactly rather than inventing a more "complete" toggle
+> UX iOS itself doesn't have — `PostAction.Pin` is a single, always-available (for own posts)
+> action, and `PostRepository.unpinPost` stays unwired.
+>
+> **Reused the existing pure `PostActionMenu` hook point rather than a new mechanism**: `Post
+> Action.Pin` slots in right before `Delete` (own-post actions), `PostActionMenuTest`'s existing
+> exhaustive `containsExactly(...).inOrder()` assertion for the own-post case updated to include
+> it — a source-guard-style test that would have failed loudly if the new action landed in the
+> wrong position. `FeedViewModel.pinPost(postId)` mirrors `repost()`'s/`deletePost()`'s exact
+> established shape (`NetworkResult.Success` → `postRepository.refresh()`; `Failure` →
+> `errorMessage`) rather than inventing a new pattern for the third time.
+>
+> **+5 tests**: `PostActionMenuTest` — own-post ordering now includes `Pin` (was previously
+> exactly Share/CopyLink/Repost/Bookmark/Delete, now has Pin before Delete), someone-else's post
+> never offers Pin (new test, locks the own-post-only gate). `FeedViewModelTest` — `pinPost`
+> delegates + refreshes on success, surfaces the error without refreshing on failure.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules) green. EN/FR/ES/PT strings added (`feed_action_pin`), matching the existing 4-locale
+> baseline for every other action in the same menu.
+>
+> **Still open, noted honestly rather than silently left unchecked**: comment pin-unpin (a
+> separate surface from post pin, not investigated this slice); quote-repost's own composer UI —
+> `PostRepository.repost` already accepts `isQuote`/`content`, but `FeedScreen`'s current
+> `onRepost` always calls the plain repost path; whether a quote-composer UI exists anywhere else
+> in the app wasn't confirmed, left as a genuinely open question for a future run.
+
 > On 2026-08-17 **Notification stale-while-revalidate cache shipped** (slice
 > `notification-cache-first-stream`, feature-parity §M), closing the "still open" item left by
 > the earlier `notification-realtime-socket` slice the same day. `gh pr list --state open
