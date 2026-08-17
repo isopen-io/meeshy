@@ -30,12 +30,44 @@ jest.mock('@/hooks/use-feature-flags', () => ({
 // ---- Contrôle du comportement du point de montage Lentille -------------
 let mockLentilleShouldThrow = false;
 
+// REV-4/B2 — le double du point de montage expose désormais CE QU'IL REÇOIT du
+// mux en matière de pagination et de branche vide : c'est exactement ce que le
+// verdict de la porte V2 a trouvé manquant (« le Mount remplace `renderContent`
+// en bloc »). Le comportement de rendu de ces props est couvert par la suite du
+// composant réel (`LentilleConversationListMount.test.tsx`).
 jest.mock('@/components/conversations/lentille/LentilleConversationListMount', () => ({
-  LentilleConversationListMount: ({ currentUserId }: { currentUserId: string | null | undefined }) => {
+  LentilleConversationListMount: ({
+    currentUserId,
+    searchQuery,
+    hasMore,
+    isLoadingMore,
+    onLoadMore,
+    loadMoreSentinelRef,
+  }: {
+    currentUserId: string | null | undefined;
+    searchQuery?: string;
+    hasMore?: boolean;
+    isLoadingMore?: boolean;
+    onLoadMore?: () => void;
+    loadMoreSentinelRef?: (el: HTMLDivElement | null) => void;
+  }) => {
     if (mockLentilleShouldThrow) {
       throw new Error('[test] échec injecté dans la sous-arborescence Lentille');
     }
-    return <div data-testid="lentille-list-mount" data-current-user-id={currentUserId ?? ''} />;
+    return (
+      <div
+        data-testid="lentille-list-mount"
+        data-current-user-id={currentUserId ?? ''}
+        data-search-query={searchQuery ?? ''}
+        data-has-more={String(hasMore ?? false)}
+        data-is-loading-more={String(isLoadingMore ?? false)}
+        data-has-load-more={String(typeof onLoadMore === 'function')}
+      >
+        {hasMore && !isLoadingMore && (
+          <div ref={loadMoreSentinelRef} data-testid="lentille-load-more-sentinel" />
+        )}
+      </div>
+    );
   },
 }));
 
@@ -300,6 +332,73 @@ describe('ConversationList — mux Lentille (WL-101)', () => {
         'user-1'
       );
       expect(screen.queryByText('Test Conversation 1')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * REV-4/B2 — behaviour-matrix:L17.
+   *
+   * Le mux ne doit plus AMPUTER le chemin Lentille de ce que `renderContent`
+   * portait : la pagination et la branche vide sont des propriétés de la
+   * LISTE, pas de sa peau. Le mécanisme reste unique (`useLoadMoreSentinel`
+   * chez `ConversationList`) ; seul son ref-setter descend.
+   */
+  describe('drapeau ON — pagination et branche vide transmises (B2)', () => {
+    beforeEach(() => {
+      mockLentilleActive = true;
+    });
+
+    it('transmet hasMore / isLoadingMore / onLoadMore au point de montage', async () => {
+      render(
+        <ConversationList
+          {...defaultProps}
+          hasMore={true}
+          isLoadingMore={false}
+          onLoadMore={jest.fn()}
+        />
+      );
+
+      const mount = await screen.findByTestId('lentille-list-mount');
+      expect(mount).toHaveAttribute('data-has-more', 'true');
+      expect(mount).toHaveAttribute('data-is-loading-more', 'false');
+      expect(mount).toHaveAttribute('data-has-load-more', 'true');
+    });
+
+    it('transmet la requête de recherche courante (la branche vide doit pouvoir la distinguer)', async () => {
+      render(<ConversationList {...defaultProps} />);
+      const mount = await screen.findByTestId('lentille-list-mount');
+      expect(mount).toHaveAttribute('data-search-query', '');
+    });
+
+    it("observe la sentinelle rendue par le point de montage — l'observateur unique du parent la voit", async () => {
+      const observed: Element[] = [];
+      const originalObserver = global.IntersectionObserver;
+      // @ts-expect-error -- double de test, borné à ce cas
+      global.IntersectionObserver = class {
+        constructor(_cb: unknown, _opts: unknown) {}
+        observe(el: Element) { observed.push(el); }
+        unobserve() {}
+        disconnect() {}
+        takeRecords() { return []; }
+      };
+
+      try {
+        render(
+          <ConversationList
+            {...defaultProps}
+            hasMore={true}
+            isLoadingMore={false}
+            onLoadMore={jest.fn()}
+          />
+        );
+
+        const sentinel = await screen.findByTestId('lentille-load-more-sentinel');
+        await waitFor(() => {
+          expect(observed).toContain(sentinel);
+        });
+      } finally {
+        global.IntersectionObserver = originalObserver;
+      }
     });
   });
 

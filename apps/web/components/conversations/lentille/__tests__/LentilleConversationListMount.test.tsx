@@ -158,3 +158,148 @@ describe('LentilleConversationListMount', () => {
     expect(screen.getByTestId('lentille-list-mount')).toBeInTheDocument();
   });
 });
+
+/**
+ * REV-4/B2 — behaviour-matrix:L17.
+ *
+ * Verdict de la porte V2 : « drapeau ON ⇒ pagination (sentinelle
+ * IntersectionObserver) et branches vides perdues — le Mount remplace
+ * `renderContent` en bloc ». Ces témoins verrouillent le retour des DEUX,
+ * par RÉUTILISATION des mécanismes historiques :
+ *   - `EmptyConversations` (`conversation-groups/`) — le MÊME composant que
+ *     le chemin historique, avec la MÊME distinction « recherche vide » vs
+ *     « aucune conversation » ;
+ *   - `ConversationListLoadMore` (`conversation-groups/`) — le bouton
+ *     « Charger plus », son indicateur de chargement et la CIBLE de la
+ *     sentinelle, tous trois extraits de `renderContent` (marquage inchangé
+ *     au caractère près, snapshot OFF oblige) pour servir les deux chemins ;
+ *     l'observateur reste unique, chez `ConversationList`
+ *     (`useLoadMoreSentinel`), et sa ref est simplement transmise ici.
+ *
+ * La sentinelle ne porte AUCUN attribut de test (le chemin OFF doit rester
+ * bit-à-bit identique) : ce qui est vérifié est ce qui compte réellement —
+ * le ref-setter de l'observateur unique reçoit bien un élément réel.
+ *
+ * Le squelette (déjà présent avant B2) reste couvert plus haut ; il fait
+ * partie du même id L17 et n'a jamais manqué.
+ */
+function sentinelElements(ref: jest.Mock): HTMLElement[] {
+  return ref.mock.calls.map(([el]) => el).filter((el): el is HTMLElement => el instanceof HTMLElement);
+}
+
+describe('LentilleConversationListMount — pagination et branches vides (B2, behaviour-matrix:L17)', () => {
+  it('rend la branche vide historique quand aucune conversation ne subsiste (hors chargement)', () => {
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[]}
+        searchQuery=""
+      />
+    );
+    expect(screen.getByText('noConversations')).toBeInTheDocument();
+  });
+
+  it('distingue « recherche sans résultat » de « aucune conversation » (même règle que le chemin historique)', () => {
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[]}
+        searchQuery="zzz"
+      />
+    );
+    expect(screen.getByText('conversationSearch.noConversationsFound')).toBeInTheDocument();
+    expect(screen.queryByText('noConversations')).not.toBeInTheDocument();
+  });
+
+  it('ne rend PAS la branche vide pendant le chargement initial (le squelette la précède)', () => {
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[]}
+        isLoading={true}
+        searchQuery=""
+      />
+    );
+    expect(screen.getByTestId('lentille-list-skeleton')).toBeInTheDocument();
+    expect(screen.queryByText('noConversations')).not.toBeInTheDocument();
+  });
+
+  it('ne rend PAS la branche vide quand des conversations existent', () => {
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a')]}
+        searchQuery=""
+      />
+    );
+    expect(screen.queryByText('noConversations')).not.toBeInTheDocument();
+  });
+
+  it('rend le bouton « Charger plus » ET la cible de sentinelle quand il reste des pages', () => {
+    const sentinelRef = jest.fn();
+    const onLoadMore = jest.fn();
+
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a')]}
+        searchQuery=""
+        hasMore
+        isLoadingMore={false}
+        onLoadMore={onLoadMore}
+        loadMoreSentinelRef={sentinelRef}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'loadMore' }));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    // La sentinelle est bien la cible de l'observateur unique du parent :
+    // le ref-setter reçu a été appelé avec un élément réel.
+    expect(sentinelElements(sentinelRef)).toHaveLength(1);
+  });
+
+  it('masque la cible de sentinelle pendant un chargement de page (jamais deux pages en vol)', () => {
+    const sentinelRef = jest.fn();
+
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a')]}
+        searchQuery=""
+        hasMore
+        isLoadingMore
+        onLoadMore={jest.fn()}
+        loadMoreSentinelRef={sentinelRef}
+      />
+    );
+
+    expect(sentinelElements(sentinelRef)).toHaveLength(0);
+    expect(screen.getByText('loadingMore')).toBeInTheDocument();
+  });
+
+  it('ne rend ni bouton ni sentinelle quand il ne reste plus de page', () => {
+    const sentinelRef = jest.fn();
+
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a')]}
+        searchQuery=""
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        loadMoreSentinelRef={sentinelRef}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'loadMore' })).not.toBeInTheDocument();
+    expect(sentinelElements(sentinelRef)).toHaveLength(0);
+  });
+});
