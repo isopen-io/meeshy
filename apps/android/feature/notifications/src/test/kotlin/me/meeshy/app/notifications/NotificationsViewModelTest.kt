@@ -1,26 +1,33 @@
 package me.meeshy.app.notifications
 
 import com.google.common.truth.Truth.assertThat
-import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationState
-import me.meeshy.sdk.net.ApiError
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Cache-first (feature-parity §M): [NotificationRepository.notificationsStream]/
+ * [NotificationRepository.unreadCountStream] are the single source of truth this ViewModel
+ * projects — dedup/optimistic-mutation behaviour itself lives (and is tested) in
+ * `NotificationRepositoryTest`, not here.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotificationsViewModelTest {
 
@@ -36,12 +43,25 @@ class NotificationsViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private val repository: NotificationRepository = mockk(relaxed = true)
-
     private fun notification(id: String, isRead: Boolean = false) = ApiNotification(
         id = id,
         state = NotificationState(isRead = isRead, createdAt = "2024-01-01"),
     )
+
+    private var capturedOnSyncError: ((Throwable) -> Unit)? = null
+
+    private fun repository(
+        notifications: MutableSharedFlow<CacheResult<List<ApiNotification>>> = MutableSharedFlow(replay = 1),
+        unreadCount: MutableStateFlow<Int> = MutableStateFlow(0),
+    ): NotificationRepository {
+        val repository: NotificationRepository = mockk(relaxed = true)
+        every { repository.notificationsStream(any(), any()) } answers {
+            capturedOnSyncError = secondArg()
+            notifications
+        }
+        every { repository.unreadCountStream } returns unreadCount
+        return repository
+    }
 
     private fun socketManager(events: MutableSharedFlow<ApiNotification> = MutableSharedFlow()): MessageSocketManager {
         val manager: MessageSocketManager = mockk(relaxed = true)
@@ -50,69 +70,104 @@ class NotificationsViewModelTest {
     }
 
     @Test
-    fun `loads notifications on init`() = runTest {
-        val items = listOf(notification("1"), notification("2"))
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(items)
+    fun `projects a fresh cache result into state`() = runTest {
+        val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
+        val repo = repository(notifications)
+        val vm = NotificationsViewModel(repo, socketManager())
 
-        val vm = NotificationsViewModel(repository, socketManager())
+        notifications.emit(CacheResult.Fresh(listOf(notification("1"), notification("2")), ageMillis = 0))
 
         assertThat(vm.state.value.notifications).hasSize(2)
         assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isSyncing).isFalse()
     }
 
     @Test
-    fun `markAsRead updates local state optimistically`() = runTest {
-        val items = listOf(notification("n1", isRead = false))
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(items)
+    fun `an empty cache result shows the loading skeleton`() = runTest {
+        val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
+        val repo = repository(notifications)
+        val vm = NotificationsViewModel(repo, socketManager())
 
-        val vm = NotificationsViewModel(repository, socketManager())
+        notifications.emit(CacheResult.Empty)
+
+        assertThat(vm.state.value.isLoading).isTrue()
+        assertThat(vm.state.value.isSyncing).isTrue()
+    }
+
+    @Test
+    fun `a stale cache result paints immediately while syncing continues`() = runTest {
+        val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
+        val repo = repository(notifications)
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        notifications.emit(CacheResult.Stale(listOf(notification("1")), ageMillis = 999_999))
+
+        assertThat(vm.state.value.notifications).hasSize(1)
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isSyncing).isTrue()
+    }
+
+    @Test
+    fun `a sync error surfaces the error message`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        capturedOnSyncError?.invoke(RuntimeException("Server error"))
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("Server error")
+        assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `unread count reflects the repository stream`() = runTest {
+        val unreadCount = MutableStateFlow(0)
+        val repo = repository(unreadCount = unreadCount)
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        unreadCount.value = 3
+
+        assertThat(vm.state.value.unreadCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `load forces a repository refresh`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        vm.load()
+
+        coVerify(exactly = 1) { repo.refresh() }
+    }
+
+    @Test
+    fun `markAsRead delegates to the repository`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, socketManager())
 
         vm.markAsRead("n1")
 
-        assertThat(vm.state.value.notifications.first().state.isRead).isTrue()
+        coVerify(exactly = 1) { repo.markAsRead("n1") }
     }
 
     @Test
-    fun `surfaces load error`() = runTest {
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Failure(ApiError("Server error", httpStatus = 500))
+    fun `markAllRead delegates to the repository`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, socketManager())
 
-        val vm = NotificationsViewModel(repository, socketManager())
+        vm.markAllRead()
 
-        assertThat(vm.state.value.errorMessage).isEqualTo("Server error")
+        coVerify(exactly = 1) { repo.markAllAsRead() }
     }
 
     @Test
-    fun `a real-time notification is prepended to the list and bumps the unread count`() = runTest {
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(listOf(notification("old")))
+    fun `a real-time notification is forwarded to the repository's shared cache`() = runTest {
         val events = MutableSharedFlow<ApiNotification>()
-        val vm = NotificationsViewModel(repository, socketManager(events))
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(events))
 
-        events.emit(notification("fresh", isRead = false))
+        val incoming = notification("fresh")
+        events.emit(incoming)
 
-        assertThat(vm.state.value.notifications.map { it.id }).containsExactly("fresh", "old").inOrder()
-        assertThat(vm.state.value.unreadCount).isEqualTo(1)
-    }
-
-    @Test
-    fun `a real-time notification that arrives already read does not bump the unread count`() = runTest {
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(emptyList())
-        val events = MutableSharedFlow<ApiNotification>()
-        val vm = NotificationsViewModel(repository, socketManager(events))
-
-        events.emit(notification("fresh", isRead = true))
-
-        assertThat(vm.state.value.unreadCount).isEqualTo(0)
-    }
-
-    @Test
-    fun `a duplicate real-time delivery of an already-known id is a no-op`() = runTest {
-        coEvery { repository.list(any(), any(), any()) } returns NetworkResult.Success(listOf(notification("n1")))
-        val events = MutableSharedFlow<ApiNotification>()
-        val vm = NotificationsViewModel(repository, socketManager(events))
-
-        events.emit(notification("n1", isRead = false))
-
-        assertThat(vm.state.value.notifications).hasSize(1)
-        assertThat(vm.state.value.unreadCount).isEqualTo(0)
+        verify(exactly = 1) { repo.prependLive(incoming) }
     }
 }

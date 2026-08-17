@@ -303,3 +303,46 @@ avait « corrigé `location` ». Il avait corrigé UN des deux consommateurs, et
 cycle 53 le savait puisqu'il écrit noir sur blanc que c'est ce mapping qui l'a
 laissé tomber. Trois cycles ont lu cette phrase sans aller voir si le mapping
 avait changé. Détail : voir leçon 214.
+
+---
+
+## Addendum — cycle 54 bis : ce que le correctif de code ne ferme pas
+
+Ce cycle a été instruit DEUX fois en parallèle. La branche qui a fusionné (#3122)
+et celle qui ne l'a pas fait (#3120) avaient trouvé les deux mêmes trous, écrit
+six témoins chacune, et nommé leur journal du même nom de fichier. Le code de la
+seconde était donc redondant, et n'a pas été repoussé.
+
+Restait une chose qu'aucune des deux n'avait faite au moment du merge, et c'est
+la seule qui répond à « pourquoi ça recommencera » :
+
+**`location` voyageait sans être déclaré nulle part.**
+`ConversationUpdatedEventData` se termine par `readonly [key: string]: unknown`.
+C'est cette index signature — utile pour les champs qu'un seul émetteur pose, un
+renommage, un réglage — qui couvrait un membre d'un GROUPE que **trois**
+émetteurs doivent servir à l'identique. La parité ne reposait donc sur rien de
+mécanique : ni compilateur, ni test, ni relecture ne pouvait dire « il en manque
+un ». Elle a tenu deux fois sur trois, ce qui est exactement le mode de panne
+d'une convention non écrite.
+
+Le champ est maintenant déclaré, et sa déclaration porte la **règle du silence**,
+sans laquelle le type seul ne dirait rien d'utile :
+
+> **Clé ABSENTE = « ce message n'a pas de lieu »**, et non « je n'en parle pas ».
+> Corollaire opposable : qui porte `lastMessageId` porte le lieu du message qu'il
+> nomme, ou aucun.
+
+ADR : `packages/shared/decisions.md`. Leçon 216.
+
+### Ce qui reste ouvert
+
+La bonne forme est connue et n'est pas livrée : faire porter tout le groupe
+d'aperçu par un sous-objet `lastMessage: {…}` rendrait l'oubli d'un membre
+impossible **par construction**, au lieu de le rendre seulement détectable. C'est
+un changement de fil pour trois émetteurs et trois clients — à instruire pour
+lui-même, pas en marge d'un correctif.
+
+Les trois autres membres non déclarés du groupe — `lastMessageId`,
+`lastMessagePreview`, `senderId` — passent encore par l'index signature. Ils ne
+sont pas ajoutés ici : aucun défaut n'est mesuré à leur nom, et déclarer un champ
+sans la règle qui le gouverne ne ferait que le documenter.

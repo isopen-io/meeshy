@@ -5265,10 +5265,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       prepends the fresh row live (dedup by id — a REST-list race or a duplicate delivery is a
       no-op), bumping `unreadCount` only when the incoming notification isn't already read. +4
       tests (`MessageSocketManagerNotificationTest`: payload decode; `NotificationsViewModelTest`
-      ×3: prepend+bump, already-read doesn't bump, duplicate id is a no-op). **Still open:
-      stale-while-revalidate cache** (today's `list()` is a plain REST call, no `CacheResult`/Room
-      layer) and pagination/unread-only filter — this slice was data-plumbing only, scoped
-      narrowly after finding the item's actual size during re-proof (see below).
+      ×3: prepend+bump, already-read doesn't bump, duplicate id is a no-op).
+      **Stale-while-revalidate cache shipped 2026-08-17** (slice
+      `notification-cache-first-stream`). Re-proved before coding: `CachePolicy.Notifications`
+      already existed (`freshFor` 60s, `keepFor` 24h) with ZERO usages anywhere — the constant had
+      been anticipated but never wired. `NotificationRepository.notificationsStream()` mirrors
+      `PostRepository.feedStream()`'s exact shape (in-memory L1 `MutableStateFlow` cache,
+      `CacheResult.Empty`/`Fresh`/`Stale`/`Syncing`, background revalidate on staleness) —
+      `NotificationsViewModel` is now a thin projector of this stream plus a new
+      `unreadCountStream: StateFlow<Int>` (also repository-owned, sourced from the previously
+      dormant `NotificationApi.unreadCount()` REST call — the earlier slice's own note "unreadCount
+      was never even populated from the server" is now fixed as a natural consequence of this
+      refactor, not a separate add-on). `markAsRead`/`markAllAsRead` moved INTO the repository as
+      optimistic cache mutations (mirrors `PostRepository.toggleLike`'s rollback-on-failure
+      pattern) — necessary for correctness once the ViewModel stopped holding its own copy of the
+      list: without this, a live socket arrival re-triggering the shared stream would have
+      silently reverted an optimistic local mark-as-read back to unread. `prependLive` (used by the
+      real-time socket handler) now lives on the repository too, for the same reason. +10 tests
+      (`NotificationRepositoryTest`) + rewritten `NotificationsViewModelTest` (9 tests, now
+      exercising the ViewModel's actual remaining job — projecting `CacheResult` variants and
+      delegating writes — since dedup/rollback behaviour moved to and is tested at the repository
+      layer). **Still open: pagination/unread-only filter** (the stream serves the first page
+      only, matching `list()`'s existing default `limit=20`) — not attempted, a separate item.
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
 - [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice

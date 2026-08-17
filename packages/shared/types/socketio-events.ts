@@ -1568,6 +1568,31 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
   readonly lastMessageOriginalLanguage?: string | null;
   /**
+   * Lieu partagé du dernier message, hissé depuis `metadata.location` — membre
+   * du MÊME groupe d'aperçu que les trois champs ci-dessus, et soumis à la même
+   * règle de groupe.
+   *
+   * Déclaré ici parce qu'il ne l'était nulle part : l'index signature de fin le
+   * laissait voyager sans contrat, si bien que la parité entre les TROIS
+   * émetteurs de ce groupe (`MessageHandler`, `MeeshySocketIOManager`,
+   * `emitConversationPreviewUpdate`) ne reposait que sur la lecture du code
+   * voisin. Elle a échoué exactement comme ça : le chemin REST/ZMQ l'a omis
+   * pendant que les deux autres le portaient (corrigé par #3122, sans que rien
+   * n'empêche la prochaine récidive — c'est ce que cette déclaration ajoute).
+   *
+   * **Clé ABSENTE = « ce message n'a pas de lieu »**, et non « je n'en parle
+   * pas » : les clients écrivent l'épingle AVEC l'identité du message, si bien
+   * que son absence efface celle du message précédent quand un texte le
+   * remplace. Corollaire opposable à tout nouvel émetteur : **qui porte
+   * `lastMessageId` porte le lieu du message qu'il nomme, ou aucun.**
+   *
+   * Forme non typée, même convention que `MessageRequest.location` : la
+   * validation stricte (bornes des coordonnées, longueur des chaînes) vit dans
+   * `services/gateway/src/services/location/sharedPlace.ts`, et la dupliquer
+   * ici la ferait diverger.
+   */
+  readonly location?: unknown;
+  /**
    * `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de la
    * base, par opposition à une poussée de message (`bump-to-top`) qui ne fait
    * que porter le message qu'on vient d'écrire.
