@@ -198,15 +198,40 @@ describe('LentilleRow — rang', () => {
   });
 
   /**
+   * V4ter/R4-3 — behaviour-matrix:L02. Le label « ✎ Brouillon » est en
+   * couleur d'erreur, `draft.content` reste tertiaire (hérité du
+   * `text-muted-foreground` du conteneur ligne 2) — deux spans distincts,
+   * plus le span unique `text-destructive` d'avant ce lot qui couvrait les
+   * deux. Solde la réserve R4-3 (`WEB_COVERAGE.L02`).
+   */
+  it('behaviour-matrix:L02 — R4-3 : le label est en erreur, le texte du brouillon reste tertiaire', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Hello', createdAt: new Date(), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        draft={{ content: 'en cours de rédaction' }}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row-draft-label');
+    const content = screen.getByTestId('lentille-row-draft-content');
+    expect(label).toHaveClass('text-destructive');
+    expect(content).not.toHaveClass('text-destructive');
+    expect(content.textContent).toContain('en cours de rédaction');
+  });
+
+  /**
    * V4bis/R4-1 — behaviour-matrix:L02.
    *
    * « Les brouillons gardent leur précédence actuelle typing > brouillon >
    * préview et s'affichent « ✎ Brouillon » en couleur d'erreur … » — la
-   * précédence ET le label sont réels (vérifiés ici). L'écart connu (le
-   * `text-destructive` couvre aussi `draft.content`, pas seulement le label
-   * — la matrice veut ce dernier en tertiaire) est documenté dans la
-   * classification `WEB_COVERAGE.L02` (`__tests__/lentille/behaviour-matrix-parity.test.ts`),
-   * réserve R4-3.
+   * précédence ET le label sont réels (vérifiés ici). Le label/texte est
+   * couvert plein depuis R4-3 (test ci-dessus) : la réserve R4-3 est
+   * SOLDÉE, `WEB_COVERAGE.L02` n'y renvoie plus.
    */
   it('behaviour-matrix:L02 — précédence : brouillon prime sur pont et préview', () => {
     const bridge: ConversationBridge = {

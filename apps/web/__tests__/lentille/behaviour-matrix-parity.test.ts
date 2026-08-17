@@ -79,11 +79,12 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
   L02: {
     covered: true,
     reason:
-      "précédence typing > brouillon > pont/préview RÉELLE et testée (LentilleRow.tsx:199, test « précédence : brouillon prime sur pont et préview ») ; " +
-      "label « ✎ Brouillon » en couleur d'erreur RÉEL. Écart VÉRIFIÉ contre la matrice : celle-ci exige le label en erreur AVEC le texte du brouillon en " +
-      "tertiaire, or le span `text-destructive` couvre le label ET `draft.content` (LentilleRow.tsx:370-371) — la couleur d'erreur déborde sur le contenu. " +
-      "Trou COSMÉTIQUE documenté, pas caché : réserve R4-3 (« L02 brouillon tout-destructive », tasks/lentille-workshop-execution.md §8 ligne V4), non " +
-      "soldée par ce lot (hors périmètre R4-1, qui porte sur la garde de matrice, pas sur cette correction).",
+      "précédence typing > brouillon > pont/préview RÉELLE et testée (LentilleRow.tsx, test « précédence : brouillon prime sur pont et préview ») ; " +
+      "label « ✎ Brouillon » en couleur d'erreur AVEC le texte du brouillon en tertiaire — RÉEL, plus un écart : deux spans distincts désormais " +
+      "(LentilleRow.tsx, `lentille-row-draft-label` en `text-destructive`, `lentille-row-draft-content` hérite `text-muted-foreground` du conteneur " +
+      "ligne 2), là où un unique span `text-destructive` couvrait auparavant le label ET `draft.content`. Réserve R4-3 (« L02 brouillon tout-destructive », " +
+      "tasks/lentille-workshop-execution.md §8 ligne V4) SOLDÉE par V4ter/R4-3 — testé « behaviour-matrix:L02 — R4-3 : le label est en erreur, le texte " +
+      "du brouillon reste tertiaire » (LentilleRow.test.tsx).",
   },
   L03: {
     covered: false,

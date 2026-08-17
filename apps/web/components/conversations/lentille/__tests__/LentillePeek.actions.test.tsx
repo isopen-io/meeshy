@@ -274,6 +274,28 @@ describe('LentillePeek — les 6 actions historiques du ⋮ (B3, behaviour-matri
     expect(screen.getByText('conversationHeader.pin')).toBeInTheDocument();
     expect(screen.getByTestId('reading-mode-item-auto')).toBeInTheDocument();
   });
+
+  /**
+   * R5-2 — troisième déclencheur (WL-108, l'encoche de la focus card),
+   * jusque-là non prouvé PAR CE FICHIER jusqu'aux actions du rang : les deux
+   * autres (⋮ ci-dessus, clic droit ci-dessus) le sont déjà. « Trois points
+   * d'entrée, UNE préférence » (LentillePeek.tsx) — même magasin, même
+   * `togglePin`, que le geste soit ⋮, clic droit OU encoche.
+   */
+  it("l'encoche (troisième déclencheur) ouvre le MÊME menu — épingler écrit dans le magasin partagé", () => {
+    render(
+      <div role="button" tabIndex={0} onClick={jest.fn()}>
+        <LentillePeek conversation={makeConversation()} t={t} isFocused>
+          <span>contenu du rang</span>
+        </LentillePeek>
+      </div>
+    );
+
+    fireEvent.click(screen.getByTestId('lentille-focus-card-notch'));
+    fireEvent.click(screen.getByText('conversationHeader.pin'));
+
+    expect(togglePinMock).toHaveBeenCalledWith('conv-1', true);
+  });
 });
 
 /**

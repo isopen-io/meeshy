@@ -435,8 +435,16 @@ export const LentilleRow = memo(function LentilleRow({
                 {t('lentille.typing.one', { name: typingUser!.displayName })}
               </span>
             ) : hasDraft ? (
-              <span className="text-destructive" data-testid="lentille-row-draft-line">
-                {t('lentille.draft')} {draft!.content}
+              // V4ter/R4-3 — behaviour-matrix:L02. L'ancien span unique
+              // `text-destructive` couvrait le label ET `draft.content` ; la
+              // matrice veut le label seul en couleur d'erreur, le texte du
+              // brouillon en tertiaire (hérité de `text-muted-foreground` du
+              // conteneur ligne 2, ligne 362 — jamais `text-destructive`).
+              <span data-testid="lentille-row-draft-line">
+                <span className="text-destructive" data-testid="lentille-row-draft-label">
+                  {t('lentille.draft')}
+                </span>{' '}
+                <span data-testid="lentille-row-draft-content">{draft!.content}</span>
               </span>
             ) : hasBridge && bridge ? (
               <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />
