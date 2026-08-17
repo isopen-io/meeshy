@@ -23,11 +23,13 @@
  * choisir » (le Résumé Vivant est masqué à un invité, etc.). La question du
  * mux est différente et plus étroite : « qu'est-ce que cet ÉCRAN sait
  * monter aujourd'hui ». La réponse, re-prouvée dans `ConversationMessages.tsx`
- * au moment de ce lot, est `FocalThread` — et rien d'autre : ni `RiverThread`
- * (R-135 a dégrisé la Rivière dans les MENUS, il n'a pas monté son écran dans
- * le fil ; `riviere-screen-not-mounted.test.ts` en garde la preuve), ni Résumé
- * Vivant (l'API observer `assist:*` n'existe pas). `FocalThread` porte en
- * revanche NATIVEMENT ses deux densités (`FocalDensity = 'focal' | 'script'`),
+ * au moment de ce lot, est `FocalThread` — et rien d'autre : ni l'écran de la
+ * Rivière (sa peau vit sous `components/conversations/riviere/` et n'a AUCUN
+ * site de montage dans le fil — R-135 a dégrisé la Rivière dans les MENUS,
+ * pas monté son écran ; `riviere-screen-not-mounted.test.ts` en garde la
+ * preuve, et ce fichier-ci ne doit donc pas même NOMMER cet hôte), ni le
+ * Résumé Vivant (l'API observer `assist:*` n'existe pas). `FocalThread` porte
+ * en revanche NATIVEMENT ses deux densités (`FocalDensity = 'focal' | 'script'`),
  * qui sont exactement les deux crans plats de la loi.
  *
  * Passer ce catalogue-là — et non celui du lecteur — a une conséquence qu'il
