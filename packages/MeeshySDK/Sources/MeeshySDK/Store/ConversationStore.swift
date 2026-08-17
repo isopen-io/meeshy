@@ -542,7 +542,25 @@ public actor ConversationStore {
                 //
                 // Posé AVANT les champs ci-dessous, qui reposent ce que ce
                 // payload-ci porte vraiment.
-                if case .replaced(.some(let id)) = event.lastMessage { conv.adoptLastMessage(id: id); changed = true }
+                if case .replaced(.some(let id)) = event.lastMessage {
+                    conv.adoptLastMessage(id: id)
+                    // L'épingle fait partie de ce que `adoptLastMessage` vient
+                    // de remettre à neutre, et c'est le seul de ces champs que
+                    // le payload PORTE vraiment — les trois émetteurs la hissent
+                    // depuis `metadata.location` du message qu'ils nomment. La
+                    // reposer est donc exactement le geste que
+                    // `adoptLastMessage` demande à son appelant ; l'omettre
+                    // laissait une ligne BLANCHE derrière un message
+                    // position-seule, dont l'aperçu est vide par construction.
+                    //
+                    // Écrite AVEC l'identité et jamais seule : `nil` efface
+                    // l'épingle du message précédent quand un texte le remplace.
+                    // Même règle, au même endroit, que le chemin jumeau de
+                    // `ConversationListViewModel` — et c'est le seul point du
+                    // groupe d'aperçu où les deux fusions divergeaient.
+                    conv.lastMessageLocation = event.location
+                    changed = true
+                }
                 if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
                 // préfère la traduction à l'aperçu brut, donc poser l'un sans
@@ -965,6 +983,15 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// ordre, et c'est la seule façon de rendre une édition applicable.
     public let lastMessageTranslations: LastMessagePreviewTranslations
     public let lastMessageOriginalLanguage: String?
+    /// Épingle du dernier message, quand il en porte une. Membre du groupe
+    /// d'aperçu au même titre que le texte et le Prisme : un message
+    /// position-seule a un `lastMessagePreview` VIDE, donc c'est le seul champ
+    /// dont la ligne dispose pour composer son libellé.
+    ///
+    /// Les trois émetteurs du payload la hissent depuis `metadata.location` du
+    /// message NOMMÉ par `lastMessage` — jamais du message précédent. Elle
+    /// s'applique donc avec l'identité, et jamais seule.
+    public let location: SharedPlace?
     /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
     /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
     /// de RECULER dans le temps — voir `merging(_:with:)`.
@@ -985,6 +1012,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false,
         title: String? = nil,
         avatar: String? = nil,
@@ -1001,6 +1029,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.location = location
         self.previewRecalculated = previewRecalculated
         self.title = title
         self.avatar = avatar
