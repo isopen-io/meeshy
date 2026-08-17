@@ -1289,6 +1289,18 @@ final class CallManager: ObservableObject {
             return false
         }
 
+        // Micro absolument requis pour reprendre l'appel — ce chemin partage le
+        // même pipeline média que answerCall()/answerCallReady() (voir leur
+        // garde) mais n'a, lui, aucun appel entrant à raccrocher : rien n'a
+        // encore été mutée avant ce point, on refuse simplement la reprise.
+        guard MediaPermissionState.microphone.isUsable else {
+            Logger.calls.warning("[CALL] rejoin refused: microphone permission missing")
+            FeedbackToastManager.shared.showError(
+                MediaPermissionCoordinator.deniedMessage(for: .microphone)
+            ) { MediaPermissionCoordinator.openSettings() }
+            return false
+        }
+
         analyticsCallInitiatedDate = Date()
         currentCallId = callId
         self.remoteUserId = remoteUserId
