@@ -191,6 +191,7 @@ import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -415,6 +416,18 @@ fun ChatScreen(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(start = MeeshySpacing.sm),
                                 )
+                                if (!state.isGroup) {
+                                    val presenceColor = meeshyPresenceDotColor(state.headerPresence(System.currentTimeMillis()))
+                                    if (presenceColor != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(start = MeeshySpacing.xs)
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(presenceColor),
+                                        )
+                                    }
+                                }
                             }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
