@@ -161,12 +161,22 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
    * non lus : exactement l'ensemble que le badge compte, donc exactement le
-   * même masquage, sur l'unique fenêtre agrégée qu'il lit (jamais une lecture
-   * par conversation — d'où `reads: 1`). Sans l'application, un auteur dont le
-   * lecteur a effacé l'historique reviendrait le nommer dans la phrase du
-   * rang : la fuite que le compteur, lui, ne fait plus depuis le cycle 109.
+   * même masquage. Sans l'application, un auteur dont le lecteur a effacé
+   * l'historique reviendrait le nommer dans la phrase du rang : la fuite que le
+   * compteur, lui, ne fait plus depuis le cycle 109.
+   *
+   * `reads: 2` — une fenêtre agrégée par CHEMIN, jamais une lecture par
+   * conversation ni par lecteur, ce qui reste l'invariant que ce compte garde :
+   *   1. le chemin par lecteur (`applyPersonalHistoryHiding`, compté ci-dessous)
+   *   2. le chemin BATCHÉ des viewers (REV-5/B2), qui lit UNE fenêtre commune
+   *      pour N lecteurs puis la resserre par lecteur EN MÉMOIRE
+   *
+   * Le second n'appelle donc pas `applyPersonalHistoryHiding` — il n'aurait rien
+   * à y faire, le masquage étant personnel et la requête commune — d'où
+   * `applications: 1` et une déclaration dans `IN_MEMORY_HIDING_SURFACES`, seule
+   * forme que le balayage puisse prouver sur ce chemin.
    */
-  'ConversationBridgeService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
     kind: 'exempt',
@@ -198,6 +208,20 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
+
+  /**
+   * Le pont ✦ batché (REV-5/B2) a la MÊME forme : une fenêtre commune pour N
+   * lecteurs, resserrée par lecteur en mémoire. Ses deux coupes personnelles y
+   * sont exigées séparément parce qu'elles se perdent séparément —
+   * `exclusiveFloorMsFor` fond la coupure d'historique dans le plancher de
+   * lecture, `hiddenMessageIds` écarte les messages effacés un par un. Retirer
+   * l'une laisserait l'autre verte.
+   */
+  'ConversationBridgeService.ts': [
+    'loadPersonalHistoryHidingByUser(',
+    'exclusiveFloorMsFor(',
+    'hiddenMessageIds?.has(',
+  ],
 };
 
 const walk = (dir: string): string[] =>
