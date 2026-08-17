@@ -15,6 +15,50 @@ public struct MessageDeletedEvent: Decodable, Sendable {
     }
 }
 
+/// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
+///
+/// Le couple, jamais le seul `messageId` : un lot de masquage traverse
+/// plusieurs conversations (« effacer ces 100 »), et le consommateur doit
+/// pouvoir trier les références qui concernent le fil qu'il tient.
+public struct PersonalMessageVisibilityRef: Decodable, Sendable, Equatable {
+    public let messageId: String
+    public let conversationId: String
+
+    public init(messageId: String, conversationId: String) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+    }
+}
+
+/// `message:hidden-for-me` — CE lecteur vient de retirer des messages de SA
+/// vue, depuis un autre de ses appareils.
+///
+/// À ne pas confondre avec `message:deleted`, qui décrit une suppression POUR
+/// TOUS et laisse une pierre tombale (« ce message a été supprimé »). Ici le
+/// message reste vivant pour les autres participants : il doit simplement
+/// DISPARAÎTRE du fil de ce lecteur, sans trace. Les deux gestes n'ont donc pas
+/// la même écriture locale, et réutiliser `markDeleted` afficherait une
+/// tombstone là où l'utilisateur attend le vide.
+///
+/// Une LISTE, pas un id : la route de masquage en lot en accepte cent, et un
+/// événement par message ferait payer cent réconciliations à un seul geste. La
+/// route unitaire émet une liste d'un élément — les clients n'ont qu'une forme
+/// à traiter. Contrat serveur : `services/gateway/src/services/personalMessageVisibilitySync.ts`.
+public struct MessageHiddenForMeEvent: Decodable, Sendable {
+    public let userId: String
+    public let messages: [PersonalMessageVisibilityRef]
+    /// Instant ISO-8601 du masquage. Optionnel côté client : il n'arbitre rien
+    /// (le masquage est un fait par-lecteur, sans concurrence à départager) et
+    /// un serveur plus ancien pourrait ne pas le porter.
+    public let hiddenAt: String?
+
+    public init(userId: String, messages: [PersonalMessageVisibilityRef], hiddenAt: String? = nil) {
+        self.userId = userId
+        self.messages = messages
+        self.hiddenAt = hiddenAt
+    }
+}
+
 public struct MessagePinnedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -1460,6 +1504,10 @@ public protocol MessageSocketProviding: Sendable {
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
+    /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
+    /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
+    /// détient qu'un `MessageSocketProviding`.
+    var messageHiddenForMe: PassthroughSubject<MessageHiddenForMeEvent, Never> { get }
     var messagePinned: PassthroughSubject<MessagePinnedEvent, Never> { get }
     var messageUnpinned: PassthroughSubject<MessageUnpinnedEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
@@ -1704,6 +1752,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageReceived = PassthroughSubject<APIMessage, Never>()
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     public let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
 
@@ -3125,6 +3174,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageDeletedEvent.self, from: data) { [weak self] event in
                 self?.messageDeleted.send(event)
+            }
+        }
+
+        // Le canal de visibilité PERSONNELLE. La room est celle de
+        // l'UTILISATEUR, pas du socket : l'appareil qui a émis la requête reçoit
+        // l'événement lui aussi, et le retrait y est idempotent (il a déjà
+        // retiré la bulle en optimiste).
+        socket.on("message:hidden-for-me") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageHiddenForMeEvent.self, from: data) { [weak self] event in
+                self?.messageHiddenForMe.send(event)
             }
         }
 
