@@ -122,9 +122,10 @@ export function resolveOtherDirectParticipantUser(
  *
  *   - conversation DIRECTE ⇒ `profile` : l'avatar ouvre le profil de l'AUTRE
  *     participant (iOS : `onViewProfile` → `ConversationListView.swift:734`
- *     `handleProfileView`, feuille de profil ; web : la route `/u/{username}`,
- *     l'unique façon dont ce dépôt ouvre le profil d'autrui — re-prouvée,
- *     aucune modale de profil n'existe côté web).
+ *     `handleProfileView`, feuille de profil ; web : DIRECTIVE PRODUIT DU
+ *     2026-08-17 — `UserProfileModal` (`components/profile/UserProfileModal.tsx`),
+ *     avec le lien `/u/{username}` conservé comme `href` réel de repli — voir
+ *     `AvatarAffordance` dans `LentilleRow.tsx`).
  *   - tout autre type ⇒ `conversationInfo` : les infos de la conversation,
  *     « jamais d'entrée profil (un avatar de groupe n'ouvre pas un profil
  *     unique) » — `ConversationAvatarMenu.groupRoles`.
@@ -135,7 +136,7 @@ export function resolveOtherDirectParticipantUser(
  * fait rien ment au clavier et au lecteur d'écran.
  */
 export type LentilleAvatarTarget =
-  | { readonly kind: 'profile'; readonly href: string; readonly name: string }
+  | { readonly kind: 'profile'; readonly href: string; readonly name: string; readonly username: string }
   | { readonly kind: 'conversationInfo'; readonly name: string };
 
 /** Segment de route du profil — `username` d'abord (l'idiome du dépôt), `id` en repli. */
@@ -162,6 +163,12 @@ export function resolveLentilleAvatarTarget(input: {
     return {
       kind: 'profile',
       href: `/u/${segment}`,
+      // Décodé — `segment` est `encodeURIComponent`é pour l'URL, mais
+      // `UserProfileModal.userId` (donc `usersService.getUserProfile`) veut
+      // le username/id BRUT, exactement ce que `/u/[id]/page.tsx` reçoit de
+      // `useParams` (Next.js décode déjà le segment de route). Un double
+      // encodage ferait chercher un utilisateur `%40bob` inexistant.
+      username: decodeURIComponent(segment),
       name: other.displayName ?? other.username ?? conversationName,
     };
   }

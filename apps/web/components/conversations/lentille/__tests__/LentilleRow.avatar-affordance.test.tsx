@@ -25,15 +25,19 @@
  * flex-shrink-0">`, sans lien, sans bouton, sans `stopPropagation` — un clic
  * dessus remontait au `role="button"` racine et ouvrait le fil.
  *
- * COMMENT LE WEB OUVRE UN PROFIL — re-prouvé, RÉUTILISÉ, jamais recopié : la
- * route `/u/{username}` (`apps/web/app/u/[id]/page.tsx`), atteinte partout
- * ailleurs par un `<Link href={`/u/${user.username}`} onClick={(e) =>
- * e.stopPropagation()}>` — `conversation-participants.tsx:198`,
- * `components/v2/MessageBubble.tsx:155`,
- * `conversation-participants-drawer.tsx:438`. Aucune « modale de profil »
- * n'existe côté web (re-preuve : `grep -rn 'UserProfile' apps/web/components`
- * → services/hooks/route seulement) : l'idiome de l'app EST cette route.
- * Écart de surface documenté au rapport, pas comblé par une modale inventée.
+ * MISE À JOUR — DIRECTIVE PRODUIT DU 2026-08-17 (« le profil s'ouvre en
+ * modale ») : `UserProfileModal` existe désormais
+ * (`components/profile/UserProfileModal.tsx`). L'affordance de CE fichier
+ * reste un VRAI `<Link href="/u/{username}">` (nom accessible, clic droit
+ * "nouvel onglet" natif, atteignable au clavier) — mais son clic gauche
+ * SIMPLE est intercepté par `onOpenProfile` (fourni par
+ * `LentilleConversationListMount`, l'état d'ouverture unique de la liste)
+ * pour ouvrir la modale plutôt que de naviguer. Les témoins « la route reste
+ * `/u/{username}` » ci-dessous restent VRAIS (le `href` ne change pas) ; ceux
+ * qui suivent, dans le describe « profil en modale », prouvent
+ * l'interception. Sans `onOpenProfile` (repli), le lien navigue toujours
+ * directement — comportement inchangé pour tout appelant qui ne monte pas la
+ * modale.
  */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -238,5 +242,88 @@ describe("LentilleRow — l'avatar ouvre le profil, jamais la conversation (beha
       'data-lentille-press-exempt',
       'true'
     );
+  });
+});
+
+describe('LentilleRow — l’avatar ouvre le PROFIL EN MODALE (directive produit 2026-08-17)', () => {
+  it('clic gauche simple avec `onOpenProfile` fourni : la modale s’ouvre (username de l’AUTRE participant), la navigation est empêchée', () => {
+    const onOpenProfile = jest.fn();
+    render(
+      <LentilleRow
+        conversation={makeDirectConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        onOpenProfile={onOpenProfile}
+        t={t}
+      />
+    );
+
+    const affordance = screen.getByTestId('lentille-row-avatar-affordance');
+    // Le `href` reste réel (repli honnête, clic droit "nouvel onglet") —
+    // c'est SEULEMENT la navigation par défaut du clic simple qui cède la
+    // place à la modale.
+    expect(affordance).toHaveAttribute('href', '/u/bob');
+
+    const notPrevented = fireEvent.click(affordance);
+    // `dispatchEvent` rend `false` quand `preventDefault()` a été appelé —
+    // la preuve que la navigation native n'a PAS eu lieu.
+    expect(notPrevented).toBe(false);
+    expect(onOpenProfile).toHaveBeenCalledTimes(1);
+    expect(onOpenProfile).toHaveBeenCalledWith('bob');
+  });
+
+  it('sans `onOpenProfile` (appelant qui ne monte pas la modale) : le lien navigue, comportement inchangé', () => {
+    render(
+      <LentilleRow
+        conversation={makeDirectConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+
+    const affordance = screen.getByTestId('lentille-row-avatar-affordance');
+    const notPrevented = fireEvent.click(affordance);
+    expect(notPrevented).toBe(true);
+  });
+
+  it('clic MODIFIÉ (Ctrl) : jamais intercepté — le navigateur garde la main (nouvel onglet natif)', () => {
+    const onOpenProfile = jest.fn();
+    render(
+      <LentilleRow
+        conversation={makeDirectConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        onOpenProfile={onOpenProfile}
+        t={t}
+      />
+    );
+
+    const affordance = screen.getByTestId('lentille-row-avatar-affordance');
+    const notPrevented = fireEvent.click(affordance, { ctrlKey: true });
+    expect(notPrevented).toBe(true);
+    expect(onOpenProfile).not.toHaveBeenCalled();
+  });
+
+  it('l’ouverture de la modale N’OUVRE PAS non plus la conversation (propagation toujours arrêtée)', () => {
+    const onSelect = jest.fn();
+    const onOpenProfile = jest.fn();
+    render(
+      <LentilleRow
+        conversation={makeDirectConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={onSelect}
+        onOpenProfile={onOpenProfile}
+        t={t}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('lentille-row-avatar-affordance'));
+    expect(onOpenProfile).toHaveBeenCalledWith('bob');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

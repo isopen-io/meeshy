@@ -9,6 +9,8 @@
     "groups": "Mis grupos",
     "memberSince": "Miembro desde",
     "sendMessage": "Enviar un mensaje",
+    "viewFullProfile": "Ver el perfil completo",
+    "modalTitle": "Perfil",
     "addFriend": "Agregar",
     "cancelFriendRequest": "Cancelar solicitud",
     "userNotFound": "Usuario no encontrado",

@@ -19,10 +19,18 @@
  * par une loi partagée — c'est de la présentation pure, elle vit ici en
  * dur : `updateActiveSection` compare les positions des stickers au bord
  * haut du conteneur de défilement.
+ *
+ * PROFIL EN MODALE — directive produit du 2026-08-17. L'état d'ouverture
+ * (« quel username la modale montre-t-elle ? ») vit ICI, UNE SEULE fois pour
+ * toute la liste — jamais une `UserProfileModal` par rang (même patron que
+ * `LentillePeek`/`ReadingModeMenu` : un menu unique, monté une fois, pas un
+ * par rangée). `onOpenProfile` descend, STABLE (`useCallback`, aucune
+ * dépendance), jusqu'à `AvatarAffordance` via `LentilleRow`.
  */
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UserProfileModal } from '@/components/profile/UserProfileModal';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import type { UserConversationCategory, UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
@@ -231,6 +239,16 @@ export function LentilleConversationListMount({
   // filtrage »), même composant, même distinction recherche/vide.
   const showEmptyBranch = !showSkeleton && conversations.length === 0;
 
+  // Directive produit 2026-08-17 — un seul état d'ouverture pour toute la
+  // liste (voir docstring de fichier).
+  const [profileModalUsername, setProfileModalUsername] = useState<string | null>(null);
+  const handleOpenProfile = useCallback((username: string) => {
+    setProfileModalUsername(username);
+  }, []);
+  const handleProfileModalOpenChange = useCallback((open: boolean) => {
+    if (!open) setProfileModalUsername(null);
+  }, []);
+
   return (
     <div ref={rootRef} data-testid="lentille-list-mount">
       {sections.length > 0 && (
@@ -281,12 +299,19 @@ export function LentilleConversationListMount({
                   perspectiveRef={registerRow(conversation.id)}
                   election={election}
                   onShowDetails={onShowDetails}
+                  onOpenProfile={handleOpenProfile}
                 />
               ))}
             </div>
           );
         })
       )}
+
+      <UserProfileModal
+        open={profileModalUsername !== null}
+        onOpenChange={handleProfileModalOpenChange}
+        userId={profileModalUsername}
+      />
 
       {/* behaviour-matrix:L17 — le pied de pagination historique, monté par
           la peau : même bouton, même indicateur, même CIBLE de sentinelle.
