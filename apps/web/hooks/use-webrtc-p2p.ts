@@ -948,14 +948,26 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   }, [callId]);
 
   /**
-   * Apply an adaptive video quality tier to every peer (compression / survival
-   * under congestion). 'audio-only' drops outbound video entirely.
+   * Apply an adaptive video quality tier to ONE peer only (per-peer bitrate
+   * shedding, Vague 143 — replaces a former call-wide `applyQualityTier`,
+   * which had no remaining caller once bitrate shedding moved per-peer: the
+   * audio-only survival transition it might look like it once fed goes
+   * through `disableVideo`/`enableVideo` instead, see
+   * `use-adaptive-degradation.ts`). `applyVideoEncoding` is a plain
+   * `setParameters()` call on that peer's own RTCRtpSender — no
+   * renegotiation, no track mutation — so this cannot affect any other
+   * peer's outbound video. A peerId with no live service (already left, or a
+   * monitoring sample from a tick that is now one participant stale) is a
+   * silent no-op.
    */
-  const applyQualityTier = useCallback(async (tier: VideoQualityTier): Promise<void> => {
-    await Promise.all(
-      Array.from(webrtcServicesRef.current.values()).map((service) => service.applyVideoEncoding(tier))
-    );
-  }, []);
+  const applyQualityTierToPeer = useCallback(
+    async (peerId: string, tier: VideoQualityTier): Promise<void> => {
+      const service = webrtcServicesRef.current.get(peerId);
+      if (!service) return;
+      await service.applyVideoEncoding(tier);
+    },
+    []
+  );
 
   /**
    * Cleanup on unmount or call end
@@ -1211,7 +1223,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     enableVideo,
     disableVideo,
     switchCamera,
-    applyQualityTier,
+    applyQualityTierToPeer,
     removeParticipant,
     cleanup,
   };
