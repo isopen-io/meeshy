@@ -7,10 +7,13 @@ jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (key: string, fallback?: string) => fallback ?? key, isLoading: false }),
 }));
 
+// `getSharedAccessData` : la charge complète quand la lecture est permise, les
+// métadonnées publiques du lien sinon. C'est ce que l'écran demande — la
+// distinction entre les deux sources vit dans le service, pas ici.
 const mockGetConversationData = jest.fn();
 jest.mock('@/services/link-conversation.service', () => ({
   LinkConversationService: {
-    getConversationData: (...args: unknown[]) => mockGetConversationData(...args),
+    getSharedAccessData: (...args: unknown[]) => mockGetConversationData(...args),
   },
 }));
 

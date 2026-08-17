@@ -217,6 +217,67 @@ describe('LinkConversationService', () => {
     });
   });
 
+  // ── getSharedAccessData ───────────────────────────────────────────────────
+
+  describe('getSharedAccessData', () => {
+    const IDENTIFIER = '68ee540df062ef6a37bd3cca.2510141545_ordljlc5';
+
+    const publicLinkInfo = {
+      id: 'share-1',
+      linkId: 'lnk-abc',
+      name: 'Ardèche',
+      description: '',
+      requireAccount: false,
+      requireEmail: true,
+      requireNickname: true,
+      requireBirthday: false,
+      expiresAt: null,
+      conversation: { id: 'conv-1', title: 'Week-end Ardèche', description: '', type: 'group' },
+    };
+
+    it('serves the full conversation when the history is readable', async () => {
+      const data = makeLinkConversationData();
+      mockFetch.mockResolvedValue(makeOkResponse(data) as any);
+
+      const result = await LinkConversationService.getSharedAccessData(IDENTIFIER);
+
+      expect(result).toEqual(data);
+    });
+
+    // `allowViewHistory: false` masque le PASSÉ de la conversation ; il ne
+    // ferme pas la porte. La route complète répond 403, la route publique du
+    // lien répond toujours — c'est elle qui porte les exigences de jonction.
+    it('falls back to the public link when the history is refused', async () => {
+      mockFetch
+        .mockResolvedValueOnce(makeErrorResponse(403, 'Forbidden') as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, data: publicLinkInfo }),
+        } as any);
+
+      const result = await LinkConversationService.getSharedAccessData(IDENTIFIER);
+
+      expect(result.conversation.title).toBe('Week-end Ardèche');
+      expect(result.link).toMatchObject({
+        linkId: 'lnk-abc',
+        requireEmail: true,
+        requireNickname: true,
+        allowViewHistory: false,
+        isActive: true,
+      });
+      expect(result.currentUser).toBeNull();
+      expect(result.messages).toEqual([]);
+    });
+
+    it('keeps reporting a link that does not resolve at all', async () => {
+      mockFetch.mockResolvedValue(makeErrorResponse(404, 'Not Found') as any);
+
+      await expect(LinkConversationService.getSharedAccessData(IDENTIFIER)).rejects.toThrow(
+        'HTTP 404',
+      );
+    });
+  });
+
   // ── getLinkInfo ───────────────────────────────────────────────────────────
 
   describe('getLinkInfo', () => {
