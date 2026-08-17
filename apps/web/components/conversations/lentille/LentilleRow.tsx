@@ -53,6 +53,7 @@ import {
 } from '../conversation-item/conversation-utils';
 import { formatLastMessage } from '../conversation-item/message-formatting';
 import { formatConversationDate } from '@/utils/date-format';
+import { getTagColor } from '@/utils/tag-colors';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import {
   resolveLentilleAvatarTarget,
@@ -138,6 +139,15 @@ function pickDeterministicTypingUser(
  */
 const UNREAD_ARIA_ONE_KEY = 'lentille.a11y.unreadOne';
 const UNREAD_ARIA_OTHER_KEY = 'lentille.a11y.unreadOther';
+
+/**
+ * Miroir de `packages/shared/design/lentille-tokens.json` → `list.tags.maxCount`
+ * (= `--lentille-list-tags-max-count`, M-049) — un NOMBRE, nécessaire au
+ * `.slice()`, donc impossible à ne garder qu'en CSS. Gardé contre la dérive
+ * par `__tests__/lentille-tags-max-count.parity.test.ts`, même discipline que
+ * `LENTILLE_LIST_RAIL_MAX_ENTRIES` (`LivesRail.tsx`).
+ */
+export const LENTILLE_LIST_TAGS_MAX_COUNT = 3;
 
 function resolveUnreadAriaSegment(unreadCount: number, t: LentilleRowTranslate): string | null {
   if (unreadCount <= 0) return null;
@@ -269,6 +279,14 @@ export const LentilleRow = memo(function LentilleRow({
   const rowPreference = useConversationPreference(conversation.id);
   const isPinned = rowPreference?.isPinned ?? false;
   const isMuted = rowPreference?.isMuted ?? false;
+  // Maquette §3 — « tags et émoji favori vivent après le nom ». MÊME magasin
+  // que pin/sourdine (`useConversationPreference`), donc aucune prop neuve à
+  // faire traverser le montage et aucune seconde source de vérité.
+  const favoriteReaction = rowPreference?.reaction ?? null;
+  const tagDots = useMemo(
+    () => (rowPreference?.tags ?? []).slice(0, LENTILLE_LIST_TAGS_MAX_COUNT),
+    [rowPreference?.tags]
+  );
   const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -520,32 +538,111 @@ export const LentilleRow = memo(function LentilleRow({
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+          {/* Ligne 1 — grammaire « Nom · heure » de la maquette (§3, figure
+              cotée : « nom 15 extrabold · point médian · heure 12 » ; rendu
+              `.l1{display:flex; align-items:baseline}` avec `.mid` entre
+              `.nm` et `.tm`). L'heure est ACCOLÉE au nom : pas de
+              `justify-between`, qui la renverrait au bord droit — c'est la
+              grammaire du rang historique, celle que la Lentille remplace.
+              Ordre de la maquette (`rowHtml`) : 📌 · nom · favori · tags ·
+              🔕 · point médian · heure. */}
+          <div data-testid="lentille-row-line1" className="flex items-baseline gap-1.5">
+            {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
+            {isPinned && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-pin-glyph"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
+              >
+                📌
+              </span>
+            )}
+
             <h3
-              className="truncate"
+              data-testid="lentille-row-name"
+              className="truncate min-w-0"
               style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
             >
-              {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
-              {isPinned && (
-                <span aria-hidden="true" data-testid="lentille-row-pin-glyph">
-                  📌{' '}
-                </span>
-              )}
               {conversationName}
-              {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
-              {isMuted && (
-                <span aria-hidden="true" data-testid="lentille-row-mute-glyph" className="ml-1">
-                  🔕
-                </span>
-              )}
             </h3>
-            {conversation.lastMessage && (
+
+            {/* Émoji favori — maquette §3 (« tags et émoji favori vivent
+                après le nom », rendu `.fav`) et parité iOS
+                (`LentilleConversationRow.swift`, `userState.reaction` à la
+                taille `LentilleMetrics.Tags.emojiSize`). MÊME magasin que
+                pin/sourdine : aucune seconde source. */}
+            {favoriteReaction && (
               <span
-                className="text-muted-foreground flex-shrink-0"
-                style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+                aria-hidden="true"
+                data-testid="lentille-row-favorite"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
               >
-                {time}
+                {favoriteReaction}
               </span>
+            )}
+
+            {/* behaviour-matrix:L08 (part tags, réserve REV-4/R4-2) — « les
+                tags utilisateur deviennent au plus 3 pastilles de 6 px après
+                le nom ». Teinte par `getTagColor`, le MÊME hachage que le
+                rang historique (`ConversationItem`) : une seule loi de
+                couleur de tag dans le dépôt, jamais une seconde. La classe
+                porte la teinte (`text-…`), la pastille la peint
+                (`currentColor`) — les nuances 700/300 de la palette sont
+                lisibles sur 6 px dans les deux thèmes, là où les fonds
+                `bg-…-100` de la capsule historique disparaîtraient. */}
+            {tagDots.length > 0 && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-tag-dots"
+                className="flex shrink-0 items-center gap-[3px]"
+              >
+                {tagDots.map((tag) => (
+                  <i
+                    key={tag}
+                    data-testid="lentille-row-tag-dot"
+                    className={cn('inline-block rounded-full', getTagColor(tag).text)}
+                    style={{
+                      width: 'var(--lentille-list-tags-size)',
+                      height: 'var(--lentille-list-tags-size)',
+                      backgroundColor: 'currentColor',
+                    }}
+                  />
+                ))}
+              </span>
+            )}
+
+            {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
+            {isMuted && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-row-mute-glyph"
+                className="shrink-0"
+                style={{ fontSize: 'var(--lentille-list-tags-emoji-size)' }}
+              >
+                🔕
+              </span>
+            )}
+
+            {conversation.lastMessage && (
+              <>
+                <span
+                  aria-hidden="true"
+                  data-testid="lentille-row-time-separator"
+                  className="text-muted-foreground shrink-0"
+                  style={{ fontSize: 'var(--lentille-list-time-size)' }}
+                >
+                  ·
+                </span>
+                <span
+                  data-testid="lentille-row-time"
+                  className="text-muted-foreground shrink-0"
+                  style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+                >
+                  {time}
+                </span>
+              </>
             )}
           </div>
 
