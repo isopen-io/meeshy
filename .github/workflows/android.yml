@@ -79,7 +79,7 @@ jobs:
           java-version: '21'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # Derived from app/build.gradle.kts rather than hardcoded: a compileSdk
       # bump must not require editing this workflow in lockstep and silently
