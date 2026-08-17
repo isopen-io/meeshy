@@ -166,8 +166,18 @@ public actor MediaSessionCoordinator {
     ) {
         guard Self.shouldManageSession(callActive: callActive) else { return }
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: mode, options: options)
-        try? session.setActive(true)
+        // Independent do/catch per call — a setCategory failure must not skip the
+        // setActive attempt (each used to run regardless of the other's outcome).
+        do {
+            try session.setCategory(.playback, mode: mode, options: options)
+        } catch {
+            logger.error("activatePlaybackSync: setCategory failed — \(error.localizedDescription, privacy: .public)")
+        }
+        do {
+            try session.setActive(true)
+        } catch {
+            logger.error("activatePlaybackSync: setActive failed — \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Configure SYNCHRONEMENT la session pour un enregistrement micro
@@ -194,7 +204,11 @@ public actor MediaSessionCoordinator {
     /// la session appartient alors à l'appel).
     public nonisolated func deactivatePlaybackSync() {
         guard Self.shouldManageSession(callActive: callActive) else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            logger.error("deactivatePlaybackSync failed — \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Pure, testable decision: may the coordinator (re)configure or tear down
@@ -240,8 +254,11 @@ public actor MediaSessionCoordinator {
         guard activationCount > 0 else { return }
         activationCount -= 1
         if activationCount == 0, Self.shouldManageSession(callActive: callActive) {
-            try? AVAudioSession.sharedInstance().setActive(false,
-                options: .notifyOthersOnDeactivation)
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                logger.error("release: setActive(false) failed — \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
