@@ -60,7 +60,10 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
         let didReconnect = PassthroughSubject<Void, Never>()
 
-        init(store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me") {
+        init(
+            store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me",
+            onReadingModePreferenceChanged: (@Sendable (String, String) -> Void)? = nil
+        ) {
             bridge = ConversationStoreSocketBridge(
                 store: store,
                 categoryStore: categoryStore,
@@ -79,7 +82,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 categoryUpdated: categoryUpdated.eraseToAnyPublisher(),
                 categoryDeleted: categoryDeleted.eraseToAnyPublisher(),
                 categoriesReordered: categoriesReordered.eraseToAnyPublisher(),
-                didReconnect: didReconnect.eraseToAnyPublisher()
+                didReconnect: didReconnect.eraseToAnyPublisher(),
+                onReadingModePreferenceChanged: onReadingModePreferenceChanged
             )
         }
     }
@@ -89,12 +93,14 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         version: Int,
         reset: Bool = false,
         isPinned: Bool = false,
-        isMuted: Bool = false
+        isMuted: Bool = false,
+        readingMode: String = "auto"
     ) -> UserPreferencesConversationUpdatedSocketEvent {
         let prefs: UserPreferencesConversationUpdatedSocketEvent.Preferences? = reset ? nil : .init(
             isPinned: isPinned, isMuted: isMuted, mentionsOnly: false, isArchived: false,
             tags: [], categoryId: nil, orderInCategory: nil, customName: nil,
-            reaction: nil, deletedForUserAt: nil, clearHistoryBefore: nil
+            reaction: nil, deletedForUserAt: nil, clearHistoryBefore: nil,
+            readingMode: readingMode
         )
         return UserPreferencesConversationUpdatedSocketEvent(
             userId: "me", conversationId: conversationId, version: version, reset: reset, preferences: prefs
@@ -535,6 +541,62 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             return s?.isPinned == false && s?.version == 3
         }
         XCTAssertTrue(reset, "reset must restore defaults while preserving the bumped version")
+    }
+
+    // MARK: readingMode relay (G-124)
+    //
+    // `readingMode` n'appartient PAS à `userState`/`RemotePreferencesPayload` —
+    // c'est un canal SÉPARÉ (`onReadingModePreferenceChanged`), volontairement
+    // découplé de `applyRemote`. Ces témoins couvrent ce canal seul ; les
+    // trois au-dessus couvrent déjà `applyRemote` sans y toucher.
+
+    func test_userPreferencesUpdated_relaysReadingModeThroughDedicatedCallback() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        var received: [(String, String)] = []
+        let env = BridgeEnv(
+            store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
+            onReadingModePreferenceChanged: { conversationId, readingMode in
+                received.append((conversationId, readingMode))
+            }
+        )
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, readingMode: "script"))
+
+        let relayed = await waitUntil { received.contains { $0 == ("c1", "script") } }
+        XCTAssertTrue(relayed, "un readingMode reçu doit atteindre le callback SANS transformation")
+    }
+
+    /// `reset == true` porte `preferences == nil` — rien à relayer, le
+    /// callback ne doit PAS être invoqué (l'app garde sa valeur locale).
+    func test_userPreferencesUpdated_reset_doesNotInvokeReadingModeCallback() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        var callCount = 0
+        let env = BridgeEnv(
+            store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
+            onReadingModePreferenceChanged: { _, _ in callCount += 1 }
+        )
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, reset: true))
+        // Laisse le temps à un éventuel (mauvais) appel de se produire.
+        _ = await waitUntil(timeout: 0.3) { false }
+
+        XCTAssertEqual(callCount, 0, "reset ⇒ preferences nil ⇒ rien à relayer")
+    }
+
+    /// Un appelant qui ne branche rien (`onReadingModePreferenceChanged` par
+    /// défaut `nil`) doit continuer de fonctionner exactement comme avant ce
+    /// lot — `applyRemote` toujours routé, aucun crash sur l'appel optionnel.
+    func test_userPreferencesUpdated_noReadingModeCallback_stillRoutesApplyRemote() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, isPinned: true, readingMode: "resume"))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.userState.isPinned == true }
+        XCTAssertTrue(applied, "l'absence de callback readingMode ne doit rien changer au chemin existant")
     }
 
     // MARK: read-status:updated

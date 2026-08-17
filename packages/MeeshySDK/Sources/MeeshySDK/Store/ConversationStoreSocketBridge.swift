@@ -61,7 +61,20 @@ public final class ConversationStoreSocketBridge {
     }
 
     /// Wire the shared socket manager's broadcasts to the stores.
-    public func activate(socket: MessageSocketManager = .shared) {
+    ///
+    /// `onReadingModePreferenceChanged` — G-124, volet « préférence serveur »
+    /// de P7. `MeeshySDK` ne connaît pas `ReadingModePreference` (type
+    /// app-level, `ReadingModeOrchestrator.swift`) ni le magasin scopé qui le
+    /// persiste (`LentilleScopedReadingModePreferenceStore`) : ce callback est
+    /// le seul point où le SDK expose la valeur BRUTE reçue
+    /// (`Preferences.readingMode`, raw `auto|focal|script|resume|riviere`)
+    /// sans lui-même écrire quoi que ce soit — l'app décide où/si elle
+    /// persiste. `nil` (défaut) préserve le comportement d'avant ce lot pour
+    /// tout appelant qui ne branche rien.
+    public func activate(
+        socket: MessageSocketManager = .shared,
+        onReadingModePreferenceChanged: (@Sendable (_ conversationId: String, _ readingMode: String) -> Void)? = nil
+    ) {
         activate(
             conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
@@ -75,7 +88,8 @@ public final class ConversationStoreSocketBridge {
             categoryUpdated: socket.categoryUpdated.eraseToAnyPublisher(),
             categoryDeleted: socket.categoryDeleted.eraseToAnyPublisher(),
             categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher(),
-            didReconnect: socket.didReconnect.eraseToAnyPublisher()
+            didReconnect: socket.didReconnect.eraseToAnyPublisher(),
+            onReadingModePreferenceChanged: onReadingModePreferenceChanged
         )
     }
 
@@ -94,7 +108,8 @@ public final class ConversationStoreSocketBridge {
         categoryUpdated: AnyPublisher<CategorySocketEvent, Never>,
         categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>,
         categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>,
-        didReconnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
+        didReconnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
+        onReadingModePreferenceChanged: (@Sendable (_ conversationId: String, _ readingMode: String) -> Void)? = nil
     ) {
         cancellables.removeAll()
         let store = self.store
@@ -145,6 +160,15 @@ public final class ConversationStoreSocketBridge {
         userPreferencesUpdated.sink { event in
             let remote = Self.mapPreferences(event)
             Task { await store.applyRemote(remote) }
+            // G-124 — volet séparé de `applyRemote` ci-dessus : `readingMode`
+            // n'est PAS un champ de `userState`/`RemotePreferencesPayload`
+            // (préférence de LECTURE, pas d'organisation), donc pas question
+            // de le glisser dans `mapPreferences`. `reset == true` porte
+            // `preferences == nil` — rien à relayer, l'app garde sa valeur
+            // locale (même posture que le reste de ce sink sur un reset).
+            if let readingMode = event.preferences?.readingMode {
+                onReadingModePreferenceChanged?(event.conversationId, readingMode)
+            }
         }.store(in: &cancellables)
 
         readStatusUpdated.sink { event in

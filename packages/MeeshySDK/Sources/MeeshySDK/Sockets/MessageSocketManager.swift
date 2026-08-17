@@ -109,9 +109,31 @@ public struct TypingEvent: Decodable, Sendable {
 public struct UnreadUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let unreadCount: Int
+    /// Le pont ✦ recalculé POUR CE destinataire (G-123, payload optionnel de
+    /// `ConversationUnreadUpdatedEventData`, `packages/shared/types/socketio-events.ts`).
+    /// ABSENT quand le serveur n'a rien à annoncer (typiquement `unreadCount == 0`,
+    /// contrat §3.2) — un client ancien qui ignore le champ garde son comportement
+    /// d'avant.
+    ///
+    /// Décodage TOLÉRANT (`try?`), même patron que `MeeshyConversation.bridge`
+    /// (`CoreModels.swift`) : un pont malformé rend `nil` au lieu de faire
+    /// échouer le décodage de l'événement ENTIER — `conversationId` et
+    /// `unreadCount` restent exploitables sans lui (G-124).
+    public let bridge: ConversationBridge?
 
-    public init(conversationId: String, unreadCount: Int) {
-        self.conversationId = conversationId; self.unreadCount = unreadCount
+    public init(conversationId: String, unreadCount: Int, bridge: ConversationBridge? = nil) {
+        self.conversationId = conversationId; self.unreadCount = unreadCount; self.bridge = bridge
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case conversationId, unreadCount, bridge
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.conversationId = try c.decode(String.self, forKey: .conversationId)
+        self.unreadCount = try c.decode(Int.self, forKey: .unreadCount)
+        self.bridge = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge)
     }
 }
 
@@ -171,6 +193,35 @@ public struct UserPreferencesConversationUpdatedSocketEvent: Decodable, Sendable
         public let reaction: String?
         public let deletedForUserAt: Date?
         public let clearHistoryBefore: Date?
+        /// `ReadingModePreference` (raw : `auto|focal|script|resume|riviere`) —
+        /// G-124, champ requis du payload gelé `ConversationPreferencesPayload`
+        /// (`packages/shared/types/socketio-events.ts`, « payload complet »,
+        /// jamais omis par le gateway sur ce scope). Décodé en `String` brute
+        /// ici (pas `ReadingModeOrchestrator.ReadingModePreference` — ce type
+        /// vit dans l'app, `MeeshySDK` ne le connaît pas) ; l'app-level
+        /// consommateur (`ConversationStoreSocketBridge`
+        /// `.onReadingModePreferenceChanged`) fait le `RawRepresentable` sur
+        /// SES 5 cas gelés, une valeur inconnue y rendant simplement `nil`.
+        ///
+        /// Défaut `"auto"` dans l'init memberwise ci-dessous UNIQUEMENT pour
+        /// les call sites de test antérieurs à G-124 (le décodage JSON, lui,
+        /// exige TOUJOURS la clé — le champ n'est pas optionnel sur le fil).
+        public let readingMode: String
+
+        public init(
+            isPinned: Bool, isMuted: Bool, mentionsOnly: Bool, isArchived: Bool,
+            tags: [String], categoryId: String?, orderInCategory: Int?,
+            customName: String?, reaction: String?,
+            deletedForUserAt: Date?, clearHistoryBefore: Date?,
+            readingMode: String = "auto"
+        ) {
+            self.isPinned = isPinned; self.isMuted = isMuted
+            self.mentionsOnly = mentionsOnly; self.isArchived = isArchived
+            self.tags = tags; self.categoryId = categoryId; self.orderInCategory = orderInCategory
+            self.customName = customName; self.reaction = reaction
+            self.deletedForUserAt = deletedForUserAt; self.clearHistoryBefore = clearHistoryBefore
+            self.readingMode = readingMode
+        }
     }
     public let userId: String
     public let conversationId: String
