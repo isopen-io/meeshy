@@ -41,6 +41,20 @@
 > **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
 > green before push.
 >
+> **CI incident, unrelated to this diff**: GitHub itself had a ~5h platform-wide outage
+> (`githubstatus.com` confirmed `impact: critical`, "Incident with GitHub.com", 13:40→~18:23 UTC)
+> that blocked `gh pr create` entirely — every attempt (GraphQL and REST) 503'd until "Git
+> Operations" was reported mitigated, at which point PR #3185 finally went through on the first
+> retry. Separately, once open, PR #3185's `Test gateway` check came back red — verified this was
+> **pre-existing on `main` itself**, not caused by this diff: `git diff origin/main...HEAD --stat`
+> confirms zero gateway/TypeScript files touched, and `main`'s own most recent completed CI run
+> (commit `782dc3225`) fails the exact same test with a byte-for-byte identical error
+> (`personal-history-hiding-surface-guard.test.ts`, a `ConversationBridgeService.ts` drift from an
+> unrelated concurrent gateway session). `Android (assemble + unit tests)` — the actual merge gate
+> for this routine's PRs — was green throughout; merged in squash despite the red `Test gateway`,
+> confirming it isn't a required check for this branch (same pattern as the `Test shared` false
+> negative documented earlier this session).
+>
 > `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
 > android_streak=3 last_run=settings-email-notification-toggle`.
 
