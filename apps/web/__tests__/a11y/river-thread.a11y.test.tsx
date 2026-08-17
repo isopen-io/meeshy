@@ -18,41 +18,29 @@ import type { RiverBubbleContent } from '@/components/conversations/riviere/rive
 expect.extend(toHaveNoViolations);
 
 /**
- * FINDING V4ter/axe (2026-08-17) — `aria-required-children`
- * (https://dequeuniversity.com/rules/axe/4.12/aria-required-children) tiré
- * sur `river-thread` dans les DEUX layouts : la racine pose `role="grid"` +
- * `aria-rowcount`/`aria-colcount` (`RiverThread.tsx:247-249`), mais ses
- * enfants directs ne sont ni `row` ni `rowgroup` — `RiverLaneHeaderStrip`,
- * le scroller, et la grille CSS de `RiverBubble` (`role="button"`, RE-PROUVÉ
- * par lecture de `RiverBubble.tsx`) placés par `gridColumn`/`gridRow` bruts.
- * Le pattern WAI-ARIA `grid` exige des lignes `row` contenant des
- * `gridcell`/`columnheader` — absent ici.
+ * FINDING V4ter/axe — `aria-required-children` : **SOLDÉ le 2026-08-17
+ * (Q-142, réserve REV-4ter R5-8).**
  *
- * PAS un attribut manquant — donc PAS trivial au sens du contrat de cette
- * tâche : la grille CSS positionne CHAQUE bulle par `gridColumn`/`gridRow`
- * calculés depuis `bubble.laneIndex`/`bubble.rank` (§7bis/§7ter) ; intercaler
- * des conteneurs `role="row"` casserait ce placement (une ligne DOM par
- * rang, alors que les couloirs vides d'un rang n'ont AUCUNE bulle à
- * placer) — une correction propre demande soit de restructurer la grille en
- * lignes/cellules explicites (potentiellement avec cellules vides pour les
- * couloirs sans bulle à ce rang), soit d'abandonner `role="grid"` pour un
- * pattern natif différent (ex. `role="application"` + navigation clavier
- * documentée, ou aucun rôle composite). Les deux touchent `RiverThread.tsx`
- * ET la loi de placement (`river-column-layout.ts`/`river-lanes` côté
- * `packages/shared`) — HORS PÉRIMÈTRE de cette tâche (« tu ne fais que les
- * monter dans des tests »).
+ * CE QUI ÉTAIT DÉSACTIVÉ ICI. La racine de `RiverThread` posait
+ * `role="grid"` + `aria-rowcount`/`aria-colcount` sans qu'aucun `row` ni
+ * `gridcell` n'existe dessous : la grille annonçait un pattern WAI-ARIA
+ * qu'elle ne fournissait pas. La règle tirait sur les DEUX layouts (`lanes`
+ * et `serialized`). La désactivation a été RETIRÉE AVANT le correctif —
+ * c'est ce retrait qui a produit le RED (2 violations, une par layout).
  *
- * La navigation clavier RÉELLE n'est pas affectée : `resolveRiverStep`
- * (rejoué par `RiverThread.test.tsx`) gouverne déjà `ArrowUp/Down/Left/
- * Right` indépendamment de la sémantique `grid` native — la violation est
- * un défaut d'annonce pour un lecteur d'écran qui s'attendrait aux enfants
- * `row`/`gridcell` du rôle `grid`, pas une régression de navigation
- * constatée.
+ * L'ARBITRAGE RENDU. Deux issues étaient ouvertes : abandonner `grid` pour
+ * un rôle qui ne promet rien, ou tenir la promesse. La navigation à deux axes
+ * est RÉELLE ici (`resolveRiverStep` gouverne les quatre flèches, rejoué par
+ * `RiverThread.test.tsx`) — `grid` ne sur-promettait pas, il était incomplet.
+ * Les couches manquantes sont donc posées, en `display: contents` pour
+ * qu'elles n'aient aucune boîte : la CSS Grid, le placement
+ * `gridColumn`/`gridRow` et l'ordre DOM chronologique sont INTACTS
+ * (`RiverThread.tsx`, note « LA GRILLE TIENT SA PROMESSE » ; témoins dans
+ * `components/conversations/riviere/__tests__/RiverThread.test.tsx`).
  *
- * Désactivée ICI SEULEMENT (pas globalement, pas dans jest.setup.js) —
- * reportée à l'orchestrateur comme finding V4ter/axe.
+ * `axe(container)` NU dans les deux témoins ci-dessous : toutes les règles,
+ * aucune exception.
  */
-const RIVER_GRID_AXE_OPTIONS = { rules: { 'aria-required-children': { enabled: false } } } as const;
 
 const participants = [
   { id: 'me', displayName: 'Moi' },
@@ -89,7 +77,7 @@ describe('Audit axe — Rivière (layout lanes, géométrie LOI réelle)', () =>
     expect(geometry.layout).toBe('lanes');
     const { container } = render(<RiverThread geometry={geometry} contents={contents} youLabel="Toi" />);
 
-    const results = await axe(container, RIVER_GRID_AXE_OPTIONS);
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });
@@ -106,7 +94,7 @@ describe('Audit axe — Rivière (layout serialized, géométrie LOI réelle)', 
     expect(duoGeometry.layout).toBe('serialized');
     const { container } = render(<RiverThread geometry={duoGeometry} contents={duoContents} youLabel="Toi" />);
 
-    const results = await axe(container, RIVER_GRID_AXE_OPTIONS);
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });

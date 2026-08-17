@@ -1007,5 +1007,32 @@ describe('CallEventsHandler — call:end handler', () => {
 
       expect((handler as any).bufferedOffers.has(`${CALL_ID}:bystander-user-id`)).toBe(true);
     });
+
+    it('broadcasts PARTICIPANT_LEFT with the CallParticipant row id, not the participantId FK (Vague 142)', async () => {
+      const prisma = makePrisma();
+      const { socket, handlers, socketToEmit } = makeSocket([`call:${CALL_ID}`]);
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      // The hanger-up's CallParticipant ROW id ('call-participant-row-caller',
+      // per the beforeEach fixture) is what `removeParticipant`/roster lookups
+      // on every client key on — never `PARTICIPANT_ID`, the FK to
+      // `Participant.id`, which is what `endCall()`/`clearBufferedOfferFor`
+      // consume instead. Emitting the FK here left every client's roster
+      // entry for the hanger-up stuck (never removed), even though the
+      // hanger-up's own WebRTC connection was correctly torn down elsewhere.
+      expect(socketToEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        expect.objectContaining({
+          callId: CALL_ID,
+          participantId: 'call-participant-row-caller',
+          userId: CALLER_ID,
+        })
+      );
+    });
   });
 });

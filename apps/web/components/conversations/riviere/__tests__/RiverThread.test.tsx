@@ -163,4 +163,78 @@ describe('RiverThread — hôte de l\'écran Rivière (R-134)', () => {
     expect(screen.getByTestId('river-lane-overlay')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByTestId('river-lane-header-strip')).toHaveAttribute('aria-hidden', 'true');
   });
+
+  /**
+   * Q-142 / réserve REV-4ter **R5-8** — `aria-required-children`.
+   *
+   * La racine annonçait `role="grid"` sans un seul `row`/`gridcell` dessous.
+   * Ces témoins figent les DEUX moitiés du remède : la sémantique EST là, et
+   * elle n'a RIEN déplacé — c'est la seconde moitié qui pouvait casser en
+   * silence, et c'est elle qui a dicté le `display: contents`.
+   */
+  describe('Q-142/R5-8 — la grille tient sa promesse (row + gridcell)', () => {
+    it('un `row` par rang, un `gridcell` par bulle, indexés par la LOI (rank/laneIndex), jamais par un compteur de rendu', () => {
+      render(<RiverThread geometry={geometry} contents={contents} youLabel="Toi" />);
+
+      const rows = screen.getAllByTestId('river-row');
+      const cells = screen.getAllByTestId('river-gridcell');
+      expect(rows).toHaveLength(geometry.bubbles.length);
+      expect(cells).toHaveLength(geometry.bubbles.length);
+
+      expect(rows.map((el) => el.getAttribute('role'))).toEqual(rows.map(() => 'row'));
+      expect(cells.map((el) => el.getAttribute('role'))).toEqual(cells.map(() => 'gridcell'));
+
+      // 1-indexés, et pris sur la géométrie — pas sur la position de rendu.
+      expect(rows.map((el) => el.getAttribute('aria-rowindex'))).toEqual(
+        geometry.bubbles.map((bubble) => String(bubble.rank + 1))
+      );
+      expect(cells.map((el) => el.getAttribute('aria-colindex'))).toEqual(
+        geometry.bubbles.map((bubble) => String(bubble.laneIndex + 1))
+      );
+    });
+
+    it("les index annoncés recouvrent EXACTEMENT ce que la racine déclare (`aria-rowcount`/`aria-colcount`)", () => {
+      render(<RiverThread geometry={geometry} contents={contents} youLabel="Toi" />);
+      const host = screen.getByTestId('river-thread');
+
+      expect(host).toHaveAttribute('role', 'grid');
+      const rowIndexes = screen
+        .getAllByTestId('river-row')
+        .map((el) => Number(el.getAttribute('aria-rowindex')));
+      const colIndexes = screen
+        .getAllByTestId('river-gridcell')
+        .map((el) => Number(el.getAttribute('aria-colindex')));
+
+      expect(Math.max(...rowIndexes)).toBeLessThanOrEqual(Number(host.getAttribute('aria-rowcount')));
+      expect(Math.max(...colIndexes)).toBeLessThanOrEqual(Number(host.getAttribute('aria-colcount')));
+      expect(Math.min(...rowIndexes)).toBeGreaterThanOrEqual(1);
+      expect(Math.min(...colIndexes)).toBeGreaterThanOrEqual(1);
+    });
+
+    it("les deux couches n'ont AUCUNE boîte (`display: contents`) — sans quoi la CSS Grid serait cassée", () => {
+      render(<RiverThread geometry={geometry} contents={contents} youLabel="Toi" />);
+
+      for (const el of [...screen.getAllByTestId('river-row'), ...screen.getAllByTestId('river-gridcell')]) {
+        expect((el as HTMLElement).style.display).toBe('contents');
+      }
+    });
+
+    it('le PLACEMENT et l’ORDRE CHRONOLOGIQUE sont intacts — la bulle reste l’élément de grille, avec ses gridColumn/gridRow', () => {
+      render(<RiverThread geometry={geometry} contents={contents} youLabel="Toi" />);
+
+      const bubbles = screen.getAllByTestId('river-bubble') as HTMLElement[];
+      expect(bubbles.map((el) => el.getAttribute('data-message-id'))).toEqual(
+        geometry.bubbles.map((bubble) => bubble.messageId)
+      );
+
+      bubbles.forEach((el, index) => {
+        const bubble = geometry.bubbles[index]!;
+        expect(el.style.gridColumn).toBe(String(bubble.laneIndex + 1));
+        expect(el.style.gridRow).toBe(String(bubble.rank + 1));
+      });
+
+      // Et la grille elle-même n'a pas bougé de forme.
+      expect(screen.getByTestId('river-grid').style.display).toBe('grid');
+    });
+  });
 });

@@ -201,6 +201,25 @@ type ScanOptions = {
   readonly excludedFiles?: ReadonlySet<string>;
 };
 
+// Borne de LECTURE (Q-145, 2026-08-17) : le jumeau jest de cette garde avait
+// été rendu déterministe par V4bis/B5 (« borner, pas relever le seuil ») —
+// ce fichier vitest ne l'avait jamais été, et le run complet le tuait au
+// timeout de 5 s (vert isolé à 2,9 s : contenu juste, budget faux). Un jeton
+// `behaviour-matrix:<id>` ne vit que dans du code ou de la doc de code —
+// lire bun.lock, les images ou les .jsonl d'audit ne peut RIEN découvrir.
+// Sens de sûreté : si un jeton vivait dans un type exclu, son id tomberait
+// dans `missing` et la garde ROUGIRAIT — l'exclusion ne peut pas verdir à
+// tort.
+const SCANNED_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  '.swift', '.kt', '.kts', '.md', '.sh', '.yml', '.yaml',
+]);
+
+function hasScannedExtension(fileName: string): boolean {
+  const dot = fileName.lastIndexOf('.');
+  return dot >= 0 && SCANNED_EXTENSIONS.has(fileName.slice(dot).toLowerCase());
+}
+
 /**
  * Parcourt récursivement `rootDir` et collecte tous les ids référencés via
  * le motif `behaviour-matrix:<id>`, tous fichiers confondus (hors
@@ -233,6 +252,7 @@ function scanBehaviourMatrixCoverage(rootDir: string, options: ScanOptions = {})
         continue;
       }
       if (!entry.isFile()) continue;
+      if (!hasScannedExtension(entry.name)) continue; // borne Q-145 — voir SCANNED_EXTENSIONS
 
       const path = join(dir, entry.name);
       if (excludedFiles.has(path)) continue; // le fichier de la garde lui-même — voir SELF_TEST_FILE_PATH

@@ -156,8 +156,10 @@ export function LentilleFocusCard({
         data-testid="lentille-focus-card-notch"
         aria-label={label}
         onClick={(event) => {
-          // Le rang entier est un `role="button"` qui navigue : sans cet
-          // arrêt, ouvrir le menu de mode ouvrirait AUSSI la conversation.
+          // Q-142/R5-7 — la racine du rang n'est PLUS un `role="button"` : ce
+          // `stopPropagation` ne protège donc plus d'un ancêtre interactif,
+          // mais du gestionnaire de geste de `LentillePeek` (clic droit /
+          // appui long) et de tout ancêtre futur. Il reste, et son témoin avec.
           event.stopPropagation();
           onNotchTap();
         }}
@@ -166,6 +168,9 @@ export function LentilleFocusCard({
           // `textTransform` (contrairement à `sticker`, qui l'a). La casse
           // est celle de la traduction — « AUTO · Focal », pas « AUTO · FOCAL ».
           'absolute rounded-full px-2 py-0.5',
+          // Q-142/R5-7 — AU-DESSUS de la couverture d'ouverture du rang
+          // (`LentilleRow`, `ROW_CONTROL_Z`) : l'encoche garde son geste.
+          'z-20',
           'bg-secondary hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary'
         )}
         style={{
