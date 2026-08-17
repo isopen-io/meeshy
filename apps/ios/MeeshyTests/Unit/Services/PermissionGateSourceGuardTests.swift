@@ -89,6 +89,35 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le refus doit être annoncé avec un renvoi vers les Réglages.")
     }
 
+    /// Répondre depuis l'UI système CallKit (écran verrouillé, Dynamic Island,
+    /// CarPlay, AirPods) invoque `answerCallReady()`, PAS `answerCall()` — un
+    /// chemin distinct qui ne portait aucune garde micro jusqu'ici. Sans elle,
+    /// un appel accepté via CallKit avec le micro refusé se connectait muet,
+    /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
+    /// `answerCall()`, resté ouvert sur son propre point d'entrée.
+    func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
+        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
+
+        XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
+                      "answerCallReady() doit vérifier le micro avant d'accepter, comme answerCall().")
+        XCTAssertTrue(fn.contains("failCall("),
+                      "Sans micro, l'appel doit être raccroché via failCall() — endCall() ne résout pas " +
+                      "le CXAnswerCallAction déjà retenu par holdPendingAnswerAction.")
+        XCTAssertTrue(fn.contains("MediaPermissionCoordinator"),
+                      "Le refus doit être annoncé avec un renvoi vers les Réglages.")
+
+        guard let guardIndex = fn.range(of: "MediaPermissionState.microphone.isUsable")?.lowerBound,
+              let connectingIndex = fn.range(of: "callState = .connecting")?.lowerBound else {
+            return XCTFail("Impossible de localiser la garde et la transition .connecting")
+        }
+        XCTAssertLessThan(
+            guardIndex, connectingIndex,
+            "La garde micro doit précéder le passage à .connecting — sinon l'appel est déjà donné " +
+            "comme démarré côté UI quand le raccroché survient."
+        )
+    }
+
     /// Toute surface produit compose via le point d'entrée qui demande d'abord
     /// les permissions. `startCall` brut reste réservé au moteur/tests.
     func test_outgoingCallSurfaces_useThePermissionCheckedEntryPoint() throws {
