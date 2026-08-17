@@ -203,7 +203,15 @@ minimum ni maximum : un négatif est écrivable (normalisé en « désactivé »
 règle) et une valeur énorme vaut un mutisme de fait. La borne HAUTE est une
 décision produit — quel est le mode lent maximal légitime ? — et pas un
 correctif ; la nommer ici sans la trancher vaut mieux que de choisir un chiffre
-au hasard. Piste n°1.
+au hasard.
+
+Sévérité mesurée avant de la classer : le SEUL client qui expose le réglage
+(`ConversationSettingsView`) offre un `Picker` fermé à cinq valeurs — `0`, `10`,
+`30`, `60`, `300` — donc aucune valeur absurde ne peut venir du client officiel.
+La règle livrée ici couvre exactement ces cinq cas. Une valeur hors bornes exige
+une requête FORGÉE par un `creator`/`admin`/`moderator` du conteneur, c'est-à-dire
+quelqu'un qui peut déjà régler 5 minutes par l'interface. Piste n°1, réelle mais
+sans urgence.
 
 **Porter `retryAfterSeconds` dans l'accusé de réception socket.**
 `MessageResponse` ne transporte qu'un `error: string`, et le décompte y arrive
