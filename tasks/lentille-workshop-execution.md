@@ -407,6 +407,19 @@ taille fixe avec un texte tronqué : on lisait la rivière, pas la conversation.
    base de fuseaux, et l'enjeu est un en-tête en plus ou en moins, jamais un contenu.
 4. **La citation d'une réponse reste sur UNE ligne tronquée** (`FocalQuotedReplyView`, `.lineLimit(1)`).
    « Le message en entier » vaut pour LE message, jamais pour la copie d'un autre.
+5. **La ligne CONTOURNE une bulle centrée, elle ne la longe pas** (arbitrage produit, même jour) : la
+   branche descend à l'aplomb du CENTRE de son couloir, la bulle est centrée dessus, le contour de la
+   bulle — même couleur, même épaisseur — porte le trait de part et d'autre, et il repart par le bas.
+   Une bulle posée à côté d'un rail fait de la ligne une rambarde qu'on longe ; centrée, la ligne la
+   TRAVERSE. L'identité reste AU-DESSUS de la bulle (jamais dedans), et le nom y est **borné à la
+   moitié de la largeur** : c'est cette borne qui garantit que la branche croise du vide dans la
+   rangée d'identité, et jamais un mot. Une peau n'a AUCUNE découpe à calculer — le trait passe
+   derrière, et le fond opaque de la bulle l'interrompt de lui-même ; c'est ce qui rend le
+   contournement insensible à la hauteur du texte.
+6. **Sérialisée, la bulle n'a PAS de contour coloré** : aucune ligne ne l'aborde, et un cadre y
+   mimerait une branche que le verdict vient de retirer. Restent le **bord gauche** (2.5, couleur de
+   l'auteur) et le **bord bas** ; le reste sans coloration (1, `line`). L'habillage suit donc le
+   verdict de forme, jamais une préférence de peau.
 
 **B. L'en-tête nomme la ligne qu'on lit** (`resolveRiverLaneHeaders`). « Les noms en tête doivent
 refléter les auteurs de la ligne — fading et apparition du nom correspondant à la ligne affichée

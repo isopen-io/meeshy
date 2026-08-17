@@ -85,28 +85,44 @@
   .river-grid > svg { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
 
   .cell { position: relative; z-index: 1; padding: 7px 0 11px; }
-  /* L'identité vit DANS le haut de la bulle : la ligne contourne un bloc, pas
-     deux. C'est aussi la composition de la rangée plate du Fil, où le nom
-     surmonte le texte dans le même bloc — jamais un en-tête flottant. */
-  .idh { display: flex; align-items: center; gap: 7px; min-height: var(--avatar); margin-bottom: 2px; }
+  /* L'identité se tient AU-DESSUS de la bulle, hors d'elle — pastille à
+     l'aplomb du bord gauche, nom, puis l'heure au bord droit : la composition
+     de la rangée plate du Fil, sans rien y ajouter. */
+  .idh { display: flex; align-items: center; gap: 7px; min-height: var(--avatar); margin-bottom: 5px; }
   .ava {
     width: var(--avatar); height: var(--avatar); border-radius: 50%; flex: none;
     display: grid; place-items: center; color: #FFF; font-size: 11px; font-weight: 700;
   }
-  .idh .nm { font-size: var(--name-size); font-weight: 800; letter-spacing: -0.01em; }
+  /* Le nom est BORNÉ à la moitié de la bulle — pas par esthétique : c'est ce
+     qui garantit que la branche, qui descend à l'aplomb du centre, traverse
+     toujours du vide dans cette rangée et jamais un mot. Un nom plus long
+     s'élide, comme sur le Fil. */
+  .idh .nm {
+    font-size: var(--name-size); font-weight: 800; letter-spacing: -0.01em;
+    max-width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .idh .tm {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--time-size);
     font-weight: 600; color: var(--muted); margin-left: auto;
     font-variant-numeric: tabular-nums;
   }
-  /* Le CONTOUR de la bulle est un segment de la ligne (amendement R) : même
-     couleur, même épaisseur que le trait qui l'aborde. Son fond est OPAQUE —
-     c'est ce qui fait que la ligne, peinte derrière, s'arrête au bord haut et
-     repart au bord bas au lieu de traverser le texte. */
   .bub {
-    background: var(--surface); border: 2.5px solid; border-radius: 14px;
+    background: var(--surface); border-radius: 14px;
     padding: 9px 13px 8px; cursor: pointer;
     display: flex; flex-direction: column; gap: 5px;
+  }
+  /* EN COULOIRS — le CONTOUR de la bulle est un segment de la ligne (amendement
+     R) : même couleur, même épaisseur que le trait qui l'aborde. Son fond est
+     OPAQUE, et c'est ce qui fait que la ligne peinte derrière s'arrête au bord
+     haut et repart au bord bas au lieu de traverser le texte. */
+  .bub.contour { border: 2.5px solid; }
+  /* EN FIL — aucune ligne ne l'aborde, donc aucun contour : un cadre coloré y
+     mimerait une branche que la loi vient de retirer. Reste le bord gauche, qui
+     dit l'auteur, et le bord bas, qui clôt le bloc. Le reste sans coloration. */
+  .bub.flat {
+    border: 1px solid var(--line);
+    border-left-width: 2.5px;
+    border-bottom-width: 2.5px;
   }
   .bub:focus-visible { outline: 2px solid var(--river); outline-offset: 2px; }
   .bub .txt { font-size: var(--text-size); line-height: var(--text-leading); }
@@ -343,7 +359,8 @@
           <strong>centrée dessus</strong> : la ligne l’aborde par le haut, son contour — même couleur,
           même épaisseur — la porte de part et d’autre, et le trait repart par le bas. Une bulle posée
           de côté ferait de la ligne une rambarde ; centrée, la ligne la <strong>traverse</strong>.
-          L’identité vit alors <em>dans</em> le haut de la bulle : la ligne contourne un bloc, pas deux.
+          Au-dessus, elle passe dans la rangée d’identité : le nom y est borné à la moitié de la
+          bulle, si bien que la branche croise toujours du vide et jamais un mot.
         </p>
       </div>
     </div>
@@ -440,6 +457,11 @@
         bulles, même anatomie, une seule colonne. Faites-la défiler : en tête, un seul nom, qui
         <strong>traverse en fondu croisé</strong> à chaque changement d’auteur. La sérialisation
         n’est pas un mode dégradé qu’on subit, c’est la même vue à un seul axe.
+        <br><br>
+        Une différence, et elle se déduit du verdict : <strong>aucune ligne n’aborde ces bulles</strong>,
+        donc aucune n’a de contour coloré — un cadre y mimerait une branche que la loi vient de
+        retirer. Reste le <strong>bord gauche</strong>, qui dit l’auteur, et le <strong>bord bas</strong>,
+        qui clôt le bloc ; le reste sans coloration.
       </p>
     </div>
   </section>
@@ -665,12 +687,8 @@
       cell.style.paddingLeft = GUTTER + "px";
       cell.style.paddingRight = GUTTER + "px";
 
-      var bub = div("bub", cell);
-      bub.style.borderColor = lane.color;
-      bub.setAttribute("tabindex", "0");
-
       if (bubble.isFirstInGroup) {
-        var head = div("idh", bub);
+        var head = div("idh", cell);
         var avatar = div("ava", head);
         avatar.style.background = lane.color;
         avatar.textContent = lane.initials;
@@ -683,6 +701,19 @@
         stamp.className = "tm";
         stamp.textContent = bubble.time;
         head.appendChild(stamp);
+      }
+
+      // L'habillage suit le VERDICT DE FORME, jamais une préférence : contour
+      // complet là où une ligne le porte, bord gauche + bord bas là où il n'y
+      // a plus de ligne du tout.
+      var bub = div("bub", cell);
+      bub.className = "bub " + (D.layout === "serialized" ? "flat" : "contour");
+      bub.setAttribute("tabindex", "0");
+      if (D.layout === "serialized") {
+        bub.style.borderLeftColor = lane.color;
+        bub.style.borderBottomColor = lane.color;
+      } else {
+        bub.style.borderColor = lane.color;
       }
 
       if (KIND_GLYPH[bubble.kind]) {
