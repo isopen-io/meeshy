@@ -12,15 +12,23 @@
  * hook samples EVERY peer connection passed in, not just one. A 1:1 call has
  * a single peer so aggregation is a no-op there, but once a call hosts 3+
  * participants a single struggling peer must not be silently masked by
- * healthy ones (nor a struggling peer's stats wrongly drive the WHOLE call's
- * adaptive-degradation ladder while everyone else is fine — see
- * `useAdaptiveDegradation`, whose `applyTier`/`suspend` already act on every
- * peer via `useWebRTCP2P.applyQualityTier`). RTT/packet-loss/jitter take the
- * WORST value across peers (a lagging peer must move the needle); bitrate and
- * cumulative byte counters SUM across peers (total bandwidth in use). The
+ * healthy ones. RTT/packet-loss/jitter take the WORST value across peers (a
+ * lagging peer must move the needle); bitrate and cumulative byte counters
+ * SUM across peers (total bandwidth in use). The
  * external shape (`ConnectionQualityStats`) is unchanged, so every downstream
  * consumer (`CallQualityOverlay`, `useAdaptiveDegradation`,
  * `useCallAnalyticsReporter`) needed no changes.
+ *
+ * Per-peer bitrate (Vague 143, `2026-08-13-group-calls-gap-analysis.md`
+ * follow-up): the aggregate above is right for the call-wide survival
+ * decision (audio-only fallback — if the link truly cannot carry video for
+ * ANYONE, worst-of is the correct signal), but it is the WRONG input for
+ * bitrate/tier shedding, which is a per-connection encoder parameter. This
+ * hook also returns `perPeerStats`, the same per-peer `rates` this function
+ * already computes, reduced individually instead of folded into one
+ * worst-of/summed value — so a single struggling peer's link no longer drags
+ * every other (healthy) peer's outbound video down to the same tier. See
+ * `use-per-peer-video-tier.ts`.
  */
 
 'use client';
@@ -258,6 +266,13 @@ export function useCallQuality({
 }: UseCallQualityOptions) {
   const peerConnections = useStablePeerConnections(peerConnectionsProp);
   const [qualityStats, setQualityStats] = useState<ConnectionQualityStats | null>(null);
+  // Per-peer view of the SAME samples the aggregate above is built from — each
+  // peer's own level, never the worst-of-the-call one (Vague 143, per-peer
+  // adaptive bitrate). Empty map (not null) when there are no peers, so
+  // consumers can `.forEach`/`.get` unconditionally.
+  const [perPeerStats, setPerPeerStats] = useState<ReadonlyMap<string, ConnectionQualityStats>>(
+    new Map()
+  );
 
   // Previous quality level, tracked outside React state purely so the
   // "level changed" debug log below can compare against it without making
@@ -333,6 +348,29 @@ export function useCallQuality({
 
       setQualityStats(newStats);
 
+      // Per-peer stats, from the SAME per-peer rates computed above — each
+      // entry uses that peer's OWN rtt/packetLoss (never the worst-of-the-call
+      // values folded into `newStats`), so a per-peer consumer never sees one
+      // struggling peer's numbers misattributed to a healthy one.
+      const nextPerPeer = new Map<string, ConnectionQualityStats>();
+      samples.forEach(([participantId], index) => {
+        const rate = rates[index];
+        nextPerPeer.set(participantId, {
+          level: calculateQualityLevel(rate.packetLoss, rate.rtt),
+          packetLoss: Math.round(rate.packetLoss * 100) / 100,
+          rtt: Math.round(rate.rtt),
+          bitrate: {
+            audio: Math.round(rate.audioBitrate),
+            video: Math.round(rate.videoBitrate),
+          },
+          jitter: Math.round(rate.jitter * 100) / 100,
+          timestamp: new Date(),
+          bytesSent: rate.bytesSent,
+          bytesReceived: rate.bytesReceived,
+        });
+      });
+      setPerPeerStats(nextPerPeer);
+
       // Log quality changes. Audit Vague 27 — this used to compare against
       // `qualityStats?.level` directly, which made this a dependency of
       // `updateStats` and gave it a fresh identity on every REAL quality
@@ -364,6 +402,7 @@ export function useCallQuality({
   useEffect(() => {
     if (peerConnections.size === 0) {
       setQualityStats(null);
+      setPerPeerStats(new Map());
       previousInboundRef.current = new Map();
       return;
     }
@@ -442,6 +481,7 @@ export function useCallQuality({
 
   return {
     qualityStats,
+    perPeerStats,
     isMonitoring: peerConnections.size > 0,
   };
 }

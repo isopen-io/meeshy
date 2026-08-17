@@ -344,6 +344,47 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.level).toBe('fair');
     });
 
+    // Vague 143 (per-peer adaptive bitrate follow-up to W5): the AGGREGATE
+    // above is right for the call-wide audio-only survival decision, but the
+    // wrong input for per-peer bitrate/tier shedding — a peer with a fine
+    // link must not be penalized because a bystander peer is struggling.
+    it('perPeerStats reports each peer at its OWN level, never the worst-of-the-call one', async () => {
+      const good = makeMockPeerConnection(makeStatsReport({ rtt: 0.05, packetsLost: 0, packetsReceived: 100 }));
+      const bad = makeMockPeerConnection(makeStatsReport({ rtt: 0.4, packetsLost: 0, packetsReceived: 100 }));
+
+      const { result } = renderHook(() =>
+        useCallQuality({
+          peerConnections: new Map([
+            ['peer-1', good as unknown as RTCPeerConnection],
+            ['peer-2', bad as unknown as RTCPeerConnection],
+          ]),
+        })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      // Aggregate is dragged to 'fair' by peer-2 (asserted above/adjacent) —
+      // but peer-1's OWN entry must still read 'excellent'.
+      expect(result.current.perPeerStats.get('peer-1')?.level).toBe('excellent');
+      expect(result.current.perPeerStats.get('peer-1')?.rtt).toBe(50);
+      expect(result.current.perPeerStats.get('peer-2')?.level).toBe('fair');
+      expect(result.current.perPeerStats.get('peer-2')?.rtt).toBe(400);
+    });
+
+    it('perPeerStats is an empty map (not null/undefined) with no peers, and clears when the call ends', async () => {
+      const good = makeMockPeerConnection(makeStatsReport({ rtt: 0.05 }));
+      const { result, rerender } = renderHook(
+        ({ peers }) => useCallQuality({ peerConnections: peers }),
+        { initialProps: { peers: onePeer(good) } }
+      );
+
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current.perPeerStats.size).toBe(1);
+
+      rerender({ peers: new Map() });
+      expect(result.current.perPeerStats.size).toBe(0);
+    });
+
     it('does not let one failing peer permanently drag the level below what a healthy peer alone would report, once it recovers', async () => {
       // Two peers, one improves on the second tick — the aggregate must
       // reflect the CURRENT worst peer each tick, not the failing peer's

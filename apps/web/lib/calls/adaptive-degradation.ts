@@ -71,10 +71,20 @@ export function createDegradationState(): DegradationState {
   return { sending: true, poorSince: null, goodSince: null, lastTier: null };
 }
 
-function tierForLevel(level: ConnectionQualityLevel): VideoSendTier {
+/**
+ * Immediate (no-hysteresis) quality→tier ladder: excellent/good→high,
+ * fair→medium, poor→low. Shared by two independent consumers — the call-wide
+ * hysteresis machine below (which also layers the sustain-then-suspend
+ * survival logic on top) and the PER-PEER tier controller
+ * (`use-per-peer-video-tier.ts`, Vague 143), which applies this ladder to
+ * each peer's own reading directly, with no hysteresis: a bitrate/encoding
+ * tier change is a cheap `setParameters()` call (no renegotiation), unlike
+ * the audio-only survival transition, which alone needs the sustained-
+ * duration guard to avoid flapping the camera off/on.
+ */
+export function deriveVideoTier(level: ConnectionQualityLevel): VideoSendTier {
   if (level === 'excellent' || level === 'good') return 'high';
   if (level === 'fair') return 'medium';
-  /* istanbul ignore next -- defensive fallback: tierForLevel is only called from the non-poor path in reduceDegradation, where level is always 'excellent'|'good'|'fair'; 'poor' is handled before calling this function */
   return 'low';
 }
 
@@ -113,12 +123,12 @@ export function reduceDegradation(
       // Shed to the lowest video tier while the poor streak builds.
       return {
         state: { sending: true, poorSince, goodSince: null, lastTier: 'low' },
-        action: tierAction('low', state.lastTier),
+        action: tierAction(deriveVideoTier('poor'), state.lastTier),
       };
     }
 
     // Non-poor: map level → tier and clear the poor streak.
-    const tier = tierForLevel(sample.level);
+    const tier = deriveVideoTier(sample.level);
     return {
       state: { sending: true, poorSince: null, goodSince: null, lastTier: tier },
       action: tierAction(tier, state.lastTier),

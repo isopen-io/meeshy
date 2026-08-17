@@ -842,6 +842,39 @@ describe('useWebRTCP2P', () => {
     });
   });
 
+  describe('applyQualityTierToPeer (Vague 143 — per-peer adaptive bitrate)', () => {
+    it('applies the tier to the named peer only', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      await act(async () => {
+        await result.current.applyQualityTierToPeer(mockTargetUserId, 'low');
+      });
+
+      expect(mockApplyVideoEncoding).toHaveBeenCalledWith('low');
+    });
+
+    it('is a silent no-op for a peerId with no live service (already left / stale sample)', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockApplyVideoEncoding.mockClear();
+
+      await act(async () => {
+        await result.current.applyQualityTierToPeer('unknown-peer', 'low');
+      });
+
+      expect(mockApplyVideoEncoding).not.toHaveBeenCalled();
+    });
+  });
+
   describe('switchCamera (Vague 95 — front/back camera flip)', () => {
     it('acquires a new track and swaps it on the single peer (no clone needed)', async () => {
       const camTrack = { kind: 'video', id: 'cam-back', clone: jest.fn() };

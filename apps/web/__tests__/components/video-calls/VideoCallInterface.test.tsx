@@ -9,7 +9,7 @@ const webrtc = {
   enableVideo: jest.fn().mockResolvedValue(undefined),
   disableVideo: jest.fn().mockResolvedValue(undefined),
   switchCamera: jest.fn().mockResolvedValue(undefined),
-  applyQualityTier: jest.fn().mockResolvedValue(undefined),
+  applyQualityTierToPeer: jest.fn().mockResolvedValue(undefined),
   removeParticipant: jest.fn(),
 };
 
@@ -90,7 +90,7 @@ jest.mock('@/hooks/use-audio-effects', () => ({
   useAudioEffects: (...args: unknown[]) => useAudioEffectsMock(...(args as [])),
 }));
 jest.mock('@/hooks/use-call-quality', () => ({
-  useCallQuality: () => ({ qualityStats: null }),
+  useCallQuality: () => ({ qualityStats: null, perPeerStats: new Map() }),
 }));
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: (...args: unknown[]) => useRemoteCallAlertsMock(...(args as [])),
