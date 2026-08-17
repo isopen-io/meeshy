@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Translate
@@ -104,6 +105,7 @@ internal fun PostCommentsSection(
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
+                        onDelete = viewModel::deleteComment,
                     )
                     ReplyThread(
                         comment = comment,
@@ -113,6 +115,7 @@ internal fun PostCommentsSection(
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
                         onFlagTap = viewModel::onCommentFlagTap,
+                        onDelete = viewModel::deleteComment,
                     )
                 }
             }
@@ -148,6 +151,7 @@ private fun CommentRow(
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(
@@ -219,6 +223,9 @@ private fun CommentRow(
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
                 CommentReplyButton(comment = comment, onReply = onReply)
+                if (comment.isOwn) {
+                    CommentDeleteButton(comment = comment, onDelete = onDelete)
+                }
             }
         }
     }
@@ -318,6 +325,7 @@ private fun ReplyThread(
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
     onFlagTap: (String, String) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     val isExpanded = thread?.isExpanded == true
     val isPreview = thread?.isPreview == true
@@ -333,6 +341,7 @@ private fun ReplyThread(
                         onToggleLike = onToggleLike,
                         onReply = onReply,
                         onFlagTap = onFlagTap,
+                        onDelete = onDelete,
                     )
                 }
             }
@@ -389,6 +398,7 @@ private fun ReplyThread(
                         onToggleLike = onToggleLike,
                         onReply = onReply,
                         onFlagTap = onFlagTap,
+                        onDelete = onDelete,
                     )
                 }
             }
@@ -423,6 +433,28 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
             )
         }
     }
+}
+
+/**
+ * Delete affordance for the viewer's own comment — the row's [CommentPresentation.isOwn]
+ * gate decides whether this renders at all (mirror of iOS `deleteHandler`'s author check).
+ * A single tap deletes immediately, no confirmation step — same as iOS's destructive-role
+ * menu item, which also fires on tap without an intermediate alert.
+ */
+@Composable
+private fun CommentDeleteButton(comment: CommentPresentation, onDelete: (String) -> Unit) {
+    val label = stringResource(R.string.post_comments_delete_action)
+    Icon(
+        imageVector = Icons.Filled.Delete,
+        contentDescription = label,
+        tint = MeeshyTheme.tokens.textSecondary,
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .size(16.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .clickable(enabled = !comment.isPending) { onDelete(comment.id) }
+            .semantics { role = Role.Button; contentDescription = label },
+    )
 }
 
 @Composable

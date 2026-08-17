@@ -864,6 +864,83 @@ class PostCommentsViewModelTest {
         assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
     }
 
+    // --- Viewer-initiated delete (own comments only, UI gates on CommentPresentation.isOwn) ---
+
+    @Test
+    fun `deleteComment optimistically removes a top-level comment and calls the repository`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b")))
+        coEvery { repository.deleteComment("p1", "a") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+
+        vm.deleteComment("a")
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("b")
+        coVerify(exactly = 1) { repository.deleteComment("p1", "a") }
+    }
+
+    @Test
+    fun `deleteComment optimistically removes a reply and decrements its parent's reply count`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 2)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1")))
+        coEvery { repository.deleteComment("p1", "r1") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+
+        vm.deleteComment("r1")
+
+        val s = vm.state.value
+        assertThat(s.replyThreads.getValue("c1").replies.map { it.id }).containsExactly("r2")
+        assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
+        coVerify(exactly = 1) { repository.deleteComment("p1", "r1") }
+    }
+
+    @Test
+    fun `deleteComment rolls back and surfaces an error on failure`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b")))
+        coEvery { repository.deleteComment("p1", "a") } returns NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+
+        vm.deleteComment("a")
+
+        val s = vm.state.value
+        assertThat(s.comments.map { it.id }).containsExactly("a", "b")
+        assertThat(s.errorMessage).isEqualTo("nope")
+    }
+
+    @Test
+    fun `deleteComment is inert for a blank postId`() = runTest {
+        val vm = viewModel(postId = null)
+
+        vm.deleteComment("a")
+
+        coVerify(exactly = 0) { repository.deleteComment(any(), any()) }
+    }
+
+    @Test
+    fun `deleteComment is inert for a blank commentId`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+
+        vm.deleteComment("  ")
+
+        coVerify(exactly = 0) { repository.deleteComment(any(), any()) }
+    }
+
+    @Test
+    fun `deleteComment is a no-op for an unknown comment id`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+
+        vm.deleteComment("ghost")
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
+        coVerify(exactly = 0) { repository.deleteComment(any(), any()) }
+    }
+
     // --- Realtime room: live heart reactions for the open post ---
 
     private fun reaction(commentId: String, userId: String, postId: String = "p1", emoji: String = "❤️") =

@@ -308,6 +308,13 @@ final class MessageListViewController: UIViewController {
     private static let estimatedFlatRowLayoutHeight: CGFloat = 150
     private static let estimatedBubbleRowLayoutHeight: CGFloat = 80
 
+    /// Zone « près du bas » (en points d'offset) : en dessous, l'utilisateur
+    /// SUIT la conversation — bouton « aller au bas » masqué, auto-scroll sur
+    /// message entrant, et poussée naturelle des insertions en tête. Au-delà,
+    /// il LIT l'historique — badge non-lus, et le layout compense les
+    /// insertions pour ne jamais déplacer sa lecture (`MessageListLayout`).
+    private static let nearBottomFollowThreshold: CGFloat = 200
+
     /// Points d'accès de test (WS-6, F-085) — `internal`, lus par
     /// `@testable import Meeshy`, jamais par une autre cible app.
     var focalCollectionViewForTesting: UICollectionView? { collectionView }
@@ -884,7 +891,12 @@ final class MessageListViewController: UIViewController {
         //
         // Le provider est rappelé à chaque invalidation de layout, il peut
         // donc lire le mode courant — `applyReadingModeChange` invalide déjà.
-        let layout = UICollectionViewCompositionalLayout { [weak self] _, _ in
+        // `MessageListLayout` (et pas le compositionnel nu) : les corrections
+        // de self-sizing sous la fenêtre et les insertions en tête sont
+        // absorbées par `contentOffset` dans la même transaction de layout —
+        // sans quoi la scène visible saute (et l'échelle Focal avec elle,
+        // `visualMidY` étant fonction de `center.y − offset`).
+        let layout = MessageListLayout { [weak self] _, _ in
             let estimate = (self?.readingMode.usesFlatRow ?? false)
                 ? Self.estimatedFlatRowLayoutHeight
                 : Self.estimatedBubbleRowLayoutHeight
@@ -904,6 +916,10 @@ final class MessageListViewController: UIViewController {
             section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
             return section
         }
+        // Même règle « près du bas » que `isCurrentlyNearBottom` : sous ce
+        // seuil la poussée naturelle d'un message entrant reste le
+        // comportement historique (auto-scroll RC2.1 compris).
+        layout.nearBottomThreshold = Self.nearBottomFollowThreshold
 
         collectionView = UICollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -1631,6 +1647,21 @@ final class MessageListViewController: UIViewController {
         // ne fait que 5ms. Tuer l'animation des bulk supprime le churn sans
         // perdre le slide d'un message entrant.
         let effectiveAnimated = animated && ((hasGenuinelyNewMessages && delta <= 2) || typingJustAppeared)
+        // Stabilité du champ visuel — les hauteurs des items SUPPRIMÉS sous
+        // la fenêtre (typing indicator qui s'éteint, message effacé déjà
+        // défilé) ne seront plus lisibles pendant le batch update : mesurées
+        // ICI sur le layout encore courant, déposées au layout qui les
+        // absorbera dans `contentOffset` (cf. `MessageListLayout`). Posé à
+        // CHAQUE apply — un dépôt non consommé ne doit jamais survivre à
+        // l'update suivant.
+        let deletedBelowWindowHeight: CGFloat = previousItems
+            .subtracting(Set(items))
+            .compactMap { dataSource.indexPath(for: $0) }
+            .compactMap { collectionView.layoutAttributesForItem(at: $0) }
+            .filter { $0.frame.minY < collectionView.contentOffset.y }
+            .reduce(0) { $0 + $1.frame.height }
+        (collectionView.collectionViewLayout as? MessageListLayout)?
+            .noteUpcomingDeletionCompensation(height: deletedBelowWindowHeight)
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
         dataSource.apply(snapshot, animatingDifferences: effectiveAnimated) { [weak self] in
             PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
@@ -2289,9 +2320,9 @@ extension MessageListViewController: UICollectionViewDelegate {
 
         // Near-bottom detection for the floating "scroll to latest" button.
         // In the inverted layout, contentOffset.y ≈ 0 means the user is at
-        // the visual bottom (newest messages). A threshold of 200pt gives a
+        // the visual bottom (newest messages). The threshold gives a
         // comfortable zone before the button appears.
-        let nearBottom = offset < 200
+        let nearBottom = offset < Self.nearBottomFollowThreshold
         if nearBottom != isCurrentlyNearBottom {
             isCurrentlyNearBottom = nearBottom
             onNearBottomChanged?(nearBottom)

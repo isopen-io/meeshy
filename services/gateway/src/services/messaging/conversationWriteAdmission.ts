@@ -121,6 +121,32 @@ const WRITE_ROLE_RANK: Readonly<Record<string, number>> = {
 /** Rang exigé par un canal d'annonces — il PRIME sur `defaultWriteRole`. */
 const ANNOUNCEMENT_REQUIRED_ROLE = 'admin';
 
+/**
+ * Les types de conteneur qui n'ont AUCUNE hiérarchie d'écriture.
+ *
+ * `global` — tout le monde y parle. C'est ce que la règle orpheline énonçait, et
+ * rien ne le contredit.
+ *
+ * `direct` — un tête-à-tête n'a pas d'administrateur. Ses deux lignes
+ * `Participant` portent bien des rôles distincts — `creator` pour qui a ouvert
+ * le fil, `member` pour l'autre (`routes/conversations/core.ts`, création) —
+ * mais cette asymétrie nomme un ORDRE D'ARRIVÉE, pas une autorité sur l'autre
+ * partie. Sans cette dispense, l'initiateur posait `isAnnouncementChannel` (ou
+ * un plancher `defaultWriteRole`) sur le tête-à-tête et le rang refusait
+ * DURABLEMENT les messages de son pair — `member` (1) sous un plancher `admin`
+ * (3) — sans retour en arrière pour la victime, à qui `PUT /conversations/:id`
+ * répond 403 précisément parce qu'elle est `member`.
+ *
+ * La route refuse désormais ces trois champs sur un `direct`, et les deux
+ * gestes ne sont pas redondants : celui-là empêche l'état d'être écrit, cette
+ * ligne-ci GUÉRIT les conteneurs déjà empoisonnés, dont aucune route ne rendra
+ * jamais compte.
+ *
+ * La dispense porte sur le RANG, jamais sur l'existence : un tête-à-tête clos
+ * reste refusé, l'état terminal étant tranché avant qu'on arrive ici.
+ */
+const WRITE_HIERARCHY_FREE_TYPES: ReadonlySet<string> = new Set(['global', 'direct']);
+
 /** Rôles `User.role` qui écrivent partout, quel que soit leur rang local. */
 const PLATFORM_STAFF_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'BIGBOSS', 'MODERATOR']);
 
@@ -223,9 +249,9 @@ export const isConversationClosed = (
  * restriction, et c'est là que s'arrête le chemin nominal — sans lire personne.
  */
 const requiredWriteRank = (conversation: ConversationWriteStateRow): number => {
-  // La conversation globale n'a pas de hiérarchie d'écriture : tout le monde y
-  // parle. C'est ce que la règle orpheline énonçait, et rien ne le contredit.
-  if (conversation.type === 'global') return 0;
+  // Certains conteneurs n'ont AUCUNE hiérarchie d'écriture : le rang n'y est
+  // même pas interrogé. Cf. WRITE_HIERARCHY_FREE_TYPES.
+  if (conversation.type != null && WRITE_HIERARCHY_FREE_TYPES.has(conversation.type)) return 0;
 
   const requiredRole = conversation.isAnnouncementChannel
     ? ANNOUNCEMENT_REQUIRED_ROLE

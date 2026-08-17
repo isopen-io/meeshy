@@ -311,6 +311,75 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertTrue(removed)
     }
 
+    // MARK: - La ligne de liste après une édition
+    //
+    // Les onze champs `lastMessage*` décrivent UN message (cf.
+    // `LastMessageFacet`). Le chemin ci-dessous en réécrivait une PARTIE alors
+    // que la carte du Prisme ne décrivait plus le texte affiché.
+
+    /// Une édition garde le MÊME message — les drapeaux et l'auteur restent
+    /// donc justes. Ce qui ne l'est plus, c'est la traduction : elle décrit le
+    /// texte D'AVANT, et le serveur remet d'ailleurs `Message.translations` à
+    /// `null` dans la même écriture que le nouveau contenu. Ne réécrire que
+    /// `lastMessagePreview` laissait le résolveur servir l'ancienne phrase.
+    func test_messageEditedRelay_dropsTheTranslationCardOfThePreEditText() async throws {
+        let (engine, socket, cache) = try makeEngine()
+
+        var row = TestFactories.makeConversation(id: "c1")
+        row.lastMessageId = "m1"
+        row.lastMessagePreview = "Hello"
+        row.lastMessageTranslations = ["fr": "Bonjour"]
+        row.lastMessageOriginalLanguage = "en"
+        try await cache.conversations.save([row], for: "list")
+        await engine.startSocketRelay()
+
+        socket.messageEdited.send(TestFactories.makeAPIMessage(
+            id: "m1", conversationId: "c1", content: "Hello again"
+        ))
+
+        let refreshed = await waitUntil {
+            await cache.conversations.load(for: "list").snapshot()?.first?.lastMessagePreview == "Hello again"
+        }
+        XCTAssertTrue(refreshed)
+
+        let afterEdit = await cache.conversations.load(for: "list").snapshot()
+        let updated = try XCTUnwrap(afterEdit?.first)
+        XCTAssertNil(updated.lastMessageTranslations, "la carte traduisait le texte d'avant")
+        XCTAssertEqual(
+            updated.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "Hello again",
+            "un lecteur francophone lisait « Bonjour » sur un message devenu « Hello again »"
+        )
+    }
+
+    /// Contre-épreuve : une édition qui ne vise PAS le dernier message ne doit
+    /// toucher à rien — surtout pas à la carte du Prisme, qui décrit toujours
+    /// correctement le dernier message, lui inchangé.
+    func test_messageEditedRelay_olderMessage_leavesTheRowUntouched() async throws {
+        let (engine, socket, cache) = try makeEngine()
+
+        var row = TestFactories.makeConversation(id: "c1")
+        row.lastMessageId = "m-last"
+        row.lastMessagePreview = "Hello"
+        row.lastMessageTranslations = ["fr": "Bonjour"]
+        row.lastMessageOriginalLanguage = "en"
+        try await cache.conversations.save([row], for: "list")
+        await engine.startSocketRelay()
+
+        socket.messageEdited.send(TestFactories.makeAPIMessage(
+            id: "m-older", conversationId: "c1", content: "corrigé"
+        ))
+
+        // Laisser le relais s'exécuter : c'est l'ABSENCE de changement qu'on mesure.
+        let mutated = await waitUntil(timeout: 0.5) {
+            await cache.conversations.load(for: "list").snapshot()?.first?.lastMessagePreview != "Hello"
+        }
+        XCTAssertFalse(mutated, "éditer un message ancien ne réécrit pas la ligne")
+
+        let afterOlderEdit = await cache.conversations.load(for: "list").snapshot()
+        let untouched = try XCTUnwrap(afterOlderEdit?.first)
+        XCTAssertEqual(untouched.lastMessageTranslations, ["fr": "Bonjour"])
+    }
+
     func test_messageConsumedRelay_forwardsViewOnceCountToTheCanonicalStore() async throws {
         let (engine, socket, _) = try makeEngine()
         let collector = RealtimeMutationCollector()
