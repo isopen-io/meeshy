@@ -472,7 +472,16 @@ export const CLIENT_EVENTS = {
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
-  USER_STATUS: 'user:status',
+  // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
+  // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
+  // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et
+  // AUCUN client ne l'émet — aucun `socket.on('user:status')` n'existe côté
+  // gateway pour l'accueillir. Le déclarer dans les DEUX sens laissait croire
+  // qu'un client pouvait annoncer sa propre présence, alors qu'elle est dérivée
+  // par le backend (`isOnline` + `lastActiveAt`, règle 1/3/5 —
+  // `packages/shared/utils/user-presence.ts`). C'était de surcroît le seul cas
+  // qu'un garde « tout CLIENT_EVENTS a un handler gateway » aurait signalé sans
+  // désigner un vrai défaut (audits cycles 57 et 59).
   /**
    * Transition foreground/background du device — le gateway s'en sert pour
    * router la sonnerie d'appel (socket au premier plan = event socket,
@@ -1944,13 +1953,6 @@ export interface TypingActionData {
 }
 
 /**
- * Données pour le statut utilisateur
- */
-export interface UserStatusData {
-  readonly isOnline: boolean;
-}
-
-/**
  * Données pour l'authentification
  */
 export interface AuthenticateData {
@@ -2018,7 +2020,6 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
-  [CLIENT_EVENTS.USER_STATUS]: (data: UserStatusData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;

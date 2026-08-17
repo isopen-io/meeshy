@@ -190,7 +190,13 @@ le soit** — c'est la condition de merge, pas une formalité.
    temps réel n'y déclenche de relecture, tous **replient** leur événement en
    état. `ConversationListViewModel` était le **seul** porteur de la forme dans
    toute l'application Android. La piste est close, pas reportée.
-3. **Le garde de forme des queries infinite OFFSET** (cycle 59 §6) — intacte.
+3. ~~Le garde de forme des queries infinite OFFSET~~ (cycle 59 §6) — **traité
+   par le cycle 60 bis, en parallèle de celui-ci** (leçon 227). Et son verdict
+   vaut d'être lu : le garde tel que le cycle 59 l'avait formulé aurait été
+   **VERT au-dessus de trois défauts vivants**, parce que les deux dérogations
+   ne désarment que les déclencheurs GLOBAUX du QueryClient — un
+   `invalidateQueries` explicite passe à travers. Ne pas le rouvrir sous
+   l'ancienne formulation.
 4. **`USER_STATUS` retiré de `CLIENT_EVENTS`** (cycle 59 §7) — intacte.
 5. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte.
 6. **Le mock inerte de `presence.service.test.ts`** (cycle 56 §5) — intacte.
