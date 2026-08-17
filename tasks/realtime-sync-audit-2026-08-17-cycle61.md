@@ -176,12 +176,12 @@ le soit** — c'est la condition de merge, pas une formalité.
    et le compteur. La vraie cible est le relais `CacheCoordinator` du plan
    part-17 (mutation locale ciblée) — gros morceau, et il doit naître avec les
    deux règles maintenant écrites dans son plan.
-2. **`ContactsListViewModel` et les autres consommateurs de `MessageSocketManager`**
-   — le balayage de ce cycle a montré que `ChatViewModel` et
-   `NotificationsViewModel` **replient** leurs événements en état (aucun
-   refetch), donc sains. Le balayage n'a pas couvert `feature/contacts`,
-   `feature/feed`, `feature/stories`. Même forme à chercher : un `collect` dont
-   le corps déclenche une relecture complète.
+2. ~~Les autres consommateurs de socket~~ — **balayé, RIEN à corriger.** Les huit
+   modules `feature/*` ont été dépouillés (`contacts`, `feed`, `stories`,
+   `notifications`, `calls`, `reels`, `profile`, `chat`) : aucun collecteur
+   temps réel n'y déclenche de relecture, tous **replient** leur événement en
+   état. `ConversationListViewModel` était le **seul** porteur de la forme dans
+   toute l'application Android. La piste est close, pas reportée.
 3. **Le garde de forme des queries infinite OFFSET** (cycle 59 §6) — intacte.
 4. **`USER_STATUS` retiré de `CLIENT_EVENTS`** (cycle 59 §7) — intacte.
 5. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte.
