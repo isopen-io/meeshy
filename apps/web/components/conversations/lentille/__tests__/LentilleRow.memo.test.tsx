@@ -51,8 +51,9 @@ jest.mock('@/hooks/lentille/use-lentille-list-typing', () => ({
   useLentilleListTyping: () => mockTypingMap,
 }));
 
+let mockBridgeMap = new Map<string, unknown>();
 jest.mock('@/hooks/lentille/use-lentille-bridges', () => ({
-  useLentilleBridges: () => new Map(),
+  useLentilleBridges: () => mockBridgeMap,
 }));
 
 jest.mock('@/stores/conversation-ui-store', () => ({
@@ -131,6 +132,7 @@ describe('LentilleRow — le memo est EFFECTIF (R4-6)', () => {
   beforeEach(() => {
     peekRenders.clear();
     mockTypingMap = new Map();
+    mockBridgeMap = new Map();
     onSelectConversation.mockClear();
   });
 
@@ -157,6 +159,32 @@ describe('LentilleRow — le memo est EFFECTIF (R4-6)', () => {
     peekRenders.clear();
 
     mockTypingMap = new Map([['b', [{ userId: 'u9', displayName: 'Zoé' }]]]);
+    rerender(<LentilleConversationListMount {...props} />);
+
+    expect([...peekRenders.keys()]).toEqual(['b']);
+  });
+
+  /**
+   * V4bis/R4-1 — behaviour-matrix:L15.
+   *
+   * Le miroir iOS de cet id étend `renderFingerprint` avec le champ `bridge`
+   * pour que le portillon `.equatable()` (manuel, un comparateur écrit à la
+   * main) ne gèle pas les mises à jour du pont. Le web n'a PAS de portillon
+   * manuel équivalent : `LentilleRow` est enveloppé dans `memo(fn)` SANS
+   * second argument (comparateur de props) — vérifié en tête de
+   * `LentilleRow.tsx` — donc React compare TOUTES les props par défaut,
+   * `bridge` inclus, sans qu'aucun code n'ait eu besoin de le lister
+   * explicitement. Il n'existe donc structurellement AUCUNE façon d'oublier
+   * `bridge` dans la comparaison côté web : ce témoin prouve que la mise à
+   * jour du pont d'UN rang traverse bien le memo, sans toucher ses voisins.
+   */
+  it('behaviour-matrix:L15 — un pont qui apparaît sur UN rang le re-rend, seul (memo par défaut, bridge inclus)', () => {
+    const { rerender } = render(<LentilleConversationListMount {...props} />);
+    peekRenders.clear();
+
+    mockBridgeMap = new Map([
+      ['b', { kind: 'fallback', unreadCount: 2, suggestedMode: 'focal', data: { authors: ['Zoe'], extraAuthorCount: 0, messageCount: 2 } }],
+    ]);
     rerender(<LentilleConversationListMount {...props} />);
 
     expect([...peekRenders.keys()]).toEqual(['b']);

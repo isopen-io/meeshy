@@ -50,6 +50,7 @@ jest.mock('@/hooks/use-i18n', () => ({
 
 import { LentilleRow } from '../LentilleRow';
 import { LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 
 const makeUser = (overrides: Partial<User> = {}): User =>
   ({
@@ -179,7 +180,18 @@ describe('LentilleRow — rang', () => {
     expect(screen.getByTestId('lentille-row-typing-dot')).toBeInTheDocument();
   });
 
-  it('précédence : brouillon prime sur pont et préview', () => {
+  /**
+   * V4bis/R4-1 — behaviour-matrix:L02.
+   *
+   * « Les brouillons gardent leur précédence actuelle typing > brouillon >
+   * préview et s'affichent « ✎ Brouillon » en couleur d'erreur … » — la
+   * précédence ET le label sont réels (vérifiés ici). L'écart connu (le
+   * `text-destructive` couvre aussi `draft.content`, pas seulement le label
+   * — la matrice veut ce dernier en tertiaire) est documenté dans la
+   * classification `WEB_COVERAGE.L02` (`__tests__/lentille/behaviour-matrix-parity.test.ts`),
+   * réserve R4-3.
+   */
+  it('behaviour-matrix:L02 — précédence : brouillon prime sur pont et préview', () => {
     const bridge: ConversationBridge = {
       kind: 'fallback',
       unreadCount: 2,
@@ -242,6 +254,41 @@ describe('LentilleRow — rang', () => {
     expect(screen.getByTestId('lentille-row').textContent).toContain('Salut !');
   });
 
+  /**
+   * V4bis/R4-1 — behaviour-matrix:L04.
+   *
+   * « La branche pièces jointes sans texte … reste identique » : `LentilleRow`
+   * réutilise `formatLastMessage` (`message-formatting.tsx`) SANS y toucher —
+   * même fonction que `ConversationItem` — donc la branche pièce jointe (pas
+   * de `content`, un `attachments[0]`) rend le MÊME balisage image (glyphe
+   * 📷 + dimensions `W×H`) qu'avant la Lentille. Le Prisme ne s'y applique
+   * jamais (`formatLastMessage`, commentaire "le prisme ne s'applique qu'au
+   * TEXTE").
+   */
+  it('behaviour-matrix:L04 — pièce jointe sans texte : glyphe + méta, jamais le Prisme', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          lastMessage: {
+            id: 'm1',
+            conversationId: 'conv-1',
+            senderId: 'u2',
+            content: '',
+            createdAt: new Date(),
+            attachments: [{ mimeType: 'image/png', width: 800, height: 600 }],
+          } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    const row = screen.getByTestId('lentille-row');
+    expect(row.textContent).toContain('📷');
+    expect(row.textContent).toContain('800×600');
+  });
+
   it('behaviour-matrix:L16 — aria-label = "{nom}, {heure}, {n} non lus, {pont ou préview}"', () => {
     render(
       <LentilleRow
@@ -281,6 +328,78 @@ describe('LentilleRow — présence (behaviour-matrix:L10)', () => {
       />
     );
     expect(screen.getAllByTestId('online-indicator').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * V4bis/R4-1 — behaviour-matrix:L07 (part VISUELLE).
+ *
+ * REV-4/B3 avait déjà couvert les SIX actions du ⋮ (`LentillePeek.actions.test.tsx`) ;
+ * le trou laissé par R4-1 était la part visuelle : « l'épingle ajoute un
+ * glyphe 📌 avant le nom … et la sourdine passe enfin visible (rang à 0.55 +
+ * 🔕) ». Le VRAI magasin (`useConversationPreferencesStore`, pas un double) —
+ * même source que `LentillePeek`/`useConversationItemActions` — pour prouver
+ * qu'un seul état gouverne les deux surfaces.
+ */
+describe('LentilleRow — pin/sourdine visibles (behaviour-matrix:L07)', () => {
+  afterEach(() => {
+    useConversationPreferencesStore.setState({ preferencesMap: new Map() });
+  });
+
+  it('épinglé ⇒ glyphe 📌 devant le nom, rien sans épingle', () => {
+    useConversationPreferencesStore.setState({
+      preferencesMap: new Map([['conv-1', { isPinned: true, isMuted: false, isArchived: false } as any]]),
+    });
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    expect(screen.getByTestId('lentille-row-pin-glyph').textContent).toContain('📌');
+    expect(screen.queryByTestId('lentille-row-mute-glyph')).not.toBeInTheDocument();
+  });
+
+  it('en sourdine ⇒ 🔕 visible et le RANG entier passe à --lentille-list-muted-opacity', () => {
+    useConversationPreferencesStore.setState({
+      preferencesMap: new Map([['conv-1', { isPinned: false, isMuted: true, isArchived: false } as any]]),
+    });
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    expect(screen.getByTestId('lentille-row-mute-glyph').textContent).toContain('🔕');
+    const row = screen.getByTestId('lentille-row');
+    expect(row).toHaveAttribute('data-muted', 'true');
+    // Classe Tailwind arbitraire, PAS un style inline (`opacity: var(...)`
+    // n'est pas fiable sous jsdom — voir le commentaire du composant) :
+    // la règle CSS réelle vient de la compilation Tailwind.
+    expect(row.className).toContain('opacity-[var(--lentille-list-muted-opacity)]');
+  });
+
+  it('ni épinglé ni en sourdine (repli du magasin vide, `LentillePeek.tsx:174`) ⇒ aucun glyphe, opacité pleine', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    expect(screen.queryByTestId('lentille-row-pin-glyph')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lentille-row-mute-glyph')).not.toBeInTheDocument();
+    const row = screen.getByTestId('lentille-row');
+    expect(row).not.toHaveAttribute('data-muted');
+    expect(row.className).not.toContain('opacity-[');
   });
 });
 

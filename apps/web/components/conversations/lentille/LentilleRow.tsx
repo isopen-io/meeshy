@@ -48,6 +48,7 @@ import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } from './lentille-row-utils';
 import { LentilleBridgeLine } from './LentilleBridgeLine';
 import { LentillePeek } from './LentillePeek';
+import { useConversationPreference } from '@/stores/conversation-preferences-store';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
 import { useIsFocusedRow, type LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
 
@@ -127,6 +128,23 @@ export const LentilleRow = memo(function LentilleRow({
   // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
   // le défilement ET reste sur le rang ouvert. Deux sources, un seul style.
   const isElected = useIsFocusedRow(election, conversation.id);
+
+  /**
+   * V4bis/R4-1 — behaviour-matrix:L07 (part VISUELLE, trou REV-4/R4-1 comblé).
+   *
+   * REV-4 avait laissé la part actions du L07 couverte (B3, six actions du
+   * ⋮) mais sa part visuelle absente : « l'épingle ajoute un glyphe 📌 avant
+   * le nom … et la sourdine passe enfin visible (rang à 0.55 + 🔕) ».
+   * MÊME magasin que `LentillePeek`/`useConversationItemActions`
+   * (`useConversationPreference`, `conversation-preferences-store.ts`) —
+   * aucune seconde source de vérité pour pin/mute, pas de prop à faire
+   * traverser `LentilleConversationListMount` (celui-ci ne connaît déjà pas
+   * ces booléens, voir `LentillePeek.tsx:174` : même repli qu'ici, `false`
+   * quand le magasin n'a pas encore la ligne).
+   */
+  const rowPreference = useConversationPreference(conversation.id);
+  const isPinned = rowPreference?.isPinned ?? false;
+  const isMuted = rowPreference?.isMuted ?? false;
   const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -221,10 +239,21 @@ export const LentilleRow = memo(function LentilleRow({
       data-testid="lentille-row"
       onClick={handleClick}
       onKeyDown={handleKeyDown}
+      data-muted={isMuted ? 'true' : undefined}
       className={cn(
         'group cursor-pointer outline-none',
         'hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-        isSelected && 'bg-primary/10 hover:bg-primary/20'
+        isSelected && 'bg-primary/10 hover:bg-primary/20',
+        // behaviour-matrix:L07 — « la sourdine passe … visible (rang à
+        // 0.55 … ) » : opacité du RANG ENTIER, jamais un littéral (garde
+        // R15) — classe Tailwind arbitraire portant la variable
+        // `--lentille-list-muted-opacity` (`list.muted.opacity`,
+        // `lentille-tokens.json`), déjà consommée côté iOS
+        // (`LentilleMetrics.Muted`, `lentille-tokens-consumption-gate`) et
+        // jusqu'ici morte côté web. Une classe (résolue en RÈGLE CSS à la
+        // compilation), pas un style inline : `opacity` en style inline
+        // n'accepte pas `var()` de façon fiable sous jsdom pour les tests.
+        isMuted && 'opacity-[var(--lentille-list-muted-opacity)]'
       )}
       style={{
         height: 'var(--lentille-list-row-height)',
@@ -305,7 +334,19 @@ export const LentilleRow = memo(function LentilleRow({
               className="truncate"
               style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
             >
+              {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
+              {isPinned && (
+                <span aria-hidden="true" data-testid="lentille-row-pin-glyph">
+                  📌{' '}
+                </span>
+              )}
               {conversationName}
+              {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
+              {isMuted && (
+                <span aria-hidden="true" data-testid="lentille-row-mute-glyph" className="ml-1">
+                  🔕
+                </span>
+              )}
             </h3>
             {conversation.lastMessage && (
               <span
