@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MarkReadResponse
 import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.UnreadCountResponse
 import me.meeshy.sdk.net.api.NotificationApi
 import org.junit.Test
@@ -158,6 +159,97 @@ class NotificationRepositoryTest {
         assertThat(repo.unreadCountStream.value).isEqualTo(1)
         repo.notificationsStream().test {
             assertThat(awaitItem().notifications().get("n1").state.isRead).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // --- Pagination (feature-parity §M "still open" — port of iOS NotificationListViewModel.loadMore) ---
+
+    @Test
+    fun loadMore_appendsTheNextPageAfterTheCurrentCache() = runTest {
+        coEvery { api.list(0, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = true))
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+        coEvery { api.list(1, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n2")), pagination = Pagination(hasMore = false))
+
+        repo.loadMore()
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1", "n2").inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { api.list(1, any(), any()) }
+    }
+
+    @Test
+    fun loadMore_dedupesAlreadyKnownNotifications() = runTest {
+        coEvery { api.list(0, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = true))
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+        coEvery { api.list(1, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = false))
+
+        repo.loadMore()
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications()).hasSize(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun loadMore_setsHasMoreFalseWhenTheServerSaysSo() = runTest {
+        coEvery { api.list(0, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = true))
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+        assertThat(repo.hasMoreStream.value).isTrue()
+        coEvery { api.list(1, any(), any()) } returns
+            ApiResponse(success = true, data = emptyList(), pagination = Pagination(hasMore = false))
+
+        repo.loadMore()
+
+        assertThat(repo.hasMoreStream.value).isFalse()
+    }
+
+    @Test
+    fun loadMore_isANoOpBeforeAnyPageHasLoaded() = runTest {
+        val repo = NotificationRepository(api)
+
+        repo.loadMore()
+
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test
+    fun loadMore_isANoOpWhenTheServerReportedNoFurtherPages() = runTest {
+        val repo = seed(notification("n1"), unread = 0) // seed()'s stub carries no pagination -> hasMore false
+
+        repo.loadMore()
+
+        coVerify(exactly = 1) { api.list(any(), any(), any()) } // only the initial refresh() call
+    }
+
+    @Test
+    fun loadMore_leavesTheCacheAndHasMoreUnchangedOnFailure() = runTest {
+        coEvery { api.list(0, any(), any()) } returns
+            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = true))
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+        coEvery { api.list(1, any(), any()) } throws IOException("offline")
+
+        repo.loadMore()
+
+        assertThat(repo.hasMoreStream.value).isTrue()
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1")
             cancelAndIgnoreRemainingEvents()
         }
     }

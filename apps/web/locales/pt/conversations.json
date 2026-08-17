@@ -744,6 +744,24 @@
       "typing": {
         "one": "{name} está digitando…"
       }
+    },
+    "lens": {
+      "label": "Lente",
+      "density": "Densidade de leitura",
+      "modes": {
+        "focal": {
+          "name": "Focal",
+          "hint": "Eu leio, eu vivo a conversa"
+        },
+        "script": {
+          "name": "Script",
+          "hint": "Densidade uniforme, sem perspetiva"
+        },
+        "bubble": {
+          "name": "Bolhas",
+          "hint": "A vista clássica"
+        }
+      }
     }
   },
   "bubbleStream": {

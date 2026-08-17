@@ -1,20 +1,20 @@
 # Cycle 57 bis — le troisième réglage de police, réglable partout et appliqué nulle part
 
-> **Numérotation — trois collisions en une seule journée, sur le même fichier.**
+> **Numérotation — quatre collisions en une seule journée, dont trois sur le même fichier.**
 > Un second couloir a livré le même jour un journal nommé `cycle57` (« le
 > rattrapage du cycle 56 dépensait le budget dont il dépend », PR #3154). Les
 > deux documents sont conservés ; celui-ci prend le suffixe `-bis` selon la
 > convention des cycles 46-bis, 54-bis et 56-bis — le nom canonique reste à
 > celui de `main`.
 >
-> `tasks/lessons.md` a collisionné **deux fois de suite**, à deux intégrations
-> manuelles d'écart : d'abord contre une « Leçon 221 » (cycle 57 de l'autre
-> couloir), puis — après renumérotation en 222 — contre une « Leçon 222 »
-> (cycle 58) ET une « Leçon 221 » rétroactive (cycle 54). La leçon de ce cycle
-> a donc cédé DEUX fois et porte finalement le **numéro 223**. Règle appliquée à
-> chaque fois, celle du cycle 56-bis (§6) : celle qui n'est pas encore sur `main`
-> cède, parce qu'elle est la seule dont l'auteur peut encore corriger les
-> renvois. **Aucun texte n'a été perdu à aucune des trois résolutions.**
+> `tasks/lessons.md` a collisionné à **chacune des trois dernières intégrations
+> manuelles** : contre une « Leçon 221 » (cycle 57 de l'autre couloir), puis
+> contre une « Leçon 222 » (cycle 58) et une « Leçon 221 » rétroactive
+> (cycle 54), puis contre une « Leçon 223 » (livraison /chat partagé). La leçon
+> de ce cycle a donc cédé **trois fois** — 221 → 222 → 223 → **224**. Règle
+> appliquée à l'identique chaque fois, celle du cycle 56-bis (§6) : celle qui
+> n'est pas encore sur `main` cède, parce qu'elle est la seule dont l'auteur peut
+> encore corriger les renvois. **Aucun texte n'a été perdu à aucune résolution.**
 >
 > `tasks/todo.md` a lui aussi collisionné, et là c'est le fichier de travail du
 > couloir cycle 58 qui l'emporte : ce fichier est ÉPHÉMÈRE par convention (chaque
@@ -26,7 +26,7 @@
 > (leçons, cycles, journaux) n'ont **aucun allocateur**, chaque couloir numérote
 > depuis sa propre lecture du fichier, et la collision n'est donc pas
 > accidentelle mais CERTAINE dès que deux couloirs livrent le même jour. Ce jour
-> a produit cinq collisions en trois intégrations. Piste n°10.
+> a produit sept collisions en quatre intégrations. Piste n°10.
 >
 > **Note d'exactitude.** Le sujet du commit de code de ce cycle porte
 > `(#3154)` : le numéro a été deviné avant l'ouverture de la PR, et #3154 est en

@@ -7,7 +7,6 @@ import {
   AuthState,
   checkAuthStatus,
   canAccessProtectedRoute,
-  canAccessSharedConversation,
   redirectToAuth,
   redirectToHome,
   clearAllAuthData
@@ -127,31 +126,19 @@ export function useAuth() {
       return;
     }
 
-    // 2. Gestion des routes de chat partagé
+    // 2. Chat partagé : JAMAIS de redirection.
+    //
+    // `/chat/:sharedId` s'ouvre pour tout le monde — visiteur sans compte
+    // inclus. C'est `SharedConversationExperience` qui décide quoi peindre
+    // (vue complète, vue partagée vivante, ou aperçu + modale de jonction), et
+    // il a besoin de la réponse du serveur pour trancher.
+    //
+    // Ce bloc renvoyait auparavant vers `/join/:storedLinkId` — l'ancienne
+    // page d'accueil — dès qu'une session anonyme manquait. Comme `/join`
+    // renvoyait à son tour sur `/chat`, les deux écrans se relançaient : la
+    // boucle que trois gardes `sessionStorage` tentaient de contenir. Le
+    // routeur n'a plus rien à décider ici.
     if (isSharedChatRoute(pathname)) {
-      const justJoined = localStorage.getItem('anonymous_just_joined');
-      if (justJoined) return;
-      
-      if (authState.isAnonymous) {
-        const session = authManager.getAnonymousSession();
-        const participant = localStorage.getItem('anonymous_participant');
-
-        if (!session?.token || !participant) {
-          const storedLinkId = localStorage.getItem('anonymous_current_link_id');
-          redirectInProgress.current = true;
-          if (storedLinkId) router.push(`/join/${storedLinkId}`);
-          else redirectToHome();
-          return;
-        }
-      }
-      
-      if (!canAccessSharedConversation(authState)) {
-        const storedLinkId = localStorage.getItem('anonymous_current_link_id');
-        redirectInProgress.current = true;
-        if (storedLinkId) router.push(`/join/${storedLinkId}`);
-        else redirectToHome();
-        return;
-      }
       return;
     }
     

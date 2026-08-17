@@ -51,7 +51,8 @@ export function isPublicRoute(pathname: string): boolean {
   // 5. Affiliate routes
   if (cleanPath.startsWith('/signup/affiliate/')) return true;
 
-  // 6. Join routes
+  // 6. Join routes — /join/* est redirigé vers /chat/*, mais l'ancienne
+  //    forme circule encore dans des messages déjà envoyés.
   if (cleanPath.startsWith('/join/')) return true;
 
   return false;

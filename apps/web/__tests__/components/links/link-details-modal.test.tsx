@@ -200,7 +200,7 @@ describe('LinkDetailsModal', () => {
 
       // URL should contain the link ID - using partial match since origin varies
       const urlInput = screen.getByRole('textbox') as HTMLInputElement;
-      expect(urlInput.value).toContain('/join/xyz789');
+      expect(urlInput.value).toContain('/chat/xyz789');
     });
 
     it('should copy link to clipboard when copy button is clicked', async () => {
@@ -222,7 +222,7 @@ describe('LinkDetailsModal', () => {
           // Should call clipboard with URL containing the link ID
           expect(mockCopyToClipboard).toHaveBeenCalled();
           const calledWith = mockCopyToClipboard.mock.calls[0][0];
-          expect(calledWith).toContain('/join/copytest');
+          expect(calledWith).toContain('/chat/copytest');
         });
 
         await waitFor(() => {

@@ -207,8 +207,10 @@ describe('GET /links/:identifier — success as registered but non-member', () =
     }));
     const { app } = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
-    // Non-member registered user — hasAccess=false → 403
-    expect(res.statusCode).toBe(403);
+    // Un compte connecté non membre retombe sur l'aperçu public : être
+    // identifié ne peut pas donner MOINS d'accès que la navigation privée.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.userType).toBe('anonymous');
     await app.close();
   });
 });

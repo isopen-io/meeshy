@@ -78,6 +78,30 @@ const nextConfig: NextConfig = {
   //
   // Self routes: `/me` and `/links` are real v1 pages (`/me` lives under
   // the app/(connected) route group, `/links` at the root) — no rewrite.
+  // `/join/:linkId` n'est plus une page : la jonction se fait dans une modale
+  // par-dessus la conversation, à `/chat/:linkId`. La redirection est PERMANENTE
+  // (308) parce que des liens `/join/...` circulent déjà dans des messages
+  // envoyés — ils doivent continuer d'atterrir sur la conversation, et les
+  // moteurs doivent apprendre la nouvelle URL canonique.
+  //
+  // Elle vit ici plutôt que dans un `redirect()` de page : côté serveur, aucun
+  // JavaScript client ne s'exécute, donc aucune chance de rejouer l'ancienne
+  // boucle /chat → /join → /chat.
+  async redirects() {
+    return [
+      {
+        source: '/join/:linkId',
+        destination: '/chat/:linkId',
+        permanent: true,
+      },
+      {
+        source: '/join',
+        destination: '/',
+        permanent: false,
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       // Real v1 pages now exist for /feeds/post, /post, /reel, /story, /mood

@@ -66,6 +66,7 @@
     "usernameAvailable": "Ce pseudo est disponible",
     "suggestedUsername": "Nom d'utilisateur suggéré : {username}",
     "firstNameRequired": "Le prénom et le nom sont requis",
-    "connectionError": "Erreur de connexion"
+    "connectionError": "Erreur de connexion",
+    "joinConversation": "Rejoindre la conversation"
   }
 }

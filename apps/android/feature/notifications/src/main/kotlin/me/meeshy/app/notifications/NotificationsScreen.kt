@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,12 +103,25 @@ fun NotificationsScreen(
                         )
                     }
                     else -> LazyColumn {
-                        items(state.notifications, key = { it.id }) { notification ->
+                        itemsIndexed(state.notifications, key = { _, item -> item.id }) { index, notification ->
+                            if (index == state.notifications.lastIndex) {
+                                LaunchedEffect(notification.id) { viewModel.loadMore() }
+                            }
                             NotificationItem(
                                 notification = notification,
                                 onTap = { viewModel.markAsRead(notification.id) },
                             )
                             HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
+                        }
+                        if (state.isLoadingMore) {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                }
+                            }
                         }
                     }
                 }

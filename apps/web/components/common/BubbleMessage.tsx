@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useCallback, useState, useEffect } from 'react';
+import React, { memo, useMemo, useCallback, useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { User, BubbleTranslation, ConversationType, TranslationModel } from '@meeshy/shared/types';
@@ -10,7 +10,9 @@ import { useMessageView } from '@/hooks/use-message-view-state';
 import { reportService } from '@/services/report.service';
 import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
 import { BubbleMessageNormalView } from './bubble-message/BubbleMessageNormalView';
+import { FocalRow } from './bubble-message/FocalRow';
 import { CallSystemMessage } from './bubble-message/CallSystemMessage';
+import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
 import { ReactionSelectionMessageView } from './bubble-message/ReactionSelectionMessageView';
 import { LanguageSelectionMessageView } from './bubble-message/LanguageSelectionMessageView';
 import { EditMessageView } from './bubble-message/EditMessageView';
@@ -52,6 +54,13 @@ interface BubbleMessageProps {
   currentAnonymousUserId?: string;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
+  /**
+   * Lentille de lecture. `focal`/`script` rendent la rangée plate (`FocalRow`),
+   * `bubble` garde la vue à bulles historique. Seul le rendu « normal » change :
+   * réaction, langue, édition, suppression et signalement sont identiques dans
+   * toutes les lentilles.
+   */
+  readingMode?: ReadingMode;
 }
 
 const BubbleMessageInner = memo(function BubbleMessageInner({
@@ -75,9 +84,10 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   isAnonymous = false,
   currentAnonymousUserId,
   isFirstInGroup = true,
-  isLastInGroup = true
+  isLastInGroup = true,
+  readingMode = DEFAULT_READING_MODE
 }: BubbleMessageProps) {
-  
+
   const { t } = useI18n();
 
   // State local pour la langue d'affichage (permet la mise à jour immédiate du contenu)
@@ -223,7 +233,36 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   // VIRTUALIZATION SMART: Rendu conditionnel selon le mode
   return (
     <AnimatePresence mode="wait" initial={false}>
-      {currentMode === 'normal' && (
+      {currentMode === 'normal' && isFlatReadingMode(readingMode) && (
+        <FocalRow
+          key={`focal-${message.id}`}
+          message={message}
+          currentUser={currentUser}
+          userLanguage={userLanguage}
+          currentDisplayLanguage={effectiveDisplayLanguage}
+          translationError={translationError}
+          conversationType={conversationType}
+          userRole={userRole as React.ComponentProps<typeof FocalRow>['userRole']}
+          conversationId={conversationId}
+          isAnonymous={isAnonymous}
+          currentAnonymousUserId={currentAnonymousUserId}
+          onReplyMessage={onReplyMessage}
+          onNavigateToMessage={onNavigateToMessage}
+          onImageClick={onImageClick}
+          onLanguageSwitch={onLanguageSwitch}
+          onEnterReactionMode={enterReactionMode}
+          onEnterLanguageMode={enterLanguageMode}
+          onEnterEditMode={canEdit ? enterEditMode : undefined}
+          onEnterDeleteMode={canDelete ? enterDeleteMode : undefined}
+          onEnterReportMode={!isOwnMessage && !isAnonymous ? enterReportMode : undefined}
+          onEditMessage={canEdit ? onEditMessage : undefined}
+          onDeleteMessage={canDelete ? onDeleteMessage : undefined}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
+        />
+      )}
+
+      {currentMode === 'normal' && !isFlatReadingMode(readingMode) && (
         <BubbleMessageNormalView
           key={`normal-${message.id}`}
           message={message}

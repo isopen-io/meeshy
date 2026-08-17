@@ -10,6 +10,11 @@
 /* Import des styles de conversations */
 @import url('../styles/conversations-layout.css');
 
+/* Lentille — cotes générées depuis packages/shared/design/lentille-tokens.json,
+   puis le mode Focal qui les consomme (rangée plate + carte de focus). */
+@import url('../styles/lentille-tokens.css');
+@import url('../styles/focal-row.css');
+
 /* Force scroll behavior globally for conversation components */
 .conversation-area .messages-scroll,
 .conversation-area .conversation-list-scroll {

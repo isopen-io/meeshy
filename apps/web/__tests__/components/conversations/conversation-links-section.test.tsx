@@ -393,7 +393,7 @@ describe('ConversationLinksSection', () => {
 
         await waitFor(() => {
           expect(copyToClipboard).toHaveBeenCalledWith(
-            expect.stringContaining('/join/abc123')
+            expect.stringContaining('/chat/abc123')
           );
         });
       } else {
@@ -402,7 +402,7 @@ describe('ConversationLinksSection', () => {
 
         await waitFor(() => {
           expect(copyToClipboard).toHaveBeenCalledWith(
-            expect.stringContaining('/join/abc123')
+            expect.stringContaining('/chat/abc123')
           );
         });
       }

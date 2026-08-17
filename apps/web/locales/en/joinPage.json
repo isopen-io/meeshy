@@ -66,6 +66,7 @@
     "usernameAvailable": "Username available",
     "suggestedUsername": "Suggested username: {username}",
     "firstNameRequired": "First name and last name are required",
-    "connectionError": "Connection error"
+    "connectionError": "Connection error",
+    "joinConversation": "Join the conversation"
   }
 }

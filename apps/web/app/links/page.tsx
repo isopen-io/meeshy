@@ -76,6 +76,7 @@ import { useUser } from '@/stores';
 import { useRouter } from 'next/navigation';
 import { deleteTrackingLink, deactivateTrackingLink } from '@/services/tracking-links';
 import { authManager } from '@/services/auth-manager.service';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 export default function LinksPage() {
   const { t, locale } = useI18n('links');
@@ -309,7 +310,7 @@ export default function LinksPage() {
 
   // Copier le lien
   const handleCopyLink = async (linkId: string) => {
-    const linkUrl = `${window.location.origin}/join/${linkId}`;
+    const linkUrl = buildShareLinkUrl(linkId);
     const result = await copyToClipboard(linkUrl);
     if (result.success) {
       toast.success(t('success.linkCopied'));

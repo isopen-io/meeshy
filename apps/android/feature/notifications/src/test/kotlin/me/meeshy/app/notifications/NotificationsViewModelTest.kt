@@ -1,10 +1,12 @@
 package me.meeshy.app.notifications
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationState
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
@@ -53,6 +56,7 @@ class NotificationsViewModelTest {
     private fun repository(
         notifications: MutableSharedFlow<CacheResult<List<ApiNotification>>> = MutableSharedFlow(replay = 1),
         unreadCount: MutableStateFlow<Int> = MutableStateFlow(0),
+        hasMore: MutableStateFlow<Boolean> = MutableStateFlow(false),
     ): NotificationRepository {
         val repository: NotificationRepository = mockk(relaxed = true)
         every { repository.notificationsStream(any(), any()) } answers {
@@ -60,6 +64,7 @@ class NotificationsViewModelTest {
             notifications
         }
         every { repository.unreadCountStream } returns unreadCount
+        every { repository.hasMoreStream } returns hasMore
         return repository
     }
 
@@ -169,5 +174,45 @@ class NotificationsViewModelTest {
         events.emit(incoming)
 
         verify(exactly = 1) { repo.prependLive(incoming) }
+    }
+
+    // --- Pagination (feature-parity §M "still open") ---
+
+    @Test
+    fun `loadMore delegates to the repository when a further page is available`() = runTest {
+        val hasMore = MutableStateFlow(true)
+        val repo = repository(hasMore = hasMore)
+        coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        vm.loadMore()
+
+        coVerify(exactly = 1) { repo.loadMore() }
+    }
+
+    @Test
+    fun `loadMore is inert when the repository reports no further page`() = runTest {
+        val hasMore = MutableStateFlow(false)
+        val repo = repository(hasMore = hasMore)
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        vm.loadMore()
+
+        coVerify(exactly = 0) { repo.loadMore() }
+    }
+
+    @Test
+    fun `a second loadMore while one is in flight is a no-op`() = runTest {
+        val hasMore = MutableStateFlow(true)
+        val repo = repository(hasMore = hasMore)
+        val pending = CompletableDeferred<NetworkResult<Unit>>()
+        coEvery { repo.loadMore() } coAnswers { pending.await() }
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        vm.loadMore()
+        vm.loadMore()
+
+        coVerify(exactly = 1) { repo.loadMore() }
+        pending.complete(NetworkResult.Success(Unit))
     }
 }

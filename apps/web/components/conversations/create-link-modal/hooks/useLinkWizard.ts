@@ -10,6 +10,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { User, Conversation } from '@meeshy/shared/types';
 import { TOTAL_WIZARD_STEPS } from '../constants';
 import { LinkSettings, NewConversationData } from '../types';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface UseLinkWizardOptions {
   isOpen: boolean;
@@ -169,7 +170,7 @@ export function useLinkWizard({
           throw new Error('Token de lien manquant dans la réponse');
         }
 
-        const linkUrl = `${window.location.origin}/join/${linkToken}`;
+        const linkUrl = buildShareLinkUrl(linkToken);
         setGeneratedLink(linkUrl);
         setGeneratedToken(linkToken);
 

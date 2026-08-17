@@ -64,7 +64,7 @@ describe('Share Utils Module', () => {
       };
 
       const result = generateShareLink(options);
-      expect(result).toBe('https://test.meeshy.me/join/conv-123');
+      expect(result).toBe('https://test.meeshy.me/chat/conv-123');
     });
 
     it('should throw error for conversation link without linkId', () => {
@@ -82,7 +82,7 @@ describe('Share Utils Module', () => {
       };
 
       const result = generateShareLink(options);
-      expect(result).toBe('https://test.meeshy.me/join/join-456');
+      expect(result).toBe('https://test.meeshy.me/chat/join-456');
     });
 
     it('should throw error for join link without linkId', () => {

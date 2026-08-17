@@ -377,6 +377,80 @@ export const messageSchema = {
   }
 } as const;
 
+/**
+ * Les trois formes d'identité renvoyées par `GET /links/:identifier`.
+ *
+ * Elles étaient déclarées `{ type: 'object' }` SANS `properties` :
+ * fast-json-stringify sérialise alors `{}`, et la conversation partagée
+ * arrivait au client sans savoir qui parle ni qui participe. Même famille de
+ * panne que celle documentée au-dessus de `linkMessageSenderSchema`.
+ */
+export const linkCurrentUserSchema = {
+  type: 'object',
+  description: 'Identity of the caller, member or anonymous participant',
+  properties: {
+    id: { type: 'string', description: 'User ID (member) or Participant ID (anonymous)' },
+    username: { type: 'string', nullable: true, description: 'Username' },
+    firstName: { type: 'string', nullable: true, description: 'First name' },
+    lastName: { type: 'string', nullable: true, description: 'Last name' },
+    displayName: { type: 'string', nullable: true, description: 'Display name' },
+    language: { type: 'string', nullable: true, description: 'Preferred language code' },
+    isMeeshyer: { type: 'boolean', description: 'Registered account (vs anonymous participant)' },
+    permissions: {
+      type: 'object',
+      description: 'What the caller may post in this conversation',
+      properties: {
+        canSendMessages: { type: 'boolean' },
+        canSendFiles: { type: 'boolean' },
+        canSendImages: { type: 'boolean' }
+      }
+    }
+  }
+} as const;
+
+export const linkMemberSchema = {
+  type: 'object',
+  description: 'Registered member of the shared conversation',
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    role: { type: 'string', description: 'Member role in the conversation' },
+    joinedAt: { type: 'string', format: 'date-time' },
+    user: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string', nullable: true },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        isOnline: { type: 'boolean' },
+        lastActiveAt: { type: 'string', format: 'date-time', nullable: true }
+      }
+    }
+  }
+} as const;
+
+export const linkAnonymousParticipantSchema = {
+  type: 'object',
+  description: 'Anonymous participant of the shared conversation',
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    username: { type: 'string', nullable: true },
+    firstName: { type: 'string', nullable: true },
+    lastName: { type: 'string', nullable: true },
+    displayName: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    language: { type: 'string', nullable: true },
+    isOnline: { type: 'boolean' },
+    lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+    joinedAt: { type: 'string', format: 'date-time' },
+    canSendMessages: { type: 'boolean' },
+    canSendFiles: { type: 'boolean' },
+    canSendImages: { type: 'boolean' }
+  }
+} as const;
+
 export const createLinkBodySchema = {
   type: 'object',
   description: 'Create share link request body',
