@@ -1080,27 +1080,61 @@ export class MeeshySocketIOManager {
     this._drainPendingMessages(userId, isAnonymous).catch(err => {
       logger.warn('Failed to drain pending messages on connect', { userId, error: err });
     });
-    if (!isAnonymous) {
-      this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
-        logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
-      });
-    }
+    // Les DEUX identités, comme l'instantané de présence vingt lignes plus haut.
+    // Le `if (!isAnonymous)` qui se tenait ici n'exprimait aucune règle produit :
+    // il masquait une résolution de participant qui ne lisait que la colonne
+    // `userId`, donc rendait zéro ligne pour un invité de lien partagé. Le
+    // brancher sans corriger la lecture aurait été un no-op silencieux — la
+    // raison pour laquelle le trou a survécu à ses propres témoins.
+    this._emitUnreadCountsSnapshot(socket, userId, isAnonymous).catch(err => {
+      logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, isAnonymous, error: err });
+    });
   }
 
-  private async _emitUnreadCountsSnapshot(socket: Socket, userId: string): Promise<void> {
+  /**
+   * Remet les pastilles d'aplomb à la reconnexion — le SEUL signal qui le
+   * fasse. La file hors-ligne rejoue l'aperçu, le rang et la promotion en tête
+   * de chaque ligne (`_drainedEventName` ne mappe que des événements de
+   * message) ; le COMPTEUR, lui, ne se calcule que côté serveur, depuis les
+   * curseurs de lecture.
+   *
+   * `readerKey` porte la CLÉ DE CONNEXION, pas un `User.id` : c'est `userId`
+   * pour un inscrit et `Participant.id` pour un invité de lien partagé — même
+   * convention que la file (`enqueueForOfflineParticipants` enfile sous
+   * `p.userId ?? p.id`), que `_dropEndedMemberships` et que
+   * `_emitDeliveryForDrainedMessages`. La résolution lisait auparavant la seule
+   * colonne `userId`, donc rendait ZÉRO ligne pour un invité, donc sortait en
+   * silence ; le site d'appel enterrait le trou sous un `if (!isAnonymous)` qui
+   * donnait l'omission pour délibérée. L'instantané de PRÉSENCE, dans la même
+   * méthode appelante, résolvait pourtant déjà les deux identités correctement.
+   *
+   * Ça privait de pastille exacte la population DOMINANTE d'une conversation
+   * ouverte par lien — et sans recours sur iOS/Android, qui n'ont aucun lecteur
+   * pour `message:pending-delivered`.
+   */
+  private async _emitUnreadCountsSnapshot(
+    socket: Socket,
+    readerKey: string,
+    isAnonymous: boolean
+  ): Promise<void> {
     try {
       const participantRows = await this.prisma.participant.findMany({
-        where: { userId, isActive: true },
+        where: isAnonymous
+          ? { id: readerKey, isActive: true }
+          : { userId: readerKey, isActive: true },
         select: { conversationId: true },
       });
       if (participantRows.length === 0) return;
       const conversationIds = participantRows.map(p => p.conversationId);
-      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(userId, conversationIds);
+      // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
+      // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
+      // au-dessus qui ne connaissait qu'une colonne.
+      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(readerKey, conversationIds);
       for (const [conversationId, unreadCount] of unreadCounts) {
         socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
       }
     } catch (error) {
-      logger.warn('unread counts snapshot failed on reconnect', { userId, error });
+      logger.warn('unread counts snapshot failed on reconnect', { readerKey, isAnonymous, error });
     }
   }
 

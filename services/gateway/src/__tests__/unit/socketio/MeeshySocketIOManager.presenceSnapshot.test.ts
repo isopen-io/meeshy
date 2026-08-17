@@ -7,6 +7,24 @@
  * methods read from `this` and test via direct invocation — no constructor
  * needed.  The real MeeshySocketIOManager import hangs in test envs because
  * its module-level code opens ZMQ / Redis / Firebase sockets.
+ *
+ * ⚠ CE FICHIER TESTE UNE COPIE, PAS LA PRODUCTION. Les `*Impl` ci-dessous
+ * RÉ-IMPLÉMENTENT le corps des méthodes du manager. Aucune de ces assertions ne
+ * peut donc passer au ROUGE quand la production change : la copie et l'original
+ * dérivent en silence, et les témoins continuent d'attester la copie.
+ *
+ * Ce n'est pas une remarque de style. C'est la raison pour laquelle
+ * `_emitUnreadCountsSnapshot` a pu priver de pastille toute la population des
+ * invités de lien partagé pendant des mois AVEC des témoins verts : le témoin
+ * « does NOT call _emitUnreadCountsSnapshot for anonymous users » attestait le
+ * `if (!isAnonymous)` de la copie, et le fix de la production ne l'a pas fait
+ * tomber.
+ *
+ * Toute NOUVELLE garde de comportement va dans
+ * `src/socketio/__tests__/MeeshySocketIOManager.test.ts`, qui construit un vrai
+ * manager et appelle les vraies méthodes (le harnais y mocke déjà ZMQ / Redis /
+ * Firebase). Ce fichier-ci n'est conservé que pour ses cas de cache de présence,
+ * et devrait à terme y être replié.
  */
 
 // Mock logger before any import so logger module-level code doesn't error.
@@ -82,9 +100,7 @@ function makePresenceContext(overrides: Partial<{
       }
 
       (this as any)._drainPendingMessages(userId, isAnonymous).catch(() => {});
-      if (!isAnonymous) {
-        (this as any)._emitUnreadCountsSnapshot(socket, userId).catch(() => {});
-      }
+      (this as any)._emitUnreadCountsSnapshot(socket, userId, isAnonymous).catch(() => {});
     } catch (error) {
       logger.error('snapshot failed', error);
     }
@@ -112,17 +128,18 @@ function makeUnreadContext(overrides: Partial<{
 
   ctx._emitUnreadCountsSnapshotImpl = async function(
     socket: SocketLike,
-    userId: string
+    readerKey: string,
+    isAnonymous: boolean
   ): Promise<void> {
     const logger = { error: jest.fn(), warn: jest.fn(), info: jest.fn() };
     try {
       const participantRows = await (this as any).prisma.participant.findMany({
-        where: { userId, isActive: true },
+        where: isAnonymous ? { id: readerKey, isActive: true } : { userId: readerKey, isActive: true },
         select: { conversationId: true },
       });
       if (participantRows.length === 0) return;
       const conversationIds = participantRows.map((p: { conversationId: string }) => p.conversationId);
-      const unreadCounts: Map<string, number> = await (this as any).readStatusService.getUnreadCountsForUser(userId, conversationIds);
+      const unreadCounts: Map<string, number> = await (this as any).readStatusService.getUnreadCountsForUser(readerKey, conversationIds);
       for (const [conversationId, unreadCount] of unreadCounts) {
         socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
       }
@@ -160,7 +177,10 @@ describe('_emitPresenceSnapshot drain behaviour (inline logic test)', () => {
     expect(drainSpy).toHaveBeenCalledWith(USER_ID, false);
   });
 
-  it('drains for anonymous users too (participant-id key) but skips the unread snapshot', async () => {
+  // Deuxième exemplaire, dans le même fichier, du témoin qui attestait le
+  // `if (!isAnonymous)` — voir la note en tête de fichier : la copie ne peut pas
+  // tomber, donc rien ne signalait que DEUX témoins gelaient le même symptôme.
+  it('drains for anonymous users too (participant-id key) and snapshots their unread counts', async () => {
     const drainSpy = jest.fn().mockResolvedValue(undefined);
     const unreadSpy = jest.fn().mockResolvedValue(undefined);
     const ctx = makePresenceContext({ _drainPendingMessages: drainSpy, _emitUnreadCountsSnapshot: unreadSpy });
@@ -171,7 +191,7 @@ describe('_emitPresenceSnapshot drain behaviour (inline logic test)', () => {
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, true);
 
     expect(drainSpy).toHaveBeenCalledWith(USER_ID, true);
-    expect(unreadSpy).not.toHaveBeenCalled();
+    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID, true);
   });
 
   it('drains pending messages on a fresh (non-cached) snapshot', async () => {
@@ -213,7 +233,7 @@ describe('_emitPresenceSnapshot unread counts on reconnect', () => {
     const socket: SocketLike = { emit: jest.fn() };
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, false);
 
-    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID);
+    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID, false);
   });
 
   it('calls _emitUnreadCountsSnapshot on cache miss for authenticated users', async () => {
@@ -224,10 +244,15 @@ describe('_emitPresenceSnapshot unread counts on reconnect', () => {
     const socket: SocketLike = { emit: jest.fn() };
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, false);
 
-    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID);
+    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID, false);
   });
 
-  it('does NOT call _emitUnreadCountsSnapshot for anonymous users', async () => {
+  // Ce témoin demandait `not.toHaveBeenCalled()`, donnant pour règle produit ce
+  // qui n'était qu'un `if (!isAnonymous)` masquant une résolution de participant
+  // incomplète (lecture sur la seule colonne `userId`, donc zéro ligne pour une
+  // clé de participant). Corrigé avec la production : les deux identités
+  // reçoivent leur instantané, et la clé voyage avec sa nature.
+  it('calls _emitUnreadCountsSnapshot for anonymous users too, forwarding the participant-id key', async () => {
     const unreadSpy = jest.fn().mockResolvedValue(undefined);
     const ctx = makePresenceContext({ _emitUnreadCountsSnapshot: unreadSpy });
 
@@ -236,7 +261,7 @@ describe('_emitPresenceSnapshot unread counts on reconnect', () => {
     const socket: SocketLike = { emit: jest.fn() };
     await (ctx._emitPresenceSnapshotImpl as Function).call(ctx, socket, USER_ID, true);
 
-    expect(unreadSpy).not.toHaveBeenCalled();
+    expect(unreadSpy).toHaveBeenCalledWith(socket, USER_ID, true);
   });
 
   it('unread snapshot failure is swallowed and does not surface to caller', async () => {

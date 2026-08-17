@@ -44,6 +44,7 @@ let conversationClosedCallback: ((data: { conversationId: string; closedBy: stri
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
 let pendingMessagesDeliveredCallback: ((data: { count: number; conversationIds: string[] }) => void) | null = null;
+let unreadUpdatedCallback: ((data: { conversationId: string; unreadCount: number }) => void) | null = null;
 let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => void) | null = null;
 let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
@@ -125,7 +126,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       translationCallback = callback;
       return mockUnsubscribeTranslation;
     },
-    onUnreadUpdated: jest.fn(() => jest.fn()),
+    onUnreadUpdated: (callback: (data: { conversationId: string; unreadCount: number }) => void) => {
+      unreadUpdatedCallback = callback;
+      return jest.fn();
+    },
     onTranscription: jest.fn(() => jest.fn()),
     onAudioTranslation: jest.fn(() => jest.fn()),
     onAttachmentStatusUpdated: jest.fn(() => jest.fn()),
@@ -358,6 +362,7 @@ describe('useSocketCacheSync', () => {
     categoryChangedCallback = null;
     messageAttachmentUpdatedCallback = null;
     pendingMessagesDeliveredCallback = null;
+    unreadUpdatedCallback = null;
     linkMessageNewCallback = null;
     conversationJoinErrorCallback = null;
     messagePinnedCallback = null;
@@ -2083,25 +2088,68 @@ describe('useSocketCacheSync — suite', () => {
 
   // ─── Le compteur de non-lus après une vidange de file ───────────────────────
   //
-  // La SEULE chose que la file hors-ligne ne rejoue pas.
+  // Il ne se lit plus au réseau, et il n'a jamais eu à s'y lire.
   //
   // `_drainedEventName` (`MeeshySocketIOManager.ts`) mappe chaque entrée de file
   // vers UN événement de message — `message:new`, `edited`, `deleted`,
   // `reaction-*`, `translation`, `pinned`... — et n'a AUCUN cas
   // `conversation:unread-updated`. L'aperçu, le rang et la promotion en tête
-  // arrivent donc par socket ; la pastille, non. Elle demande une lecture
-  // serveur, et c'est la seule raison pour laquelle ce handler doit toucher au
-  // réseau.
+  // arrivent donc par ces rejeux ; la pastille, non.
   //
-  // Lecture BORNÉE par les ids que l'événement porte déjà, jamais un rejeu de
-  // pages : c'est le motif que ce fichier applique déjà deux fois
-  // (`handleConversationNew`, et la branche « conversation inconnue » de
-  // `handleNewMessage`).
+  // Ce handler la lisait donc au réseau : N `GET /conversations/:id`, PLAFONNÉS
+  // à 10, au-delà desquels les compteurs étaient abandonnés — et sur le lien le
+  // plus contraint qui existe, un mobile qui vient de revenir.
+  //
+  // Or le gateway pousse ce compteur sur le MÊME chemin de connexion
+  // (`_emitUnreadCountsSnapshot` → `conversation:unread-updated`), pour TOUTES
+  // les conversations du lecteur et sans plafond : un SUR-ENSEMBLE. Son seul
+  // angle mort était l'invité de lien partagé, dont la résolution de participant
+  // ne lisait que la colonne `userId` — corrigé côté serveur, où le trou était.
   describe('Pending Messages Delivered — pastille de non-lus', () => {
-    it('relit chaque conversation nommée et applique son compteur, sans toucher à l’aperçu', async () => {
-      // Client propre : le harnais partagé tourne en `gcTime: 0`, qui collecte
-      // la liste semée avant que le handler ne puisse y écrire (aucun
-      // observateur ne la monte ici).
+    // Le cache est SEMÉ avec les deux conversations nommées : c'est la condition
+    // exacte sous laquelle l'ancienne lecture REST tirait
+    // (`refreshUnreadCountsFromServer` filtrait sur les lignes déjà en cache).
+    // Sans cette semence le témoin serait vert par vacuité — il n'attesterait
+    // que d'un cache vide, pas de la suppression de la lecture.
+    it('ne demande RIEN au réseau : la pastille arrive par conversation:unread-updated', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [
+              { ...mockConversation, id: 'conv-a', unreadCount: 0 },
+              { ...mockConversation, id: 'conv-b', unreadCount: 0 },
+            ],
+            pagination: { limit: 20, offset: 0, total: 2, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-a', enabled: true }), { wrapper });
+
+      await act(async () => {
+        pendingMessagesDeliveredCallback?.({ count: 6, conversationIds: ['conv-a', 'conv-b'] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).not.toHaveBeenCalledWith('/conversations/conv-a');
+      expect(mockApiGet).not.toHaveBeenCalledWith('/conversations/conv-b');
+    });
+
+    /**
+     * La garde qui compte vraiment après la suppression : c'est bien l'ÉVÉNEMENT
+     * qui déplace la pastille, et il porte déjà le clamp de conversation
+     * OUVERTE que la lecture REST devait dupliquer. Router la pastille par
+     * l'événement ramène donc cette garde à UN seul site.
+     */
+    it('applique le compteur poussé par le serveur, et le force à zéro sur la conversation OUVERTE', async () => {
       const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false, staleTime: Infinity } },
       });
@@ -2122,79 +2170,12 @@ describe('useSocketCacheSync — suite', () => {
         pageParams: [0],
       });
 
-      mockApiGet.mockImplementation((path: string) => {
-        const id = path.split('/').pop();
-        return Promise.resolve({ data: { id, unreadCount: id === 'conv-a' ? 4 : 2 } });
-      });
-
+      useNotificationStore.getState().setActiveConversationId('conv-a');
       renderHook(() => useSocketCacheSync({ conversationId: 'conv-a', enabled: true }), { wrapper });
 
       await act(async () => {
-        pendingMessagesDeliveredCallback?.({ count: 6, conversationIds: ['conv-a', 'conv-b'] });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(mockApiGet).toHaveBeenCalledWith('/conversations/conv-a');
-      expect(mockApiGet).toHaveBeenCalledWith('/conversations/conv-b');
-
-      const cached = queryClient.getQueryData(['conversations', 'infinite']) as {
-        pages: Array<{ conversations: Conversation[] }>;
-      };
-      const rows = cached.pages.flatMap((page) => page.conversations);
-      expect(rows.find((c) => c.id === 'conv-a')?.unreadCount).toBe(4);
-      expect(rows.find((c) => c.id === 'conv-b')?.unreadCount).toBe(2);
-      // L'aperçu vient du `message:new` rejoué juste avant : la lecture de la
-      // pastille ne doit pas le remplacer par la projection d'une autre route.
-      expect(rows.find((c) => c.id === 'conv-a')?.lastMessage?.id).toBe('msg-9');
-    });
-
-    /**
-     * Troisième écrivain de ce compteur, donc troisième porteur de la garde.
-     *
-     * Le gateway calcule la pastille pour TOUS les destinataires, lecteur
-     * compris : la rapporter telle quelle rallume le badge de la conversation
-     * qu'on a sous les yeux, entre l'arrivée du message et l'aller-retour
-     * `mark-as-read`. Jumeaux : `handleUnreadUpdated` et
-     * `ConversationDeltaMergeOptions.openConversationId`.
-     *
-     * La conversation ouverte est lue à l'ÉCRITURE, pas avant la requête : le
-     * témoin ne l'ouvre qu'APRÈS l'émission de l'événement, donc il échouerait
-     * sur une lecture faite trop tôt.
-     */
-    it('force à zéro la pastille de la conversation OUVERTE au moment de l’écriture', async () => {
-      const queryClient = new QueryClient({
-        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
-      });
-      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
-        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-      };
-      queryClient.setQueryData(['conversations', 'infinite'], {
-        pages: [
-          {
-            conversations: [{ ...mockConversation, id: 'conv-a', unreadCount: 0 }],
-            pagination: { limit: 20, offset: 0, total: 1, hasMore: false },
-          },
-        ],
-        pageParams: [0],
-      });
-
-      let resolveGet: ((value: unknown) => void) | null = null;
-      mockApiGet.mockImplementation(
-        () => new Promise((resolve) => { resolveGet = resolve; })
-      );
-
-      useNotificationStore.getState().setActiveConversationId(null);
-      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
-
-      act(() => {
-        pendingMessagesDeliveredCallback?.({ count: 3, conversationIds: ['conv-a'] });
-      });
-
-      // La conversation s'ouvre PENDANT que la requête court.
-      await act(async () => {
-        useNotificationStore.getState().setActiveConversationId('conv-a');
-        resolveGet?.({ data: { id: 'conv-a', unreadCount: 3 } });
+        unreadUpdatedCallback?.({ conversationId: 'conv-a', unreadCount: 4 });
+        unreadUpdatedCallback?.({ conversationId: 'conv-b', unreadCount: 2 });
         await Promise.resolve();
       });
 
@@ -2202,23 +2183,13 @@ describe('useSocketCacheSync — suite', () => {
         pages: Array<{ conversations: Conversation[] }>;
       };
       const rows = cached.pages.flatMap((page) => page.conversations);
+      // Conversation OUVERTE : le compteur poussé est clampé à zéro.
       expect(rows.find((c) => c.id === 'conv-a')?.unreadCount).toBe(0);
+      expect(rows.find((c) => c.id === 'conv-b')?.unreadCount).toBe(2);
+      // L'aperçu vient du `message:new` rejoué : la pastille ne le remplace pas.
+      expect(rows.find((c) => c.id === 'conv-a')?.lastMessage?.id).toBe('msg-9');
 
       useNotificationStore.getState().setActiveConversationId(null);
-    });
-
-    it('ne demande rien au réseau quand la conversation n’est pas en cache', async () => {
-      const { wrapper } = createWrapperWithClient();
-      renderHook(() => useSocketCacheSync({ conversationId: 'conv-a', enabled: true }), { wrapper });
-
-      await act(async () => {
-        pendingMessagesDeliveredCallback?.({ count: 1, conversationIds: ['conv-absent'] });
-        await Promise.resolve();
-      });
-
-      // Une conversation absente du cache n'a pas de ligne à corriger : le
-      // montage suivant lira le serveur en entier (`refetchOnMount: 'always'`).
-      expect(mockApiGet).not.toHaveBeenCalled();
     });
   });
 });
