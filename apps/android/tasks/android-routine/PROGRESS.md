@@ -1,5 +1,61 @@
 # Progress — state & what to do next
 
+> On 2026-08-17 **Share-target lot 2 (image/video attachments) shipped** (slice
+> `share-target-media-attachments`), closing out the Android Share-Sheet receiver started by the
+> previous run's lot 1. `gh pr list --state open --search "apps/android OR apps/ios"` showed
+> three concurrent PRs (#3096, #3106, #3108), none touching `apps/android`. `df -h /` showed
+> 9.0 Gi free, stable.
+>
+> **RE-PROVED the previous run's own "needs the TUS upload pipeline" note before touching
+> anything — it did not survive contact with the real code.** An Explore agent traced the actual
+> chat-attachment send path (`ChatViewModel.sendFileAttachment`, the code the composer's own
+> photo/video picker calls) and found it enqueues through `MediaUploadQueue.enqueue(item)` with a
+> **`null`** `TusUploadContext` — the doc-comment on `MediaUploadQueue.enqueue` says this uploads
+> via `MediaRepository`/`POST /attachments/upload`, never TUS. Android's TUS pipeline
+> (`TusUploadRepository`/`TusApi`) is scoped to post/story/status/comment media only; message
+> attachments never touched it on either platform — iOS's own `ShareSender.swift` has zero
+> TUS/attachment code (`grep` empty), confirming the earlier note was a mis-citation of a *product
+> intention* from `apps/ios/CLAUDE.md`, not a verified technical constraint. This flips the slice
+> from "blocked on an unbuilt pipeline" to "a same-day extension of lot 1."
+>
+> **Reused the exact existing chat-attachment shape rather than inventing a parallel one.**
+> `ShareTargetActivity`'s manifest gained two more `ACTION_SEND` intent-filters (`image/*`,
+> `video/*`) alongside the existing `text/plain` one; the inbound `Intent.EXTRA_STREAM` Uri is
+> read into bytes off the main thread (`withContext(Dispatchers.IO)` inside a `LaunchedEffect` in
+> `ShareTargetScreen`, so a large shared video never blocks the screen from drawing) via
+> `readPickedAttachment(context, uri)` — the SAME helper `ChatScreen.kt`'s own system-picker
+> callback already used, flipped from `private` to `internal` so `ShareTargetScreen.kt` (same
+> module, different file) can call it directly instead of duplicating the ContentResolver glue.
+> `ShareTargetViewModel.loadAttachment(bytes, fileName, declaredMimeType)` mirrors
+> `sendFileAttachment`'s own mime-resolution (`MimeTypeResolver.resolve`) and `sendTo` mirrors its
+> send shape exactly: `MediaUploadQueue.enqueue` → `MessageRepository.sendOptimistic` with
+> `messageType`/`attachmentUploadCmids`/`attachments` populated from `AttachmentMessageType.forMime`.
+>
+> **A share with only an attachment and no text is no longer inert** — `sendTo`'s guard changed
+> from "blank text → inert" to "blank text AND no attachment → inert," since an image/video share
+> commonly carries no caption at all.
+>
+> **+4 tests** (`ShareTargetViewModelTest`): an attachment upload+send carries the correct
+> `messageType`/`attachmentUploadCmids`; an attachment with blank shared text still sends; mime
+> resolves from the file extension when the platform declares none (`declaredMimeType = null`);
+> empty bytes (`loadAttachment`) are a no-op, mirroring `sendFileAttachment`'s own empty-bytes
+> guard.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. `:app:compileDebugKotlin` checked explicitly (manifest + `ShareTargetActivity`'s
+> `IntentCompat.getParcelableExtra` wiring live there). One build hiccup caught and fixed before
+> the check run: a KDoc comment that literally wrote `` `image/*` `` triggered Kotlin's nested
+> block-comment parsing (`/*` inside a `/** */` doc IS a nested comment start in Kotlin, unlike
+> Java) → "Unclosed comment" — rewritten to avoid a bare `/*` sequence in prose.
+>
+> **Still open: `ACTION_SEND_MULTIPLE`** (several images/videos shared at once from a gallery
+> multi-select) — deliberately deferred, not investigated in detail; single-item share (by far the
+> common case) is now fully covered by lots 1+2.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time (unchanged from before this PR's CI wait,
+> `streak=1`, no race) → advances to `lane=ANDROID android_streak=2
+> last_run=share-target-media-attachments`.
+
 > On 2026-08-17 **Share-target lot 1 (text/URL) shipped** (slice `share-target-text-url`) —
 > Android's counterpart to iOS's own `MeeshyShareExtension`, from a fresh section scan
 > (`§O Links`) rather than re-attacking the four candidates the previous run had already
