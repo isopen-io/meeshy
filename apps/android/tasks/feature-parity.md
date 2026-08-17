@@ -4181,7 +4181,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
 - [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
       (except/only audience picker deferred, tracked above)
-- [ ] Mood status create, react, delete; 21h expiry + viewer tracking
+- [x] Mood status create, react, delete; 21h expiry + viewer tracking — **all five clauses now
+      verified shipped** (last gap closed by slice `status-view-tracking`, 2026-08-17): create/react/
+      delete via `StatusRepository.create`/`.react`/`.delete` wired through `StatusesViewModel.setStatus`/
+      `.react`/`.clearStatus`; 21h expiry via `MoodStatusExpiry.remaining(expiresAt:)` consumed in
+      `StatusBarPresentation`; **viewer tracking** was the last unchecked clause — found via the "ready
+      backend, never wired to UI" heuristic's own iOS-reading step: `StatusViewModel.swift`'s doc
+      comment states plainly "un mood EST un post… la barre de moods était le seul contenu du produit
+      dont la portée restait à zéro" [a mood carries `impressionCount`/`viewCount` like any post, but
+      no Android surface fed either]. Reused BOTH building blocks already shipped this session for
+      regular posts rather than inventing anything new: the pill's on-screen appearance now calls
+      `StatusesViewModel.trackImpression(statusId)` → the same `ImpressionBatcher` class
+      (`source = "status"`, mirror of iOS's own `ImpressionBatcher(source: "status", ...)`) used by
+      the feed; opening a status's popover (a single per-viewer-deduplicated VIEW, distinct from the
+      batched impression) now calls `markStatusViewed(statusId)` → `PostRepository.viewPost`, the
+      exact fire-and-forget shape of `PostDetailViewModel.recordView` from the previous slice. Wired
+      in `StatusBarView.kt`'s existing `StatusBarCell.Pill` branch only — `StatusBarCell.MyStatus`
+      (the viewer's own pill in their own bar) is a SEPARATE branch already, so it's naturally excluded
+      exactly as iOS excludes `viewModel.myStatus` from its own tracking filter, with zero extra gating
+      code needed. `impressionBatcher.flushNowAsync()` on `onCleared()`, mirroring `FeedViewModel`'s own
+      established pattern. +3 tests (`StatusesViewModelTest`: view recorded once, blank id inert, a
+      failed record doesn't disturb the loaded bar) — `trackImpression`'s own debounce/batch logic is
+      already fully covered by `ImpressionBatcherTest`, so no duplicate ViewModel-level test, matching
+      the precedent set by `FeedViewModel.trackImpression` (also untested at the VM level for the same
+      reason).
 - [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
       `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
       `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only

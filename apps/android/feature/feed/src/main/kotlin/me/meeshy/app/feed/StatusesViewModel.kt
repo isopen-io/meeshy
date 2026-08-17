@@ -14,6 +14,8 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.ImpressionBatcher
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -55,6 +57,7 @@ data class StatusesUiState(
 @HiltViewModel
 class StatusesViewModel @Inject constructor(
     private val statusRepository: StatusRepository,
+    private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
     private val statusBarCacheRepository: StatusBarCacheRepository,
@@ -64,6 +67,13 @@ class StatusesViewModel @Inject constructor(
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
     private val listState = MutableStateFlow(StatusBarListState())
     private val status = MutableStateFlow(StatusesStatus())
+
+    /**
+     * Groups mood impressions before sending them (feature-parity §F) — the status-bar
+     * counterpart of the feed's own batcher. Port of iOS `StatusViewModel.impressions`
+     * (`source: "status"`).
+     */
+    private val impressionBatcher = ImpressionBatcher(source = "status", postRepository = postRepository)
 
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
@@ -137,6 +147,34 @@ class StatusesViewModel @Inject constructor(
      * Mirrors the iOS `payload.userId != currentUser?.id` guard.
      */
     private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
+
+    /** [statusId]'s pill just appeared on screen — call once per appearance. */
+    fun trackImpression(statusId: String) {
+        impressionBatcher.record(statusId)
+    }
+
+    /**
+     * A mood status IS a post — opening its popover is a single, per-viewer-deduplicated
+     * VIEW, the status-bar counterpart of the post-detail `viewPost` record. Fire-and-forget,
+     * failure silently ignored (best-effort analytics). Port of iOS `markStatusViewed`.
+     */
+    fun markStatusViewed(statusId: String) {
+        if (statusId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(statusId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches iOS `try?`
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        impressionBatcher.flushNowAsync()
+    }
 
     /**
      * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
