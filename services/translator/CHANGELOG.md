@@ -1,5 +1,175 @@
 # @meeshy/translator
 
+## 1.26.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - pin your own posts (#3129)
+  - cinq des six événements qui décrivent l'ORGANISATION de la liste n'arrivaient nulle part [cycle 55] (#3126)
+  - stale-while-revalidate cache for notifications (#3127)
+  - les six écrivains locaux de la ligne de liste laissaient la carte du Prisme décrire l'ancien message [cycle 54-bis] (#3125)
+  - MediaSessionCoordinator no longer swallows AVAudioSession errors (#3124)
+  - l'épingle d'un message position-seule se perdait sur deux des trois chemins (#3122)
+  - batched feed impression tracking (#3121)
+  - call:signal's answer-received cleanup swept the whole call, not just the negotiating pair (#3119)
+  - pure decision core for the in-app notification toast (#3118)
+  - call:join's stale-buffered-offer drop swept the whole call, not just the joiner's own slot (#3110)
+  - failCall() guards callState.isActive like its siblings (#3106)
+  - wire real-time notification socket updates (#3117)
+  - share-target lot 2 — image/video attachments (#3114)
+  - share-target lot 1 (text/URL) — ACTION_SEND receiver (#3112)
+  - la ligne de liste décrivait un mélange de deux messages [cycle 53] (#3111)
+  - CameraView no longer swallows real capture/merge failures (#3109)
+  - ban a conversation member — PATCH .../participants/{userId}/ban (#3107)
+  - la ligne de liste décrivait un mélange de deux messages (#3105)
+  - Focal — parite audio complete avec le chemin bulle
+  - Focal — l'appui long eleve la CELLULE VIVANTE, plus jamais une bulle reconstruite
+  - Focal — le fil court jusqu'au bord bas physique + plus aucun fondu de distance sur les bulles
+  - Focal — chrome escamote pendant le defilement + zone d'activation sans conflit avec la saisie
+  - add-member sheet — POST /conversations/{id}/participants (#3104)
+  - reposer la perspective dans layoutSubviews, jamais dans apply(\_:)
+  - la perspective Focal survit a l'application d'attributs de layout
+  - transpose la cinematique de la maquette de reference -- constantes ET pivot
+  - join the story-viewer realtime room (post:join/post:leave) (#3103)
+  - aligne l'estimation de hauteur du layout sur le mode rendu -- MESURE NON CONCLUANTE
+  - buffered-offer cleanup on participant leave wiped siblings' pending offers in group calls
+  - le titre BRUT d'un DM entrait par le cache disque (#3099)
+  - retire le travail MORT fait a chaque frame de defilement + etend la portee de la courbe
+  - la reconfiguration d'arret de defilement effacait la perspective sans jamais la reposer
+  - join the feed-comments-sheet realtime room (post:join/post:leave) (#3100)
+  - l'exclusion « thread.hiddenChrome » avait survécu à sa cause (#3098)
+  - la magnification ne change plus la hauteur de la cellule -- fin des sauts au defilement
+  - "Missed" call-history filter never matched a group call the user was bystander to (#3095)
+  - MessageLanguageDetailView drives sync through adaptiveOnChange (#3097)
+  - la garde "entierement visible" comparait deux reperes qui ne coincidaient pas
+  - la base de la carte devient la rangee d'action, et le cadre se referme autour
+  - ressuscite la magnification du message elu et rend l'heure aux messages
+  - join the post room from the reel viewer (post:join/post:leave) (#3093)
+  - wire the first ThumbHash Coil placeholder (feed images) (#3094)
+  - recalibrer 3 gardes source du lot de réserves — run #99
+  - wire post-detail realtime room (post:join/post:leave) (#3092)
+  - [R-d] monte la rangée .conversationStart sous drapeau
+  - [R-a] safeAreaInset sticky monté uniquement drapeau ON
+  - [R-j] constante partagée Notification.Name.openMyStories
+  - la feuille de commentaires trappait à l'envoi sous macOS (#3087)
+  - translated call captions leaked every group-call language to the whole room
+  - paginate user search in the new-conversation picker (#3088)
+  - reading_modes cascades to BetaFeaturesPreference — beta ON activates the reading-mode system app-wide [I-075, second amendment]
+  - 'Focal (beta)' item + Settings toggle 'Activate betas' [I-075 amendment]
+  - amendment — visibility gate is a user preference, not a dev flag [I-075]
+  - 'Focal (dev)' long-press menu item — force Focal, one open, no writes [I-075]
+  - thread forcedReadingMode through the existing nav path to ConversationView [I-075]
+  - ReadingModeController.init(forcedMode:) — ephemeral open-time override [I-075]
+  - third Lentille flag focalDevPreview — env/defaults, default OFF [I-075]
+  - header round-chrome gutter 20→28pt — (+) toujours au bord
+  - wire per-conversation tags, closing the preferences line (#3085)
+  - transcription-invite badge never cleared when a peer left mid-transcription (#3084)
+  - themedComposer stack overflow — fractionner la chaîne de modificateurs
+  - « plus aucun message visible » était dit par le serveur et entendu par personne [cycle 49]
+  - shiftHue en formules pures — parité bit à bit avec le domicile TS
+  - group-call hang-up no longer ends the call for everyone (#3080)
+  - wire favorite reaction, fixing a dead FAVORITES filter tab (#3082)
+  - isSelf reads through the nullable id, not a smart cast
+  - paginated conversation member list + role moderation
+  - la résolution Socket.IO s'exécute hors du try de son appelant
+  - wire per-conversation custom name (rename) (#3079)
+  - la remise à zéro ne prévenait personne, et échouait pour qui était déjà à zéro
+  - conversation delete-for-all (creator-only) + conversation:closed real-time purge (#3077)
+  - une préférence, un cache — six mémoires purgées par un seul point d'entrée (#3076)
+  - forceCleanupParticipationAfterLeaveFailure omitted userId, its own sibling emit (#3073)
+  - rétablir la cible des modificateurs des trois états vides (build cassé sur main)
+  - un aperçu recalculé a le droit de reculer — le serveur le déclare [cycle46]
+  - Lentille empty branches restyled under flag; B1 RED tests renamed green [REV-3/V3ter L17]
+  - Lentille focus card — type/memberCount chip absorbed from the row [REV-3/V3ter L08]
+  - Lentille row — honest presence/typing, tertiary timestamp, pin, kind glyphs, live-call badge [REV-3/V3ter L01/L03/L06/L07/L10/L13]
+  - migrate ComposerLanguagePickerDialog to the shared LanguagePickerDialog (#3072)
+  - raison Rivière honnête — jamais/seuil/compte-inconnu, amendement S1 [REV-3/B3]
+  - un seul magasin de préférence de mode, scopé identité — l'adaptateur Lentille rejoint le stockage Focal [REV-3/B2]
+  - l'écran Confidentialité écrivait dans un tiroir que le serveur n'ouvrait pas
+  - extract shared LanguagePickerDialog into :sdk-ui (#3070)
+  - chevron d'épisode nommé par la direction de lecture, pas par un côté [F-088/WS-9]
+  - routage audio — le `.audio` pur + texte est soleWithFooter, comme la bulle [F-082/WS-3]
+  - pilule de défilement — les tests tiquent en ms, comme la loi [F-081/WS-2]
+  - topSenders départage par userId ASC, plus par récence [F-087/WS-8]
+  - les assertions i18n V3 résolvent par le catalogue, plus par le repli français
+  - l'accusé de livraison dépendait du transport — les deux émetteurs socket ne l'ÉCRIVAIENT pas
+  - FocalHostSourceGuardTests R15 searched a MARK comment in comment-stripped source
+  - clear remaining Focal/Lentille build-break — app + test targets compile clean
+  - `status` construit à chaque message, jamais rempli, jamais servi
+  - CallQualityOverlay mislabels group-call peer alerts with wrong name
+  - un message d'invité arrivait sans nom, le fil sans pièce jointe ni réponse citée
+  - trois chargements d'accusés nominatifs jetés à la sérialisation
+  - la préférence d'accusés de lecture tenait à trois portes sur quatre
+  - OngoingCallBanner counted participants who already left
+  - LivingSummaryModels missing MeeshySDK import breaks iOS CI
+  - l'arriéré de lecture d'une personne partait à toute la conversation
+  - crash-safe call:signal, cross-call quality-ladder leak, timedOutPerforming identity guard
+  - delete conversation for me from the list context menu (#3057)
+  - leave conversation from the list context menu (#3055)
+  - mentions-only per-conversation notification preference (#3054)
+  - ConversationListViewModel mirrors live conversation-lock state (#3053)
+  - un invité de lien était nommé de deux façons selon le transport
+  - close signal-size gap, end-reason spoofing, and two call-setup swallowed-failure paths
+  - BubbleGridImageView reads display scale from the environment (#3050)
+  - focal F-083ter — F05/F06/F10/F11/F15 trous visuels comblés [2/2]
+  - focal F-083ter — filet contraste méta réparé, R15 vert [1/2]
+  - garde R15 en jetons, commentaires exclus — indigo900 et les docs de loi ne sont plus des faux positifs [S-003/F-090]
+  - LentillePeekView sur le chemin natif iOS 26 [LWS-7/I-067ter]
+  - un lecteur sans compte n'accusait jamais réception au drain
+  - focal WS-10 — surfaces agent ✦ stub, grammaire pointillée OFF [WS-10/F-089]
+  - focal WS-9 — Résumé Vivant, l'état d'abord la preuve à un tap [WS-9/F-088]
+  - LentilleModeMenu, LentillePeekView, sous-menu Mode de lecture [LWS-8/I-072]
+  - focal WS-8 — digest déterministe, épisodes, Rampe [WS-8/F-087]
+  - logout wipes conversation-lock PINs (was dead code) (#3048)
+  - focus card + encoche AUTO·décision + chip mode mémorisé [LWS-8/I-071]
+  - le message d'un invité de lien n'accusait jamais réception au rejeu (#3047)
+  - le garde du cycle sous-titres bornait à 900 octets — le commentaire de la branche « réception seule » l'a débordé
+  - le garde d'horodatage exigeait l'écoulé depuis l'appel, remplacé par l'horloge murale de capture
+  - le garde du nom de locuteur cherchait `Text(speakerName)` que la ligne de journal a fusionné avec l'heure
+  - focal WS-6/7 — flash immédiat, pilule montée, menu Aa [WS-7/F-086bis]
+  - le garde d'auto-révélation du panneau visait une règle retirée — il garde la MÊME garantie à la source
+  - drop 2 dead catalog keys — every app-catalog identifier is referenced in code again
+  - 19 code call sites carried a French defaultValue with no catalog entry — no French leak into other locales
+  - le garde d'échec transcription exigeait une fermeture de panneau que le spec 2026-08-13 a retirée
+  - les gardes de hint VoiceOver de la pill bornaient à 1000 octets — ils bornent à la déclaration suivante
+  - l'icône décorative de l'état vide des favoris n'était jamais masquée à VoiceOver
+  - le relais recherche vers la plateforme ne se déclenchait jamais — Bob ne matche plus "awa" par son email hérité
+  - les filtres de recherche par défaut de la factory de test faussaient l'assertion — Bob ne matche plus "awa" par un email/téléphone hérité
+  - les gardes rejoinActiveCall lisaient les COMMENTAIRES — rejoinBody ne renvoie plus que du code
+  - le garde d'adjacence start/stopSystemPiP cassait sur son propre doc comment — adjacence structurelle
+  - le garde proximité grepait `!isVideoEnabled` que le fix C7 a remplacé — il relit la vraie condition
+  - élection de la focus card sur le défilement [LWS-8/I-070]
+  - LentillePerspective — passe compositor sur la courbe .list [LWS-8/I-069]
+  - ConversationLockStore foundation (PIN storage, no UI yet) (#3045)
+  - screen-capture privacy alert last-writer-wins across peers
+  - focal WS-7 — coquille, orchestrateur dans ConversationView.init [WS-7/F-086]
+  - mux du squelette Lentille dans la branche cache vide [LWS-7/I-067bis]
+  - focal WS-6 — hôte de défilement, six sites montés sous drapeau [WS-6/F-085]
+  - mux de rang Lentille sous drapeau dans ConversationRowItem [LWS-7/I-067]
+  - LentilleSkeletonRow — géométrie exacte du rang [LWS-7/I-066]
+  - LentilleConversationRow + LentilleBridgeLine — rang plat, pont ✦ [LWS-7/I-065]
+  - focal WS-5 — FocalScrollPass, géométrie inversée et ancrage corrigé [WS-5/F-084]
+  - focal WS-3 — filet de citation au token, flou et vue unique dans la grille [WS-3/F-083bis]
+  - sticky visible, rail fusionné, pilule sur le relais existant [LWS-6/I-063bis]
+  - focal WS-4 — FocalRow, densité Script comprise [WS-4/F-083]
+  - montage pilule de section et rail vivants sur le signal existant [LWS-6/I-063]
+  - focal WS-3 — blocs riches de la rangée plate [WS-3/F-082]
+  - conteneur sticky Section/pinnedViews, pliage et drop conservés [LWS-6/I-062]
+  - FocalMetrics — miroir des cotes thread + parité tokens [WS-0/F-082-pre]
+  - focal WS-2 — pilule jour·heure sur ScrollTimePillLaw [WS-2/F-081]
+  - focal WS-1 — préférence locale, identité lecteur, VoiceOver [WS-1/F-080]
+  - vues Chrome Lentille — sticker, pilule, rail vivants [LWS-6/I-061]
+  - greffe groupConversations sur LentilleSectionResolver [LWS-5/I-060]
+  - attache le pont ✦ au payload — liste, socket, suggestedMode [G-123]
+  - ConversationBridgeService — le pont ✦ en requêtes agrégées [G-122]
+  - route préférences — readingMode validé, patch partiel, broadcast utilisateur [G-121]
+  - ajoute readingMode à UserConversationPreferences (colonne typée, jamais clé/valeur) [G-120]
+  - CategoryStorage prend un PrismaClient, plus un any
+  - un PATCH de préférences n'a jamais été partiel (cycle 49)
+  - la ligne de liste se corrigeait à toute mutation SAUF au masquage
+
 ## 1.25.0
 
 ### Minor Changes
