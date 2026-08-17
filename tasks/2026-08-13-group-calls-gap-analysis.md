@@ -431,3 +431,58 @@ toujours, direct inchangé), `CallEventsHandler.test.ts` (2 cas — fast-path
 broadcast REST, no-op défensif). Tous vérifiés ROUGE sans le fix serveur,
 VERT avec. Suites `CallService`/`CallEventsHandler`/`calls-routes` complètes
 vertes, `tsc --noEmit` propre.
+
+## Mise à jour 2026-08-17 — première moitié de W6 traitée : bouton « exclure » web branché sur le kick REST
+
+**W6 (partiel) levé** : le prérequis serveur (2026-08-15, diffusion
+`PARTICIPANT_LEFT` sur `DELETE /calls/:callId/participants/:participantId`)
+n'avait toujours aucun appelant côté web — `onRemove` restait un nettoyage
+purement local déclenché par le timeout de déconnexion, jamais par une
+action de modération. Ajouté :
+
+- `callsService.removeParticipant(callId, userId)` — wrapper REST manquant
+  (`calls.service.ts` n'exposait que `getActiveCall`), miroir de
+  `participantsService.removeParticipant` pour la conversation.
+- Rôle de modération résolu via `useConversationQuery` + `isParticipantModerator`
+  (même idiome que `useParticipantManagement`) — **jamais** lu depuis
+  `CallParticipant.role`, qui est le rôle de session d'appel
+  (`initiator`/`participant`), sans rapport avec le rôle de conversation.
+  Gate double : `conversation.type === 'group'` (jamais en direct — y
+  retirer l'autre partie équivaut à raccrocher, chemin déjà couvert) ET
+  modérateur/admin de la conversation.
+- UI : bouton « retirer » (icône `UserMinus`, confirmation `AlertDialog` —
+  même pattern que `DeliveryQueueItemCard`) ajouté dans `VideoStream` (donc
+  disponible aussi bien sur la tuile plein écran que sur les vignettes
+  `DraggableParticipantOverlay`, un seul site de rendu) — visible seulement
+  quand `onKickParticipant` est fourni, jamais pour la tuile locale.
+- Aucune mutation locale du store au succès : la diffusion serveur
+  `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` (déjà écoutée) reconcilie l'état pour
+  tout le monde, y compris l'auteur du kick — exactement le pattern déjà en
+  place pour un départ volontaire.
+- i18n groupe (W7, partiel) : `stream.removeParticipant*` + `toasts.participantRemoved`/
+  `removeParticipantFailed` ajoutés aux 4 locales (en/fr/es/pt), clés
+  identiques vérifiées par script.
+
+**Limite connue, non traitée ici** : la cible passée à `removeParticipant`
+est la clé de `remoteStreams` (`participant.userId || participant.participantId`,
+côté offre WebRTC) — pour un participant anonyme sans `userId`, la route
+REST (`where: { userId: participantId }`) ne peut pas le résoudre. Aucune UI
+existante (y compris `conversation-participants-drawer.tsx`) ne permet
+aujourd'hui de retirer un participant anonyme non plus — pas une régression
+introduite ici, juste un périmètre encore non couvert.
+
+**Reste du W6** : grille adaptative multi-participants, roster dédié,
+`CallNotification`/timeout déjà traités (2026-08-14). **Reste du W7** : i18n
+groupe pour le roster/toasts join-leave restants. Mesh iOS mono-PC (I1-I7)
+et SFU toujours hors périmètre (nécessitent le toolchain Xcode, absent de
+cet environnement).
+
+Tests : `calls.service.test.ts` (nouveau, 6 cas — `getActiveCall` +
+`removeParticipant`, jusque-là non testé du tout), `VideoStream.test.tsx`
+(+6 cas), `DraggableParticipantOverlay.test.tsx` (+2 cas, transmission de
+prop), `VideoCallInterface.test.tsx` (+8 cas — gate modérateur/type de
+conversation, appel REST avec le bon id, pas de mutation locale au succès,
+toast d'échec). Suite complète `apps/web` : 644 suites / 12 953 tests verts.
+`tsc --noEmit` et `eslint` sans régression (mêmes 11 erreurs tsc et 5
+findings eslint pré-existants, aucun nouveau, vérifié par diff avant/après
+via `git stash`).

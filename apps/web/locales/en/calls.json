@@ -78,7 +78,12 @@
       "videoSuspended": "Video paused",
       "videoSuspendedHint": "Weak connection · auto-resume",
       "fullscreen": "Toggle fullscreen",
-      "dragToMove": "Drag to move"
+      "dragToMove": "Drag to move",
+      "removeParticipant": "Remove from call",
+      "removeParticipantConfirmTitle": "Remove {name} from the call?",
+      "removeParticipantConfirmDescription": "{name} will be disconnected from this call immediately. They can rejoin as long as the call is still active.",
+      "removeParticipantConfirmAction": "Remove",
+      "cancel": "Cancel"
     },
     "toasts": {
       "connectionError": "Connection error",
@@ -99,7 +104,9 @@
       "micPermissionDenied": "Camera/microphone permission denied.",
       "micNotFound": "No camera or microphone found.",
       "micAccessFailed": "Failed to access camera/microphone: {message}",
-      "micAccessFailedGeneric": "Failed to access camera/microphone"
+      "micAccessFailedGeneric": "Failed to access camera/microphone",
+      "participantRemoved": "Participant removed",
+      "removeParticipantFailed": "Failed to remove participant"
     },
     "permissions": {
       "title": {

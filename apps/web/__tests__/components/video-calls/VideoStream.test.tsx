@@ -1,8 +1,35 @@
 import { act } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({ t: (k: string) => k, isLoading: false }),
+}));
+
+// Same convention as DeliveryQueueItemCard.test.tsx — stub the Radix
+// primitives to plain elements so the confirm flow is testable without a
+// portal, while still exercising the real trigger → content → action wiring.
+jest.mock('@/components/ui/alert-dialog', () => ({
+  AlertDialog: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  AlertDialogContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogDescription: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogFooter: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogCancel: ({ children }: { children?: React.ReactNode }) => (
+    <button data-testid="alert-dialog-cancel">{children}</button>
+  ),
+  AlertDialogAction: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+  }) => (
+    <button data-testid="alert-dialog-action" onClick={onClick}>
+      {children}
+    </button>
+  ),
 }));
 
 import { VideoStream } from '@/components/video-calls/VideoStream';
@@ -73,5 +100,53 @@ describe('VideoStream — disconnected overlay tracks isDisconnected both ways',
     });
 
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});
+
+// W6 (`tasks/2026-08-13-group-calls-gap-analysis.md`) — moderator "remove
+// from call" control. Callers gate `onKickParticipant` on moderator role +
+// group conversation type; VideoStream itself has no opinion on permissions,
+// it only renders/wires the control when the prop is present.
+describe('VideoStream — moderator kick control (W6)', () => {
+  it('does not render a remove-participant control when onKickParticipant is absent', () => {
+    render(<VideoStream stream={null} participantName="Alice" />);
+    expect(screen.queryByRole('button', { name: 'stream.removeParticipant' })).not.toBeInTheDocument();
+  });
+
+  it('renders an accessible remove-participant control when onKickParticipant is provided', () => {
+    render(<VideoStream stream={null} participantName="Alice" onKickParticipant={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'stream.removeParticipant' })).toBeInTheDocument();
+  });
+
+  it('does not call onKickParticipant merely by opening the confirmation', () => {
+    const onKickParticipant = jest.fn();
+    render(<VideoStream stream={null} participantName="Alice" onKickParticipant={onKickParticipant} />);
+    fireEvent.click(screen.getByRole('button', { name: 'stream.removeParticipant' }));
+    expect(onKickParticipant).not.toHaveBeenCalled();
+  });
+
+  it('calls onKickParticipant when the confirm action is clicked', () => {
+    const onKickParticipant = jest.fn();
+    render(<VideoStream stream={null} participantName="Alice" onKickParticipant={onKickParticipant} />);
+    fireEvent.click(screen.getByTestId('alert-dialog-action'));
+    expect(onKickParticipant).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onKickParticipant when cancel is clicked', () => {
+    const onKickParticipant = jest.fn();
+    render(<VideoStream stream={null} participantName="Alice" onKickParticipant={onKickParticipant} />);
+    fireEvent.click(screen.getByTestId('alert-dialog-cancel'));
+    expect(onKickParticipant).not.toHaveBeenCalled();
+  });
+
+  it('stops the trigger click from bubbling to an ancestor fullscreen toggle', () => {
+    const onAncestorClick = jest.fn();
+    render(
+      <div onClick={onAncestorClick}>
+        <VideoStream stream={null} participantName="Alice" onKickParticipant={jest.fn()} />
+      </div>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'stream.removeParticipant' }));
+    expect(onAncestorClick).not.toHaveBeenCalled();
   });
 });
