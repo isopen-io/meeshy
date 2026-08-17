@@ -22,7 +22,25 @@ describe('ConversationReadingModeSchema', () => {
 })
 
 describe('ReadingModePreferenceSchema', () => {
-  const validPreferences: ReadingModePreference[] = ['auto', 'focal', 'script', 'resume', 'riviere']
+  /**
+   * AMENDEMENT S1 (REV-4bis/B2) — `bulles` entre au vocabulaire de préférence.
+   * Justification complète dans `types/reading-modes.ts` : sans lui, « je veux
+   * le rendu hérité » n'a AUCUNE image dans l'énumération gelée, et la seule
+   * alternative était de garder un SECOND magasin de persistance pour cette
+   * unique valeur — le défaut même que la façade referme.
+   *
+   * L'énumération des modes RENDUS reste inchangée : `bulles` (préférence) et
+   * `bubbles` (mode rendu) restent DEUX mots, comme `resume`/`summary` et
+   * `riviere`/`river` — le test du haut de ce fichier le verrouille encore.
+   */
+  const validPreferences: ReadingModePreference[] = [
+    'auto',
+    'focal',
+    'script',
+    'resume',
+    'riviere',
+    'bulles',
+  ]
 
   it.each(validPreferences)('accepts %s and round-trips through parse', (preference) => {
     expect(ReadingModePreferenceSchema.parse(preference)).toBe(preference)

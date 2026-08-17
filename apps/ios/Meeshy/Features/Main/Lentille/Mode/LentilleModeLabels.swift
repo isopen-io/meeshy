@@ -44,6 +44,14 @@ nonisolated enum LentilleModeLabels {
             return String(localized: "lentille.mode.name.resume", defaultValue: "Résumé", bundle: .main)
         case .riviere:
             return String(localized: "lentille.mode.name.riviere", defaultValue: "Rivière", bundle: .main)
+        // AMENDEMENT S1 (REV-4bis/B2) — jamais affiché sur iOS : `.bulles` est
+        // hors de l'ordre du menu (`LentilleModeMenu.build`, cinq entrées).
+        // RÉUTILISE la clé du mode RENDU `.bubbles` (cf. `decisionModeTitle`
+        // ci-dessous) plutôt que d'en créer une sixième : c'est le même mot
+        // pour le lecteur, et une clé i18n neuve pour un libellé jamais rendu
+        // serait une dette gratuite dans les 12 catalogues de localisation.
+        case .bulles:
+            return String(localized: "lentille.mode.name.bubbles", defaultValue: "Bulles", bundle: .main)
         }
     }
 

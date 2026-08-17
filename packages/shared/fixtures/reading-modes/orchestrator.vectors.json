@@ -140,6 +140,34 @@
     "expectedBridgeSuggestedMode": "focal"
   },
   {
+    "_label": "sticky-bulles-hors-catalogue-clampe",
+    "input": {
+      "unreadCount": 2,
+      "lastOpenedAt": 999999700000,
+      "now": 1000000000000,
+      "stickyChoice": "bulles",
+      "isFlagEnabled": true,
+      "capabilities": {
+        "availableModes": [
+          "focal",
+          "script",
+          "summary"
+        ],
+        "riverEligible": false,
+        "riverEligibilityReason": {
+          "threshold": 5,
+          "current": 0,
+          "riverReason": "belowThreshold"
+        }
+      }
+    },
+    "expected": {
+      "mode": "focal",
+      "reason": "clamped-unavailable"
+    },
+    "expectedBridgeSuggestedMode": "focal"
+  },
+  {
     "_label": "sticky-focal-unread30-absent",
     "input": {
       "unreadCount": 30,
