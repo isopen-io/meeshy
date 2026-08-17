@@ -200,8 +200,29 @@ reste ouverte comme question de contrat, elle n'est plus une dette de défaut.
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `broadcastReadStatus.test.ts` | ✅ 13/13 |
 | `broadcastReadStatus.cost.test.ts` | ✅ 3/3 |
-| Suite gateway complète | voir § ci-dessous |
+| Suite gateway complète | **744/744 suites, 18 044 témoins** verts (une suite rendue verte, § 6 bis) |
 | Clients | aucun changement — les deux lisent déjà `bridge` |
+
+### 6 bis. La seule suite touchée — et ce qu'elle révèle du double, pas du code
+
+`messages-extended.test.ts` a rougi sur un témoin d'ADRESSAGE (« adresse un
+participant sans compte par son participant id »), et le défaut accusé n'existait
+pas. Son double posait `participant.findMany.mockResolvedValueOnce([…])` :
+un `Once` sert la première lecture **ARRIVÉE**, pas la lecture visée. La route
+en fait désormais deux — l'éventail des accusés (`{conversationId, isActive}`) et
+la résolution du lecteur par la passe de pont (`OR: [{id}, {userId}]`) — et la
+passe partant en parallèle (§3 bis), c'est elle qui consommait la valeur. Le
+fan-out retombait sur le défaut du double, qui ne porte qu'un participant à
+compte.
+
+Le double regarde maintenant sa CLAUSE et sert chaque appelant selon ce qu'il
+demande. Vérifié après réparation : le témoin retombe bien sous la mutation qu'il
+nomme (éventail filtré sur `userId`), donc il n'a pas été affaibli pour passer.
+
+> **Un `mockResolvedValueOnce` encode un ORDRE D'APPEL, pas une lecture.** Il
+> survit tant qu'un seul appelant existe, et se met à décrire un autre programme
+> le jour où un second apparaît — a fortiori concurrent. Un double qui branche
+> sur sa clause n'a pas ce défaut.
 
 ## 7. Pistes pour le cycle 64
 
