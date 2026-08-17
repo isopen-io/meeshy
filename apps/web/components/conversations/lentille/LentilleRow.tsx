@@ -36,6 +36,7 @@
 'use client';
 
 import { memo, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -53,7 +54,12 @@ import {
 import { formatLastMessage } from '../conversation-item/message-formatting';
 import { formatConversationDate } from '@/utils/date-format';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
-import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } from './lentille-row-utils';
+import {
+  resolveLentilleAvatarTarget,
+  resolveLentillePresenceEntries,
+  resolveOtherDirectParticipantUser,
+  type LentilleAvatarTarget,
+} from './lentille-row-utils';
 import { LentilleBridgeLine, resolveLentilleBridgeAriaText } from './LentilleBridgeLine';
 import type { BridgeTranslate } from '@meeshy/shared/utils/conversation-bridge';
 import { LentillePeek } from './LentillePeek';
@@ -139,6 +145,96 @@ function resolveUnreadAriaSegment(unreadCount: number, t: LentilleRowTranslate):
   return t(key, { count: unreadCount });
 }
 
+/**
+ * behaviour-matrix:L12 — l'avatar du rang porte SON geste, et la « zone
+ * d'exclusion avatar » qui va avec.
+ *
+ * TROIS invariants, chacun éprouvé par un témoin dédié
+ * (`__tests__/LentilleRow.avatar-affordance.test.tsx`) :
+ *
+ *  1. **Le clic n'ouvre jamais la conversation.** La racine du rang est un
+ *     `role="button"` avec `onClick`/`onKeyDown` ; sans `stopPropagation` sur
+ *     les DEUX (le clavier autant que la souris — `Enter` sur un lien remonte
+ *     jusqu'au `onKeyDown` du rang), ouvrir un profil ouvrirait AUSSI le fil.
+ *  2. **Atteignable au clavier avec un nom accessible.** `<Link>` rend un
+ *     `<a href>` et le bouton de groupe un `<button>` : tous deux
+ *     naturellement tabulables, chacun nommé par `aria-label` — jamais un
+ *     `div` cliquable.
+ *  3. **Exempté de l'appui long.** `data-lentille-press-exempt` : `LentillePeek`
+ *     n'arme ni son minuteur de 420 ms ni son aperçu quand la pression
+ *     commence ici. C'est la transposition web de l'« exclusion avatar 70 pt »
+ *     d'iOS (une géométrie de zone tactile n'aurait aucun sens ici : le
+ *     marqueur suit l'élément, quelle que soit son habillage).
+ *
+ * `target === null` ⇒ rien à ouvrir ⇒ le conteneur reste un simple `div`,
+ * la rangée redevient une cible unique. Aucun contrôle inerte n'est rendu.
+ */
+const AVATAR_BOX_STYLE: React.CSSProperties = {
+  width: 'var(--lentille-list-avatar-size)',
+  height: 'var(--lentille-list-avatar-size)',
+};
+
+const AVATAR_BOX_CLASS = 'relative flex-shrink-0 block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
+function AvatarAffordance({
+  target,
+  t,
+  onOpenConversationInfo,
+  children,
+}: {
+  readonly target: LentilleAvatarTarget | null;
+  readonly t: LentilleRowTranslate;
+  readonly onOpenConversationInfo: () => void;
+  readonly children: React.ReactNode;
+}) {
+  const stopKeyboardPropagation = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+  }, []);
+
+  if (target === null) {
+    return (
+      <div className="relative flex-shrink-0" style={AVATAR_BOX_STYLE}>
+        {children}
+      </div>
+    );
+  }
+
+  if (target.kind === 'profile') {
+    return (
+      <Link
+        href={target.href}
+        data-testid="lentille-row-avatar-affordance"
+        data-lentille-press-exempt="true"
+        aria-label={t('lentille.a11y.openProfile', { name: target.name })}
+        className={AVATAR_BOX_CLASS}
+        style={AVATAR_BOX_STYLE}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={stopKeyboardPropagation}
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="lentille-row-avatar-affordance"
+      data-lentille-press-exempt="true"
+      aria-label={t('lentille.a11y.openConversationInfo', { name: target.name })}
+      className={AVATAR_BOX_CLASS}
+      style={AVATAR_BOX_STYLE}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpenConversationInfo();
+      }}
+      onKeyDown={stopKeyboardPropagation}
+    >
+      {children}
+    </button>
+  );
+}
+
 export const LentilleRow = memo(function LentilleRow({
   conversation,
   currentUser,
@@ -217,6 +313,25 @@ export const LentilleRow = memo(function LentilleRow({
   const presenceEntries = useMemo(
     () => resolveLentillePresenceEntries(conversation, currentUser?.id),
     [conversation, currentUser?.id]
+  );
+
+  // behaviour-matrix:L12 — la cible du geste d'avatar (profil pour un DM,
+  // infos de conversation sinon), résolue par la MÊME loi que le nom/avatar
+  // du rang (`resolveOtherDirectParticipantUser`), jamais un second chemin.
+  const avatarTarget = useMemo(
+    () =>
+      resolveLentilleAvatarTarget({
+        conversation,
+        currentUserId: currentUser?.id,
+        conversationName,
+        hasConversationInfo: !!onShowDetails,
+      }),
+    [conversation, currentUser?.id, conversationName, onShowDetails]
+  );
+
+  const handleOpenConversationInfo = useCallback(
+    () => onShowDetails?.(conversation),
+    [onShowDetails, conversation]
   );
 
   const unreadCount = conversation.unreadCount ?? 0;
@@ -354,8 +469,16 @@ export const LentilleRow = memo(function LentilleRow({
           transformOrigin: 'var(--lentille-list-row-transform-origin-x) var(--lentille-list-row-transform-origin-y)',
         }}
       >
-        {/* Avatar 44 + anneau accent */}
-        <div className="relative flex-shrink-0" style={{ width: 'var(--lentille-list-avatar-size)', height: 'var(--lentille-list-avatar-size)' }}>
+        {/* Avatar 44 + anneau accent — enveloppé dans SON PROPRE geste
+            (behaviour-matrix:L12) quand une cible existe : profil pour un DM,
+            infos de conversation sinon. `AvatarAffordance` ci-dessous porte
+            l'arrêt de propagation (clic ET clavier) et le marqueur
+            d'exclusion d'appui long lu par `LentillePeek`. */}
+        <AvatarAffordance
+          target={avatarTarget}
+          t={t}
+          onOpenConversationInfo={handleOpenConversationInfo}
+        >
           <Avatar
             className="h-full w-full"
             style={{
@@ -393,7 +516,7 @@ export const LentilleRow = memo(function LentilleRow({
               }}
             />
           )}
-        </div>
+        </AvatarAffordance>
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">

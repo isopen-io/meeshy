@@ -757,7 +757,9 @@
       },
       "a11y": {
         "unreadOne": "{count} unread message",
-        "unreadOther": "{count} unread messages"
+        "unreadOther": "{count} unread messages",
+        "openProfile": "View {name}'s profile",
+        "openConversationInfo": "Conversation info for {name}"
       }
     },
     "focal": {

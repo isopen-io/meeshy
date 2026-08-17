@@ -759,7 +759,9 @@
       },
       "a11y": {
         "unreadOne": "{count} mensagem não lida",
-        "unreadOther": "{count} mensagens não lidas"
+        "unreadOther": "{count} mensagens não lidas",
+        "openProfile": "Ver o perfil de {name}",
+        "openConversationInfo": "Informações da conversa {name}"
       }
     },
     "focal": {
