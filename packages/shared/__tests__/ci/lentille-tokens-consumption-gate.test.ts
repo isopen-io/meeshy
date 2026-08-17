@@ -9,13 +9,21 @@
 // `LentilleMetricsTests`/`FocalMetricsTests` (JSON ⇔ constante Swift VALEUR,
 // même angle mort) ne prouvent qu'un token est CONSOMMÉ par une vue réelle.
 // Ce fichier ferme ce trou : chaque FAMILLE de token (`list.<x>` /
-// `thread.<x>`, le regroupement à la profondeur où vivent les enums Swift et
-// les blocs de commentaires CSS) doit avoir au moins un consommateur RÉEL —
-// Swift (référence au symbole `LentilleMetrics.<X>`/`FocalMetrics.<X>` hors
-// définition et hors tests) OU CSS (variable `--lentille-<section>-<x>`
-// utilisée hors le fichier de déclaration `lentille-tokens.css` et hors
-// tests) — sinon figurer, datée et attribuée, dans `EXCLUDED_DEAD_FAMILIES`
-// ci-dessous.
+// `thread.<x>` / `river.<x>` depuis R-131, le regroupement à la profondeur où
+// vivent les enums Swift et les blocs de commentaires CSS) doit avoir au
+// moins un consommateur RÉEL — Swift (référence au symbole
+// `LentilleMetrics.<X>`/`FocalMetrics.<X>`/`RiverMetrics.<X>` hors définition
+// et hors tests) OU CSS (variable `--lentille-<section>-<x>` utilisée hors le
+// fichier de déclaration `lentille-tokens.css` et hors tests) — sinon
+// figurer, datée et attribuée, dans `EXCLUDED_DEAD_FAMILIES` ci-dessous.
+//
+// **`river` (R-131/R-133)** — section ajoutée avec son premier consommateur
+// DANS LE MÊME lot : `RiverMetrics.swift` (miroir Swift, comme
+// `LentilleMetrics`/`FocalMetrics`) et la peau `Riviere/View/` qui le
+// consomme (`RiverBubbleView`, `RiverLaneCanvas`, `RiverLaneHeaderStrip`) —
+// c'est cette garde-ci qui interdirait de livrer les tokens SANS peau
+// (« token déclaré ⇒ token consommé », cf. workshop §7bis/§7ter « Reste à
+// faire »).
 //
 // **Placement.** Comme `ios-pr-compile-gate.test.ts` (même dossier) : ce
 // garde lit des fichiers HORS `packages/shared` (l'app iOS, l'app web) —
@@ -63,6 +71,7 @@ const WEB_APP_ROOT = join(REPO_ROOT, 'apps/web');
 const IOS_DEFINITION_FILES = [
   'Features/Main/Lentille/Core/LentilleMetrics.swift',
   'Features/Main/Focal/Core/FocalMetrics.swift',
+  'Features/Main/Riviere/Core/RiverMetrics.swift',
 ].map((p) => join(IOS_APP_ROOT, p));
 
 // Fichier de déclaration CSS — se documente lui-même comme inerte/non
@@ -81,8 +90,10 @@ function loadTokensJson(): TokenJson {
   return JSON.parse(raw) as TokenJson;
 }
 
-/** Familles = clés de profondeur 1 sous `list`/`thread` (`$source` exclu). */
-function families(section: 'list' | 'thread', tokens: TokenJson): string[] {
+type TokenSection = 'list' | 'thread' | 'river';
+
+/** Familles = clés de profondeur 1 sous `list`/`thread`/`river` (`$source` exclu). */
+function families(section: TokenSection, tokens: TokenJson): string[] {
   const node = tokens[section];
   if (typeof node !== 'object' || node === null) {
     throw new Error(`lentille-tokens.json : section « ${section} » absente ou non-objet.`);
@@ -122,6 +133,13 @@ const SWIFT_SYMBOL_BY_FAMILY: Record<string, string> = {
   'thread.hiddenChrome': 'FocalMetrics.HiddenChrome',
   'thread.pill': 'FocalMetrics.Pill',
   'thread.agent': 'FocalMetrics.Agent',
+  // R-131 — `RiverMetrics.swift`, même patron nommé (miroir 1:1 des clés
+  // JSON, aucun renommage comme `thread.line2` → `FocalMetrics.Text`).
+  'river.line': 'RiverMetrics.Line',
+  'river.lane': 'RiverMetrics.Lane',
+  'river.bubble': 'RiverMetrics.Bubble',
+  'river.connector': 'RiverMetrics.Connector',
+  'river.laneHeader': 'RiverMetrics.LaneHeader',
 };
 
 /** camelCase → kebab-case (même règle que `apps/web/styles/lentille-tokens.css`, en-tête). */
@@ -129,7 +147,7 @@ function toKebab(family: string): string {
   return family.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
 
-function cssVarPrefix(section: 'list' | 'thread', family: string): string {
+function cssVarPrefix(section: TokenSection, family: string): string {
   return `--lentille-${section}-${toKebab(family)}`;
 }
 
@@ -256,7 +274,7 @@ function readCached(path: string): string {
   return content;
 }
 
-function findConsumers(section: 'list' | 'thread', family: string): Consumers {
+function findConsumers(section: TokenSection, family: string): Consumers {
   const swiftSymbol = SWIFT_SYMBOL_BY_FAMILY[`${section}.${family}`];
   const swiftPattern = swiftSymbol
     ? new RegExp(`\\b${swiftSymbol.replace('.', '\\.')}\\b`)
@@ -277,9 +295,10 @@ function findConsumers(section: 'list' | 'thread', family: string): Consumers {
 
 describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consommé', () => {
   const tokens = loadTokensJson();
-  const allFamilies: Array<{ section: 'list' | 'thread'; family: string }> = [
+  const allFamilies: Array<{ section: TokenSection; family: string }> = [
     ...families('list', tokens).map((family) => ({ section: 'list' as const, family })),
     ...families('thread', tokens).map((family) => ({ section: 'thread' as const, family })),
+    ...families('river', tokens).map((family) => ({ section: 'river' as const, family })),
   ];
 
   // Leçon 257 : une garde qui scanne zéro famille, zéro fichier Swift ou
@@ -287,6 +306,7 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
   it('découvre au moins une famille de tokens dans chaque section (jamais zéro)', () => {
     expect(families('list', tokens).length).toBeGreaterThan(0);
     expect(families('thread', tokens).length).toBeGreaterThan(0);
+    expect(families('river', tokens).length).toBeGreaterThan(0);
     expect(allFamilies.length).toBeGreaterThan(0);
   });
 
@@ -347,7 +367,7 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
   it.each(EXCLUDED_DEAD_FAMILIES)(
     'exclusion « $family » : toujours réellement morte des deux côtés (sinon retirer l\'entrée)',
     ({ family }) => {
-      const [section, familyName] = family.split('.') as ['list' | 'thread', string];
+      const [section, familyName] = family.split('.') as [TokenSection, string];
       const { iosFiles, webFiles } = findConsumers(section, familyName);
 
       expect(
