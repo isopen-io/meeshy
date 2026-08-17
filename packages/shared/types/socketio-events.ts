@@ -178,7 +178,12 @@ export const SERVER_EVENTS = {
   CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
-  REACTION_SYNC: 'reaction:sync',
+  // Pas de `REACTION_SYNC` : l'instantané de réactions voyage dans l'ACK de
+  // `CLIENT_EVENTS.REACTION_REQUEST_SYNC`, jamais en diffusion. Le déclarer ici
+  // affirmait un canal serveur→client sans émetteur, et un client s'y était
+  // abonné en versant l'instantané dans le seau incrémental de
+  // `reaction:added`. Le nom `reaction:sync` ne subsiste que comme étiquette de
+  // journal et préfixe de quota côté gateway.
   ATTACHMENT_REACTION_ADDED: 'attachment:reaction-added',
   ATTACHMENT_REACTION_REMOVED: 'attachment:reaction-removed',
   MENTION_CREATED: 'mention:created',
@@ -555,6 +560,37 @@ export const CLIENT_EVENTS = {
   ADMIN_AGENT_SUBSCRIBE: 'admin:agent-subscribe',
   ADMIN_AGENT_UNSUBSCRIBE: 'admin:agent-unsubscribe',
 } as const;
+
+/**
+ * Budget serveur de `reaction:request-sync`, par utilisateur.
+ *
+ * Publié ICI, et non dans le seul `SOCKET_RATE_LIMITS` de la gateway, parce
+ * qu'un CLIENT en dépend désormais pour se cadencer : la réconciliation des
+ * réactions au retour de la connexion émet une demande par bulle montée, et
+ * une bulle ne peut pas savoir combien de voisines partagent le même budget.
+ * Un client qui devine ce chiffre le devine faux dès que le serveur le change —
+ * exactement la duplication que la règle « single source of truth » interdit.
+ *
+ * La gateway le consomme dans `SOCKET_RATE_LIMITS.REACTION_SYNC`
+ * (`services/gateway/src/utils/socket-rate-limiter.ts`), qui garde son
+ * `keyPrefix` : la clé Redis est une affaire de serveur, le budget non.
+ */
+export const REACTION_SYNC_BUDGET = {
+  maxRequests: 120,
+  windowMs: 60000,
+} as const;
+
+/**
+ * Ce que répond un ACK dont le budget est épuisé.
+ *
+ * Un refus n'est PAS un échec : le serveur a répondu, et il a répondu « pas
+ * maintenant ». Un client doit pouvoir les séparer pour ne pas réessayer
+ * immédiatement une demande dont la fenêtre n'a pas bougé — un réessai
+ * approfondit l'épuisement au lieu de le traverser. La distinction voyage donc
+ * dans un littéral PARTAGÉ, jamais dans une prose que chaque client
+ * re-devinerait.
+ */
+export const RATE_LIMIT_REFUSAL_MESSAGE = 'Rate limit exceeded';
 
 // ===== ÉVÉNEMENTS SOCKET.IO =====
 
@@ -1698,7 +1734,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
-  [SERVER_EVENTS.REACTION_SYNC]: (data: ReactionSyncEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_ADDED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.CALL_INITIATED]: (data: CallInitiatedEvent) => void;

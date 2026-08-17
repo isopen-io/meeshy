@@ -1626,12 +1626,19 @@ export function registerCoreRoutes(
       const userId = authRequest.authContext.userId;
 
       // Vérifier les permissions d'administration
+      // Le `select` ramène le TYPE du conteneur par la relation que cette
+      // requête d'appartenance charge déjà — la garde du tête-à-tête ci-dessous
+      // en dépend, et aucune requête de plus n'est émise pour l'obtenir.
       const membership = await prisma.participant.findFirst({
         where: {
           conversationId: id,
           userId: userId,
           role: { in: ['creator', 'admin', 'moderator'] },
           isActive: true
+        },
+        select: {
+          role: true,
+          conversation: { select: { type: true } }
         }
       });
 
@@ -1649,6 +1656,29 @@ export function registerCoreRoutes(
             slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
           return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
         }
+      }
+
+      // Le rang d'écriture, le canal d'annonces et le mode lent décrivent la
+      // POLICE d'un conteneur À HIÉRARCHIE. Un tête-à-tête n'en a pas : ses
+      // rôles `creator`/`member` nomment qui a ouvert le fil, pas une autorité
+      // sur l'autre partie (cf. WRITE_HIERARCHY_FREE_TYPES dans
+      // `conversationWriteAdmission`). Les laisser passer permettait à
+      // l'initiateur de faire TAIRE son pair, refusé ensuite à chaque envoi,
+      // et sans recours : ce même PUT lui répond 403 puisqu'il est `member`.
+      //
+      // Le filtre ne porte QUE sur ces trois champs. `autoTranslateEnabled`,
+      // `title`, `description`, `avatar` et `banner` ne décrivent aucune
+      // hiérarchie et restent modifiables sur un tête-à-tête.
+      //
+      // Un type inconnu reste permissif — idiome documenté du module
+      // d'admission. Ce n'est pas un trou : la garde qui protège réellement le
+      // pair est la règle d'admission, qui lit le type sur la ligne AUTORITAIRE
+      // de conversation. Ici on empêche l'écriture d'un réglage sans effet, et
+      // l'événement `conversation:updated` qui l'annoncerait aux clients.
+      if (membership?.conversation?.type === 'direct' &&
+          (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
+           slowModeSeconds !== undefined)) {
+        return sendForbidden(reply, 'Un tête-à-tête n\'a pas de hiérarchie d\'écriture : ces réglages ne s\'y appliquent pas');
       }
 
       const updatedConversation = await prisma.conversation.update({

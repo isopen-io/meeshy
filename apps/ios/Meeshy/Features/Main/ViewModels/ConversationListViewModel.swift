@@ -7,7 +7,25 @@ import MeeshySDK
 @MainActor
 class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = [] {
-        didSet { _convIdIndex = nil }
+        didSet {
+            _convIdIndex = nil
+            // G-124 — point de composition de `GatewayBridgeProvider`
+            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lentille/Core/
+            // GatewayBridgeProvider.swift`). `didSet` est le SEUL endroit où
+            // convergent le chargement REST initial (`setConversations`) et
+            // les rechargements déclenchés par le socket
+            // (`observeSync` → `reloadFromCache` → `setConversations`, sur
+            // `conversationsDidChange` — lui-même émis par
+            // `ConversationSyncEngine.handleUnreadUpdated`, qui recopie déjà
+            // `event.bridge` sur la conversation en cache) : « alimenté par
+            // la liste + le socket », exactement ce que demande l'en-tête du
+            // provider. Derrière le drapeau (R19, câblage OFF ⇒ zéro effet
+            // mesurable) — même garde que `groupConversations` (§4.4, seul
+            // point de greffe voisin de ce fichier).
+            if LentilleFeatureFlag.isLentilleListEnabled {
+                gatewayBridgeProvider.noteBridges(from: conversations)
+            }
+        }
     }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
@@ -128,6 +146,18 @@ class ConversationListViewModel: ObservableObject {
     private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
+
+    /// Registre du pont ✦ gateway (G-124) — voir le commentaire du `didSet`
+    /// de `conversations` ci-dessus pour l'alimentation, et l'en-tête de
+    /// `GatewayBridgeProvider.swift` pour le contrat complet. Pas encore lu
+    /// par un rang : `LentilleConversationRow` lit `conversation.bridge`
+    /// directement (même donnée, posée par le SDK — voir son commentaire),
+    /// donc ce registre n'est consommateur d'AUCUN call site aujourd'hui —
+    /// même posture que `LocalLiveCallProvider` (câblé, pas encore branché à
+    /// un site d'appel). `let`, pas injecté : c'est un registre pur, aucune
+    /// dépendance externe à substituer en test (contrairement à `syncEngine`
+    /// ci-dessus).
+    let gatewayBridgeProvider = GatewayBridgeProvider()
 
     // O(1) conversation lookup by ID
     private var _convIdIndex: [String: Int]?

@@ -286,6 +286,52 @@ describe('admitConversationWriteFor — conversation globale', () => {
   });
 });
 
+describe('admitConversationWriteFor — tête-à-tête', () => {
+  // Dans un `direct`, l'initiateur reçoit `role: 'creator'` et l'autre
+  // `role: 'member'` (`routes/conversations/core.ts`, création). Cette asymétrie
+  // nomme qui a ouvert le fil, PAS une autorité sur l'autre partie. Sans cette
+  // dispense, le `creator` posait `isAnnouncementChannel` sur le tête-à-tête et
+  // le rang (member 1 < admin 3) refusait durablement les messages du pair.
+  it('n’impose aucune hiérarchie d’écriture dans un tête-à-tête marqué canal d’annonces', async () => {
+    const { prisma, result } = admitFor(
+      { type: 'direct', isAnnouncementChannel: true },
+      { participantRole: 'member' }
+    );
+
+    expect(isConversationWriteRefused(await result)).toBe(false);
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('ignore un `defaultWriteRole` posé sur un tête-à-tête', async () => {
+    const { prisma, result } = admitFor(
+      { type: 'direct', defaultWriteRole: 'admin' },
+      { participantRole: 'member' }
+    );
+
+    expect(isConversationWriteRefused(await result)).toBe(false);
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+  });
+
+  // La borne, jumelle de celle de la conversation globale : la dispense porte
+  // sur le RANG, jamais sur l'existence.
+  it('refuse le tête-à-tête fermé — la dispense de rang n’est pas une dispense d’existence', async () => {
+    const { result } = admitFor({ type: 'direct', isActive: false });
+
+    expect(await result).toEqual({ admitted: false, reason: 'conversation-closed' });
+  });
+
+  // La borne de l'autre côté : un groupe garde sa hiérarchie. La dispense ne
+  // doit pas se lire « tout type nommé est dispensé ».
+  it('laisse un groupe canal d’annonces refuser un simple membre', async () => {
+    const { result } = admitFor(
+      { type: 'group', isAnnouncementChannel: true },
+      { participantRole: 'member' }
+    );
+
+    expect(await result).toEqual({ admitted: false, reason: 'write-role-insufficient' });
+  });
+});
+
 // ── La lecture, pour le point de convergence ───────────────────────────────
 
 const readerReturning = (row: unknown, participant: unknown = { role: 'member', user: null }) =>

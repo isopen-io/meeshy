@@ -16,6 +16,7 @@ class FeedMediaGalleryTest {
     ) = FeedPostPresentation(
         id = "p1",
         authorId = null,
+        authorUsername = null,
         authorName = authorName,
         authorAvatarUrl = null,
         createdAtIso = createdAtIso,
@@ -34,6 +35,9 @@ class FeedMediaGalleryTest {
         isEdited = false,
         isReel = false,
         repostEmbed = null,
+        viewCount = 0,
+        impressionCount = 0,
+        isAuthor = false,
     )
 
     @Test

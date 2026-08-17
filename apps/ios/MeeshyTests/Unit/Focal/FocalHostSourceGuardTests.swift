@@ -69,16 +69,38 @@ final class FocalHostSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - R2 : reset en première ligne des trois registrations
+    // MARK: - R2 : amorçage en première ligne de CHAQUE registration
 
     /// « Aucune sous-classe de cellule, donc aucun `prepareForReuse` » —
-    /// sans ce reset, une cellule recyclée hériterait du transform/de la
+    /// sans cet amorçage, une cellule recyclée hériterait du transform/de la
     /// décoration de son occupant précédent (§4.8 « hors sites »).
-    func test_allThreeCellRegistrations_resetTheFocalPassFirst() throws {
+    ///
+    /// **Recalibré deux fois, l'invariant est inchangé : AUCUNE registration
+    /// ne configure une cellule avant de l'avoir amorcée.**
+    ///
+    /// 1. *Elles sont QUATRE* — `728fd957` ([R-d], réserve soldée) a monté la
+    ///    rangée `.conversationStart` (`FocalConversationStartRow`) derrière
+    ///    `startRegistration`. Le témoin n'en balayait que trois : la
+    ///    quatrième pouvait naître sans amorçage sans que rien ne le dise.
+    ///    C'est le mode d'échec exact que R2 existe pour attraper, et il
+    ///    était grand ouvert. Le nom du test suit (`allCellRegistrations`).
+    /// 2. *L'appel est INDIRECT* — `ea6ff081` a extrait `primeFocalCell(_:
+    ///    item:)`, qui porte maintenant les deux chemins : `focalPass.reset`
+    ///    quand la cellule n'est pas encore montée, `focalPass.apply` quand
+    ///    elle l'est (« pose la perspective TOUT DE SUITE », sinon la cellule
+    ///    entrante s'affiche une frame à l'échelle pleine). Chercher
+    ///    `focalPass.reset(cell)` en dur dans la closure ne décrit donc plus
+    ///    l'invariant, seulement l'une de ses branches.
+    ///
+    /// Le témoin exige donc l'amorçage dans les QUATRE closures, PUIS vérifie
+    /// que `primeFocalCell` mène bien encore à `focalPass` — sans quoi
+    /// l'indirection suffirait à vider la garde de son sens.
+    func test_allCellRegistrations_primeTheFocalPassFirst() throws {
         let code = try strippedSource("MessageListViewController.swift")
         let registrationMarkers = [
             "let typingRegistration = UICollectionView.CellRegistration",
             "let dayHeaderRegistration = UICollectionView.CellRegistration",
+            "let startRegistration = UICollectionView.CellRegistration",
             "let messageRegistration = UICollectionView.CellRegistration",
         ]
         for marker in registrationMarkers {
@@ -87,15 +109,45 @@ final class FocalHostSourceGuardTests: XCTestCase {
                 continue
             }
             // Fenêtre de 400 caractères après la déclaration : large assez
-            // pour couvrir le `guard let self` + la ligne de reset, jamais
+            // pour couvrir le `guard let self` + la ligne d'amorçage, jamais
             // assez pour déborder sur la registration suivante.
             let windowEnd = code.index(range.upperBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
             let window = code[range.upperBound..<windowEnd]
             XCTAssertTrue(
-                window.contains("focalPass.reset(cell)"),
-                "`\(marker)` ne réinitialise pas `focalPass.reset(cell)` en tête de closure — une cellule recyclée hériterait du transform/de la carte de son occupant précédent (R2, §4.8 « hors sites »)."
+                window.contains("primeFocalCell(cell, item: item)"),
+                "`\(marker)` n'amorce pas `primeFocalCell(cell, item: item)` en tête de closure — une cellule recyclée hériterait du transform/de la carte de son occupant précédent (R2, §4.8 « hors sites »)."
             )
         }
+
+        // Le compte, pas seulement la présence (leçon 257) : une CINQUIÈME
+        // registration introduite sans amorçage passerait entre les mailles
+        // d'une boucle sur une liste écrite à la main.
+        let registrationCount = code.components(separatedBy: "UICollectionView.CellRegistration").count - 1
+        XCTAssertEqual(
+            registrationCount, registrationMarkers.count,
+            "MessageListViewController déclare \(registrationCount) `UICollectionView.CellRegistration` — \(registrationMarkers.count) sont balayées par ce témoin. Toute registration neuve doit être ajoutée ICI en même temps qu'elle est écrite, sinon elle naît sans amorçage R2."
+        )
+
+        // L'indirection ne doit pas vider la garde : `primeFocalCell` est le
+        // SEUL amorceur, et il mène toujours à `focalPass`.
+        guard let primeRange = code.range(of: "private func primeFocalCell(_ cell: UICollectionViewCell, item: MessageListItem) {") else {
+            XCTFail("`primeFocalCell` introuvable — l'amorçage R2 a-t-il été renommé ?")
+            return
+        }
+        let primeEnd = code.index(primeRange.upperBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
+        let primeBody = code[primeRange.upperBound..<primeEnd]
+        XCTAssertTrue(
+            primeBody.contains("focalPass.reset(cell)"),
+            "`primeFocalCell` doit remettre la cellule à l'identité (`focalPass.reset(cell)`) sur le chemin « pas encore montée » — c'est le reset R2 lui-même, seulement déplacé d'un cran."
+        )
+        XCTAssertTrue(
+            primeBody.contains("focalPass.apply(to: cell, in: collectionView"),
+            "`primeFocalCell` doit poser la perspective (`focalPass.apply(to:in:descriptor:)`) sur le chemin « déjà montée » — sans quoi la cellule entrante s'affiche une frame à l'échelle pleine."
+        )
+        XCTAssertTrue(
+            primeBody.contains("guard readingMode != .bubbles else { return }"),
+            "`primeFocalCell` doit garder `readingMode != .bubbles` en tête — drapeau OFF ⇒ zéro appel à `focalPass` (garde « bit-à-bit identique », leçon 257)."
+        )
     }
 
     // MARK: - §4.5 : `contentInset.bottom` a un écrivain UNIQUE
@@ -182,6 +234,27 @@ final class FocalHostSourceGuardTests: XCTestCase {
         )
     }
 
+    /// **Recalibré — déplacé par `ea6ff081` (« chrome escamoté pendant le
+    /// défilement + zone d'activation sans conflit avec la saisie »),
+    /// l'invariant est inchangé : les DEUX gestionnaires d'arrêt, et eux
+    /// seuls, déclenchent la pose typographique.**
+    ///
+    /// Ce commit a interposé `settleFocalElection()` entre les gestionnaires
+    /// et la pose : à l'arrêt du geste, si l'élu chevauche le composeur, un
+    /// `setContentOffset` animé le dégage AVANT que la typographie ne bouge —
+    /// sinon le texte grossit sous le clavier, là où on ne le voit pas. La
+    /// pose passe donc par deux chemins désormais : immédiat (élu déjà au
+    /// clair) ou différé à `scrollViewDidEndScrollingAnimation` (fin du
+    /// nudge).
+    ///
+    /// Exiger `reconfigureFocusTypographyAtScrollStop()` LITTÉRALEMENT dans
+    /// les 150 caractères qui suivent chaque gestionnaire décrivait le
+    /// CÂBLAGE d'hier, pas l'invariant. Le témoin suit donc l'indirection
+    /// d'un cran — les deux gestionnaires appellent `settleFocalElection()`,
+    /// qui pose — et vérifie que les DEUX sorties de `settleFocalElection`
+    /// (pose immédiate, et fin de nudge) mènent bien à la typographie : sans
+    /// cette seconde moitié, l'élection nudgée resterait au corps d'avant,
+    /// pour toujours.
     func test_typographyReconfigure_isCalledFromBothScrollStopHandlers() throws {
         let code = try strippedSource("MessageListViewController.swift")
         for handler in ["func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {",
@@ -192,10 +265,32 @@ final class FocalHostSourceGuardTests: XCTestCase {
             }
             let windowEnd = code.index(range.upperBound, offsetBy: 150, limitedBy: code.endIndex) ?? code.endIndex
             XCTAssertTrue(
-                code[range.upperBound..<windowEnd].contains("reconfigureFocusTypographyAtScrollStop()"),
-                "`\(handler)` doit appeler `reconfigureFocusTypographyAtScrollStop()` — sans cela, la typographie 15→16 ne se met jamais à jour (§4.6)."
+                code[range.upperBound..<windowEnd].contains("settleFocalElection()"),
+                "`\(handler)` doit appeler `settleFocalElection()` — c'est lui qui pose la typographie 15→16 (§4.6), directement ou au terme du nudge d'atterrissage (§4.7bis, `ea6ff081`)."
             )
         }
+
+        // L'indirection ne doit rien perdre : les DEUX sorties de
+        // `settleFocalElection` posent la typographie.
+        guard let settleRange = code.range(of: "private func settleFocalElection() {") else {
+            XCTFail("`settleFocalElection` introuvable — le point de pose §4.7bis a-t-il été renommé ?")
+            return
+        }
+        let settleEnd = code.index(settleRange.upperBound, offsetBy: 500, limitedBy: code.endIndex) ?? code.endIndex
+        XCTAssertTrue(
+            code[settleRange.upperBound..<settleEnd].contains("reconfigureFocusTypographyAtScrollStop()"),
+            "`settleFocalElection` doit poser la typographie sur son chemin IMMÉDIAT (élu déjà au clair) — sans cela, la typographie 15→16 ne se met jamais à jour (§4.6)."
+        )
+
+        guard let animEnd = code.range(of: "func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {") else {
+            XCTFail("`scrollViewDidEndScrollingAnimation` introuvable — la fin du nudge §4.7bis a-t-elle été renommée ?")
+            return
+        }
+        let animWindowEnd = code.index(animEnd.upperBound, offsetBy: 500, limitedBy: code.endIndex) ?? code.endIndex
+        XCTAssertTrue(
+            code[animEnd.upperBound..<animWindowEnd].contains("reconfigureFocusTypographyAtScrollStop()"),
+            "`scrollViewDidEndScrollingAnimation` doit poser la typographie au terme du nudge — c'est l'AUTRE sortie de `settleFocalElection` (§4.7bis) ; sans elle, un élu dégagé du composeur garderait le corps d'avant."
+        )
         XCTAssertTrue(
             code.contains("reconfigureFocusTypographyAtScrollStop() {\n        guard readingMode == .focal"),
             "reconfigureFocusTypographyAtScrollStop doit garder `readingMode == .focal` — Script est plat par construction (WS-4), rien à distinguer."

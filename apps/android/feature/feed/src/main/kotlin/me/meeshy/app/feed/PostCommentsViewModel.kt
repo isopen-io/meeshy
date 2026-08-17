@@ -478,6 +478,40 @@ class PostCommentsViewModel @Inject constructor(
     }
 
     /**
+     * Delete a comment the viewer authored (the UI gates the affordance to
+     * [CommentPresentation.isOwn]). Optimistic removal reuses [onCommentDeleted]'s exact
+     * transition — a top-level comment vanishes with its loaded reply thread, a reply vanishes
+     * and decrements its parent's `replyCount` — then confirms with the server or fully rolls
+     * back [thread]/[replies] to their pre-delete snapshot on failure. A blank post/comment id,
+     * or a comment not currently loaded, is inert. Mirror of iOS `FeedCommentsSheet.deleteComment`.
+     */
+    fun deleteComment(commentId: String) {
+        if (postId.isBlank() || commentId.isBlank()) return
+        if (findComment(commentId) == null) return
+        val threadSnapshot = thread.value
+        val repliesSnapshot = replies.value
+        onCommentDeleted(commentId)
+        viewModelScope.launch {
+            try {
+                when (val result = postRepository.deleteComment(postId, commentId)) {
+                    is NetworkResult.Success -> Unit
+                    is NetworkResult.Failure -> {
+                        thread.value = threadSnapshot
+                        replies.value = repliesSnapshot
+                        status.update { it.copy(error = result.error.message) }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                thread.value = threadSnapshot
+                replies.value = repliesSnapshot
+                status.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    /**
      * Expand or collapse the reply thread beneath a top-level comment. Expanding fetches
      * its replies once (cache-first on re-expand — a loaded thread is never refetched);
      * a fetch failure collapses the thread. A blank post/comment id is inert.
@@ -550,6 +584,7 @@ class PostCommentsViewModel @Inject constructor(
         val likeState = inputs.likes
         val replyState = inputs.replies
         val prefs: LanguageResolver.ContentLanguagePreferences = inputs.user ?: EmptyContentPreferences
+        val currentUserId = inputs.user?.id
         val topLevel = thread.comments.filter { it.parentId.isNullOrBlank() }
         val rows = topLevel.map {
             CommentProjection.build(
@@ -559,6 +594,7 @@ class PostCommentsViewModel @Inject constructor(
                 isPending = it.id in thread.pendingIds,
                 likeState = likeState,
                 activeLanguageCode = activeLanguages[it.id],
+                currentUserId = currentUserId,
             )
         }
         val replyThreads = topLevel
@@ -578,6 +614,7 @@ class PostCommentsViewModel @Inject constructor(
                             isPending = replyState.isPendingReply(it.id),
                             likeState = likeState,
                             activeLanguageCode = activeLanguages[it.id],
+                            currentUserId = currentUserId,
                         )
                     },
                     isPreview = !expanded && shown.isNotEmpty(),

@@ -5,11 +5,22 @@ import UIKit
 ///
 /// ## Pourquoi ce type existe (mesuré, pas déduit)
 ///
-/// `UICollectionReusableView.apply(_:)` réécrit `layer.transform` depuis
+/// L'application d'attributs de layout réécrit `layer.transform` depuis
 /// `layoutAttributes.transform3D` (identité) et `alpha` depuis
 /// `layoutAttributes.alpha` (1). `FocalScrollPass` le documentait déjà, et y
 /// répondait par ses SIX sites d'appel : reposer la perspective après chaque
 /// événement connu qui provoque une application d'attributs.
+///
+/// **Précision sur QUI écrase** (elle compte pour lire les témoins) : ces
+/// écritures viennent du chemin INTERNE de la collection, qui pose les
+/// attributs sur la cellule PUIS appelle `apply(_:)` — le point de surcharge
+/// public, dont l'implémentation par défaut ne fait rien. Appeler
+/// `super.apply(_:)` à nu, sur une cellule détachée, n'efface donc rien : un
+/// témoin qui compterait sur ce `super` pour remettre le layer à l'identité
+/// épinglerait un maillon inexistant (cf.
+/// `FocalPerspectiveCellTests.test_applyLayoutAttributes_doesNotRewriteSynchronously`,
+/// qui joue le rôle d'UIKit au lieu de le supposer). L'effacement, lui, est
+/// bien réel — il est MESURÉ ci-dessous.
 ///
 /// **Cette réponse perd la course.** Les rangées de `FocalRow` s'auto-mesurent
 /// (`.estimated`), et une mesure SwiftUI en invalide une autre : la collection

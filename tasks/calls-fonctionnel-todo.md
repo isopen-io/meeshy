@@ -9447,3 +9447,160 @@ pur), aucun edit Swift/Kotlin non testable.
   `!isAnonymous` (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment`
   (web + iOS) sans filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur,
   Vague 135) ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 140 — `call:media-toggled`'s remote mute/camera indicator never updates: `participantId` names a THIRD, unmatched ID space (gateway + web) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-139). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway + web (TypeScript pur), aucun
+edit Swift/Kotlin non testable.
+
+- **Root cause** : `handleMediaToggle` (`CallEventsHandler.ts:1473`, corps partagé de
+  `call:toggle-audio`/`call:toggle-video`) résout l'appelant via
+  `resolveActiveCallParticipantId(userId, callId)`, qui renvoie `CallParticipant.participantId` —
+  la FK vers `Participant.id` — et l'inclut tel quel dans le `CallMediaToggleEvent` émis
+  (`participantId`, `video-call.ts:602-607`, sans champ `userId`, contrairement à ses cousins
+  `CallQualityAlertEvent`/`CallScreenCaptureEvent` étendus Vague 132). Côté web,
+  `CallManager.tsx:handleMediaToggle` (avant fix) relayait `event.participantId` verbatim à
+  `call-store.ts`'s `updateParticipant`, qui ne matche QUE `CallParticipant.id` — la clé primaire
+  de la ligne de participation ELLE-MÊME (`call-session-response.ts:67-94`,
+  `toCallParticipantResponse` : `.id = p.id`). Trois espaces d'identité distincts pour un champ
+  nommé `participantId` sur deux événements différents (voir Leçon 214) : `call:participant-left`'s
+  `participantId` porte authentiquement `CallParticipant.id` (le match `p.id` y est donc correct),
+  tandis que `call:media-toggled`'s `participantId` porte la FK `CallParticipant.participantId` —
+  une valeur qui n'égale JAMAIS `CallParticipant.id` pour un appel réel. `updateParticipant` était
+  donc un no-op silencieux et permanent sur son unique site d'appel de production.
+- **Scénario de défaillance concret** : deux (ou plus) utilisateurs en appel web-à-web. B coupe son
+  micro (`call:toggle-audio`, `enabled:false`). Le gateway persiste correctement en DB et émet
+  `call:media-toggled` avec `participantId` = FK de B. Le navigateur de A :
+  `handleMediaToggle` → `updateParticipant(FK-de-B, {isAudioEnabled:false})` → aucune entrée du
+  roster n'a `.id` égal à cette FK → no-op. `VideoStream`/`DraggableParticipantOverlay` de A pour B
+  continuent de lire l'état obsolète du roster — le badge `MicOff`/`VideoOff` n'apparaît jamais. B
+  peut couper/rétablir micro et caméra pour le reste de l'appel sans que A ne le voie jamais,
+  affectant tout appel 1:1 et de groupe web.
+- **Preuve indépendante** : un test existant
+  (`apps/web/__tests__/stores/call-store.test.ts:409-422`) codifiait
+  `updateParticipant('participant-1', …)` comme correct contre un fixture dont `.id === 'participant-1'`
+  — coïncidence de nommage entre la string de test et `.id`, même patron de faux témoin que Vague
+  132. Zéro test (grep `media-toggled`/`handleMediaToggle` sur tous les tests web) ne reliait le
+  payload RÉEL du gateway au store avant cette vague.
+- **Fix** :
+  1. `packages/shared/types/video-call.ts` — `CallMediaToggleEvent` gagne `readonly userId?: string`,
+     miroir de `CallQualityAlertEvent`.
+  2. `CallEventsHandler.ts:handleMediaToggle` — utilise désormais `resolveActiveCallParticipant`
+     (déjà disponible, zéro requête supplémentaire) au lieu de `resolveActiveCallParticipantId`,
+     inclut `userId: resolved.userId` dans l'événement émis à côté de `participantId` (inchangé,
+     toujours utilisé tel quel pour l'écriture DB via `updateParticipantMedia`, qui attend bien la
+     FK).
+  3. `CallManager.tsx:handleMediaToggle` — résout l'identité via `event.userId || event.participantId`
+     (même idiome que `useRemoteCallAlerts`/`VideoCallInterface.tsx`, Vague 132), retrouve l'entrée
+     du roster par `(p.userId || p.participantId) === identity` (même predicate que les lookups
+     d'affichage existants, `VideoCallInterface.tsx:823/866`), puis appelle `updateParticipant`
+     avec le VRAI `.id` de cette entrée. `call-store.ts`'s `updateParticipant`/`removeParticipant`
+     restent INCHANGÉS (toujours keyés `.id` — correct pour `removeParticipant`, dont
+     `call:participant-left`'s `participantId` porte authentiquement cette clé) : la traduction
+     d'identité se fait à la frontière `CallManager.tsx`, pas dans le store générique.
+- **Tests** (TDD, RED confirmé — `git stash` des 3 fichiers de production, suite rejouée,
+  `git stash pop`) :
+  - `CallEventsHandler-media-toggle.test.ts` — 1 cas neuf : le payload diffusé inclut le `userId`
+    de l'appelant à côté de `participantId`. RED confirmé (`payload.userId` valait `undefined`
+    contre le code non corrigé). Suite du fichier : **4/4** verts après fix.
+  - `CallManager.mediaToggleIdentity.test.tsx` (nouveau fichier) — 3 cas : met à jour l'entrée du
+    roster par `userId` quand l'événement en porte un ; retombe sur `participantId` quand
+    l'événement n'a pas de `userId` (invité anonyme, dont le `.userId` du roster égale déjà son
+    `.participantId` par construction de `toCallParticipantResponse`) ; no-op quand aucune entrée
+    du roster ne matche ni l'un ni l'autre (pair inconnu/obsolète). RED confirmé : les 2 premiers
+    cas échouaient contre le code non corrigé (`isAudioEnabled`/`isVideoEnabled` restaient à leur
+    valeur initiale `true`), le 3e passait trivialement par construction avant comme après.
+    **3/3** verts après fix.
+  - Sweep gateway `--testPathPatterns="[Cc]all"` : **55 suites / 1231 tests** verts (+1 suite/+4
+    tests nets, 0 régression). Sweep web `--testPathPatterns="CallManager|call-store"` : **23
+    suites / 152 tests** verts (+1 suite/+3 tests nets, 0 régression). `npx tsc --noEmit`
+    (services/gateway ET apps/web) : **0 erreur** avant et après sur les fichiers touchés
+    (`packages/shared` reconstruit via `bun run build` avant chaque relance ; `bun install
+    --ignore-scripts` a résolu l'échec réseau du postinstall `grpc-tools` cette session ; client
+    Prisma généré via `npx prisma generate --generator client`).
+- **Non fait volontairement** : `call-store.ts`'s `updateParticipant`/`removeParticipant`
+  laissés keyés `.id` (généraliser leur matching à `userId`/`participantId` aurait cassé le
+  contrat existant de `removeParticipant`, correct pour `call:participant-left`, et le test
+  existant de `updateParticipant` dont le fixture ne porte que `.id`) — la traduction d'identité
+  reste la responsabilité du CONSOMMATEUR de l'événement, pas du store générique, cohérent avec le
+  patron déjà établi pour `call:participant-left`/`call:quality-alert`/`call:screen-capture-alert`.
+  Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; runner-up
+  `use-webrtc-p2p.ts:957-983`'s `userId`-change effect clearing refs asymmetrically vs. `cleanup()`
+  (pas de déclencheur production concret tracé cette vague).
+
+## Vague 141 — `use-webrtc-p2p.ts`'s userId-change teardown left `connectedPeersRef`/`stalledPeersRef`/`isReconnecting`/`reconnectAttemptRef` stale, unlike `cleanup()` (web) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+runner-up explicitement flaggé par la Vague 140 dans sa section « Non fait volontairement » —
+`use-webrtc-p2p.ts:957-983`'s effet de changement de `userId`, dont l'asymétrie avec `cleanup()`
+n'avait pas encore été tracée jusqu'à un scénario de défaillance concret. Toolchains iOS/Android
+toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé web
+(TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : l'effet `useEffect` déclenché à chaque changement de `userId` truthy (promotion
+  anonyme→authentifié, refresh de session) ferme et recrée CHAQUE `WebRTCService` — exactement ce
+  que fait `cleanup()` — mais ne vide que 6 des 11 refs/states que `cleanup()` remet à zéro :
+  absents de l'effet, `connectedPeersRef`, `stalledPeersRef`, `isReconnecting` (state) et
+  `reconnectAttemptRef` (les 4 refs dédiées au signal de reconnexion mid-call, doc comment
+  ligne 146-151). `removeParticipant` — le miroir scopé-par-pair de `cleanup()`, documenté par
+  l'audit du 2026-08-15 — vide déjà ces 4 mêmes refs pour le PARTICIPANT qui part ; l'effet
+  `userId`-change n'avait jamais reçu le même traitement bien qu'il fasse le même genre de reset
+  global pour TOUS les participants.
+- **Scénario de défaillance concret** : un utilisateur en appel dont l'identité `userId` passe d'un
+  id temporaire/anonyme à l'id définitif (ou est corrigée par un refresh de token) APRÈS qu'un pair
+  a déjà atteint ICE `connected` — ou pire, a déjà `stall`é (`disconnected`/`failed`) mid-call,
+  posant `isReconnecting=true` et `stalledPeersRef`/`connectedPeersRef` en conséquence. L'effet se
+  déclenche, ferme le service existant, recrée son état de connexion à zéro (`connectionStatesRef`,
+  `iceConnectionStatesRef`, `connectionState`/`iceConnectionState` remis à `'new'`) — mais
+  `connectedPeersRef` garde l'ancien participant marqué "connecté" et `isReconnecting`/
+  `reconnectAttemptRef` gardent leur valeur d'AVANT le changement d'identité. Deux symptômes
+  indépendants : (1) si l'appel n'était pas en stall, `isReconnecting` reste bloqué à `true` sans
+  qu'aucun renégociation réelle ne le remette jamais à `false` (le service fraîchement recréé n'a
+  pas encore atteint `connected`, donc la branche de récupération, ligne 337-343, ne s'exécute
+  jamais) ; (2) le NOUVEAU service recréé, dont c'est le tout premier cycle ICE, peut atteindre
+  `disconnected` avant tout `connected` initial (blip normal de pré-connexion) — le garde de la
+  ligne 358-361 (`connectedPeersRef.current.has(participantId)`) lit l'entrée PÉRIMÉE comme "était
+  connecté, stall maintenant" et déclenche un faux `isReconnecting=true` + un `call:reconnecting`
+  non mérité émis au serveur, avec un `reconnectAttemptRef` qui continue de compter depuis sa valeur
+  d'avant le changement d'identité au lieu de repartir de 1.
+- **Fix** : `apps/web/hooks/use-webrtc-p2p.ts` — l'effet `userId`-change vide désormais aussi
+  `connectedPeersRef.current.clear()`, `stalledPeersRef.current.clear()`,
+  `setIsReconnecting(false)` et `reconnectAttemptRef.current = 0`, dans le même bloc que le reset
+  déjà présent. `negotiationIdsRef` reste délibérément INTACT — contrairement à `cleanup()` qui le
+  vide (l'appel y est vraiment terminé) : ici l'appel CONTINUE et le pair distant a déjà mémorisé
+  notre high-water mark de négociation envoyé sous l'ancien `userId` ; le remettre à zéro ferait
+  paraître notre prochain signal PLUS ANCIEN que ce que le pair a déjà vu, et le pair le
+  droppperait silencieusement comme périmé — exactement le bug documenté au commentaire de
+  déclaration de `negotiationIdsRef` (ligne 155-163, interop iOS).
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 3 cas neufs dans `use-webrtc-p2p.test.tsx`, describe « userId Change Handling »
+  — « clears the reconnecting/stalled state when userId changes mid-call » (RED : `isReconnecting`
+  restait `true` après le changement d'identité) ; « does not report a false "Reconnecting" state
+  for a freshly recreated peer after a userId change » (RED : le tout premier `disconnected` du
+  service recréé déclenchait quand même `isReconnecting=true`) ; « resets the reconnect attempt
+  counter when userId changes mid-call » (RED : `attempt` émis valait `2`, leaké depuis le stall
+  d'avant le changement d'identité, au lieu de `1`). **3/3 rouges confirmés** contre le code non
+  corrigé, **3/3 verts** après fix. Suite du fichier : **65/65** verts (+3 nets, 0 régression).
+  Sweep web `--testPathPatterns="[Cc]all"` : **54 suites / 509 tests** verts, 0 régression.
+  `npx tsc --noEmit` (apps/web) : **0 erreur** sur le fichier touché (le dépôt en porte 1771 par
+  ailleurs, préexistantes, comparées fichier par fichier — même méthode que les vagues
+  précédentes).
+- **Non fait volontairement** : `negotiationIdsRef` non touché par cet effet, pour la raison
+  détaillée ci-dessus (pas un oubli — un choix délibéré, documenté inline). Reconduits (inchangés) :
+  dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
+  de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
+  construction (Vague 139).

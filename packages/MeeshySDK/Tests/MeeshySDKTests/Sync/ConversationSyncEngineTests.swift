@@ -965,6 +965,66 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(cached.first?.userState.unreadCount, 4)
     }
 
+    // MARK: - Bridge ✦ persistence sur l'événement socket (G-124)
+    //
+    // `conversation:unread-updated` porte désormais un `bridge?` optionnel
+    // (G-123, `ConversationUnreadUpdatedEventData.bridge`). Avant ce lot,
+    // `handleUnreadUpdated` n'appliquait QUE `unreadCount` — un pont reçu par
+    // socket était silencieusement perdu jusqu'au prochain rechargement REST
+    // complet. C'est le trou exact que R-c dénonçait (« pont invisible,
+    // drapeau ON ») : le champ existait sur le fil mais rien en aval ne le
+    // recopiait sur la conversation mise en cache.
+
+    func test_handleUnreadUpdated_persistsBridgeFromEvent() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("bridge-c1", 0)])
+        await engine.startSocketRelay()
+
+        let bridge = ConversationBridge(
+            kind: .fallback,
+            unreadCount: 3,
+            suggestedMode: .focal,
+            data: ConversationBridgeData(authors: ["Ali"], extraAuthorCount: 0, messageCount: 3)
+        )
+        mockMessageSocket.unreadUpdated.send(
+            UnreadUpdateEvent(conversationId: "bridge-c1", unreadCount: 3, bridge: bridge)
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(
+            cached.first(where: { $0.id == "bridge-c1" })?.bridge, bridge,
+            "le pont de l'événement socket doit être persisté sur la conversation en cache — sans transformation"
+        )
+    }
+
+    /// Le serveur omet `bridge` quand `unreadCount == 0` (contrat §3.2) — le
+    /// client doit alors EFFACER un pont déjà connu, jamais le laisser périmé
+    /// derrière un compteur retombé à zéro (« zéro donnée fabriquée »).
+    func test_handleUnreadUpdated_absentBridge_clearsPreviouslyKnownBridge() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("bridge-c2", 5)])
+        await CacheCoordinator.shared.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == "bridge-c2" }) {
+                updated[idx].bridge = ConversationBridge(kind: .fallback, unreadCount: 5, suggestedMode: .focal)
+            }
+            return updated
+        }
+        await engine.startSocketRelay()
+
+        mockMessageSocket.unreadUpdated.send(
+            UnreadUpdateEvent(conversationId: "bridge-c2", unreadCount: 0, bridge: nil)
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertNil(
+            cached.first(where: { $0.id == "bridge-c2" })?.bridge,
+            "unreadCount==0 ⇒ bridge absent du payload ⇒ le pont périmé doit être effacé, pas conservé"
+        )
+    }
+
     // MARK: - handleReadStatusUpdated (multi-device read sync)
 
     /// When the gateway broadcasts a "read" event for the current user (e.g. from

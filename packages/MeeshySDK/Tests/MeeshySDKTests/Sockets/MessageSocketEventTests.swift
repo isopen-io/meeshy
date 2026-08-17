@@ -252,6 +252,85 @@ final class MessageSocketEventTests: XCTestCase {
         let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
         XCTAssertEqual(event.conversationId, "c1")
         XCTAssertEqual(event.unreadCount, 5)
+        XCTAssertNil(event.bridge, "un client ancien (ou un événement sans pont) ignore simplement le champ")
+    }
+
+    /// G-124 — `conversation:unread-updated` porte désormais un `bridge?`
+    /// optionnel (G-123, `ConversationUnreadUpdatedEventData.bridge`).
+    /// `suggestedMode`/`isComplete`/`data` doivent traverser SANS
+    /// transformation : c'est un relais, jamais un recalcul côté client.
+    func testUnreadUpdateEventDecoding_withBridge_relaysFieldsUnchanged() throws {
+        let json = """
+        {
+            "conversationId": "c1",
+            "unreadCount": 3,
+            "bridge": {
+                "kind": "fallback",
+                "unreadCount": 3,
+                "suggestedMode": "focal",
+                "isComplete": false,
+                "data": {
+                    "authors": ["Ali"],
+                    "extraAuthorCount": 1,
+                    "messageCount": 3
+                }
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.unreadCount, 3)
+        XCTAssertEqual(event.bridge?.kind, .fallback)
+        XCTAssertEqual(event.bridge?.unreadCount, 3)
+        XCTAssertEqual(event.bridge?.suggestedMode, .focal)
+        XCTAssertEqual(event.bridge?.isComplete, false)
+        XCTAssertEqual(event.bridge?.data?.authors, ["Ali"])
+        XCTAssertEqual(event.bridge?.data?.extraAuthorCount, 1)
+        XCTAssertEqual(event.bridge?.data?.messageCount, 3)
+    }
+
+    /// `isComplete` ABSENT du JSON ⇒ `nil` = complet (contrat §3.2, jamais une
+    /// absence convertie en affirmation) — distinct du cas `false` ci-dessus.
+    func testUnreadUpdateEventDecoding_bridgeWithoutIsComplete_decodesAsNilNotFalse() throws {
+        let json = """
+        {
+            "conversationId": "c1",
+            "unreadCount": 2,
+            "bridge": {
+                "kind": "fallback",
+                "unreadCount": 2,
+                "suggestedMode": "focal",
+                "data": {"authors": [], "extraAuthorCount": 0, "messageCount": 1}
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertNil(event.bridge?.isComplete, "absent du JSON ⇒ nil (complet), jamais false par défaut")
+    }
+
+    /// Un `bridge` malformé (ici : `kind` inconnu du client) ne doit JAMAIS
+    /// faire échouer le décodage de l'événement ENTIER — `conversationId` et
+    /// `unreadCount` restent exploitables sans lui (même discipline de
+    /// tolérance que `MeeshyConversation.bridge`, CoreModels.swift).
+    func testUnreadUpdateEventDecoding_malformedBridge_dropsBridgeButKeepsEvent() throws {
+        let json = """
+        {
+            "conversationId": "c1",
+            "unreadCount": 7,
+            "bridge": {
+                "kind": "some-future-kind-unknown-today",
+                "unreadCount": 7,
+                "suggestedMode": "focal"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.unreadCount, 7)
+        XCTAssertNil(event.bridge, "un pont malformé rend nil, jamais un échec de décodage de l'événement entier")
     }
 
     // MARK: - UserStatusEvent

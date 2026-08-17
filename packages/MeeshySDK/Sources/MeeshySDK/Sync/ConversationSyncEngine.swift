@@ -1287,6 +1287,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// is that row's `lastMessageId`. No-op otherwise (editing an older message
     /// leaves the preview untouched). Fires `_conversationsDidChange` only when a
     /// row actually changed.
+    ///
+    /// Une édition garde le MÊME message : l'auteur, les pièces jointes et les
+    /// drapeaux éphémères restent vrais, et ce chemin n'y touche pas. Seule la
+    /// carte du Prisme devient fausse — elle traduit le texte remplacé — et
+    /// c'est celle que le résolveur préfère.
     private func refreshLastMessagePreviewIfEdited(
         conversationId: String, messageId: String, newContent: String
     ) async {
@@ -1296,6 +1301,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].lastMessagePreview = newContent.meeshyPreviewTruncated
+                // La carte du Prisme traduisait le texte D'AVANT. Le résolveur
+                // (`resolvedLastMessagePreview`) la PRÉFÈRE à l'aperçu brut :
+                // la garder ici réécrivait le texte visible… pour personne, le
+                // lecteur servi par une traduction continuant de lire la phrase
+                // pré-édition. Le serveur fait le même geste dans la même
+                // écriture — `routes/messages.ts` remet `Message.translations`
+                // à `null` avec le nouveau contenu, et `emitConversationPreview
+                // Update` l'annonce par `.replaced([:])`.
+                //
+                // `lastMessageOriginalLanguage` reste : le message n'a pas
+                // changé d'identité, et sans carte le résolveur ne le consulte
+                // plus. Le prochain `conversation:updated` reposera les deux.
+                updated[idx].lastMessageTranslations = nil
             }
             return updated
         }
@@ -1437,6 +1455,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
+                // G-124 — le pont ✦ voyage sur CE même événement (G-123,
+                // `ConversationUnreadUpdatedEventData.bridge`, payload optionnel).
+                // Avant ce lot, seul `unreadCount` était appliqué : un pont reçu
+                // par socket restait invisible jusqu'au prochain rechargement REST
+                // complet (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact
+                // que R-c dénonçait (« pont invisible drapeau ON »). `event.bridge`
+                // remplace TOUJOURS l'ancien, y compris `nil` : le serveur omet le
+                // champ précisément quand `unreadCount == 0` ou qu'il n'a rien à
+                // annoncer (contrat §3.2) — garder un pont périmé serait une
+                // affirmation fabriquée, l'inverse de la règle du fichier.
+                updated[idx].bridge = event.bridge
             }
             return updated
         }

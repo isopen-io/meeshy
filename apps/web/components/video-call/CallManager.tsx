@@ -640,13 +640,30 @@ export function CallManager() {
     (event: CallMediaToggleEvent) => {
       logger.debug('[CallManager]', 'Media toggle - participantId: ' + event.participantId + ', type: ' + event.mediaType + ', enabled: ' + event.enabled);
 
+      // Vague 140 — `event.participantId` is `CallParticipant.participantId`
+      // (a `Participant.id` FK), never the roster entry's own `.id`
+      // (`CallParticipant.id`, what `updateParticipant` matches against —
+      // same key `removeParticipant` uses for `call:participant-left`,
+      // whose `participantId` field genuinely IS that PK). Passing it
+      // straight through silently no-op'd every remote mute/camera toggle.
+      // Resolve the roster entry the SAME way every other remote-peer
+      // lookup already does (`p.userId || p.participantId`,
+      // VideoCallInterface.tsx / useRemoteCallAlerts, Vague 132), then
+      // update it by its actual `.id`.
+      const identity = event.userId || event.participantId;
+      const { currentCall } = useCallStore.getState();
+      const participant = currentCall?.participants.find(
+        (p) => (p.userId || p.participantId) === identity
+      );
+      if (!participant) return;
+
       // Update participant state
       if (event.mediaType === 'audio') {
-        updateParticipant(event.participantId, {
+        updateParticipant(participant.id, {
           isAudioEnabled: event.enabled,
         });
       } else if (event.mediaType === 'video') {
-        updateParticipant(event.participantId, {
+        updateParticipant(participant.id, {
           isVideoEnabled: event.enabled,
         });
       }

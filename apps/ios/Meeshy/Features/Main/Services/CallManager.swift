@@ -2089,6 +2089,25 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
+        // Same guard as `answerCall()` — on THIS path the acceptance came from
+        // CallKit's system UI (lock screen, Dynamic Island, CarPlay, AirPods),
+        // so nothing could be requested upstream either. Without it, a call
+        // answered via CallKit with the microphone denied/revoked connects
+        // silently muted: no toast, no Settings redirect, no hangup — the
+        // caller just talks into silence. Routed through `failCall()` rather
+        // than `endCall()`/`endCallInternal()` directly because a
+        // `CXAnswerCallAction` is already held (`holdPendingAnswerAction`) and
+        // must be resolved via `settlePendingAnswerAction`, which `failCall()`
+        // reaches through `endCallInternal`.
+        guard MediaPermissionState.microphone.isUsable else {
+            Logger.calls.warning("[CALL] CallKit answer refused: microphone permission missing — ending call")
+            FeedbackToastManager.shared.showError(
+                MediaPermissionCoordinator.deniedMessage(for: .microphone)
+            ) { MediaPermissionCoordinator.openSettings() }
+            failCall("Microphone permission missing")
+            return
+        }
+
         analyticsNegotiationStartDate = Date()
         callState = .connecting
 

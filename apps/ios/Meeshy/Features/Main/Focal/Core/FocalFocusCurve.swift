@@ -34,7 +34,11 @@ nonisolated enum FocalFocusCurve {
 
     /// Miroir de `FocusCurveVariant` (TS `'thread' | 'list'`).
     enum Variant: Sendable {
-        /// Fil (Focal) : `f = min(1, d/380)`, `scale = 1 − 0.40f`, `alpha = 1 − 0.82f`.
+        /// Fil (Focal) : `f = min(1, d/520)`, `scale = 1 − 0.38f`, `alpha = 1 − 0.78f`.
+        /// (Cotes transposées de la maquette de référence par `0612c8ca`, dans
+        /// la loi partagée comme dans ce miroir — cette ligne décrivait encore
+        /// `380 / 0.40 / 0.82`, c'est-à-dire l'inverse de ce que déclarent les
+        /// trois constantes gelées vingt lignes plus bas.)
         case thread
         /// Liste (Lentille) : `f = min(1, d/520)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.04f`.
         case list
