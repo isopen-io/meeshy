@@ -41,9 +41,10 @@ final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Senda
     init() {}
 
     func bridgeFor(conversationId: String, viewerId: String, unreadCount: Int) async -> ConversationBridge? {
-        lock.lock()
-        defer { lock.unlock() }
-        return bridges[conversationId]
+        // `lock()`/`unlock()` sont `noasync` (SE-0340) : dans cette méthode
+        // `async`, seuls `withLock` (closure synchrone, aucune suspension
+        // possible verrou tenu) passe la compile Swift 6 / Xcode 26.
+        lock.withLock { bridges[conversationId] }
     }
 
     /// Enregistre (`bridge` non nil) ou efface (`nil`) le pont connu pour une

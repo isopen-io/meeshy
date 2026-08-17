@@ -24,11 +24,13 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -203,6 +205,7 @@ private fun PostDetailContent(
                                 color = MeeshyTheme.tokens.textSecondary,
                             )
                         }
+                        PostReachLine(post = post)
                     }
                 }
 
@@ -266,6 +269,42 @@ private fun PostDetailContent(
 
         Spacer(Modifier.height(MeeshySpacing.lg))
         PostCommentsSection()
+    }
+}
+
+/**
+ * The author-only "@pseudo · views · impressions" reach line — port of iOS `PostDetailView`'s
+ * `authorRevealView`/`authorReachLine`. A reader who isn't the author sees only `@pseudo` (or
+ * nothing at all, when the post carries neither a handle nor viewer-visible stats).
+ */
+@Composable
+private fun PostReachLine(post: FeedPostPresentation) {
+    val reach = PostReachFormatter.components(
+        username = post.authorUsername,
+        isAuthor = post.isAuthor,
+        viewCount = post.viewCount,
+        impressionCount = post.impressionCount,
+    )
+    if (reach.pseudo == null && reach.views == null) return
+    val a11yLabel = stringResource(R.string.feed_post_reach_a11y)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = a11yLabel },
+    ) {
+        reach.pseudo?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+        }
+        if (reach.views != null && reach.impressions != null) {
+            if (reach.pseudo != null) {
+                Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+            }
+            Icon(Icons.Filled.Visibility, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+            Text(text = reach.views, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+            Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+            Icon(Icons.Filled.BarChart, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+            Text(text = reach.impressions, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
+        }
     }
 }
 

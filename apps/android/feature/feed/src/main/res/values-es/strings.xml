@@ -18,6 +18,7 @@
     <string name="feed_pinned">Fijado</string>
     <string name="feed_edited">Editado</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_post_reach_a11y">Vistas e impresiones</string>
     <string name="feed_repost_reposted">Republicado</string>
     <string name="feed_repost_quoted">Citado</string>
     <string name="feed_repost_story">Historia</string>
@@ -42,6 +43,7 @@
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_reply_badge">Respuesta</string>
     <string name="post_comments_reply_action">Responder</string>
+    <string name="post_comments_delete_action">Eliminar comentario</string>
     <string name="post_comments_replying_to">Respondiendo a %1$s</string>
     <string name="post_comments_replying_to_generic">Respondiendo…</string>
     <string name="post_comments_cancel_reply">Cancelar respuesta</string>

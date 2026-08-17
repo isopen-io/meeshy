@@ -9460,7 +9460,98 @@ abonnement muet que rien ne déclenche et qu'aucun type ne refuse. Le témoin de
 sous ses DEUX formes : par la constante si elle existe, par `undefined` si elle
 a été retirée.
 
-## Leçon 219 — un rattrapage posé par ÉLÉMENT dépense un budget compté par UTILISATEUR (2026-08-17, routine messagerie, cycle 57)
+## Leçon 219 — appliquer une règle jusque-là inerte change la question à poser au site qui l'ÉCRIT (2026-08-17, routine messagerie, cycle 56)
+
+**Le fait.** Le cycle 31 a découvert que `isAnnouncementChannel` n'était appliqué
+par personne, et l'a câblé — correctement, au point de convergence des trois
+transports d'envoi. Le cycle 56 a trouvé que l'initiateur d'un tête-à-tête
+pouvait poser ce drapeau sur son DM et **faire taire son pair définitivement**,
+sans recours possible pour la victime.
+
+Le code qui écrit le drapeau n'a pas changé entre les deux cycles. Ce qui a
+changé, c'est qu'il est devenu **effectif**.
+
+**La règle.** Câbler une garde jusque-là inerte, c'est transformer chaque champ
+qu'elle lit en champ de SÉCURITÉ. Le même cycle doit donc reposer, sur chaque
+site qui ÉCRIT ce champ, une question qui n'avait pas d'objet la veille :
+*qui peut le poser, et sur quoi ?* Un champ cosmétique et un champ appliqué ne se
+gardent pas pareil, et l'écrivain ne s'aperçoit de rien — sa signature, son
+schéma et ses tests sont identiques de part et d'autre du câblage.
+
+**La forme du défaut.** La garde d'écriture ne filtrait que sur le RÔLE de
+l'appelant, jamais sur le TYPE du conteneur. Or `POST /conversations` crée un DM
+avec deux rôles distincts — `creator` pour qui a ouvert le fil, `member` pour
+l'autre — et cette asymétrie nomme un **ordre d'arrivée**, pas une hiérarchie.
+Le corollaire est plus large que ce cycle : **un rôle n'est une autorité que
+dans un conteneur qui a une hiérarchie.** Un tête-à-tête n'a pas
+d'administrateur, et le `creator` d'un DM n'est le supérieur de personne.
+
+**L'indice qui était déjà dans le fichier.** La règle contenait
+`if (conversation.type === 'global') return 0` — donc elle connaissait la
+catégorie « conteneur sans hiérarchie d'écriture ». Elle n'en connaissait qu'un
+membre, et le plus exotique des deux. **Une énumération à un seul élément est un
+aveu : quelque chose a été catégorisé sans que la catégorie soit balayée.** La
+question à lui poser n'est pas « ce cas est-il juste ? » (il l'était) mais
+« quels sont les AUTRES membres de cette catégorie ? ».
+
+**Deux gestes, et ils ne se subsument pas.** Corriger la règle guérit les
+conteneurs DÉJÀ empoisonnés en base, dont aucune route ne rendra jamais compte.
+Corriger la route empêche l'écriture ET l'événement temps réel qui annoncerait
+aux clients un drapeau que plus rien n'applique. Livrer l'un sans l'autre laisse
+soit des victimes existantes, soit un événement qui MENT sur l'état du conteneur.
+
+**Le symptôme repéré n'était pas le défaut.** La piste disait « `PUT
+/conversations/:id` accepte de renommer un DM ». Le renommage est le champ le
+plus INOFFENSIF du corps — web résout le nom du pair pour un `direct` et n'a
+jamais lu `conversation.title`. On avait vu la moitié visible d'un corps de
+requête dont la moitié invisible était l'attaque. **Quand une piste nomme un
+champ, l'instruire c'est instruire les SEPT AUTRES du même corps** — au moins
+assez pour savoir lequel est appliqué par une garde.
+
+**La question de suivi, mécanique** (au sens de la leçon 215) : *pour chaque
+réglage de CONTENEUR appliqué par une garde, quels TYPES de conteneur peuvent
+légitimement le porter, et quel écrivain vérifie ce type ?* Elle se pose en
+tableau, une ligne par écrivain, en partant de la garde qui APPLIQUE et en
+remontant. Les préférences de communauté et les droits de lien de partage ne
+l'ont jamais reçue.
+
+## Leçon 220 — un effet qui « fait comme `cleanup()` » doit vider EXACTEMENT les mêmes refs que `cleanup()`, sauf exception nommée et justifiée (2026-08-17, routine calling, cycle 141)
+
+**Le constat.** `use-webrtc-p2p.ts` a DEUX resets globaux de l'état de connexion : `cleanup()`
+(fin d'appel/unmount, vide 11 refs/states) et l'effet `userId`-change (promotion anonyme→
+authentifié, refresh de session, vide seulement 6 des 11 — ferme bien tous les `WebRTCService`
+comme `cleanup()`, mais oublie `connectedPeersRef`, `stalledPeersRef`, `isReconnecting` et
+`reconnectAttemptRef`, les 4 refs dédiées au signal de reconnexion mid-call). Le miroir SCOPÉ par
+participant, `removeParticipant`, avait déjà reçu ce même correctif pour ces 4 refs — documenté par
+son propre commentaire (« Audit web-calls 2026-08-15 ») — mais l'effet `userId`-change, qui fait le
+même genre de reset pour TOUS les participants à la fois, n'avait jamais reçu le traitement
+symétrique alors qu'il partage la même exposition.
+
+**Le tell.** Un commentaire qui décrit un geste comme « recreate/reset like X » (ici : « Recreate
+WebRTC services when userId changes », visuellement un mini-`cleanup()`) sans énumérer explicitement
+CHAQUE ref que X vide est une promesse non vérifiée. Le nombre de refs vidées par les DEUX sites
+doit être compté et comparé — pas seulement leur intention lue.
+
+**La règle.** Quand un second site du code affirme « je fais le même genre de nettoyage que le site
+A » (par un commentaire, un nom de fonction, ou simplement la ressemblance du code), lister TOUTES
+les refs/states que A vide, puis vérifier UNE PAR UNE leur présence au site B. Une absence n'est
+acceptable que si elle est justifiée par une différence de scope réelle — jamais silencieuse. Ici,
+`negotiationIdsRef` est l'exception légitime : `cleanup()` le vide parce que l'appel est VRAIMENT
+fini, alors que l'effet `userId`-change ne doit PAS le vider parce que l'appel CONTINUE et que le
+pair distant a déjà mémorisé notre high-water mark de négociation — le vider ferait paraître notre
+prochain signal plus ancien que ce qu'il a déjà vu, et le pair le droppperait comme périmé (le même
+bug documenté à la Leçon sur l'interop iOS, `negotiationIdsRef`'s propre commentaire de
+déclaration). Une exception délibérée et documentée n'est pas un oubli ; une absence non expliquée
+l'est toujours.
+
+**Le corollaire des Vagues 137-139.** C'est la même classe de défaut que
+`clearBufferedOffer`/`clearBufferedOfferFor` (nettoyer un scope trop LARGE) vue depuis l'angle
+inverse : ici, ce n'est pas la CIBLE du nettoyage qui est trop large, c'est sa COUVERTURE qui est
+trop étroite. Les deux bugs naissent du même geste manqué — énumérer chaque état dérivé qu'un
+"reset" doit couvrir, plutôt que faire confiance à la ressemblance de surface entre deux sites qui
+prétendent faire la même chose.
+
+## Leçon 221 — un rattrapage posé par ÉLÉMENT dépense un budget compté par UTILISATEUR (2026-08-17, routine messagerie, cycle 57)
 
 **Le constat.** Le cycle 56 a mis en service la réconciliation des réactions au
 retour de la connexion. Elle est posée dans `useReactionsQuery`, donc **par
@@ -9509,3 +9600,4 @@ rattrapage qui se refuse tout seul.
 livraison du cycle PRÉCÉDENT : elle est récente, son intention est écrite, et
 ses propres notes contiennent les chiffres qu'il faut confronter. Ce cycle n'a
 rien trouvé en balayant le contrat ; il a trouvé en relisant le §3.1 du cycle 56.
+

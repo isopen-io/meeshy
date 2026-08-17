@@ -1525,5 +1525,98 @@ describe('useWebRTCP2P', () => {
       // Services should be cleared
       expect(mockClose).toHaveBeenCalled();
     });
+
+    // Vague 141 (2026-08-17) — a userId correction mid-call (anonymous→
+    // authenticated promotion, session token refresh) tears down every peer
+    // connection just like the effect above proves, but a peer that had
+    // already connected — or stalled — under the OLD userId left
+    // `connectedPeersRef`/`stalledPeersRef`/`isReconnecting`/
+    // `reconnectAttemptRef` stale, unlike `cleanup()` and `removeParticipant`
+    // which both clear this same state.
+    const latestPeerOptions = () =>
+      (WebRTCService as unknown as jest.Mock).mock.calls.filter((call) => call[0]).at(-1)![0];
+
+    it('clears the reconnecting/stalled state when userId changes mid-call', async () => {
+      const { result, rerender } = renderHook(
+        ({ userId }) => useWebRTCP2P({ callId: mockCallId, userId }),
+        { initialProps: { userId: mockUserId } }
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const peer = latestPeerOptions();
+
+      // Peer connects, then genuinely stalls mid-call under the OLD userId.
+      act(() => peer.onIceConnectionStateChange('connected'));
+      act(() => peer.onIceConnectionStateChange('disconnected'));
+      expect(result.current.isReconnecting).toBe(true);
+
+      // userId is corrected while the call is still mid-stall.
+      rerender({ userId: 'user-corrected' });
+
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('does not report a false "Reconnecting" state for a freshly recreated peer after a userId change', async () => {
+      const { result, rerender } = renderHook(
+        ({ userId }) => useWebRTCP2P({ callId: mockCallId, userId }),
+        { initialProps: { userId: mockUserId } }
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      act(() => latestPeerOptions().onIceConnectionStateChange('connected'));
+
+      rerender({ userId: 'user-corrected' });
+
+      // Recreate the connection under the corrected userId — same participant
+      // identity, brand-new WebRTCService/RTCPeerConnection.
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const freshPeer = latestPeerOptions();
+
+      // The FIRST ever ICE state for the fresh service — a normal
+      // pre-connection blip, never a mid-call stall.
+      act(() => freshPeer.onIceConnectionStateChange('disconnected'));
+
+      expect(result.current.isReconnecting).toBe(false);
+    });
+
+    it('resets the reconnect attempt counter when userId changes mid-call', async () => {
+      const { result, rerender } = renderHook(
+        ({ userId }) => useWebRTCP2P({ callId: mockCallId, userId }),
+        { initialProps: { userId: mockUserId } }
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      act(() => latestPeerOptions().onIceConnectionStateChange('connected'));
+      act(() => latestPeerOptions().onIceConnectionStateChange('disconnected'));
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_RECONNECTING,
+        expect.objectContaining({ attempt: 1 }),
+      );
+
+      rerender({ userId: 'user-corrected' });
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const freshPeer = latestPeerOptions();
+      act(() => freshPeer.onIceConnectionStateChange('connected'));
+      mockEmit.mockClear();
+      act(() => freshPeer.onIceConnectionStateChange('disconnected'));
+
+      // A genuinely fresh first stall under the corrected userId must count
+      // as attempt 1, not a leaked attempt 2 from the pre-correction stall.
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_RECONNECTING,
+        expect.objectContaining({ attempt: 1 }),
+      );
+    });
   });
 });
