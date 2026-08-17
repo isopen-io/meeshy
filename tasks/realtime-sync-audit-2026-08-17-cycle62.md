@@ -180,13 +180,44 @@ prix est disproportionné au regard du symptôme (un pont absent sur un appareil
 secondaire, jusqu'au message suivant). Consigné en piste n°1, non livré — c'est
 un arbitrage, pas un oubli.
 
+## 5 bis. Trouvaille collatérale — `main` était ROUGE
+
+La suite complète du gateway a rendu **une suite rouge qui n'a rien à voir avec
+ce lot** : `personal-history-hiding-surface-guard`. Vérifié en comparant octet à
+octet avec `origin/main` — le garde ET le fichier qu'il accuse
+(`ConversationBridgeService.ts`) y sont **identiques**. La rougeur préexiste donc
+à ce cycle.
+
+Le garde faisait exactement son travail. `ConversationBridgeService` a gagné une
+**seconde** `prisma.message.findMany` avec la passe par lecteurs (REV-5/B2,
+cycle 61) et le dénombrement est resté à `reads: 1` : une nouvelle lecture de
+messages était apparue sans que personne déclare ce qu'elle fait du **masquage
+personnel** — c'est-à-dire des messages qu'un lecteur a effacés pour lui.
+
+Vérification faite, la réponse est correcte, et invisible au balayage : la passe
+par lecteurs porte une fenêtre **COMMUNE** à tous les destinataires alors que le
+masquage est **personnel**. Elle ne peut donc pas l'écrire dans sa clause, et
+l'applique en mémoire, lecteur par lecteur — `exclusiveFloorMsFor` pour le
+plancher, `hiddenMessageIds` pour les messages effacés un par un.
+
+Corrigé en déclarant la vérité : `reads: 2, applications: 1`, et le fichier entre
+dans `IN_MEMORY_HIDING_SURFACES` avec les **trois marqueurs** qui prouvent
+l'application en mémoire. Retirer l'un d'eux ferait fuiter dans le pont ✦ d'un
+lecteur des messages qu'il a effacés — et le garde le dira. Aucun changement de
+production.
+
+C'est la deuxième fois dans le même lot que **le cycle 61 a livré un émetteur ou
+un lecteur sans instruire le dispositif qui le surveille**. Même classe que §2 :
+une extension correcte, et un contrat périphérique laissé en arrière.
+
 ## 6. Vérification
 
 | Gate | Résultat |
 |------|----------|
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `bun run test src/socketio src/services/__tests__/ConversationBridgeService` | ✅ 43 suites / 1557 tests |
-| Suite gateway complète | ✅ (voir PR) |
+| `MeeshySocketIOManager.test.ts` | ✅ 375/375 |
+| Suite gateway complète | 742/743 avec la rougeur préexistante, **743/743** après §5 bis |
 | Clients | aucun changement — les deux lisent déjà `bridge` |
 
 ## 7. Pistes pour le cycle 63
