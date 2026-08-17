@@ -9306,6 +9306,88 @@ Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebu
   filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ;
   gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
 
+## Vague 138 — `call:join`'s stale-buffered-offer drop still swept the WHOLE call, the exact bug Vague 137 said this site was immune to (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-137). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit
+Swift/Kotlin non testable.
+
+- **Root cause** : la Vague 137 a introduit `clearBufferedOfferFor(callId, ...identities)` pour
+  scoper le nettoyage du buffer §4.6 (keyé PAR DESTINATAIRE, `${callId}:${to}`) aux trois sites
+  « ce participant part » (`call:leave`, `call:force-leave`, `call:end` groupe-continue), et sa
+  propre section « Non fait volontairement » affirmait que les 3 AUTRES sites d'appel à
+  `clearBufferedOffer` (balayage total) « restent corrects par construction » — dont, mot pour
+  mot, « purge d'une offre bufferisée dont l'émetteur s'est avéré parti au moment du replay
+  `call:join` ». Cette affirmation n'a jamais été vérifiée par la trace du code : dans `call:join`,
+  quand `bufferedOfferFor(callId, userId, joinerParticipantId)` retrouve l'offre bufferisée pour LE
+  PARTICIPANT QUI REJOINT et que son émetteur s'avère parti entre-temps, le code droppait l'offre
+  via `clearBufferedOffer(data.callId)` — un balayage de TOUT L'APPEL — alors qu'il vient
+  lui-même de prouver PRÉCISÉMENT quelle clé est périmée (celle du joiner). Exactement le même
+  défaut structurel que celui fixé pour les 3 sites « leave » : un nettoyage nommé par le SCOPE
+  PARENT (`callId`) appliqué à une structure keyée par un ENFANT de ce scope
+  (`callId:destinataire`).
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel (Vague
+  126). A envoie une offre à B (buffered `${callId}:B`, B pas encore dans la room). E (un autre
+  participant déjà connecté, renégociation caméra) envoie une offre à C (buffered `${callId}:C`, C
+  pas encore dans la room non plus). A quitte l'appel — son propre départ est déjà correctement
+  scopé depuis la Vague 137 (`clearBufferedOfferFor(callId, A)`), ne touche ni `${callId}:B` ni
+  `${callId}:C`. B rejoint enfin (`call:join`) : `bufferedOfferFor` retrouve `${callId}:B`, son
+  émetteur A a quitté → branche « sender left » → AVANT ce fix, `clearBufferedOffer(callId)`
+  supprimait AUSSI `${callId}:C`, une offre totalement étrangère au join de B, émise par E qui est
+  toujours actif. Quand C rejoint à son tour, `bufferedOfferFor` ne trouve plus rien : la connexion
+  mesh E↔C n'est jamais établie pour le reste de l'appel, C reste spectateur silencieux vis-à-vis
+  de E — sans qu'aucun événement dans le parcours propre de C n'ait jamais échoué.
+- **Fix** : la branche « sender no longer active » de `call:join` appelle désormais
+  `clearBufferedOfferFor(data.callId, userId, joinerParticipantId)` — exactement les deux espaces
+  d'identité déjà utilisés par le `bufferedOfferFor` qui vient de trouver cette entrée, au lieu du
+  balayage total `clearBufferedOffer(data.callId)`. Doc comment de `clearBufferedOfferFor` étendu
+  pour lister ce 4e site d'appel (`call:leave`, `call:force-leave`, `call:end` groupe-continue,
+  et maintenant le drop stale-sender de `call:join`) et pour ne plus limiter sa description aux
+  seuls sites « participant part » — le vrai invariant est « nettoyer UNE clé déjà identifiée,
+  jamais tout le scope parent ». `clearBufferedOffer` (balayage total) reste INCHANGÉ pour les
+  2 sites restants où il est réellement correct : négociation terminée (`answer` reçue,
+  `call:signal`) et branche terminale `call:end` (l'appel finit vraiment pour tout le monde) — non
+  audités plus avant dans cette vague (cf. « Non fait volontairement »).
+- **Tests** (TDD, RED confirmé contre le code non corrigé — `git stash` du seul fichier source,
+  suite rejouée, `git stash pop`) :
+  `CallEventsHandler-join-stale-sender-buffered-offer-scope.test.ts` (nouveau fichier) — 3 cas :
+  nettoie le slot du joiner (espace `userId`) ; NE nettoie PAS le slot d'un tiers spectateur
+  toujours actif, offre sans rapport (le bug de groupe) ; ne rejoue pas l'offre périmée au socket
+  qui rejoint. RED confirmé : le cas « bystander survit » échouait contre le code non corrigé
+  (`bufferedOffers.has(...)` retournait `false` au lieu de `true`, la Map entière ayant été
+  vidée) ; les 2 autres cas passaient trivialement par construction avant comme après. Suite du
+  fichier : **3/3** verts. Sweep gateway `--testPathPatterns="[Cc]all"` : **54 suites / 1227
+  tests** verts (+1 suite / +3 tests nets vs. la Vague 137, 0 régression). Suite gateway COMPLÈTE
+  (`jest --config=jest.config.json`, toutes suites) : **739 suites / 17 923 tests**
+  verts, 0 échec — 0 régression sur rien de touché par ce diff. Écart vs. la Vague 137
+  (735 suites / 17 876 tests) : +4 suites / +47 tests, entièrement imputable à d'autres routines
+  automatiques non liées ayant tourné sur ce dépôt entre les deux vagues (CLAUDE.md tolère cette
+  dérive — seul compte l'absence de régression sur ce que cette vague touche). `npx tsc --noEmit`
+  (services/gateway) : **0 erreur** avant et après (`git stash`/`stash pop` du fichier source —
+  client Prisma généré cette session via le binaire `prisma@6.19.3` déjà présent dans
+  `node_modules/.bun` après `bun install --ignore-scripts`, `npx prisma generate` ayant résolu la
+  dernière version 7.x incompatible avec le schema au lieu de la version pinnée ; `packages/shared`
+  buildé en amont via `bun run build`).
+- **Non fait volontairement** : les 2 AUTRES sites d'appel à `clearBufferedOffer` (balayage total)
+  restent inchangés — négociation terminée (`answer` reçue, `call:signal`, ligne ~3437) et branche
+  terminale `call:end` (l'appel finit vraiment pour tout le monde). Le premier reste un candidat
+  plausible pour un raffinement futur (un appel de groupe à 3+ paires en négociation simultanée
+  pourrait en théorie souffrir du même sur-nettoyage — une `answer` complétant la négociation
+  A↔B pourrait balayer une offre A↔C ou B↔C encore en attente) mais n'a pas été vérifié par trace
+  de code dans cette vague — seule la piste `call:join` (déjà tracée avec certitude, voir
+  root cause ci-dessus) a été retenue pour rester dans le gabarit chirurgical d'UNE seule vague ;
+  à auditer et fixer dans un prochain cycle avec le même patron (`clearBufferedOfferFor` scopé aux
+  deux parties de la négociation qui vient de se conclure) si un scénario de défaillance concret
+  s'y confirme. Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880
+  lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte
+  dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours
+  latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre
+  `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps
+  d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
 ## Vague 139 — call:signal's answer-received cleanup swept the whole call, not just the two participants whose negotiation just finished (gateway) (2026-08-17)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
