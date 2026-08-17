@@ -137,6 +137,11 @@ pas » de « je n'ai pas demandé ».
   `ConversationSyncEngine.handleUnreadUpdated` `switch` dessus : `.notComputed`
   ne touche à rien.
 
+- **Android** — aucun changement, et vérifié plutôt que supposé : son
+  `UnreadUpdateEvent` (`core/model/.../SocketEvents.kt`) ne modélise PAS
+  `bridge`. Il n'a donc jamais participé à la classe de défaut, et le `null`
+  neuf est pour lui un champ inconnu qu'il ignore.
+
 **Durcissement collatéral, iOS** : un pont **malformé** rend désormais
 `.notComputed` et non `.cleared`. Le décodage reste tolérant (l'événement entier
 survit, G-124), mais **ne pas savoir lire n'autorise pas à détruire**. C'est le
@@ -199,10 +204,10 @@ quoi que ce soit : un balayage d'une minute signalerait un tout autre problème.
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `tsc --noEmit` shared | ✅ 0 erreur |
 | gateway — `src/socketio`, `src/__tests__/unit/socketio`, `src/__tests__/unit/handlers` | ✅ 103 suites / 2405 tests |
-| gateway — suite complète + couverture | (cf. §7 bis) |
+| gateway — **suite complète + couverture** | ✅ **744 suites / 18 043 tests**, 95,15 % lignes |
 | `packages/shared` | ✅ **83 suites / 2168 tests** (le flake §6 inclus) |
 | web — suites pont/lentille/cache | ✅ 36 suites / 374 tests |
-| web — suite complète | (cf. §7 bis) |
+| web — **suite complète** | ✅ **687 suites / 13 381 tests** (21 skipped) |
 | iOS / SDK | **non compilable ici** — ni `swift` ni Xcode dans ce conteneur. Vérifié par `sdk-tests.yml`, déclenché sur `packages/MeeshySDK/**` en PR. |
 
 ## 8. Pistes pour le cycle 64

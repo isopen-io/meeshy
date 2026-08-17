@@ -253,14 +253,14 @@ describe('POST /messages/:messageId/status — la quatrième porte des accusés'
     await markRead(app);
 
     const badge = personalSendTo('conversation:unread-updated', `user:${ACTOR_USER_ID}`);
-    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT });
+    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT, bridge: null });
   });
 
   it('recale le badge de l\'acteur avec l\'arriéré RÉEL, pas un zéro écrit en dur', async () => {
     await markRead(app);
 
     const badge = personalSendTo('conversation:unread-updated', `user:${ACTOR_USER_ID}`);
-    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT });
+    expect(badge?.payload).toEqual({ conversationId: CONVERSATION_ID, unreadCount: UNREAD_COUNT, bridge: null });
   });
 
   // ─── 3. L'arriéré ne concerne que l'acteur ────────────────────────────────
