@@ -143,6 +143,24 @@ class AuthManager {
 
   // ==================== ANONYMOUS SESSIONS ====================
 
+  /**
+   * Ouvre une session anonyme — dans SON emplacement, et nulle part ailleurs.
+   *
+   * Un jeton `anon_…` n'est pas un JWT, et l'emplacement `AUTH_TOKEN` ne porte
+   * que des JWT. L'y déposer aussi trompait tout ce qui le relit :
+   *
+   *   - `checkAuthStatus()` prenait la branche compte inscrit et interrogeait
+   *     `/auth/me` en `Authorization: Bearer anon_…` — refusé — sans jamais
+   *     atteindre la branche anonyme (`/anonymous/refresh`) : le participant
+   *     revenait « ni identifié, ni anonyme » à chaque rechargement ;
+   *   - `isJWTExpired()` répond `true` sur tout ce qu'il ne sait pas décoder,
+   *     donc `apiService.request()` refusait d'émettre (« Session expirée »)
+   *     et `ConnectionService.initializeConnection()` n'ouvrait aucune socket.
+   *
+   * L'emplacement JWT est vidé au passage : les deux identités s'excluent, et
+   * un navigateur qui traîne encore un `anon_…` déposé là par une version
+   * précédente se répare en rejoignant.
+   */
   setAnonymousSession(token: string, participantId: string, expiresHours: number = 24): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
@@ -151,7 +169,7 @@ class AuthManager {
     const session: AnonymousSession = { token, participantId, expiresAt };
 
     localStorage.setItem(AUTH_STORAGE_KEYS.ANONYMOUS_SESSION, JSON.stringify(session));
-    localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, token);
+    this.safeRemoveItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
   }
 
   getAnonymousSession(): AnonymousSession | null {
