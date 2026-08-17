@@ -23,6 +23,16 @@
 #   - apps/ios/Meeshy/Features/Main/Riviere/** (except Core/** — hosts law mirrors)
 #   - apps/web/components/conversations/lentille/**, focal/**, riviere/**
 #   - apps/web/hooks/lentille/**
+#   - apps/web/components/conversations/reading/** (DateSticker, LensSwitcher,
+#     ScrollTimePill — REV-4bis/V4ter-B3: la réconciliation a fait entrer ces
+#     peaux de lecture SANS étendre la garde ; R15 les couvrait de nom mais
+#     pas en pratique)
+#   - apps/web/components/common/bubble-message/FocalRow.tsx (fichier NOMMÉ,
+#     pas tout le dossier `bubble-message/` : ce dossier est par ailleurs le
+#     chrome de message GÉNÉRIQUE — édition, suppression, réactions, appels,
+#     signalement — hors loi Lentille/Focal ; scanner tout le dossier
+#     inonderait la garde de faux positifs sur du code qui n'a jamais cité la
+#     loi. Seul `FocalRow` y consomme la spec Focal.)
 #
 # The `Core/**` exclusion is TARGETED to the immediate `<skin-root>/Core/`
 # subtree of Lentille/Focal/Riviere ONLY — never a repo-wide `--exclude-dir=Core`,
@@ -59,6 +69,13 @@ declare -a SKIN_DIRS=(
   "apps/web/components/conversations/focal"
   "apps/web/components/conversations/riviere"
   "apps/web/hooks/lentille"
+  "apps/web/components/conversations/reading"
+)
+
+# Fichier de peau ciblé nommément (pas tout son dossier — voir commentaire
+# au-dessus des SKIN_DIRS) : n'ajoute PAS de racine de recherche générique.
+declare -a SKIN_FILES=(
+  "apps/web/components/common/bubble-message/FocalRow.tsx"
 )
 
 # Forbidden literals (hard, no nuance)
@@ -283,47 +300,58 @@ fi
 
 has_errors=0
 
+# Every skin-file candidate for the real scan: SKIN_DIRS expanded through
+# `list_skin_files` (dir-based exclusions apply), PLUS the explicitly named
+# SKIN_FILES (single files targeted rather than a whole directory — see the
+# comment above their declaration). --self-test exercises `list_skin_files`
+# directly and never touches this wrapper.
+list_all_skin_files() {
+  local dir f
+  for dir in "${SKIN_DIRS[@]}"; do
+    list_skin_files "$dir"
+  done
+  for f in "${SKIN_FILES[@]}"; do
+    [ -f "$f" ] && echo "$f"
+  done
+}
+
 # === Check hard literals ===
 for literal in "${HARD_LITERALS[@]}"; do
-  for dir in "${SKIN_DIRS[@]}"; do
-    mapfile -t files < <(list_skin_files "$dir")
-    [ "${#files[@]}" -eq 0 ] && continue
+  mapfile -t files < <(list_all_skin_files)
+  [ "${#files[@]}" -eq 0 ] && continue
 
-    matches=""
-    for f in "${files[@]}"; do
-      m=$(scan_hard_literal "$literal" "$f")
-      [ -n "$m" ] && matches="${matches}${m}"$'\n'
-    done
-    matches="${matches%$'\n'}"
-
-    if [ -n "$matches" ]; then
-      echo -e "${RED}✗ Hard literal '$literal' found in skin files:${NC}"
-      echo "$matches" | sed 's/^/  /'
-      has_errors=1
-    fi
+  matches=""
+  for f in "${files[@]}"; do
+    m=$(scan_hard_literal "$literal" "$f")
+    [ -n "$m" ] && matches="${matches}${m}"$'\n'
   done
+  matches="${matches%$'\n'}"
+
+  if [ -n "$matches" ]; then
+    echo -e "${RED}✗ Hard literal '$literal' found in skin files:${NC}"
+    echo "$matches" | sed 's/^/  /'
+    has_errors=1
+  fi
 done
 
 # === Check soft literals (numeric comparisons only) ===
 for literal in "${SOFT_LITERALS[@]}"; do
-  for dir in "${SKIN_DIRS[@]}"; do
-    mapfile -t files < <(list_skin_files "$dir")
-    [ "${#files[@]}" -eq 0 ] && continue
+  mapfile -t files < <(list_all_skin_files)
+  [ "${#files[@]}" -eq 0 ] && continue
 
-    # Match: > literal, >= literal, < literal, <= literal (with flexible spacing)
-    matches=""
-    for f in "${files[@]}"; do
-      m=$(scan_soft_literal "$literal" "$f")
-      [ -n "$m" ] && matches="${matches}${m}"$'\n'
-    done
-    matches="${matches%$'\n'}"
-
-    if [ -n "$matches" ]; then
-      echo -e "${RED}✗ Soft literal '$literal' (numeric comparison) found in skin files:${NC}"
-      echo "$matches" | sed 's/^/  /'
-      has_errors=1
-    fi
+  # Match: > literal, >= literal, < literal, <= literal (with flexible spacing)
+  matches=""
+  for f in "${files[@]}"; do
+    m=$(scan_soft_literal "$literal" "$f")
+    [ -n "$m" ] && matches="${matches}${m}"$'\n'
   done
+  matches="${matches%$'\n'}"
+
+  if [ -n "$matches" ]; then
+    echo -e "${RED}✗ Soft literal '$literal' (numeric comparison) found in skin files:${NC}"
+    echo "$matches" | sed 's/^/  /'
+    has_errors=1
+  fi
 done
 
 if [ $has_errors -eq 0 ]; then
