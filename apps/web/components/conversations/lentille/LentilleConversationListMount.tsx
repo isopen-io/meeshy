@@ -37,7 +37,8 @@ import { EmptyConversations } from '../conversation-groups/EmptyConversations';
 import { LentilleRow, type LentilleRowTranslate } from './LentilleRow';
 import { LentilleSticker } from './LentilleSticker';
 import { SectionScrollPill } from './SectionScrollPill';
-import { LivesRail, type LentilleLiveEntry } from './LivesRail';
+import { LivesRail } from './LivesRail';
+import { resolveLentilleRailEntries, type LentilleRailEntry } from './lentille-rail-entries';
 import { LentilleSkeletonRow } from './LentilleSkeletonRow';
 
 export interface LentilleConversationListMountProps {
@@ -130,16 +131,26 @@ export function LentilleConversationListMount({
   const sections = useLentilleSections({ conversations, preferencesMap, categories, now, locale, timeZone });
   const bridgesByConversation = useLentilleBridges(conversations, currentUserId);
 
+  /**
+   * Rail des vivants — maquette §3, ligne « Rail stories & vivants » :
+   * « d'abord les conversations où il se passe quelque chose MAINTENANT
+   * (Scène live, typing, salve ✦) ». La composition vit dans une fonction
+   * PURE (`resolveLentilleRailEntries`) ; le montage ne fait que lui passer ce
+   * qu'il a déjà en main, et `LivesRail` garde le plafond de 6. Auparavant,
+   * seule la section `live` l'alimentait — structurellement vide côté web
+   * (behaviour-matrix:L13, `liveCall` sans source), donc un rail qui ne
+   * s'affichait jamais en production.
+   */
   const liveSection = sections.find((section) => section.kind === 'live');
-  const liveEntries: readonly LentilleLiveEntry[] = useMemo(
+  const railEntries: readonly LentilleRailEntry[] = useMemo(
     () =>
-      (liveSection?.conversations ?? []).map((conversation) => ({
-        id: conversation.id,
-        name: conversation.title || 'Conversation',
-        avatarUrl: conversation.avatar || conversation.image,
-        isLive: true,
-      })),
-    [liveSection]
+      resolveLentilleRailEntries({
+        liveConversations: liveSection?.conversations ?? [],
+        conversations,
+        typingByConversation,
+        bridgeByConversation: (conversation) => resolveRowBridge(conversation, bridgesByConversation),
+      }),
+    [liveSection, conversations, typingByConversation, bridgesByConversation]
   );
 
   /**
@@ -226,7 +237,7 @@ export function LentilleConversationListMount({
         <SectionScrollPill label={activeSectionLabel} visible={pillVisible} />
       )}
 
-      <LivesRail entries={liveEntries} label={t('lentille.sections.live')} />
+      <LivesRail entries={railEntries} label={t('lentille.sections.live')} />
 
       {showSkeleton ? (
         <div role="status" aria-busy="true" aria-label={t('loadingConversations')} data-testid="lentille-list-skeleton">
