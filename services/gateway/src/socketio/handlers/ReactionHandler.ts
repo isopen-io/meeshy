@@ -12,7 +12,7 @@ import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { ReactionUpdateEvent } from '@meeshy/shared/types';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -96,7 +96,7 @@ export class ReactionHandler {
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
       if (!rateLimitAllowed) {
         const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        if (callback) callback({ success: false, error: RATE_LIMIT_REFUSAL_MESSAGE });
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Too many reactions. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
         });
@@ -267,7 +267,7 @@ export class ReactionHandler {
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
       if (!rateLimitAllowed) {
         const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        if (callback) callback({ success: false, error: RATE_LIMIT_REFUSAL_MESSAGE });
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Too many reaction changes. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
         });
@@ -380,7 +380,7 @@ export class ReactionHandler {
 
       const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_SYNC);
       if (!syncAllowed) {
-        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        if (callback) callback({ success: false, error: RATE_LIMIT_REFUSAL_MESSAGE });
         return;
       }
 

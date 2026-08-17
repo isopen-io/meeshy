@@ -13,9 +13,13 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
+import { useReactionsQuery, RECONCILE_SPACING_MS } from '@/hooks/queries/use-reactions-query';
 import type { ReactionAggregation, ReactionUpdateEvent } from '@meeshy/shared/types/reaction';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import {
+  CLIENT_EVENTS,
+  RATE_LIMIT_REFUSAL_MESSAGE,
+  REACTION_SYNC_BUDGET,
+} from '@meeshy/shared/types/socketio-events';
 
 // Mock Socket.IO service
 let mockSocketConnected = true;
@@ -2183,6 +2187,159 @@ describe('useReactionsQuery', () => {
       dropAndRestoreConnection();
 
       expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── La rafale de réconciliation, et le budget qu'elle dépense ─────────────
+  //
+  // La réconciliation ci-dessus est posée PAR BULLE. Un fil monté en compte
+  // autant que de bulles rendues, et un franchissement les réveille toutes dans
+  // le MÊME tick : le serveur reçoit N `reaction:request-sync` d'un coup, contre
+  // un budget de `REACTION_SYNC_BUDGET.maxRequests` par minute et par
+  // utilisateur. Une bulle ne peut pas savoir combien de voisines partagent ce
+  // budget — c'est au tour d'émission de le tenir.
+  describe('Reconciliation burst pacing', () => {
+    const messageIdAt = (n: number) =>
+      `507f1f77bcf86cd7994${String(390 + n).padStart(5, '0')}`;
+
+    const respondOk = () => {
+      mockSocketEmit.mockImplementation((event, _messageId, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
+          callback({ success: true, data: { reactions: [], userReactions: [] } });
+        }
+      });
+    };
+
+    it('spaces a multi-bubble burst instead of firing every demand in one tick', async () => {
+      jest.useFakeTimers();
+      try {
+        respondOk();
+        const wrapper = createWrapper();
+
+        const BUBBLES = 4;
+        for (let i = 0; i < BUBBLES; i++) {
+          renderHook(
+            () => useReactionsQuery({ messageId: messageIdAt(i), currentUserId: 'user-1' }),
+            { wrapper }
+          );
+        }
+        await act(async () => { await Promise.resolve(); });
+        mockSocketEmit.mockClear();
+
+        mockSocketConnected = false;
+        mockSocket.connected = false;
+        act(() => { mockEmitStatusChange(); });
+        mockSocketConnected = true;
+        mockSocket.connected = true;
+        act(() => { mockEmitStatusChange(); });
+
+        // Le franchissement réveille les quatre bulles dans le même tick. Une
+        // seule part tout de suite : les autres tiennent un créneau.
+        expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+
+        act(() => { jest.advanceTimersByTime(RECONCILE_SPACING_MS); });
+        expect(mockSocketEmit).toHaveBeenCalledTimes(2);
+
+        act(() => { jest.advanceTimersByTime(RECONCILE_SPACING_MS * 2); });
+        expect(mockSocketEmit).toHaveBeenCalledTimes(BUBBLES);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('spaces demands far enough apart to stay inside the server budget', () => {
+      // Le cadencement n'est pas un chiffre choisi : c'est la fenêtre serveur
+      // divisée par son propre plafond. Un client qui devine ce nombre le
+      // devine faux dès que le serveur l'ajuste.
+      expect(RECONCILE_SPACING_MS).toBe(
+        REACTION_SYNC_BUDGET.windowMs / REACTION_SYNC_BUDGET.maxRequests
+      );
+    });
+
+    it('drops a pending slot when its bubble unmounts before firing', async () => {
+      jest.useFakeTimers();
+      try {
+        respondOk();
+        const wrapper = createWrapper();
+
+        renderHook(
+          () => useReactionsQuery({ messageId: messageIdAt(0), currentUserId: 'user-1' }),
+          { wrapper }
+        );
+        const second = renderHook(
+          () => useReactionsQuery({ messageId: messageIdAt(1), currentUserId: 'user-1' }),
+          { wrapper }
+        );
+        await act(async () => { await Promise.resolve(); });
+        mockSocketEmit.mockClear();
+
+        mockSocketConnected = false;
+        mockSocket.connected = false;
+        act(() => { mockEmitStatusChange(); });
+        mockSocketConnected = true;
+        mockSocket.connected = true;
+        act(() => { mockEmitStatusChange(); });
+
+        expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+
+        // La bulle sort de l'écran avant que son créneau n'arrive : la demande
+        // meurt avec elle, elle ne dépense pas un budget pour un observateur
+        // démonté.
+        second.unmount();
+        act(() => { jest.advanceTimersByTime(RECONCILE_SPACING_MS * 4); });
+
+        expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not retry a refusal — the window has not moved', async () => {
+      // Un refus de budget n'est pas une panne : le serveur a répondu « pas
+      // maintenant ». Le réessayer sur-le-champ dépense une demande de plus
+      // dans la fenêtre déjà pleine, et échoue identiquement.
+      mockSocketEmit.mockImplementation((event, _messageId, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
+          callback({ success: false, error: RATE_LIMIT_REFUSAL_MESSAGE });
+        }
+      });
+
+      const qc = new QueryClient({
+        defaultOptions: { queries: { gcTime: 0, staleTime: Infinity, retryDelay: 0 } },
+      });
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      );
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: messageIdAt(0), currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.error).not.toBeNull());
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('still retries once a demand that failed for any other reason', async () => {
+      mockSocketEmit.mockImplementation((event, _messageId, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_REQUEST_SYNC) {
+          callback({ success: false, error: 'Could not resolve participant' });
+        }
+      });
+
+      const qc = new QueryClient({
+        defaultOptions: { queries: { gcTime: 0, staleTime: Infinity, retryDelay: 0 } },
+      });
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      );
+
+      renderHook(
+        () => useReactionsQuery({ messageId: messageIdAt(0), currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockSocketEmit).toHaveBeenCalledTimes(2));
     });
   });
 });

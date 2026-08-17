@@ -20,7 +20,11 @@ import type {
   ReactionSync,
   ReactionUpdateEvent
 } from '@meeshy/shared/types/reaction';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import {
+  CLIENT_EVENTS,
+  RATE_LIMIT_REFUSAL_MESSAGE,
+  REACTION_SYNC_BUDGET,
+} from '@meeshy/shared/types/socketio-events';
 import { useI18n } from '@/hooks/useI18n';
 
 // Étendre les query keys pour les réactions
@@ -59,7 +63,66 @@ class ReactionSocketUnavailableError extends Error {
   }
 }
 
+/**
+ * Un budget épuisé n'est PAS une panne : le serveur a répondu « pas
+ * maintenant ». Distinguée pour la même raison que la classe ci-dessus, et avec
+ * la même conséquence — pas de réessai. La fenêtre du serveur n'a pas bougé
+ * entre deux tentatives immédiates : la seconde est refusée comme la première,
+ * et elle a coûté une demande de plus dans une fenêtre déjà pleine. C'est le
+ * TOUR d'émission (ci-dessous) qui traverse l'épuisement, pas un compteur de
+ * réessais.
+ */
+class ReactionSyncRateLimitedError extends Error {
+  constructor() {
+    super(RATE_LIMIT_REFUSAL_MESSAGE);
+    this.name = 'ReactionSyncRateLimitedError';
+  }
+}
+
 const isSocketReachable = (): boolean => Boolean(meeshySocketIOService.getSocket()?.connected);
+
+/**
+ * L'écart minimal entre deux demandes de réconciliation, dérivé du budget que
+ * le SERVEUR publie — jamais choisi ici.
+ *
+ * `REACTION_SYNC_BUDGET` autorise `maxRequests` demandes par `windowMs` et par
+ * utilisateur ; une demande toutes les `windowMs / maxRequests` millisecondes
+ * est donc, par construction, le débit le plus rapide qui ne peut pas épuiser
+ * la fenêtre.
+ */
+export const RECONCILE_SPACING_MS =
+  REACTION_SYNC_BUDGET.windowMs / REACTION_SYNC_BUDGET.maxRequests;
+
+/**
+ * Le tour d'émission d'UNE rafale de réconciliation.
+ *
+ * La réconciliation est posée par BULLE : un fil monté en compte autant que de
+ * bulles rendues, et le franchissement injoignable → joignable les réveille
+ * toutes dans le même tick. Chacune ignore combien de voisines partagent son
+ * budget, donc aucune ne peut décider seule d'attendre — d'où ce compteur
+ * partagé, qui n'existe que le temps de la rafale.
+ *
+ * Le compteur se remet à zéro en microtâche : tous les abonnés d'un même
+ * franchissement sont notifiés SYNCHRONEMENT par `emitStatusChange`, donc ils
+ * ont tous pris leur créneau quand la microtâche s'exécute. Le franchissement
+ * suivant repart de zéro, et une bulle seule à l'écran part toujours
+ * immédiatement.
+ */
+let burstSlot = 0;
+let burstResetScheduled = false;
+
+function nextBurstDelayMs(): number {
+  const delay = burstSlot * RECONCILE_SPACING_MS;
+  burstSlot += 1;
+  if (!burstResetScheduled) {
+    burstResetScheduled = true;
+    queueMicrotask(() => {
+      burstSlot = 0;
+      burstResetScheduled = false;
+    });
+  }
+  return delay;
+}
 
 // Fonction pour récupérer les réactions via Socket.IO
 async function fetchReactions(messageId: string): Promise<ReactionState> {
@@ -94,6 +157,8 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
             reactions: syncData.reactions as ReactionAggregation[],
             userReactions: syncData.userReactions as string[],
           });
+        } else if (response.error === RATE_LIMIT_REFUSAL_MESSAGE) {
+          reject(new ReactionSyncRateLimitedError());
         } else {
           reject(new Error(response.error || 'Failed to fetch reactions'));
         }
@@ -219,8 +284,15 @@ export function useReactionsQuery({
     queryFn: () => fetchReactions(messageId),
     enabled: enabled && !!messageId && isPersisted,
     staleTime: Infinity, // Socket.IO gère les mises à jour
+    // Les deux refus que rien ne rend réessayables : un canal absent et un
+    // budget épuisé. Dans les deux cas la n-ième tentative immédiate échoue
+    // exactement comme la première — et pour le budget elle CREUSE l'échec, en
+    // dépensant une demande de plus dans la fenêtre qui vient de le refuser.
     retry: (failureCount, error) =>
-      error instanceof ReactionSocketUnavailableError ? false : failureCount < 1,
+      error instanceof ReactionSocketUnavailableError ||
+      error instanceof ReactionSyncRateLimitedError
+        ? false
+        : failureCount < 1,
     initialData, // Utiliser reactionSummary pour affichage instantané
   });
 
@@ -244,17 +316,42 @@ export function useReactionsQuery({
   // d'état qui ne franchit pas la frontière injoignable → joignable ne
   // redemande rien. Le volume est celui, déjà admis, du montage du fil — une
   // demande par bulle montée, sous la même limite `REACTION_SYNC` du gateway.
+  //
+  // La demande ne part pas dans le tick du franchissement, mais dans le CRÉNEAU
+  // que `nextBurstDelayMs` lui attribue : le réveil est collectif, le budget
+  // aussi, et une rafale de N bulles émise d'un seul coup épuise exactement le
+  // plafond dont la réconciliation dépend — elle se ferait refuser pour avoir
+  // été trop pressée. Une bulle seule garde le créneau 0, donc part tout de
+  // suite. Le minuteur meurt avec le composant : une bulle sortie de l'écran ne
+  // dépense pas un budget pour un observateur qui n'est plus là.
   useEffect(() => {
     if (!enabled || !messageId || !isPersisted) return;
 
     let wasReachable = isSocketReachable();
+    let burstTimer: ReturnType<typeof setTimeout> | null = null;
 
-    return meeshySocketIOService.onStatusChange(() => {
+    const unsubscribe = meeshySocketIOService.onStatusChange(() => {
       const reachable = isSocketReachable();
       if (reachable === wasReachable) return;
       wasReachable = reachable;
-      if (reachable) refetch();
+      if (!reachable) return;
+
+      const delay = nextBurstDelayMs();
+      if (delay === 0) {
+        refetch();
+        return;
+      }
+      if (burstTimer) clearTimeout(burstTimer);
+      burstTimer = setTimeout(() => {
+        burstTimer = null;
+        refetch();
+      }, delay);
     });
+
+    return () => {
+      if (burstTimer) clearTimeout(burstTimer);
+      unsubscribe();
+    };
   }, [enabled, messageId, isPersisted, refetch]);
 
   // Mutation pour ajouter une réaction
