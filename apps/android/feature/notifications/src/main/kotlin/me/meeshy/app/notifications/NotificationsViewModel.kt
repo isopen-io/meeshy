@@ -20,6 +20,8 @@ data class NotificationsUiState(
     val unreadCount: Int = 0,
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val hasMore: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -43,6 +45,7 @@ class NotificationsViewModel @Inject constructor(
     init {
         observeNotifications()
         observeUnreadCount()
+        observeHasMore()
         observeRealtime()
     }
 
@@ -75,6 +78,14 @@ class NotificationsViewModel @Inject constructor(
         }
     }
 
+    private fun observeHasMore() {
+        viewModelScope.launch {
+            notificationRepository.hasMoreStream.collect { hasMore ->
+                _state.update { it.copy(hasMore = hasMore) }
+            }
+        }
+    }
+
     /**
      * A `notification:new` arriving while this screen is alive/backing the badge is prepended
      * live into the shared repository cache — an already-known id (REST list beat the socket, or
@@ -100,6 +111,29 @@ class NotificationsViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _state.update { it.copy(isSyncing = false, errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Infinite scroll: fetch the page after the currently loaded notifications. Re-entrancy
+     * guarded so a fast double-scroll never fires two overlapping fetches, and inert once the
+     * repository reports no further page — mirror of iOS `NotificationListViewModel.loadMore`.
+     * A failed page is silent (the repository leaves its cache/`hasMoreStream` untouched, so the
+     * next scroll simply retries).
+     */
+    fun loadMore() {
+        if (_state.value.isLoadingMore || !_state.value.hasMore) return
+        _state.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            try {
+                notificationRepository.loadMore()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Silent: the next scroll re-triggers the fetch.
+            } finally {
+                _state.update { it.copy(isLoadingMore = false) }
             }
         }
     }
