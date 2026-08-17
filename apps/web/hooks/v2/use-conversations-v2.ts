@@ -13,7 +13,7 @@ import {
   useInfiniteConversationsQuery,
   useConversationQuery,
 } from '@/hooks/queries/use-conversations-query';
-import { withPreviewMessage } from '@/hooks/queries/use-socket-cache-sync';
+import { withArrivedMessage } from '@/hooks/queries/use-socket-cache-sync';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useI18n } from '@/hooks/useI18n';
 import { queryKeys } from '@/lib/react-query/query-keys';
@@ -105,25 +105,28 @@ export function useConversationsV2(
           ...old,
           pages: old.pages.map((page: any) => ({
             ...page,
-            conversations: page.conversations.map((conv: Conversation) =>
-              conv.id === message.conversationId
-                ? {
-                    // Sixième écrivain du MÊME cache que `useSocketCacheSync` :
-                    // il doit périmer la carte du Prisme comme les cinq autres.
-                    // Sans cela, l'ordre des deux écouteurs déciderait du texte
-                    // affiché — si celui-ci écrit en premier, le voisin verrait
-                    // une ligne décrivant DÉJÀ le nouveau message et garderait,
-                    // à raison selon sa propre règle, une carte qui décrit
-                    // l'ancien.
-                    ...withPreviewMessage({ conversation: conv, message }),
-                    lastMessageAt: message.createdAt,
-                    unreadCount:
-                      (getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id) !== currentUserId
-                        ? (conv.unreadCount ?? 0) + 1
-                        : conv.unreadCount,
-                  }
-                : conv
-            ),
+            conversations: page.conversations.map((conv: Conversation) => {
+              if (conv.id !== message.conversationId) return conv;
+              // Sixième écrivain du MÊME cache que `useSocketCacheSync` : il
+              // doit périmer la carte du Prisme comme les cinq autres, et
+              // porter la même garde monotone qu'eux. Sans cela, l'ordre des
+              // deux écouteurs déciderait du texte affiché — si celui-ci écrit
+              // en premier, le voisin verrait une ligne décrivant DÉJÀ le
+              // nouveau message et garderait, à raison selon sa propre règle,
+              // une carte qui décrit l'ancien ; et un message arrivé dans le
+              // désordre reculerait la ligne que son jumeau vient de protéger.
+              //
+              // La pastille, elle, compte des MESSAGES et non des rangs : elle
+              // monte même quand l'aperçu ne bouge pas. La garde ne couvre que
+              // le groupe d'aperçu.
+              const unreadCount =
+                (getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id) !== currentUserId
+                  ? (conv.unreadCount ?? 0) + 1
+                  : conv.unreadCount;
+              const arrived = withArrivedMessage({ conversation: conv, message });
+              if (!arrived) return { ...conv, unreadCount };
+              return { ...arrived, lastMessageAt: message.createdAt, unreadCount };
+            }),
           })),
         };
       });

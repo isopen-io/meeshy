@@ -133,6 +133,30 @@ Translation cache MUST be a bounded LRU (max 500 entries), not an unbounded Map.
 Each feature MUST have its own ErrorBoundary.
 A crash in message list MUST NOT crash the conversation list.
 
+### Aperçu de la ligne de liste — monotone par construction
+Le groupe d'aperçu de `conversations.infinite()` — `lastMessage`, `lastMessageAt`,
+`lastMessageTranslations`, `lastMessageOriginalLanguage` — a **six écrivains temps réel** et aucun
+ordre garanti entre eux. Un écrivain qui nomme un message plus ANCIEN que celui que la ligne décrit
+la fait reculer : texte, auteur, carte du Prisme, et RANG (`sortConversations` trie sur
+`lastMessageAt`). En `staleTime: Infinity`, ce recul ne se corrige jamais tout seul.
+
+Toute écriture d'une ARRIVÉE (`message:new`, `link:message:new`) passe donc par
+`withArrivedMessage()` — qui rend `null` quand la ligne décrit déjà un message plus récent — et
+`conversation:updated` par `mergeConversationUpdate()`, qui applique la même garde. Ne jamais poser
+`lastMessage` / `lastMessageAt` à la main sur une conversation en cache.
+
+Deux exemptions, et deux seulement :
+- **`previewRecalculated: true`** — le serveur déclare avoir RECALCULÉ l'aperçu depuis sa base, et
+  un tel aperçu recule légitimement (suppression pour tous du dernier message, masquage personnel).
+  Du seul contenu, un recul légitime et une diffusion tardive sont indiscernables : le discriminant
+  ne peut venir que de l'émetteur.
+- **`advanceConversationPreviewOnDelete`** — recalcul LOCAL après une suppression, même raison.
+
+L'ÉGALITÉ d'horodatage n'est pas un recul (c'est une édition), et l'IDENTITÉ prime : un écrivain qui
+nomme le message de la ligne n'est jamais périmé. Miroir exact de
+`ConversationStore.merging` (`packages/MeeshySDK/.../Store/ConversationStore.swift`) — toute
+évolution touche les deux.
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST

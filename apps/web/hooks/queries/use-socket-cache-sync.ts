@@ -136,6 +136,86 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
 }
 
 /**
+ * Les champs du `conversation:updated` qui, avec le groupe d'aperçu ci-dessus,
+ * décrivent le message de la ligne — et qui, eux, entrent bien dans le cache.
+ *
+ * Ils sont MONOTONES AVEC lui : quand la garde ci-dessous rejette un aperçu
+ * périmé, ces trois-là partent avec, sinon la ligne garderait le rang et la
+ * carte du Prisme d'un message dont elle vient de refuser le texte.
+ */
+const MONOTONE_GROUP_KEYS = new Set([
+  'lastMessageAt',
+  'lastMessageTranslations',
+  'lastMessageOriginalLanguage',
+]);
+
+/** L'horodatage du message que la ligne décrit AUJOURD'HUI. */
+function rowMessageAt(conversation: Conversation): Date | null {
+  return toDate(conversation.lastMessageAt) ?? toDate(conversation.lastMessage?.createdAt);
+}
+
+/**
+ * Le groupe d'aperçu est MONOTONE : un écrivain qui nomme un message plus
+ * ANCIEN que celui de la ligne décrit un état périmé, et l'appliquer fait
+ * reculer la ligne — le texte, l'auteur, la carte du Prisme, et le rang, que
+ * `sortConversations` lit dans `lastMessageAt`. Le cache tournant en
+ * `staleTime: Infinity`, ce recul ne se corrige jamais de lui-même.
+ *
+ * Le désordre n'est pas théorique : `MessageHandler` diffuse `message:new` dans
+ * la room de CONVERSATION, puis `conversation:updated` dans la room USER de
+ * chaque participant — avec un `prisma.participant.findMany` AWAITÉ entre les
+ * deux. Deux envois concurrents dans le même fil sortent donc leurs
+ * `conversation:updated` dans l'ordre de leurs requêtes, pas dans celui de
+ * leurs messages. Le chemin `message:new` a sa propre course, plus courante
+ * encore : sur une conversation absente du cache, chaque message déclenche un
+ * `GET /conversations/:id`, et deux messages rapides dans un DM tout neuf font
+ * deux fetches dont le plus ANCIEN peut résoudre en dernier.
+ *
+ * C'est la règle que `ConversationStore.merging` tient côté iOS depuis le cycle
+ * 46 bis, `previewRecalculated` compris — et que le web décodait sans jamais
+ * la lire (`PREVIEW_GROUP_KEYS` la laisse tomber). Deuxième moitié de la même
+ * loi, sur le client qui ne l'avait pas.
+ *
+ * L'ÉGALITÉ n'est pas un recul : c'est le même message, donc une édition, et
+ * elle s'applique. L'identité prime sur l'horodatage — un écrivain qui nomme le
+ * message de la ligne n'est jamais périmé.
+ */
+function rowDescribesNewerMessage(
+  conversation: Conversation,
+  incoming: { id?: string; createdAt: unknown }
+): boolean {
+  if (incoming.id != null && conversation.lastMessage?.id === incoming.id) return false;
+  const incomingAt = toDate(incoming.createdAt);
+  if (!incomingAt) return false;
+  const currentAt = rowMessageAt(conversation);
+  if (!currentAt) return false;
+  return currentAt.getTime() > incomingAt.getTime();
+}
+
+/**
+ * Le message qui vient d'ARRIVER, posé sur la ligne de liste — ou la ligne
+ * intacte quand elle décrit déjà un message plus récent.
+ *
+ * Le pendant, pour les trois écrivains temps réel d'une arrivée (`message:new`,
+ * `link:message:new`, et le second écouteur de `use-conversations-v2`), de la
+ * garde monotone que `mergeConversationUpdate` applique à `conversation:updated`.
+ * Sans elle, corriger le seul chemin `conversation:updated` ne corrigeait rien :
+ * les deux pendent au même geste — un message envoyé — et le second réécrit ce
+ * que le premier vient de refuser.
+ *
+ * `updatedAt` accompagne `lastMessageAt` chez deux appelants sur trois ; il
+ * reste au site d'appel, qui seul sait s'il le pose.
+ */
+export function withArrivedMessage(params: {
+  conversation: Conversation;
+  message: Message;
+}): Conversation | null {
+  const { conversation, message } = params;
+  if (rowDescribesNewerMessage(conversation, message)) return null;
+  return withPreviewMessage({ conversation, message });
+}
+
+/**
  * Ce que le groupe d'aperçu dit du message que la ligne DÉCRIT — ou rien, quand
  * l'événement ne parle pas de lui (un renommage) ou n'en dit pas assez.
  *
@@ -249,8 +329,30 @@ export function mergeConversationUpdate(
   conversation: Conversation,
   raw: Record<string, unknown>
 ): Conversation {
-  const previewed = previewedLastMessage(raw, conversation.id, conversation.lastMessage);
-  const merged = { ...conversation, ...normalizeConversationPatch(raw) };
+  // La monotonie cède devant `previewRecalculated` : le serveur déclare alors
+  // avoir RECALCULÉ l'aperçu depuis sa base, et un tel aperçu recule
+  // LÉGITIMEMENT — supprimer pour tous le dernier message fait redescendre la
+  // ligne sur le précédent, et masquer pour soi son dernier message visible
+  // sert un remplaçant plus ancien par construction. Des deux, seul l'émetteur
+  // peut dire lequel est lequel : du contenu, un recul légitime et une
+  // diffusion arrivée en retard sont indiscernables.
+  const stale =
+    raw.previewRecalculated !== true &&
+    rowDescribesNewerMessage(conversation, {
+      id: typeof raw.lastMessageId === 'string' ? raw.lastMessageId : undefined,
+      createdAt: raw.lastMessageAt,
+    });
+
+  // Un `conversation:updated` périmé ne l'est que sur son groupe d'aperçu : le
+  // reste du payload — un renommage, un réglage — n'a pas d'ordre et s'applique.
+  const source = stale
+    ? Object.fromEntries(Object.entries(raw).filter(([key]) => !MONOTONE_GROUP_KEYS.has(key)))
+    : raw;
+
+  const previewed = stale
+    ? ({ decided: false } as const)
+    : previewedLastMessage(raw, conversation.id, conversation.lastMessage);
+  const merged = { ...conversation, ...normalizeConversationPatch(source) };
   return previewed.decided ? { ...merged, lastMessage: previewed.lastMessage } : merged;
 }
 
@@ -519,24 +621,21 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // Update infinite conversations query (paginated cache used by ConversationList)
       let conversationFoundInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
-        let updated: Conversation | null = null;
-        const rest: Conversation[] = [];
-        for (const conv of convs) {
-          if (conv.id === targetConversationId) {
-            updated = {
-              ...withPreviewMessage({ conversation: conv, message }),
-              lastMessageAt: message.createdAt,
-              updatedAt: message.createdAt,
-            };
-          } else {
-            rest.push(conv);
-          }
-        }
-        if (updated) {
-          conversationFoundInCache = true;
-          return [updated, ...rest];
-        }
-        return convs;
+        const idx = convs.findIndex((conv) => conv.id === targetConversationId);
+        if (idx === -1) return convs;
+        conversationFoundInCache = true;
+        // Garde monotone (`withArrivedMessage`) : la ligne décrit peut-être
+        // déjà un message plus RÉCENT que celui-ci, auquel cas ni son aperçu ni
+        // son rang ne bougent — remonter la conversation en tête sur un message
+        // périmé la trierait à contretemps autant que la ligne mentirait.
+        const arrived = withArrivedMessage({ conversation: convs[idx], message });
+        if (!arrived) return convs;
+        const updated: Conversation = {
+          ...arrived,
+          lastMessageAt: message.createdAt,
+          updatedAt: message.createdAt,
+        };
+        return [updated, ...convs.filter((_, i) => i !== idx)];
       });
 
       // First time this client sees the conversation (brand-new DM,
@@ -554,11 +653,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 // Defensive dedup: a concurrent fetch / socket event
                 // might have inserted while we were awaiting the API.
                 const filtered = convs.filter((c) => c.id !== targetConversationId);
-                const enriched: Conversation = {
-                  ...withPreviewMessage({ conversation: fetched, message }),
-                  lastMessageAt: message.createdAt,
-                  updatedAt: message.createdAt,
-                };
+                // La ligne fraîchement lue au serveur porte DÉJÀ son dernier
+                // message, et il peut être plus récent que celui-ci : deux
+                // messages rapides dans une conversation absente du cache
+                // déclenchent DEUX `GET /conversations/:id`, et rien ne garantit
+                // que le plus ancien résolve en premier. Estampiller le nôtre
+                // par-dessus laissait la ligne décrire le premier message d'un
+                // DM tout neuf, pour de bon.
+                const arrived = withArrivedMessage({ conversation: fetched, message });
+                const enriched: Conversation = arrived
+                  ? { ...arrived, lastMessageAt: message.createdAt, updatedAt: message.createdAt }
+                  : fetched;
                 return [enriched, ...filtered];
               });
             })
@@ -1199,6 +1304,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
+        // Même garde monotone que `handleNewMessage` : ce chemin est le seul
+        // sans jumeau `conversation:updated` côté serveur, donc le seul dont
+        // un recul ne serait jamais recorrigé par un fan-out ultérieur.
+        const arrivedLink = withArrivedMessage({ conversation: convs[idx], message: linkLastMessage });
+        if (!arrivedLink) return convs;
         // Le seul des cinq écrivains sans jumeau serveur : `broadcastLinkMessage`
         // n'émet PAS de `conversation:updated`, délibérément, parce que « le
         // handler web applique déjà l'aperçu depuis cet événement ». Vrai de
@@ -1206,7 +1316,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         // fausse sur les conversations de lien partagé, que rien ne repassait
         // corriger.
         const updated: Conversation = {
-          ...withPreviewMessage({ conversation: convs[idx], message: linkLastMessage }),
+          ...arrivedLink,
           lastMessageAt: linkLastMessageAt,
         };
         return [updated, ...convs.filter((_, i) => i !== idx)];
