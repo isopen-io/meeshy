@@ -117,6 +117,10 @@ class PostCommentsViewModel @Inject constructor(
      *  selection cancels it so a stale response never lands in the panel. */
     private var mentionSearchJob: Job? = null
 
+    /** The `@username ` prefix [beginReply] last injected, tracked so retargeting the composer to
+     *  a different reply strips exactly that prefix rather than any leading text. */
+    private var prefilledMention: String? = null
+
     private val _state = MutableStateFlow(PostCommentsUiState())
     val state: StateFlow<PostCommentsUiState> = _state.asStateFlow()
 
@@ -356,8 +360,11 @@ class PostCommentsViewModel @Inject constructor(
     /**
      * Aim the composer at [commentId]. Replying to a reply attaches to the *root* parent
      * (flat 2-level threading, mirror of iOS `sendReply`), and the parent's thread is opened
-     * and loaded so the viewer sees the context their reply lands in. A blank post/comment id
-     * is inert.
+     * and loaded so the viewer sees the context their reply lands in. When the target is itself
+     * a reply, its author's `@username ` is prefilled into the draft — otherwise flat threading
+     * would notify/highlight the thread's root author instead of the person actually being
+     * addressed (mirror of iOS `FeedCommentsSheet.beginReply(to:)`); switching targets strips the
+     * previous prefill via [ReplyMentionPrefill]. A blank post/comment id is inert.
      */
     fun beginReply(commentId: String) {
         if (postId.isBlank() || commentId.isBlank()) return
@@ -366,6 +373,15 @@ class PostCommentsViewModel @Inject constructor(
         val name = comment?.author?.let { it.displayName ?: it.username }?.takeIf { it.isNotBlank() }
         composer.value = ReplyTarget(parentId, name)
         ensureThreadLoaded(parentId)
+
+        val prefill = ReplyMentionPrefill.apply(
+            currentText = composerDraft.value.text,
+            previousMention = prefilledMention,
+            replyToParentId = comment?.parentId,
+            authorUsername = comment?.author?.username,
+        )
+        prefilledMention = prefill.prefilledMention
+        composerDraft.update { it.copy(text = prefill.text) }
     }
 
     /** Drop the active reply target — the composer returns to posting a top-level comment. */
