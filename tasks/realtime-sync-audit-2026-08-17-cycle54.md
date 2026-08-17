@@ -332,7 +332,7 @@ sans laquelle le type seul ne dirait rien d'utile :
 > Corollaire opposable : qui porte `lastMessageId` porte le lieu du message qu'il
 > nomme, ou aucun.
 
-ADR : `packages/shared/decisions.md`. Leçon 215.
+ADR : `packages/shared/decisions.md`. Leçon 216.
 
 ### Ce qui reste ouvert
 
