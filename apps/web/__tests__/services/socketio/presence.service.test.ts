@@ -93,7 +93,6 @@ describe('PresenceService', () => {
         'reaction:removed',
         'conversation:joined',
         'conversation:left',
-        'reaction:sync',
         'read-status:updated',
         'participant:role-updated',
         'conversation:new',
@@ -212,14 +211,30 @@ describe('PresenceService', () => {
       expect(listener).toHaveBeenCalledWith(event);
     });
 
-    it('forwards reaction:sync events to reactionAdded listeners (full reconciliation)', () => {
+    // `reaction:sync` n'est pas une diffusion : la réconciliation voyage dans
+    // l'ACK de `reaction:request-sync`. L'abonnement qui vivait ici versait un
+    // INSTANTANÉ (`{ messageId, reactions[], totalCount, userReactions[] }`)
+    // dans le seau de `reaction:added`, dont les consommateurs lisent un DELTA
+    // (`{ emoji, action, aggregation }`) — `handleReactionAdded` y aurait
+    // poussé `undefined` en guise d'agrégation.
+    it('does not subscribe reaction:sync, nor route it to the reactionAdded listeners', () => {
       const socket = makeSocket();
       service.setupEventListeners(socket as any);
       const listener = jest.fn();
       service.onReactionAdded(listener);
-      const event = { messageId: 'msg-1', reactions: [] };
-      socket._trigger('reaction:sync', event);
-      expect(listener).toHaveBeenCalledWith(event);
+
+      const subscribed = socket.on.mock.calls.map((call: unknown[]) => call[0]);
+      expect(subscribed).not.toContain('reaction:sync');
+
+      // Et pas davantage sous la forme que prend le mis-routage une fois la
+      // constante retirée du contrat : `socket.on(undefined, handler)` — un
+      // abonnement muet, que rien ne déclenche et qu'aucun type ne refuse.
+      // Aucun écouteur ne doit être posé sur un nom que le contrat ne définit
+      // pas.
+      expect(subscribed).not.toContain(undefined);
+
+      socket._trigger('reaction:sync', { messageId: 'msg-1', reactions: [] });
+      expect(listener).not.toHaveBeenCalled();
     });
 
     it('forwards read-status:updated events to listeners AND updates the UI store', () => {
