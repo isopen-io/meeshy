@@ -326,6 +326,91 @@ function updateInfiniteConversationCache(
   );
 }
 
+/**
+ * Plafond de lectures par vidange de file hors-ligne.
+ *
+ * Une vidange peut nommer autant de conversations que la coupure en a touchées.
+ * Au-delà de ce plafond, N lectures d'une ligne coûtent plus qu'elles ne
+ * rapportent sur le lien le plus contraint qui existe — un mobile qui vient de
+ * revenir. Les pastilles laissées de côté ne sont pas perdues pour autant :
+ * chaque `conversation:unread-updated` ultérieur les corrige, et le montage
+ * suivant relit le serveur en entier (`refetchOnMount: 'always'`).
+ *
+ * Le dépassement est TRACÉ plutôt que silencieux : une troncature muette se lit
+ * comme « tout a été couvert ».
+ */
+const PENDING_UNREAD_REFRESH_LIMIT = 10;
+
+/**
+ * Relit le compteur de non-lus des conversations qu'une vidange de file nomme —
+ * la SEULE chose que la file ne rejoue pas.
+ *
+ * `_drainedEventName` (`MeeshySocketIOManager.ts`) mappe chaque entrée de file
+ * vers un événement de MESSAGE (`message:new`, `edited`, `deleted`,
+ * `reaction-*`, `translation`, `pinned`…) et n'a AUCUN cas
+ * `conversation:unread-updated`. L'aperçu, le rang et la promotion en tête de la
+ * ligne de liste arrivent donc par socket, déjà fusionnés par
+ * `handleNewMessage` ; la pastille, elle, reste celle d'avant la coupure et
+ * n'est calculable que par le serveur.
+ *
+ * BORNÉE aux ids que l'événement porte, et aux seules conversations DÉJÀ en
+ * cache : une ligne absente n'a rien à corriger. Surtout, jamais un
+ * `invalidateQueries` sur `queryKeys.conversations.all` — ce préfixe atteint
+ * `conversations.infinite()`, dont il rejoue TOUTES les pages chargées en
+ * remplaçant le cache : les écritures socket ci-dessus sont écrasées, et comme
+ * la route pagine par OFFSET sur un tri `lastMessageAt` décroissant, un message
+ * arrivé entre deux pages duplique une ligne à la frontière et en perd une
+ * autre.
+ *
+ * Troisième écrivain de ce compteur, donc troisième porteur de la garde de
+ * conversation OUVERTE : le gateway calcule la pastille pour TOUS les
+ * destinataires, lecteur compris. Sans clamp, la relecture rallume le badge de
+ * la conversation qu'on a sous les yeux. Jumeaux : `handleUnreadUpdated`
+ * ci-dessous et `ConversationDeltaMergeOptions.openConversationId`.
+ */
+function refreshUnreadCountsFromServer(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationIds: readonly string[]
+): void {
+  if (conversationIds.length === 0) return;
+
+  const cached = queryClient.getQueryData<InfiniteConversationData>(
+    queryKeys.conversations.infinite()
+  );
+  if (!cached) return;
+
+  const known = new Set(cached.pages.flatMap((page) => page.conversations).map((conv) => conv.id));
+  const targets = [...new Set(conversationIds)].filter((id) => known.has(id));
+  if (targets.length === 0) return;
+
+  const capped = targets.slice(0, PENDING_UNREAD_REFRESH_LIMIT);
+  if (capped.length < targets.length) {
+    console.warn(
+      `[SOCKET_SYNC] unread refresh borné à ${PENDING_UNREAD_REFRESH_LIMIT} : ${targets.length - capped.length} pastille(s) laissée(s) au prochain conversation:unread-updated`
+    );
+  }
+
+  for (const convId of capped) {
+    apiService
+      .get<Conversation>(`/conversations/${convId}`)
+      .then((response) => {
+        const unreadCount = response?.data?.unreadCount;
+        if (typeof unreadCount !== 'number') return;
+        // Conversation ouverte lue ICI, à l'écriture, jamais avant la requête :
+        // celle-ci a pu courir plusieurs centaines de millisecondes, pendant
+        // lesquelles l'utilisateur a pu ouvrir la conversation dont on rapporte
+        // la pastille. Même règle que `mergeDeltaIntoCache`, pour le même motif.
+        const activeConversationId = useNotificationStore.getState().activeConversationId;
+        setConversationUnreadInCache(
+          queryClient,
+          convId,
+          convId === activeConversationId ? 0 : unreadCount
+        );
+      })
+      .catch(() => undefined);
+  }
+}
+
 // After a message is deleted, advance the conversation-list preview to the
 // newest remaining message — but only for conversations whose `lastMessage`
 // WAS the deleted message. Mirrors the lastMessage-update pattern used by the
@@ -1023,15 +1108,28 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // Aucune donnée à fusionner : le masquage a RETIRÉ la bulle des caches, et
     // l'événement ne porte que l'adresse. Une apparition ne peut pas s'écrire
     // comme une tombstone inversée — il faut aller rechercher. On invalide donc
-    // les conversations nommées, jamais tout le cache, et la liste avec elles
-    // (l'aperçu du dernier message peut redevenir celui qu'on avait masqué).
+    // les FILS des conversations nommées, jamais tout le cache.
+    //
+    // La LIGNE DE LISTE, en revanche, n'a rien à demander ici. Le serveur l'a
+    // déjà envoyée : `restoreMessageForUser` (gateway) appelle
+    // `refreshPersonalConversationPreview`, qui émet un `conversation:updated`
+    // portant l'aperçu PERSONNEL recalculé — le dernier message encore visible
+    // POUR CE LECTEUR, filtré à son prisme, que seul le serveur connaît (il peut
+    // être hors de la page chargée, ou masqué lui aussi) et borné à sa seule
+    // audience (`onlyForReaderUserId`). `handleConversationUpdated` le fusionne
+    // sans remplacer la page.
+    //
+    // L'invalidation qui se trouvait ici était donc PUREMENT redondante — et
+    // destructrice : `queryKeys.conversations.all` est un PRÉFIXE de
+    // `conversations.infinite()`, dont elle rejouait toutes les pages chargées.
+    // Elle courait de surcroît contre la diffusion qu'elle doublait, sur une
+    // route lourde, pour un résultat que la socket apportait déjà mieux.
     const handleMessagesRestoredForMe = (data: MessageRestoredForMeEventData) => {
       const affected = new Set((data?.messages ?? []).map((m) => m.conversationId).filter(Boolean));
       if (affected.size === 0) return;
       for (const convId of affected) {
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     };
 
     // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
@@ -1057,20 +1155,35 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         .catch(() => undefined);
     };
 
-    // Handler for message:pending-delivered — queued messages delivered on reconnect.
-    // Use targeted per-conversation invalidation to avoid a broad cache flush.
+    // Handler for message:pending-delivered — la file hors-ligne vient d'être
+    // vidée au reconnect.
+    //
+    // Le gateway rejoue d'abord CHAQUE entrée de file comme son propre événement
+    // (`_drainedEmissions`), PUIS annonce ce compte. Tout ce que ces rejeux
+    // portent est donc déjà fusionné quand ce handler s'exécute :
+    // `handleNewMessage` a écrit l'aperçu, le rang et la promotion en tête de la
+    // ligne de liste — sans remplacer la page, et son commentaire l'écrit en
+    // capitales (« DO NOT invalidate here »).
+    //
+    // Ce handler faisait exactement l'inverse, à vingt lignes de là et sur un
+    // préfixe PLUS LARGE : `queryKeys.conversations.all` (`['conversations']`)
+    // atteint `conversations.infinite()` (`['conversations','infinite']`), dont
+    // il rejouait TOUTES les pages chargées en remplaçant le cache — effaçant
+    // les écritures que le handler précédent venait de poser, et dupliquant une
+    // ligne à chaque frontière de page (la route pagine par OFFSET sur un tri
+    // `lastMessageAt` décroissant).
+    //
+    // Reste la seule chose que la file ne rejoue pas, la PASTILLE : voir
+    // `refreshUnreadCountsFromServer`.
     const handlePendingMessagesDelivered = (data: { count: number; conversationIds: string[] }) => {
       const affected = data?.conversationIds ?? [];
-      if (affected.length > 0) {
-        for (const convId of affected) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
-        }
-      } else if (conversationId) {
-        // Fallback for old server versions without conversationIds
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(conversationId) });
+      // Repli sur la conversation active pour les serveurs anciens, qui
+      // n'envoyaient pas `conversationIds`.
+      const targets = affected.length > 0 ? affected : conversationId ? [conversationId] : [];
+      for (const convId of targets) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
       }
-      // Always refresh conversation list to update lastMessageAt / unread counts
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      refreshUnreadCountsFromServer(queryClient, targets);
     };
 
     // Handler for message:attachment-updated — async enrichment (transcription/translation) completed for an attachment
@@ -1319,6 +1432,13 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           });
         })
         .catch(() => {
+          // DERNIER RECOURS, délibérément conservé. C'est la seule des quatre
+          // invalidations de ce préfixe qui reste, et la seule qui se justifie :
+          // la lecture BORNÉE d'une ligne vient d'échouer, et sans elle la
+          // conversation n'apparaît pas du tout. Rejouer les pages coûte cher et
+          // peut dupliquer une frontière — mais une ligne manquante à vie coûte
+          // plus. Ce chemin ne s'ouvre que sur un échec réseau, jamais sur le
+          // cours normal des choses.
           queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
         });
     };
