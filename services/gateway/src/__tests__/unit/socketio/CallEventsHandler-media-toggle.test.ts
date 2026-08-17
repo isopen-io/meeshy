@@ -142,6 +142,17 @@ describe('CallEventsHandler — media toggle broadcast excludes sender', () => {
       expect(payload.mediaType).toBe('audio');
       expect(payload.enabled).toBe(false);
     });
+
+    // Vague 140 — the web roster's only registered-peer identity match is
+    // `p.userId || p.participantId` (VideoCallInterface.tsx / Vague 132);
+    // `participantId` alone (a `Participant.id` FK) never matches a roster
+    // entry's `.id` (its own PK) or `.userId`, so `call-store.ts`'s
+    // `updateParticipant` silently no-op'd on every toggle without this.
+    it('includes the caller userId alongside participantId, mirroring call:quality-alert/call:screen-capture-alert', () => {
+      const [, payload] = socketRoomEmit.mock.calls[0];
+      expect(payload.participantId).toBe('participant-1');
+      expect(payload.userId).toBe(USER_ID);
+    });
   });
 
   describe('call:toggle-video (reference behaviour, must stay excluded)', () => {
