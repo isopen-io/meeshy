@@ -1,5 +1,25 @@
 # Audit 360° — Sous-systeme Appels Audio/Video Meeshy
 
+> **Statut au 2026-08-16** (routine « continuous improvement — appels »,
+> meme environnement Linux sans Xcode/simulateur ni acces SSH prod) :
+> - **iOS — corrige** : `CallManager.failCall()` porte desormais le meme
+>   garde `guard callState.isActive else { return }` que ses paths freres
+>   `endCall()`/`handleRemoteEnd()`, identifie le 2026-07-08 et laisse ouvert
+>   faute d'acces build iOS. Ferme d'un coup les ~17 sites d'appel async
+>   (SDP offer/answer, watchdog de connexion, `call:error` serveur) qui ne
+>   verifiaient que `currentCallId == callId` — vivant pendant la fenetre de
+>   "settle" de ~1.5s apres un raccroche local — et qui pouvaient donc
+>   ecraser la vraie raison de fin (`.local`/`.missed`/`.rejected`) avec
+>   `.failed` dans l'UI, le snapshot UserDefaults et l'historique gateway.
+>   Verification faite par extraction statique du corps de fonction (pattern
+>   "source-guard" deja etabli dans `CallManagerTests.swift`, ex.
+>   `handleAudioInterruption`) : deux nouveaux temoins dans
+>   `FailCallActiveGuardTests` (`CallManagerTests.swift`) — presence du garde,
+>   et position AVANT le report CallKit `.failed` et le re-emit `call:end`.
+>   **Compilation et `./apps/ios/meeshy.sh test` non executes dans cette
+>   session** (meme contrainte d'environnement que les sessions precedentes) —
+>   a confirmer par la CI iOS sur la PR.
+
 > **Statut au 2026-07-08 (2)** (session `claude/loving-thompson-wyzy59`, meme
 > environnement Linux sans Xcode/simulateur ni acces SSH prod) :
 > - **P1-GW-8 (nouveau, corrige)** — `call:end` attendait `postCallSummary()`
