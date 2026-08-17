@@ -63,6 +63,16 @@
  * @see packages/shared/utils/conversation-bridge.ts (la loi — LWS-1)
  * @see packages/shared/types/conversation-bridge.ts (le contrat gelé §3.2)
  * @see tasks/lentille-workshop-execution.md G-122
+ *
+ * ── 4. L'étage agent, en TOP-UP optionnel (G-127) ───────────────────────────
+ * `buildBridgeData` rend TOUJOURS le plancher déterministe ci-dessus (C1).
+ * Si l'appelant fournit `params.agent`, chaque pont qui a une fenêtre non
+ * lue REÇOIT une tentative d'enrichissement — mais seule une couverture
+ * EXACTE (mêmes bornes de messages, même compte) fait basculer `kind` de
+ * `'fallback'` à `'agent'` (C2 : une couverture incertaine ne se déclare
+ * jamais complète). Tout le reste — agent muet (`data: null`), bornes
+ * différentes, compte différent, service down, timeout — laisse le pont
+ * fallback strictement INTACT. Voir `enrichWithAgentSummaries`.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -127,6 +137,34 @@ export interface ConversationBridgeEntry {
   readonly lastReadAt?: Date;
 }
 
+/**
+ * Ce que la gateway demande au débouché de lecture de l'agent (G-126,
+ * `GET /api/agent/conversations/:id/range-summary`) pour UNE plage. Interface
+ * STRUCTURELLE — comme `UnreadBridgeBuilder` d'`emitUnreadCountsToRecipients`
+ * — plutôt qu'un import direct d'`AgentHttpClient` : ce service reste
+ * testable sans monter un vrai client réseau, et l'implémentation réelle
+ * (`AgentHttpClient.getRangeSummary`, timeout 1500 ms) comme un double de
+ * test satisfont toutes deux ce contrat minimal.
+ *
+ * `null` — jamais une erreur — est la réponse attendue quand l'agent est
+ * muet, en panne, ou hors budget : c'est exactement ce que rend la route
+ * G-126 pour `data: null`, et exactement ce que ce service traite comme un
+ * repli silencieux (C1/C2).
+ */
+export interface BridgeAgentRangeSummaryClient {
+  getRangeSummary(params: {
+    conversationId: string;
+    fromMessageId: string;
+    toMessageId: string;
+  }): Promise<{
+    conversationId: string;
+    summary: string;
+    fromMessageId: string;
+    toMessageId: string;
+    messageCount: number;
+  } | null>;
+}
+
 export interface BuildBridgeDataParams {
   /**
    * `User.id` du lecteur — ou `Participant.id` pour un anonyme, exactement le
@@ -146,9 +184,23 @@ export interface BuildBridgeDataParams {
   readonly orchestratorInputs?: ReadonlyMap<string, BridgeOrchestratorInput>;
   /** Plafond global de la fenêtre agrégée. Défaut : `DEFAULT_BRIDGE_WINDOW_LIMIT`. */
   readonly windowLimit?: number;
+  /**
+   * G-127 — ABSENT (défaut) : cette passe ne consulte jamais l'agent, elle
+   * rend exactement le plancher déterministe de G-122, sans requête réseau
+   * de plus. Fourni : chaque pont produit reçoit une tentative
+   * d'enrichissement borné — cf. `enrichWithAgentSummaries`.
+   *
+   * Volontairement absent de l'interface `UnreadBridgeBuilder`
+   * (`socketio/emitUnreadCountsToRecipients.ts`) : le chemin socket chaud
+   * n'a jamais accès à ce paramètre et ne peut donc jamais payer l'appel
+   * agent — seul `GET /conversations` (REST, `routes/conversations/core.ts`)
+   * le fournit.
+   */
+  readonly agent?: BridgeAgentRangeSummaryClient;
 }
 
 type WindowMessageRow = {
+  id: string;
   conversationId: string;
   senderId: string;
   messageType?: string | null;
@@ -311,6 +363,7 @@ export class ConversationBridgeService {
         orderBy: { createdAt: 'asc' },
         take,
         select: {
+          id: true,
           conversationId: true,
           senderId: true,
           messageType: true,
@@ -327,6 +380,13 @@ export class ConversationBridgeService {
 
       // ── Regroupement puis appel de la LOI, une fois par conversation ──────
       const windowByConversation = new Map<string, BridgeMessage[]>();
+      // Bornes RÉELLES (id du premier/dernier message NOMMÉ retenu), dans le
+      // même ordre ascendant que `rows` — c'est la « fenêtre non lue du
+      // pont » que G-127 intersecte avec la plage résumée par l'agent.
+      const windowBoundsByConversation = new Map<
+        string,
+        { firstMessageId: string; lastMessageId: string }
+      >();
       for (const row of rows) {
         const senderName = resolveAuthorName(row.sender);
         if (senderName === null) continue; // innommable ⇒ écarté, jamais inventé
@@ -336,8 +396,20 @@ export class ConversationBridgeService {
           senderName,
           attachments: bridgeAttachmentsOf(row),
         };
-        if (bucket) bucket.push(bridgeMessage);
-        else windowByConversation.set(row.conversationId, [bridgeMessage]);
+        if (bucket) {
+          bucket.push(bridgeMessage);
+          const bounds = windowBoundsByConversation.get(row.conversationId)!;
+          windowBoundsByConversation.set(row.conversationId, {
+            firstMessageId: bounds.firstMessageId,
+            lastMessageId: row.id,
+          });
+        } else {
+          windowByConversation.set(row.conversationId, [bridgeMessage]);
+          windowBoundsByConversation.set(row.conversationId, {
+            firstMessageId: row.id,
+            lastMessageId: row.id,
+          });
+        }
       }
 
       for (const [conversationId, participant] of participantByConversation) {
@@ -373,6 +445,16 @@ export class ConversationBridgeService {
         });
       }
 
+      // ── G-127 : top-up agent optionnel, jamais sur le chemin socket ──────
+      if (params.agent && result.size > 0) {
+        await this.enrichWithAgentSummaries(
+          result,
+          windowBoundsByConversation,
+          windowByConversation,
+          params.agent
+        );
+      }
+
       return result;
     } catch (error) {
       // Posture d'échec : le pont est un confort, la liste est le produit. On
@@ -405,5 +487,99 @@ export class ConversationBridgeService {
       return toBridgeSuggestedMode(resolveOrchestratorDecision({ ...orchestrator, unreadCount }));
     }
     return unreadCount > ORCHESTRATOR_UNREAD_CAP ? 'resume' : 'focal';
+  }
+
+  /**
+   * G-127 — top-up agent, EN PLACE sur `result` déjà rempli du plancher
+   * déterministe. Une conversation à la fois, en parallèle (`Promise.all`) :
+   * l'agent lit une plage par appel (G-126), il n'y a rien à agréger ici.
+   *
+   * ── L'intersection exacte (C2) ─────────────────────────────────────────
+   * La « fenêtre non lue du pont » est `windowBoundsByConversation` — les
+   * bornes RÉELLES (id du premier/dernier message nommé) que ce service a
+   * déjà retenues pour construire le plancher. Le résumé agent ne COUVRE
+   * cette fenêtre que si les TROIS coïncident :
+   *   1. `summary.fromMessageId === bounds.firstMessageId`
+   *   2. `summary.toMessageId   === bounds.lastMessageId`
+   *   3. `summary.messageCount  === ` le compte RÉEL de cette fenêtre
+   * (1) et (2) sont en réalité un écho — `summarizeMessageRange` (G-125)
+   * rend `null` dès que les bornes demandées ne se retrouvent pas TELLES
+   * QUELLES dans la mémoire de l'agent, donc un succès les échoue déjà
+   * identiques. (3) est la vérification qui manquerait sans elle : deux
+   * mémoires peuvent partager les mêmes bornes tout en désaccordant sur ce
+   * qu'il y a ENTRE ELLES (droits de lecture, masquage personnel — l'agent
+   * n'en connaît rien). Une des trois manque ⇒ repli : le pont fallback
+   * déjà dans `result` reste EXACTEMENT tel quel, `isComplete` compris.
+   *
+   * ── E7 : la paire `translations`+`originalLanguage` ────────────────────
+   * `resolveLastMessagePreview` (packages/shared/utils/conversation-helpers)
+   * ne fait RIEN de spécial quand `translations` est absent : elle rend le
+   * texte tel quel, dans toutes les langues. C'est exactement la posture
+   * honnête ici. Le débouché G-126 ne déclare AUCUNE langue par construction
+   * (son commentaire le dit : ce serait affirmer la sortie du modèle), et ce
+   * service ne fait tourner aucun pipeline de traduction sur la phrase de
+   * l'observer — en fabriquer une (p. ex. `originalLanguage: 'fr'`, parce
+   * que le prompt système DEMANDE du français) affirmerait une propriété du
+   * texte produit que personne ici n'a vérifiée. La paire E7 reste donc
+   * ABSENTE : le texte agent traverse `resolveLastMessagePreview` comme un
+   * texte non retraduit, identique pour tous les lecteurs — un repli
+   * honnête, pas un défaut d'implémentation. Reformater cette phrase par
+   * langue est un chantier ultérieur (une vraie traduction serveur), hors
+   * périmètre de G-127.
+   *
+   * Ne lève JAMAIS : chaque tentative est isolée par son propre `try/catch`,
+   * pour qu'un agent en panne sur une conversation ne prive pas les autres
+   * de leur tentative, et surtout ne fasse jamais échouer le `try` englobant
+   * de `buildBridgeData` (qui, lui, viderait TOUTE la map — sort réservé aux
+   * pannes du plancher déterministe, jamais à celles d'un confort).
+   */
+  private async enrichWithAgentSummaries(
+    result: Map<string, ConversationBridgeEntry>,
+    windowBoundsByConversation: ReadonlyMap<string, { firstMessageId: string; lastMessageId: string }>,
+    windowByConversation: ReadonlyMap<string, BridgeMessage[]>,
+    agent: BridgeAgentRangeSummaryClient
+  ): Promise<void> {
+    await Promise.all(
+      [...result.entries()].map(async ([conversationId, entry]) => {
+        const bounds = windowBoundsByConversation.get(conversationId);
+        if (!bounds) return; // aucun message nommé retenu ⇒ rien à intersecter
+
+        try {
+          const summary = await agent.getRangeSummary({
+            conversationId,
+            fromMessageId: bounds.firstMessageId,
+            toMessageId: bounds.lastMessageId,
+          });
+
+          const expectedCount = windowByConversation.get(conversationId)?.length ?? 0;
+          const coversExactly =
+            summary !== null &&
+            summary.fromMessageId === bounds.firstMessageId &&
+            summary.toMessageId === bounds.lastMessageId &&
+            summary.messageCount === expectedCount;
+
+          if (!coversExactly) return; // C2 : repli — le pont fallback reste intact
+
+          const agentBridge: ConversationBridge = {
+            kind: 'agent',
+            unreadCount: entry.bridge.unreadCount,
+            suggestedMode: entry.bridge.suggestedMode,
+            text: summary.summary,
+            // La partialité voyage à travers le changement d'étage : un
+            // plancher déjà déclaré partiel (fenêtre tronquée par
+            // `windowLimit`) le reste, phrase ou pas.
+            ...(entry.bridge.isComplete === false ? { isComplete: false } : {}),
+            // E7 : `translations`/`originalLanguage` ABSENTS — cf. doc-comment.
+          };
+
+          result.set(conversationId, { ...entry, bridge: agentBridge });
+        } catch (error) {
+          logger.warn('[ConversationBridgeService] agent enrichment failed, serving fallback bridge', {
+            conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+    );
   }
 }

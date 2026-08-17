@@ -48,6 +48,7 @@ import {
   ConversationBridgeService,
   type BridgeOrchestratorInput
 } from '../../services/ConversationBridgeService';
+import { AgentHttpClient } from '../../services/AgentHttpClient';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
@@ -833,11 +834,26 @@ export function registerCoreRoutes(
             });
           }
 
+          // G-127 — top-up agent, OPTIONNEL et borné, REST seulement.
+          // `AGENT_HOST` absent (comme le client ZMQ de `server.ts`, même
+          // convention) ⇒ `agentClient` reste `undefined`, et
+          // `buildBridgeData` ne consulte jamais l'agent : plancher G-122
+          // strictement inchangé. Ce paramètre n'existe PAS sur l'interface
+          // `UnreadBridgeBuilder` du chemin socket
+          // (`emitUnreadCountsToRecipients`) — le fan-out temps réel d'un
+          // compteur de non-lus ne paie donc jamais cet appel HTTP.
+          const agentHost = process.env.AGENT_HOST;
+          const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+          const agentClient = agentHost
+            ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`)
+            : undefined;
+
           const bridgeService = new ConversationBridgeService(prisma);
           bridgeByConversation = await bridgeService.buildBridgeData({
             viewerId: userId,
             candidates: bridgeCandidates,
-            orchestratorInputs
+            orchestratorInputs,
+            ...(agentClient ? { agent: agentClient } : {})
           });
         } catch (error) {
           // Posture d'échec identique à celle du service : le pont est un

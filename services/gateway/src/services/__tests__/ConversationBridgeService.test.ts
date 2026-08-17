@@ -153,6 +153,7 @@ const makePrismaMock = (fixture: Fixture) => {
           );
         const limited = typeof take === 'number' ? matched.slice(0, take) : matched;
         return limited.map((row) => ({
+          id: row.id,
           conversationId: row.conversationId,
           senderId: row.senderId,
           createdAt: row.createdAt,
@@ -693,5 +694,241 @@ describe('ConversationBridgeService — forme du pont', () => {
       candidates: [{ conversationId: 'c1', unreadCount: 3 }],
     });
     expect(result.size).toBe(0);
+  });
+});
+
+// =============================================================================
+// G-127 — top-up agent : intersection exacte, repli déterministe (C2), E7
+// =============================================================================
+
+describe('ConversationBridgeService — étage agent (G-127)', () => {
+  const baseFixture = (): Fixture => ({
+    participants: [participant('c1', 'p1')],
+    cursors: [
+      {
+        participantId: 'p1',
+        lastReadAt: at('2026-03-01T08:00:00.000Z'),
+        lastReadMessageCreatedAt: at('2026-03-01T08:00:00.000Z'),
+      },
+    ],
+    messages: [
+      message({
+        id: 'm1',
+        conversationId: 'c1',
+        senderId: 's1',
+        createdAt: at('2026-03-02T09:00:00.000Z'),
+        sender: { displayName: 'Alice' },
+      }),
+      message({
+        id: 'm2',
+        conversationId: 'c1',
+        senderId: 's2',
+        createdAt: at('2026-03-02T10:00:00.000Z'),
+        sender: { displayName: 'Bruno' },
+      }),
+      message({
+        id: 'm3',
+        conversationId: 'c1',
+        senderId: 's1',
+        createdAt: at('2026-03-02T11:00:00.000Z'),
+        sender: { displayName: 'Alice' },
+      }),
+    ],
+  });
+
+  it('sans `agent` fourni : ne monte AUCUN appel, le pont reste `fallback` (comportement G-122 intact)', async () => {
+    const getRangeSummary = jest.fn();
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+    });
+    expect(result.get('c1')!.bridge.kind).toBe('fallback');
+    expect(getRangeSummary).not.toHaveBeenCalled();
+  });
+
+  it('intersection EXACTE (mêmes bornes, même compte) ⇒ kind bascule à `agent`, `text` porté', async () => {
+    const getRangeSummary = jest.fn().mockResolvedValue({
+      conversationId: 'c1',
+      summary: "Alice et Bruno ont réglé l'horaire de vendredi.",
+      fromMessageId: 'm1',
+      toMessageId: 'm3',
+      messageCount: 3,
+    });
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    expect(getRangeSummary).toHaveBeenCalledWith({
+      conversationId: 'c1',
+      fromMessageId: 'm1',
+      toMessageId: 'm3',
+    });
+    const bridge = result.get('c1')!.bridge;
+    expect(bridge.kind).toBe('agent');
+    expect(bridge.text).toBe("Alice et Bruno ont réglé l'horaire de vendredi.");
+    expect(bridge.unreadCount).toBe(3);
+    expect(bridge.suggestedMode).toBe('focal');
+    // `data` (l'étage déterministe) ne voyage plus une fois basculé à agent.
+    expect(bridge.data).toBeUndefined();
+    // Fenêtre complète ⇒ `isComplete` ABSENT, comme le plancher qu'il remplace.
+    expect('isComplete' in bridge).toBe(false);
+  });
+
+  it("E7 : `translations` et `originalLanguage` restent ABSENTS — aucune langue n'est fabriquée", async () => {
+    const getRangeSummary = jest.fn().mockResolvedValue({
+      conversationId: 'c1',
+      summary: 'Une phrase en français, jamais retraduite ici.',
+      fromMessageId: 'm1',
+      toMessageId: 'm3',
+      messageCount: 3,
+    });
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    const bridge = result.get('c1')!.bridge;
+    expect('translations' in bridge).toBe(false);
+    expect('originalLanguage' in bridge).toBe(false);
+  });
+
+  it('C2 — repli : bornes différentes (résumé plus court) ⇒ le pont fallback reste INTACT', async () => {
+    const getRangeSummary = jest.fn().mockResolvedValue({
+      conversationId: 'c1',
+      summary: 'Résumé partiel des deux premiers messages seulement.',
+      fromMessageId: 'm1',
+      toMessageId: 'm2', // ne couvre pas jusqu'à m3
+      messageCount: 2,
+    });
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    const bridge = result.get('c1')!.bridge;
+    expect(bridge.kind).toBe('fallback');
+    expect(bridge.text).toBeUndefined();
+    expect(bridge.data!.messageCount).toBe(3);
+  });
+
+  it('C2 — repli : mêmes bornes mais `messageCount` divergent (droits que l\'agent ignore) ⇒ fallback INTACT', async () => {
+    const getRangeSummary = jest.fn().mockResolvedValue({
+      conversationId: 'c1',
+      summary: 'Résumé qui prétend couvrir 4 messages que la gateway ne voit pas tous.',
+      fromMessageId: 'm1',
+      toMessageId: 'm3',
+      messageCount: 4, // l'agent voit un message de plus que les droits du lecteur
+    });
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    expect(result.get('c1')!.bridge.kind).toBe('fallback');
+  });
+
+  it('C2 — repli : agent muet (`data: null`, G-126) ⇒ fallback INTACT', async () => {
+    const getRangeSummary = jest.fn().mockResolvedValue(null);
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    expect(result.get('c1')!.bridge.kind).toBe('fallback');
+  });
+
+  it('C2 — repli : agent en panne (timeout/service down, promesse rejetée) ⇒ fallback INTACT, rien ne casse', async () => {
+    const getRangeSummary = jest.fn().mockRejectedValue(new Error('agent unreachable'));
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      agent: { getRangeSummary },
+    });
+
+    expect(result.get('c1')!.bridge.kind).toBe('fallback');
+    expect(result.get('c1')!.bridge.data!.messageCount).toBe(3);
+  });
+
+  it("la partialité traverse le changement d'étage : fenêtre tronquée ⇒ `isComplete: false` reste posé sur un pont `agent`", async () => {
+    // windowLimit: 2 tronque la fenêtre à [m1, m2] — la gateway n'appelle
+    // l'agent QUE sur les bornes qu'elle a réellement retenues.
+    const getRangeSummary = jest.fn().mockResolvedValue({
+      conversationId: 'c1',
+      summary: 'Résumé des deux messages retenus par la fenêtre tronquée.',
+      fromMessageId: 'm1',
+      toMessageId: 'm2',
+      messageCount: 2,
+    });
+    const prisma = makePrismaMock(baseFixture());
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [{ conversationId: 'c1', unreadCount: 3 }],
+      windowLimit: 2,
+      agent: { getRangeSummary },
+    });
+
+    expect(getRangeSummary).toHaveBeenCalledWith({
+      conversationId: 'c1',
+      fromMessageId: 'm1',
+      toMessageId: 'm2',
+    });
+    const bridge = result.get('c1')!.bridge;
+    expect(bridge.kind).toBe('agent');
+    expect(bridge.isComplete).toBe(false);
+  });
+
+  it('une panne agent sur UNE conversation ne prive pas les autres de leur tentative', async () => {
+    const fixture: Fixture = {
+      participants: [participant('c1', 'p1'), participant('c2', 'p2')],
+      cursors: [
+        { participantId: 'p1', lastReadAt: null, lastReadMessageCreatedAt: null },
+        { participantId: 'p2', lastReadAt: null, lastReadMessageCreatedAt: null },
+      ],
+      messages: [
+        message({
+          id: 'a1',
+          conversationId: 'c1',
+          senderId: 'other-1',
+          createdAt: at('2026-03-02T09:00:00.000Z'),
+          sender: { displayName: 'Alice' },
+        }),
+        message({
+          id: 'b1',
+          conversationId: 'c2',
+          senderId: 'other-2',
+          createdAt: at('2026-03-02T09:00:00.000Z'),
+          sender: { displayName: 'Bruno' },
+        }),
+      ],
+    };
+    const getRangeSummary = jest.fn().mockImplementation(async ({ conversationId }: any) => {
+      if (conversationId === 'c1') throw new Error('down for c1');
+      return { conversationId: 'c2', summary: 'Bruno a écrit.', fromMessageId: 'b1', toMessageId: 'b1', messageCount: 1 };
+    });
+    const prisma = makePrismaMock(fixture);
+    const result = await new ConversationBridgeService(prisma).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: [
+        { conversationId: 'c1', unreadCount: 1 },
+        { conversationId: 'c2', unreadCount: 1 },
+      ],
+      agent: { getRangeSummary },
+    });
+
+    expect(result.get('c1')!.bridge.kind).toBe('fallback');
+    expect(result.get('c2')!.bridge.kind).toBe('agent');
   });
 });
