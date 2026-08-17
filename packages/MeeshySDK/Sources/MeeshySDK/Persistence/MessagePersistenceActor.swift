@@ -898,6 +898,62 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Retirer des messages du stockage local, LIGNES COMPRISES.
+    ///
+    /// Le pendant dur de `markDeleted`, et la distinction est le produit :
+    /// `markDeleted` pose une pierre tombale (`deletedAt` + contenu vidé) parce
+    /// que le message a disparu POUR TOUS et que le fil doit en garder la trace
+    /// (« ce message a été supprimé »). Ici le message reste vivant pour les
+    /// autres participants — c'est CE lecteur qui l'a retiré de sa vue. Il ne
+    /// doit rien laisser derrière lui, pas même une tombstone : le serveur ne le
+    /// renverra plus jamais à ce lecteur (`personalHistoryFilter`), donc une
+    /// ligne « supprimée » resterait affichée à vie.
+    ///
+    /// Résolution par `localId` OU `serverId`, comme `markDeleted` : l'événement
+    /// nomme l'id SERVEUR, et la ligne locale d'un message qu'on a soi-même
+    /// envoyé peut encore porter son id optimiste.
+    ///
+    /// Les tables filles sont balayées avec les lignes, exactement comme
+    /// `deleteAll` — sans quoi traductions, transcriptions et audios traduits
+    /// survivraient à leur message, invisibles et jamais collectés.
+    ///
+    /// Un rafraîchissement PAR conversation touchée, jamais un global : les
+    /// observateurs de `MessageStore` filtrent par `conversationId`, et un lot
+    /// peut traverser plusieurs fils.
+    public func purgeMessages(ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
+        let affectedConvIds: Set<String> = try await dbWriter.write { db -> Set<String> in
+            let matching = MessageRecord.filter(
+                ids.contains(Column("localId")) || ids.contains(Column("serverId"))
+            )
+            let rows = try matching.fetchAll(db)
+            guard !rows.isEmpty else { return [] }
+            // Les tables filles sont clées sur le localId RÉEL de la ligne, pas
+            // sur l'identifiant reçu — c'est pourquoi elles se purgent depuis
+            // les lignes retrouvées, jamais depuis `ids`.
+            let localIds = rows.map { $0.localId }
+            let placeholders = localIds.map { _ in "?" }.joined(separator: ",")
+            let childArgs = StatementArguments(localIds)
+            for table in ["message_translations", "message_transcriptions", "message_audio_translations"] {
+                try db.execute(
+                    sql: "DELETE FROM \(table) WHERE messageLocalId IN (\(placeholders))",
+                    arguments: childArgs
+                )
+            }
+            for table in ["pending_ids", "send_attempts"] {
+                try db.execute(
+                    sql: "DELETE FROM \(table) WHERE localId IN (\(placeholders))",
+                    arguments: childArgs
+                )
+            }
+            _ = try matching.deleteAll(db)
+            return Set(rows.map { $0.conversationId })
+        }
+        if !affectedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
+        }
+    }
+
     /// Undo a soft-delete, restoring the message to a non-deleted state.
     /// Used as the optimistic rollback when a delete network call fails.
     public func markUndeleted(localId: String) throws {

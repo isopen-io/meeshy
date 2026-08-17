@@ -1502,6 +1502,92 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertNil(fetched?.content, "Content should be cleared in persistence after deletion")
     }
 
+    // MARK: - messageHiddenForMe (masquage PERSONNEL, multi-appareil)
+
+    /// Un masquage venu d'un AUTRE appareil du même utilisateur doit retirer la
+    /// bulle, sans laisser de pierre tombale : le message reste vivant pour les
+    /// autres participants, et le serveur ne le renverra plus jamais à ce
+    /// lecteur — une ligne « supprimée » y resterait affichée à vie.
+    func test_messageHiddenForMe_purgesRowInsteadOfTombstoning() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, _, socket) = makeSUT()
+        sut.persistence = actor
+
+        try await actor.insertOptimistic(makeStoredRecord(localId: "hidden_msg", content: "Hide me"))
+
+        socket.simulateMessageHiddenForMe(
+            MessageHiddenForMeEvent(
+                userId: currentUserId,
+                messages: [PersonalMessageVisibilityRef(messageId: "hidden_msg", conversationId: conversationId)],
+                hiddenAt: "2026-08-16T10:00:00.000Z"
+            )
+        )
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let fetched = try await db.read { db in try MessageRecord.fetchOne(db, key: "hidden_msg") }
+        XCTAssertNil(fetched, "un masquage personnel retire la ligne — il ne pose pas de deletedAt")
+    }
+
+    /// Le lot traverse plusieurs conversations (« effacer ces 100 ») : ce
+    /// handler ne parle que du fil qu'il tient, et ne doit pas purger celui du
+    /// voisin sur la foi d'un événement qu'un autre handler consommera.
+    func test_messageHiddenForMe_ignoresRefsFromAnotherConversation() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, _, socket) = makeSUT()
+        sut.persistence = actor
+
+        try await actor.insertOptimistic(
+            makeStoredRecord(localId: "other_conv_msg", content: "Elsewhere", conversationId: "000000000000000000000077")
+        )
+
+        socket.simulateMessageHiddenForMe(
+            MessageHiddenForMeEvent(
+                userId: currentUserId,
+                messages: [PersonalMessageVisibilityRef(messageId: "other_conv_msg", conversationId: "000000000000000000000077")],
+                hiddenAt: nil
+            )
+        )
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let fetched = try await db.read { db in try MessageRecord.fetchOne(db, key: "other_conv_msg") }
+        XCTAssertNotNil(fetched, "une référence hors du fil courant n'est pas l'affaire de ce handler")
+    }
+
+    private func makeStoredRecord(
+        localId: String,
+        content: String,
+        conversationId: String? = nil
+    ) -> MessageRecord {
+        MessageRecord(
+            localId: localId, serverId: nil,
+            conversationId: conversationId ?? self.conversationId, senderId: otherUserId,
+            content: content, originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+    }
+
     func test_messageEdited_withPersistence_writesEditToStore() async throws {
         let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()

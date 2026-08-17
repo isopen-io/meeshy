@@ -36,7 +36,10 @@ const makeSocketMock = () => {
 
 let currentSocketMock: ReturnType<typeof makeSocketMock> | null = null;
 
-const mockIo = jest.fn(() => {
+// La signature variadique n'est pas décorative : sans elle, `mock.calls` se
+// type en tuple vide et aucun témoin ne peut lire les OPTIONS du handshake —
+// or c'est précisément ce que la résolution du jeton demande d'inspecter.
+const mockIo = jest.fn((..._args: any[]) => {
   currentSocketMock = makeSocketMock();
   return currentSocketMock;
 });
@@ -50,6 +53,32 @@ jest.mock('@/lib/config', () => ({
     getBackendUrl: () => 'http://test-backend',
   },
 }));
+
+// Le jeton VIVANT du porteur. `null` par défaut — le cas d'un porteur sans
+// localStorage, où le résolveur doit retomber sur le jeton confié à `connect()`.
+const mockGetAuthToken = jest.fn<string | null, []>(() => null);
+
+jest.mock('@/services/auth-manager.service', () => ({
+  authManager: {
+    getAuthToken: () => mockGetAuthToken(),
+  },
+}));
+
+/**
+ * Le jeton que la socket présenterait au PROCHAIN handshake.
+ *
+ * Socket.IO rejoue l'option `auth` à chaque tentative de reconnexion. Sous sa
+ * forme RÉSOLVEUR, c'est un appel — pas une valeur figée à la construction —
+ * et c'est précisément cette différence que les témoins ci-dessous épinglent.
+ */
+const handshakeTokenOf = (ioCallIndex = 0): unknown => {
+  const options = mockIo.mock.calls[ioCallIndex]?.[1] as { auth?: unknown } | undefined;
+  const auth = options?.auth;
+  if (typeof auth !== 'function') return auth;
+  let resolved: unknown;
+  (auth as (cb: (data: unknown) => void) => void)((data) => { resolved = data; });
+  return resolved;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,6 +115,8 @@ describe('notificationSocketIO singleton', () => {
   beforeEach(() => {
     notificationSocketIO.reset();
     mockIo.mockClear();
+    mockGetAuthToken.mockReset();
+    mockGetAuthToken.mockReturnValue(null);
     currentSocketMock = null;
   });
 
@@ -96,10 +127,8 @@ describe('notificationSocketIO singleton', () => {
       await notificationSocketIO.connect('tok-123');
 
       expect(mockIo).toHaveBeenCalledTimes(1);
-      expect(mockIo).toHaveBeenCalledWith(
-        'http://test-backend',
-        expect.objectContaining({ auth: { token: 'tok-123' } })
-      );
+      expect(mockIo).toHaveBeenCalledWith('http://test-backend', expect.any(Object));
+      expect(handshakeTokenOf()).toEqual({ token: 'tok-123' });
     });
 
     it('is a no-op when already connected with the same token', async () => {
@@ -718,6 +747,168 @@ describe('notificationSocketIO singleton', () => {
       currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 9 }));
 
       expect(desyncCb).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Le handshake présente le jeton VIVANT, pas celui de la construction ──
+  //
+  // Socket.IO rejoue l'option `auth` à CHAQUE tentative de reconnexion. Figée en
+  // littéral, elle re-présente pour la vie le jeton d'origine : après un
+  // rafraîchissement silencieux (chemin 401 REST), les cinq tentatives
+  // présentent des identifiants que la gateway refuse — et brûlent le budget de
+  // reconnexion sur une session dont les identifiants VALIDES étaient en
+  // storage depuis le début. Jumeau exact de `resolveHandshakeToken()` du
+  // couloir principal (`socketio/connection.service.ts`).
+
+  describe('handshake token resolution', () => {
+    it('presents the freshly refreshed token, not the one connect() was built with', async () => {
+      mockGetAuthToken.mockReturnValue('tok-stale');
+      await notificationSocketIO.connect('tok-stale');
+
+      // Rafraîchissement silencieux : le nouveau jeton atterrit en storage.
+      mockGetAuthToken.mockReturnValue('tok-fresh');
+
+      expect(handshakeTokenOf()).toEqual({ token: 'tok-fresh' });
+    });
+
+    it('falls back to the token handed to connect() when no live token is in storage', async () => {
+      mockGetAuthToken.mockReturnValue(null);
+      await notificationSocketIO.connect('tok-handed');
+
+      expect(handshakeTokenOf()).toEqual({ token: 'tok-handed' });
+    });
+  });
+
+  // ── `reconnect_failed` : la boucle interne abandonne, la nôtre reprend ────
+  //
+  // Socket.IO cesse DÉFINITIVEMENT de retenter après `reconnectionAttempts`.
+  // Sans reprise, l'onglet reste ouvert avec un canal mort : plus aucune
+  // notification, aucun compteur, et — le pire — plus aucun signal de resync,
+  // alors que React Query est en `staleTime: Infinity` et n'a aucune autre voie
+  // de rattrapage.
+
+  describe('recovery after socket.io gives up (reconnect_failed)', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
+
+    it('rebuilds the socket after socket.io exhausts its reconnection budget', async () => {
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+
+      currentSocketMock!._emit('reconnect_failed');
+      expect(mockIo).toHaveBeenCalledTimes(1); // pas de rafale synchrone
+
+      jest.advanceTimersByTime(60_000);
+      expect(mockIo).toHaveBeenCalledTimes(2);
+    });
+
+    it('still signals a resync on the recovered connection', async () => {
+      const desyncCb = jest.fn();
+      notificationSocketIO.onSyncDesync(desyncCb);
+
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect'); // PREMIÈRE connexion — aucun signal
+      expect(desyncCb).not.toHaveBeenCalled();
+
+      const dead = currentSocketMock!;
+      dead._emit('reconnect_failed');
+      jest.advanceTimersByTime(60_000);
+      expect(currentSocketMock).not.toBe(dead); // une socket NEUVE, sinon le reste ne prouve rien
+      currentSocketMock!._emit('connect'); // la socket REPRISE
+
+      // La reprise a traversé une fenêtre AVEUGLE : c'est exactement le cas que
+      // `desync('reconnect')` existe pour signaler. Passer par `disconnect()`
+      // pour reconstruire remettrait `hasConnectedBefore` à false et TAIRAIT ce
+      // signal — la socket reviendrait, le rattrapage non.
+      expect(desyncCb).toHaveBeenCalledWith('reconnect');
+    });
+
+    it('keeps the _seq cursor across the recovery so a gap is still detectable', async () => {
+      const desyncCb = jest.fn();
+      notificationSocketIO.onSyncDesync(desyncCb);
+
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 40 }));
+      desyncCb.mockClear();
+
+      const dead = currentSocketMock!;
+      dead._emit('reconnect_failed');
+      jest.advanceTimersByTime(60_000);
+      expect(currentSocketMock).not.toBe(dead); // une socket NEUVE, sinon le reste ne prouve rien
+      currentSocketMock!._emit('connect');
+      desyncCb.mockClear(); // le `reconnect` de la reprise n'est pas ce qu'on mesure ici
+      currentSocketMock!._emit('notification:new', makeNotificationData({ _seq: 45 }));
+
+      // Curseur réinitialisé ⇒ `45` passerait pour une PREMIÈRE observation et
+      // le trou 40→45 serait invisible.
+      expect(desyncCb).toHaveBeenCalledWith('gap');
+    });
+
+    it('presents the live token on the rebuilt socket', async () => {
+      mockGetAuthToken.mockReturnValue('tok-old');
+      await notificationSocketIO.connect('tok-old');
+      currentSocketMock!._emit('connect');
+
+      mockGetAuthToken.mockReturnValue('tok-new');
+      currentSocketMock!._emit('reconnect_failed');
+      jest.advanceTimersByTime(60_000);
+
+      expect(handshakeTokenOf(1)).toEqual({ token: 'tok-new' });
+    });
+
+    it('backs off further on a second consecutive failure', async () => {
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+
+      currentSocketMock!._emit('reconnect_failed');
+      jest.advanceTimersByTime(60_000);
+      expect(mockIo).toHaveBeenCalledTimes(2);
+
+      // La reprise échoue à son tour, sans jamais atteindre `connect`.
+      currentSocketMock!._emit('reconnect_failed');
+      jest.advanceTimersByTime(1_500);
+      expect(mockIo).toHaveBeenCalledTimes(2); // l'attente a GRANDI
+
+      jest.advanceTimersByTime(60_000);
+      expect(mockIo).toHaveBeenCalledTimes(3);
+    });
+
+    it('resets the backoff once a connection succeeds', async () => {
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+
+      currentSocketMock!._emit('reconnect_failed');
+      jest.advanceTimersByTime(60_000);
+      currentSocketMock!._emit('connect'); // reprise RÉUSSIE
+
+      currentSocketMock!._emit('reconnect_failed');
+      jest.advanceTimersByTime(2_500);
+      expect(mockIo).toHaveBeenCalledTimes(3); // à nouveau le PREMIER palier
+    });
+
+    it('cancels a pending retry when the caller disconnects explicitly', async () => {
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+
+      currentSocketMock!._emit('reconnect_failed');
+      notificationSocketIO.disconnect();
+      jest.advanceTimersByTime(60_000);
+
+      expect(mockIo).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels a pending retry when the caller reconnects with a new token', async () => {
+      await notificationSocketIO.connect('tok');
+      currentSocketMock!._emit('connect');
+
+      currentSocketMock!._emit('reconnect_failed');
+      await notificationSocketIO.connect('tok-2');
+      jest.advanceTimersByTime(60_000);
+
+      // La socket demandée par l'appelant, et ELLE SEULE — pas une seconde
+      // ouverte par un minuteur que personne n'a purgé.
+      expect(mockIo).toHaveBeenCalledTimes(2);
     });
   });
 

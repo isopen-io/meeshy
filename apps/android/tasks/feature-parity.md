@@ -1696,11 +1696,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
 - [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
       `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
-      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
-      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
-      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
-      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
-      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      (2026-08-12, slice `conversation-list-live-presence`)**; **row dot shipped 2026-08-17** (slice
+      `conversation-list-presence-dot`). Confirmed a real, categorical gap: `ApiConversation.participants`
+      carries no `isOnline`/`lastActiveAt` fields at all (unlike the Contacts roster, which at least had
+      stale REST data to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the
+      chat header had ZERO presence indication, not even a frozen one. New `ApiConversation.
       otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
       `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
       preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
@@ -1708,13 +1708,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
       `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
       `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
-      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
-      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
-      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
-      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
-      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
-      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
-      direct-type gate and the snapshot merge.
+      nowEpochMillis): PresenceState?` (already gated to direct-only via `otherParticipantUserId`
+      returning `null` for group/community/channel/bot). **Row dot wiring** threads `presence:
+      PresenceState?` through `ConversationRow` → `ConversationRowContent` into the existing
+      `MeeshyAvatar`'s own `presence` parameter — `MeeshyAvatar` (`:sdk-ui`) already RENDERS the dot
+      overlay when given a non-null `PresenceState` (shipped with the avatar atom itself, just never
+      fed a live value from the conversation list, exactly the same "missing wire, not missing UI atom"
+      shape as the earlier `contacts-mood-emoji-presence` slice). Pure Compose glue — no new logic to
+      test (`TDD-COVERAGE.md`'s documented exemption: `@Composable` param threading is out of the JVM
+      gate; the testable decision, `presenceStateFor`, already has its 5 dedicated `ConversationListViewModelTest`
+      cases from the foundation slice). **Chat header dot remains open** — a separate call site, not
+      attempted this run. +9 tests carried over unchanged from the foundation slice (4 `ConversationAccentTest`,
+      5 `ConversationListViewModelTest`), mutation-proven on the direct-type gate and the snapshot merge.
 - [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
       badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
       Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above
@@ -4181,7 +4186,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
 - [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
       (except/only audience picker deferred, tracked above)
-- [ ] Mood status create, react, delete; 21h expiry + viewer tracking
+- [x] Mood status create, react, delete; 21h expiry + viewer tracking — **all five clauses now
+      verified shipped** (last gap closed by slice `status-view-tracking`, 2026-08-17): create/react/
+      delete via `StatusRepository.create`/`.react`/`.delete` wired through `StatusesViewModel.setStatus`/
+      `.react`/`.clearStatus`; 21h expiry via `MoodStatusExpiry.remaining(expiresAt:)` consumed in
+      `StatusBarPresentation`; **viewer tracking** was the last unchecked clause — found via the "ready
+      backend, never wired to UI" heuristic's own iOS-reading step: `StatusViewModel.swift`'s doc
+      comment states plainly "un mood EST un post… la barre de moods était le seul contenu du produit
+      dont la portée restait à zéro" [a mood carries `impressionCount`/`viewCount` like any post, but
+      no Android surface fed either]. Reused BOTH building blocks already shipped this session for
+      regular posts rather than inventing anything new: the pill's on-screen appearance now calls
+      `StatusesViewModel.trackImpression(statusId)` → the same `ImpressionBatcher` class
+      (`source = "status"`, mirror of iOS's own `ImpressionBatcher(source: "status", ...)`) used by
+      the feed; opening a status's popover (a single per-viewer-deduplicated VIEW, distinct from the
+      batched impression) now calls `markStatusViewed(statusId)` → `PostRepository.viewPost`, the
+      exact fire-and-forget shape of `PostDetailViewModel.recordView` from the previous slice. Wired
+      in `StatusBarView.kt`'s existing `StatusBarCell.Pill` branch only — `StatusBarCell.MyStatus`
+      (the viewer's own pill in their own bar) is a SEPARATE branch already, so it's naturally excluded
+      exactly as iOS excludes `viewModel.myStatus` from its own tracking filter, with zero extra gating
+      code needed. `impressionBatcher.flushNowAsync()` on `onCleared()`, mirroring `FeedViewModel`'s own
+      established pattern. +3 tests (`StatusesViewModelTest`: view recorded once, blank id inert, a
+      failed record doesn't disturb the loaded bar) — `trackImpression`'s own debounce/batch logic is
+      already fully covered by `ImpressionBatcherTest`, so no duplicate ViewModel-level test, matching
+      the precedent set by `FeedViewModel.trackImpression` (also untested at the VM level for the same
+      reason).
 - [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
       `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
       `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only

@@ -2,6 +2,112 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Live presence dot on conversation-list rows shipped** (slice
+> `conversation-list-presence-dot`, feature-parity §B). `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed three unrelated open PRs (#3113, #3156, #3160 — all wrong
+> branch naming for this routine, other agents' work, untouched). `df -h /` showed 10 Gi free,
+> stable.
+>
+> **The "backend never wired" heuristic is now genuinely exhausted** — a dedicated Explore agent
+> swept all ~140 public methods across `sdk-core`/`core/*` and found nothing. Pivoted to a new
+> strategy: reading `feature-parity.md` directly for `[~]` (partially-done) lines whose own notes
+> name a small, still-open sub-gap. A second Explore agent surfaced 3 candidates; the strongest
+> (`PostRepository.requestTranslation` never wired) turned out **bigger than assessed on
+> re-proof** — unlike the chat message twin (`MessageRepository.requestTranslation`, a direct
+> client-side translate + cache-merge), the post version fires a request server-side and the
+> translation arrives back via a `post:translation-updated` socket event that isn't wired on
+> Android's `SocialSocketManager` AT ALL — a 3-part system (socket event + cache merge + UI across
+> 2 ViewModels), not a thin slice. Correctly deferred rather than force-fit into one run.
+>
+> **Picked the genuinely small candidate instead**: `- [~] Live presence dot on a direct
+> conversation's row/header` — its own note from the 2026-08-12 foundation slice
+> (`conversation-list-live-presence`) says plainly "UI wiring... is NOT done this run", with the
+> ViewModel-side plumbing (`ConversationListUiState.presenceStateFor(conversation, now):
+> PresenceState?`, already gated to direct-only, already 5 dedicated tests) fully ready to consume.
+>
+> **The wiring turned out to be pure parameter-threading, no new logic**: `MeeshyAvatar` (`:sdk-ui`)
+> already accepts a `presence: PresenceState?` parameter and already RENDERS the dot overlay when
+> given one — this capability shipped with the avatar atom itself and was simply never fed a live
+> value from the conversation list (the Contacts tab's own presence dot predates this parameter and
+> renders a separate `Surface`, an older pattern — not what I copied). Threaded `presence` through
+> `ConversationRow` → `ConversationRowContent` → the existing `MeeshyAvatar(...)` call (3 Composable
+> signatures, one new argument each), with `state.presenceStateFor(conversation, System
+> .currentTimeMillis())` computed once at the list's row-builder closure.
+>
+> **Zero new tests** — deliberate, not an oversight: `TDD-COVERAGE.md` explicitly exempts
+> `@Composable` parameter-threading/layout glue from the JVM red-first gate ("push all testable
+> decisions out of the Composable into a pure function or the ViewModel, then cover that"). The one
+> testable decision here, `presenceStateFor`, already carries its 5 dedicated
+> `ConversationListViewModelTest` cases from the foundation slice — nothing new to decide, only to
+> wire.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. Diff is a single file, 6 lines, `apps/android`-only.
+>
+> **Still open**: the chat header's own presence dot (a separate call site, iOS's
+> `ConversationView` header) — not attempted this run, noted for a future slice.
+
+> On 2026-08-17 **Mood status view/impression tracking shipped, closing feature-parity §G's
+> last open clause** (slice `status-view-tracking`). `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed two unrelated open PRs (#3113, #3156 — both wrong branch
+> naming for this routine, other agents' work, untouched). `df -h /` had dropped to 3.0 Gi free
+> (this worktree's own `apps/ios/Build` DerivedData from the prior iOS-debt item — 7.5 Gi,
+> fully regenerable — deleted, restoring 10 Gi free before starting this slice).
+>
+> **Seventh candidate found via the "ready backend, never wired to UI" heuristic — but this time
+> the heuristic itself came up EMPTY on a dedicated Explore agent pass.** A systematic sweep of
+> all ~140 public methods across every `sdk-core`/`core/*` repository confirmed the codebase is
+> now near-fully wired after 6 prior slices; the one live lead (`PostRepository.getPostViews`,
+> flagged as a candidate by the previous run) was independently re-killed — not only zero Android
+> call sites, but **zero iOS call sites either** (`PostViewersResponse`/`getPostViews` exist only
+> in `PostService.swift` + its mock; no "who viewed this post" screen exists anywhere in the iOS
+> app), so it has no parity reference and falls outside this routine's mandate entirely.
+>
+> **Pivoted to reading `feature-parity.md`'s remaining unchecked lines directly** (build order:
+> the checklist itself, not another heuristic pass) and found `- [ ] Mood status create, react,
+> delete; 21h expiry + viewer tracking` (§G) — a compound line where 4 of 5 clauses were already
+> shipped in earlier slices, leaving only "viewer tracking" genuinely open. Reading iOS
+> `StatusViewModel.swift` directly (not just the checklist wording) surfaced its own doc comment:
+> "un mood EST un post… la barre de moods était le seul contenu du produit dont la portée restait
+> à zéro" — a mood status carries `impressionCount`/`viewCount` exactly like a regular post, but no
+> Android surface fed either.
+>
+> **Zero new mechanism invented — both building blocks already existed from this session's own
+> earlier slices**: the pill's on-screen appearance now calls the new `StatusesViewModel
+> .trackImpression(statusId)`, which delegates to the SAME `ImpressionBatcher` class the feed
+> already uses (`source = "status"` this time, mirroring iOS's own per-surface `ImpressionBatcher
+> (source: "status", ...)` instance — iOS uses one batcher per SwiftUI view too, not a shared
+> singleton). Opening a status's popover — a single, per-viewer-deduplicated VIEW, distinct from
+> the batched impression — now calls the new `markStatusViewed(statusId)`, whose body is the exact
+> fire-and-forget shape of `PostDetailViewModel.recordView` from the `post-detail-reach-stats`
+> slice two runs ago (launch, try/catch, silently swallow — best-effort analytics, matches iOS's
+> `try?`).
+>
+> **Wiring point required zero extra gating logic**: `StatusBarView.kt`'s cell model already splits
+> `StatusBarCell.MyStatus` (the viewer's own pill) from `StatusBarCell.Pill` (everyone else's) as
+> two separate `when` branches — so adding the tracking calls only to the `Pill` branch naturally
+> excludes the viewer's own status exactly as iOS's `viewModel.statuses.filter { $0.id !=
+> viewModel.myStatus?.id }` does explicitly. `impressionBatcher.flushNowAsync()` wired into
+> `onCleared()`, mirroring `FeedViewModel`'s own already-established pattern (not a new Compose
+> `DisposableEffect`, even though iOS ties the flush to the SwiftUI view's `.onDisappear` — Android's
+> established precedent for this exact need is ViewModel-level, so followed that instead of
+> introducing a second pattern for the same problem).
+>
+> **+3 tests** (`StatusesViewModelTest`): a view is recorded exactly once when a status opens, a
+> blank status id never hits the network, and a failed view record doesn't disturb the loaded bar.
+> `trackImpression`'s own debounce/batch/retry logic is already fully covered by the existing
+> `ImpressionBatcherTest` suite, so no duplicate ViewModel-level test was added — matching the
+> precedent set by `FeedViewModel.trackImpression`, which also carries zero VM-level tests for the
+> identical reason.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. No new strings needed (no new UI text — the pill/popover UI is unchanged, only its
+> tracking side-effects). Diff confirmed `apps/android`-only via the working-tree diff (3 files,
+> Kotlin only, no resources touched).
+>
+> **feature-parity.md §G line now fully checked** — all five clauses (create/react/delete/expiry/
+> viewer-tracking) verified shipped with evidence, no longer a compound partial-credit line.
+
 > On 2026-08-17 **Post view recording + author-only reach stats shipped** (slice
 > `post-detail-reach-stats`, feature-parity §F). `gh pr list --state open --search "apps/android
 > OR apps/ios"` showed one unrelated open PR (#3113, branch `claude/keen-hamilton-sqq310` — wrong

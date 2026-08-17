@@ -5,6 +5,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { APP_CONFIG } from '@/lib/config';
+import { authManager } from '@/services/auth-manager.service';
 import {
   SERVER_EVENTS,
   type NotificationDeletedBulkEventData,
@@ -36,9 +37,13 @@ class NotificationSocketIOSingleton {
   private isConnecting = false;
   private isConnected = false;
   private authToken: string | null = null;
-  private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private reconnectDelay = 5000;
+  // Palier de la boucle de reprise MANUELLE (celle qui prend le relais quand
+  // socket.io a définitivement renoncé), remis à zéro par toute connexion
+  // réussie. À ne pas confondre avec `maxReconnectAttempts`, qui borne la
+  // boucle INTERNE de socket.io.
+  private manualRetryAttempt = 0;
+  private manualRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Callbacks
   private notificationCallbacks: Set<NotificationCallback> = new Set();
@@ -79,19 +84,113 @@ class NotificationSocketIOSingleton {
 
     this.isConnecting = true;
     this.authToken = token;
+    this.cancelManualRetry();
+    this.manualRetryAttempt = 0;
 
+    this.openSocket();
+  }
+
+  /**
+   * Les identifiants du PROCHAIN handshake, lus à l'instant où il a lieu.
+   *
+   * Socket.IO rejoue l'option `auth` à CHAQUE tentative de reconnexion. Passée
+   * en littéral, la socket restait épinglée à vie au jeton avec lequel elle
+   * avait été construite : après un rafraîchissement silencieux (chemin 401
+   * REST), chaque tentative re-présentait des identifiants que la gateway
+   * refuse — la boucle interne brûlait ses cinq essais, `reconnect_failed`
+   * tombait, et le canal mourait sur une session dont les identifiants VALIDES
+   * dormaient en storage depuis le début.
+   *
+   * Sous forme de résolveur, chaque handshake redemande. Rien n'a à penser à
+   * pousser un nouveau jeton — et rien ne doit ré-épingler `socket.auth`, ce
+   * qui restaurerait la panne. Jumeau exact de `resolveHandshakeToken()` du
+   * couloir principal (`socketio/connection.service.ts`).
+   *
+   * Repli sur le jeton confié à `connect()` : c'est lui qui fait autorité pour
+   * un porteur sans `localStorage` accessible.
+   */
+  private resolveHandshakeToken(): string | undefined {
+    return authManager.getAuthToken() ?? this.authToken ?? undefined;
+  }
+
+  private openSocket(): void {
     const backendUrl = APP_CONFIG.getBackendUrl();
 
     this.socket = io(backendUrl, {
-      auth: { token },
+      auth: (cb: (data: Record<string, unknown>) => void) => cb({ token: this.resolveHandshakeToken() }),
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
-      reconnectionDelay: this.reconnectDelay
+      // Mêmes paliers que le couloir principal. L'ancien couple
+      // (`reconnectionDelay: 5000`, aucun `Max`) plafonnait socket.io à son
+      // défaut de 5 s : les cinq tentatives tenaient ~25 s, si bien qu'une
+      // coupure réseau d'une demi-minute suffisait à épuiser la boucle.
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5
     });
 
     this.setupEventListeners();
+  }
+
+  /**
+   * Démontage TECHNIQUE de la socket, sans toucher à l'état SÉMANTIQUE de la
+   * session (`authToken`, curseur `_seq`, `hasConnectedBefore`).
+   *
+   * La distinction n'est pas cosmétique : c'est elle qui rend la reprise
+   * correcte. Reconstruire en passant par `disconnect()` remettrait
+   * `hasConnectedBefore` à false — la connexion réparée ne serait donc plus vue
+   * comme une RE-connexion et n'émettrait pas `desync('reconnect')` — et
+   * réinitialiserait `syncSeq`, effaçant le curseur qui révèle les trous. La
+   * socket reviendrait ; le rattrapage, lui, resterait perdu.
+   */
+  private teardownSocket(): void {
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    this.isConnected = false;
+    this.isConnecting = false;
+  }
+
+  private cancelManualRetry(): void {
+    if (this.manualRetryTimer) {
+      clearTimeout(this.manualRetryTimer);
+      this.manualRetryTimer = null;
+    }
+  }
+
+  /**
+   * Reprend la main quand socket.io a renoncé DÉFINITIVEMENT.
+   *
+   * Sa boucle interne cesse de retenter après `reconnectionAttempts`, et rien
+   * ne la relance : `connect()` n'est appelé que par un `useEffect` monté sur
+   * l'authentification (`use-notifications-manager-rq.tsx`), qui ne re-tourne
+   * pas sur un échec de socket. L'onglet restait donc ouvert avec un canal
+   * mort — plus aucune notification, aucun compteur, et surtout plus aucun
+   * signal de resync, alors que React Query est en `staleTime: Infinity` et
+   * n'a, comme ce fichier le documente lui-même, « aucune autre voie de
+   * rattrapage ».
+   *
+   * Aucune garde « plus de jeton » ici : après un logout, `disconnect()` a
+   * purgé les listeners ET le minuteur (`cancelManualRetry`), si bien que ce
+   * chemin n'est plus atteignable. La garde vit là où elle est prouvée.
+   */
+  private scheduleManualRetry(): void {
+    if (this.manualRetryTimer) return;
+
+    const attempt = this.manualRetryAttempt;
+    const delay = Math.min(1000 * Math.pow(2, attempt), 30000) + Math.random() * 1000;
+    this.manualRetryAttempt = Math.min(attempt + 1, 10);
+
+    this.manualRetryTimer = setTimeout(() => {
+      this.manualRetryTimer = null;
+      this.teardownSocket();
+      this.openSocket();
+    }, delay);
   }
 
   /**
@@ -105,7 +204,7 @@ class NotificationSocketIOSingleton {
       const isReconnect = this.hasConnectedBefore;
       this.isConnected = true;
       this.isConnecting = false;
-      this.reconnectAttempts = 0;
+      this.manualRetryAttempt = 0;
       this.hasConnectedBefore = true;
 
       // Notifier tous les callbacks de connexion
@@ -124,10 +223,21 @@ class NotificationSocketIOSingleton {
       this.disconnectCallbacks.forEach(cb => cb(reason));
     });
 
-    // Erreur de connexion
+    // Erreur de connexion. Une tentative qui échoue n'est pas un abandon :
+    // socket.io enchaîne la suivante tout seul. Le compteur qui vivait ici
+    // était ÉCRIT et jamais LU — il donnait l'apparence d'une gestion de
+    // tentatives qui n'existait pas. Le vrai abandon a son propre événement,
+    // juste en dessous.
     this.socket.on('connect_error', (error) => {
-      this.reconnectAttempts++;
       this.isConnecting = false;
+    });
+
+    // socket.io a renoncé définitivement — le seul moment où la reprise nous
+    // revient. Cf. `scheduleManualRetry`.
+    this.socket.on('reconnect_failed', () => {
+      this.isConnected = false;
+      this.isConnecting = false;
+      this.scheduleManualRetry();
     });
 
     // Nouvelle notification
@@ -191,16 +301,13 @@ class NotificationSocketIOSingleton {
    * Déconnecte la socket
    */
   public disconnect(): void {
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    // Une déconnexion VOULUE annule toute reprise en vol : sans ça, un minuteur
+    // armé par `reconnect_failed` rouvrirait une socket après le logout.
+    this.cancelManualRetry();
+    this.teardownSocket();
 
-    this.isConnected = false;
-    this.isConnecting = false;
     this.authToken = null;
-    this.reconnectAttempts = 0;
+    this.manualRetryAttempt = 0;
     // `_seq` est alloué PAR USER et persiste côté serveur : le curseur d'un
     // compte ne veut rien dire pour le suivant. `disconnect()` n'est appelé que
     // sur un changement de token, un logout ou un `reset()` — la reconnexion
