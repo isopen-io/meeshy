@@ -185,6 +185,11 @@ data class ChatUiState(
     /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
      * `ConversationListUiState.presenceByUserId`. */
     val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
+    /** Mirrors the same `networkConditionMonitor` reading already threaded into
+     * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
+     * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
+     * `ConversationScrollControlsView.isOffline`. */
+    val isOffline: Boolean = false,
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
 
@@ -517,7 +522,10 @@ class ChatViewModel @Inject constructor(
                             result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
                             overrides, showReadReceipts, isOffline,
                         )
-                        next.copy(search = next.search.reconciled(next.messages.toSearchable()))
+                        next.copy(
+                            search = next.search.reconciled(next.messages.toSearchable()),
+                            isOffline = isOffline,
+                        )
                     }
                 }
         }

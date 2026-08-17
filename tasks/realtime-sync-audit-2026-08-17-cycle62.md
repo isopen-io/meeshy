@@ -209,3 +209,73 @@ production.
 C'est la deuxième fois dans le même lot que **le cycle 61 a livré un émetteur ou
 un lecteur sans instruire le dispositif qui le surveille**. Même classe que §2 :
 une extension correcte, et un contrat périphérique laissé en arrière.
+
+## 6. Vérification
+
+| Gate | Résultat |
+|------|----------|
+| `tsc --noEmit` gateway | ✅ 0 erreur |
+| `bun run test src/socketio src/services/__tests__/ConversationBridgeService` | ✅ 43 suites / 1557 tests |
+| `MeeshySocketIOManager.test.ts` | ✅ 375/375 |
+| Suite gateway complète | 742/743 avec la rougeur préexistante, **743/743** après §5 bis |
+| Clients | aucun changement — les deux lisent déjà `bridge` |
+
+## 7. Pistes pour le cycle 63
+
+1. **Le pont sur `broadcastReadStatus`** (§5). Nouvelle. Bornée et instruite :
+   le site est connu, la passe existe, seul le prix est en question. La vraie
+   question à trancher n'est pas « faut-il le pont ici » mais « la passe peut-elle
+   coûter moins qu'une passe complète quand il n'y a qu'UNE conversation et
+   qu'un curseur vient de bouger ».
+
+   **Ce que le balayage du §7 bis ajoute à cette piste** : le contrat n'a AUCUNE
+   valeur pour dire « je n'ai pas calculé ». Deux états sur le fil (présent /
+   absent) servent à en exprimer trois (voici un pont / il n'y en a pas / je ne
+   sais pas). Le cycle 62 a fermé le cas de la reconnexion en la forçant à
+   TOUJOURS calculer ; `broadcastReadStatus` est le cas où calculer coûte trop.
+   Avant de trancher le prix, se demander si le manque n'est pas d'abord un
+   manque de vocabulaire dans le contrat gelé.
+2. **Le mock inerte de `presence.service.test.ts`** (cycle 56 §5) — intacte,
+   même famille que le repli de témoins traité par la PR #3184.
+3. **Le flake non identifié de `packages/shared`** (cycle 61 bis §7) — intacte.
+   Le prochain run de CI rouge doit le NOMMER (`--reporter=json --outputFile`).
+4. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte.
+5. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte.
+6. **`attachment:reaction-*` et `message:consumed` sans lecteur web** (cycle 57
+   §8-3) — décision produit, intacte.
+7. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
+   intacte, bloquée sur l'absence de Xcode.
+8. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
+
+## 7 bis. Le balayage de la classe, étendu aux AUTRES événements — résultat NÉGATIF
+
+Fait juste après le merge, en appliquant la règle du §8 aux événements
+multi-émetteurs les plus fréquentés. **Aucun jumeau trouvé.** Consigné pour que
+le cycle 63 n'ait pas à le refaire :
+
+| Événement | Émetteurs | Verdict |
+|-----------|-----------|---------|
+| `conversation:updated` | 3 (`MessageHandler`, `emitConversationPreviewUpdate`, `MeeshySocketIOManager`) | **sain** — les trois résolvent le Prisme PAR destinataire (`resolveLastMessagePreviewPrism`) et hissent `location` sous la même règle (clé absente, jamais `null`). Les commentaires des trois se citent mutuellement : la parité y a été construite exprès. |
+| `read-status:updated` + `message:read-status-updated` | 2 sites, 3 formes (`peerPayload`, `actorPayload`, resynchro de join) | **sain** — l'écart entre `peerPayload` et `actorPayload` est DÉLIBÉRÉ et documenté (l'arriéré personnel de l'acteur ne regarde pas la conversation), et les deux noms d'événement voyagent toujours ensemble. |
+| `message:new` | 13 sites sur 2 transports | non déplié entièrement — la parité WS/REST-ZMQ y est explicitement construite et testée (les deux blocs se citent). Reste le candidat le plus coûteux à auditer si la classe réapparaît. |
+
+Ce que ce résultat négatif dit : la classe du §8 n'est pas endémique. Elle a
+frappé `conversation:unread-updated` parce que ce champ-là a été rendu
+autoritatif côté client par un lot qui n'a instruit qu'un émetteur — pas parce
+que la gateway diverge partout. Le garde utile n'est donc pas un balayage
+périodique, c'est la règle de lot du §8.
+
+## 8. La leçon, généralisée
+
+Ce cycle ajoute une classe au carnet, distincte de celles déjà nommées :
+
+> **Un champ OPTIONNEL sur le wire dont le client fait une lecture AUTORITATIVE
+> n'est plus optionnel pour l'émetteur.** À partir de ce moment, tout émetteur
+> qui l'omet ÉCRIT — il n'est pas muet. Un contrat qui rend un champ facultatif
+> côté émetteur pendant qu'il le rend destructeur côté lecteur fabrique un
+> défaut à chaque émetteur qui n'a pas été mis au courant.
+
+Le corollaire opérationnel, pour les cycles suivants : **quand on rend un champ
+autoritatif côté client, on énumère TOUS les émetteurs serveur du même
+événement dans le même lot.** Ici il y en avait quatre ; un seul avait été
+instruit.
