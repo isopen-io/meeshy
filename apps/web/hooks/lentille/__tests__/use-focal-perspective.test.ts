@@ -8,9 +8,17 @@
  * (4) `focusedId` ne se commet QUE quand `isSettled` devient `true` — jamais
  * pendant le défilement (§4.6, écart #3) ; (5) sous `prefers-reduced-motion`,
  * l'écriture opacity/transform s'arrête mais l'élection continue (§4.9).
+ *
+ * RENFORCEMENT REV-4/B1 (V4bis) — ce fichier « peuplait la ref à la main »
+ * (`containerRef.current = container`, précédé d'un `@ts-expect-error`). Il
+ * reçoit désormais l'ÉLÉMENT, la forme sûre de `PerspectiveContainer`. Aucune
+ * assertion retirée ; deux AJOUTÉES en fin de fichier (rien ne tourne sous
+ * OFF, une cible tardive démarre quand même la passe). Le cycle de vie réel du
+ * fil — conteneur rendu par un ancêtre, une seule passe d'effets, sans
+ * `StrictMode` — est verrouillé par
+ * `components/conversations/focal/__tests__/FocalThread.perspective-lifecycle.test.tsx`.
  */
 import { renderHook, act } from '@testing-library/react';
-import { createRef } from 'react';
 import { focusCurve, FOCUS_BAND_OFFSET } from '@meeshy/shared/utils/focus-curve';
 
 let mockReducedMotion = false;
@@ -62,12 +70,9 @@ describe('useFocalPerspective', () => {
   };
 
   it("courbe via la loi — focusCurve('thread', d), MÊME mécanique que la Lentille", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- assignation directe pour le test
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+    const { result } = renderHook(() => useFocalPerspective({ container }));
 
     const focusY = 1000 - FOCUS_BAND_OFFSET;
     const rowMidY = focusY - 140;
@@ -82,12 +87,9 @@ describe('useFocalPerspective', () => {
   });
 
   it('planifie UN SEUL requestAnimationFrame par frame, quel que soit le nombre de rangs', () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+    const { result } = renderHook(() => useFocalPerspective({ container }));
 
     act(() => {
       result.current.registerRow('a')(makeElementWithRect({ top: 100, bottom: 164 }));
@@ -103,12 +105,9 @@ describe('useFocalPerspective', () => {
   });
 
   it('nettoie sa frame en vol au démontage (cancelAnimationFrame appelé)', () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error
-    containerRef.current = container;
 
-    const { unmount } = renderHook(() => useFocalPerspective({ containerRef }));
+    const { unmount } = renderHook(() => useFocalPerspective({ container }));
     unmount();
 
     expect(global.cancelAnimationFrame).toHaveBeenCalledTimes(1);
@@ -116,13 +115,10 @@ describe('useFocalPerspective', () => {
 
   describe('élection (electFocusRow, bande gelée FOCUS_BAND_OFFSET/HALF_HEIGHT)', () => {
     it('isSettled=true (défaut) : commet le rang le plus proche de la bande dès la première frame', () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
       const focusY = 1000 - FOCUS_BAND_OFFSET;
-      const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+      const { result } = renderHook(() => useFocalPerspective({ container }));
 
       act(() => {
         result.current.registerRow('far')(makeElementWithRect({ top: focusY - 300, bottom: focusY - 300 }));
@@ -135,14 +131,11 @@ describe('useFocalPerspective', () => {
     });
 
     it("isSettled=false : ne COMMET jamais focusedId, même après plusieurs frames de défilement (§4.6, jamais pendant le scroll)", () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
       const focusY = 1000 - FOCUS_BAND_OFFSET;
       const { result } = renderHook(() =>
-        useFocalPerspective({ containerRef, isSettled: false })
+        useFocalPerspective({ container, isSettled: false })
       );
 
       act(() => {
@@ -156,14 +149,11 @@ describe('useFocalPerspective', () => {
     });
 
     it('isSettled bascule false → true : commet alors la dernière élection en vol', () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
       const focusY = 1000 - FOCUS_BAND_OFFSET;
       const { result, rerender } = renderHook(
-        ({ isSettled }: { isSettled: boolean }) => useFocalPerspective({ containerRef, isSettled }),
+        ({ isSettled }: { isSettled: boolean }) => useFocalPerspective({ container, isSettled }),
         { initialProps: { isSettled: false } }
       );
 
@@ -184,12 +174,9 @@ describe('useFocalPerspective', () => {
   // (voir aussi FocalRow.test.tsx, "publie le plafond confirmé (1)").
   describe('setAlphaCeiling — §4.4 : alpha = min(alphaCeiling, alphaPerspective)', () => {
     it('sans plafond posé, l\'opacité de la courbe seule s\'applique', () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
-      const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+      const { result } = renderHook(() => useFocalPerspective({ container }));
       const focusY = 1000 - FOCUS_BAND_OFFSET;
       const row = makeElementWithRect({ top: focusY, bottom: focusY });
       act(() => result.current.registerRow('row-1')(row));
@@ -200,12 +187,9 @@ describe('useFocalPerspective', () => {
     });
 
     it('avec un plafond 0.7 posé, l\'opacité ne dépasse jamais 0.7 même au focus (distance 0 → alpha 1 sans plafond)', () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
-      const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+      const { result } = renderHook(() => useFocalPerspective({ container }));
       const focusY = 1000 - FOCUS_BAND_OFFSET;
       const row = makeElementWithRect({ top: focusY, bottom: focusY });
       act(() => {
@@ -219,12 +203,9 @@ describe('useFocalPerspective', () => {
     });
 
     it('avec un plafond, loin de la bande la courbe reste sous le plafond : le plafond n\'élève jamais l\'opacité', () => {
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
-      const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+      const { result } = renderHook(() => useFocalPerspective({ container }));
       const focusY = 1000 - FOCUS_BAND_OFFSET;
       const farMidY = focusY - 380; // f=1, alpha au plancher (1 - 0.82) = 0.18
       const row = makeElementWithRect({ top: farMidY, bottom: farMidY });
@@ -245,13 +226,10 @@ describe('useFocalPerspective', () => {
     it("continue de tourner (contrairement à la Lentille) et n'écrit PAS opacity/transform", () => {
       mockReducedMotion = true;
 
-      const containerRef = createRef<HTMLDivElement>();
       const container = makeElementWithRect({ top: 0, bottom: 1000 });
-      // @ts-expect-error
-      containerRef.current = container;
 
       const focusY = 1000 - FOCUS_BAND_OFFSET;
-      const { result } = renderHook(() => useFocalPerspective({ containerRef }));
+      const { result } = renderHook(() => useFocalPerspective({ container }));
 
       const row = makeElementWithRect({ top: focusY - 5, bottom: focusY - 5 });
       act(() => result.current.registerRow('near')(row));
@@ -265,6 +243,41 @@ describe('useFocalPerspective', () => {
       expect(row.style.opacity).toBe('1');
       expect(row.style.transform).toBe('none');
       expect(result.current.focusedId).toBe('near');
+    });
+  });
+
+  describe('câblage de la cible (REV-4/B1)', () => {
+    /**
+     * `enabled: false` est le seul interrupteur d'arrêt (densité `script` :
+     * « zéro perspective »). Sans ce témoin, le correctif B1 pourrait
+     * « réparer » le démarrage en le rendant inconditionnel.
+     */
+    it('enabled=false ⇒ AUCUNE frame planifiée (rien ne tourne sous OFF)', () => {
+      const container = makeElementWithRect({ top: 0, bottom: 1000 });
+
+      renderHook(() => useFocalPerspective({ container, enabled: false }));
+
+      expect(rafCallCount).toBe(0);
+    });
+
+    /**
+     * La cible n'existe pas au premier effet et n'apparaît qu'ensuite —
+     * exactement ce que l'ordre des effets React produit en production. La
+     * passe doit démarrer À CE MOMENT-LÀ, pas jamais.
+     */
+    it('cible apparue APRÈS le premier effet ⇒ la passe démarre quand même', () => {
+      const container = makeElementWithRect({ top: 0, bottom: 1000 });
+
+      const { rerender } = renderHook(
+        ({ target }: { target: HTMLElement | null }) => useFocalPerspective({ container: target }),
+        { initialProps: { target: null as HTMLElement | null } }
+      );
+
+      expect(rafCallCount).toBe(0);
+
+      rerender({ target: container });
+
+      expect(rafCallCount).toBe(1);
     });
   });
 });

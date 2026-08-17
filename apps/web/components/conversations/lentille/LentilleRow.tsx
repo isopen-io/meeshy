@@ -27,7 +27,7 @@
  */
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -61,7 +61,18 @@ export interface LentilleRowProps {
   readonly conversation: Conversation;
   readonly currentUser: User;
   readonly isSelected: boolean;
-  readonly onClick: () => void;
+  /**
+   * REV-4/R4-6 — rappel STABLE + donnée, jamais une fermeture littérale.
+   *
+   * Le parent passait `onClick={() => onSelectConversation(conversation)}` :
+   * une fonction neuve à chaque rendu, donc une prop toujours différente, donc
+   * un `memo` qui ne refusait jamais rien — vingt rangs re-rendus à chaque
+   * frappe typing d'un seul. Le rang reçoit désormais le MÊME rappel que tous
+   * ses voisins (mémoïsé une fois chez `ConversationList`) et referme lui-même
+   * sur SA conversation. C'est le patron déjà en place pour les autres rangées
+   * mémoïsées du dépôt (`ConversationGroup` : `onToggleSection` + `sectionId`).
+   */
+  readonly onSelect: (conversation: Conversation) => void;
   readonly typingUsers?: readonly LentilleTypingUser[];
   readonly draft?: LentilleRowDraft;
   readonly bridge?: ConversationBridge | null;
@@ -103,7 +114,7 @@ export const LentilleRow = memo(function LentilleRow({
   conversation,
   currentUser,
   isSelected,
-  onClick,
+  onSelect,
   typingUsers = [],
   draft,
   bridge,
@@ -116,6 +127,16 @@ export const LentilleRow = memo(function LentilleRow({
   // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
   // le défilement ET reste sur le rang ouvert. Deux sources, un seul style.
   const isElected = useIsFocusedRow(election, conversation.id);
+  const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onSelect(conversation);
+      }
+    },
+    [onSelect, conversation]
+  );
   const showsFocusCard = isElected || isSelected;
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser),
@@ -198,13 +219,8 @@ export const LentilleRow = memo(function LentilleRow({
       aria-label={ariaLabel}
       aria-current={isSelected ? 'true' : undefined}
       data-testid="lentille-row"
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={cn(
         'group cursor-pointer outline-none',
         'hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',

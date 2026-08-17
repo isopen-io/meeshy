@@ -293,7 +293,7 @@ describe('LentilleRow — les actions du rang sont atteignables depuis le rang L
         conversation={makeConversation()}
         currentUser={currentUser}
         isSelected={false}
-        onClick={jest.fn()}
+        onSelect={jest.fn()}
         t={t}
         {...props}
       />
@@ -326,8 +326,8 @@ describe('LentilleRow — les actions du rang sont atteignables depuis le rang L
   });
 
   it("ouvrir le menu depuis le rang n'ouvre pas la conversation", () => {
-    const onClick = jest.fn();
-    renderRow({ onClick });
-    expect(onClick).not.toHaveBeenCalled();
+    const onSelect = jest.fn();
+    renderRow({ onSelect });
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

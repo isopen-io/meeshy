@@ -95,8 +95,15 @@ export function FocalThread({
   const ordered = useMemo(() => [...messages].reverse(), [messages]);
 
   const { visible: pillVisible, notifyScrolled } = useScrollActivity();
+  // REV-4/B1 — forme 2 de `PerspectiveContainer` : ce `RefObject` est peuplé
+  // par React lui-même (`ConversationView` rend `<div ref={scrollContainerRef}>`,
+  // attaché en phase de commit, donc AVANT tout effet passif de ce
+  // sous-arbre), jamais par un effet de l'appelant. C'est le seul cas où un
+  // `RefObject` reste admis — et le témoin
+  // `FocalThread.perspective-lifecycle.test.tsx` le vérifie sur une SEULE
+  // passe d'effets, sans `StrictMode`.
   const { registerRow, focusedId, setAlphaCeiling } = useFocalPerspective({
-    containerRef: scrollContainerRef,
+    container: scrollContainerRef,
     enabled: density === 'focal',
     isSettled: !pillVisible,
   });

@@ -82,7 +82,7 @@ describe('LentilleRow — câblage du Prisme Linguistique', () => {
         })}
         currentUser={makeUser({ systemLanguage: 'fr', regionalLanguage: 'en' })}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -100,7 +100,7 @@ describe('LentilleRow — câblage du Prisme Linguistique', () => {
         })}
         currentUser={makeUser({ systemLanguage: 'de', regionalLanguage: 'de' })}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
@@ -118,7 +118,7 @@ describe('LentilleRow — câblage du Prisme Linguistique', () => {
         })}
         currentUser={makeUser({ systemLanguage: 'de', regionalLanguage: 'es' })}
         isSelected={false}
-        onClick={() => {}}
+        onSelect={() => {}}
         t={t}
       />
     );
