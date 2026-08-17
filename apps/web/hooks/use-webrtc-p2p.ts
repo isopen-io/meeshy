@@ -978,6 +978,33 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         lastAggregatedConnectionStateRef.current = 'new';
         setConnectionState('new');
         setIceConnectionState('new');
+
+        // Audit web-calls (2026-08-17) — this branch tears down every peer
+        // connection just like cleanup() below, but a userId correction
+        // mid-call (anonymous→authenticated promotion, session token
+        // refresh) can fire it AFTER a peer already reached ICE
+        // 'connected'/'completed' or had genuinely stalled under the OLD
+        // userId. Without clearing these too, `connectedPeersRef` keeps a
+        // participant marked connected from a connection that no longer
+        // exists: the FRESH service recreated below can report its first
+        // ever 'disconnected' (a normal pre-connection blip, not a mid-call
+        // stall) and the guard at onIceConnectionStateChange
+        // (`connectedPeersRef.current.has(participantId)`) reads the stale
+        // entry as "was connected, is now stalling" — firing a false
+        // "Reconnecting…" state and an unearned `call:reconnecting` emit to
+        // the server for a connection that was never actually up. Mirrors
+        // the same class of bug `removeParticipant`'s matching comment
+        // documents for the per-participant teardown path. `negotiationIdsRef`
+        // is deliberately NOT cleared here (unlike cleanup()): the call is
+        // still ongoing and the remote peer already recorded our prior
+        // negotiationId high-water mark — resetting it would make our next
+        // signal look OLDER than what they've already seen and get it
+        // silently dropped as stale (the exact bug documented above at this
+        // ref's declaration).
+        connectedPeersRef.current.clear();
+        stalledPeersRef.current.clear();
+        setIsReconnecting(false);
+        reconnectAttemptRef.current = 0;
       }
     }
   }, [userId, callId, removePeerConnection]);
