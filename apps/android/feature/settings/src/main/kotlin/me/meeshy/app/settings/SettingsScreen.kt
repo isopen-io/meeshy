@@ -231,6 +231,11 @@ fun SettingsScreen(
                     onCheckedChange = viewModel::setPushEnabled,
                 )
                 NotificationToggleRow(
+                    label = stringResource(R.string.settings_email_notifications),
+                    checked = notifications.emailEnabled,
+                    onCheckedChange = viewModel::setEmailEnabled,
+                )
+                NotificationToggleRow(
                     label = stringResource(R.string.settings_new_message_notifications),
                     checked = notifications.newMessageEnabled,
                     enabled = notifications.pushEnabled,
