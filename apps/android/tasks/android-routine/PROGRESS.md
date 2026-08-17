@@ -2,6 +2,59 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Notification stale-while-revalidate cache shipped** (slice
+> `notification-cache-first-stream`, feature-parity §M), closing the "still open" item left by
+> the earlier `notification-realtime-socket` slice the same day. `gh pr list --state open
+> --search "apps/android OR apps/ios"` showed three concurrent PRs (#3096, #3108, #3123), none
+> touching `apps/android`. `df -h /` showed 9.0 Gi free, stable.
+>
+> **Found via a genuinely strong signal, not a guess**: grepped for the existing
+> `CachePolicy.Notifications` constant (`freshFor` 60s, `keepFor` 24h) and confirmed ZERO usages
+> anywhere in the codebase — someone had already anticipated this exact gap and left the policy
+> ready to wire, which is exactly what this slice does.
+>
+> **`NotificationRepository.notificationsStream()` is a direct mirror of `PostRepository
+> .feedStream()`** — same in-memory L1 `MutableStateFlow` cache, same `CacheResult.Empty/Fresh/
+> Stale/Syncing` shape, same background-revalidate-on-staleness `combine().distinctUntilChanged()
+> .transformLatest{}` chain. `NotificationsViewModel` is now a thin projector of this stream
+> (plus the new `unreadCountStream`) rather than owning its own copy of the list.
+>
+> **A real, previously-undiscovered bug fixed as a genuine consequence of the refactor, not a
+> bolt-on**: `unreadCount` had been dead since before this routine even started —
+> `NotificationApi.unreadCount()` existed, was fully wired at the repository level, and was never
+> once called (confirmed via `grep`, zero call sites). Once the stream became the single source
+> of truth, populating it from the real server count was the natural design, not a separate fix.
+>
+> **A design decision forced by moving state ownership, caught during design rather than after
+> shipping a bug**: once the ViewModel stopped holding its own copy of the notification list,
+> `markAsRead`/`markAllAsRead`'s existing optimistic local-state mutation would have gone stale —
+> a live socket arrival re-triggering the shared repository stream would have silently REVERTED
+> an optimistic "marked as read" back to unread, since the repository's own cache never learned
+> about the mutation. Fixed by moving the optimistic mutation (+ rollback-on-failure) INTO the
+> repository itself, mirroring `PostRepository.toggleLike`'s exact established pattern. The
+> real-time `prependLive` handler moved to the repository for the same reason — it needs to
+> mutate the SAME cache every other write already does.
+>
+> **+10 tests** (`NotificationRepositoryTest`, new file, mirrors `PostRepositoryTest`'s Turbine
+> harness): empty→fresh stream sequencing; refresh populates both the list cache and the unread
+> count; `prependLive` prepends + bumps unread / doesn't bump when arriving pre-read / dedupes a
+> duplicate id; `markAsRead` flips optimistically + decrements unread, with rollback-on-failure;
+> `markAllAsRead` flips every entry + zeroes unread, with rollback-on-failure.
+> **`NotificationsViewModelTest` rewritten** (9 tests) to match what the ViewModel actually still
+> owns after the refactor — projecting each `CacheResult` variant into UI state, reflecting the
+> unread-count stream, delegating `load`/`markAsRead`/`markAllRead`/a live arrival to the
+> repository — since the dedup/rollback logic itself moved to (and is now tested at) the
+> repository layer, duplicating those assertions at the ViewModel layer would just re-test the
+> same behaviour through an extra layer of mocking.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules) green — confirmed no other call site of `NotificationRepository` outside
+> `NotificationsViewModel`/`PushTokenHandler` (the latter untouched, `registerDeviceToken` only)
+> regressed from the signature/behaviour changes.
+>
+> **Still open**: pagination / unread-only filter on the stream (serves the first page only,
+> matching `list()`'s existing `limit=20` default) — not attempted, a separate item.
+
 > On 2026-08-17 **Feed impression batching shipped** (slice `feed-impression-batching`,
 > feature-parity §F). `gh pr list --state open --search "apps/android OR apps/ios"` showed two
 > concurrent PRs (#3096, #3108), neither touching `apps/android`. `df -h /` showed ~10 Gi free,
