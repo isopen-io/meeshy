@@ -25,12 +25,20 @@ jest.mock('@/stores/conversation-ui-store', () => ({
   useConversationUIStore: (selector: any) => selector({ draftMessages: {} }),
 }));
 
-const rowElections: unknown[] = [];
-const rowShowDetails: unknown[] = [];
+/**
+ * Capture par IDENTIFIANT de rang, jamais par ordre d'appel : depuis le
+ * correctif REV-4/B1, le point de montage publie son conteneur de défilement
+ * par une ref PAR CALLBACK — donc un rendu de publication s'ajoute au montage,
+ * et compter les appels de rendu compterait des passes, pas des rangs. Ce que
+ * ces témoins vérifient (« chaque rang reçoit le MÊME magasin », « chaque rang
+ * reçoit `onShowDetails` ») ne dépend pas du nombre de passes.
+ */
+const rowElections = new Map<string, unknown>();
+const rowShowDetails = new Map<string, unknown>();
 jest.mock('../LentilleRow', () => ({
   LentilleRow: ({ conversation, onClick, election, onShowDetails }: any) => {
-    rowElections.push(election);
-    rowShowDetails.push(onShowDetails);
+    rowElections.set(conversation.id, election);
+    rowShowDetails.set(conversation.id, onShowDetails);
     return (
       <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
         {conversation.title}
@@ -137,21 +145,22 @@ describe('LentilleConversationListMount', () => {
    * contenu bouge, et chaque rang s'y abonne pour SON booléen).
    */
   it("transmet le magasin d'élection à chaque rang, avec une référence STABLE", () => {
-    rowElections.length = 0;
+    rowElections.clear();
     const { rerender } = render(
       <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a'), conv('b')]} />
     );
 
-    expect(rowElections).toHaveLength(2);
-    expect(rowElections[0]).toBeDefined();
+    expect([...rowElections.keys()].sort()).toEqual(['a', 'b']);
+    expect(rowElections.get('a')).toBeDefined();
     // Les deux rangs partagent LE MÊME magasin — un élu global, pas un par rang.
-    expect(rowElections[0]).toBe(rowElections[1]);
+    expect(rowElections.get('a')).toBe(rowElections.get('b'));
 
-    const before = rowElections[0];
+    const before = rowElections.get('a');
     rerender(
       <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a'), conv('b')]} />
     );
-    expect(rowElections[rowElections.length - 1]).toBe(before);
+    expect(rowElections.get('a')).toBe(before);
+    expect(rowElections.get('b')).toBe(before);
   });
 
   /**
@@ -160,7 +169,7 @@ describe('LentilleConversationListMount', () => {
    * montage ne la transmet pas, l'entrée existe mais ne fait rien.
    */
   it("transmet `onShowDetails` à chaque rang (behaviour-matrix:L07)", () => {
-    rowShowDetails.length = 0;
+    rowShowDetails.clear();
     const onShowDetails = jest.fn();
     render(
       <LentilleConversationListMount
@@ -170,8 +179,8 @@ describe('LentilleConversationListMount', () => {
         onShowDetails={onShowDetails}
       />
     );
-    expect(rowShowDetails).toHaveLength(2);
-    expect(rowShowDetails.every((fn) => fn === onShowDetails)).toBe(true);
+    expect([...rowShowDetails.keys()].sort()).toEqual(['a', 'b']);
+    expect([...rowShowDetails.values()].every((fn) => fn === onShowDetails)).toBe(true);
   });
 
   it('fonctionne sans currentUserId (garde défensive)', () => {

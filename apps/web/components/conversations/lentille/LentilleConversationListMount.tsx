@@ -144,8 +144,27 @@ export function LentilleConversationListMount({
     [liveSection]
   );
 
-  const rootRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  /**
+   * REV-4/B1 — le conteneur de défilement est publié dans l'ÉTAT par une REF
+   * PAR CALLBACK, jamais écrit dans une `useRef` depuis un effet.
+   *
+   * Ce composant ne rend pas le conteneur de défilement : il est le PARENT du
+   * point de montage (`ConversationList` : `<div className="… overflow-y-auto">`).
+   * La version précédente le récupérait dans un `useEffect` — déclaré APRÈS
+   * l'appel à `useLentillePerspective`, donc joué APRÈS l'effet du hook. Le
+   * hook lisait `null`, ses dépendances ne mentionnaient pas le nœud, et ni la
+   * passe de perspective ni l'élection ne démarraient jamais en production.
+   * `StrictMode` (`next dev`) rejouait les effets et masquait le défaut.
+   *
+   * La ref par callback est appelée en phase de commit, quand le nœud existe
+   * et que son parent est déjà inséré : elle publie la cible dans l'état, ce
+   * qui ré-arme TOUS les effets qui en dépendent — la passe comme l'écouteur
+   * de défilement. Même remède que `useLoadMoreSentinel` (REV-4/B2).
+   */
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
+  const rootRef = useCallback((el: HTMLDivElement | null) => {
+    setScrollContainer(el?.parentElement ?? null);
+  }, []);
   const sectionRefs = useRef(new Map<string, HTMLDivElement>());
   const [activeSectionKey, setActiveSectionKey] = useState<string | null>(
     sections[0] ? sectionKey(sections[0]) : null
@@ -162,7 +181,7 @@ export function LentilleConversationListMount({
   // chaque rang ne provoque aucun re-rendu, et l'élu ne vit JAMAIS dans
   // l'état de ce composant (sinon les vingt rangs se re-rendraient à chaque
   // rang franchi — voir `lentille-focus-election.ts`).
-  const { registerRow, election } = useLentillePerspective({ containerRef: scrollContainerRef });
+  const { registerRow, election } = useLentillePerspective({ container: scrollContainer });
 
   const updateActiveSection = useCallback(
     (root: HTMLElement) => {
@@ -181,9 +200,8 @@ export function LentilleConversationListMount({
   );
 
   useEffect(() => {
-    const root = rootRef.current?.parentElement;
+    const root = scrollContainer;
     if (!root) return;
-    scrollContainerRef.current = root;
 
     const handleScroll = () => {
       notifyScrolled();
@@ -194,7 +212,7 @@ export function LentilleConversationListMount({
     return () => {
       root.removeEventListener('scroll', handleScroll);
     };
-  }, [notifyScrolled, updateActiveSection]);
+  }, [scrollContainer, notifyScrolled, updateActiveSection]);
 
   const activeSection = sections.find((section) => sectionKey(section) === activeSectionKey) ?? sections[0];
   const activeSectionLabel = activeSection ? sectionLabel(activeSection, categories, t) : '';

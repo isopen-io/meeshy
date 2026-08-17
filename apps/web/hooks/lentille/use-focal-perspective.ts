@@ -66,7 +66,11 @@ import {
   type FocusRowCandidate,
 } from '@meeshy/shared/utils/focus-curve';
 import { useReducedMotion } from '@/hooks/use-accessibility';
-import { computeFocusTransform } from './use-lentille-perspective';
+import {
+  computeFocusTransform,
+  resolvePerspectiveContainer,
+  type PerspectiveContainer,
+} from './use-lentille-perspective';
 
 /**
  * Plafond d'opacité par défaut — aucun plafonnement (rangée confirmée).
@@ -82,7 +86,14 @@ import { computeFocusTransform } from './use-lentille-perspective';
 const DEFAULT_ALPHA_CEILING = 1;
 
 export interface UseFocalPerspectiveOptions {
-  readonly containerRef: React.RefObject<HTMLElement | null>;
+  /**
+   * Conteneur de défilement — MÊME contrat que la Lentille, voir
+   * `PerspectiveContainer` (REV-4/B1). Le fil web reçoit ici la forme 2 (un
+   * `RefObject` peuplé par React) : `ConversationView` rend le div scrollable
+   * et le passe à travers `ConversationMessages` ; il est donc attaché en
+   * phase de commit, avant tout effet passif de ce sous-arbre.
+   */
+  readonly container: PerspectiveContainer;
   /** Off si la peau parente n'a rien à animer (ex. fil vide). Défaut `true`. */
   readonly enabled?: boolean;
   /**
@@ -123,7 +134,7 @@ function resetToIdentity(el: HTMLElement): void {
 }
 
 export function useFocalPerspective({
-  containerRef,
+  container: containerSource,
   enabled = true,
   isSettled = true,
 }: UseFocalPerspectiveOptions): UseFocalPerspectiveResult {
@@ -175,7 +186,7 @@ export function useFocalPerspective({
   }, [isSettled]);
 
   useEffect(() => {
-    const container = containerRef.current;
+    const container = resolvePerspectiveContainer(containerSource);
     if (!container || !enabled) return;
 
     let frameId: number;
@@ -232,7 +243,10 @@ export function useFocalPerspective({
     // `useLentillePerspective`, ce hook garde la boucle vivante sous reduced
     // motion (l'élection doit continuer, §4.9) — seule l'ÉCRITURE
     // opacity/transform est court-circuitée, via la ref, à chaque frame.
-  }, [containerRef, enabled]);
+    //
+    // `containerSource`, LUI, y entre (REV-4/B1) : c'est cette dépendance qui
+    // ré-arme la passe quand la cible apparaît après le premier effet.
+  }, [containerSource, enabled]);
 
   return { registerRow, focusedId, setAlphaCeiling };
 }

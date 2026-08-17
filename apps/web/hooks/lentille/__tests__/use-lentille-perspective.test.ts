@@ -25,9 +25,19 @@
  * WL-108 ajoute les preuves d'élection : `electFocusRow` + hystérésis
  * `FOCUS_BAND_HALF_HEIGHT` (les DEUX venant de la loi gelée), publication
  * gardée par le changement.
+ *
+ * RENFORCEMENT REV-4/B1 (V4bis) — ce fichier « peuplait la ref à la main »
+ * (`containerRef.current = container`, précédé d'un `@ts-expect-error` : le
+ * signe même qu'on forçait une porte). Il ne le fait plus : le hook reçoit
+ * désormais l'ÉLÉMENT, la forme sûre de `PerspectiveContainer`, celle qui
+ * ré-arme la passe quand la cible apparaît. Aucune assertion n'a été retirée —
+ * deux ont été AJOUTÉES en fin de fichier : la passe ne tourne pas sous OFF,
+ * et une cible qui n'apparaît qu'APRÈS le premier effet démarre quand même la
+ * passe. Le cycle de vie complet (montage réel, cible peuplée par le rendu,
+ * une seule passe d'effets sans `StrictMode`) est verrouillé un cran plus
+ * haut, par `LentilleConversationListMount.perspective-lifecycle.test.tsx`.
  */
 import { renderHook, act } from '@testing-library/react';
-import { createRef } from 'react';
 import {
   focusCurve,
   FOCUS_BAND_OFFSET,
@@ -85,12 +95,9 @@ describe('useLentillePerspective', () => {
   };
 
   it("courbe via la loi — `focusCurve('list', d)`, jamais recopiée", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- assignation directe pour le test (ref non mutable via React ici)
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
 
     // focusY = 1000 - FOCUS_BAND_OFFSET. Rang dont le midY tombe à distance
     // FOCUS_BAND_OFFSET (~140) au-dessus de la bande de focus : d = 140.
@@ -107,12 +114,9 @@ describe('useLentillePerspective', () => {
   });
 
   it('planifie UN SEUL requestAnimationFrame par frame, quel que soit le nombre de rangs', () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
 
     act(() => {
       result.current.registerRow('a')(makeElementWithRect({ top: 100, bottom: 164 }));
@@ -132,12 +136,9 @@ describe('useLentillePerspective', () => {
   it("prefers-reduced-motion ⇒ perspective désactivée : AUCUNE écriture opacity/transform, wrappers à l'identité", () => {
     mockReducedMotion = true;
 
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
 
     const row = makeElementWithRect({ top: 100, bottom: 164 });
     act(() => result.current.registerRow('row-1')(row));
@@ -157,12 +158,9 @@ describe('useLentillePerspective', () => {
   it('prefers-reduced-motion ⇒ ÉLECTION CONSERVÉE (LWS-8 : « la surbrillance survit, l\'animation non »)', () => {
     mockReducedMotion = true;
 
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
 
     const focusY = 1000 - FOCUS_BAND_OFFSET;
     act(() => {
@@ -178,12 +176,9 @@ describe('useLentillePerspective', () => {
   });
 
   it("élit le rang dont le midY tombe dans la bande — par `electFocusRow`, jamais une comparaison locale", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
     const focusY = 1000 - FOCUS_BAND_OFFSET;
 
     act(() => {
@@ -196,12 +191,9 @@ describe('useLentillePerspective', () => {
   });
 
   it("hystérésis : l'élu garde la main tant qu'il reste dans la bande (oscillation sans tremblement)", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
     const focusY = 1000 - FOCUS_BAND_OFFSET;
 
     // `b` PILE au centre ; `a` juste au-dessus. On élit `a` d'abord en le
@@ -238,12 +230,9 @@ describe('useLentillePerspective', () => {
   });
 
   it("ne publie que les CHANGEMENTS d'élu — pas une notification par frame", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
     const focusY = 1000 - FOCUS_BAND_OFFSET;
 
     act(() => {
@@ -262,12 +251,9 @@ describe('useLentillePerspective', () => {
   });
 
   it("aucun candidat ⇒ aucun élu (jamais un id périmé)", () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { result } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { result } = renderHook(() => useLentillePerspective({ container }));
     const focusY = 1000 - FOCUS_BAND_OFFSET;
 
     const row = makeElementWithRect({ top: focusY, bottom: focusY });
@@ -281,14 +267,46 @@ describe('useLentillePerspective', () => {
   });
 
   it('nettoie sa frame en vol au démontage (cancelAnimationFrame appelé)', () => {
-    const containerRef = createRef<HTMLDivElement>();
     const container = makeElementWithRect({ top: 0, bottom: 1000 });
-    // @ts-expect-error -- idem
-    containerRef.current = container;
 
-    const { unmount } = renderHook(() => useLentillePerspective({ containerRef }));
+    const { unmount } = renderHook(() => useLentillePerspective({ container }));
     unmount();
 
     expect(global.cancelAnimationFrame).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * REV-4/B1 — `enabled: false` est le seul interrupteur d'arrêt : sous OFF
+   * (drapeau éteint côté peau, liste vide), AUCUNE frame ne doit être
+   * planifiée. Sans ce témoin, le correctif B1 pourrait « réparer » le
+   * démarrage en le rendant inconditionnel.
+   */
+  it('enabled=false ⇒ AUCUNE frame planifiée (rien ne tourne sous OFF)', () => {
+    const container = makeElementWithRect({ top: 0, bottom: 1000 });
+
+    renderHook(() => useLentillePerspective({ container, enabled: false }));
+
+    expect(rafCallCount).toBe(0);
+  });
+
+  /**
+   * Le témoin B1 au niveau du hook : la cible n'existe pas au premier effet
+   * (`null`) et n'apparaît qu'ensuite — exactement la situation que l'ordre
+   * des effets React crée en production. La passe doit démarrer À CE
+   * MOMENT-LÀ, pas jamais.
+   */
+  it("cible apparue APRÈS le premier effet ⇒ la passe démarre quand même (B1)", () => {
+    const container = makeElementWithRect({ top: 0, bottom: 1000 });
+
+    const { rerender } = renderHook(
+      ({ target }: { target: HTMLElement | null }) => useLentillePerspective({ container: target }),
+      { initialProps: { target: null as HTMLElement | null } }
+    );
+
+    expect(rafCallCount).toBe(0);
+
+    rerender({ target: container });
+
+    expect(rafCallCount).toBe(1);
   });
 });
