@@ -17,7 +17,10 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
-import type { UserPreferencesConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type {
+  UserPreferencesConversationUpdatedEventData,
+  UserPreferencesReorderedEventData,
+} from '@meeshy/shared/types/socketio-events';
 
 interface ConversationPreferencesState {
   // Preferences map by conversation ID
@@ -53,6 +56,9 @@ interface ConversationPreferencesActions {
 
   // Apply a `user:preferences-updated` broadcast (conversation scope)
   applyRemotePreferences: (event: UserPreferencesConversationUpdatedEventData) => void;
+
+  // Apply a `user:preferences-reordered` broadcast (drag-reorder, no version)
+  applyRemoteReorder: (updates: UserPreferencesReorderedEventData['updates']) => void;
 
   // Reload from backend
   refreshPreferences: () => Promise<void>;
@@ -248,6 +254,42 @@ export const useConversationPreferencesStore = create<ConversationPreferencesSta
 
         const newMap = new Map(get().preferencesMap);
         newMap.set(conversationId, next);
+        set({ preferencesMap: newMap });
+      },
+
+      /**
+       * Le glisser-déposer d'un autre appareil.
+       *
+       * `orderInCategory` est un critère de tri de la liste au même titre
+       * qu'`isPinned` et `categoryId` (`useConversationSorting` les lit tous
+       * les trois dans cette même map), mais c'est le seul que le serveur
+       * annonce SANS version : `reorderConversationPreferences` refuse
+       * délibérément de la bumper (« order is broadcast by
+       * USER_PREFERENCES_REORDERED, which carries no version ») pour émettre un
+       * événement par geste plutôt qu'un par ligne déplacée. L'arbitre de
+       * `applyRemotePreferences` n'a donc rien à arbitrer ici, et le mirroir iOS
+       * (`ConversationStore.applyRemoteReorder`) applique lui aussi sans garde.
+       *
+       * Une conversation SANS ligne locale est ignorée plutôt que créée : un
+       * ordre seul ne dit rien des dix autres champs, et la ligne fabriquée
+       * affirmerait des valeurs par défaut (`isPinned: false`, aucune catégorie)
+       * que le serveur n'a jamais envoyées — elle sortirait la conversation de
+       * son groupe pour la placer dans « non catégorisées ». Le serveur ne
+       * diffuse que ce qu'il a écrit ; ce qu'on n'a pas encore chargé arrivera
+       * par `initialize`.
+       */
+      applyRemoteReorder: (updates) => {
+        const current = get().preferencesMap;
+        const applicable = updates.filter((update) => current.has(update.conversationId));
+        if (applicable.length === 0) return;
+
+        const newMap = new Map(current);
+        applicable.forEach(({ conversationId, orderInCategory }) => {
+          newMap.set(conversationId, {
+            ...newMap.get(conversationId)!,
+            orderInCategory,
+          });
+        });
         set({ preferencesMap: newMap });
       },
 

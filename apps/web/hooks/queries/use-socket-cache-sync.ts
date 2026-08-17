@@ -1035,8 +1035,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
+    // Les quatre événements de catégorie, et ce que la liste en lit VRAIMENT.
+    //
+    // `queryKeys.preferences.categories()` n'a aucun observateur en production
+    // (`useCategoriesQuery` n'est importé que par ses propres tests) : la
+    // `ConversationList` lit ses catégories dans le store Zustand, via
+    // `useConversationPreferences` → `useConversationCategories`. Invalider une
+    // requête que personne ne monte ne déclenche aucun refetch et ne change rien
+    // à l'écran — la liste des catégories restait donc figée sur l'unique
+    // chargement d'`initialize()`, tant que l'onglet vivait. L'invalidation est
+    // conservée : elle reste juste, et un futur lecteur React Query en
+    // hériterait ; c'est le rafraîchissement du store qui manquait.
     const handleCategoryChanged = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
+      // `void` DÉTACHE la promesse : le `.catch` est la seule garde qui reste,
+      // et il appartient au site d'appel — que le collaborateur avale ou non ses
+      // propres pannes est sa propriété, pas une garantie d'ici.
+      void useConversationPreferencesStore
+        .getState()
+        .refreshCategories()
+        .catch(() => undefined);
     };
 
     // Handler for message:pending-delivered — queued messages delivered on reconnect.
@@ -1347,6 +1365,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
       }
     });
+    // `user:preferences-reordered` — le glisser-déposer d'un autre appareil.
+    //
+    // `orderInCategory` est un critère de tri de la liste au même titre
+    // qu'`isPinned` et `categoryId` (`useConversationSorting` les lit tous les
+    // trois dans la même map du store), et c'est le SEUL que
+    // `user:preferences-updated` n'annonce pas : le gateway émet un événement
+    // par GESTE de réordonnancement, pas un par ligne déplacée. Le store
+    // arbitre sans `version` — l'événement n'en porte pas, délibérément.
+    const unsubscribePreferencesReordered = meeshySocketIOService.onPreferencesReordered((data) => {
+      useConversationPreferencesStore.getState().applyRemoteReorder(data?.updates ?? []);
+    });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
@@ -1378,6 +1407,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeAudioTranslation?.();
       unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
+      unsubscribePreferencesReordered?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();

@@ -33,6 +33,7 @@ let capturedMessageUnpinnedListener: ((data: any) => void) | null = null;
 let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
 // Capture the preferences listener — `user:preferences-updated` is a three-scope union
 let capturedPreferencesListener: ((data: any) => void) | null = null;
+let capturedPreferencesReorderedListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -70,6 +71,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesUpdated: jest.fn((listener: (data: any) => void) => {
       capturedPreferencesListener = listener;
       return () => { capturedPreferencesListener = null; };
+    }),
+    onPreferencesReordered: jest.fn((listener: (data: any) => void) => {
+      capturedPreferencesReorderedListener = listener;
+      return () => { capturedPreferencesReorderedListener = null; };
     }),
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
@@ -116,9 +121,15 @@ jest.mock('@/stores/auth-store', () => ({
 }));
 
 const applyRemotePreferencesMock = jest.fn();
+const applyRemoteReorderMock = jest.fn();
+const refreshCategoriesMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/stores/conversation-preferences-store', () => ({
   useConversationPreferencesStore: {
-    getState: () => ({ applyRemotePreferences: applyRemotePreferencesMock }),
+    getState: () => ({
+      applyRemotePreferences: applyRemotePreferencesMock,
+      applyRemoteReorder: applyRemoteReorderMock,
+      refreshCategories: refreshCategoriesMock,
+    }),
   },
 }));
 

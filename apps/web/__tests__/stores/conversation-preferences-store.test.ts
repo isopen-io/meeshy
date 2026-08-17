@@ -578,3 +578,108 @@ describe('optimistic writes — version arbitration', () => {
     });
   });
 });
+
+/**
+ * `user:preferences-reordered` — l'ordre est le SEUL critère de tri de la liste
+ * qui n'a pas de version.
+ *
+ * Le gateway refuse délibérément de bumper `version` sur un réordonnancement
+ * (`reorderConversationPreferences`, commentaire « No version bump ») : l'ordre
+ * vit hors du chemin versionné et `USER_PREFERENCES_REORDERED` n'en porte
+ * aucune. L'arbitre d'`applyRemotePreferences` n'est donc PAS applicable ici —
+ * le mirroir iOS (`ConversationStore.applyRemoteReorder`) l'applique lui aussi
+ * sans garde.
+ */
+describe('applyRemoteReorder', () => {
+  const read = (conversationId: string) =>
+    useConversationPreferencesStore.getState().preferencesMap.get(conversationId);
+
+  const seed = (...prefs: UserConversationPreferences[]) => {
+    act(() => {
+      useConversationPreferencesStore.setState({
+        preferencesMap: new Map(prefs.map((p) => [p.conversationId, p])),
+      });
+    });
+  };
+
+  const reorder = (updates: ReadonlyArray<{ conversationId: string; orderInCategory: number }>) => {
+    act(() => {
+      useConversationPreferencesStore.getState().applyRemoteReorder(updates);
+    });
+  };
+
+  beforeEach(() => {
+    act(() => {
+      useConversationPreferencesStore.getState().reset();
+    });
+  });
+
+  it('applies the broadcast order onto every known conversation', () => {
+    seed(
+      createPrefs('conv-a', { orderInCategory: 0 }),
+      createPrefs('conv-b', { orderInCategory: 1 })
+    );
+
+    reorder([
+      { conversationId: 'conv-a', orderInCategory: 5 },
+      { conversationId: 'conv-b', orderInCategory: 2 },
+    ]);
+
+    expect(read('conv-a')?.orderInCategory).toBe(5);
+    expect(read('conv-b')?.orderInCategory).toBe(2);
+  });
+
+  it('applies even though the event carries no version', () => {
+    seed(createPrefs('conv-a', { orderInCategory: 0, version: 9 }));
+
+    reorder([{ conversationId: 'conv-a', orderInCategory: 3 }]);
+
+    expect(read('conv-a')?.orderInCategory).toBe(3);
+    expect(read('conv-a')?.version).toBe(9);
+  });
+
+  it('touches nothing else on the row it reorders', () => {
+    seed(
+      createPrefs('conv-a', {
+        orderInCategory: 0,
+        isPinned: true,
+        isMuted: true,
+        categoryId: 'cat-1',
+        tags: ['work'],
+      })
+    );
+
+    reorder([{ conversationId: 'conv-a', orderInCategory: 4 }]);
+
+    expect(read('conv-a')).toMatchObject({
+      isPinned: true,
+      isMuted: true,
+      categoryId: 'cat-1',
+      tags: ['work'],
+      orderInCategory: 4,
+    });
+  });
+
+  it('skips a conversation with no local row instead of minting one', () => {
+    seed(createPrefs('conv-a', { orderInCategory: 0 }));
+
+    reorder([
+      { conversationId: 'ghost', orderInCategory: 9 },
+      { conversationId: 'conv-a', orderInCategory: 3 },
+    ]);
+
+    expect(read('ghost')).toBeUndefined();
+    expect(read('conv-a')?.orderInCategory).toBe(3);
+  });
+
+  it('leaves the map referentially unchanged when nothing applies', () => {
+    seed(createPrefs('conv-a', { orderInCategory: 0 }));
+    const before = useConversationPreferencesStore.getState().preferencesMap;
+
+    reorder([{ conversationId: 'ghost', orderInCategory: 9 }]);
+    expect(useConversationPreferencesStore.getState().preferencesMap).toBe(before);
+
+    reorder([]);
+    expect(useConversationPreferencesStore.getState().preferencesMap).toBe(before);
+  });
+});
