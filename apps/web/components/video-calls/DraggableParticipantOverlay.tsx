@@ -25,6 +25,8 @@ interface DraggableParticipantOverlayProps {
   initialPosition?: { x: number; y: number };
   onDoubleClick?: () => void;
   onRemove?: () => void;
+  /** See `VideoStream`'s prop of the same name — passed through unchanged. */
+  onKickParticipant?: () => void;
 }
 
 export function DraggableParticipantOverlay({
@@ -38,6 +40,7 @@ export function DraggableParticipantOverlay({
   initialPosition = { x: 20, y: 20 },
   onDoubleClick,
   onRemove,
+  onKickParticipant,
 }: DraggableParticipantOverlayProps) {
   const { t } = useI18n('calls');
   const [position, setPosition] = useState(initialPosition);
@@ -128,6 +131,7 @@ export function DraggableParticipantOverlay({
         isVideoEnabled={isVideoEnabled}
         isDisconnected={isDisconnected}
         onRemove={onRemove}
+        onKickParticipant={onKickParticipant}
       />
 
       {/* Fullscreen button (on hover) */}

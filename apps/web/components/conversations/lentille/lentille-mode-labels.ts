@@ -33,13 +33,26 @@ import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/sha
 import type { OrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import type { LentilleRowTranslate } from './LentilleRow';
 
-/** Clé i18n du nom d'une PRÉFÉRENCE (mots du menu, chip d'un mode forcé). */
+/**
+ * Clé i18n du nom d'une PRÉFÉRENCE (mots du menu, chip d'un mode forcé).
+ *
+ * AMENDEMENT S1 (REV-4bis/B2) — `bulles` RÉUTILISE `lentille.modes.bubbles`,
+ * la clé que WL-108 avait déjà posée pour le mode RENDU homonyme (voir
+ * `DECISION_LABEL_KEY` ci-dessous, et la note de tête de ce fichier). Aucune
+ * clé neuve n'est créée : c'est le même mot pour le lecteur, et `bulles`
+ * n'est offert par AUCUN des trois chemins d'entrée du menu de mode
+ * (`ReadingModeMenu`, catalogue inchangé) — seul le sélecteur historique
+ * `LensSwitcher` l'écrit, drapeau éteint. La table reste TOTALE sur
+ * l'énumération amendée, ce qui est sa seule raison d'exister :
+ * `preferenceLabel` ne doit jamais rendre `undefined`.
+ */
 const PREFERENCE_LABEL_KEY: Readonly<Record<ReadingModePreference, string>> = {
   auto: 'lentille.modes.auto',
   focal: 'lentille.modes.focal',
   script: 'lentille.modes.script',
   resume: 'lentille.modes.resume',
   riviere: 'lentille.modes.riviere',
+  bulles: 'lentille.modes.bubbles',
 };
 
 /**

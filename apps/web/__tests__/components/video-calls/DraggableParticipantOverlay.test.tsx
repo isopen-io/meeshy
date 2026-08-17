@@ -2,10 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 // VideoStream pulls in heavy WebRTC/ref machinery — stub it to a marker node.
 // `data-muted` mirrors the real `muted` prop so the speaker-toggle wiring below
-// can be asserted without a real <video> element.
+// can be asserted without a real <video> element. `data-has-kick` does the
+// same for the W6 moderator-kick prop.
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: (props: { muted?: boolean }) => (
-    <div data-testid="video-stream" data-muted={String(props.muted)} />
+  VideoStream: (props: { muted?: boolean; onKickParticipant?: () => void }) => (
+    <div data-testid="video-stream" data-muted={String(props.muted)} data-has-kick={String(!!props.onKickParticipant)} />
   ),
 }));
 
@@ -86,5 +87,26 @@ describe('DraggableParticipantOverlay — speaker mute threading', () => {
       />
     );
     expect(screen.getByTestId('video-stream')).toHaveAttribute('data-muted', 'true');
+  });
+});
+
+describe('DraggableParticipantOverlay — moderator kick threading (W6)', () => {
+  it('does not forward a kick control to VideoStream when onKickParticipant is absent', () => {
+    render(
+      <DraggableParticipantOverlay participantId="p1" stream={{} as MediaStream} participantName="Alice" />
+    );
+    expect(screen.getByTestId('video-stream')).toHaveAttribute('data-has-kick', 'false');
+  });
+
+  it('forwards onKickParticipant to its VideoStream unchanged', () => {
+    render(
+      <DraggableParticipantOverlay
+        participantId="p1"
+        stream={{} as MediaStream}
+        participantName="Alice"
+        onKickParticipant={jest.fn()}
+      />
+    );
+    expect(screen.getByTestId('video-stream')).toHaveAttribute('data-has-kick', 'true');
   });
 });

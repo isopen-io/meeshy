@@ -6,9 +6,20 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { MicOff, VideoOff } from 'lucide-react';
+import { MicOff, UserMinus, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface VideoStreamProps {
   stream: MediaStream | null;
@@ -20,6 +31,15 @@ interface VideoStreamProps {
   isVideoEnabled?: boolean;
   isDisconnected?: boolean;
   onRemove?: () => void;
+  /**
+   * Group calls only (gated by the caller — never passed for a direct call
+   * or a non-moderator viewer): shows a "remove from call" control behind a
+   * confirmation dialog. Wired to `callsService.removeParticipant`, whose
+   * success is reconciled everywhere via the existing
+   * `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` broadcast — this component never
+   * mutates call state itself.
+   */
+  onKickParticipant?: () => void;
 }
 
 export function VideoStream({
@@ -32,6 +52,7 @@ export function VideoStream({
   isVideoEnabled = true,
   isDisconnected = false,
   onRemove,
+  onKickParticipant,
 }: VideoStreamProps) {
   const { t } = useI18n('calls');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -145,6 +166,48 @@ export function VideoStream({
               <div className="bg-red-600 p-1 rounded-full" title={t('stream.videoOff')}>
                 <VideoOff className="w-3 h-3 text-white" />
               </div>
+            )}
+            {onKickParticipant && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t('stream.removeParticipant')}
+                    title={t('stream.removeParticipant')}
+                    className="bg-red-600/90 hover:bg-red-600 p-1 rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <UserMinus className="w-3 h-3 text-white" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t('stream.removeParticipantConfirmTitle').replace(
+                        '{name}',
+                        participantName || t('stream.participant')
+                      )}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('stream.removeParticipantConfirmDescription').replace(
+                        '{name}',
+                        participantName || t('stream.participant')
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t('stream.cancel')}</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
+                      onClick={onKickParticipant}
+                    >
+                      {t('stream.removeParticipantConfirmAction')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         </div>
