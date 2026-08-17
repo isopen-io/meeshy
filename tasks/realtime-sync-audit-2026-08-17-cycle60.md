@@ -131,11 +131,28 @@ la version pinnée).
 
 ## 6. Pistes pour le cycle 61
 
-1. **Le troisième client.** Android relaie `message:new` vers
-   `CacheCoordinator` (« upsert + bump conversation to top ») — porte-t-il la
-   garde monotone ? La règle vaut désormais sur deux clients sur trois, ce qui
-   est exactement la forme que ce cycle vient de fermer sur un autre champ.
-   **Nouvelle, et la plus directe.**
+1. **Le troisième client — dépouillé, et il change la piste.** La question
+   « Android porte-t-il la garde monotone ? » a été posée AVANT d'ouvrir la PR,
+   parce que c'est exactement la forme que ce cycle vient de fermer. Réponse :
+   **il n'en a pas besoin**. `ConversationListViewModel` (`feature/conversations`)
+   n'applique AUCUN payload au cache de liste — ses trois abonnements
+   (`messageReceived`, `conversationUpdated`, `unreadUpdated`) appellent tous
+   `refreshSilently()`, une relecture serveur complète. Le serveur reste donc la
+   source de vérité de la ligne, et aucun désordre de diffusion ne peut la faire
+   reculer : Android est **structurellement immunisé**, comme les neuf queries
+   infinite keyset l'étaient au cycle 59 §7.1.
+
+   Le tableau de parité (`apps/android/tasks/audit/part-17.md`) décrit pourtant
+   un relais « upsert + bump conversation to top » vers `CacheCoordinator` : c'est
+   un plan de PORTAGE, pas du code livré. **Le jour où ce relais existera, il
+   naîtra avec le défaut** — et la garde devra naître avec lui. À noter dans le
+   plan avant qu'il ne soit exécuté, pas après.
+
+   Ce que la réponse fait apparaître à la place, et qui est la vraie piste :
+   `refreshSilently()` sur CHAQUE message entrant est une requête de liste
+   complète par message reçu. C'est le coût que le web ne paie qu'au reconnect,
+   et qu'il a précisément passé les cycles 59 et 60 à borner. **Piste de
+   performance Android, nouvelle et chiffrable.**
 2. **Le garde de forme des queries infinite OFFSET** (cycle 59 §6, §7.1) —
    intacte, entièrement instruite.
 3. **`USER_STATUS` retiré de `CLIENT_EVENTS`** (cycle 59 §7) — intacte.
