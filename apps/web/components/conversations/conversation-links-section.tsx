@@ -19,6 +19,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface ShareLink {
   id: string;
@@ -112,7 +113,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
   };
 
   const copyLink = async (linkId: string) => {
-    const linkUrl = `${window.location.origin}/join/${linkId}`;
+    const linkUrl = buildShareLinkUrl(linkId);
     const result = await copyToClipboard(linkUrl);
     
     if (result.success) {

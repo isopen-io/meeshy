@@ -14,6 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { generateLinkName } from '@/utils/link-name-generator';
 import { conversationsService } from '@/services/conversations.service';
 import { authManager } from '@/services/auth-manager.service';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface CreateLinkButtonProps {
   conversationId?: string; // ID de la conversation (optionnel, détecté depuis l'URL sinon)
@@ -178,7 +179,7 @@ export function CreateLinkButton({
 
       if (response.ok) {
         const result = await response.json();
-        const linkUrl = `${window.location.origin}/join/${result.data.linkId}`;
+        const linkUrl = buildShareLinkUrl(result.data.linkId);
         const messages = getTranslatedMessages(detectedInterfaceLanguage);
 
         // Stocker les liens générés

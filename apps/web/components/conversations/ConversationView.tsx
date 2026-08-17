@@ -19,6 +19,9 @@ import { FailedMessageBanner } from '@/components/messages/failed-message-banner
 import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { LensSwitcher } from './reading/LensSwitcher';
+import { useConversationAccent } from '@/hooks/conversations/use-conversation-accent';
+import { useReadingMode, useReadingModeStore } from '@/stores/reading-mode-store';
 import { useSeenMessages } from '@/hooks/use-seen-messages';
 import { resolveConsumedLanguage } from '@/utils/consumed-language';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
@@ -269,9 +272,19 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     // Token pour les attachments
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;
 
+    // Lentille de lecture — choix collant par conversation (verdict vol. 3).
+    const readingMode = useReadingMode(conversation.id);
+    const setReadingMode = useReadingModeStore(state => state.setMode);
+    const toggleDensity = useReadingModeStore(state => state.toggleDensity);
+
+    // L'accent de la conversation, publié en variables CSS : le ring de focus du
+    // mode Focal et la Lentille le consomment via `--conv-accent`.
+    const accentStyle = useConversationAccent(conversation);
+
     return (
       <div
         ref={ref}
+        style={accentStyle as React.CSSProperties | undefined}
         className={cn(
           "flex flex-col bg-white dark:bg-gray-950 overflow-hidden",
           isMobile
@@ -307,6 +320,15 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             showBackButton={showBackButton}
             otherUnreadCount={otherUnreadCount}
           />
+
+          {/* La Lentille — Focal / Script / Bulles, + `Aa` pour la densité. */}
+          <div className={cn('flex justify-end pb-1', isMobile ? 'px-2' : 'px-4')}>
+            <LensSwitcher
+              mode={readingMode}
+              onModeChange={(mode) => setReadingMode(conversation.id, mode)}
+              onToggleDensity={() => toggleDensity(conversation.id)}
+            />
+          </div>
 
           {!isConnected && (
             <div className={cn("py-2", isMobile ? "px-4" : "px-6")}>
@@ -368,6 +390,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
               t={t}
               tCommon={tCommon}
               reverseOrder={true}
+              readingMode={readingMode}
             />
           </ErrorBoundary>
         </div>

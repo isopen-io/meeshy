@@ -689,7 +689,13 @@ describe('useAuth shared chat route', () => {
     expect(mockRedirectToHome).not.toHaveBeenCalled();
   });
 
-  it('redirects to join page when anonymous user lacks session and link id is stored', async () => {
+  // `/chat/:sharedId` s'ouvre pour TOUT LE MONDE. C'est
+  // `SharedConversationExperience` qui décide quoi peindre (vue complète, vue
+  // partagée vivante, ou aperçu + modale de jonction) : le routeur ne doit
+  // jamais l'en priver. Ce hook renvoyait auparavant vers `/join/:linkId`, qui
+  // renvoyait à son tour sur `/chat` — la boucle de redirection que trois
+  // gardes `sessionStorage` tentaient de contenir.
+  it('never redirects an anonymous visitor who lacks a session', async () => {
     localStorageMock.setItem('anonymous_current_link_id', 'link-777');
     mockCheckAuthStatus.mockResolvedValue({
       isAuthenticated: true,
@@ -701,10 +707,12 @@ describe('useAuth shared chat route', () => {
 
     renderHook(() => useAuth());
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/join/link-777'));
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockRedirectToHome).not.toHaveBeenCalled();
   });
 
-  it('redirects to home when anonymous user lacks session and no link id', async () => {
+  it('never redirects a visitor with no stored link id', async () => {
     mockCheckAuthStatus.mockResolvedValue({
       isAuthenticated: true,
       user: anonParticipant as any,
@@ -715,24 +723,19 @@ describe('useAuth shared chat route', () => {
 
     renderHook(() => useAuth());
 
-    await waitFor(() => expect(mockRedirectToHome).toHaveBeenCalled());
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+    expect(mockRedirectToHome).not.toHaveBeenCalled();
   });
 
-  it('redirects to join page when canAccessSharedConversation is false and link id exists', async () => {
+  it('never redirects even when shared-conversation access is denied', async () => {
     mockCanAccessSharedConversation.mockReturnValue(false);
     localStorageMock.setItem('anonymous_current_link_id', 'link-888');
 
     renderHook(() => useAuth());
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/join/link-888'));
-  });
-
-  it('redirects to home when canAccessSharedConversation is false and no link id', async () => {
-    mockCanAccessSharedConversation.mockReturnValue(false);
-
-    renderHook(() => useAuth());
-
-    await waitFor(() => expect(mockRedirectToHome).toHaveBeenCalled());
+    await waitFor(() => expect(mockCheckAuthStatus).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockRedirectToHome).not.toHaveBeenCalled();
   });
 
   it('does not redirect when anonymous user has valid session and participant', async () => {

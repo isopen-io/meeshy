@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOgImageUrl } from '@/lib/og-images';
 import { buildApiUrl } from '@/lib/config';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface MetadataResponse {
   title: string;
@@ -100,7 +101,7 @@ async function generateConversationMetadata(
           title: `${shareLink.conversation?.title || 'Conversation Meeshy'} - Rejoignez la discussion`,
           description: shareLink.description || `Rejoignez cette conversation sur Meeshy et discutez en temps réel avec traduction automatique dans plus de 100 langues.`,
           image: getOgImageUrl('default', frontendUrl),
-          url: `${frontendUrl}/join/${linkId}`,
+          url: buildShareLinkUrl(linkId, frontendUrl),
           type: 'website',
           siteName: 'Meeshy',
           locale: 'fr_FR'
@@ -135,7 +136,7 @@ async function generateJoinMetadata(
           title: `Rejoignez ${shareLink.conversation?.title || 'cette conversation'} sur Meeshy`,
           description: `Participez à une conversation multilingue en temps réel. Traduction automatique, partage de fichiers et discussions globales sur Meeshy.`,
           image: getOgImageUrl('signin', frontendUrl),
-          url: `${frontendUrl}/join/${linkId}`,
+          url: buildShareLinkUrl(linkId, frontendUrl),
           type: 'website',
           siteName: 'Meeshy',
           locale: 'fr_FR'

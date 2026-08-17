@@ -461,3 +461,28 @@ describe('countConversationMessages', () => {
     expect(where.conversationId).toBe(OBJECT_ID);
   });
 });
+
+// ---------------------------------------------------------------------------
+// shareLinkIncludeStructure
+// ---------------------------------------------------------------------------
+
+describe('shareLinkIncludeStructure — participant fields read by callers', () => {
+  // `retrieval.ts` décide `userType: 'member'` avec
+  // `member.userId === user.id && member.isActive`. Un `where: { isActive: true }`
+  // ne PROJETTE pas le champ : sans `isActive` dans le `select`, la propriété
+  // arrive `undefined` et aucun membre n'est jamais reconnu — la conversation
+  // partagée s'ouvrait en aperçu pour ses propres membres.
+  it('selects isActive on conversation participants', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    expect(participants.select.isActive).toBe(true);
+  });
+
+  it('selects userId on conversation participants', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    expect(participants.select.userId).toBe(true);
+  });
+});

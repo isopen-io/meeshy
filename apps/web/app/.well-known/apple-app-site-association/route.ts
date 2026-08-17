@@ -6,7 +6,8 @@ const AASA = {
       {
         appIDs: ["D72UK7R5RE.me.meeshy.app"],
         components: [
-          { "/": "/join/*", "comment": "Join conversation links" },
+          { "/": "/chat/*", "comment": "Shared conversation links (canonical)" },
+          { "/": "/join/*", "comment": "Legacy share links — 308 to /chat/*" },
           { "/": "/l/*", "comment": "Legacy join links" },
           { "/": "/c/*", "comment": "Conversation links" },
           { "/": "/conversation/*", "comment": "Conversation links" },
