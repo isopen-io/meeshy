@@ -1419,3 +1419,83 @@ entre dans le nouveau `catch`.
 déjà couvert par des tests source-guard, re-lire chaque site individuellement) plutôt qu'un tri
 exhaustif de l'ensemble en une fois, à la manière dont `DispatchQueue.main.async` a été découpé en
 plusieurs sous-lots au fil de plusieurs runs.
+
+### 2026-08-17 — Run #13 (`MediaSessionCoordinator.swift` — 4 sites `try?` → `do/catch` + logging, PR #3124 mergée `a2eacc9d1`)
+
+Contexte : `tasks/lane-cursor.md` à `lane=ANDROID android_streak=5 last_run=feed-impression-batching` —
+règle d'alternance déclenchée. `gh pr list --state open --search "apps/android OR apps/ios"` → 2 PR
+concurrentes (#3096, #3108), aucune touchant un fichier de ce diff.
+
+**RE-PROUVÉ tout le backlog avant de choisir — items 1-7 restent dans l'état documenté par les runs
+précédents** (rien de nouveau à rouvrir). **Continué la méthode `try?` ouverte au Run #12** : plutôt
+que de re-scanner l'ensemble des 806 sites restants, échantillonné individuellement plusieurs
+fichiers à faible nombre d'occurrences (`StatusViewModel` 3, `PhonebookViewModel` 3,
+`GlobalSearchViewModel` 3, `UserProfileViewModel` 3, `ConversationSocketHandler` 4,
+`SharePendingSendConsumer` 3, `NSEPendingPostConsumer` 4, `NSEPendingMessageConsumer` 5,
+`LinkPreviewFetcher` 3) — **chacun écarté après lecture directe** : tous correspondaient à des
+patrons déjà documentés comme légitimes par la mémoire projet (`feedback_avoid_try_optional_and_ios_
+compat_folder.md`) — regex `NSRegularExpression`/`NSDataDetector` sur un littéral compile-time,
+parsing de dates en cascade (`Date(dateStr, strategy:)` avec repli), scans de répertoire
+(`contentsOfDirectory`/`Data(contentsOf:)` best-effort dans une boucle), décodage best-effort
+(`try? decoder.decode(...)`), `Task.sleep`. Aucun n'a été retenu sans nouvelle preuve contraire.
+
+**Choisi : `MediaSessionCoordinator.swift`, 4 sites — un vrai candidat cette fois.** `setCategory`/
+`setActive` sur `AVAudioSession.sharedInstance()` sont des appels SYSTÈME réels (pas une regex
+littérale, pas un parsing) qui peuvent authentiquement échouer (autre process tenant le hardware en
+exclusif, conflit de routage) — `try?` rendait chaque échec de ce coordinateur audio CENTRAL
+(« Coordonne l'accès à AVAudioSession entre tous les composants audio ») totalement indiagnosticable.
+Signal fort supplémentaire : la méthode sœur `activateRecordingSync`, juste en dessous dans le même
+fichier, utilise déjà un vrai `do/catch` (retourne `Bool`) — `activatePlaybackSync` et
+`deactivatePlaybackSync` étaient incohérentes avec leur propre voisine.
+
+**TDD** — pas de seam pour faire réellement échouer `AVAudioSession` en test unitaire (confirmé en
+lisant les 2 suites de tests existantes : elles testent le forwarding d'événements système, jamais
+les chemins d'échec de `setCategory`/`setActive`). Nouveau fichier source-guard
+`MediaSessionCoordinatorTryOptionalLoggingSourceGuardTests.swift` (même patron que
+`CameraModelSwitchDuringRecordingTests` du Run #12) : RED confirmé (échec pour la bonne raison — `try?`
+encore présent, PAS une erreur de résolution de chemin — corrigée en cours de route : une déletion
+de composant de chemin manquante). GREEN : les 4 sites convertis. `activatePlaybackSync` reçoit DEUX
+`do/catch` INDÉPENDANTS (pas un seul englobant les deux appels) pour préserver EXACTEMENT le
+comportement `try?` d'origine — un échec de `setCategory` ne doit PAS empêcher la tentative
+`setActive`, comme c'était déjà le cas. Réutilise le `logger` déjà déclaré en tête de fichier —
+aucune nouvelle déclaration. Piège rencontré et corrigé : mon propre commentaire de code mentionnait
+littéralement la chaîne `try?` en prose, faisant échouer le verrou global du test
+(`test_noTryOptionalRemainsAnywhereInTheFile`) — reformulé.
+
+**Vérification** :
+- `./apps/ios/meeshy.sh build` vert (114s).
+- **Nouveau motif d'incident opérationnel, distinct du « killed sans diagnostic » du Run #12** :
+  `./apps/ios/meeshy.sh test` (suite complète) lancée via `run_in_background` de l'outil Bash a été
+  TUÉE deux fois de suite. Cause élucidée cette fois (contrairement au Run #12) : la fenêtre max de
+  `run_in_background` est de 10 minutes, et la suite complète (phase 0 SDK + 3 phases app, milliers
+  de tests) la dépasse — ce n'est pas un crash système. **Corrigé : 3e tentative lancée en process
+  totalement détaché** (`nohup ... > log 2>&1 < /dev/null & disown`, PID sauvegardé), surveillée par
+  un Monitor dédié (plafond 55 min) qui poll le log pour les 4 lignes de résumé de phase — a fini par
+  aboutir. Phase 0 (SDK, inclut les nouveaux tests) verte, Phase 3 (connectée) verte, Phase 1/2 :
+  16 échecs.
+- **Chaque échec vérifié individuellement, pas supposé** : les 16 sont concentrés dans 10 classes de
+  test (`FocalHostSourceGuardTests`, `FocalPerspectiveCellTests`, `FocalRowMetricsTests`,
+  `FocalScrollPassGeometryTests`, `FocalScrollPassSourceGuardTests`, `FocalScrollTimePillMountGuardTests`,
+  `FocalVoiceOverParityTests`, `FocalFocusDecorationTests`, `ConversationTopChromeFadeTests`,
+  `CallDetailRoutingTests`) — aucune ne touche `MediaSessionCoordinator`/audio-session (`grep`
+  confirmé). Recoupé avec la CI GitHub réelle de `origin/main` : `gh run list --workflow iOS` a montré
+  un run FAILURE sur `main` au commit `05e704134` — exactement UN commit avant le point de branchement
+  de cette PR — et `gh run view --log-failed` a confirmé la liste EXACTEMENT IDENTIQUE des 10 classes
+  en échec. Confirmé sans rapport avec ce diff par preuve indépendante, pas par supposition — churn
+  concurrent connu de la feature "Focal" en développement actif.
+- Branche `claude/apps/ios/debt-mediasessioncoordinator-try-optional-logging` créée EN PREMIER, avant
+  toute édition — cette fois le piège de l'itération précédente (édition avant branche, sur la branche
+  de routine Android) ne s'est PAS reproduit côté iOS.
+- PR #3124 : CI intégralement verte, y compris `sdk-tests` (34 min — le workflow SPM dédié déclenché
+  par tout diff `packages/MeeshySDK`) et `Build app (app + cibles de test)` (le job iOS pertinent).
+  Mergée via l'API GitHub directe → `a2eacc9d1`.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0
+  last_run=mediasessioncoordinator-try-optional-logging` (commit séparé, poussé directement sur
+  `main`, jamais mélangé au diff `packages/MeeshySDK`).
+
+**Nouveau backlog noté pour un futur run IOS_DETTE** : `try?` reste un gisement d'environ 802 sites
+(4 de moins qu'au Run #12). La méthode « échantillonner plusieurs petits fichiers, écarter ceux qui
+matchent les patrons légitimes déjà documentés, ne garder que les vrais appels système/hardware sans
+seam de test » s'est montrée efficace ce run-ci et mérite d'être reproduite plutôt que de re-scanner
+l'ensemble à l'aveugle.
