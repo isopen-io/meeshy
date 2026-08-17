@@ -10,20 +10,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -110,6 +119,8 @@ fun NotificationsScreen(
                             NotificationItem(
                                 notification = notification,
                                 onTap = { viewModel.markAsRead(notification.id) },
+                                onMarkRead = { viewModel.markAsRead(notification.id) },
+                                onDelete = { viewModel.deleteNotification(notification.id) },
                             )
                             HorizontalDivider(color = MeeshyTheme.tokens.inputBorder.copy(alpha = 0.4f))
                         }
@@ -130,66 +141,136 @@ fun NotificationsScreen(
     }
 }
 
+/**
+ * Port of iOS `NotificationRowView`'s `.swipeActions`: trailing (end-to-start) swipe deletes,
+ * leading (start-to-end) swipe marks read — only offered while unread, mirroring iOS's
+ * `if !notification.isRead`. Non-destructive at the gesture level (mirrors the established
+ * `ConversationListScreen` pattern): the swipe box always snaps back, and the row's actual
+ * removal/re-style comes from the repository cache mutation flowing back through [state].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificationItem(
     notification: ApiNotification,
     onTap: () -> Unit,
+    onMarkRead: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val isUnread = !notification.state.isRead
     val accent = hexColor(notificationTypeAccentHex(notification.type))
-    Surface(
-        onClick = onTap,
-        color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
+
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> if (isUnread) onMarkRead()
+                SwipeToDismissBoxValue.EndToStart -> onDelete()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = { NotificationSwipeBackground(direction = dismissState.dismissDirection, isUnread = isUnread) },
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            onClick = onTap,
+            color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
         ) {
-            MeeshyAvatar(
-                name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
-                modifier = Modifier.size(44.dp),
-                containerColor = accent,
-            )
-            Spacer(Modifier.width(MeeshySpacing.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = notification.actor?.displayName ?: notification.actor?.username
-                            ?: stringResource(R.string.notifications_system_sender),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textPrimary,
-                        fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                    if (isUnread) {
-                        Spacer(Modifier.width(MeeshySpacing.sm))
-                        Box(
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(accent),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MeeshyAvatar(
+                    name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
+                    modifier = Modifier.size(44.dp),
+                    containerColor = accent,
+                )
+                Spacer(Modifier.width(MeeshySpacing.md))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = notification.actor?.displayName ?: notification.actor?.username
+                                ?: stringResource(R.string.notifications_system_sender),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                        )
+                        if (isUnread) {
+                            Spacer(Modifier.width(MeeshySpacing.sm))
+                            Box(
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(accent),
+                            )
+                        }
+                    }
+                    notification.content?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
                         )
                     }
-                }
-                notification.content?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-                notificationRowRelativeTime(notification)?.let { relativeTime ->
-                    Text(
-                        text = relativeTime,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MeeshyTheme.tokens.textMuted,
-                    )
+                    notificationRowRelativeTime(notification)?.let { relativeTime ->
+                        Text(
+                            text = relativeTime,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MeeshyTheme.tokens.textMuted,
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationSwipeBackground(direction: SwipeToDismissBoxValue, isUnread: Boolean) {
+    val (alignment, icon, description, background) = when {
+        direction == SwipeToDismissBoxValue.StartToEnd && isUnread -> NotificationSwipeVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.MarkEmailRead,
+            description = stringResource(R.string.notifications_action_mark_read),
+            background = MeeshyPalette.Indigo500.copy(alpha = 0.20f),
+        )
+        direction == SwipeToDismissBoxValue.EndToStart -> NotificationSwipeVisual(
+            alignment = Alignment.CenterEnd,
+            icon = Icons.Filled.Delete,
+            description = stringResource(R.string.notifications_action_delete),
+            background = MeeshyPalette.Error.copy(alpha = 0.20f),
+        )
+        else -> NotificationSwipeVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.MarkEmailRead,
+            description = "",
+            background = Color.Transparent,
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(background)
+            .padding(horizontal = MeeshySpacing.xl),
+        contentAlignment = alignment,
+    ) {
+        if (background != Color.Transparent) {
+            Icon(imageVector = icon, contentDescription = description, tint = MeeshyTheme.tokens.textSecondary)
+        }
+    }
+}
+
+private data class NotificationSwipeVisual(
+    val alignment: Alignment,
+    val icon: ImageVector,
+    val description: String,
+    val background: Color,
+)
 
 /**
  * The notification row's arrival timestamp as a compact relative label ("5 min", "2 h", "3 j", …)

@@ -4,4 +4,6 @@
     <string name="notifications_mark_all_read">Marcar tudo como lido</string>
     <string name="notifications_empty">Nenhuma notificação</string>
     <string name="notifications_system_sender">Sistema</string>
+    <string name="notifications_action_delete">Excluir</string>
+    <string name="notifications_action_mark_read">Lido</string>
 </resources>
