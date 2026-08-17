@@ -45,7 +45,7 @@ import { useReplyStore } from '@/stores/reply-store';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStore } from '@/stores/user-store';
-import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
+import { useSocketCacheSync } from '@/hooks/queries';
 import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
 import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
@@ -246,7 +246,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   // liste (sans sélection) pour que lastMessage/unread et les caches de messages
   // continuent d'être alimentés par les événements socket.
   useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: true });
-  useInvalidateOnReconnect();
   useAutoRetryFailedMessages();
 
   // Clavier virtuel mobile

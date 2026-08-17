@@ -1,5 +1,5 @@
 /**
- * Tests for useSocketCacheSync and useInvalidateOnReconnect hooks
+ * Tests for the useSocketCacheSync hook
  *
  * Tests cover:
  * - Socket.IO event listeners registration
@@ -9,7 +9,6 @@
  * - Cache updates on translation events
  * - Cache updates on unread count changes
  * - Cleanup on unmount
- * - useInvalidateOnReconnect: Query invalidation on reconnect
  */
 
 import { renderHook, act } from '@testing-library/react';
@@ -17,7 +16,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import {
   useSocketCacheSync,
-  useInvalidateOnReconnect,
+
 } from '@/hooks/queries/use-socket-cache-sync';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
@@ -1852,44 +1851,18 @@ describe('useSocketCacheSync', () => {
   });
 });
 
-describe('useInvalidateOnReconnect', () => {
+describe('useSocketCacheSync — suite', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should invalidate queries on online event', () => {
-    const { wrapper, queryClient } = createWrapperWithClient();
-    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+  // Les deux témoins de `useInvalidateOnReconnect` ont été retirés avec le hook
+  // (cycle 59) : ils épinglaient ses appels `invalidateQueries` — c'est-à-dire
+  // exactement le geste destructeur qui a motivé sa suppression. L'invariant
+  // qu'ils prétendaient garder vit désormais dans
+  // `use-conversations-query.test.tsx` (« ne relit PAS ses pages au retour de
+  // connexion réseau »), en termes de COMPORTEMENT observable.
 
-    renderHook(() => useInvalidateOnReconnect(), { wrapper });
-
-    // Simulate online event
-    act(() => {
-      window.dispatchEvent(new Event('online'));
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['conversations'],
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['notifications'],
-    });
-  });
-
-  it('should cleanup event listener on unmount', () => {
-    const { wrapper } = createWrapperWithClient();
-
-    const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
-    const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
-
-    const { unmount } = renderHook(() => useInvalidateOnReconnect(), { wrapper });
-
-    expect(addEventListenerSpy).toHaveBeenCalledWith('online', expect.any(Function));
-
-    unmount();
-
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('online', expect.any(Function));
-  });
   // ─── message:restored-for-me ───────────────────────────────────────────────
   //
   // Un message masqué pour moi est revenu en vue depuis un AUTRE de mes
