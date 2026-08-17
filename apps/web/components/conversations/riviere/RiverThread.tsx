@@ -34,6 +34,25 @@
  * `packages/shared/utils/focus-curve.ts`) — jamais une seconde loi de
  * défilement.
  *
+ * **LA GRILLE TIENT SA PROMESSE** (Q-142, réserve REV-4ter **R5-8**). La
+ * racine annonce `role="grid"` + `aria-rowcount`/`aria-colcount`, mais aucun
+ * `row` ni `gridcell` n'existait dessous : `aria-required-children` tirait sur
+ * les DEUX layouts, et la suite d'audit devait désactiver la règle. Deux
+ * issues étaient ouvertes — abandonner `grid` pour un rôle qui ne promet rien,
+ * ou tenir la promesse. C'est la seconde qui est rendue : la navigation à deux
+ * axes est RÉELLE ici (`resolveRiverStep` gouverne les quatre flèches), donc
+ * `grid` ne sur-promet pas, il était seulement incomplet.
+ *
+ * Les deux couches manquantes sont posées en `display: contents`
+ * (`GRID_SEMANTIC_LAYER_STYLE`) : `row` par rang, `gridcell` par bulle.
+ * N'ayant AUCUNE boîte, elles ne déplacent rien — chaque bulle reste un
+ * élément de la même CSS Grid, avec les mêmes `gridColumn`/`gridRow`, et
+ * l'ordre du DOM reste `geometry.bubbles`, c'est-à-dire l'ordre
+ * CHRONOLOGIQUE strict (§7bis/§7ter). Les index annoncés
+ * (`aria-rowindex`/`aria-colindex`) viennent des `rank`/`laneIndex` de la LOI,
+ * jamais d'un compteur de rendu : un couloir sans bulle à ce rang n'a pas de
+ * cellule vide à fabriquer, l'index dit à lui seul où l'on se trouve.
+ *
  * **Deux axes qui se PARCOURENT** : les flèches du clavier traduisent leur
  * direction en `left`/`right`/`up`/`down` et délèguent INTÉGRALEMENT à
  * `resolveRiverStep` — aucune arithmétique de couloir/rang n'est écrite ici
@@ -48,7 +67,7 @@
  */
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   resolveRiverStep,
   resolveRiverLaneHeaders,
@@ -76,6 +95,18 @@ export interface RiverThreadProps {
   readonly initialCursor?: RiverCursor;
   readonly onSelectMessage?: (messageId: string) => void;
 }
+
+/**
+ * Q-142/R5-8 — LA COUCHE SÉMANTIQUE NE PORTE AUCUNE BOÎTE.
+ *
+ * `display: contents` fait disparaître la boîte de l'élément sans le retirer
+ * ni du DOM ni de l'arbre d'accessibilité : ses enfants deviennent, pour la
+ * mise en page, les enfants de son parent. C'est ce qui permet d'intercaler
+ * les `row`/`gridcell` que `role="grid"` exige SANS toucher au placement —
+ * chaque bulle reste un élément de grille de `river-grid` et garde son
+ * `gridColumn`/`gridRow` calculés depuis `laneIndex`/`rank` (§7bis/§7ter).
+ */
+const GRID_SEMANTIC_LAYER_STYLE: CSSProperties = { display: 'contents' };
 
 const KEY_TO_DIRECTION: Readonly<Record<string, RiverStepDirection>> = {
   ArrowLeft: 'left',
@@ -271,21 +302,40 @@ export function RiverThread({
             if (!content) return null;
 
             return (
-              <RiverBubble
+              // Q-142/R5-8 — `row` puis `gridcell`, les deux couches que
+              // `role="grid"` EXIGE, posées en `display: contents` : elles
+              // n'ont aucune boîte, donc la bulle reste l'enfant de grille
+              // qu'elle était et garde SON `gridColumn`/`gridRow`. Voir la
+              // note « LA GRILLE TIENT SA PROMESSE » en tête de fichier.
+              <div
                 key={bubble.messageId}
-                content={content}
-                youLabel={youLabel}
-                registerRef={registerBubbleRef(bubble.rank)}
-                onSelect={onSelect}
-                style={{
-                  gridColumn: bubble.laneIndex + 1,
-                  gridRow: bubble.rank + 1,
-                  paddingLeft: 'var(--lentille-river-lane-gutter)',
-                  paddingRight: 'var(--lentille-river-lane-gutter)',
-                  position: 'relative',
-                  zIndex: 1,
-                }}
-              />
+                role="row"
+                data-testid="river-row"
+                aria-rowindex={bubble.rank + 1}
+                style={GRID_SEMANTIC_LAYER_STYLE}
+              >
+                <div
+                  role="gridcell"
+                  data-testid="river-gridcell"
+                  aria-colindex={bubble.laneIndex + 1}
+                  style={GRID_SEMANTIC_LAYER_STYLE}
+                >
+                  <RiverBubble
+                    content={content}
+                    youLabel={youLabel}
+                    registerRef={registerBubbleRef(bubble.rank)}
+                    onSelect={onSelect}
+                    style={{
+                      gridColumn: bubble.laneIndex + 1,
+                      gridRow: bubble.rank + 1,
+                      paddingLeft: 'var(--lentille-river-lane-gutter)',
+                      paddingRight: 'var(--lentille-river-lane-gutter)',
+                      position: 'relative',
+                      zIndex: 1,
+                    }}
+                  />
+                </div>
+              </div>
             );
           })}
         </div>
