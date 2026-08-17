@@ -117,6 +117,16 @@ export const CommonSchemas = {
 3. Add to `ServerToClientEvents` or `ClientToServerEvents` type map
 4. Use pattern: `entity:action-word`
 
+**`SERVER_EVENTS` ou `CLIENT_EVENTS`, pas les deux** — sauf si les DEUX sens
+existent réellement, c'est-à-dire s'il existe à la fois un émetteur client et un
+`socket.on(...)` côté gateway pour l'accueillir. Déclarer un nom dans les deux
+maps « au cas où » fabrique un contrat que rien n'honore : `user:status` y a
+figuré des deux côtés alors que c'est un événement SERVEUR→client pur (la
+présence est DÉRIVÉE par le backend depuis `isOnline` + `lastActiveAt`, cf.
+`utils/user-presence.ts` — aucun client ne l'annonce), retiré au cycle 60. Une
+déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un garde
+« tout `CLIENT_EVENTS` a un handler gateway » sans liste d'exemptions.
+
 ## Build
 ```bash
 npm run build   # TypeScript → dist/ (ESM + declarations + source maps)
