@@ -2,6 +2,48 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Email notification toggle shipped** (slice
+> `settings-email-notification-toggle`, feature-parity's notification-preferences composite line,
+> "still open" email-channel-toggle sub-gap). `gh pr list --state open --search "apps/android OR
+> apps/ios"` showed two unrelated open PRs (#3180 — Android perf, different files; #3182 — web),
+> no collision. `df -h /` showed 6.6 Gi free.
+>
+> **Found via a fresh Explore agent sweep of `[~]` lines** (no candidate held in reserve from a
+> prior run this time — both previously-known candidates, notification swipe-actions and chat
+> header presence dot, are now shipped), ranked 3 candidates and chose the smallest: the agent
+> also flagged one near-miss worth noting — story reactions' "pending: full picker/animation/heart
+> bounce" note is itself **stale**, all three already shipped 2026-08-11 before the note's last
+> edit; correctly not proposed as a candidate.
+>
+> **Re-proved before coding**: `UserNotificationPreferences.emailEnabled` already existed and
+> already flowed end-to-end through `NotificationPreferenceSyncBody`/the sync pipeline — the field
+> itself was never the gap, only the `SettingsViewModel` intent + `SettingsScreen` row were
+> missing. Read iOS `NotificationSettingsView.swift:84-85` directly: `notifToggle(...keyPath:
+> \.emailEnabled)` sits right after Push, before Sound/Vibration. Also checked `notifToggle`'s own
+> signature (`NotificationSettingsView.swift:326-341`) — it has NO `enabled:`/push-dependency
+> parameter for ANY row, unlike Android's existing Sound/Vibration/NewMessage rows (which the
+> Android UI itself gates on `pushEnabled`, a pre-existing Android-only refinement not present on
+> iOS). Decision: leave the new Email row un-gated, matching iOS exactly and matching the more
+> sensible semantics (email is an independent delivery channel from push).
+>
+> **`SettingsViewModel.setEmailEnabled(enabled)`** — a one-line mirror of `setSoundEnabled`'s
+> `updateNotifications { it.copy(...) }` shape; `updateNotifications` already persists the whole
+> block to the device-local store instantly then enqueues the durable sync, so this new toggle
+> automatically inherits the same offline-queued PATCH behavior with zero new plumbing.
+> **`SettingsScreen`** gains one new `NotificationToggleRow` between Push and New-message. +1 test
+> (`setEmailEnabled_persists`, mirroring `setVibrationEnabled_persists`). 1 new string
+> (`settings_email_notifications`) across EN/FR/ES/PT.
+>
+> **Process note**: branch created FIRST this run, before any edit — the prior iteration's
+> reminder (created the branch only mid-way through, caught before any commit) applied
+> immediately.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=3 last_run=settings-email-notification-toggle`.
+
 > On 2026-08-17 **Chat header presence dot shipped** (slice `chat-header-presence-dot`,
 > feature-parity's "Live presence dot on a direct conversation's row/header" composite line — the
 > last open half, the row dot having shipped earlier this session). `gh pr list --state open

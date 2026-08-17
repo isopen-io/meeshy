@@ -25,6 +25,7 @@
     <string name="settings_regional_language_search">Rechercher une langue</string>
     <string name="settings_regional_language_empty">Aucune langue ne correspond à votre recherche</string>
     <string name="settings_push_notifications">Notifications push</string>
+    <string name="settings_email_notifications">Email</string>
     <string name="settings_new_message_notifications">Nouveaux messages</string>
     <string name="settings_notification_sound">Son</string>
     <string name="settings_notification_vibration">Vibration</string>
