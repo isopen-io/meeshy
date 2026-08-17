@@ -193,6 +193,17 @@ export interface BuildBridgeDataParams {
    * même convention que le chargeur batché.
    */
   readonly hidingByConversation?: ReadonlyMap<string, PersonalHistoryHiding>;
+  /**
+   * Curseurs DÉJÀ chargés par la passe, par `Participant.id` du lecteur —
+   * R6-6 : `routes/conversations/core.ts` lit déjà `conversationReadCursor`
+   * pour peupler `orchestratorInputs.lastOpenedAt` (mêmes participants,
+   * même table) ; fourni ⇒ la requête interne n'est pas rejouée. Absent ⇒
+   * comportement inchangé (la passe lit elle-même, comme avant R6-6).
+   */
+  readonly cursorsByParticipant?: ReadonlyMap<
+    string,
+    { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
+  >;
   /** Entrées d'orchestrateur par conversation (facultatif, cf. ci-dessus). */
   readonly orchestratorInputs?: ReadonlyMap<string, BridgeOrchestratorInput>;
   /** Plafond global de la fenêtre agrégée. Défaut : `DEFAULT_BRIDGE_WINDOW_LIMIT`. */
@@ -352,12 +363,20 @@ export class ConversationBridgeService {
 
       // ── Requêtes 2 (+3, 4) : curseurs et masquage personnel, batchés ──────
       // Le masquage n'est rechargé QUE si la passe ne l'a pas déjà : l'attache
-      // G-123 doit pouvoir le lui passer et ne payer que la fenêtre.
+      // G-123 doit pouvoir le lui passer et ne payer que la fenêtre. R6-6 :
+      // les curseurs suivent la MÊME règle — `core.ts` les a déjà lus pour
+      // `orchestratorInputs.lastOpenedAt` sur ces mêmes participants.
       const [cursors, hidingByConversation] = await Promise.all([
-        this.prisma.conversationReadCursor.findMany({
-          where: { participantId: { in: participantIds } },
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
-        }),
+        params.cursorsByParticipant
+          ? Promise.resolve(
+              participantIds
+                .filter((id: string) => params.cursorsByParticipant!.has(id))
+                .map((id: string) => ({ participantId: id, ...params.cursorsByParticipant!.get(id)! }))
+            )
+          : this.prisma.conversationReadCursor.findMany({
+              where: { participantId: { in: participantIds } },
+              select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+            }),
         params.hidingByConversation
           ? Promise.resolve(params.hidingByConversation)
           : loadPersonalHistoryHidingByConversation(this.prisma, {

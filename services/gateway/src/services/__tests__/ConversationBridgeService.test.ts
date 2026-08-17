@@ -300,6 +300,47 @@ describe('ConversationBridgeService — non-N+1 (contrainte dure 1)', () => {
     expect(withInjection.__counters['userMessageDeletion.findMany']).toBeUndefined();
     expect(withInjection.__total).toBe(withLookup.__total - 2);
   });
+
+  // R6-6 (REV-5) — AVANT ce correctif, `routes/conversations/core.ts` lisait
+  // `conversationReadCursor` pour `orchestratorInputs.lastOpenedAt`, PUIS
+  // cette passe la relisait, sur les MÊMES participants : deux requêtes
+  // identiques par passage de liste. `cursorsByParticipant`, jumeau exact de
+  // `hidingByConversation` ci-dessus, laisse l'appelant fournir ce qu'il a
+  // déjà — la même discipline de mutualisation, appliquée au même défaut.
+  it("les curseurs déjà chargés par la passe (`cursorsByParticipant`) économisent leur requête (R6-6)", async () => {
+    const fixture = buildFixture(4);
+    const withLookup = makePrismaMock(fixture);
+    const withInjection = makePrismaMock(fixture);
+    const cursorsByParticipant = new Map(
+      fixture.cursors.map((c) => [
+        c.participantId,
+        { lastReadAt: c.lastReadAt, lastReadMessageCreatedAt: c.lastReadMessageCreatedAt },
+      ])
+    );
+
+    const before = await new ConversationBridgeService(withLookup).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: candidatesFor(4),
+    });
+    const after = await new ConversationBridgeService(withInjection).buildBridgeData({
+      viewerId: 'u-viewer',
+      candidates: candidatesFor(4),
+      cursorsByParticipant,
+    });
+
+    // AVANT : une requête `conversationReadCursor.findMany` par passe.
+    expect(withLookup.__counters['conversationReadCursor.findMany']).toBe(1);
+    // APRÈS : aucune — les curseurs fournis suffisent, sans recharger.
+    expect(withInjection.__counters['conversationReadCursor.findMany']).toBeUndefined();
+    expect(withInjection.__total).toBe(withLookup.__total - 1);
+
+    // Et le résultat produit n'a PAS changé de forme : mêmes ponts, mêmes
+    // `lastReadAt` — la mutualisation ne doit rien coûter en exactitude.
+    expect(after.size).toBe(before.size);
+    for (const [conversationId, entry] of before) {
+      expect(after.get(conversationId)).toEqual(entry);
+    }
+  });
 });
 
 // =============================================================================
