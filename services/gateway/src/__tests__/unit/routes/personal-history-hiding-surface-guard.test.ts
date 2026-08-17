@@ -161,12 +161,18 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
    * non lus : exactement l'ensemble que le badge compte, donc exactement le
-   * même masquage, sur l'unique fenêtre agrégée qu'il lit (jamais une lecture
-   * par conversation — d'où `reads: 1`). Sans l'application, un auteur dont le
-   * lecteur a effacé l'historique reviendrait le nommer dans la phrase du
-   * rang : la fuite que le compteur, lui, ne fait plus depuis le cycle 109.
+   * même masquage. `applyPersonalHistoryHiding` couvre `buildBridgeData`
+   * (N conversations × 1 lecteur, `where` bâti à la ligne ~390) — sa SEULE
+   * application, d'où `applications: 1`. `reads: 2` depuis REV-5/B2
+   * (fan-out socket) : `buildBridgeDataForViewers` (1 conversation ×
+   * N lecteurs) ajoute une DEUXIÈME `findMany`, déclarée séparément ci-dessous
+   * dans `IN_MEMORY_HIDING_SURFACES` — une fenêtre partagée par des lecteurs
+   * dont le masquage diffère ne peut pas se filtrer dans UN `where` commun ;
+   * elle se resserre PAR LECTEUR après coup (`hiddenMessageIds?.has(row.id)`,
+   * `exclusiveFloorMsFor`), invisible à ce balayage `applyPersonalHistoryHiding(`
+   * — même forme que `MessageReadStatusService.ts` ci-dessous.
    */
-  'ConversationBridgeService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
     kind: 'exempt',
@@ -198,6 +204,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
+  // REV-5/B2 — `buildBridgeDataForViewers`'s shared per-conversation window
+  // (see SERVICE_LAYER_SURFACES entry above): masking resolved per-viewer,
+  // in memory, on the SAME two primitives as the surface above it reuses.
+  'ConversationBridgeService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor(', 'hiddenMessageIds?.has('],
 };
 
 const walk = (dir: string): string[] =>
