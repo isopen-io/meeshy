@@ -4,4 +4,6 @@
     <string name="notifications_mark_all_read">Mark all read</string>
     <string name="notifications_empty">No notifications</string>
     <string name="notifications_system_sender">System</string>
+    <string name="notifications_action_delete">Delete</string>
+    <string name="notifications_action_mark_read">Mark read</string>
 </resources>

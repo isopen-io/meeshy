@@ -149,6 +149,52 @@ class NotificationRepositoryTest {
         }
     }
 
+    // --- Delete (feature-parity §M — swipe-to-delete, port of iOS NotificationRowView's
+    // trailing swipe / NotificationListViewModel.deleteNotification) ---
+
+    @Test
+    fun delete_removesOptimisticallyAndDecrementsUnreadCountForAnUnreadNotification() = runTest {
+        val repo = seed(notification("n1", isRead = false), notification("n2", isRead = true), unread = 1)
+        coEvery { api.delete("n1") } returns ApiResponse(success = true, data = Unit)
+
+        repo.delete("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(0)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n2")
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { api.delete("n1") }
+    }
+
+    @Test
+    fun delete_removesOptimisticallyWithoutTouchingUnreadCountForAnAlreadyReadNotification() = runTest {
+        val repo = seed(notification("n1", isRead = true), notification("n2", isRead = false), unread = 1)
+        coEvery { api.delete("n1") } returns ApiResponse(success = true, data = Unit)
+
+        repo.delete("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n2")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun delete_rollsBackOnFailure() = runTest {
+        val repo = seed(notification("n1", isRead = false), unread = 1)
+        coEvery { api.delete("n1") } throws IOException("offline")
+
+        repo.delete("n1")
+
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id }).containsExactly("n1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun markAllAsRead_rollsBackOnFailure() = runTest {
         val repo = seed(notification("n1", isRead = false), unread = 1)
