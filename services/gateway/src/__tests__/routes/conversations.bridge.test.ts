@@ -317,6 +317,44 @@ describe('GET /conversations — attache du pont ✦ (G-123)', () => {
 
       await app.close();
     });
+
+    // R6-6 — la LISTE lit `conversationReadCursor` une fois pour son propre
+    // besoin (`lastOpenedAt` ci-dessus) ; ce même relevé est aussi transmis au
+    // service, qui n'a donc plus à le relire lui-même (voir le témoin de
+    // compteurs jumeau dans `ConversationBridgeService.test.ts`).
+    it('transmet cursorsByParticipant au service — le levier de mutualisation R6-6 est bien branché', async () => {
+      mockGetUnreadCountsForUser.mockResolvedValue(new Map([[CONV_A, 6]]));
+      mockBuildBridgeData.mockResolvedValue(new Map());
+      const lastReadAt = new Date('2026-07-01T08:00:00Z');
+      const lastReadMessageCreatedAt = new Date('2026-07-01T07:30:00Z');
+      const prisma = makePrisma([makeConversation()]);
+      prisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: PARTICIPANT_A, lastReadAt, lastReadMessageCreatedAt },
+      ]);
+      const app = await buildApp(prisma);
+
+      await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+
+      // Sélection étendue : le service a aussi besoin de `lastReadMessageCreatedAt`.
+      expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+        })
+      );
+      const callArgs = mockBuildBridgeData.mock.calls[0][0] as {
+        cursorsByParticipant: Map<string, { lastReadAt: Date | null; lastReadMessageCreatedAt: Date | null }>;
+      };
+      expect(callArgs.cursorsByParticipant.get(PARTICIPANT_A)).toEqual({
+        lastReadAt,
+        lastReadMessageCreatedAt,
+      });
+      // Une seule lecture de la table pour toute la passe — la seconde
+      // lecture (celle que le service ferait sans ce paramètre) est évitée
+      // en amont : c'est exactement ce que compte le témoin jumeau du service.
+      expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledTimes(1);
+
+      await app.close();
+    });
   });
 
   describe('G-127 — étage agent : le pont `kind: agent` survit au schéma fast-json-stringify', () => {

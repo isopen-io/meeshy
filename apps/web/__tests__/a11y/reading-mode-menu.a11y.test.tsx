@@ -81,24 +81,41 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
   }) as unknown as Conversation;
 
 /**
- * FINDING V4ter/axe (2026-08-17) — `nested-interactive` (best-practice,
- * https://dequeuniversity.com/rules/axe/4.12/nested-interactive), MÊME
- * défaut structurel que celui documenté dans
- * `__tests__/a11y/lentille-list.a11y.test.tsx` : ce `role="button"` autour
- * de `LentillePeek` REPRODUIT le contexte réel du rang (`LentilleRow` pose
- * exactement ce rôle) — `LentillePeek` n'est jamais monté hors d'un rang
- * cliquable en production, RE-PROUVÉ (`LentillePeek.test.tsx` fait de même,
- * `renderInsideRow`). Pas un second défaut, la même racine : le ⋮
- * (`data-testid="lentille-peek-more-trigger"`) est un `<button>` réel
- * enfant du `role="button"` du rang. Structurel, pas un attribut manquant —
- * hors périmètre de cette tâche. Désactivée ICI SEULEMENT.
+ * FINDING V4ter/axe — `nested-interactive` : **SOLDÉ le 2026-08-17 (Q-142,
+ * réserve REV-4ter R5-7).**
+ *
+ * Ce fichier désactivait la règle pour la MÊME racine que
+ * `__tests__/a11y/lentille-list.a11y.test.tsx` : le contexte de rang
+ * reproduit ici était un `<div role="button" tabIndex={0} onClick>`
+ * englobant `LentillePeek`, donc englobant le ⋮.
+ *
+ * DEUX choses ont changé, et il faut nommer les deux. (1) La désactivation a
+ * été retirée. (2) Le contexte reproduit ci-dessous a été RÉALIGNÉ sur la
+ * production : `LentilleRow` ne pose plus aucun rôle sur sa racine, et
+ * l'ouverture de la conversation est une COUVERTURE (`<button>` absolu,
+ * `lentille-row-open`) rendue comme PREMIER enfant de `LentillePeek` — donc
+ * un FRÈRE du ⋮, pas son ancêtre. Un harnais resté sur l'ancienne forme
+ * aurait continué d'auditer une structure qui n'existe plus.
+ *
+ * HONNÊTETÉ SUR LE RED. Contrairement à la suite de la liste, ce fichier-ci
+ * était DÉJÀ vert le jour du retrait, AVANT tout correctif : les trois
+ * témoins auditent le menu OUVERT, et Radix pose `aria-hidden` sur tout ce
+ * qui l'entoure pendant ce temps — le rang englobant sortait donc de l'arbre
+ * d'accessibilité, et axe n'avait plus d'imbrication à voir. La
+ * désactivation y était défensive, pas nécessaire. Le RED probant de R5-7
+ * est celui de la suite de la liste (5 violations, une par rang).
  */
-const PEEK_ROW_AXE_OPTIONS = { rules: { 'nested-interactive': { enabled: false } } } as const;
-
 function renderRowWithMoreTrigger(peekProps: Partial<React.ComponentProps<typeof LentillePeek>> = {}) {
   return render(
-    <div role="button" tabIndex={0} onClick={jest.fn()} data-testid="row-root">
+    <div data-testid="row-root" className="relative">
       <LentillePeek conversation={makeConversation()} t={t} {...peekProps}>
+        <button
+          type="button"
+          data-testid="lentille-row-open"
+          aria-label="Ouvrir Équipe produit"
+          onClick={jest.fn()}
+          className="absolute inset-0 z-10"
+        />
         <span>contenu du rang</span>
       </LentillePeek>
     </div>
@@ -121,7 +138,7 @@ describe('Audit axe — menu de mode ouvert (ReadingModeMenu via LentillePeek)',
     fireEvent.keyDown(screen.getByTestId('lentille-peek-more-trigger'), { key: 'Enter' });
     expect(screen.getByTestId('lentille-peek-menu')).toBeInTheDocument();
 
-    const results = await axe(container, PEEK_ROW_AXE_OPTIONS);
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 
@@ -130,7 +147,7 @@ describe('Audit axe — menu de mode ouvert (ReadingModeMenu via LentillePeek)',
     fireEvent.contextMenu(screen.getByTestId('lentille-peek'));
     expect(screen.getByTestId('lentille-peek-menu')).toBeInTheDocument();
 
-    const results = await axe(container, PEEK_ROW_AXE_OPTIONS);
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 
@@ -139,7 +156,7 @@ describe('Audit axe — menu de mode ouvert (ReadingModeMenu via LentillePeek)',
     fireEvent.click(screen.getByTestId('lentille-focus-card-notch'));
     expect(screen.getByTestId('lentille-peek-menu')).toBeInTheDocument();
 
-    const results = await axe(container, PEEK_ROW_AXE_OPTIONS);
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });

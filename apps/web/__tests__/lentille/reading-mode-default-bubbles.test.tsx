@@ -97,6 +97,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 import { resolveOrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import { ConversationMessages } from '@/components/conversations/ConversationMessages';
 import { useReadingModePreferenceStore } from '@/stores/reading-mode-preference-store';
+import { useReadingModeStore } from '@/stores/reading-mode-store';
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
 const CONVERSATION_ID = 'conv-1';
@@ -254,6 +255,78 @@ describe('décision produit provisoire 2026-08-17 — un choix explicite garde t
     mockFocalActive = true;
     await chooseExplicitly('script');
     await chooseExplicitly('auto');
+
+    render(<ConversationMessages {...defaultProps} reverseOrder />);
+
+    expect(await screen.findByTestId('messages-display')).toHaveAttribute(
+      'data-reading-mode',
+      'bubble'
+    );
+  });
+
+  /**
+   * Q-142 / réserve REV-5 **R6-4** — « Bulles » ON n'est plus SANS EFFET.
+   *
+   * `LensSwitcher` (l'en-tête du fil, monté SANS drapeau par
+   * `ConversationView.tsx:326`) offre trois entrées : Focal, Script, Bulles.
+   * Drapeau ON, la troisième était MORTE : `bulles` → `'bubbles'` →
+   * `clampToCapabilities` sur un catalogue d'écran `['focal','script']` →
+   * `focal`/`clamped-unavailable`. Un choix visible, réversible d'un tap, et
+   * sans aucun effet.
+   *
+   * Ce que ce témoin oppose au clamp : le fil SAIT monter les bulles — la
+   * décision produit du 2026-08-17 le lui fait faire tous les jours, pour la
+   * branche `auto`. Le catalogue de l'écran DISAIT le contraire ; c'est le
+   * catalogue qui avait tort, pas le lecteur.
+   */
+  it('R6-4 — « Bulles » choisi EXPLICITEMENT ⇒ le fil rend les bulles, pas un rabat sur Focal', async () => {
+    mockFocalActive = true;
+    await chooseExplicitly('bulles');
+
+    render(<ConversationMessages {...defaultProps} reverseOrder />);
+
+    expect(await screen.findByTestId('messages-display')).toHaveAttribute(
+      'data-reading-mode',
+      'bubble'
+    );
+    expect(screen.queryByTestId('focal-thread-mount')).not.toBeInTheDocument();
+  });
+
+  /**
+   * R6-4, DISCRIMINATION — ouvrir le catalogue de l'écran à `bubbles` ne doit
+   * ouvrir QUE cela. Les deux autres modes hors catalogue (`resume` →
+   * `'summary'`, `riviere` → `'river'`) restent rabattus sur `focal` : leurs
+   * écrans, eux, ne sont toujours pas montés. Sans ce témoin, un catalogue
+   * élargi trop largement passerait pour un catalogue élargi juste.
+   */
+  it('R6-4 — discrimination : `resume` et `riviere` restent rabattus sur Focal, eux', async () => {
+    mockFocalActive = true;
+
+    await chooseExplicitly('resume');
+    const first = render(<ConversationMessages {...defaultProps} reverseOrder />);
+    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute('data-density', 'focal');
+    expect(screen.queryByTestId('messages-display')).not.toBeInTheDocument();
+    first.unmount();
+
+    await chooseExplicitly('riviere');
+    render(<ConversationMessages {...defaultProps} reverseOrder />);
+    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute('data-density', 'focal');
+    expect(screen.queryByTestId('messages-display')).not.toBeInTheDocument();
+  });
+
+  /**
+   * R6-4 — LE CHEMIN COMPLET, depuis le geste du lecteur. Les témoins
+   * ci-dessus écrivent la préférence directement dans le magasin ; celui-ci
+   * part de l'API que `LensSwitcher` appelle réellement
+   * (`useReadingModeStore(state => state.setMode)`, la façade REV-4bis/B2)
+   * avec SA valeur de lentille (`'bubble'`), et prouve que le fil suit. Sans
+   * ce témoin, la traduction `bubble → bulles` resterait supposée.
+   */
+  it('R6-4 — le geste RÉEL du sélecteur (`setMode(\'bubble\')`) fait rendre les bulles', async () => {
+    mockFocalActive = true;
+    await act(async () => {
+      useReadingModeStore.getState().setMode(CONVERSATION_ID, 'bubble');
+    });
 
     render(<ConversationMessages {...defaultProps} reverseOrder />);
 

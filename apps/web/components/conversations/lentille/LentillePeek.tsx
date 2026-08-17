@@ -393,6 +393,10 @@ export function LentillePeek({
             onClick={(event) => event.stopPropagation()}
             className={cn(
               'absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full',
+              // Q-142/R5-7 — AU-DESSUS de la couverture d'ouverture du rang
+              // (`LentilleRow`, `ROW_CONTROL_Z`) : le ⋮ garde son geste alors
+              // que la couverture recouvre toute la boîte du rang.
+              'z-20',
               'opacity-0 group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 transition-opacity'
             )}
           >

@@ -1381,10 +1381,14 @@ final class MessageListViewController: UIViewController {
                     isRightToLeft: self.collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft,
                     isOptimistic: isOptimistic,
                     isAgentAuthored: message.messageSource == .agent,
-                    // WS-10 (F-089) n'a pas encore livré `isAgentGrammarEnabled` —
-                    // OFF tant que le drapeau n'existe pas (`grep` vide sur le
-                    // dépôt à l'ouverture de F-086).
-                    showsAgentGrammar: false,
+                    // R6-2 — WS-10 A LIVRÉ `isAgentGrammarEnabled`
+                    // (`MeeshyFeatureFlags.swift:69`) : ce site le branche
+                    // enfin. Le drapeau lui-même reste OFF PAR DÉFAUT (§5.2
+                    // du contrat : le chemin serveur non écrivant n'existe
+                    // toujours pas — activation soumise à décision produit
+                    // écrite, non prise ici) ; brancher le site rend
+                    // seulement le levier réel, il ne l'actionne pas.
+                    showsAgentGrammar: MeeshyFeatureFlags.isAgentGrammarEnabled,
                     highlightSearchTerm: highlightTerm,
                     mentionDisplayNames: mentionDisplayNames,
                     userLanguages: userLanguages,
