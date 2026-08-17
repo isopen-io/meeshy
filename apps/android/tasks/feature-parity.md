@@ -3826,7 +3826,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
       effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
-- [ ] Post view + dwell-time tracking; batched impression tracking
+- [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
+      tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
+      `PostApi.recordImpressions`/`PostRepository.recordImpressions(postIds, source)`
+      (`POST /posts/impressions/batch`) already existed end-to-end, tested, just never called by
+      any UI. New `ImpressionBatcher` (`:sdk-core`) — a faithful port of iOS's own
+      `ImpressionBatcher.swift` debounce/flush/retry core: an impression is counted per
+      APPEARANCE (never deduped — matches the gateway's own batch semantics), `record(postId)`
+      appends and (re)schedules a 3s debounce flush, `flushNow()`/`flushNowAsync()` sends
+      immediately, a failed send reinserts the batch at the front for the next flush to retry.
+      One instance per surface (`FeedViewModel` owns a `source = "feed"` instance directly, not a
+      Hilt singleton — mirrors iOS's per-view `@StateObject` lifetime) with its OWN
+      `SupervisorJob`+`Dispatchers.IO` scope, deliberately NOT `viewModelScope`: an
+      `onCleared()`-triggered flush would otherwise race `viewModelScope`'s own teardown
+      (cancelled right after `onCleared()` returns) and likely get dropped. Wired into
+      `FeedScreen`'s existing `items(state.posts, key = { it.id })` block via a sibling
+      `LaunchedEffect(post.id) { viewModel.trackImpression(post.id) }`, alongside the
+      already-existing `loadMoreIfNeeded` effect. +9 tests (`ImpressionBatcherTest`): debounced
+      flush fires after the delay; doesn't fire early; groups records within the window into one
+      batch; repeat appearances aren't deduped; a blank id is a no-op; `flushNow`
+      sends+cancels the pending timer; `flushNow` on an empty batch is inert; `flushNowAsync`
+      sends without being awaited; a failed flush keeps the batch for the next retry.
+      **Deliberately narrower than iOS's own three safety nets**: the debounced auto-flush and
+      an explicit `flushNow`/`flushNowAsync` are ported; iOS's OTHER two nets —
+      app-backgrounding flush (`willResignActive`/`didEnterBackground`) and kill-survival
+      persistence (UserDefaults, replayed on relaunch) — are NOT, Android has no equivalent
+      wiring point yet for either. **Still fully open: dwell-time tracking** — iOS's own
+      `EngagementTracker`/`TrackEngagementModifier` is a materially bigger, separate system
+      (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
+      overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
+      `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
       done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
       dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`
