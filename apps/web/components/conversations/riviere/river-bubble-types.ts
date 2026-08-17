@@ -10,7 +10,7 @@
  * `useQuery` (garde R15 / WF-113).
  */
 
-import type { RiverBubble as RiverBubbleLaw } from '@meeshy/shared/utils/river-lanes';
+import type { RiverBubble as RiverBubbleLaw, RiverLayout } from '@meeshy/shared/utils/river-lanes';
 
 /** « La citation est une RÉFÉRENCE, pas une relecture » (§7ter A4) — une seule ligne tronquée. */
 export interface RiverReplyPreview {
@@ -31,5 +31,14 @@ export interface RiverBubbleContent {
   readonly timeString: string;
   /** « Le message en ENTIER » (§7ter A1) — jamais tronqué par ce type ni par la peau. */
   readonly text: string;
+  /**
+   * §7ter A.6 (2026-08-17) — verdict de forme de la géométrie source
+   * (`RiverGeometry.layout`), porté PAR BULLE (même discipline que `bubble`,
+   * qui porte déjà sa part de la loi) plutôt que de faire lire toute la
+   * géométrie à `RiverBubble`. Gouverne l'habillage du contour : `'lanes'` ⇒
+   * contour complet coloré (une ligne aborde la bulle) ; `'serialized'` ⇒
+   * bord gauche + bord bas colorés SEULS, reste neutre.
+   */
+  readonly layout: RiverLayout;
   readonly replyPreview: RiverReplyPreview | null;
 }

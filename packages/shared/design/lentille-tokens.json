@@ -171,7 +171,9 @@
     "bubble": {
       "detourRadius": 14,
       "baseGap": 8,
-      "$note": "detourRadius = rayon de contournement de bulle (le trait épouse ce rayon en abordant/quittant la bulle) ; baseGap = écart horizontal de la ligne de base où vit l'heure (amendement R : « l'heure vit en base de bulle »)."
+      "identityNameMaxWidth": "44%",
+      "flatBorderWidth": 1,
+      "$note": "detourRadius = rayon de contournement de bulle (le trait épouse ce rayon en abordant/quittant la bulle) ; baseGap = écart horizontal de la ligne de base où vit l'heure (amendement R : « l'heure vit en base de bulle ») ; identityNameMaxWidth = §7ter A.5 (2026-08-17), borne du nom en tête de groupe (% de la largeur de bulle, même convention que list.row.transformOriginX — garantit que la branche, à l'aplomb du centre du couloir, croise du vide dans la rangée d'identité, jamais un mot) ; flatBorderWidth = §7ter A.6, contour NEUTRE de la vue sérialisée (le bord gauche et le bord bas restent `line.width`, couleur d'auteur — aucune ligne n'aborde la bulle en vue sérialisée, un contour complet coloré y mimerait une branche que le verdict de forme vient de retirer)."
     },
     "connector": {
       "strokeWidth": 1.4,

@@ -25,6 +25,7 @@ function makeContents(geometry: ReturnType<typeof resolveRiverLanes>): ReadonlyM
         colorSeed: bubble.laneId,
         timeString: '10:00',
         text: `texte de ${bubble.messageId}`,
+        layout: geometry.layout,
         replyPreview: null,
       } satisfies RiverBubbleContent,
     ])

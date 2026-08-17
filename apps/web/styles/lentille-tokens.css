@@ -153,6 +153,13 @@
   /* river.bubble */
   --lentille-river-bubble-detour-radius: 14px;
   --lentille-river-bubble-base-gap: 8px;
+  /* §7ter A.5 (2026-08-17) — borne du nom en tête de groupe, % de la largeur
+     de bulle (garantit que la branche, à l'aplomb du centre du couloir,
+     croise du vide dans la rangée d'identité). */
+  --lentille-river-bubble-identity-name-max-width: 44%;
+  /* §7ter A.6 — contour NEUTRE de la vue sérialisée (bord gauche/bas restent
+     --lentille-river-line-width, couleur d'auteur). */
+  --lentille-river-bubble-flat-border-width: 1px;
 
   /* river.connector */
   --lentille-river-connector-stroke-width: 1.4px;
