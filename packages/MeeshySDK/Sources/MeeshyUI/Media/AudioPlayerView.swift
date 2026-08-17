@@ -664,9 +664,97 @@ nonisolated public struct AudioProgressDisplay: Sendable, Equatable {
     }
 }
 
+// MARK: - Chrome (tenues de rendu)
+
+/// Tenue de rendu du player — paramètre OPAQUE : le SDK rend la tenue qu'on
+/// lui tend, il ne décide JAMAIS laquelle s'applique à quelle rangée. La
+/// décision (« rangée ordinaire vs rangée élue » du mode Focal) vit côté app
+/// (SDK Purity — même règle que `initialTranscriptionLanguage` ci-dessous).
+nonisolated public enum AudioPlayerChrome: String, Sendable, Equatable, CaseIterable {
+    /// Rendu historique : carte (fond + bord), chips, bloc karaoké. Défaut de
+    /// tous les sites d'appel existants.
+    case card
+    /// Bande NUE : play + waveform + durée, transcription à plat en italique
+    /// « … » tronquée — rien d'autre.
+    case flatMinimal
+    /// Bande nue ENRICHIE : + vitesse, pourcentage d'avancement,
+    /// glyphes/drapeaux de traduction, re-transcrire, transcription entière.
+    case flatFocused
+}
+
+/// Plan PUR de la tenue — décide QUI apparaît, jamais comment. Extrait en
+/// type valeur testable (même patron que `AudioProgressDisplay`).
+nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
+    public let showsCardBackground: Bool
+    public let showsRightChips: Bool
+    public let showsLanguageStrip: Bool
+    public let showsRetranscribe: Bool
+    public let showsTranscribeCTA: Bool
+    public let rendersFlatTranscription: Bool
+    /// `nil` = transcription entière (tenue élue et carte).
+    public let flatTranscriptionLineLimit: Int?
+
+    public init(
+        showsCardBackground: Bool,
+        showsRightChips: Bool,
+        showsLanguageStrip: Bool,
+        showsRetranscribe: Bool,
+        showsTranscribeCTA: Bool,
+        rendersFlatTranscription: Bool,
+        flatTranscriptionLineLimit: Int?
+    ) {
+        self.showsCardBackground = showsCardBackground
+        self.showsRightChips = showsRightChips
+        self.showsLanguageStrip = showsLanguageStrip
+        self.showsRetranscribe = showsRetranscribe
+        self.showsTranscribeCTA = showsTranscribeCTA
+        self.rendersFlatTranscription = rendersFlatTranscription
+        self.flatTranscriptionLineLimit = flatTranscriptionLineLimit
+    }
+
+    public static func plan(for chrome: AudioPlayerChrome) -> AudioPlayerChromePlan {
+        switch chrome {
+        case .card:
+            return AudioPlayerChromePlan(
+                showsCardBackground: true,
+                showsRightChips: true,
+                showsLanguageStrip: true,
+                showsRetranscribe: true,
+                showsTranscribeCTA: true,
+                rendersFlatTranscription: false,
+                flatTranscriptionLineLimit: nil
+            )
+        case .flatMinimal:
+            return AudioPlayerChromePlan(
+                showsCardBackground: false,
+                showsRightChips: false,
+                showsLanguageStrip: false,
+                showsRetranscribe: false,
+                showsTranscribeCTA: false,
+                rendersFlatTranscription: true,
+                flatTranscriptionLineLimit: 2
+            )
+        case .flatFocused:
+            return AudioPlayerChromePlan(
+                showsCardBackground: false,
+                showsRightChips: true,
+                showsLanguageStrip: true,
+                showsRetranscribe: true,
+                showsTranscribeCTA: true,
+                rendersFlatTranscription: true,
+                flatTranscriptionLineLimit: nil
+            )
+        }
+    }
+}
+
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
+
+    /// Tenue de rendu — voir `AudioPlayerChrome`. `.card` = rendu historique,
+    /// aucun site d'appel existant ne change.
+    public var chrome: AudioPlayerChrome = .card
 
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var transcription: MessageTranscription? = nil
@@ -788,6 +876,13 @@ public struct AudioPlayerView: View {
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
+    private var chromePlan: AudioPlayerChromePlan { .plan(for: chrome) }
+
+    /// Habillage typographique de la transcription à plat — guillemets
+    /// français, espaces insécables (maquette Focal « … »). Pur, testable.
+    nonisolated public static func flatTranscriptionQuote(_ text: String) -> String {
+        "\u{00AB}\u{00A0}\(text)\u{00A0}\u{00BB}"
+    }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
         AudioPlayerView.resolveDisplaySegments(
@@ -870,6 +965,7 @@ public struct AudioPlayerView: View {
 
     public init<TopContent: View, BottomContent: View>(
         attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+        chrome: AudioPlayerChrome = .card,
         accentColor: String = MeeshyColors.brandPrimaryHex, transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
         initialTranscriptionLanguage: String? = nil,
@@ -886,7 +982,8 @@ public struct AudioPlayerView: View {
         @ViewBuilder topContent: () -> TopContent = { EmptyView() },
         @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
     ) {
-        self.attachment = attachment; self.context = context; self.accentColor = accentColor
+        self.attachment = attachment; self.context = context; self.chrome = chrome
+        self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
         self._selectedAudioLanguage = State(
@@ -937,7 +1034,7 @@ public struct AudioPlayerView: View {
         VStack(spacing: 0) {
             mainPlayer
 
-            if !translatedAudios.isEmpty && !context.isCompact {
+            if chromePlan.showsLanguageStrip && !translatedAudios.isEmpty && !context.isCompact {
                 languageSelector
                     .padding(.top, 6)
                     .transition(.opacity)
@@ -1080,13 +1177,19 @@ public struct AudioPlayerView: View {
                     waveformProgress
                     timeRow
                 }
-                rightChipsColumn
+                if chromePlan.showsRightChips {
+                    rightChipsColumn
+                }
                 contextActions
             }
-            .padding(.horizontal, context.isCompact ? 10 : 14)
-            .padding(.vertical, context.isCompact ? 8 : 12)
+            .padding(.horizontal, chromePlan.showsCardBackground ? (context.isCompact ? 10 : 14) : 0)
+            .padding(.vertical, chromePlan.showsCardBackground ? (context.isCompact ? 8 : 12) : 6)
 
-            transcriptionBlock
+            if chromePlan.rendersFlatTranscription {
+                flatTranscriptionBlock
+            } else {
+                transcriptionBlock
+            }
 
             if let slot = bottomSlot {
                 slotDivider
@@ -1095,7 +1198,11 @@ public struct AudioPlayerView: View {
                     .padding(.vertical, 6)
             }
         }
-        .background(playerBackground)
+        .background {
+            if chromePlan.showsCardBackground {
+                playerBackground
+            }
+        }
     }
 
     /// Trait subtil utilisé entre les sections du player. Un seul style,
@@ -1172,6 +1279,53 @@ public struct AudioPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                 }
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Transcription À PLAT des tenues `.flatMinimal` / `.flatFocused`
+    /// (maquette Focal) : texte statique en italique entre guillemets
+    /// français, AUCUN séparateur, aucun bloc karaoké. La tenue minimale
+    /// tronque (`flatTranscriptionLineLimit`) et n'offre AUCUNE affordance ;
+    /// la tenue élue déroule tout et garde re-transcrire + Transcrire.
+    @ViewBuilder
+    private var flatTranscriptionBlock: some View {
+        if isTranscribing && displaySegments.isEmpty {
+            transcriptionShimmer
+                .padding(.top, 2)
+                .transition(.opacity)
+        } else if !displaySegments.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Self.flatTranscriptionQuote(fullTranscriptionText))
+                    .font(.system(size: 12.5))
+                    .italic()
+                    .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
+                    .lineLimit(chromePlan.flatTranscriptionLineLimit)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if chromePlan.showsRetranscribe {
+                    retranscribeButton
+                }
+            }
+            .padding(.top, 2)
+            .transition(.opacity)
+        } else if chromePlan.showsTranscribeCTA, let onRequest = onRequestTranscription {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    isTranscribing = true
+                }
+                onRequest()
+                HapticFeedback.light()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "text.badge.plus")
+                        .font(.system(size: 10, weight: .medium))
+                    Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                .padding(.vertical, 4)
             }
             .transition(.opacity)
         }
