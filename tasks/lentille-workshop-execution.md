@@ -383,6 +383,102 @@ colonnes par leurs tokens.
 
 ---
 
+## 7ter. Amendement R3 — la bulle porte tout, l'en-tête nomme la ligne, l'axe a des bornes (décision produit 2026-08-17)
+
+Trois directives, reçues après la première maquette navigable, et qui portent toutes sur ce que le
+lecteur VOIT — pas sur ce que la loi calcule. Deux d'entre elles ont pourtant besoin de la loi, parce
+qu'elles ne se décident pas par plateforme.
+
+**A. Le message en ENTIER, l'identité AU-DESSUS.** « Le message doit être affiché en complet dans sa
+bulle, et le nom de l'auteur avec son logo au-dessus. » La première forme rendait un rectangle de
+taille fixe avec un texte tronqué : on lisait la rivière, pas la conversation. Conséquences :
+1. **La hauteur d'un rang n'est plus une constante** — c'est celle de son texte, MESURÉE par la peau.
+   Aucune loi n'en connaît la valeur (elle n'a jamais servi de pixel) ; la maquette pose désormais des
+   cellules HTML et mesure le rendu réel avant de tracer les branches.
+2. **L'anatomie de la bulle est celle de la rangée plate du Fil**, aux cotes du token GELÉ `thread.*` :
+   pastille `22`, nom `13/800`, heure `12/600`, texte `15/1.42`, texte aligné sous le NOM (l'esprit de
+   `thread.line2.indentPx`). C'est la réponse à « pas trop éloigné de ce qui se passe sur iOS » : la
+   Rivière n'invente pas une seconde anatomie de message, elle réutilise celle qui existe.
+3. **`RiverBubble.isFirstInGroup`** entre dans la loi, avec la règle d'iOS mot pour mot (l'expéditeur
+   du rang précédent change, ou le jour calendaire change —
+   `MessageListViewController.isFirstInGroup`). Une suite de groupe ne répète ni le visage ni le nom
+   et garde son heure en base, comme `FocalMetaRow`. La frontière du jour se lit dans le calendrier du
+   LECTEUR : `dayBoundaryOffsetMinutes` (défaut `0` = UTC) — une loi pure ne peut pas embarquer une
+   base de fuseaux, et l'enjeu est un en-tête en plus ou en moins, jamais un contenu.
+4. **La citation d'une réponse reste sur UNE ligne tronquée** (`FocalQuotedReplyView`, `.lineLimit(1)`).
+   « Le message en entier » vaut pour LE message, jamais pour la copie d'un autre.
+
+**B. L'en-tête nomme la ligne qu'on lit** (`resolveRiverLaneHeaders`). « Les noms en tête doivent
+refléter les auteurs de la ligne — fading et apparition du nom correspondant à la ligne affichée
+pendant le scroll vertical. » Un couloir ne porte donc pas un nom fixe : il porte celui de la voix qui
+l'occupe **à la hauteur où l'on lit**. La loi rend `{laneIndex, laneId, colorSeed, isViewer, alpha}`
+pour une hauteur de lecture qui peut être **fractionnaire** — la peau la calcule depuis son
+défilement, avec la MÊME bande de focus que le reste de la Lentille (`FOCUS_BAND_OFFSET`,
+`electFocusRow`), jamais une seconde loi de défilement. Une seule rampe (`RIVER_HEADER_FADE_RANKS` = 2
+rangs), et c'est la donnée qui décide de la forme du fondu :
+- occupations qui se **touchent** ⇒ **fondu croisé**, les deux noms coexistent brièvement à opacité
+  réduite (c'est un relais : il n'y a aucun silence à rendre entre elles) ;
+- occupations séparées par du **vide** (branche morte, d'autres parlent, elle renaît) ⇒ sur les rangs
+  du vide, la colonne **ne nomme personne**. Nommer une branche éteinte mentirait sur une présence,
+  exactement comme une pastille grise sur un avatar hors ligne (`user-presence.ts`, qui ne la dessine
+  pas). Aucune entrée d'opacité nulle n'est servie.
+- une occupation encore **ouverte** ne s'estompe pas DANS la fenêtre (on ne sait pas encore si elle
+  meurt) ; au-delà du dernier rang, elle s'éteint avec la fenêtre — hors fenêtre, il n'y a rien à
+  nommer.
+
+**C. Sept couloirs, trois voix — sinon on sérialise.** « On limite à 7 utilisateurs en horizontal et 3
+minimum, sinon on sérialise en vertical. » `resolveRiverLanes` rend désormais un VERDICT DE FORME :
+`layout: 'lanes' | 'serialized'` + `serializationReason: 'belowMinimum' | 'aboveMaximum' | null`.
+- `RIVER_MIN_VOICES` = 3. Une **voix** est quelqu'un qu'on a entendu : au moins une bulle (une branche
+  qui n'existe que pour recevoir une réponse ne compte pas — sinon deux personnes qui se répondent
+  feraient trois voix). En dessous, l'axe horizontal ne raconte rien que l'alternance ne dise déjà.
+- `RIVER_MAX_LANES` = 7. Plafond de couloirs **simultanés**, pas de participants.
+- **Amende la règle A.3 de §7bis** (« la colonne est RÉSERVÉE à vie ») : elle le reste **tant que la
+  rivière tient dans sa largeur**. Au-delà de sept voix, les colonnes se **PARTAGENT** entre voix qui
+  ne parlent jamais ensemble (coloration gloutonne d'intervalles ; deux couloirs peuvent porter le même
+  `laneIndex`, et `resolveRiverLaneAt(geometry, laneIndex, rank)` dit qui l'occupe à une hauteur
+  donnée). Le partage est un **recours**, jamais une optimisation qu'on applique parce qu'elle est
+  possible : à sept voix ou moins, chacune garde sa colonne, morte ou vivante, et la rivière ne
+  tremble pas. La rive (colonne 0) reste au lecteur SEUL quand il a une branche.
+- C'est le partage qui rend B **nécessaire** et non décoratif : une colonne qui change de main doit
+  dire de qui elle est, à la hauteur où on la lit.
+- Une voix qui ne trouve aucune colonne ⇒ `aboveMaximum`. Au-delà de sept, un couloir serait plus
+  étroit que le texte qu'il porte : on préfère un fil honnête à une rivière illisible.
+- **Sérialisée, la géométrie n'a plus qu'une colonne** : tous les `laneIndex` valent `0` (couloirs,
+  bulles, connecteurs). Le verdict est STRUCTUREL, pas consultatif — une peau ne peut pas dessiner un
+  axe que la loi vient de retirer. `resolveRiverStep` s'y adapte : `left`/`right` ⇒ `edge` (il n'y a
+  plus d'axe horizontal), `up`/`down` ⇒ le message suivant **quel qu'en soit l'auteur** (sans branche
+  pour la porter, suivre une personne n'a plus de support visuel : l'axe vertical redevient le temps).
+- **Ce n'est PAS l'éligibilité.** `resolveCapabilities` (≥ 5 participants actifs, jamais en `direct`)
+  décide si le mode s'OFFRE au catalogue ; ce verdict-ci décide de la forme que prend la fenêtre
+  affichée — une conversation à dix participants dont deux seulement ont parlé ce matin se lit
+  sérialisée, sans quitter le mode.
+
+**Livré (2026-08-17)** — R-130 étendu, toujours sans consommateur runtime :
+- `packages/shared/utils/river-lanes.ts` — `RIVER_MAX_LANES`, `RIVER_MIN_VOICES`,
+  `RIVER_HEADER_FADE_RANKS`, `resolveRiverLaneAt`, `resolveRiverLaneHeaders`, verdict de forme et
+  `isFirstInGroup`. Toujours zéro pixel, zéro `Date.now()`.
+- Fixtures régénérées en EXÉCUTANT la loi : `river-lanes.vectors.json` (21 cas),
+  `river-step.vectors.json` (19 cas), `river-headers.vectors.json` (13 cas, **nouveau**).
+- Suites : `__tests__/river-lanes.test.ts` (64 cas), les trois suites de vecteurs et leurs témoins de
+  couverture (partage de colonne, deux causes de sérialisation, deux natures de rangée, trois régimes
+  de fondu).
+- Maquette normative `docs/design/2026-08-17-riviere-navigation.html` — refondue : bulles HTML à
+  hauteur mesurée, en-tête d'identité, en-tête de couloirs fondu au défilement, jauge de largeur
+  d'axe, et la borne basse rendue par la loi (même conversation réduite à deux voix ⇒ sérialisée).
+
+**Tension assumée, à trancher par les peaux** : une bulle qui rend tout son texte a besoin d'environ
+`300 px` de couloir ; sept couloirs font donc ~`2 100 px`. Sur un téléphone, la Rivière défile
+horizontalement (la maquette le fait déjà, en suivant le curseur sur les deux axes) — et c'est
+précisément pourquoi la loi plafonne à sept. R-133/R-134 devront décider si une largeur plus étroite
+appelle une borne plus basse **par plateforme** (`maxLanes` est un paramètre d'entrée, pas une
+constante réécrite) ; aucune peau ne doit tronquer le texte pour gagner une colonne.
+
+**Reste à faire** : inchangé (R-131 tokens `river`, R-132 miroir Swift — qui rejoue désormais TROIS
+fichiers de vecteurs —, R-133/R-134 peaux, R-135, R-136).
+
+---
+
 ## 8. Suivi d'avancement
 
 Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
