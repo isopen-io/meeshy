@@ -415,5 +415,23 @@ describe('behaviour-matrix — garde d\'ensemble déclarés == couverts (ARMÉE 
 
     expect(missing, `ids déclarés mais NON couverts par un test : ${missing.join(', ')}`).toEqual([]);
     expect(extra, `ids référencés par un test mais absents de behaviour-matrix.json : ${extra.join(', ')}`).toEqual([]);
-  });
+    // Budget explicite : ce témoin PARCOURT LE DÉPÔT ENTIER en synchrone
+    // (`walk` + `readFileSync` sur chaque fichier de test) — ~4,2 s seul sur un
+    // runner de CI, contre le `testTimeout` de 5 s par défaut de Vitest. La
+    // marge était donc de quelques centaines de millisecondes, et elle
+    // s'évapore dès que la suite complète tourne : les 82 autres fichiers se
+    // disputent le CPU, et ce test-ci dépasse.
+    //
+    // C'est le flake `packages/shared` que le cycle 61 bis n'avait pas su
+    // nommer (piste n°3, restée ouverte quatre cycles) : il ne rougissait
+    // jamais seul, seulement en suite, et son message — « Test timed out » —
+    // ne désignait aucune régression. Il n'y en avait pas : le témoin fait un
+    // travail d'I/O que 5 s ne payent pas.
+    //
+    // Le budget se resserre à CHAQUE fichier de test ajouté au dépôt, ce qui
+    // en fait une bombe à retardement pour tout lot un peu large — celui du
+    // cycle 63 en ajoute quatre. 60 s laissent la marge d'un ordre de
+    // grandeur, sans masquer une vraie régression : un balayage qui prendrait
+    // une minute signalerait un tout autre problème.
+  }, 60_000);
 });

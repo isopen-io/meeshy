@@ -9986,3 +9986,69 @@ défaut par émetteur non instruit.
 Corollaire sur les témoins : un `toHaveBeenCalledWith` sur le payload ENTIER gèle
 la forme courte comme un acquis. Quand la forme longue existe ailleurs pour le
 même événement, ce témoin ne protège plus — il garantit la divergence.
+
+### Quand deux sites doivent choisir entre deux mensonges, le défaut est dans le VOCABULAIRE
+
+La piste n°1 du cycle 62 était formulée comme un arbitrage de PRIX : « le pont
+devrait être recalculé ici, il est effacé à la place ; le corriger coûterait la
+passe à chaque accusé de lecture ». Trois cycles auraient pu se perdre à mesurer
+ce coût. La vraie question était ailleurs : **le contrat savait-il seulement
+dire ce que ce site voulait dire ?** Il ne le savait pas — `bridge` avait deux
+formes de fil (présent / absent) pour trois faits (voici / il n'y en a pas / je
+n'ai pas calculé). Chaque émetteur était donc forcé de choisir entre deux
+mensonges, et le débat glissait naturellement vers le prix du moins pire.
+
+Règle : devant une piste énoncée comme « corriger ici coûterait N requêtes »,
+poser d'abord « que SAIT-ON, au juste, et le contrat peut-il l'exprimer ? ».
+Ici la réponse a fermé la piste à ZÉRO requête — le serveur n'a besoin d'aucune
+lecture pour savoir que l'acte qu'il diffuse vient d'invalider le pont qu'il
+annonce.
+
+### Le sens du SILENCE doit être le sens INOFFENSIF
+
+Corollaire structurel du même lot. Un protocole où l'OMISSION détruit fabrique
+un défaut à chaque émetteur qui n'a pas été mis au courant — et ces émetteurs-là
+ne se signalent JAMAIS, puisque leur code ne change pas et que leurs témoins
+restent verts. Le cycle 62 a corrigé un émetteur ; il en restait quatre.
+
+Inverser la polarité (l'effacement devient un ACTE EXPLICITE, `null` ; le
+silence ne fait plus rien) ne corrige pas un défaut de plus : ça retire à la
+classe entière son terrain. Un émetteur futur qui ignore tout du champ ne peut
+plus détruire par omission. Préférer systématiquement cette inversion à la
+correction site par site — elle coûte le même lot et elle ferme la classe.
+
+Compatibilité, au passage : la valeur EXPLICITE doit reproduire ce que les
+clients déployés faisaient déjà face au silence. Ici `null` = « efface », ce que
+les clients faisaient de l'omission — donc aucune migration, aucun drapeau, et
+un client ancien reste correct partout où l'effacement est voulu.
+
+### Un correctif qui BORNE son travail doit dire ce qu'il advient de ce qui est HORS borne
+
+Le cycle 62 a plafonné sa passe de ponts à une page de liste, et a écrit — dans
+le code et dans son carnet — que « les conversations plus anciennes gardent leur
+compteur exact ; seul leur pont attend le prochain `GET /conversations` ».
+Le code ne différait pas ce travail : il l'ANNULAIT. Hors borne, l'émission
+sortait la forme courte, que les clients lisent comme un ordre d'effacement.
+La borne avait donc troqué un effacement GLOBAL contre un effacement de la
+QUEUE — sans qu'aucun témoin ne puisse le voir, la charge émise étant
+RIGOUREUSEMENT identique dans les deux cas.
+
+Règle : quand on pose une borne, le témoin à écrire n'est pas « ce qui est DANS
+la borne est traité » — c'est **« ce qui est DEHORS est INTACT »**. Et si les
+deux cas produisent la même sortie observable, la borne n'est pas bornée : elle
+est destructrice, et il manque un état au contrat.
+
+### Un flake qui ne rougit jamais SEUL est un budget, pas une régression
+
+Piste ouverte quatre cycles (« le flake non identifié de `packages/shared` »),
+fermée en trois runs. `behaviour-matrix.test.ts` parcourt le dépôt ENTIER en
+synchrone : ~4,2 s de temps de test contre le `testTimeout` de 5 s par défaut de
+Vitest. Seul il passe ; en suite complète, les 82 autres fichiers se disputent le
+CPU et il dépasse.
+
+Deux marqueurs suffisent à reconnaître la classe et à éviter la chasse au
+fantôme : (1) le message est « Test timed out », qui ne désigne AUCUNE
+assertion ; (2) le test passe isolément, de façon reproductible. Alors ne pas
+chercher une régression — MESURER le temps du test seul et le comparer au
+timeout. Et retenir que la marge de ces témoins-là se resserre à CHAQUE fichier
+de test ajouté au dépôt : un lot un peu large les fait tomber sans les toucher.

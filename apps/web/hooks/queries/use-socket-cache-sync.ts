@@ -857,19 +857,38 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const effectiveUnread =
         data.conversationId === activeConversationId ? 0 : data.unreadCount;
 
-      // REV-5/B1 — le pont ✦ voyage sur CE même événement (G-123,
-      // `ConversationUnreadUpdatedEventData.bridge`, optionnel). Recopié
-      // INCONDITIONNELLEMENT, `undefined` compris : jumeau exact de
-      // `ConversationSyncEngine.handleUnreadUpdated`
-      // (`updated[idx].bridge = event.bridge`) — le serveur omet le champ
-      // précisément quand il n'a rien à annoncer (contrat §3.2), et garder un
-      // pont périmé en cache serait une affirmation fabriquée. La garde de
-      // conversation OUVERTE ci-dessus ne s'applique QU'AU compteur, comme
-      // côté iOS : le pont n'a pas besoin d'être gaté séparément puisque le
-      // rang ne le rend jamais sans non-lus (`LentilleRow.hasBridge`).
-      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread, {
-        bridge: data.bridge,
-      });
+      // Le pont ✦ voyage sur CE même événement (G-123,
+      // `ConversationUnreadUpdatedEventData.bridge`). TROIS ÉTATS depuis le
+      // cycle 63, et c'est la PRÉSENCE DE LA CLÉ qui les sépare — pas sa
+      // valeur :
+      //
+      //   objet   → le serveur annonce un pont neuf : on remplace
+      //   `null`  → le serveur a calculé, il n'y en a pas : on efface
+      //   absent  → le serveur n'a PAS calculé : on ne touche à rien
+      //
+      // REV-5/B1 recopiait `data.bridge` inconditionnellement, `undefined`
+      // compris, en revendiquant qu'« un pont ABSENT du payload wire DOIT
+      // effacer un pont déjà en cache ». C'était vrai du seul émetteur qu'on
+      // avait en tête — le fan-out d'envoi, qui calcule toujours — et faux des
+      // trois autres : l'instantané de reconnexion effaçait ainsi le pont de
+      // TOUTES les lignes à chaque retour de réseau (cycle 62).
+      //
+      // `in` plutôt qu'un test de valeur : `undefined` et l'absence sont
+      // indiscernables à la lecture d'une propriété, et c'est exactement la
+      // distinction à tenir. `null` est traduit en `undefined` au passage —
+      // le cache ne stocke que « pont ou rien », le troisième état est une
+      // grammaire de FIL, jamais un état de cache.
+      //
+      // La garde de conversation OUVERTE ci-dessus ne s'applique QU'AU
+      // compteur, comme côté iOS : le rang ne rend jamais un pont sans non-lus
+      // (`LentilleRow.hasBridge`).
+      const bridgeAnnounced = 'bridge' in data;
+      setConversationUnreadInCache(
+        queryClient,
+        data.conversationId,
+        effectiveUnread,
+        bridgeAnnounced ? { bridge: data.bridge ?? undefined } : undefined
+      );
     };
 
     const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {

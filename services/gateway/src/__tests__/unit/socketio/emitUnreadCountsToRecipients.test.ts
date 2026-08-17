@@ -293,9 +293,12 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
     });
 
     expect(bridgeService.buildBridgeDataForViewers).not.toHaveBeenCalled();
+    // Ne PAS appeler la passe n'est pas ne rien savoir : un compteur nul n'a
+    // pas de pont, contrat gelé §3.2. Le serveur l'affirme (cycle 63).
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONV_ID,
       unreadCount: 0,
+      bridge: null,
     });
   });
 
@@ -369,7 +372,9 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       ],
     });
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: bridgeForPeer });
-    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1 });
+    // L'invité est absent de la map RENDUE par une passe qui a bien tourné :
+    // « il n'y en a pas », donc `null` explicite — jamais le silence.
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: null });
   });
 });
 

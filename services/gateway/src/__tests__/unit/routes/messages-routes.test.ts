@@ -3804,6 +3804,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
       unreadCount: 1,
+      bridge: null,
     });
   });
 
@@ -3819,6 +3820,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
       unreadCount: 0,
+      bridge: null,
     });
     // READ_STATUS_UPDATED (peer disclosure) must be suppressed — both the legacy and the
     // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
@@ -3886,6 +3888,7 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
       unreadCount: 0,
+      bridge: null,
     });
   });
 
@@ -3984,6 +3987,7 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
       unreadCount: 0,
+      bridge: null,
     });
   });
 

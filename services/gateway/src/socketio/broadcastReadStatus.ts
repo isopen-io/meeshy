@@ -5,6 +5,7 @@ import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
 } from './emitToConversationParticipants.js';
+import { bridgeComputed } from './unreadBridgeField.js';
 
 /**
  * Les deux lectures dont la diffusion a besoin, nommées par ce qu'elles
@@ -117,11 +118,25 @@ export async function broadcastReadStatus(
   // écrit en dur — une lecture exacte ou partielle n'avance le curseur que sur
   // le préfixe contigu déjà lu, donc des messages peuvent légitimement rester
   // non lus, et un zéro viderait à tort le badge sur TOUS ses appareils.
+  //
+  // Le pont ✦ : `null` EXPLICITE, et c'est une affirmation, pas un pis-aller
+  // (cycle 63, piste n°1 du cycle 62). Le pont PORTE son propre `unreadCount`,
+  // et le rang n'affiche plus aucun autre chiffre — L06 a supprimé le badge
+  // chiffré, « le chiffre vit ICI ». L'accusé qu'on diffuse est donc l'acte
+  // même qui VIDE le pont précédent : après une lecture partielle qui fait
+  // tomber l'arriéré de 12 à 5, le garder ferait lire « Alice · 12 messages »
+  // à un lecteur qui n'en a plus que 5.
+  //
+  // Le cycle 62 posait la question en termes de PRIX — « recalculer coûterait
+  // la passe à chaque accusé de lecture, sur l'un des chemins les plus chauds ».
+  // La question était mal posée : le serveur n'a pas besoin de recalculer pour
+  // savoir que l'ancien pont est void. Il le sait. Il le dit. Zéro requête.
   const emitUnreadUpdate = () => {
     if (!actorReadSync) return;
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
       conversationId: args.conversationId,
       unreadCount: actorReadSync.unreadCount,
+      ...bridgeComputed(undefined),
     });
   };
 

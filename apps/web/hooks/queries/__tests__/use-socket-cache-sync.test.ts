@@ -1418,7 +1418,7 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
     expect(row.bridge).toEqual(bridge);
   });
 
-  it('un événement SANS `bridge` EFFACE un pont déjà en cache (jumeau Swift : `nil` efface, ne conserve jamais un pont périmé)', () => {
+  it('un `bridge: null` EXPLICITE efface un pont déjà en cache (jumeau Swift : `.cleared`)', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
     seedConversations(queryClient, [
       { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
@@ -1426,14 +1426,40 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
     renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
 
     act(() => {
-      // Le gateway OMET le champ (jamais `null`) quand `unreadCount` retombe
-      // à 0 ou qu'il n'a rien à annoncer — ici, un nouveau message qui ne
-      // change rien au pont applicable pour ce lecteur.
-      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 0 });
+      // Le gateway AFFIRME l'absence de pont — `bridge: null` — quand
+      // `unreadCount` retombe à 0 ou que sa passe a tourné sans rien annoncer
+      // pour ce lecteur (contrat gelé §3.2).
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 0, bridge: null });
     });
 
     const [row] = cachedConversations(queryClient);
     expect(row.unreadCount).toBe(0);
     expect(row.bridge).toBeUndefined();
+  });
+
+  /**
+   * Cycle 63 — le témoin ci-dessus s'appelait « un événement SANS `bridge`
+   * EFFACE un pont déjà en cache », et il gelait la règle qui a coûté au
+   * cycle 62 le pont de TOUTES les lignes du lecteur à chaque reconnexion.
+   *
+   * L'omission n'a jamais voulu dire « il n'y a pas de pont » chez trois des
+   * quatre émetteurs serveur : elle voulait dire « je ne l'ai pas calculé »
+   * (instantané au-delà de sa borne, passe tombée, accusé de lecture). Le fil
+   * sépare désormais les deux, et le silence ne détruit plus rien.
+   */
+  it('un événement sans la CLÉ `bridge` ne touche pas au pont en cache — le serveur n’a pas calculé', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 2 });
+    });
+
+    const [row] = cachedConversations(queryClient);
+    expect(row.unreadCount).toBe(2);
+    expect(row.bridge).toEqual(bridge);
   });
 });
