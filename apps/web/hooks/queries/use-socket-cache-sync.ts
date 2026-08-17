@@ -858,18 +858,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         data.conversationId === activeConversationId ? 0 : data.unreadCount;
 
       // REV-5/B1 — le pont ✦ voyage sur CE même événement (G-123,
-      // `ConversationUnreadUpdatedEventData.bridge`, optionnel). Recopié
-      // INCONDITIONNELLEMENT, `undefined` compris : jumeau exact de
-      // `ConversationSyncEngine.handleUnreadUpdated`
-      // (`updated[idx].bridge = event.bridge`) — le serveur omet le champ
-      // précisément quand il n'a rien à annoncer (contrat §3.2), et garder un
-      // pont périmé en cache serait une affirmation fabriquée. La garde de
-      // conversation OUVERTE ci-dessus ne s'applique QU'AU compteur, comme
-      // côté iOS : le pont n'a pas besoin d'être gaté séparément puisque le
-      // rang ne le rend jamais sans non-lus (`LentilleRow.hasBridge`).
-      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread, {
-        bridge: data.bridge,
-      });
+      // `ConversationUnreadUpdatedEventData.bridge`). Jumeau exact de
+      // `ConversationSyncEngine.handleUnreadUpdated` côté iOS.
+      //
+      // TROIS formes, TROIS phrases (cycle 63) — le champ était lu en deux
+      // états pour trois choses que le serveur peut dire :
+      //   `bridge: {…}`  → voici le pont       ⇒ on l'écrit ;
+      //   `bridge: null` → il n'y en a pas     ⇒ on efface ;
+      //   clé ABSENTE    → je n'ai pas calculé ⇒ on GARDE celui du cache.
+      //
+      // Traiter l'absence comme un effacement était destructeur : trois des
+      // quatre émetteurs serveur ne calculent PAS le pont (resynchro du
+      // lecteur après lecture partielle, `conversation:join`, instantané de
+      // reconnexion au-delà de sa borne ou passe tombée), et un pont effacé à
+      // tort ne revient jamais — la liste tourne en `staleTime: Infinity`.
+      //
+      // La garde de conversation OUVERTE ci-dessus ne s'applique QU'AU
+      // compteur, comme côté iOS : le pont n'a pas besoin d'être gaté
+      // séparément puisque le rang ne le rend jamais sans non-lus
+      // (`LentilleRow.hasBridge`).
+      // `undefined` plutôt que `'bridge' in data` : Socket.IO sérialise en
+      // JSON, où `undefined` ne voyage pas. Une clé absente et une clé
+      // présente-mais-`undefined` sont la MÊME phrase une fois le payload
+      // parsé, et le discriminant doit être celui que le transport porte.
+      const bridgeUpdate = data.bridge === undefined ? undefined : { bridge: data.bridge ?? undefined };
+      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread, bridgeUpdate);
     };
 
     const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {

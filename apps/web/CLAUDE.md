@@ -196,6 +196,24 @@ lecteur), pas côté client.
 `handlePendingMessagesDelivered` ne garde donc qu'un rôle : invalider
 `messages.infinite(convId)` pour les conversations nommées. Jamais la liste, jamais le réseau.
 
+**Le pont ✦ du même événement se lit en TROIS états, jamais deux.**
+`ConversationUnreadUpdatedEventData.bridge` n'a pas de valeur « je ne sais pas » implicite : trois
+des quatre émetteurs serveur ne CALCULENT pas le pont (resynchro du lecteur après lecture partielle,
+`conversation:join`, instantané de reconnexion au-delà de sa borne ou dont la passe tombe). La clé
+ABSENTE est leur silence, et un silence n'efface rien :
+
+| forme sur le fil | ce que le client fait |
+|------------------|------------------------|
+| `bridge: {…}` | écrit le pont |
+| `bridge: null` | EFFACE le pont en cache |
+| clé absente / `undefined` | GARDE le pont en cache |
+
+Le discriminant est `data.bridge === undefined`, jamais `'bridge' in data` : Socket.IO sérialise en
+JSON, où `undefined` ne voyage pas — les deux formes sont la même phrase une fois le payload parsé.
+`BridgeCacheUpdate` (`lib/conversations/unread-cache.ts`) porte la même distinction côté cache
+(enveloppe absente = garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
+`BridgeAnnouncement` + `ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST

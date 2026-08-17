@@ -998,10 +998,10 @@ final class ConversationSyncEngineTests: XCTestCase {
         )
     }
 
-    /// Le serveur omet `bridge` quand `unreadCount == 0` (contrat §3.2) — le
-    /// client doit alors EFFACER un pont déjà connu, jamais le laisser périmé
-    /// derrière un compteur retombé à zéro (« zéro donnée fabriquée »).
-    func test_handleUnreadUpdated_absentBridge_clearsPreviouslyKnownBridge() async {
+    /// Le serveur ANNONCE `bridge: null` quand `unreadCount == 0` (contrat §3.2)
+    /// — le client doit alors EFFACER un pont déjà connu, jamais le laisser
+    /// périmé derrière un compteur retombé à zéro (« zéro donnée fabriquée »).
+    func test_handleUnreadUpdated_announcedNilBridge_clearsPreviouslyKnownBridge() async {
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         await seedConversations([("bridge-c2", 5)])
         await CacheCoordinator.shared.conversations.update(for: "list") { conversations in
@@ -1021,7 +1021,70 @@ final class ConversationSyncEngineTests: XCTestCase {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         XCTAssertNil(
             cached.first(where: { $0.id == "bridge-c2" })?.bridge,
-            "unreadCount==0 ⇒ bridge absent du payload ⇒ le pont périmé doit être effacé, pas conservé"
+            "unreadCount==0 ⇒ `bridge: null` annoncé ⇒ le pont périmé doit être effacé, pas conservé"
+        )
+    }
+
+    /// Le cœur du cycle 63. Trois des quatre émetteurs serveur de
+    /// `conversation:unread-updated` ne calculent PAS le pont — la resynchro du
+    /// lecteur après une lecture partielle, le `conversation:join`, et
+    /// l'instantané de reconnexion pour les conversations au-delà de sa borne
+    /// (ou quand sa passe tombe). Ils omettent la clé, ce qui veut dire « je ne
+    /// sais pas », jamais « il n'y en a pas ».
+    ///
+    /// Lire ce silence comme un effacement retirait le pont des lignes que le
+    /// lecteur regarde précisément pour savoir où reprendre — et rien ne le
+    /// remettait avant le message suivant dans cette conversation-là.
+    func test_handleUnreadUpdated_notComputedBridge_keepsPreviouslyKnownBridge() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("bridge-c3", 5)])
+        let known = ConversationBridge(kind: .fallback, unreadCount: 5, suggestedMode: .focal)
+        await CacheCoordinator.shared.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == "bridge-c3" }) {
+                updated[idx].bridge = known
+            }
+            return updated
+        }
+        await engine.startSocketRelay()
+
+        mockMessageSocket.unreadUpdated.send(
+            UnreadUpdateEvent(conversationId: "bridge-c3", unreadCount: 3, announcement: .notComputed)
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "bridge-c3" })
+        XCTAssertEqual(row?.unreadCount, 3, "le compteur, lui, est bien appliqué")
+        XCTAssertEqual(
+            row?.bridge, known,
+            "clé `bridge` absente du payload ⇒ l'émetteur n'a pas calculé ⇒ le pont en cache SURVIT"
+        )
+    }
+
+    /// Le décodage est la moitié qui porte la distinction : `decodeIfPresent`
+    /// seul rend `nil` aussi bien pour une clé absente que pour un `null`
+    /// explicite, et confondrait les deux phrases que ce lot sépare.
+    func test_unreadUpdateEvent_decoding_separatesAbsentKeyFromExplicitNull() throws {
+        let absent = try JSONDecoder().decode(
+            UnreadUpdateEvent.self,
+            from: Data(#"{"conversationId":"c1","unreadCount":3}"#.utf8)
+        )
+        XCTAssertEqual(absent.bridgeAnnouncement, BridgeAnnouncement.notComputed)
+
+        let explicitNull = try JSONDecoder().decode(
+            UnreadUpdateEvent.self,
+            from: Data(#"{"conversationId":"c1","unreadCount":0,"bridge":null}"#.utf8)
+        )
+        XCTAssertEqual(explicitNull.bridgeAnnouncement, BridgeAnnouncement.announced(nil))
+
+        let carried = try JSONDecoder().decode(
+            UnreadUpdateEvent.self,
+            from: Data(#"{"conversationId":"c1","unreadCount":2,"bridge":{"kind":"fallback","unreadCount":2,"suggestedMode":"focal"}}"#.utf8)
+        )
+        XCTAssertEqual(
+            carried.bridgeAnnouncement,
+            BridgeAnnouncement.announced(ConversationBridge(kind: .fallback, unreadCount: 2, suggestedMode: .focal))
         )
     }
 

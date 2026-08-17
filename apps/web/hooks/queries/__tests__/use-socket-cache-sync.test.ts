@@ -1379,13 +1379,22 @@ describe('useSocketCacheSync — la ligne de liste ne recule pas sur un `message
 });
 
 /**
- * REV-5/B1 — maillon 3 : `conversation:unread-updated` porte désormais le
- * pont ✦ (G-123, `ConversationUnreadUpdatedEventData.bridge`,
- * `emitUnreadCountsToRecipients.ts:150-154`). Jumeau exact de
- * `ConversationSyncEngine.handleUnreadUpdated` (`ConversationSyncEngine.swift`,
- * `updated[idx].bridge = event.bridge`) : le champ est recopié
- * INCONDITIONNELLEMENT — `undefined` compris, qui EFFACE un pont déjà en
- * cache plutôt que de le laisser périmer.
+ * REV-5/B1 — maillon 3 : `conversation:unread-updated` porte le pont ✦ (G-123,
+ * `ConversationUnreadUpdatedEventData.bridge`). Jumeau exact de
+ * `ConversationSyncEngine.handleUnreadUpdated` (`ConversationSyncEngine.swift`)
+ * — toute évolution touche les deux.
+ *
+ * ── Trois formes, trois phrases (cycle 63) ──────────────────────────────────
+ * Le champ était lu en DEUX états — présent ou absent — pour trois choses que
+ * le serveur peut avoir à dire. La forme absente était traitée comme un ordre
+ * d'effacement, alors que trois des quatre émetteurs l'utilisent SANS avoir
+ * calculé quoi que ce soit (resynchro du lecteur, `conversation:join`,
+ * instantané de reconnexion au-delà de sa borne ou passe tombée). Un pont
+ * effacé à tort ne revenait jamais : la liste tourne en `staleTime: Infinity`.
+ *
+ *   `bridge: {…}`  → voici le pont      ⇒ on l'écrit
+ *   `bridge: null` → il n'y en a pas    ⇒ on efface
+ *   clé ABSENTE    → je n'ai pas calculé ⇒ on GARDE celui du cache
  */
 describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-updated`', () => {
   beforeEach(() => {
@@ -1418,7 +1427,7 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
     expect(row.bridge).toEqual(bridge);
   });
 
-  it('un événement SANS `bridge` EFFACE un pont déjà en cache (jumeau Swift : `nil` efface, ne conserve jamais un pont périmé)', () => {
+  it('un `bridge: null` EFFACE un pont déjà en cache — le serveur a calculé, il n\'y en a plus', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
     seedConversations(queryClient, [
       { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
@@ -1426,14 +1435,53 @@ describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-upd
     renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
 
     act(() => {
-      // Le gateway OMET le champ (jamais `null`) quand `unreadCount` retombe
-      // à 0 ou qu'il n'a rien à annoncer — ici, un nouveau message qui ne
-      // change rien au pont applicable pour ce lecteur.
-      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 0 });
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 0, bridge: null });
     });
 
     const [row] = cachedConversations(queryClient);
     expect(row.unreadCount).toBe(0);
     expect(row.bridge).toBeUndefined();
+  });
+
+  // Le cœur du cycle 63. Trois des quatre émetteurs serveur envoient cette
+  // forme sans avoir calculé le moindre pont : la resynchro du lecteur après
+  // une lecture PARTIELLE, le `conversation:join`, et l'instantané de
+  // reconnexion pour les conversations au-delà de sa borne (ou quand sa passe
+  // tombe). La lire comme un effacement retirait le pont des lignes que le
+  // lecteur regardait justement pour savoir où reprendre — et rien ne le
+  // remettait, la liste tournant en `staleTime: Infinity`.
+  it('un événement SANS clé `bridge` GARDE le pont en cache — « je n\'ai pas calculé » n\'efface rien', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 3 });
+    });
+
+    const [row] = cachedConversations(queryClient);
+    expect(row.unreadCount).toBe(3);
+    expect(row.bridge).toEqual(bridge);
+  });
+
+  // Une clé PRÉSENTE valant `undefined` est indiscernable d'une clé absente une
+  // fois l'objet JSON parsé côté client — c'est la même phrase, et elle doit
+  // donner le même résultat. (Socket.IO sérialise en JSON : `undefined` ne
+  // voyage pas. Le témoin garde l'équivalence plutôt qu'une distinction que le
+  // transport ne peut pas porter.)
+  it('traite une clé `bridge: undefined` comme une clé absente', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 3, bridge: undefined });
+    });
+
+    expect(cachedConversations(queryClient)[0].bridge).toEqual(bridge);
   });
 });

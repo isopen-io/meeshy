@@ -1456,16 +1456,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
                 // G-124 — le pont ✦ voyage sur CE même événement (G-123,
-                // `ConversationUnreadUpdatedEventData.bridge`, payload optionnel).
-                // Avant ce lot, seul `unreadCount` était appliqué : un pont reçu
-                // par socket restait invisible jusqu'au prochain rechargement REST
-                // complet (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact
-                // que R-c dénonçait (« pont invisible drapeau ON »). `event.bridge`
-                // remplace TOUJOURS l'ancien, y compris `nil` : le serveur omet le
-                // champ précisément quand `unreadCount == 0` ou qu'il n'a rien à
-                // annoncer (contrat §3.2) — garder un pont périmé serait une
-                // affirmation fabriquée, l'inverse de la règle du fichier.
-                updated[idx].bridge = event.bridge
+                // `ConversationUnreadUpdatedEventData.bridge`). Avant ce lot,
+                // seul `unreadCount` était appliqué : un pont reçu par socket
+                // restait invisible jusqu'au prochain rechargement REST complet
+                // (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact que R-c
+                // dénonçait (« pont invisible drapeau ON »).
+                //
+                // Ce qui est ANNONCÉ remplace l'ancien, `nil` compris : garder un
+                // pont périmé quand le serveur dit qu'il n'y en a plus serait une
+                // affirmation fabriquée. Mais un serveur qui n'a RIEN dit (clé
+                // absente, `BridgeAnnouncement.notComputed`) n'annonce pas une
+                // absence — il se tait, et un silence n'efface rien. Trois des
+                // quatre émetteurs se taisent ainsi, faute d'avoir calculé le
+                // pont ; les lire comme une absence retirait le pont des lignes
+                // que le lecteur regardait pour savoir où reprendre.
+                if case .announced(let announced) = event.bridgeAnnouncement {
+                    updated[idx].bridge = announced
+                }
             }
             return updated
         }

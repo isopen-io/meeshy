@@ -19,17 +19,26 @@ type InfiniteConversationData = {
 };
 
 /**
- * Le pont ✦ à écrire À CÔTÉ du compteur, si l'appelant en a un à recopier.
+ * Le pont ✦ à écrire À CÔTÉ du compteur, si l'appelant en a un à annoncer.
  *
  * Objet-enveloppe plutôt qu'un 4e paramètre `ConversationBridge | undefined`
  * nu : un pont nu ne distingue pas « je ne sais rien du pont, laisse celui du
- * cache tel quel » (repli implicite, ex. `ConversationLayout`/
- * `bubble-stream-page` qui remettent seulement `unreadCount` à 0 à
- * l'ouverture) de « voici ce que le serveur vient d'annoncer pour ce pont,
- * `undefined` inclus » (le relais socket, REV-5/B1) — un pont ABSENT du
- * payload wire DOIT effacer un pont déjà en cache, jumeau de
- * `ConversationSyncEngine.handleUnreadUpdated` (`updated[idx].bridge =
- * event.bridge`, y compris `nil`).
+ * cache tel quel » (l'enveloppe ABSENTE — repli implicite d'un
+ * `ConversationLayout`/`bubble-stream-page` qui ne remet que `unreadCount` à 0
+ * à l'ouverture, et du relais socket quand le serveur n'a pas calculé) de
+ * « voici la réponse du serveur pour ce pont, `undefined` inclus »
+ * (l'enveloppe PRÉSENTE, qui efface).
+ *
+ * Cette distinction est la MÊME que celle des trois états du wire
+ * (`ConversationUnreadUpdatedEventData.bridge`, cycle 63) ; le relais socket
+ * la traduit d'un vocabulaire à l'autre :
+ *
+ *   wire `bridge: {…}`  → `{ bridge }`         ⇒ écrit
+ *   wire `bridge: null` → `{ bridge: undefined }` ⇒ efface
+ *   wire clé absente    → enveloppe absente     ⇒ garde
+ *
+ * Jumeau de `ConversationSyncEngine.handleUnreadUpdated` côté iOS, qui tient
+ * la même règle sur `BridgeAnnouncement`.
  */
 export interface BridgeCacheUpdate {
   readonly bridge: ConversationBridge | undefined;

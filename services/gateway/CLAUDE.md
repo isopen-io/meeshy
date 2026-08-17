@@ -126,6 +126,30 @@ ou `emitToConversationParticipants()` (`socketio/emitToConversationParticipants.
 Le `select` Prisma doit charger `id` **et** `userId`. Détail et exceptions :
 `src/socketio/README.md` § « Quel `id` passer a `ROOMS.user()` ? ».
 
+### Un champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour l'émetteur
+
+Quand un client recopie un champ de payload INCONDITIONNELLEMENT dans son cache, tout émetteur du
+même événement qui l'omet **écrit** — il n'est pas muet. Le contrat doit alors porter autant d'états
+que l'émetteur a de choses à dire, sans quoi « je n'ai pas calculé » sort sur le fil sous la forme de
+« il n'y en a pas », et détruit.
+
+Cas de référence, `conversation:unread-updated` et son pont ✦
+(`ConversationUnreadUpdatedEventData.bridge`, 4 émetteurs) :
+
+| forme | phrase | le client |
+|-------|--------|-----------|
+| `bridge: {…}` | voici le pont de CE lecteur | écrit |
+| `bridge: null` | j'ai calculé, il n'y en a pas | efface |
+| clé absente | je n'ai pas calculé | garde le sien |
+
+`bridgeKnowledgeFromCount()` (`socketio/unreadBridgeAnnouncement.ts`) porte la seule connaissance
+GRATUITE : un `unreadCount` à zéro prouve l'absence de pont (contrat gelé §3.2) sans ouvrir de
+requête. Au-dessus de zéro, un émetteur qui ne fait pas la passe **se tait** — c'est la seule phrase
+honnête, et se taire ne coûte rien alors que la passe coûte 5 requêtes sur des chemins chauds.
+
+Corollaire de lot : **quand on rend un champ autoritatif côté client, on énumère TOUS les émetteurs
+serveur du même événement dans le même lot.**
+
 ### Connection Maps
 ```typescript
 connectedUsers: Map<string, SocketUser>   // userId → user info

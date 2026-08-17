@@ -150,23 +150,51 @@ public struct TypingEvent: Decodable, Sendable {
     }
 }
 
+/// Ce que `conversation:unread-updated` dit du pont ✦ — TROIS phrases, pas deux.
+///
+/// Le champ `bridge` du contrat wire (`ConversationUnreadUpdatedEventData`,
+/// `packages/shared/types/socketio-events.ts`) a longtemps été lu en deux états,
+/// présent ou absent, alors que l'émetteur peut avoir trois choses à dire. Le
+/// lecteur recopiant le champ INCONDITIONNELLEMENT dans son cache de liste, la
+/// forme absente valait ORDRE D'EFFACEMENT — y compris venant des trois
+/// émetteurs sur quatre qui ne calculent PAS le pont (resynchro du lecteur,
+/// `conversation:join`, instantané de reconnexion au-delà de sa borne ou dont la
+/// passe est tombée). Un pont effacé à tort ne revenait qu'au message suivant.
+///
+/// Jumeau du web (`use-socket-cache-sync.handleUnreadUpdated`) — toute évolution
+/// touche les deux.
+public enum BridgeAnnouncement: Sendable, Equatable {
+    /// La clé `bridge` est ABSENTE du payload : l'émetteur n'a pas calculé le
+    /// pont. Le lecteur GARDE celui qu'il a — se taire n'efface rien.
+    case notComputed
+    /// Le serveur a la réponse : un pont, ou `nil` (`bridge: null` sur le fil)
+    /// quand il n'y en a pas. Le lecteur ÉCRIT ce qui est annoncé, `nil` compris.
+    case announced(ConversationBridge?)
+}
+
 public struct UnreadUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let unreadCount: Int
-    /// Le pont ✦ recalculé POUR CE destinataire (G-123, payload optionnel de
-    /// `ConversationUnreadUpdatedEventData`, `packages/shared/types/socketio-events.ts`).
-    /// ABSENT quand le serveur n'a rien à annoncer (typiquement `unreadCount == 0`,
-    /// contrat §3.2) — un client ancien qui ignore le champ garde son comportement
-    /// d'avant.
-    ///
-    /// Décodage TOLÉRANT (`try?`), même patron que `MeeshyConversation.bridge`
-    /// (`CoreModels.swift`) : un pont malformé rend `nil` au lieu de faire
-    /// échouer le décodage de l'événement ENTIER — `conversationId` et
-    /// `unreadCount` restent exploitables sans lui (G-124).
-    public let bridge: ConversationBridge?
+    /// Le pont ✦ recalculé POUR CE destinataire (G-123), et surtout : le fait
+    /// que le serveur en ait parlé ou non. Voir `BridgeAnnouncement`.
+    public let bridgeAnnouncement: BridgeAnnouncement
+
+    /// Le pont annoncé, s'il y en a un. Ne distingue PAS « pas de pont » de
+    /// « pont non calculé » : pour écrire dans un cache, lire
+    /// `bridgeAnnouncement`, jamais ce raccourci.
+    public var bridge: ConversationBridge? {
+        if case .announced(let announced) = bridgeAnnouncement { return announced }
+        return nil
+    }
 
     public init(conversationId: String, unreadCount: Int, bridge: ConversationBridge? = nil) {
-        self.conversationId = conversationId; self.unreadCount = unreadCount; self.bridge = bridge
+        self.init(conversationId: conversationId, unreadCount: unreadCount, announcement: .announced(bridge))
+    }
+
+    public init(conversationId: String, unreadCount: Int, announcement: BridgeAnnouncement) {
+        self.conversationId = conversationId
+        self.unreadCount = unreadCount
+        self.bridgeAnnouncement = announcement
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -177,7 +205,19 @@ public struct UnreadUpdateEvent: Decodable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.conversationId = try c.decode(String.self, forKey: .conversationId)
         self.unreadCount = try c.decode(Int.self, forKey: .unreadCount)
-        self.bridge = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge)
+        // `contains` — et non `decodeIfPresent` seul, qui rend `nil` aussi bien
+        // pour une clé absente que pour un `null` explicite, confondant les deux
+        // phrases que ce lot sépare. Décodage TOLÉRANT (`try?`) pour la valeur,
+        // même patron que `MeeshyConversation.bridge` (`CoreModels.swift`) : un
+        // pont malformé rend `nil` au lieu de faire échouer le décodage de
+        // l'événement ENTIER — `conversationId` et `unreadCount` restent
+        // exploitables sans lui (G-124).
+        if c.contains(.bridge) {
+            let decoded = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge)
+            self.bridgeAnnouncement = .announced(decoded)
+        } else {
+            self.bridgeAnnouncement = .notComputed
+        }
     }
 }
 

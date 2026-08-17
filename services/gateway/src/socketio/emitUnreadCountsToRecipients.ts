@@ -1,5 +1,6 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import { bridgeKnowledgeFromCount } from './unreadBridgeAnnouncement.js';
 
 /**
  * A conversation participant, reduced to what the unread fan-out reads.
@@ -185,7 +186,14 @@ export async function emitUnreadCountsToRecipients(params: {
     // §3.2), et un lot vide n'appelle pas le service du tout.
     const viewers = targets.filter((target) => target.unreadCount > 0);
 
-    let bridges: ReadonlyMap<string, { bridge: ConversationBridge; lastReadAt?: Date }> = EMPTY_BRIDGES;
+    // `null` — « aucun pont n'a été CALCULÉ », distinct d'une map vide qui dit
+    // « la passe a tourné et n'a rien rendu ». Les deux formes sortent
+    // différemment sur le fil : la première omet la clé `bridge` (le client
+    // garde le sien), la seconde annonce `bridge: null` (le client efface).
+    // Sans bridgeService, l'appelant n'a jamais demandé de pont : rien n'a été
+    // calculé, donc rien n'est annoncé.
+    let bridges: ReadonlyMap<string, { bridge: ConversationBridge; lastReadAt?: Date }> | null =
+      bridgeService ? EMPTY_BRIDGES : null;
     if (bridgeService && viewers.length > 0) {
       try {
         // UN appel pour TOUS les destinataires. Le pont reste par lecteur —
@@ -195,17 +203,27 @@ export async function emitUnreadCountsToRecipients(params: {
       } catch (error) {
         // Best-effort : des ponts qui échouent ne doivent priver personne de
         // sa pastille — même posture que le reste du fan-out (cf. le catch
-        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`.
+        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`,
+        // et cette forme courte dit maintenant « je ne sais pas » : une panne
+        // de la passe n'ordonne plus l'effacement des ponts en cache.
+        bridges = null;
         onError?.(error);
       }
     }
 
     for (const target of targets) {
-      const bridge = bridges.get(target.viewerId)?.bridge;
+      // Trois états sur le fil (`ConversationUnreadUpdatedEventData.bridge`) :
+      // un pont, `null` (calculé, il n'y en a pas — c'est le cas d'un
+      // destinataire à zéro non-lu, §3.2, comme d'un lecteur soumis à la passe
+      // qu'elle ne nomme pas), ou la clé absente (rien n'a été calculé).
+      const announcement =
+        bridges === null
+          ? bridgeKnowledgeFromCount(target.unreadCount)
+          : { bridge: bridges.get(target.viewerId)?.bridge ?? null };
       io.to(ROOMS.user(target.viewerId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
         conversationId,
         unreadCount: target.unreadCount,
-        ...(bridge ? { bridge } : {}),
+        ...announcement,
       });
     }
   } catch (error) {

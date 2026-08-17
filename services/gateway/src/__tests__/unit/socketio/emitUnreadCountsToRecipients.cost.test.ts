@@ -248,7 +248,11 @@ describe('emitUnreadCountsToRecipients — le coût Prisma du chemin chaud (REV-
     });
 
     expect(emitted).toHaveLength(10);
-    expect(emitted.every((payload) => payload.unreadCount === 0 && payload.bridge === undefined)).toBe(true);
+    // `bridge: null` — annoncé, pas payé. Zéro non-lu ⇒ pas de pont est une
+    // réponse que le contrat gelé (§3.2) donne SANS interroger la base : le
+    // destinataire l'apprend et retire le sien, et les 5 requêtes de la passe
+    // ne sont toujours pas dépensées, ce que la ligne suivante prouve.
+    expect(emitted.every((payload) => payload.unreadCount === 0 && payload.bridge === null)).toBe(true);
     expect(prisma.__total).toBe(5);
   });
 });

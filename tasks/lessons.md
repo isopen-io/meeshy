@@ -10035,3 +10035,56 @@ qui n'intercepte rien (vérifié : une valeur remplacée par une chaîne absurde
 fait tomber aucun des 53 témoins). Un contrat recopié dérive ; recopié dans un
 dispositif inerte, il dérive ET fait autorité.
 
+
+## Leçon 232 — un contrat doit porter autant d'états que l'émetteur a de choses à dire (2026-08-17, routine messagerie, cycle 63)
+
+**Le fait.** `conversation:unread-updated` portait DEUX formes sur le fil — champ
+`bridge` présent, ou absent — pour exprimer TROIS choses qu'un émetteur peut avoir
+à dire : « voici le pont », « il n'y en a pas », « je ne l'ai pas calculé ». Les
+deux clients recopiant le champ inconditionnellement dans leur cache, la troisième
+sortait sous l'apparence de la deuxième et **détruisait** : trois des quatre
+émetteurs ne calculent pas le pont, et leur silence ordonnait donc son effacement.
+
+**Ce que le cycle précédent avait fait, et pourquoi ça ne suffisait pas.** Il avait
+fermé le cas dominant en faisant CALCULER l'émetteur muet. C'est la réponse
+naturelle, et elle ne monte pas en généralité : elle laisse intacts tous les cas où
+calculer est impossible (une passe qui tombe), borné (les 30 lignes de
+`BRIDGE_SNAPSHOT_LIMIT`) ou disproportionné (5 requêtes par accusé de lecture sur
+un chemin chaud). Pire, elle les rend **invisibles** : le chemin nominal étant
+réparé, les chemins de repli continuent d'émettre la forme destructrice sans que
+rien ne les distingue.
+
+**La règle.**
+
+> Quand un client fait d'un champ optionnel une lecture AUTORITATIVE, compter les
+> phrases que les émetteurs ont à tenir. S'il y en a plus que le contrat n'a de
+> formes, le lecteur tranchera l'ambiguïté — toujours dans le même sens, donc
+> toujours à tort pour les autres.
+
+Le vocabulaire manquant coûte ici un `| null` : objet = « voici », `null` = « il
+n'y en a pas » (⇒ efface), clé absente = « je n'ai pas calculé » (⇒ garde). **Zéro
+requête ajoutée** ; l'alternative « faire calculer tout le monde » était chiffrée à
+5 requêtes par accusé de lecture.
+
+**Trois pièges d'implémentation, mesurés :**
+
+1. **`decodeIfPresent` (Swift) confond la clé absente et le `null` explicite** — il
+   rend `nil` pour les deux. Le discriminant est `container.contains(.bridge)`. Un
+   type qui NOMME la distinction (`enum BridgeAnnouncement { case notComputed;
+   case announced(T?) }`) vaut mieux qu'un booléen posé à côté d'un optionnel :
+   l'appelant ne peut plus lire la valeur sans avoir vu la question.
+2. **Côté JS, le discriminant est `x === undefined`, PAS `'x' in payload`.**
+   Socket.IO sérialise en JSON, où `undefined` ne voyage pas : une clé absente et
+   une clé présente-valant-`undefined` sont la même phrase une fois le payload
+   parsé, et le discriminant doit être celui que le TRANSPORT peut porter.
+3. **Chercher la connaissance GRATUITE avant de conclure « je ne sais pas ».** Ici
+   un `unreadCount` à zéro prouve l'absence de pont (contrat gelé §3.2) sans
+   ouvrir de requête — ce qui donne, à coût nul, exactement le nettoyage
+   multi-appareils que la piste réclamait. Isolée dans une fonction nommée
+   (`bridgeKnowledgeFromCount`) plutôt que recopiée aux quatre émetteurs.
+
+**Corollaire de témoins**, jumeau de la leçon 231 : un témoin qui fige le payload
+ENTIER alors qu'il parle du lecteur ou du compteur **gèle une forme dont il ne
+parle pas**. C'est le mécanisme exact qui a laissé la forme courte devenir
+destructrice sans qu'aucun témoin ne change de couleur. `objectContaining` pour ce
+dont le témoin parle ; la forme du contrat a ses propres témoins.

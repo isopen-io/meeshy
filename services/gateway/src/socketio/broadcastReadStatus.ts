@@ -5,6 +5,7 @@ import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
 } from './emitToConversationParticipants.js';
+import { bridgeKnowledgeFromCount } from './unreadBridgeAnnouncement.js';
 
 /**
  * Les deux lectures dont la diffusion a besoin, nommées par ce qu'elles
@@ -117,11 +118,27 @@ export async function broadcastReadStatus(
   // écrit en dur — une lecture exacte ou partielle n'avance le curseur que sur
   // le préfixe contigu déjà lu, donc des messages peuvent légitimement rester
   // non lus, et un zéro viderait à tort le badge sur TOUS ses appareils.
+  //
+  // Le pont ✦ n'est PAS calculé ici, et le fil le dit maintenant. Cette
+  // resynchro est l'un des chemins les plus chauds du service — un accusé de
+  // lecture par message consommé — et la passe de ponts y coûterait 5 requêtes
+  // à chaque fois. Tant que l'absence du champ et `null` étaient la même forme,
+  // ne pas calculer revenait à ORDONNER l'effacement : après une lecture
+  // PARTIELLE (le curseur n'avance que sur le préfixe contigu), les autres
+  // appareils de l'acteur gardaient un compteur > 0 et perdaient le pont qui
+  // leur disait où reprendre. Ce n'était pas un manque de calcul, c'était un
+  // manque de vocabulaire — la clé absente veut dire « je ne sais pas », et le
+  // pont en cache survit jusqu'au prochain émetteur qui, lui, aura calculé.
+  //
+  // Un cas reste tranché ici, gratuitement : un compteur retombé à zéro PROUVE
+  // qu'il n'y a plus de pont (contrat gelé §3.2). C'est précisément le cas qui
+  // doit nettoyer les autres appareils quand on finit de lire sur celui-ci.
   const emitUnreadUpdate = () => {
     if (!actorReadSync) return;
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
       conversationId: args.conversationId,
       unreadCount: actorReadSync.unreadCount,
+      ...bridgeKnowledgeFromCount(actorReadSync.unreadCount),
     });
   };
 

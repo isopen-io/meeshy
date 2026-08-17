@@ -3104,14 +3104,20 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-1', false);
 
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId: 'conv-a',
-        unreadCount: 3,
-      });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId: 'conv-b',
-        unreadCount: 0,
-      });
+      // `objectContaining` — ces trois témoins-là portent sur l'IDENTITÉ du
+      // lecteur et sur le compteur, pas sur la forme du pont. Les figer sur le
+      // payload entier est exactement ce qui a gelé la forme courte comme un
+      // acquis au cycle 62, jusqu'à ce qu'elle devienne destructrice sans
+      // qu'aucun témoin ne change de couleur. La forme du pont a ses propres
+      // témoins, plus bas.
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-a', unreadCount: 3 })
+      );
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-b', unreadCount: 0 })
+      );
     });
 
     // Le cœur du défaut. La clé de connexion d'un invité est un
@@ -3131,10 +3137,10 @@ describe('MeeshySocketIOManager', () => {
         })
       );
       expect(counts).toHaveBeenCalledWith('anon-part-3', ['conv-link']);
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId: 'conv-link',
-        unreadCount: 4,
-      });
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-link', unreadCount: 4 })
+      );
     });
 
     // La garde qui empêche la régression inverse : chercher un invité sous
@@ -3163,10 +3169,10 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-5', true);
 
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId: 'conv-read-elsewhere',
-        unreadCount: 0,
-      });
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-read-elsewhere', unreadCount: 0 })
+      );
     });
 
     // UNE lecture batchée pour N conversations — c'est tout l'écart avec les N
@@ -3304,8 +3310,10 @@ describe('MeeshySocketIOManager', () => {
 
       // L'effacement reste LÉGITIME quand la passe n'a rien à annoncer : le
       // client doit alors bien retirer son pont périmé. Ce que le défaut
-      // rendait impossible, c'est de DISTINGUER les deux cas.
-      it('emits the short form for a conversation the pass returns nothing for', async () => {
+      // rendait impossible, c'est de DISTINGUER les deux cas — et c'est ce que
+      // `null` dit maintenant (cycle 63) : « j'ai calculé, il n'y a pas de
+      // pont ». La clé ABSENTE est réservée à « je n'ai pas calculé ».
+      it('announces `bridge: null` for a conversation the pass returns nothing for', async () => {
         prisma.participant.findMany.mockResolvedValue([
           { conversationId: 'conv-with' },
           { conversationId: 'conv-without' },
@@ -3319,6 +3327,7 @@ describe('MeeshySocketIOManager', () => {
         expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId: 'conv-without',
           unreadCount: 7,
+          bridge: null,
         });
       });
 
@@ -3341,9 +3350,14 @@ describe('MeeshySocketIOManager', () => {
             candidates: [{ conversationId: 'conv-unread', unreadCount: 1 }],
           })
         );
+        // La passe n'est pas interrogée, mais la réponse est CONNUE sans elle :
+        // §3.2 interdit un pont sans non-lu. L'instantané l'annonce donc
+        // (`bridge: null`) au lieu de se taire — c'est ce qui retire le pont
+        // périmé d'une ligne que le lecteur a rattrapée sur un autre appareil.
         expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId: 'conv-zero',
           unreadCount: 0,
+          bridge: null,
         });
       });
 
@@ -3416,10 +3430,15 @@ describe('MeeshySocketIOManager', () => {
         await expect(
           (manager as any)._emitUnreadCountsSnapshot(socket, 'user-degraded', false)
         ).resolves.toBeUndefined();
+        // Et la clé est ABSENTE, jamais `null` : une passe tombée ne SAIT pas
+        // s'il y a un pont. `null` ordonnerait un effacement sur la foi d'une
+        // panne — exactement le sinistre de masse que le cycle 62 a corrigé,
+        // reconstitué par le chemin de repli.
         expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId: 'conv-degraded',
           unreadCount: 9,
         });
+        expect(socket.emit.mock.calls[0][1]).not.toHaveProperty('bridge');
       });
 
       // ── La borne ───────────────────────────────────────────────────────
@@ -3448,6 +3467,42 @@ describe('MeeshySocketIOManager', () => {
         // que le lecteur a sous les yeux au retour du réseau.
         expect(candidates[0].conversationId).toBe('conv-41');
         expect(candidates.map((c: any) => c.conversationId)).not.toContain('conv-0');
+      });
+
+      // ── Ce que la borne DIT, et ce qu'elle disait ──────────────────────
+      // La borne ne calcule rien au-delà de la 30e ligne. Le commentaire de
+      // production l'écrivait déjà — « seul leur pont attend le prochain
+      // GET /conversations » — mais la forme courte ne le disait PAS sur le
+      // fil : les clients la lisent comme « il n'y a pas de pont » et
+      // effaçaient donc, à chaque reconnexion, le pont des lignes que la
+      // borne venait précisément de protéger du calcul. La borne, posée pour
+      // épargner la base, effaçait l'affichage.
+      //
+      // Trois états sur le fil, et celui-ci est le troisième : clé ABSENTE.
+      it('says NOTHING about the bridges it deliberately did not compute', async () => {
+        const many = Array.from({ length: 42 }, (_, i) => ({
+          conversationId: `conv-${i}`,
+          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
+        }));
+        prisma.participant.findMany.mockResolvedValue(many);
+        unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
+        bridgePass({ 'conv-41': bridgeOf('conv-41') });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-capped', false);
+
+        const payloadFor = (conversationId: string) =>
+          socket.emit.mock.calls.find(
+            ([, payload]: [string, { conversationId: string }]) =>
+              payload.conversationId === conversationId
+          )![1];
+
+        // `conv-0` est la PLUS ANCIENNE : hors des 30 candidats, jamais soumise.
+        expect(payloadFor('conv-0')).not.toHaveProperty('bridge');
+        // `conv-40` EST dans les 30, soumise, et la passe n'a rien rendu pour
+        // elle : là, l'effacement est une réponse.
+        expect(payloadFor('conv-40')).toHaveProperty('bridge', null);
+        expect(payloadFor('conv-41')).toHaveProperty('bridge', bridgeOf('conv-41'));
       });
 
       // Le COMPTEUR n'est jamais borné : c'est lui qui éteint une pastille

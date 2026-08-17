@@ -3816,10 +3816,14 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
 
     // Badge reset must fire regardless of showReadReceipts.
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
-    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: 'resolved-conv-id',
-      unreadCount: 0,
-    });
+    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
+    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
+    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
+    // gèlerait une forme dont ce témoin ne parle pas.
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
+    );
     // READ_STATUS_UPDATED (peer disclosure) must be suppressed — both the legacy and the
     // dual-emitted `message:read-status-updated` name carry the same peer disclosure.
     expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
@@ -3883,10 +3887,14 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     await fastify._routes['POST']['/conversations/:id/mark-read'](anonymousRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
-    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: 'resolved-conv-id',
-      unreadCount: 0,
-    });
+    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
+    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
+    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
+    // gèlerait une forme dont ce témoin ne parle pas.
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
+    );
   });
 
   it('/read acquitte la conversation de l\'invité', async () => {
@@ -3981,10 +3989,14 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
     expect(fastify._mockTo).not.toHaveBeenCalledWith('user:null');
     expect(fastify._mockTo).not.toHaveBeenCalledWith('user:undefined');
-    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: 'resolved-conv-id',
-      unreadCount: 0,
-    });
+    // `objectContaining` : ce témoin parle de la ROOM et du COMPTEUR. Le même
+    // payload porte le pont ✦ (trois états, cycle 63), dont la forme a ses
+    // propres témoins (`broadcastReadStatus.bridge.test.ts`) — la figer ici
+    // gèlerait une forme dont ce témoin ne parle pas.
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 0 })
+    );
   });
 
   // NON-RÉGRESSION : un acteur AVEC compte continue de se nommer par son

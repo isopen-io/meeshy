@@ -8,6 +8,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
+import { bridgeKnowledgeFromCount } from '../unreadBridgeAnnouncement.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -226,7 +227,18 @@ export class ConversationHandler {
         // le chemin anonyme comme le cas courant).
         try {
           const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
-          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
+          // Le pont ✦ n'est pas calculé sur ce chemin (rejoindre une
+          // conversation, c'est l'OUVRIR, pas lister). La clé est donc omise —
+          // « je ne sais pas » — sauf quand le compteur retombé à zéro prouve
+          // à lui seul qu'il n'y a plus de pont (§3.2). Omettre a longtemps
+          // voulu dire « il n'y en a pas » : le rang ne rendant jamais de pont
+          // sans non-lu, le dommage restait invisible ici — mais le fil ment
+          // moins cher quand il dit ce qu'il sait.
+          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId: normalizedId,
+            unreadCount,
+            ...bridgeKnowledgeFromCount(unreadCount),
+          });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }

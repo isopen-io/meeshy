@@ -921,13 +921,40 @@ export interface ConversationUnreadUpdatedEventData {
   readonly conversationId: string;
   readonly unreadCount: number;
   /**
-   * Le pont ✦ recalculé POUR CE destinataire (G-123). OPTIONNEL — un client
-   * qui l'ignore garde son comportement d'avant ; absent quand `unreadCount`
-   * retombe à zéro ou que le serveur n'a rien à annoncer (contrat gelé §3.2).
-   * Le pont est PAR lecteur : deux destinataires du même événement source
-   * (un `message:new`) ne portent jamais le même `bridge`.
+   * Le pont ✦ recalculé POUR CE destinataire (G-123). Le pont est PAR lecteur :
+   * deux destinataires du même événement source (un `message:new`) ne portent
+   * jamais le même `bridge`.
+   *
+   * ── TROIS états, pas deux (cycle 63) ────────────────────────────────────
+   * Les deux clients recopient ce champ INCONDITIONNELLEMENT dans leur cache
+   * de liste (`ConversationSyncEngine.handleUnreadUpdated` côté iOS,
+   * `setConversationUnreadInCache` côté web). Ce qui arrive ici ÉCRIT, y
+   * compris quand rien n'arrive. Le champ doit donc pouvoir dire les trois
+   * choses que l'émetteur peut avoir à dire, et pas seulement deux :
+   *
+   * | forme sur le fil | ce que ça veut dire        | ce que le client fait |
+   * |------------------|----------------------------|-----------------------|
+   * | `bridge: {…}`    | voici le pont de CE lecteur | il l'écrit           |
+   * | `bridge: null`   | j'ai calculé, il n'y en a pas | il EFFACE          |
+   * | clé ABSENTE      | je n'ai pas calculé         | il GARDE le sien     |
+   *
+   * L'absence était auparavant confondue avec `null`. Trois émetteurs sur
+   * quatre ne calculent pas le pont — la resynchro du lecteur
+   * (`broadcastReadStatus`), le `conversation:join`, et l'instantané de
+   * reconnexion au-delà de sa borne ou quand sa passe tombe — et leur silence
+   * partait donc sur le fil comme un ORDRE D'EFFACEMENT. Le cycle 62 avait
+   * fermé le cas dominant en faisant CALCULER l'instantané ; il restait, sous
+   * la même forme, tous les cas où calculer n'est pas possible ou pas
+   * souhaitable. Ce n'était pas un manque de calcul, c'était un manque de
+   * vocabulaire.
+   *
+   * Corollaire pour un nouvel émetteur : n'écrire `null` que si l'on SAIT
+   * qu'il n'y a pas de pont (typiquement `unreadCount === 0`, contrat gelé
+   * §3.2, ou une passe qui a tourné et n'a rien rendu). Dans le doute, omettre
+   * la clé — un pont périmé se corrige au prochain message, un pont effacé à
+   * tort ne revient jamais (la liste web tourne en `staleTime: Infinity`).
    */
-  readonly bridge?: ConversationBridge;
+  readonly bridge?: ConversationBridge | null;
 }
 
 /**
