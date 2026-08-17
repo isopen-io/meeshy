@@ -248,12 +248,13 @@ une lecture propre et non un remplacement de pages. Le désactiver globalement
 aurait échangé un défaut contre un autre, plus discret.
 
 **Un garde de source « toute query infinite porte les deux dérogations ».** Ce
-serait la défense structurelle contre la répétition. Écarté ce cycle : les huit
-autres `useInfiniteQuery` du dépôt (feed, comments, reels, variants,
-notifications) n'ont PAS toutes besoin des dérogations — la liste de
-notifications pagine par curseur keyset, précisément pour que le rejeu soit
-inoffensif. Le garde exigerait donc une liste d'exemptions justifiées, c'est-à-
-dire l'instruction de huit cas. C'est la piste n°1 du cycle 60, pas une ligne.
+serait la défense structurelle contre la répétition. Écarté ce cycle, mais le
+dépouillement fait en attendant la CI le rend BEAUCOUP plus simple que prévu
+(§7.1) : le critère n'est pas « toute query infinite » — c'est « toute query
+infinite paginée par OFFSET », et il n'y en a que **deux** dans tout le dépôt.
+Zéro liste d'exemptions à instruire. Cela reste un cycle à part entière (écrire
+le garde, choisir sa forme — règle ESLint locale ou témoin de source), mais ce
+n'est plus l'instruction de huit cas que ce cycle croyait devoir payer.
 
 ## 7. Découvert en chemin, NON traité
 
@@ -279,17 +280,47 @@ La piste utile n'est pas le garde : c'est **retirer `USER_STATUS` de
 liste de MESSAGES porte bien les deux dérogations et son Trigger 1 est correct ;
 la liste de NOTIFICATIONS garde les deux filets globaux **à raison** — son
 `getNextPageParam` est keyset (ancré sur une LIGNE), donc l'insertion en tête ne
-décale pas le curseur et le rejeu ne peut pas dupliquer de frontière ; les huit
-autres `useInfiniteQuery` (feed, reels, comments, variants) ne portent aucune
-dérogation, ce qui reste à instruire (§6) mais n'est pas un défaut constaté.
+décale pas le curseur et le rejeu ne peut pas dupliquer de frontière.
+
+### 7.1 Le dépouillement qui simplifie la piste n°1 — les NEUF autres queries infinite
+
+Fait en attendant la CI, et il change la taille de la piste. Les neuf autres
+`useInfiniteQuery` du dépôt paginent **toutes par curseur keyset** :
+
+| fichier | `getNextPageParam` |
+|---|---|
+| `use-feed-query.ts` (×2) | `lastPage.meta?.nextCursor` |
+| `use-feed-variants.ts` (×4) | `lastPage.meta?.nextCursor` |
+| `use-comments-query.ts` (×2) | `lastPage.meta?.nextCursor` |
+| `use-reels-feed-query.ts` | `lastPage.pagination?.nextCursor` |
+| `use-notifications-query.ts` | keyset, avec repli offset documenté |
+
+Un curseur keyset est ancré sur une LIGNE : une insertion en tête ne le déplace
+pas, donc un rejeu de pages ne peut **pas** dupliquer de frontière. Elles ne
+portent aucune dérogation, et **c'est correct** — le dommage n°3 leur est
+structurellement impossible. Ne reste que le coût (N requêtes), qui est le
+compromis assumé du filet global.
+
+Les **seules** queries infinite paginées par OFFSET du dépôt sont les deux du
+couloir messagerie — `conversations.infinite()` et `messages.infinite(convId)` —
+et elles portent maintenant toutes deux les deux dérogations.
+
+**Conséquence pour le cycle 60** : la règle à garder n'est pas « toute query
+infinite porte les deux dérogations » (faux, et neuf exemptions à justifier),
+c'est « **toute query infinite paginée par OFFSET porte les deux dérogations** ».
+Deux sujets, zéro exemption, un critère mécaniquement vérifiable. C'est la
+formulation qui rend le garde écrivable.
 
 ## 8. Pistes pour le cycle 60 — repérées, NON livrées
 
-1. **Le garde « toute query infinite décide de ses deux dérogations »** (§6),
-   avec l'instruction des huit `useInfiniteQuery` restantes — dont on sait déjà
-   que la liste de notifications est une exemption LÉGITIME (keyset) et que
-   feed/reels/comments ne sont pas instruits. Nouvelle, et c'est la seule
-   défense structurelle contre la répétition de ce cycle.
+1. **Le garde « toute query infinite paginée par OFFSET porte les deux
+   dérogations »** (§6, §7.1). Nouvelle, entièrement instruite ce cycle : les
+   neuf autres queries infinite sont keyset donc structurellement immunes, les
+   deux sujets du garde sont `conversations.infinite()` et
+   `messages.infinite(convId)`, et toutes deux sont désormais correctes. Le
+   travail restant est la FORME du garde (règle ESLint locale ? témoin de
+   source ?), pas l'instruction des cas. C'est la seule défense structurelle
+   contre la répétition de ce cycle.
 2. **`USER_STATUS` retiré de `CLIENT_EVENTS`** (§7) — une ligne, désormais
    entièrement instruite. Nouvelle.
 3. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte, chiffrée à deux
