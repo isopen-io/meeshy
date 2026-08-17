@@ -180,11 +180,25 @@ nomme.
 |------|----------|
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `vitest` `packages/shared` | ✅ **83 fichiers / 2 168 témoins** verts |
-| `readReceiptEventName.test.ts` | ✅ 4/4 (RED prouvé avant) |
-| Suite gateway complète | _(voir § 6 bis)_ |
+| `readReceiptEventName.test.ts` | ✅ 4/4 (RED prouvé avant : `4 failed, 4 total`) |
+| Suite gateway complète | ✅ **745/745 suites, 18 049 témoins** verts |
 | Clients (web / iOS / Android) | **aucun changement** — `git diff apps/ packages/MeeshySDK` est vide |
 
-### 6 bis. Les témoins qui gelaient la dual-émission
+### 6 bis. Ce que le gate `tsc` du cycle n'a PAS vu
+
+Le premier run complet a rendu 2 suites rouges alors que `tsc --noEmit -p
+tsconfig.json` disait 0 erreur : **le tsconfig du gateway exclut `__tests__`**.
+Huit `events: [...]` restés au pluriel n'ont donc été signalés que par le
+compilateur de `ts-jest`, à l'exécution de la suite (TS2561), et deux
+`toHaveBeenCalledTimes(2)` comptaient encore le même accusé sous deux noms.
+
+> **Un `tsc --noEmit` vert sur ce service ne dit rien des tests.** Un changement
+> de SIGNATURE n'est pas couvert par ce gate au-delà du code de production :
+> seule la suite le prouve. Corrigé en un commit, mais la leçon vaut pour tout
+> cycle qui touche une signature partagée — lancer la suite, pas seulement le
+> typecheck, avant d'annoncer un vert.
+
+### 6 ter. Les témoins qui gelaient la dual-émission
 
 Onze fichiers de test affirmaient le doublement — c'est ce qui rend le défaut
 intéressant : il était **gardé**, donc stable, donc invisible. Aucun d'eux
