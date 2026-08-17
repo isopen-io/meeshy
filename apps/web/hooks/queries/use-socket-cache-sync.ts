@@ -1431,26 +1431,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   }, [conversationId, enabled, queryClient]);
 }
 
-/**
- * Hook to invalidate queries on reconnect.
- * Note: React Query's refetchOnReconnect: 'always' already handles most cases.
- * This hook provides additional invalidation for socket reconnection.
+/*
+ * RETIRÉ — `useInvalidateOnReconnect` (cycle 59).
+ *
+ * Il écoutait `window.online` et invalidait `['conversations']` +
+ * `['notifications']` en bloc. Deux raisons de le retirer, pas une :
+ *
+ * 1. DESTRUCTEUR. `['conversations']` est un PRÉFIXE de
+ *    `['conversations','infinite']` : sur cette query infinite, active dès que
+ *    la sidebar est montée, l'invalidation rejoue TOUTES les pages chargées et
+ *    remplace le cache — les trois dommages que l'en-tête de
+ *    `use-conversations-delta-sync.ts` détaille, dont la ligne dupliquée à la
+ *    frontière de page (la route pagine par OFFSET sur `lastMessageAt` DESC).
+ * 2. REDONDANT sur ses deux clés. Les conversations sont rattrapées par le
+ *    delta borné de `useConversationsDeltaSync` (Trigger 1, front `false → true`
+ *    de la socket) ; les notifications par `onSyncDesync` du singleton socket →
+ *    `scheduleResync`, plus `refetchOnMount: 'always'` sur la liste.
+ *
+ * Son propre commentaire s'appuyait sur `refetchOnReconnect: 'always'` — lequel
+ * est précisément le second chemin destructeur, désarmé au même cycle sur
+ * `useInfiniteConversationsQuery`. `window.online` ne prouve d'ailleurs aucune
+ * reconnexion de SOCKET : un redémarrage gateway la tue sans bouger
+ * `navigator.onLine`.
  */
-export function useInvalidateOnReconnect() {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    // Listen for online events as a proxy for reconnection
-    const handleOnline = () => {
-      // Invalidate all queries on reconnect to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
-    };
-
-    window.addEventListener('online', handleOnline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [queryClient]);
-}
