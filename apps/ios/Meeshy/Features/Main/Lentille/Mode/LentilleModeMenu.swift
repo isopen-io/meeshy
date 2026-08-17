@@ -94,6 +94,7 @@ nonisolated struct LentilleModeMenuModel: Equatable {
                 title: LentilleModeLabels.menuTitle(for: preference),
                 icon: icon(for: preference),
                 isSelected: currentPreference == preference,
+                isDisabled: isDisabled,
                 // La raison grisée ne survit QUE tant que l'entrée reste
                 // désactivée — une Rivière dégrisée (éligible + drapeau ON)
                 // ne doit plus porter un texte « s'ouvrira à… » à côté de son
