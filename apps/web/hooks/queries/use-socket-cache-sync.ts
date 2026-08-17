@@ -17,7 +17,7 @@ import { extractPreviewTranslations } from '@/services/conversations/transformer
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
-import type { AudioTranslationReadyEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -844,7 +844,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for unread count updates — applies to ALL conversation list variants (filtered, unfiltered)
-    const handleUnreadUpdated = (data: { conversationId: string; unreadCount: number }) => {
+    const handleUnreadUpdated = (data: ConversationUnreadUpdatedEventData) => {
       // Garde de conversation OUVERTE (miroir du gate iOS
       // `ConversationSyncEngine.handleUnreadUpdated`) : le gateway émet le
       // compteur à TOUS les destinataires, y compris celui qui regarde la
@@ -857,7 +857,19 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const effectiveUnread =
         data.conversationId === activeConversationId ? 0 : data.unreadCount;
 
-      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread);
+      // REV-5/B1 — le pont ✦ voyage sur CE même événement (G-123,
+      // `ConversationUnreadUpdatedEventData.bridge`, optionnel). Recopié
+      // INCONDITIONNELLEMENT, `undefined` compris : jumeau exact de
+      // `ConversationSyncEngine.handleUnreadUpdated`
+      // (`updated[idx].bridge = event.bridge`) — le serveur omet le champ
+      // précisément quand il n'a rien à annoncer (contrat §3.2), et garder un
+      // pont périmé en cache serait une affirmation fabriquée. La garde de
+      // conversation OUVERTE ci-dessus ne s'applique QU'AU compteur, comme
+      // côté iOS : le pont n'a pas besoin d'être gaté séparément puisque le
+      // rang ne le rend jamais sans non-lus (`LentilleRow.hasBridge`).
+      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread, {
+        bridge: data.bridge,
+      });
     };
 
     const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {

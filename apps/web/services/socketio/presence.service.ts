@@ -12,6 +12,7 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import type { UserStatusEvent } from '@/types';
 import type {
@@ -48,7 +49,7 @@ export class PresenceService {
   private conversationJoinedListeners: Set<ConversationJoinedListener> = new Set();
   private conversationLeftListeners: Set<ConversationJoinedListener> = new Set();
   private readStatusListeners: Set<ReadStatusListener> = new Set();
-  private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
+  private unreadUpdatedListeners: Set<(data: ConversationUnreadUpdatedEventData) => void> = new Set();
   private participantRoleUpdatedListeners: Set<(data: { conversationId: string; userId: string; newRole: string }) => void> = new Set();
   private conversationNewListeners: Set<ConversationNewListener> = new Set();
   private friendRequestCancelledListeners: Set<FriendRequestCancelledListener> = new Set();
@@ -90,7 +91,7 @@ export class PresenceService {
     });
 
     // Unread count updated
-    socket.on(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, (data: { conversationId: string; unreadCount: number }) => {
+    socket.on(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, (data: ConversationUnreadUpdatedEventData) => {
       logger.debug('[PresenceService]', 'Unread count updated', {
         conversationId: data.conversationId,
         unreadCount: data.unreadCount
@@ -283,7 +284,7 @@ export class PresenceService {
   /**
    * Event listener: Unread count updated
    */
-  onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
+  onUnreadUpdated(listener: (data: ConversationUnreadUpdatedEventData) => void): UnsubscribeFn {
     this.unreadUpdatedListeners.add(listener);
     return () => this.unreadUpdatedListeners.delete(listener);
   }

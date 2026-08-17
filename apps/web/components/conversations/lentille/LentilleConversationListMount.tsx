@@ -87,19 +87,17 @@ function sectionLabel(section: LentilleSection, categories: readonly UserConvers
 }
 
 /**
- * Résout le pont d'un rang — `conversation.bridge` (le fil, une fois LWS-4
- * livré côté gateway) est PRIORITAIRE ; `bridgesByConversation` (substitut
- * local, `useLentilleBridges`) est le repli honnête tant qu'il ne l'est pas.
- * Le champ n'existe pas encore sur le type `Conversation` du web (re-prouvé,
- * LWS-2 ne l'a porté que côté SDK Swift) — lu ici de façon défensive plutôt
- * que d'étendre un type possédé par un autre workstream.
+ * Résout le pont d'un rang — `conversation.bridge` (le fil, G-123 côté
+ * gateway) est PRIORITAIRE ; `bridgesByConversation` (substitut local,
+ * `useLentilleBridges`) est le repli honnête tant qu'aucun pont serveur
+ * n'est arrivé pour cette conversation (REV-5/B1 — le champ voyage
+ * désormais jusqu'au type `Conversation` du web, `transformConversationData`).
  */
 function resolveRowBridge(
   conversation: Conversation,
   bridgesByConversation: ReadonlyMap<string, ConversationBridge | null>
 ): ConversationBridge | null | undefined {
-  const wireBridge = (conversation as { bridge?: ConversationBridge }).bridge;
-  return wireBridge ?? bridgesByConversation.get(conversation.id) ?? null;
+  return conversation.bridge ?? bridgesByConversation.get(conversation.id) ?? null;
 }
 
 export function LentilleConversationListMount({

@@ -128,27 +128,20 @@ export interface LentillePeekProps {
 }
 
 /**
- * ÉCART CONTRAT↔CODE, signalé et non contourné (même classe que le
- * `activeParticipantCount: null` d'iOS) : le modèle `Conversation` du web ne
- * porte AUCUNE date de dernière lecture — re-prouvé, `packages/shared/types/
- * conversation.ts` n'expose `lastReadAt` que sur `ConversationReadCursor`, et
- * `apps/web/lib/conversations/delta-sync.ts` le dit noir sur blanc (« une
- * frontière LOCALE que le modèle web ne porte pas »). iOS lit
- * `conversation.userState.lastReadAt` (`LentilleReadingModeContext.swift`).
- *
- * Lu ici DÉFENSIVEMENT — exactement le patron de `resolveRowBridge`
- * (`LentilleConversationListMount.tsx`) pour le champ `bridge` : le jour où
- * le payload le porte, la valeur arrive sans qu'aucune signature ne change ;
- * d'ici là, `null`, que la loi traite comme une absence (documenté dans
- * `resolveOrchestratorDecision`). CONSÉQUENCE HONNÊTE, à porter en revue
- * REV-4 : `null` n'est PAS neutre pour cette loi — au-delà du plancher de
- * non-lus de la branche d'absence, l'encoche annoncera « AUTO · Résumé » là
- * où iOS, qui connaît la date, annoncerait « AUTO · Focal ». Aucune décision
- * de LECTURE n'en dépend aujourd'hui (le mux de fil web est un autre
- * chantier) : seul le LIBELLÉ prédictif est concerné.
+ * REV-5/B1 — le modèle `Conversation` du web porte désormais `lastReadAt`
+ * (`packages/shared/types/conversation.ts`, jumeau de
+ * `conversation.userState.lastReadAt` côté iOS,
+ * `LentilleReadingModeContext.swift`) : `transformConversationData` le copie
+ * depuis le fil au même titre que le pont ✦ (`transformers.service.ts`).
+ * L'écart REV-4 (« null n'est pas neutre pour cette loi, l'encoche annonce
+ * "AUTO · Résumé" quand iOS annoncerait "AUTO · Focal" ») se referme donc
+ * ici de lui-même — SANS branche nouvelle : `null` reste le repli honnête
+ * tant qu'aucun curseur n'existe pour cette conversation (compte non lu
+ * jamais ouvert), exactement le cas que `resolveOrchestratorDecision`
+ * documente déjà comme une absence légitime.
  */
 function resolveLastOpenedAt(conversation: Conversation): Date | null {
-  return (conversation as { lastReadAt?: Date }).lastReadAt ?? null;
+  return conversation.lastReadAt ?? null;
 }
 
 export function LentillePeek({

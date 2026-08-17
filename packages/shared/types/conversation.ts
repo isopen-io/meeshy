@@ -8,6 +8,7 @@ import type { Participant } from './participant.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
+import type { ConversationBridge } from './conversation-bridge.js';
 
 // Re-export canonical types from message-types.ts
 export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
@@ -352,6 +353,25 @@ export interface Conversation {
    * langue » de « le message EST déjà dans ma langue ».
    */
   readonly lastMessageOriginalLanguage?: string;
+
+  /**
+   * Le pont ✦ (G-123, `tasks/lentille-implementation-contract.md` §3.2) —
+   * précalculé serveur sur les messages non lus, restreint aux langues du
+   * lecteur comme `lastMessageTranslations` ci-dessus. ABSENT — jamais
+   * `null` — quand `unreadCount === 0` ou que le serveur n'a rien à
+   * annoncer : un client qui ignore ce champ garde son comportement
+   * d'avant (`GET /conversations`, `packages/shared/types/api-schemas.ts`).
+   * Jumeau de `MeeshyConversation.bridge` côté iOS
+   * (`ConversationSyncEngine.swift`).
+   */
+  readonly bridge?: ConversationBridge;
+  /**
+   * Horloge du curseur de lecture du lecteur pour cette conversation —
+   * voyage À CÔTÉ du pont (le contrat gelé §3.2 ne le porte pas). ABSENT
+   * sans curseur, jamais fabriqué. Jumeau de
+   * `MeeshyConversation.userState.lastReadAt` côté iOS.
+   */
+  readonly lastReadAt?: Date;
 
   // ===== E2EE / ENCRYPTION =====
   readonly encryptionMode?: EncryptionMode;

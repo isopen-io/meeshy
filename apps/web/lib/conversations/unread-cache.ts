@@ -11,16 +11,35 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { Conversation } from '@meeshy/shared/types';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 
 type InfiniteConversationData = {
   pages: { conversations: Conversation[]; pagination: unknown }[];
   pageParams: unknown[];
 };
 
+/**
+ * Le pont ✦ à écrire À CÔTÉ du compteur, si l'appelant en a un à recopier.
+ *
+ * Objet-enveloppe plutôt qu'un 4e paramètre `ConversationBridge | undefined`
+ * nu : un pont nu ne distingue pas « je ne sais rien du pont, laisse celui du
+ * cache tel quel » (repli implicite, ex. `ConversationLayout`/
+ * `bubble-stream-page` qui remettent seulement `unreadCount` à 0 à
+ * l'ouverture) de « voici ce que le serveur vient d'annoncer pour ce pont,
+ * `undefined` inclus » (le relais socket, REV-5/B1) — un pont ABSENT du
+ * payload wire DOIT effacer un pont déjà en cache, jumeau de
+ * `ConversationSyncEngine.handleUnreadUpdated` (`updated[idx].bridge =
+ * event.bridge`, y compris `nil`).
+ */
+export interface BridgeCacheUpdate {
+  readonly bridge: ConversationBridge | undefined;
+}
+
 export function setConversationUnreadInCache(
   queryClient: QueryClient,
   conversationId: string,
-  unreadCount: number
+  unreadCount: number,
+  bridgeUpdate?: BridgeCacheUpdate
 ): void {
   queryClient.setQueryData(
     queryKeys.conversations.infinite(),
@@ -31,7 +50,9 @@ export function setConversationUnreadInCache(
         pages: old.pages.map((page) => ({
           ...page,
           conversations: page.conversations.map((conv) =>
-            conv.id === conversationId ? { ...conv, unreadCount } : conv
+            conv.id === conversationId
+              ? { ...conv, unreadCount, ...(bridgeUpdate ? { bridge: bridgeUpdate.bridge } : {}) }
+              : conv
           ),
         })),
       };
