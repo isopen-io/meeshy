@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
@@ -477,5 +478,62 @@ class PostDetailViewModelTest {
         vm.refresh()
         assertThat(vm.state.value.post?.likeCount).isEqualTo(9)
         assertThat(vm.state.value.post?.isLiked).isTrue()
+    }
+
+    // --- Fire-and-forget view recording (mirror of iOS `.task { try? await viewPost(...) }`) ---
+
+    @Test
+    fun `opening the screen records a view exactly once`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post())
+        coEvery { repository.viewPost("p1") } returns NetworkResult.Success(Unit)
+
+        viewModel()
+
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+    }
+
+    @Test
+    fun `a blank postId never records a view`() = runTest {
+        viewModel(postId = null)
+
+        coVerify(exactly = 0) { repository.viewPost(any()) }
+    }
+
+    @Test
+    fun `a failed view record does not affect the loaded post`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(content = "Hi"))
+        coEvery { repository.viewPost("p1") } returns NetworkResult.Failure(ApiError(message = "offline"))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.content).isEqualTo("Hi")
+        }
+    }
+
+    // --- Author-only reach stats projection (isAuthor) ---
+
+    @Test
+    fun `the post author sees isAuthor true`() = runTest {
+        coEvery { repository.getPost("p1") } returns
+            NetworkResult.Success(post().copy(author = ApiAuthor(id = "me", username = "me")))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.isAuthor).isTrue()
+        }
+    }
+
+    @Test
+    fun `a reader who is not the author sees isAuthor false`() = runTest {
+        coEvery { repository.getPost("p1") } returns
+            NetworkResult.Success(post().copy(author = ApiAuthor(id = "someone-else", username = "x")))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.isAuthor).isFalse()
+        }
     }
 }
