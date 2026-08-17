@@ -428,91 +428,6 @@ function updateInfiniteConversationCache(
   );
 }
 
-/**
- * Plafond de lectures par vidange de file hors-ligne.
- *
- * Une vidange peut nommer autant de conversations que la coupure en a touchées.
- * Au-delà de ce plafond, N lectures d'une ligne coûtent plus qu'elles ne
- * rapportent sur le lien le plus contraint qui existe — un mobile qui vient de
- * revenir. Les pastilles laissées de côté ne sont pas perdues pour autant :
- * chaque `conversation:unread-updated` ultérieur les corrige, et le montage
- * suivant relit le serveur en entier (`refetchOnMount: 'always'`).
- *
- * Le dépassement est TRACÉ plutôt que silencieux : une troncature muette se lit
- * comme « tout a été couvert ».
- */
-const PENDING_UNREAD_REFRESH_LIMIT = 10;
-
-/**
- * Relit le compteur de non-lus des conversations qu'une vidange de file nomme —
- * la SEULE chose que la file ne rejoue pas.
- *
- * `_drainedEventName` (`MeeshySocketIOManager.ts`) mappe chaque entrée de file
- * vers un événement de MESSAGE (`message:new`, `edited`, `deleted`,
- * `reaction-*`, `translation`, `pinned`…) et n'a AUCUN cas
- * `conversation:unread-updated`. L'aperçu, le rang et la promotion en tête de la
- * ligne de liste arrivent donc par socket, déjà fusionnés par
- * `handleNewMessage` ; la pastille, elle, reste celle d'avant la coupure et
- * n'est calculable que par le serveur.
- *
- * BORNÉE aux ids que l'événement porte, et aux seules conversations DÉJÀ en
- * cache : une ligne absente n'a rien à corriger. Surtout, jamais un
- * `invalidateQueries` sur `queryKeys.conversations.all` — ce préfixe atteint
- * `conversations.infinite()`, dont il rejoue TOUTES les pages chargées en
- * remplaçant le cache : les écritures socket ci-dessus sont écrasées, et comme
- * la route pagine par OFFSET sur un tri `lastMessageAt` décroissant, un message
- * arrivé entre deux pages duplique une ligne à la frontière et en perd une
- * autre.
- *
- * Troisième écrivain de ce compteur, donc troisième porteur de la garde de
- * conversation OUVERTE : le gateway calcule la pastille pour TOUS les
- * destinataires, lecteur compris. Sans clamp, la relecture rallume le badge de
- * la conversation qu'on a sous les yeux. Jumeaux : `handleUnreadUpdated`
- * ci-dessous et `ConversationDeltaMergeOptions.openConversationId`.
- */
-function refreshUnreadCountsFromServer(
-  queryClient: ReturnType<typeof useQueryClient>,
-  conversationIds: readonly string[]
-): void {
-  if (conversationIds.length === 0) return;
-
-  const cached = queryClient.getQueryData<InfiniteConversationData>(
-    queryKeys.conversations.infinite()
-  );
-  if (!cached) return;
-
-  const known = new Set(cached.pages.flatMap((page) => page.conversations).map((conv) => conv.id));
-  const targets = [...new Set(conversationIds)].filter((id) => known.has(id));
-  if (targets.length === 0) return;
-
-  const capped = targets.slice(0, PENDING_UNREAD_REFRESH_LIMIT);
-  if (capped.length < targets.length) {
-    console.warn(
-      `[SOCKET_SYNC] unread refresh borné à ${PENDING_UNREAD_REFRESH_LIMIT} : ${targets.length - capped.length} pastille(s) laissée(s) au prochain conversation:unread-updated`
-    );
-  }
-
-  for (const convId of capped) {
-    apiService
-      .get<Conversation>(`/conversations/${convId}`)
-      .then((response) => {
-        const unreadCount = response?.data?.unreadCount;
-        if (typeof unreadCount !== 'number') return;
-        // Conversation ouverte lue ICI, à l'écriture, jamais avant la requête :
-        // celle-ci a pu courir plusieurs centaines de millisecondes, pendant
-        // lesquelles l'utilisateur a pu ouvrir la conversation dont on rapporte
-        // la pastille. Même règle que `mergeDeltaIntoCache`, pour le même motif.
-        const activeConversationId = useNotificationStore.getState().activeConversationId;
-        setConversationUnreadInCache(
-          queryClient,
-          convId,
-          convId === activeConversationId ? 0 : unreadCount
-        );
-      })
-      .catch(() => undefined);
-  }
-}
-
 // After a message is deleted, advance the conversation-list preview to the
 // newest remaining message — but only for conversations whose `lastMessage`
 // WAS the deleted message. Mirrors the lastMessage-update pattern used by the
@@ -1278,8 +1193,22 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // ligne à chaque frontière de page (la route pagine par OFFSET sur un tri
     // `lastMessageAt` décroissant).
     //
-    // Reste la seule chose que la file ne rejoue pas, la PASTILLE : voir
-    // `refreshUnreadCountsFromServer`.
+    // Restait la PASTILLE, seule chose que la file ne rejoue pas — et ce handler
+    // la lisait au réseau : N `GET /conversations/:id` PLAFONNÉS à 10, au-delà
+    // desquels les compteurs étaient explicitement abandonnés, sur le lien le
+    // plus contraint qui existe (un mobile qui vient de revenir).
+    //
+    // Ce n'était pas nécessaire, et ça ne l'a jamais été. Le gateway pousse le
+    // compteur sur le MÊME chemin de connexion, par `_emitUnreadCountsSnapshot`
+    // → `conversation:unread-updated`, pour TOUTES les conversations du lecteur
+    // et sans plafond — donc un SUR-ENSEMBLE de ce que cette lecture couvrait.
+    // Son unique angle mort était l'invité de lien partagé, que sa résolution de
+    // participant ne savait pas retrouver ; c'est corrigé côté serveur, où le
+    // trou était.
+    //
+    // `handleUnreadUpdated` porte déjà la garde de conversation OUVERTE que la
+    // lecture REST devait dupliquer : router la pastille par l'événement, c'est
+    // aussi ramener cette garde à UN seul site.
     const handlePendingMessagesDelivered = (data: { count: number; conversationIds: string[] }) => {
       const affected = data?.conversationIds ?? [];
       // Repli sur la conversation active pour les serveurs anciens, qui
@@ -1288,7 +1217,6 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       for (const convId of targets) {
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
       }
-      refreshUnreadCountsFromServer(queryClient, targets);
     };
 
     // Handler for message:attachment-updated — async enrichment (transcription/translation) completed for an attachment

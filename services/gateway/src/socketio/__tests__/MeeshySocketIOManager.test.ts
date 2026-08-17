@@ -3013,6 +3013,180 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 23a bis. _emitUnreadCountsSnapshot — la pastille de reconnexion, pour les
+  //          DEUX identités
+  // -------------------------------------------------------------------------
+
+  /**
+   * Le seul signal qui remet une pastille d'aplomb à la reconnexion.
+   *
+   * La file hors-ligne ne rejoue QUE des événements de message
+   * (`_drainedEventName` : `message:new`, `edited`, `deleted`, `reaction-*`,
+   * `translation`, `pinned`…). L'aperçu, le rang et la promotion en tête de la
+   * ligne de liste arrivent donc par ces rejeux ; le COMPTEUR, non — il n'est
+   * calculable que par le serveur, depuis les curseurs de lecture. D'où cette
+   * méthode, appelée sur le même chemin de connexion que le drain
+   * (`_emitPresenceSnapshot`).
+   *
+   * Elle ne servait que la moitié INSCRITE de sa population. Sa résolution de
+   * participant ne lisait que la colonne `userId` :
+   *
+   * ```ts
+   * where: { userId, isActive: true }        // ← ne matche RIEN pour un invité
+   * ```
+   *
+   * Or la clé de connexion (`userId` ici, comme dans le drain) porte un
+   * `Participant.id` pour un invité de lien partagé — jamais un `User.id`. La
+   * requête rendait donc zéro ligne, la méthode sortait en silence, et le site
+   * d'appel enterrait le trou sous un `if (!isAnonymous)` qui donnait l'omission
+   * pour délibérée.
+   *
+   * Vingt lignes plus haut, dans la MÊME méthode, l'instantané de PRÉSENCE
+   * résout pourtant les deux identités correctement
+   * (`isAnonymous ? { id: userId } : { userId }`). La règle était écrite au bon
+   * endroit et démentie par sa voisine.
+   *
+   * Ce que ça coûtait, par population :
+   *   - invité + iOS/Android : la pastille n'était JAMAIS corrigée à la
+   *     reconnexion. Aucun des deux n'a de lecteur pour
+   *     `message:pending-delivered` ; le badge mentait jusqu'au prochain message
+   *     ou au prochain montage complet.
+   *   - invité + web : corrigée seulement par N lectures REST
+   *     (`refreshUnreadCountsFromServer`), PLAFONNÉES à 10, au-delà desquelles
+   *     les pastilles étaient explicitement abandonnées.
+   *
+   * Et l'invité de lien partagé est la population DOMINANTE d'une conversation
+   * ouverte par lien — exactement l'audience de ce transport.
+   */
+  describe('_emitUnreadCountsSnapshot — les deux identités, pas seulement la moitié inscrite', () => {
+    function socketDouble() {
+      return { emit: jest.fn() } as any;
+    }
+
+    function unreadCounts(counts: Record<string, number>) {
+      (manager as any).readStatusService.getUnreadCountsForUser = jest
+        .fn()
+        .mockResolvedValue(new Map(Object.entries(counts)));
+      return (manager as any).readStatusService.getUnreadCountsForUser;
+    }
+
+    it('emits a per-conversation count to a registered reader', async () => {
+      prisma.participant.findMany.mockResolvedValue([
+        { conversationId: 'conv-a' },
+        { conversationId: 'conv-b' },
+      ]);
+      unreadCounts({ 'conv-a': 3, 'conv-b': 0 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-1', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-a',
+        unreadCount: 3,
+      });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-b',
+        unreadCount: 0,
+      });
+    });
+
+    // Le cœur du défaut. La clé de connexion d'un invité est un
+    // `Participant.id` : la ligne se retrouve sous `id`, jamais sous `userId`.
+    // Même convention exacte que `_dropEndedMemberships`,
+    // `_emitDeliveryForDrainedMessages` et l'instantané de présence d'à côté.
+    it('resolves an anonymous reader by participant id, the key its connection carries', async () => {
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-link' }]);
+      const counts = unreadCounts({ 'conv-link': 4 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-3', true);
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'anon-part-3', isActive: true }),
+        })
+      );
+      expect(counts).toHaveBeenCalledWith('anon-part-3', ['conv-link']);
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-link',
+        unreadCount: 4,
+      });
+    });
+
+    // La garde qui empêche la régression inverse : chercher un invité sous
+    // `userId` est exactement la requête qui rendait zéro ligne.
+    it('never looks an anonymous reader up under the registered column', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-4', true);
+
+      expect(prisma.participant.findMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'anon-part-4' }),
+        })
+      );
+    });
+
+    // Zéro est une VALEUR, pas une absence : c'est le compteur qui ÉTEINT une
+    // pastille restée allumée pendant la coupure (conversation lue depuis un
+    // autre appareil). L'omettre laisserait le badge menteur dans le cas même
+    // que cet instantané existe pour fermer.
+    it('emits a zero count too — it is what turns a stale badge OFF', async () => {
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-read-elsewhere' }]);
+      unreadCounts({ 'conv-read-elsewhere': 0 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-5', true);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-read-elsewhere',
+        unreadCount: 0,
+      });
+    });
+
+    // UNE lecture batchée pour N conversations — c'est tout l'écart avec les N
+    // lectures REST que le web faisait, et la raison pour laquelle le plafond de
+    // 10 disparaît au lieu d'être déplacé côté serveur.
+    it('reads every conversation of the reader in a single batched call', async () => {
+      prisma.participant.findMany.mockResolvedValue([
+        { conversationId: 'c1' },
+        { conversationId: 'c2' },
+        { conversationId: 'c3' },
+      ]);
+      const counts = unreadCounts({ c1: 1, c2: 2, c3: 3 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-batch', false);
+
+      expect(counts).toHaveBeenCalledTimes(1);
+      expect(counts).toHaveBeenCalledWith('user-batch', ['c1', 'c2', 'c3']);
+      expect(socket.emit).toHaveBeenCalledTimes(3);
+    });
+
+    it('stays silent when the reader has no active conversation', async () => {
+      prisma.participant.findMany.mockResolvedValue([]);
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-6', true);
+
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    // Best-effort : une pastille qui ne se calcule pas ne doit jamais faire
+    // tomber le chemin de connexion, dont le drain destructif fait partie.
+    it('swallows a failing read instead of surfacing it to the connect path', async () => {
+      prisma.participant.findMany.mockRejectedValue(new Error('mongo unreachable'));
+      const socket = socketDouble();
+
+      await expect(
+        (manager as any)._emitUnreadCountsSnapshot(socket, 'user-db-down', false)
+      ).resolves.toBeUndefined();
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 23b. enqueueOfflineMessageMutation (pin/unpin offline replay)
   // -------------------------------------------------------------------------
 
@@ -3134,7 +3308,15 @@ describe('MeeshySocketIOManager', () => {
       }));
     });
 
-    it('drains the pending queue for anonymous users too (participant-id key), without unread snapshot', async () => {
+    // Ce témoin demandait l'inverse (`expect(unreadSpy).not.toHaveBeenCalled()`),
+    // et son nom donnait « without unread snapshot » pour une règle produit.
+    // Ce n'en était pas une : le `if (!isAnonymous)` du site d'appel masquait une
+    // résolution de participant qui ne lisait que la colonne `userId`, donc
+    // rendait zéro ligne pour une clé de participant. Le témoin gelait le
+    // symptôme au lieu du contrat — l'invité de lien partagé, population
+    // DOMINANTE de ce transport, n'a jamais reçu de pastille exacte à la
+    // reconnexion.
+    it('drains the pending queue AND snapshots the unread counts for an anonymous reader (participant-id key)', async () => {
       const socket = makeSocket('sock-anon-drain');
       prisma.participant.findMany.mockResolvedValueOnce([{ conversationId: 'conv-anon' }]);
       prisma.participant.findMany.mockResolvedValueOnce([]);
@@ -3144,7 +3326,7 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitPresenceSnapshot(socket, 'anon-drain-id', true);
 
       expect(drainSpy).toHaveBeenCalledWith('anon-drain-id', true);
-      expect(unreadSpy).not.toHaveBeenCalled();
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'anon-drain-id', true);
     });
 
     it('hides isOnline/lastActiveAt for a contact blocked either way with the viewer (privacy parity with GET /users/presence)', async () => {
@@ -3189,7 +3371,7 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._emitPresenceSnapshot(socket, 'user-drain-onerror', false);
 
       expect(drainSpy).toHaveBeenCalledWith('user-drain-onerror', false);
-      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror');
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror', false);
     });
   });
 

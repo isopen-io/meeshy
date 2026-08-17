@@ -158,6 +158,25 @@ nomme le message de la ligne n'est jamais périmé. Miroir exact de
 `ConversationStore.merging` (`packages/MeeshySDK/.../Store/ConversationStore.swift`) — toute
 évolution touche les deux.
 
+### La pastille de non-lus vient du SERVEUR, jamais d'une lecture cliente
+`conversation:unread-updated` est le seul signal qui déplace un compteur de non-lus, et
+`handleUnreadUpdated` (`use-socket-cache-sync.ts`) son unique écrivain côté liste — il porte la garde
+de conversation OUVERTE (le gateway calcule la pastille pour TOUS les destinataires, lecteur
+compris : sans clamp, le badge se rallume sur la conversation qu'on a sous les yeux).
+
+**Ne jamais rebâtir de lecture REST de rattrapage sur `message:pending-delivered`.** Le gateway
+pousse déjà le compteur sur le chemin de CONNEXION (`_emitUnreadCountsSnapshot` →
+`conversation:unread-updated`), pour TOUTES les conversations du lecteur, en UNE requête batchée et
+**sans plafond** — un sur-ensemble de ce que la file hors-ligne nomme. Une compensation cliente a
+existé (`refreshUnreadCountsFromServer`, retirée au cycle 61) : N `GET /conversations/:id` plafonnés
+à 10, sur le lien le plus contraint qui existe — un mobile qui vient de revenir — avec abandon
+explicite des pastilles au-delà de la dixième, et un troisième exemplaire du clamp de conversation
+ouverte. Si une pastille manque après un reconnect, le défaut est côté serveur (résolution du
+lecteur), pas côté client.
+
+`handlePendingMessagesDelivered` ne garde donc qu'un rôle : invalider
+`messages.infinite(convId)` pour les conversations nommées. Jamais la liste, jamais le réseau.
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST

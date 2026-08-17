@@ -82,6 +82,27 @@ const actorUserId = isAnonymous ? null : authContext.userId; // champ du contrat
 const personalRoomKey = actorUserId ?? membership.id;        // clé de room
 ```
 
+**Corollaire : une requête `Participant` sur cette clé doit choisir sa COLONNE.**
+`where: { userId: readerKey }` ne matche RIEN quand `readerKey` porte un
+`Participant.id`, et le symptôme est une liste VIDE, pas une erreur — donc un
+`return` silencieux, donc un signal qui disparaît sans trace. Toujours brancher
+sur la nature de la clé :
+
+```typescript
+where: isAnonymous ? { id: readerKey, isActive: true } : { userId: readerKey, isActive: true }
+```
+
+Ne JAMAIS enterrer l'incomplétude sous un `if (!isAnonymous)` au site d'appel :
+le gate donne l'omission pour une règle produit, et le brancher plus tard sans
+corriger la lecture reste un no-op muet. Cas réel :
+`_emitUnreadCountsSnapshot` (cycle 61) a privé de pastille exacte à la
+reconnexion TOUTE la population des invités de lien partagé — sans recours sur
+iOS/Android, qui n'ont aucun lecteur pour `message:pending-delivered` — alors que
+l'instantané de présence, vingt lignes plus haut dans la MÊME méthode, résolvait
+déjà les deux identités correctement. `getUnreadCountsForUser` et
+`socketio/utils/participant-resolver.ts` sont les références : les deux résolvent
+sous les deux colonnes.
+
 ## Socket.IO Conventions
 
 ### Event Naming: `entity:action-word` (colons + hyphens)
