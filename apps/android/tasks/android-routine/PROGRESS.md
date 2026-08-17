@@ -2,6 +2,117 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Post view recording + author-only reach stats shipped** (slice
+> `post-detail-reach-stats`, feature-parity §F). `gh pr list --state open --search "apps/android
+> OR apps/ios"` showed one unrelated open PR (#3113, branch `claude/keen-hamilton-sqq310` — wrong
+> naming convention for this routine, a different agent's iOS work, left untouched). `df -h /`
+> showed 12 Gi free, stable.
+>
+> **Sixth candidate found via the "ready backend, never wired to UI" heuristic** — a dedicated
+> Explore agent's OTHER suggestion from the previous run (`feed-comment-delete`), explicitly
+> flagged there as needing a check before committing: `PostRepository.getPostViews` looked like it
+> might overlap with the just-shipped `ImpressionBatcher`/`recordImpressions`. Read both iOS
+> `PostService.swift` call sites directly to resolve the ambiguity: `viewPost` (`POST
+> /posts/{id}/view`) records a single deduplicated per-viewer view and is fired from many iOS
+> surfaces [Feed, ProfileUserPostsList, Reels, Statuses, PostDetail, Bookmarks];
+> `recordImpressions` (`POST /posts/impressions/batch`) is a wholly separate batched engagement
+> metric. No overlap — `viewPost` was a genuine, distinct, still-unwired gap.
+>
+> **Avoided shipping a dead end**: wiring `viewPost` alone would be invisible — nothing on Android
+> reads or displays view counts. iOS pairs the write with a read: `PostDetailView.authorRevealView`
+> shows an author-only "@pseudo · 👁 views · 📊 impressions" line via the pure `PostReachFormatter`.
+> Shipped both halves together as one coherent vertical slice, matching how iOS itself scopes the
+> feature — this is why the diff is larger than the last several single-field slices.
+>
+> **`PostDetailViewModel.recordView()`** fires `postRepository.viewPost(postId)` once from `init`
+> (alongside the existing `loadInitial()`/`observeRealtime()`), fire-and-forget, failure silently
+> swallowed — direct mirror of iOS's `.task { try? await PostService.shared.viewPost(...) }`, which
+> fires regardless of whether the post GET itself succeeds (not gated on `loadInitial`'s success
+> branch).
+>
+> **New pure `PostReachFormatter`** (`:feature:feed`): `compact(Int)` (1.2k/3.4M, faithfully ported
+> including the `999_999 → "1000.0k"` boundary quirk baked into iOS's own `>= 1_000_000` check
+> order — not "fixed", faithfully mirrored) and `components(username, isAuthor, viewCount,
+> impressionCount)` (author-only gate: a non-author sees only `@pseudo`, never the counts).
+>
+> **`FeedPostPresentation`** gained `authorUsername`/`viewCount`/`impressionCount`/`isAuthor`
+> (derived in `FeedPostBuilder.build(currentUserId:)`, same additive-trailing-param pattern used
+> for `CommentPresentation.isOwn` in the previous slice — every other call site [`FeedViewModel`,
+> `BookmarksViewModel`, `UserPostsViewModel`] defaults to `currentUserId = null` → `isAuthor =
+> false`, harmless since only `PostDetailScreen` renders the reach line). New `ApiPost
+> .impressionCount` field alongside the pre-existing `viewCount` (`:core:model`, already a real
+> gateway field per the iOS `APIPost` decoder, just never modeled on Android).
+>
+> **New `PostReachLine` composable** in `PostDetailScreen.kt`, rendered beneath the author
+> name/timestamp column, gated on `reach.pseudo != null || reach.views != null` (mirror of iOS's
+> own gate) — a completely blank post carries neither.
+>
+> **+14 tests**: `PostReachFormatterTest` (6 — compact below/at-boundary/millions, author/non-author
+> components, blank-username pseudo). `FeedPostBuilderTest` (5 — null-coerced counts, pass-through
+> counts, raw username exposure, isAuthor true/false/no-author/no-current-user). `PostDetailViewModelTest`
+> (3 — view recorded exactly once on open, blank postId never records, a failed record doesn't
+> disturb the already-loaded post) + 2 more folded into the existing isAuthor-projection coverage.
+> One pre-existing direct `FeedPostPresentation(...)` constructor call (`FeedMediaGalleryTest`, not
+> going through `FeedPostBuilder.build`) updated with the four new fields.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. EN/FR/ES/PT strings added (`feed_post_reach_a11y`). Diff confirmed `apps/android`-only via
+> the working-tree diff.
+>
+> **Still open**: iOS also renders this same reach line in a second spot (`PostDetailView`'s
+> collapsed floating-header reveal, sharing the same `PostReachFormatter` call) — Android's
+> `PostDetailScreen` has no collapsing-header treatment yet, so only the inline placement was
+> ported. Dwell-time tracking (noted in the previous impression-batching slice) remains open too.
+
+> On 2026-08-17 **Viewer-initiated comment delete shipped** (slice `feed-comment-delete`,
+> feature-parity §F). `gh pr list --state open --search "apps/android OR apps/ios"` showed zero
+> open PRs. `df -h /` showed 9.0 Gi free, stable.
+>
+> **Fifth candidate found via the "ready backend, never wired to UI" heuristic**, this time via a
+> dedicated Explore agent (the previous four obvious candidates were exhausted). It searched every
+> public method across `sdk-core`/`core-*` repositories for zero call sites in `feature`/`app`,
+> cross-checked against tests and an iOS reference. `PostRepository.deleteComment(postId,
+> commentId)` was the strongest hit: fully implemented, unlike its already-wired siblings
+> `likeComment`/`unlikeComment` in the exact same repository. The agent's other candidate
+> (`PostRepository.getPostViews`) was set aside — plausible overlap with the just-shipped
+> `ImpressionBatcher`/`recordImpressions` needs checking server-side before committing to it, left
+> for a future run.
+>
+> **Read the iOS reference directly rather than trusting the checklist line**: `FeedCommentsSheet
+> .deleteHandler(for:)` gates the delete option to `c.authorId == me` — no confirmation dialog, a
+> single tap on the destructive-role menu item fires the delete immediately with optimistic removal
+> and full rollback on failure (`deleteComment` in the same file, lines ~2012-2058).
+>
+> **Reused the existing socket-driven removal transition instead of duplicating it**: `PostCommentsViewModel`
+> already had a private `onCommentDeleted(commentId)` wired to the live `comment:deleted` socket event
+> — top-level comment removed + its reply thread purged, or a reply removed + its parent's `replyCount`
+> decremented. The new public `deleteComment(commentId)` snapshots `thread.value`/`replies.value` (both
+> plain immutable data classes, so a snapshot is just holding the old reference), calls the SAME
+> `onCommentDeleted(commentId)` for the optimistic removal, then either confirms silently on success or
+> restores both snapshots + surfaces `status.error` on failure/exception. Zero duplicated removal logic.
+>
+> **New `CommentPresentation.isOwn: Boolean`**, derived in `CommentProjection.build(currentUserId:)`
+> by comparing `comment.author?.id` to the signed-in user's id (passed from `PostCommentsViewModel
+> .project()`'s already-available `inputs.user?.id`). The existing `CommentProjectionTest` call sites
+> were untouched — `currentUserId` defaults to `null` (never own), a purely additive trailing param.
+>
+> **New `CommentDeleteButton`** (trash icon, same minimalist pill style as the existing like/reply
+> buttons), wired ONCE inside the shared `CommentRow` composable and gated on `comment.isOwn` — since
+> `ReplyThread` already reuses `CommentRow` for its reply rows, this single wire point covers both
+> top-level comments and replies with no duplication.
+>
+> **+9 tests**: `CommentProjectionTest` — `isOwn` true when the author id matches, false for a
+> mismatched/missing author or a null current user id. `PostCommentsViewModelTest` — top-level delete
+> (state updates + repository call verified), reply delete (parent `replyCount` decrements), rollback +
+> `errorMessage` on a network failure, and three inert guards (blank postId, blank commentId, an unknown
+> comment id — all zero network calls). Mirrors the existing socket-path `onCommentDeleted` test suite's
+> exact scenarios, proving the two paths converge on identical outcomes.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. EN/FR/ES/PT strings added (`post_comments_delete_action`). Diff confirmed `apps/android`-only
+> via the working-tree diff (not `main...HEAD`, which carries unrelated commits from other PRs merged
+> to `main` in this shared repo since this branch point).
+
 > On 2026-08-17 **Invite by email shipped** (slice `discover-email-invite`, feature-parity §J).
 > `gh pr list --state open --search "apps/android OR apps/ios"` showed zero open PRs. `df -h /`
 > showed 9.2 Gi free, stable.

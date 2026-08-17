@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=3 last_run=discover-email-invite
+lane=ANDROID android_streak=5 last_run=post-detail-reach-stats

@@ -85,6 +85,27 @@ class PostDetailViewModel @Inject constructor(
         }
         observeRealtime()
         loadInitial()
+        recordView()
+    }
+
+    /**
+     * Fire-and-forget view record for this post, fired once per detail-view session
+     * regardless of whether the post fetch itself succeeds — mirror of iOS `PostDetailView`'s
+     * `.task { try? await PostService.shared.viewPost(...) }`. A blank route [postId] never
+     * hits the network; a failure is silently ignored (best-effort analytics, never something
+     * the reader should see fail).
+     */
+    private fun recordView() {
+        if (postId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches iOS `try?`
+            }
+        }
     }
 
     /**
@@ -212,7 +233,7 @@ class PostDetailViewModel @Inject constructor(
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let {
-            FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active)
+            FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active, currentUserId = user?.id)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,

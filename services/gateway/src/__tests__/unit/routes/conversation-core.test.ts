@@ -2810,6 +2810,76 @@ describe('registerCoreRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
+    // ── La police d'écriture n'a pas de sens sur un conteneur SANS hiérarchie ──
+    //
+    // Dans un tête-à-tête, l'initiateur est `creator` et l'autre `member` — un
+    // artefact de « qui a tapé le premier », pas une autorité. Laisser passer
+    // ces trois champs permettait à l'initiateur de faire taire son pair
+    // (`conversationWriteAdmission` : member 1 < admin 3), sans retour possible
+    // pour la victime, à qui ce même PUT répond 403.
+    it.each([
+      ['isAnnouncementChannel', { isAnnouncementChannel: true }],
+      ['defaultWriteRole', { defaultWriteRole: 'admin' }],
+      ['slowModeSeconds', { slowModeSeconds: 30 }],
+    ])('creator of a direct conversation cannot set %s', async (_field, body) => {
+      prisma.participant.findFirst.mockResolvedValue({
+        role: 'creator',
+        conversation: { type: 'direct' },
+      });
+      const req = makeRequest({ params: { id: CONV_ID }, body });
+      const reply = makeReply();
+
+      await getUpdateHandler(fastify)(req, reply);
+
+      expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.stringContaining('tête-à-tête'));
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+      expect(fastify._mockEmit).not.toHaveBeenCalled();
+    });
+
+    // La borne : seuls les champs de POLICE sont refusés. Le reste du PUT
+    // continue de fonctionner sur un tête-à-tête.
+    it('creator of a direct conversation can still update cosmetic fields', async () => {
+      prisma.participant.findFirst.mockResolvedValue({
+        role: 'creator',
+        conversation: { type: 'direct' },
+      });
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        body: { title: 'T', description: 'D', avatar: 'a.jpg', autoTranslateEnabled: true },
+      });
+      const reply = makeReply();
+
+      await getUpdateHandler(fastify)(req, reply);
+
+      expect(mockSendForbidden).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // La borne de l'autre côté : le canal d'annonces reste une fonctionnalité
+    // entière sur un groupe.
+    it('creator of a group can still turn it into an announcement channel', async () => {
+      prisma.participant.findFirst.mockResolvedValue({
+        role: 'creator',
+        conversation: { type: 'group' },
+      });
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        body: { isAnnouncementChannel: true, defaultWriteRole: 'admin' },
+      });
+      const reply = makeReply();
+
+      await getUpdateHandler(fastify)(req, reply);
+
+      expect(mockSendForbidden).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isAnnouncementChannel: true, defaultWriteRole: 'admin' }),
+        })
+      );
+    });
+
     it('socket io null in PUT - no broadcast but update succeeds', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator' });
       prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });

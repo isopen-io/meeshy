@@ -3823,7 +3823,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       300 ms-debounced `mentionSearch.search(query)` for the active fragment [`MentionComposer.shouldQueryRemote`
       gates it, a fresh keystroke or a selection cancels the in-flight lookup], excludes the signed-in user,
       and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
-      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
+      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done** +
+      **viewer-initiated comment delete** (slice `feed-comment-delete`, 2026-08-17 — the viewer can now
+      delete their own comments/replies from the open thread, not just observe a live `comment:deleted`
+      from elsewhere. Found via the "ready backend, never wired to UI" heuristic (fifth this session):
+      `PostRepository.deleteComment(postId, commentId)` was fully implemented, unlike its already-wired
+      siblings `likeComment`/`unlikeComment`. Mirror of iOS `FeedCommentsSheet.deleteHandler`/`deleteComment`
+      — gated to `comment.author.id == currentUserId` [`CommentPresentation.isOwn`, new field derived in
+      `CommentProjection.build(currentUserId:)`], optimistic removal, full rollback on failure, no
+      confirmation dialog [same as iOS's destructive-role menu item — fires on tap]. `PostCommentsViewModel
+      .deleteComment(commentId)` deliberately **reuses the exact `onCommentDeleted` transition already
+      wired to the socket path** [snapshot `thread`/`replies` → apply the same removal → confirm or restore
+      both snapshots on failure] rather than duplicating the removal logic. New `CommentDeleteButton`
+      [trash icon, visible only when `isOwn`] wired once in `CommentRow`, covering both top-level and reply
+      rows through `ReplyThread`'s existing reuse of that composable. +9 tests [`CommentProjectionTest` ×2:
+      isOwn true/false by author id; `PostCommentsViewModelTest` ×6: top-level delete, reply delete +
+      parent count decrement, rollback + error on failure, and the three inert guards — blank postId, blank
+      commentId, unknown comment id]) **done**;
       effects/blur still open
 - [~] Post / comment pin-unpin; repost / quote-repost / share; report — **post pin shipped
       2026-08-17** (slice `feed-pin-own-post`). Re-proof found `PostRepository.pinPost`/
@@ -3875,6 +3891,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
       overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
       `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      **Post view recording + author-only reach stats shipped 2026-08-17** (slice
+      `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
+      fully implemented, tested, and unwired, same gap pattern as impression batching but a
+      genuinely distinct endpoint [confirmed by reading both: `viewPost` records a single
+      deduplicated per-viewer view, `recordImpressions` is the separate batched engagement metric
+      already shipped — no overlap, both real iOS network calls fired independently]. Mirror of
+      iOS `PostDetailView`'s `.task { try? await PostService.shared.viewPost(...) }`: fires once
+      per detail-view session regardless of whether the post fetch itself succeeds, failure
+      silently ignored. Paired with the visible half of the feature — iOS's `PostReachFormatter`
+      author-only "@pseudo · views · impressions" line (`PostDetailView.authorRevealView`) — since
+      wiring the write with nothing to show for it would be a dead end. New pure
+      `PostReachFormatter` (`compact()` 1.2k/3.4M formatting, `components()` gated on `isAuthor`)
+      + `FeedPostPresentation.viewCount`/`impressionCount`/`isAuthor`/`authorUsername` [new
+      `ApiPost.impressionCount` field alongside the pre-existing `viewCount`] + a `PostReachLine`
+      composable in `PostDetailScreen`, rendered only for the post's own author. +14 tests
+      (`PostReachFormatterTest` ×6, `FeedPostBuilderTest` ×5, `PostDetailViewModelTest` ×3: view
+      fires once, blank postId never records, a failed record doesn't disturb the loaded post).
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
       done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
       dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`

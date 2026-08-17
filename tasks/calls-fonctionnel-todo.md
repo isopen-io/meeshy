@@ -9536,3 +9536,71 @@ edit Swift/Kotlin non testable.
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; runner-up
   `use-webrtc-p2p.ts:957-983`'s `userId`-change effect clearing refs asymmetrically vs. `cleanup()`
   (pas de déclencheur production concret tracé cette vague).
+
+## Vague 141 — `use-webrtc-p2p.ts`'s userId-change teardown left `connectedPeersRef`/`stalledPeersRef`/`isReconnecting`/`reconnectAttemptRef` stale, unlike `cleanup()` (web) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+runner-up explicitement flaggé par la Vague 140 dans sa section « Non fait volontairement » —
+`use-webrtc-p2p.ts:957-983`'s effet de changement de `userId`, dont l'asymétrie avec `cleanup()`
+n'avait pas encore été tracée jusqu'à un scénario de défaillance concret. Toolchains iOS/Android
+toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé web
+(TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : l'effet `useEffect` déclenché à chaque changement de `userId` truthy (promotion
+  anonyme→authentifié, refresh de session) ferme et recrée CHAQUE `WebRTCService` — exactement ce
+  que fait `cleanup()` — mais ne vide que 6 des 11 refs/states que `cleanup()` remet à zéro :
+  absents de l'effet, `connectedPeersRef`, `stalledPeersRef`, `isReconnecting` (state) et
+  `reconnectAttemptRef` (les 4 refs dédiées au signal de reconnexion mid-call, doc comment
+  ligne 146-151). `removeParticipant` — le miroir scopé-par-pair de `cleanup()`, documenté par
+  l'audit du 2026-08-15 — vide déjà ces 4 mêmes refs pour le PARTICIPANT qui part ; l'effet
+  `userId`-change n'avait jamais reçu le même traitement bien qu'il fasse le même genre de reset
+  global pour TOUS les participants.
+- **Scénario de défaillance concret** : un utilisateur en appel dont l'identité `userId` passe d'un
+  id temporaire/anonyme à l'id définitif (ou est corrigée par un refresh de token) APRÈS qu'un pair
+  a déjà atteint ICE `connected` — ou pire, a déjà `stall`é (`disconnected`/`failed`) mid-call,
+  posant `isReconnecting=true` et `stalledPeersRef`/`connectedPeersRef` en conséquence. L'effet se
+  déclenche, ferme le service existant, recrée son état de connexion à zéro (`connectionStatesRef`,
+  `iceConnectionStatesRef`, `connectionState`/`iceConnectionState` remis à `'new'`) — mais
+  `connectedPeersRef` garde l'ancien participant marqué "connecté" et `isReconnecting`/
+  `reconnectAttemptRef` gardent leur valeur d'AVANT le changement d'identité. Deux symptômes
+  indépendants : (1) si l'appel n'était pas en stall, `isReconnecting` reste bloqué à `true` sans
+  qu'aucun renégociation réelle ne le remette jamais à `false` (le service fraîchement recréé n'a
+  pas encore atteint `connected`, donc la branche de récupération, ligne 337-343, ne s'exécute
+  jamais) ; (2) le NOUVEAU service recréé, dont c'est le tout premier cycle ICE, peut atteindre
+  `disconnected` avant tout `connected` initial (blip normal de pré-connexion) — le garde de la
+  ligne 358-361 (`connectedPeersRef.current.has(participantId)`) lit l'entrée PÉRIMÉE comme "était
+  connecté, stall maintenant" et déclenche un faux `isReconnecting=true` + un `call:reconnecting`
+  non mérité émis au serveur, avec un `reconnectAttemptRef` qui continue de compter depuis sa valeur
+  d'avant le changement d'identité au lieu de repartir de 1.
+- **Fix** : `apps/web/hooks/use-webrtc-p2p.ts` — l'effet `userId`-change vide désormais aussi
+  `connectedPeersRef.current.clear()`, `stalledPeersRef.current.clear()`,
+  `setIsReconnecting(false)` et `reconnectAttemptRef.current = 0`, dans le même bloc que le reset
+  déjà présent. `negotiationIdsRef` reste délibérément INTACT — contrairement à `cleanup()` qui le
+  vide (l'appel y est vraiment terminé) : ici l'appel CONTINUE et le pair distant a déjà mémorisé
+  notre high-water mark de négociation envoyé sous l'ancien `userId` ; le remettre à zéro ferait
+  paraître notre prochain signal PLUS ANCIEN que ce que le pair a déjà vu, et le pair le
+  droppperait silencieusement comme périmé — exactement le bug documenté au commentaire de
+  déclaration de `negotiationIdsRef` (ligne 155-163, interop iOS).
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 3 cas neufs dans `use-webrtc-p2p.test.tsx`, describe « userId Change Handling »
+  — « clears the reconnecting/stalled state when userId changes mid-call » (RED : `isReconnecting`
+  restait `true` après le changement d'identité) ; « does not report a false "Reconnecting" state
+  for a freshly recreated peer after a userId change » (RED : le tout premier `disconnected` du
+  service recréé déclenchait quand même `isReconnecting=true`) ; « resets the reconnect attempt
+  counter when userId changes mid-call » (RED : `attempt` émis valait `2`, leaké depuis le stall
+  d'avant le changement d'identité, au lieu de `1`). **3/3 rouges confirmés** contre le code non
+  corrigé, **3/3 verts** après fix. Suite du fichier : **65/65** verts (+3 nets, 0 régression).
+  Sweep web `--testPathPatterns="[Cc]all"` : **54 suites / 509 tests** verts, 0 régression.
+  `npx tsc --noEmit` (apps/web) : **0 erreur** sur le fichier touché (le dépôt en porte 1771 par
+  ailleurs, préexistantes, comparées fichier par fichier — même méthode que les vagues
+  précédentes).
+- **Non fait volontairement** : `negotiationIdsRef` non touché par cet effet, pour la raison
+  détaillée ci-dessus (pas un oubli — un choix délibéré, documenté inline). Reconduits (inchangés) :
+  dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
+  de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
+  construction (Vague 139).

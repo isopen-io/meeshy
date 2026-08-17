@@ -1,0 +1,179 @@
+// apps/ios/Meeshy/Features/Main/Views/MessageListLayout.swift
+
+import UIKit
+
+/// **Loi pure de stabilité du champ visuel** de la liste de messages
+/// (chasse Fable 2026-08-16, causes n°1 et n°2 restantes du chantier Focal).
+///
+/// La liste est INVERSÉE (`transform scaleY: -1`, item 0 = bas visuel) et
+/// self-sizing (`.estimated`). Deux familles de corrections déplacent le
+/// `contentY` des cellules visibles sans que `contentOffset` ne suive :
+///
+/// 1. **Self-sizing** : une cellule SOUS la fenêtre visible (`minY <
+///    offset`) se re-mesure — séparateur de jour estimé 150 réalisé à ~36,
+///    texte reconfiguré à la pose, image chargée. Tous les items au-dessus
+///    d'elle glissent de `Δh` d'un coup.
+/// 2. **Insertion/suppression en tête** : message entrant ou typing
+///    indicator (index 0 = bas visuel) — le `contentY` de TOUTES les
+///    cellules visibles se décale de la hauteur insérée/retirée.
+///
+/// Conséquence directe en Focal : l'échelle d'une rangée est une fonction
+/// pure de `visualMidY = H − (center.y − offset)` (`FocalPerspectiveGeometry`).
+/// Une correction non compensée fait donc sauter la scène entière — position
+/// ET échelle — au lieu de suivre la courbe gelée. En mode bulles, le même
+/// défaut est le « contenu qui recule sous le doigt » documenté par
+/// `configureCollectionView`.
+///
+/// La loi décide du DELTA d'offset qui rend la correction invisible. Elle ne
+/// touche jamais l'ancrage du bas visuel :
+/// - correction DANS la fenêtre (`minY ≥ offset`) → 0. L'élu et les rangées
+///   récentes vivent près du bas ; compenser les ferait sauter à leur tour —
+///   le pire échange possible. L'ancre reste le bas visuel, comme
+///   aujourd'hui.
+/// - près du bas (`offset < seuil`) pour les insertions → 0. La poussée
+///   naturelle (le message entrant apparaît, l'auto-scroll RC2.1 suit) est
+///   le comportement historique voulu.
+///
+/// Type pur, `nonisolated`, sans UIKit — même patron que
+/// `FocalPerspectiveGeometry` : le layout (seul consommateur) n'y ajoute que
+/// la lecture des attributs et l'écriture du contexte d'invalidation.
+nonisolated enum MessageListOffsetCompensationLaw {
+
+    /// Delta d'offset absorbant une correction de self-sizing.
+    ///
+    /// `originalMinY` vient des attributs AVANT correction (la boîte de
+    /// layout, jamais `cell.frame` qui intègre le transform de perspective).
+    /// La comparaison se fait sur `minY` et non `maxY` : une cellule à
+    /// cheval sur le bord bas de la fenêtre pousse quand même tout ce qui
+    /// est au-dessus d'elle — même compensation.
+    static func selfSizingAdjustment(
+        originalMinY: CGFloat,
+        heightDelta: CGFloat,
+        contentOffsetY: CGFloat
+    ) -> CGFloat {
+        guard originalMinY < contentOffsetY else { return 0 }
+        return heightDelta
+    }
+
+    /// Delta d'offset absorbant une insertion/suppression en tête pendant un
+    /// batch update. `headDelta` = somme signée des hauteurs insérées (+) et
+    /// supprimées (−) SOUS la fenêtre visible.
+    static func batchUpdateAdjustment(
+        headDelta: CGFloat,
+        contentOffsetY: CGFloat,
+        nearBottomThreshold: CGFloat
+    ) -> CGFloat {
+        guard contentOffsetY >= nearBottomThreshold else { return 0 }
+        return headDelta
+    }
+}
+
+/// Le layout de la liste de messages : un `UICollectionViewCompositionalLayout`
+/// qui absorbe dans `contentOffset` les corrections de layout survenant SOUS
+/// la fenêtre visible — dans la MÊME transaction de layout, donc sans aucune
+/// frame intermédiaire où la scène aurait sauté.
+///
+/// Deux points d'entrée UIKit, un par famille de corrections :
+/// - `invalidationContext(forPreferredLayoutAttributes:withOriginalAttributes:)`
+///   pour le self-sizing (le canal `contentOffsetAdjustment` existe pour ça) ;
+/// - `prepare(forCollectionViewUpdates:)` + `targetContentOffset(
+///   forProposedContentOffset:)` pour les insertions/suppressions de tête.
+///
+/// Les hauteurs SUPPRIMÉES ne sont plus lisibles au moment de l'update (les
+/// anciens attributs sont déjà jetés) : l'hôte les mesure AVANT d'appliquer
+/// son snapshot et les dépose via `noteUpcomingDeletionCompensation(height:)`.
+final class MessageListLayout: UICollectionViewCompositionalLayout {
+
+    /// Seuil « près du bas » de l'hôte (même règle que son
+    /// `isCurrentlyNearBottom`). Le défaut infini désactive la compensation
+    /// d'insertion tant que l'hôte ne l'a pas posé — comportement historique.
+    var nearBottomThreshold: CGFloat = .greatestFiniteMagnitude
+
+    private var pendingBatchAdjustment: CGFloat = 0
+    private var stashedDeletionHeight: CGFloat = 0
+
+    /// Hauteur (boîte de layout) des items que le PROCHAIN batch update va
+    /// supprimer sous la fenêtre visible. Consommée une seule fois.
+    func noteUpcomingDeletionCompensation(height: CGFloat) {
+        stashedDeletionHeight = height
+    }
+
+    override func invalidationContext(
+        forPreferredLayoutAttributes preferredAttributes: UICollectionViewLayoutAttributes,
+        withOriginalAttributes originalAttributes: UICollectionViewLayoutAttributes
+    ) -> UICollectionViewLayoutInvalidationContext {
+        let context = super.invalidationContext(
+            forPreferredLayoutAttributes: preferredAttributes,
+            withOriginalAttributes: originalAttributes
+        )
+        // Si le layout de base a déjà posé sa propre compensation (certains
+        // chemins iOS le font), ne jamais la doubler.
+        guard let collectionView, abs(context.contentOffsetAdjustment.y) < 0.5 else {
+            return context
+        }
+        let adjustment = MessageListOffsetCompensationLaw.selfSizingAdjustment(
+            originalMinY: originalAttributes.frame.minY,
+            heightDelta: preferredAttributes.frame.height - originalAttributes.frame.height,
+            contentOffsetY: collectionView.contentOffset.y
+        )
+        if adjustment != 0 {
+            context.contentOffsetAdjustment = CGPoint(
+                x: context.contentOffsetAdjustment.x,
+                y: adjustment
+            )
+        }
+        return context
+    }
+
+    override func prepare(forCollectionViewUpdates updateItems: [UICollectionViewUpdateItem]) {
+        super.prepare(forCollectionViewUpdates: updateItems)
+        guard let collectionView else { return }
+        let offsetY = collectionView.contentOffset.y
+
+        var headDelta: CGFloat = 0
+        var hasDeletion = false
+        for update in updateItems {
+            switch update.updateAction {
+            case .insert:
+                // `prepare()` a déjà recalculé le NOUVEAU layout : les
+                // attributs de l'item inséré sont lisibles. Seule une
+                // insertion posée sous la fenêtre décale les cellules
+                // visibles.
+                guard let indexPath = update.indexPathAfterUpdate,
+                      indexPath.item != NSNotFound,
+                      let frame = layoutAttributesForItem(at: indexPath)?.frame,
+                      frame.minY < offsetY
+                else { continue }
+                headDelta += frame.height
+            case .delete:
+                hasDeletion = true
+            default:
+                break
+            }
+        }
+        if hasDeletion {
+            headDelta -= stashedDeletionHeight
+        }
+        stashedDeletionHeight = 0
+        pendingBatchAdjustment = MessageListOffsetCompensationLaw.batchUpdateAdjustment(
+            headDelta: headDelta,
+            contentOffsetY: offsetY,
+            nearBottomThreshold: nearBottomThreshold
+        )
+    }
+
+    override func targetContentOffset(forProposedContentOffset proposedContentOffset: CGPoint) -> CGPoint {
+        guard pendingBatchAdjustment != 0 else {
+            return super.targetContentOffset(forProposedContentOffset: proposedContentOffset)
+        }
+        return CGPoint(
+            x: proposedContentOffset.x,
+            y: proposedContentOffset.y + pendingBatchAdjustment
+        )
+    }
+
+    override func finalizeCollectionViewUpdates() {
+        pendingBatchAdjustment = 0
+        super.finalizeCollectionViewUpdates()
+    }
+}
