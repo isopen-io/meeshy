@@ -737,12 +737,30 @@
         "script": "Guion",
         "resume": "Resumen",
         "riviere": "Río",
+        "bubbles": "Burbujas",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "se abrirá a {threshold} personas activas — {current} hoy",
-        "riviereLockedDirect": "reservado para grupos"
+        "river": {
+          "never": "nunca en una conversación directa",
+          "thresholdOnly": "se abrirá con {threshold} personas activas",
+          "reason": "se abrirá con {threshold} personas activas — {current} hoy"
+        }
       },
       "typing": {
         "one": "{name} está escribiendo…"
+      },
+      "draft": "✎ Borrador",
+      "sections": {
+        "pinned": "Fijadas",
+        "live": "En directo",
+        "today": "Hoy",
+        "yesterday": "Ayer",
+        "thisWeek": "Esta semana",
+        "older": "Más antiguo"
+      }
+    },
+    "focal": {
+      "row": {
+        "you": "Tú"
       }
     },
     "lens": {

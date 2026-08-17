@@ -170,21 +170,17 @@ interface DeadFamilyExclusion {
   readonly reason: string;
 }
 
+// SECOND passage du côté « l'exclusion est devenue périmée » (réconciliation
+// V4bis, 2026-08-17) : `list.presenceDot` était exclue le 2026-08-16 au motif
+// « morte des DEUX côtés — CSS intégralement inerte à ce jour ». La branche web
+// V4 (WL-102) a depuis branché le dot de présence de la rangée Lentille sur
+// `--lentille-list-presence-dot-size` / `-border-size`
+// (`apps/web/components/conversations/lentille/LentilleRow.tsx`). Le motif
+// tombe donc côté CSS ; l'entrée est retirée, exactement comme le message
+// d'échec de `it.each` le demande. Le côté Swift reste sur la géométrie propre
+// de `MeeshyAvatar.onlineDot` — sans conséquence pour cette garde, qui exige UN
+// consommateur réel, Swift OU CSS.
 const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
-  {
-    family: 'list.presenceDot',
-    since: '2026-08-16',
-    owner: 'Fable — orchestrateur Lentille (suivi V4bis/V5 iOS)',
-    reason:
-      'LentilleMetrics.PresenceDot (11 / bordure 2.5) est mirroré et testé pour la parité ' +
-      'JSON, mais le dot de présence RÉELLEMENT rendu (`MeeshyAvatar.onlineDot`, ' +
-      'packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift) utilise sa PROPRE ' +
-      'géométrie (`context.onlineDotSize`, `lineWidth: 2` en dur) — un composant SDK partagé, ' +
-      'hors du domaine Lentille, jamais branché sur ce token. Mort des deux côtés (CSS ' +
-      'intégralement inerte à ce jour). Hors périmètre R-b (cette garde ne fait que DÉTECTER, ' +
-      'jamais réparer une consommation) — branchement ou retrait du token à trancher par un ' +
-      'lot dédié.',
-  },
   {
     family: 'list.agent',
     since: '2026-08-16',

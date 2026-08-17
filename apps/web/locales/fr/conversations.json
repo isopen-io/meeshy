@@ -739,12 +739,30 @@
         "script": "Script",
         "resume": "Résumé",
         "riviere": "Rivière",
+        "bubbles": "Bulles",
         "autoBadge": "AUTO · {decision}",
-        "riviereLocked": "s'ouvrira à {threshold} personnes actives — {current} aujourd'hui",
-        "riviereLockedDirect": "réservée aux groupes"
+        "river": {
+          "never": "jamais en conversation directe",
+          "thresholdOnly": "s'ouvrira à {threshold} personnes actives",
+          "reason": "s'ouvrira à {threshold} personnes actives — {current} aujourd'hui"
+        }
       },
       "typing": {
         "one": "{name} écrit…"
+      },
+      "draft": "✎ Brouillon",
+      "sections": {
+        "pinned": "Épinglées",
+        "live": "En direct",
+        "today": "Aujourd'hui",
+        "yesterday": "Hier",
+        "thisWeek": "Cette semaine",
+        "older": "Plus ancien"
+      }
+    },
+    "focal": {
+      "row": {
+        "you": "Toi"
       }
     },
     "lens": {

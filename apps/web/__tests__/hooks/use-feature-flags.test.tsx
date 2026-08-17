@@ -7,10 +7,27 @@
  * - getEnabledFeatures function
  * - isPasswordResetConfigured function
  * - Environment variable integration
+ * - `lentille_list` (WL-100/LWS-10) : résolution searchParam > cookie > env > OFF,
+ *   et l'effet cookie réellement APPLIQUÉ par le hook (pas seulement décrit)
  */
+
+let mockSearchParams = new URLSearchParams();
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => mockSearchParams,
+}));
 
 import { renderHook } from '@testing-library/react';
 import { useFeatureFlags } from '@/hooks/use-feature-flags';
+
+function clearAllCookies(): void {
+  document.cookie.split(';').forEach((entry) => {
+    const name = entry.split('=')[0]?.trim();
+    if (name) {
+      document.cookie = `${name}=; max-age=0; path=/`;
+    }
+  });
+}
 
 // Store original env
 const originalEnv = process.env;
@@ -19,6 +36,8 @@ describe('useFeatureFlags', () => {
   beforeEach(() => {
     // Reset env before each test
     process.env = { ...originalEnv };
+    mockSearchParams = new URLSearchParams();
+    clearAllCookies();
 
     // Suppress console warnings
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -27,6 +46,7 @@ describe('useFeatureFlags', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    clearAllCookies();
     jest.restoreAllMocks();
   });
 
@@ -194,6 +214,86 @@ describe('useFeatureFlags', () => {
       rerender();
 
       expect(result.current.flags.passwordReset).toBe(firstFlags.passwordReset);
+    });
+  });
+
+  describe('lentille_list (WL-100/LWS-10) — unique décideur du web', () => {
+    it('OFF par défaut (aucun searchParam, aucun cookie, aucun env)', () => {
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(false);
+      expect(result.current.isFeatureEnabled('lentille_list')).toBe(false);
+    });
+
+    it('?lentille=1 → actif, ET pose le cookie meeshy_lentille=1 (effet appliqué par le hook)', () => {
+      mockSearchParams = new URLSearchParams('lentille=1');
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(true);
+      expect(document.cookie).toContain('meeshy_lentille=1');
+    });
+
+    it('?lentille=0 → inactif, ET efface un cookie meeshy_lentille=1 préexistant', () => {
+      document.cookie = 'meeshy_lentille=1; path=/';
+      mockSearchParams = new URLSearchParams('lentille=0');
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(false);
+      expect(document.cookie).not.toContain('meeshy_lentille=1');
+    });
+
+    it('cookie meeshy_lentille=1 (sans searchParam) → actif, persiste entre visites', () => {
+      document.cookie = 'meeshy_lentille=1; path=/';
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(true);
+    });
+
+    it('NEXT_PUBLIC_LENTILLE_DEFAULT=true (sans searchParam ni cookie) → actif', () => {
+      process.env.NEXT_PUBLIC_LENTILLE_DEFAULT = 'true';
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(true);
+    });
+
+    it('précédence : searchParam=0 gagne sur un cookie=1 ET un env=true déjà présents', () => {
+      document.cookie = 'meeshy_lentille=1; path=/';
+      process.env.NEXT_PUBLIC_LENTILLE_DEFAULT = 'true';
+      mockSearchParams = new URLSearchParams('lentille=0');
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(false);
+      expect(document.cookie).not.toContain('meeshy_lentille=1');
+    });
+
+    it('précédence : cookie gagne sur env en l\'absence de searchParam', () => {
+      document.cookie = 'meeshy_lentille=1; path=/';
+      process.env.NEXT_PUBLIC_LENTILLE_DEFAULT = 'false';
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.flags.lentille_list).toBe(true);
+    });
+
+    it('apparaît dans getEnabledFeatures() une fois actif', () => {
+      mockSearchParams = new URLSearchParams('lentille=1');
+
+      const { result } = renderHook(() => useFeatureFlags());
+
+      expect(result.current.getEnabledFeatures()).toContain('lentille_list');
+    });
+
+    it('n\'écrit jamais le cookie quand aucun searchParam ne le demande (cookie/env seuls)', () => {
+      process.env.NEXT_PUBLIC_LENTILLE_DEFAULT = 'true';
+
+      renderHook(() => useFeatureFlags());
+
+      expect(document.cookie).not.toContain('meeshy_lentille=');
     });
   });
 });

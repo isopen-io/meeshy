@@ -31,11 +31,17 @@
 #
 # Test files (*.test.* and *Tests.swift) are excluded.
 #
-# --self-test: exercises `list_skin_files` (the actual exclusion/detection
-# mechanism used below) against a throwaway fixture tree, asserts a forbidden
-# literal IS caught, and that Core/** + *test* files ARE excluded — then
-# cleans up. The guard is worthless if it can go silently blind, so this
-# fails loudly (non-zero) if its own detection is broken.
+# Comments — line (`//`) AND block (`/* … */`) — are stripped before scanning:
+# a docstring that CITES the law is not an executable literal (see
+# `strip_comments` below, REV-4/B4).
+#
+# --self-test: exercises `list_skin_files` and `scan_hard_literal` (the actual
+# exclusion/detection mechanisms used below) against a throwaway fixture tree,
+# asserts a forbidden literal IS caught, that Core/** + *test* files ARE
+# excluded, that a law citation inside a docstring is NOT reported, and that
+# executable code following a closed block — or a string containing `/*` —
+# stays visible; then cleans up. The guard is worthless if it can go silently
+# blind, so this fails loudly (non-zero) if its own detection is broken.
 
 set -euo pipefail
 
@@ -94,17 +100,84 @@ list_skin_files() {
 # TODO contractuel, cf. F-084). L'exclure ici est ce qui permet d'interdire
 # ces valeurs partout AILLEURS dans la peau.
 
-# Recherche d'un littéral en JETON, commentaires exclus — pas en sous-chaîne.
-# Deux faux positifs réels ont motivé ce durcissement (V3, F-090) :
+# Retrait des commentaires avant scan — REV-4/B4.
+#
+# Le strip `s@//.*$@@` de V3 (F-090) ne connaissait que le commentaire de LIGNE.
+# La branche web V4 a rendu la garde ROUGE sur 10 citations de la loi placées
+# dans des docstrings `/* … */` de 6 fichiers — un `/** §4.3 : bande 140±45 */`
+# au-dessus de la constante qui, précisément, remplace ces littéraux. Un
+# commentaire qui CITE la loi n'est pas un littéral exécutable : il documente
+# d'où vient la constante. Le générateur est donc réparé (retrait des blocs),
+# jamais la garde affaiblie — la liste des littéraux, les frontières de jeton et
+# le périmètre des fichiers de peau sont INTACTS.
+#
+# Deux exigences ont dicté l'implémentation :
+#
+#   1. **Compte de lignes préservé** — les blocs sont blanchis caractère par
+#      caractère, jamais supprimés : `grep -n` rend toujours le vrai numéro.
+#   2. **Chaînes littérales OPAQUES** — un `/*` à l'intérieur d'une chaîne
+#      n'ouvre PAS de commentaire. Sans cela, `const s = "/*"; const a = 520;`
+#      rendrait la garde AVEUGLE sur un `520` parfaitement exécutable : le
+#      durcissement aurait ouvert un trou plus grand que le bruit qu'il ferme.
+#      C'est le troisième cas du `--self-test`, son témoin de discrimination.
+#
+# Le scanner est un automate à états (hors code / dans chaîne / dans bloc) plutôt
+# qu'une expression régulière : `sed` ne sait pas distinguer un `/*` de code d'un
+# `/*` de chaîne, et une regex multi-lignes gourmande avalerait tout le fichier
+# entre le premier `/*` et le dernier `*/`. Le doute penche toujours du côté
+# PRUDENT : une chaîne non refermée en fin de ligne (littéral de gabarit mis à
+# part) remet l'automate en mode code, ce qui peut au pire produire un faux
+# positif bruyant — jamais un angle mort silencieux.
+#
+# Anciens faux positifs conservés en régression (V3, F-090) :
 #   indigo900        → matchait '900' en sous-chaîne nue
 #   /// doc « 0.82 » → un commentaire CITANT la loi gelée matchait comme du code
-# Le strip `s@//.*$@@` préserve le compte de lignes (les numéros restent vrais).
+strip_comments() {
+  awk '
+    BEGIN { SQ = sprintf("%c", 39); inBlock = 0; inTemplate = 0 }
+    {
+      line = $0; n = length(line); out = ""; i = 1
+      quote = inTemplate ? "`" : ""
+      while (i <= n) {
+        c = substr(line, i, 1); d = substr(line, i, 2)
+        if (inBlock) {
+          if (d == "*/") { inBlock = 0; out = out "  "; i += 2 }
+          else { out = out " "; i += 1 }
+          continue
+        }
+        if (quote != "") {
+          if (c == "\\") { out = out substr(line, i, 2); i += 2; continue }
+          out = out c
+          if (c == quote) quote = ""
+          i += 1
+          continue
+        }
+        if (d == "/*") { inBlock = 1; out = out "  "; i += 2; continue }
+        if (d == "//") { while (i <= n) { out = out " "; i += 1 } break }
+        if (c == "\"" || c == SQ || c == "`") { quote = c; out = out c; i += 1; continue }
+        out = out c; i += 1
+      }
+      inTemplate = (quote == "`") ? 1 : 0
+      print out
+    }
+  ' "$1"
+}
+
+# Recherche d'un littéral en JETON, commentaires exclus — pas en sous-chaîne.
 # La frontière ERE interdit chiffre/lettre/underscore/point autour du jeton :
 # '45' ne matche plus dans '0.45' ni dans 'I-045', '900' plus dans 'indigo900'.
 scan_hard_literal() {
   local literal="$1" f="$2"
   local esc="${literal//./\\.}"
-  sed 's@//.*$@@' "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" \
+  strip_comments "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" \
+    | sed "s@^@$f:@" || true
+}
+
+# Même passage par `strip_comments` pour la règle SOUPLE : une docstring qui
+# écrit « le seuil est `> 25` » documente la loi, elle ne la code pas.
+scan_soft_literal() {
+  local literal="$1" f="$2"
+  strip_comments "$f" | grep -nE "\\s*(>|>=|<|<=)\\s*${literal}\\b" \
     | sed "s@^@$f:@" || true
 }
 
@@ -123,15 +196,40 @@ EOF
 export const IGNORED_IN_TEST_FILE = 520;
 EOF
 
+  # B4 — les trois cas du retrait de commentaires. `Doc.tsx` ne doit RIEN
+  # rendre : ses deux citations de la loi vivent dans un bloc `/* … */` et dans
+  # un commentaire de ligne. `Sneaky.tsx` doit rendre SES DEUX lignes : c'est le
+  # témoin de discrimination du durcissement — du code exécutable qui suit un
+  # bloc refermé, et un `520` que seule l'opacité des chaînes littérales laisse
+  # visible (un automate naïf ouvrirait un commentaire sur le `/*` de la chaîne
+  # et deviendrait aveugle sur la ligne suivante).
+  cat > "$root/Doc.tsx" <<'EOF'
+/**
+ * Le contrat §4.3 fige la bande à 520 — cette constante en vient.
+ */
+// idem : 520 cité en commentaire de ligne
+export const FROM_TOKENS = LAW.bandWidth;
+EOF
+  cat > "$root/Sneaky.tsx" <<'EOF'
+/* commentaire refermé */ export const AFTER_BLOCK = 520;
+const OPENER = "/*";
+export const AFTER_STRING = 520;
+const CLOSER = "*/";
+EOF
+
   local files
   mapfile -t files < <(list_skin_files "$root")
 
   local detected=1
   local core_leaked=0
   local test_leaked=0
+  local doc_false_positive=0
+  local sneaky_lines=0
   local f
   for f in "${files[@]}"; do
-    if [ -n "$(scan_hard_literal "520" "$f")" ]; then
+    local hits
+    hits="$(scan_hard_literal "520" "$f")"
+    if [ -n "$hits" ]; then
       detected=0
     fi
     case "$f" in
@@ -139,6 +237,10 @@ EOF
     esac
     case "$f" in
       *.test.tsx) test_leaked=1 ;;
+    esac
+    case "$f" in
+      */Doc.tsx) [ -n "$hits" ] && doc_false_positive=1 ;;
+      */Sneaky.tsx) [ -n "$hits" ] && sneaky_lines=$(printf '%s\n' "$hits" | wc -l) ;;
     esac
   done
 
@@ -158,9 +260,17 @@ EOF
     echo -e "${RED}✗ self-test: *.test.tsx leaked into the scan — test-file exclusion is BROKEN${NC}"
     ok=0
   fi
+  if [ "$doc_false_positive" -ne 0 ]; then
+    echo -e "${RED}✗ self-test: une citation de la loi en docstring '/* */' est encore rapportée — le retrait des commentaires est CASSÉ${NC}"
+    ok=0
+  fi
+  if [ "$sneaky_lines" -ne 2 ]; then
+    echo -e "${RED}✗ self-test: du code exécutable après un bloc refermé / après une chaîne contenant '/*' n'est plus vu (${sneaky_lines}/2 lignes) — le retrait des commentaires rend la garde AVEUGLE${NC}"
+    ok=0
+  fi
 
   if [ "$ok" -eq 1 ]; then
-    echo -e "${GREEN}✓ self-test: guard mechanism intact (literal caught, Core/** and *test* excluded)${NC}"
+    echo -e "${GREEN}✓ self-test: guard mechanism intact (literal caught, Core/** and *test* excluded, docstrings stripped without blinding the scan)${NC}"
     return 0
   fi
   return 1
@@ -201,7 +311,12 @@ for literal in "${SOFT_LITERALS[@]}"; do
     [ "${#files[@]}" -eq 0 ] && continue
 
     # Match: > literal, >= literal, < literal, <= literal (with flexible spacing)
-    matches=$(grep -nE "\s*(>|>=|<|<=)\s*$literal\b" "${files[@]}" 2>/dev/null || true)
+    matches=""
+    for f in "${files[@]}"; do
+      m=$(scan_soft_literal "$literal" "$f")
+      [ -n "$m" ] && matches="${matches}${m}"$'\n'
+    done
+    matches="${matches%$'\n'}"
 
     if [ -n "$matches" ]; then
       echo -e "${RED}✗ Soft literal '$literal' (numeric comparison) found in skin files:${NC}"
