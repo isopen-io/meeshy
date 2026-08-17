@@ -101,6 +101,25 @@ export const Component = memo(function Component({ prop }: Props) {
 - Mocks in `__mocks__/` for ESM packages (lucide, tone, mermaid)
 - `jest.setup.js`: crypto mocks, window mocks, console suppression
 
+**`jest.mock('@meeshy/shared/<sous-chemin>', factory)` est INERTE ici.** La
+fabrique n'intercepte pas le module que le code charge : le `moduleNameMapper`
+réécrit `^@meeshy/shared/(.*)$` vers `packages/shared/dist/$1`, et l'importateur
+reçoit la valeur COMPILÉE. Vérifié minimalement, sous `--no-cache` (cycle 62) : un
+fichier de 8 lignes qui mocke `@meeshy/shared/types/socketio-events` puis en lit
+`SERVER_EVENTS.PRESENCE_SNAPSHOT` reçoit `'presence:snapshot'`, pas la valeur de
+sa fabrique.
+
+Conséquence : **ne pas recopier de contrat partagé dans une fabrique.** Ce n'est
+pas seulement du code mort — une table recopiée se lit comme une source de vérité
+et dérive du vrai contrat en silence. Tourner contre `packages/shared/dist` est le
+comportement SOUHAITABLE (meilleure référence possible) ; il suffit de ne pas
+prétendre le contraire. Pour vraiment substituer un module partagé, mapper le
+chemin `dist` résolu, pas le spécifieur `@meeshy/shared/*`.
+
+Reste **24 fichiers** portant une telle fabrique morte (`grep -rl
+"jest.mock('@meeshy/shared"`) — dépouillement à faire, aucun n'est un défaut de
+justesse.
+
 ## Critical Gotchas
 - Firebase optional - graceful degradation without it
 - Audio only via WebSocket `message:send-with-attachments` (not REST)

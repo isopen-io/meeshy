@@ -23,32 +23,20 @@ jest.mock('@/stores/conversation-ui-store', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    USER_STATUS: 'user:status',
-    PRESENCE_SNAPSHOT: 'presence:snapshot',
-    CONVERSATION_STATS: 'conversation:stats',
-    CONVERSATION_ONLINE_STATS: 'conversation:online-stats',
-    CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
-    REACTION_ADDED: 'reaction:added',
-    REACTION_REMOVED: 'reaction:removed',
-    CONVERSATION_JOINED: 'conversation:joined',
-    CONVERSATION_LEFT: 'conversation:left',
-    REACTION_SYNC: 'reaction:sync',
-    READ_STATUS_UPDATED: 'read-status:updated',
-    PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
-    CONVERSATION_NEW: 'conversation:new',
-    CONVERSATION_DELETED: 'conversation:deleted',
-    CONVERSATION_UPDATED: 'conversation:updated',
-    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
-    CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
-    CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
-    CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
-    CONVERSATION_CLOSED: 'conversation:closed',
-    CONVERSATION_JOIN_ERROR: 'conversation:join-error',
-  },
-  CLIENT_EVENTS: {},
-}));
+/**
+ * Aucun mock de `@meeshy/shared/types/socketio-events` ici, et c'est
+ * DÉLIBÉRÉ : dans `apps/web`, une fabrique passée à `jest.mock()` pour un
+ * sous-chemin `@meeshy/shared/*` N'INTERCEPTE PAS le module que le code charge.
+ * Vérifié deux fois, sous `--no-cache` (cycle 62) : en remplaçant une valeur de
+ * la table par une chaîne absurde, aucun des 53 témoins ne tombe ; et un fichier
+ * minimal qui mocke ce même sous-chemin puis en lit la constante reçoit la
+ * valeur COMPILÉE (`'presence:snapshot'`), pas celle de la fabrique.
+ *
+ * La table de 21 constantes qui se tenait ici n'était donc pas seulement du code
+ * mort : elle se lisait comme une source de vérité, et une table recopiée
+ * dérive. Ces témoins tournent contre le VRAI contrat compilé — la meilleure
+ * référence possible. Ne pas en réintroduire une.
+ */
 
 import { PresenceService } from '@/services/socketio/presence.service';
 

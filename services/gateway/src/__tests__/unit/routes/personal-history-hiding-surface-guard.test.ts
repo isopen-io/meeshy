@@ -161,19 +161,23 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
    * non lus : exactement l'ensemble que le badge compte, donc exactement le
-   * même masquage, sur l'unique fenêtre agrégée qu'il lit (jamais une lecture
-   * par conversation — d'où `reads: 1`). Sans l'application, un auteur dont le
-   * lecteur a effacé l'historique reviendrait le nommer dans la phrase du
-   * rang : la fuite que le compteur, lui, ne fait plus depuis le cycle 109.
+   * même masquage. Sans l'application, un auteur dont le lecteur a effacé
+   * l'historique reviendrait le nommer dans la phrase du rang : la fuite que le
+   * compteur, lui, ne fait plus depuis le cycle 109.
+   *
+   * `reads: 2` — une fenêtre agrégée par CHEMIN, jamais une lecture par
+   * conversation ni par lecteur, ce qui reste l'invariant que ce compte garde :
+   *   1. le chemin par lecteur (`applyPersonalHistoryHiding`, compté ci-dessous)
+   *   2. le chemin BATCHÉ des viewers (REV-5/B2), qui lit UNE fenêtre commune
+   *      pour N lecteurs puis la resserre par lecteur EN MÉMOIRE
+   *
+   * Le second n'appelle donc pas `applyPersonalHistoryHiding` — il n'aurait rien
+   * à y faire, le masquage étant personnel et la requête commune — d'où
+   * `applications: 1` et une déclaration dans `IN_MEMORY_HIDING_SURFACES`, seule
+   * forme que le balayage puisse prouver sur ce chemin.
    */
-  // DEUX lectures depuis REV-5/B2, et une seule application TEXTUELLE. La
-  // passe par conversations (`buildBridgeData`) appelle
-  // `applyPersonalHistoryHiding` sur chaque branche `OR` ; la passe par
-  // lecteurs (`buildBridgeDataForViewers`) ne le peut pas — sa fenêtre est
-  // COMMUNE à tous les lecteurs, alors que le masquage est personnel — et
-  // applique donc le masquage EN MÉMOIRE, lecteur par lecteur. Les marqueurs
-  // qui le prouvent sont déclarés dans `IN_MEMORY_HIDING_SURFACES`, faute de
-  // quoi ce fichier passerait pour un lecteur à moitié masqué.
+  // Faute de cette déclaration, ce fichier passerait pour un lecteur à moitié
+  // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
@@ -206,16 +210,27 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
-  // La passe par LECTEURS de `buildBridgeDataForViewers` : une fenêtre commune
-  // à tous les destinataires, donc un masquage qui ne peut pas entrer dans la
-  // clause SQL. Il est appliqué en mémoire — plancher personnel
-  // (`exclusiveFloorMsFor`) et messages masqués un par un
-  // (`hiddenMessageIds`). Retirer l'un de ces trois marqueurs, c'est faire
-  // fuiter dans le pont ✦ d'un lecteur des messages qu'il a effacés pour lui.
+
+  /**
+   * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME
+   * forme : une fenêtre commune à tous les destinataires, donc un masquage qui
+   * ne peut pas entrer dans la clause SQL. Il est appliqué en mémoire, lecteur
+   * par lecteur. Ses deux coupes personnelles sont exigées SÉPARÉMENT parce
+   * qu'elles se perdent séparément — `exclusiveFloorMsFor` fond la coupure
+   * d'historique dans le plancher de lecture, `hiddenMessageIds?.has` écarte les
+   * messages effacés un par un. Retirer l'un de ces trois marqueurs, c'est faire
+   * fuiter dans le pont ✦ d'un lecteur des messages qu'il a effacés pour lui.
+   *
+   * `hiddenMessageIds?.has(` et non `hiddenMessageIds` : le nom seul est
+   * satisfait par la CONSTRUCTION de l'ensemble, vingt lignes plus haut, et
+   * survit donc à la suppression de son USAGE — vérifié, le marqueur large reste
+   * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
+   * ce qu'il garde.
+   */
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',
-    'hiddenMessageIds',
+    'hiddenMessageIds?.has(',
   ],
 };
 

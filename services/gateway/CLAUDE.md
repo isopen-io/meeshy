@@ -260,6 +260,42 @@ GET /api/v1/static/:filename   (JWT-protected)
 - Anonymous users have NO encryption
 - Admin audit trail required for all admin actions
 
+## Tests — un témoin qui ne peut pas tomber n'est pas un témoin
+
+**Ne JAMAIS ré-implémenter le corps d'une méthode de production dans un helper de
+test pour ensuite tester la copie.** Aucune assertion portée par une copie ne peut
+passer au ROUGE quand la production change : les deux dérivent en silence et les
+témoins continuent d'attester la copie, verts.
+
+Cas réel, supprimé au cycle 62 :
+`__tests__/unit/socketio/MeeshySocketIOManager.presenceSnapshot.test.ts` recopiait
+`_emitPresenceSnapshot` et `_emitUnreadCountsSnapshot` dans des helpers `*Impl`.
+Coût mesuré, en deux temps :
+
+1. La copie avait dérivé sur le point le plus cher du contrat — elle plaçait le
+   drain de la file hors-ligne et l'instantané de pastille DANS le `try`, soit
+   l'inverse exact de la production, qui les place APRÈS pour qu'un accroc Mongo
+   sur l'instantané (cosmétique) n'échoue jamais le rejeu (destructif).
+2. Elle a laissé `_emitUnreadCountsSnapshot` priver de pastille toute la
+   population des invités de lien partagé pendant des mois AVEC des témoins verts
+   (cycle 61) : deux exemplaires du même témoin gelaient le symptôme, et le fix de
+   la production n'en a fait tomber aucun.
+
+Le harnais `src/socketio/__tests__/MeeshySocketIOManager.test.ts` construit un
+VRAI `MeeshySocketIOManager` (ZMQ / Redis / Firebase déjà mockés par fabriques) :
+toute garde de comportement du manager y va. Le prétexte historique de la copie
+(« l'import du manager pend en test ») est faux depuis que ce harnais existe.
+
+**Toujours prouver le ROUGE.** Une garde se livre en montrant qu'elle tombe sous
+la mutation qu'elle nomme — c'est la seule mesure qui distingue un témoin d'une
+décoration.
+
+**Un `.catch` sur promesse détachée se prouve par le runtime, pas par le retour de
+l'appelant** (§ Critical Gotchas, `void p`) : la promesse étant abandonnée,
+l'appelant résout `undefined` qu'elle soit gardée ou non. Écouter
+`process.on('unhandledRejection')` autour de l'appel, puis franchir la phase
+« check » (`setImmediate`) — cf. `captureUnhandledRejections` dans le harnais.
+
 ## Caching Patterns (Obligatoire)
 
 Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Patterns G1-G7
