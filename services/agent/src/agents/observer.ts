@@ -1,4 +1,4 @@
-import type { ConversationState, ToneProfile, TraitValue } from '../graph/state';
+import type { ConversationState, MessageEntry, ToneProfile, TraitValue } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 
@@ -285,4 +285,118 @@ export function createObserverNode(llm: LlmProvider) {
       };
     }
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// G-125 — Résumé borné à une plage de messages, format UNE ligne.
+//
+// Distinct du résumé glissant produit par `observe()` ci-dessus (jusqu'à 200 mots, portant sur
+// toute la fenêtre de contexte conservée) : ce résumé sert le pont ✦ du fil (contrat §5.1) et ne
+// doit JAMAIS parler de « la conversation » dans son ensemble — seulement de la plage explicite
+// qu'on lui fournit. La gateway (G-127) intersecte cette plage avec la fenêtre non lue du lecteur ;
+// l'observer, lui, ne connaît que la plage qu'on lui donne, jamais l'historique complet.
+//
+// La contrainte « une ligne » est posée sur la GÉNÉRATION (prompt système dédié + budget de
+// tokens court) — pas rattrapée après coup par une troncature fragile. `collapseToOneLine` ne
+// fait qu'aplatir des retours à la ligne littéraux si le modèle les ignore malgré la consigne ;
+// il ne réécrit, ne résume ni ne coupe jamais le texte.
+// ---------------------------------------------------------------------------------------------
+
+export type MessageRange = {
+  /** Premier message inclus dans la plage — un identifiant, jamais un index ni un décompte. */
+  fromMessageId: string;
+  /** Dernier message inclus dans la plage, bornes comprises. */
+  toMessageId: string;
+};
+
+export type RangeSummaryResult = {
+  /** Une seule ligne, sans retour à la ligne — garanti par le prompt de génération. */
+  summary: string;
+  fromMessageId: string;
+  toMessageId: string;
+  /** Nombre de messages réellement couverts — toujours compté sur la fenêtre isolée, jamais déduit. */
+  messageCount: number;
+};
+
+const RANGE_SUMMARY_SYSTEM_PROMPT = `Tu résumes UNIQUEMENT les messages fournis ci-dessous — jamais toute la conversation, jamais ce qui la précède ou la suit.
+
+Contraintes de génération, non négociables :
+- UNE SEULE ligne. Aucun retour à la ligne, aucune puce, aucun titre, aucune énumération.
+- Une phrase en français, moins de 30 mots.
+- Rien au-delà de ce que ces messages disent : si un point n'y est pas tranché, ne l'affirme pas.
+- Ne dis jamais « la conversation » en général : dis ce qui s'est dit DANS cette plage précise.
+
+Retourne UNIQUEMENT la phrase, sans guillemets, sans JSON, sans texte autour.`;
+
+/** Budget de tokens volontairement court : une contrainte de génération de plus, pas une garde a posteriori. */
+const RANGE_SUMMARY_MAX_TOKENS = 96;
+
+/**
+ * Isole la plage explicite `[fromMessageId, toMessageId]` (bornes incluses) dans `messages`.
+ * Une borne introuvable, ou des bornes inversées, rendent une fenêtre VIDE et incomplète —
+ * jamais un sous-ensemble deviné au mieux (règle « une absence reste une absence »).
+ */
+export function resolveMessageRangeWindow(
+  messages: MessageEntry[],
+  range: MessageRange,
+): { window: MessageEntry[]; isComplete: boolean } {
+  const fromIndex = messages.findIndex((m) => m.id === range.fromMessageId);
+  const toIndex = messages.findIndex((m) => m.id === range.toMessageId);
+  if (fromIndex === -1 || toIndex === -1 || fromIndex > toIndex) {
+    return { window: [], isComplete: false };
+  }
+  return { window: messages.slice(fromIndex, toIndex + 1), isComplete: true };
+}
+
+/**
+ * Aplatit une réponse en une seule ligne : un filet de sécurité littéral (retours à la ligne
+ * remplacés par un espace, lignes vides supprimées) — pas une réécriture. La forme d'une ligne
+ * vient du prompt de génération, pas d'ici ; une phrase déjà sur une seule ligne ressort intacte.
+ */
+function collapseToOneLine(raw: string): string {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join(' ')
+    .trim();
+}
+
+/**
+ * Résumé borné (G-125) : ne lit et n'envoie au LLM QUE les messages de `range`, jamais
+ * l'historique complet, jamais un résumé précédent. Rend `null` — jamais un résumé fabriqué —
+ * si la plage est introuvable, vide, ou si le modèle ne rend rien d'exploitable (C2 : une
+ * couverture incertaine ne se déclare jamais complète).
+ */
+export async function summarizeMessageRange(
+  llm: LlmProvider,
+  messages: MessageEntry[],
+  range: MessageRange,
+): Promise<RangeSummaryResult | null> {
+  const { window, isComplete } = resolveMessageRangeWindow(messages, range);
+  if (!isComplete || window.length === 0) return null;
+
+  const conversationText = window.map((m) => `[${m.senderName}]: ${m.content}`).join('\n');
+
+  try {
+    const response = await llm.chat({
+      systemPrompt: RANGE_SUMMARY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: conversationText }],
+      temperature: 0.2,
+      maxTokens: RANGE_SUMMARY_MAX_TOKENS,
+    });
+
+    const oneLine = collapseToOneLine(response.content ?? '');
+    if (!oneLine) return null;
+
+    return {
+      summary: oneLine,
+      fromMessageId: range.fromMessageId,
+      toMessageId: range.toMessageId,
+      messageCount: window.length,
+    };
+  } catch (error) {
+    console.error('[Observer] Erreur de résumé borné (G-125):', error);
+    return null;
+  }
 }
