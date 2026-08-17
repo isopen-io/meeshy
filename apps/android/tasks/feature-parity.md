@@ -1696,11 +1696,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
 - [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
       `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
-      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
-      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
-      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
-      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
-      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      (2026-08-12, slice `conversation-list-live-presence`)**; **row dot shipped 2026-08-17** (slice
+      `conversation-list-presence-dot`). Confirmed a real, categorical gap: `ApiConversation.participants`
+      carries no `isOnline`/`lastActiveAt` fields at all (unlike the Contacts roster, which at least had
+      stale REST data to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the
+      chat header had ZERO presence indication, not even a frozen one. New `ApiConversation.
       otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
       `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
       preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
@@ -1708,13 +1708,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
       `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
       `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
-      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
-      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
-      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
-      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
-      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
-      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
-      direct-type gate and the snapshot merge.
+      nowEpochMillis): PresenceState?` (already gated to direct-only via `otherParticipantUserId`
+      returning `null` for group/community/channel/bot). **Row dot wiring** threads `presence:
+      PresenceState?` through `ConversationRow` → `ConversationRowContent` into the existing
+      `MeeshyAvatar`'s own `presence` parameter — `MeeshyAvatar` (`:sdk-ui`) already RENDERS the dot
+      overlay when given a non-null `PresenceState` (shipped with the avatar atom itself, just never
+      fed a live value from the conversation list, exactly the same "missing wire, not missing UI atom"
+      shape as the earlier `contacts-mood-emoji-presence` slice). Pure Compose glue — no new logic to
+      test (`TDD-COVERAGE.md`'s documented exemption: `@Composable` param threading is out of the JVM
+      gate; the testable decision, `presenceStateFor`, already has its 5 dedicated `ConversationListViewModelTest`
+      cases from the foundation slice). **Chat header dot remains open** — a separate call site, not
+      attempted this run. +9 tests carried over unchanged from the foundation slice (4 `ConversationAccentTest`,
+      5 `ConversationListViewModelTest`), mutation-proven on the direct-type gate and the snapshot merge.
 - [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
       badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
       Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above

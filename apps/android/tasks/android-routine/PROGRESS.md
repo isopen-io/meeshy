@@ -2,6 +2,51 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Live presence dot on conversation-list rows shipped** (slice
+> `conversation-list-presence-dot`, feature-parity §B). `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed three unrelated open PRs (#3113, #3156, #3160 — all wrong
+> branch naming for this routine, other agents' work, untouched). `df -h /` showed 10 Gi free,
+> stable.
+>
+> **The "backend never wired" heuristic is now genuinely exhausted** — a dedicated Explore agent
+> swept all ~140 public methods across `sdk-core`/`core/*` and found nothing. Pivoted to a new
+> strategy: reading `feature-parity.md` directly for `[~]` (partially-done) lines whose own notes
+> name a small, still-open sub-gap. A second Explore agent surfaced 3 candidates; the strongest
+> (`PostRepository.requestTranslation` never wired) turned out **bigger than assessed on
+> re-proof** — unlike the chat message twin (`MessageRepository.requestTranslation`, a direct
+> client-side translate + cache-merge), the post version fires a request server-side and the
+> translation arrives back via a `post:translation-updated` socket event that isn't wired on
+> Android's `SocialSocketManager` AT ALL — a 3-part system (socket event + cache merge + UI across
+> 2 ViewModels), not a thin slice. Correctly deferred rather than force-fit into one run.
+>
+> **Picked the genuinely small candidate instead**: `- [~] Live presence dot on a direct
+> conversation's row/header` — its own note from the 2026-08-12 foundation slice
+> (`conversation-list-live-presence`) says plainly "UI wiring... is NOT done this run", with the
+> ViewModel-side plumbing (`ConversationListUiState.presenceStateFor(conversation, now):
+> PresenceState?`, already gated to direct-only, already 5 dedicated tests) fully ready to consume.
+>
+> **The wiring turned out to be pure parameter-threading, no new logic**: `MeeshyAvatar` (`:sdk-ui`)
+> already accepts a `presence: PresenceState?` parameter and already RENDERS the dot overlay when
+> given one — this capability shipped with the avatar atom itself and was simply never fed a live
+> value from the conversation list (the Contacts tab's own presence dot predates this parameter and
+> renders a separate `Surface`, an older pattern — not what I copied). Threaded `presence` through
+> `ConversationRow` → `ConversationRowContent` → the existing `MeeshyAvatar(...)` call (3 Composable
+> signatures, one new argument each), with `state.presenceStateFor(conversation, System
+> .currentTimeMillis())` computed once at the list's row-builder closure.
+>
+> **Zero new tests** — deliberate, not an oversight: `TDD-COVERAGE.md` explicitly exempts
+> `@Composable` parameter-threading/layout glue from the JVM red-first gate ("push all testable
+> decisions out of the Composable into a pure function or the ViewModel, then cover that"). The one
+> testable decision here, `presenceStateFor`, already carries its 5 dedicated
+> `ConversationListViewModelTest` cases from the foundation slice — nothing new to decide, only to
+> wire.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. Diff is a single file, 6 lines, `apps/android`-only.
+>
+> **Still open**: the chat header's own presence dot (a separate call site, iOS's
+> `ConversationView` header) — not attempted this run, noted for a future slice.
+
 > On 2026-08-17 **Mood status view/impression tracking shipped, closing feature-parity §G's
 > last open clause** (slice `status-view-tracking`). `gh pr list --state open --search
 > "apps/android OR apps/ios"` showed two unrelated open PRs (#3113, #3156 — both wrong branch

@@ -1,16 +1,32 @@
 # Cycle 57 bis — le troisième réglage de police, réglable partout et appliqué nulle part
 
-> **Numérotation.** Un second couloir a livré le même jour un journal nommé
-> `cycle57` (« le rattrapage du cycle 56 dépensait le budget dont il dépend »,
-> PR #3154). Les deux documents sont conservés ; celui-ci prend le suffixe `-bis`
-> selon la convention déjà employée aux cycles 46-bis, 54-bis et 56-bis — le nom
-> canonique reste à celui de `main`. Même collision sur `tasks/lessons.md` : deux
-> « Leçon 221 » ont été proposées, celle qui n'était pas encore sur `main` a cédé
-> et devient la **222**, règle de préséance retenue au cycle 56-bis (§6) parce
-> qu'elle ne casse aucun renvoi existant. C'est la **troisième journée
-> consécutive** où les trois compteurs partagés — leçons, cycles, journaux —
-> collisionnent : la piste n°10 ci-dessous n'est plus une observation, c'est une
-> dette qui se manifeste à chaque livraison.
+> **Numérotation — trois collisions en une seule journée, sur le même fichier.**
+> Un second couloir a livré le même jour un journal nommé `cycle57` (« le
+> rattrapage du cycle 56 dépensait le budget dont il dépend », PR #3154). Les
+> deux documents sont conservés ; celui-ci prend le suffixe `-bis` selon la
+> convention des cycles 46-bis, 54-bis et 56-bis — le nom canonique reste à
+> celui de `main`.
+>
+> `tasks/lessons.md` a collisionné **deux fois de suite**, à deux intégrations
+> manuelles d'écart : d'abord contre une « Leçon 221 » (cycle 57 de l'autre
+> couloir), puis — après renumérotation en 222 — contre une « Leçon 222 »
+> (cycle 58) ET une « Leçon 221 » rétroactive (cycle 54). La leçon de ce cycle
+> a donc cédé DEUX fois et porte finalement le **numéro 223**. Règle appliquée à
+> chaque fois, celle du cycle 56-bis (§6) : celle qui n'est pas encore sur `main`
+> cède, parce qu'elle est la seule dont l'auteur peut encore corriger les
+> renvois. **Aucun texte n'a été perdu à aucune des trois résolutions.**
+>
+> `tasks/todo.md` a lui aussi collisionné, et là c'est le fichier de travail du
+> couloir cycle 58 qui l'emporte : ce fichier est ÉPHÉMÈRE par convention (chaque
+> cycle l'écrase), et le dossier durable de ce cycle-ci est ce journal. Écraser le
+> todo actif d'un autre couloir aurait détruit son état de travail ; l'inverse ne
+> perd rien.
+>
+> C'est la mesure la plus nette de la dette : les trois compteurs partagés
+> (leçons, cycles, journaux) n'ont **aucun allocateur**, chaque couloir numérote
+> depuis sa propre lecture du fichier, et la collision n'est donc pas
+> accidentelle mais CERTAINE dès que deux couloirs livrent le même jour. Ce jour
+> a produit cinq collisions en trois intégrations. Piste n°10.
 >
 > **Note d'exactitude.** Le sujet du commit de code de ce cycle porte
 > `(#3154)` : le numéro a été deviné avant l'ouverture de la PR, et #3154 est en

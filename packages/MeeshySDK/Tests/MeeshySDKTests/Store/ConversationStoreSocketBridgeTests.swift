@@ -553,17 +553,23 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     func test_userPreferencesUpdated_relaysReadingModeThroughDedicatedCallback() async {
         let store = makeStore()
         await store.hydrate(makeConv(id: "c1"))
-        var received: [(String, String)] = []
+        // `SyncBox` et non un `var` capturé : `onReadingModePreferenceChanged`
+        // est `@Sendable`, et sous Swift 6 muter une variable locale depuis une
+        // telle fermeture est une ERREUR de compilation, pas un avertissement.
+        // Le témoin lit d'ailleurs depuis un autre contexte que celui qui écrit
+        // (`waitUntil` boucle pendant que le pont relaie) — la boîte à verrou
+        // est donc la forme juste, pas seulement celle qui compile.
+        let received = SyncBox<[(String, String)]>([])
         let env = BridgeEnv(
             store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
             onReadingModePreferenceChanged: { conversationId, readingMode in
-                received.append((conversationId, readingMode))
+                received.mutate { $0.append((conversationId, readingMode)) }
             }
         )
 
         env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, readingMode: "script"))
 
-        let relayed = await waitUntil { received.contains { $0 == ("c1", "script") } }
+        let relayed = await waitUntil { received.value.contains { $0 == ("c1", "script") } }
         XCTAssertTrue(relayed, "un readingMode reçu doit atteindre le callback SANS transformation")
     }
 
@@ -572,17 +578,17 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     func test_userPreferencesUpdated_reset_doesNotInvokeReadingModeCallback() async {
         let store = makeStore()
         await store.hydrate(makeConv(id: "c1"))
-        var callCount = 0
+        let callCount = SyncBox(0)
         let env = BridgeEnv(
             store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
-            onReadingModePreferenceChanged: { _, _ in callCount += 1 }
+            onReadingModePreferenceChanged: { _, _ in callCount.mutate { $0 += 1 } }
         )
 
         env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, reset: true))
         // Laisse le temps à un éventuel (mauvais) appel de se produire.
         _ = await waitUntil(timeout: 0.3) { false }
 
-        XCTAssertEqual(callCount, 0, "reset ⇒ preferences nil ⇒ rien à relayer")
+        XCTAssertEqual(callCount.value, 0, "reset ⇒ preferences nil ⇒ rien à relayer")
     }
 
     /// Un appelant qui ne branche rien (`onReadingModePreferenceChanged` par
