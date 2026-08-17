@@ -8,6 +8,9 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
+import { useConversationQuery } from '@/hooks/queries/use-conversations-query';
+import { isParticipantModerator } from '@/utils/participant-helpers';
+import { callsService } from '@/services/calls.service';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
@@ -717,6 +720,40 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       ? currentCall?.participants?.find((p) => (p.userId || p.participantId) === participantId)?.username
       : undefined) || '';
 
+  // Group calls — moderator "remove participant" (W6,
+  // `tasks/2026-08-13-group-calls-gap-analysis.md`). Conversation role is
+  // NOT on `CallParticipant` (that `role` field is call-session
+  // initiator/participant, unrelated) — same idiom as
+  // `useParticipantManagement`, cross-referenced against the conversation's
+  // own participant roster.
+  const { data: conversation } = useConversationQuery(currentCall?.conversationId);
+  const canKickParticipants = useMemo(() => {
+    if (!conversation || !user || conversation.type !== 'group') return false;
+    const membership = conversation.participants?.find((p) => p.userId === user.id);
+    return isParticipantModerator(membership?.role || 'member');
+  }, [conversation, user]);
+
+  const handleKickParticipant = useCallback(
+    async (participantId: string) => {
+      if (!currentCall) return;
+      try {
+        await callsService.removeParticipant(currentCall.id, participantId);
+        toast.success(t('toasts.participantRemoved'));
+        // No local store mutation here on purpose: the gateway broadcasts
+        // `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` on success (fixed
+        // 2026-08-15), reconciled by the existing listener above for every
+        // participant, including this one.
+      } catch (error) {
+        logger.error('[VideoCallInterface]', 'Failed to remove participant', {
+          participantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        toast.error(t('toasts.removeParticipantFailed'));
+      }
+    },
+    [currentCall, t]
+  );
+
   // Toggle fullscreen for a participant
   const handleToggleFullscreen = (participantId: string) => {
     setFullscreenParticipantId((current) => (current === participantId ? null : participantId));
@@ -839,6 +876,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                 removeRemoteStream(displayParticipant[0]);
                 removePeerConnection(displayParticipant[0]);
               }}
+              onKickParticipant={
+                canKickParticipants
+                  ? () => handleKickParticipant(displayParticipant[0])
+                  : undefined
+              }
             />
           </div>
         ) : (
@@ -883,6 +925,9 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                 removeRemoteStream(participantId);
                 removePeerConnection(participantId);
               }}
+              onKickParticipant={
+                canKickParticipants ? () => handleKickParticipant(participantId) : undefined
+              }
             />
           );
         })}
