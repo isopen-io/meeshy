@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=share-target-text-url
+lane=ANDROID android_streak=2 last_run=share-target-media-attachments
