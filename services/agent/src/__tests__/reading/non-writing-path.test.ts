@@ -108,6 +108,34 @@ describe('le chemin de lecture ne peut PAS atteindre generator/delivery (G-126, 
     expect(closure.length).toBeLessThanOrEqual(8);
   });
 
+  // [Q-146/R6-1] La clôture d'imports EXACTE — pas un plafond de taille.
+  //
+  // La garde ci-dessus (`length <= 8`) borne la TAILLE de la clôture, pas son
+  // CONTENU : un module écrivant absent de `WRITING_MODULES` (donc hors de
+  // l'intersection testée deux témoins plus haut) peut s'y glisser tant que
+  // le total reste sous la barre. Preuve retenue (R6-1) : importer
+  // `topics/TopicUsageService` (un écrivain Mongo réel — `agentTopicUsageLog
+  // .create` — absent de `WRITING_MODULES`) depuis `bridge-reading-outlet.ts`
+  // porte la clôture à 8 modules (lui + `topics/types.ts`) : encore ≤ 8, et
+  // toujours zéro intersection avec `WRITING_MODULES` puisque son propre nom
+  // n'y figure dans aucune des deux listes — les huit témoins de cette suite
+  // restaient tous VERTS avant ce durcissement.
+  //
+  // Une ALLOWLIST exacte ferme ce trou : toute nouvelle entrée, écrivante ou
+  // non, fait rougir ce test et devient une décision relue plutôt qu'un
+  // import qui se glisse sous un plafond numérique.
+  it('la clôture est EXACTEMENT les 6 modules légitimes du chemin de lecture — allowlist', () => {
+    const closure = importClosure(READING_ENTRY_POINTS);
+    expect(closure).toEqual([
+      'agents/observer.ts',
+      'graph/state.ts',
+      'llm/types.ts',
+      'reading/bridge-reading-outlet.ts',
+      'routes/reading.ts',
+      'utils/parse-json-llm.ts',
+    ]);
+  });
+
   it('le chemin de lecture n\'ouvre aucune autre porte de sortie : pas de client réseau, pas de base', () => {
     for (const entry of READING_ENTRY_POINTS) {
       const externals = importSpecifiersOf(readCode(entry)).filter((s) => !s.startsWith('.'));
