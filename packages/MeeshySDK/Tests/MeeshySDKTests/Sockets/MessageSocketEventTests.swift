@@ -255,6 +255,51 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertNil(event.bridge, "un client ancien (ou un événement sans pont) ignore simplement le champ")
     }
 
+    // MARK: - Le pont ✦ : les TROIS états du fil (cycle 63)
+    //
+    // Le fil n'a que deux formes — la clé est là, ou elle n'y est pas — et il
+    // s'en sert pour dire trois choses. `decodeIfPresent` seul ne peut pas les
+    // séparer : il rend `nil` pour la clé absente COMME pour un `null`
+    // explicite. C'est cette confusion qui faisait effacer, à chaque
+    // reconnexion, le pont de toutes les lignes du lecteur (cycle 62).
+
+    /// Clé ABSENTE : le serveur n'a pas calculé. Le client garde ce qu'il a.
+    func testUnreadUpdateEvent_absentBridgeKey_decodesAsNotComputed() throws {
+        let json = """
+        {"conversationId": "c1", "unreadCount": 5}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertEqual(event.announcement, .notComputed)
+    }
+
+    /// `null` EXPLICITE : le serveur a calculé, il n'y a pas de pont. On efface.
+    func testUnreadUpdateEvent_explicitNullBridge_decodesAsCleared() throws {
+        let json = """
+        {"conversationId": "c1", "unreadCount": 5, "bridge": null}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertEqual(
+            event.announcement, .cleared,
+            "un `null` explicite est une AFFIRMATION, jamais le silence de la clé absente"
+        )
+    }
+
+    /// Un pont ILLISIBLE n'est pas un pont ABSENT. Le décodage reste tolérant —
+    /// l'événement entier survit — mais ne pas savoir lire n'autorise pas à
+    /// détruire : `.notComputed`, donc le pont en cache est préservé.
+    func testUnreadUpdateEvent_malformedBridge_doesNotDestroyTheCachedOne() throws {
+        let json = """
+        {"conversationId": "c1", "unreadCount": 5, "bridge": {"kind": "???"}}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(UnreadUpdateEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "c1")
+        XCTAssertEqual(event.unreadCount, 5)
+        XCTAssertEqual(event.announcement, .notComputed)
+    }
+
     /// G-124 — `conversation:unread-updated` porte désormais un `bridge?`
     /// optionnel (G-123, `ConversationUnreadUpdatedEventData.bridge`).
     /// `suggestedMode`/`isComplete`/`data` doivent traverser SANS

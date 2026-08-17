@@ -23,13 +23,21 @@ type InfiniteConversationData = {
  *
  * Objet-enveloppe plutôt qu'un 4e paramètre `ConversationBridge | undefined`
  * nu : un pont nu ne distingue pas « je ne sais rien du pont, laisse celui du
- * cache tel quel » (repli implicite, ex. `ConversationLayout`/
- * `bubble-stream-page` qui remettent seulement `unreadCount` à 0 à
- * l'ouverture) de « voici ce que le serveur vient d'annoncer pour ce pont,
- * `undefined` inclus » (le relais socket, REV-5/B1) — un pont ABSENT du
- * payload wire DOIT effacer un pont déjà en cache, jumeau de
- * `ConversationSyncEngine.handleUnreadUpdated` (`updated[idx].bridge =
- * event.bridge`, y compris `nil`).
+ * cache tel quel » de « voici ce que le serveur vient d'annoncer, l'absence de
+ * pont incluse ». L'enveloppe absente dit le premier, l'enveloppe présente le
+ * second.
+ *
+ * Cette signature était déjà la bonne — c'est son APPELANT qui, jusqu'au
+ * cycle 63, passait toujours une enveloppe. Le relais socket (REV-5/B1) la
+ * fournissait même quand le fil ne portait aucun `bridge`, si bien que tout
+ * émetteur serveur qui n'avait pas calculé son pont en ordonnait l'effacement.
+ * Le troisième état vit maintenant sur le fil (`bridge` absent ≠ `bridge:
+ * null`, cf. `ConversationUnreadUpdatedEventData`), et le handler ne construit
+ * l'enveloppe que lorsque la clé est là.
+ *
+ * `bridge: undefined` DANS l'enveloppe reste donc un ordre d'effacement — la
+ * traduction du `null` du fil. Jumeau de `ConversationSyncEngine
+ * .handleUnreadUpdated` côté iOS.
  */
 export interface BridgeCacheUpdate {
   readonly bridge: ConversationBridge | undefined;

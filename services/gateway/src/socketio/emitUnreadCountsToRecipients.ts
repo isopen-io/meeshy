@@ -1,5 +1,6 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 /**
  * A conversation participant, reduced to what the unread fan-out reads.
@@ -186,6 +187,12 @@ export async function emitUnreadCountsToRecipients(params: {
     const viewers = targets.filter((target) => target.unreadCount > 0);
 
     let bridges: ReadonlyMap<string, { bridge: ConversationBridge; lastReadAt?: Date }> = EMPTY_BRIDGES;
+    // « La passe a-t-elle TOURNÉ ? » — la seule question qui décide entre les
+    // deux formes de fil (cycle 63). Sans bridgeService, il n'y a rien à
+    // demander ; avec, il faut encore qu'elle ne soit pas tombée. Un lot vide
+    // (`viewers.length === 0`) compte comme TOURNÉE : tous les compteurs y sont
+    // à zéro, et un compteur nul est un fait connu, pas une abstention.
+    let bridgePassRan = Boolean(bridgeService);
     if (bridgeService && viewers.length > 0) {
       try {
         // UN appel pour TOUS les destinataires. Le pont reste par lecteur —
@@ -195,17 +202,26 @@ export async function emitUnreadCountsToRecipients(params: {
       } catch (error) {
         // Best-effort : des ponts qui échouent ne doivent priver personne de
         // sa pastille — même posture que le reste du fan-out (cf. le catch
-        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`.
+        // englobant). Tout le monde retombe sur `{conversationId, unreadCount}`
+        // — et depuis le cycle 63, cette forme courte est un SILENCE et non un
+        // ordre d'effacement : un incident de passe ne détruit plus le pont que
+        // les lecteurs ont déjà en cache.
+        bridgePassRan = false;
         onError?.(error);
       }
     }
 
     for (const target of targets) {
-      const bridge = bridges.get(target.viewerId)?.bridge;
       io.to(ROOMS.user(target.viewerId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
         conversationId,
         unreadCount: target.unreadCount,
-        ...(bridge ? { bridge } : {}),
+        // Le pont ABSENT du Map n'est pas la même chose que le pont NON
+        // DEMANDÉ : le premier est une réponse (« ce lecteur n'en a pas »), le
+        // second une abstention. `bridgeComputed(undefined)` dit la première,
+        // `bridgeNotComputed()` la seconde.
+        ...(bridgePassRan
+          ? bridgeComputed(bridges.get(target.viewerId)?.bridge)
+          : bridgeNotComputed()),
       });
     }
   } catch (error) {

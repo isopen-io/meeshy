@@ -1456,16 +1456,25 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
                 // G-124 — le pont ✦ voyage sur CE même événement (G-123,
-                // `ConversationUnreadUpdatedEventData.bridge`, payload optionnel).
-                // Avant ce lot, seul `unreadCount` était appliqué : un pont reçu
-                // par socket restait invisible jusqu'au prochain rechargement REST
-                // complet (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact
-                // que R-c dénonçait (« pont invisible drapeau ON »). `event.bridge`
-                // remplace TOUJOURS l'ancien, y compris `nil` : le serveur omet le
-                // champ précisément quand `unreadCount == 0` ou qu'il n'a rien à
-                // annoncer (contrat §3.2) — garder un pont périmé serait une
-                // affirmation fabriquée, l'inverse de la règle du fichier.
-                updated[idx].bridge = event.bridge
+                // `ConversationUnreadUpdatedEventData.bridge`).
+                //
+                // Cycle 63 : on ÉCRIT sur ce qu'annonce le serveur, plus sur la
+                // valeur d'un optionnel. `event.bridge` valait `nil` aussi bien
+                // quand le serveur disait « il n'y a pas de pont » que quand il
+                // ne disait rien du tout, et cette ligne recopiait les deux —
+                // si bien que tout émetteur qui ne calculait pas le pont en
+                // ordonnait l'effacement. C'est ce qui retirait le pont de
+                // TOUTES les lignes du lecteur à chaque reconnexion.
+                //
+                // `.notComputed` ne touche à rien : un silence ne détruit pas.
+                switch event.announcement {
+                case .notComputed:
+                    break
+                case .cleared:
+                    updated[idx].bridge = nil
+                case .bridge(let bridge):
+                    updated[idx].bridge = bridge
+                }
             }
             return updated
         }

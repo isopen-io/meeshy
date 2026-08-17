@@ -998,10 +998,17 @@ final class ConversationSyncEngineTests: XCTestCase {
         )
     }
 
-    /// Le serveur omet `bridge` quand `unreadCount == 0` (contrat §3.2) — le
-    /// client doit alors EFFACER un pont déjà connu, jamais le laisser périmé
-    /// derrière un compteur retombé à zéro (« zéro donnée fabriquée »).
-    func test_handleUnreadUpdated_absentBridge_clearsPreviouslyKnownBridge() async {
+    /// Le serveur AFFIRME l'absence de pont quand `unreadCount == 0` (contrat
+    /// gelé §3.2) — le client doit alors EFFACER un pont déjà connu, jamais le
+    /// laisser périmé derrière un compteur retombé à zéro (« zéro donnée
+    /// fabriquée »).
+    ///
+    /// Cycle 63 : cette affirmation voyage désormais comme un `bridge: null`
+    /// EXPLICITE (`.cleared`), et non plus comme l'omission du champ. Le nom de
+    /// ce témoin disait « absentBridge » et gelait donc la règle fausse : c'est
+    /// l'omission qui a fini par effacer les ponts de tous les lecteurs, à
+    /// chaque reconnexion.
+    func test_handleUnreadUpdated_explicitlyClearedBridge_clearsPreviouslyKnownBridge() async {
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         await seedConversations([("bridge-c2", 5)])
         await CacheCoordinator.shared.conversations.update(for: "list") { conversations in
@@ -1014,15 +1021,53 @@ final class ConversationSyncEngineTests: XCTestCase {
         await engine.startSocketRelay()
 
         mockMessageSocket.unreadUpdated.send(
-            UnreadUpdateEvent(conversationId: "bridge-c2", unreadCount: 0, bridge: nil)
+            UnreadUpdateEvent(conversationId: "bridge-c2", unreadCount: 0, announcement: .cleared)
         )
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         XCTAssertNil(
             cached.first(where: { $0.id == "bridge-c2" })?.bridge,
-            "unreadCount==0 ⇒ bridge absent du payload ⇒ le pont périmé doit être effacé, pas conservé"
+            "unreadCount==0 ⇒ le serveur AFFIRME l'absence de pont ⇒ le pont périmé doit être effacé"
         )
+    }
+
+    /// LE témoin du cycle 63, côté iOS — celui qui aurait rougi au cycle 62.
+    ///
+    /// Le serveur n'a PAS calculé le pont : instantané de reconnexion au-delà
+    /// de sa borne, passe de ponts tombée, ou accusé de lecture qui ne recalcule
+    /// rien. Il se tait, et son silence ne doit RIEN détruire.
+    ///
+    /// Avant ce lot, `handleUnreadUpdated` recopiait `event.bridge` — un
+    /// optionnel qui valait `nil` dans ce cas comme dans celui de l'absence
+    /// réelle de pont — et le pont disparaissait de toutes les lignes du
+    /// lecteur à chaque retour du réseau, sans qu'aucun témoin ne change de
+    /// couleur.
+    func test_handleUnreadUpdated_notComputed_keepsTheCachedBridge() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("bridge-c3", 5)])
+        let known = ConversationBridge(kind: .fallback, unreadCount: 5, suggestedMode: .focal)
+        await CacheCoordinator.shared.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == "bridge-c3" }) {
+                updated[idx].bridge = known
+            }
+            return updated
+        }
+        await engine.startSocketRelay()
+
+        mockMessageSocket.unreadUpdated.send(
+            UnreadUpdateEvent(conversationId: "bridge-c3", unreadCount: 5, announcement: .notComputed)
+        )
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "bridge-c3" })
+        XCTAssertEqual(
+            row?.bridge, known,
+            "le serveur n'a rien annoncé : son silence ne doit pas effacer le pont en cache"
+        )
+        XCTAssertEqual(row?.userState.unreadCount, 5, "le compteur, lui, s'applique toujours")
     }
 
     // MARK: - handleReadStatusUpdated (multi-device read sync)

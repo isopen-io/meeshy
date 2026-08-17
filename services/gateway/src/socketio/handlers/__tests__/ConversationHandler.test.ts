@@ -301,7 +301,11 @@ describe('ConversationHandler', () => {
       expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(ANON_PARTICIPANT_ID, CONV_ID);
       expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
-        { conversationId: CONV_ID, unreadCount: 4 }
+        // `bridge: null` — ouvrir une conversation CONSOMME son pont ✦, et le
+        // handler le sait sans rien calculer (cycle 63). La forme courte
+        // signifie désormais « je n'ai pas calculé », ce qui laisserait ici un
+        // pont en place sur la conversation qu'on vient d'ouvrir.
+        { conversationId: CONV_ID, unreadCount: 4, bridge: null }
       );
     });
 
@@ -440,7 +444,11 @@ describe('ConversationHandler', () => {
 
       expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
-        { conversationId: CONV_ID, unreadCount: 7 }
+        // `bridge: null` — ouvrir une conversation CONSOMME son pont ✦, et le
+        // handler le sait sans rien calculer (cycle 63). La forme courte
+        // signifie désormais « je n'ai pas calculé », ce qui laisserait ici un
+        // pont en place sur la conversation qu'on vient d'ouvrir.
+        { conversationId: CONV_ID, unreadCount: 7, bridge: null }
       );
     });
 

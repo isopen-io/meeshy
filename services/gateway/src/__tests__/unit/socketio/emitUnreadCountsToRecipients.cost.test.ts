@@ -248,7 +248,7 @@ describe('emitUnreadCountsToRecipients — le coût Prisma du chemin chaud (REV-
     });
 
     expect(emitted).toHaveLength(10);
-    expect(emitted.every((payload) => payload.unreadCount === 0 && payload.bridge === undefined)).toBe(true);
+    expect(emitted.every((payload) => payload.unreadCount === 0 && payload.bridge === null)).toBe(true);
     expect(prisma.__total).toBe(5);
   });
 });
