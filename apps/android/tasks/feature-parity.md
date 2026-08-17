@@ -5409,10 +5409,29 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       cache-first conversation stream, query filters by title, a successful send marks the target
       sent and finishes, a second target while one send is in flight is a no-op, blank shared text
       never hits the network, no signed-in user never hits the network, a failed send surfaces the
-      error and clears the sending flag without finishing). **Still open (lot 2, matching iOS's own
-      deferral): image/video attachments** — needs the TUS upload pipeline, its own activation
-      rule per iOS's own documented plan ("Les images et vidéos reviendront avec le pipeline TUS
-      (lot 2), leur règle d'activation EN MÊME TEMPS").
+      error and clears the sending flag without finishing).
+      **lot 2 (image/video attachments) shipped 2026-08-17** (slice
+      `share-target-media-attachments`). The previous entry's own "needs the TUS upload pipeline"
+      note was RE-PROVED and did not hold: `ChatViewModel.sendFileAttachment` — the existing chat
+      composer's own attachment path — already enqueues through `MediaUploadQueue` with a `null`
+      `TusUploadContext`, which uploads via `MediaRepository`/`POST /attachments/upload`; TUS on
+      Android is scoped to post/story/status/comment media only, never message attachments (`grep`
+      confirmed zero overlap). `ShareTargetActivity`'s manifest gained two more `ACTION_SEND`
+      intent-filters (`image/*`, `video/*`); the Uri is read off the main thread
+      (`Dispatchers.IO`) via the exact same `readPickedAttachment` helper the chat composer's own
+      picker already used (flipped `private` → `internal` in `ChatScreen.kt` to share it, no
+      duplicate glue), then threaded through `ShareTargetViewModel.loadAttachment(bytes, fileName,
+      declaredMimeType)` → `MediaUploadQueue.enqueue` → `MessageRepository.sendOptimistic` with the
+      resolved `messageType`/`attachmentUploadCmids`/`attachments`, mirroring
+      `sendFileAttachment`'s own send shape exactly. +4 tests: upload+send carries the correct
+      `messageType`/`attachmentUploadCmids`; an attachment with blank shared text still sends
+      (only "nothing at all" is inert now); mime resolves from the file extension when the
+      platform declares none; empty bytes are a no-op. **Still open: `ACTION_SEND_MULTIPLE`**
+      (sharing several images/videos from a gallery multi-select at once) — deliberately deferred,
+      not investigated in detail; a single-item share (the overwhelmingly common case) is fully
+      covered by lots 1+2. The "message/story" part of this checklist line's own parenthetical
+      refers to Meeshy-internal share/forward targets, not this external-receiver item — already
+      tracked separately (§C "forwarded" indicators, §E "Story actions: forward/send").
 
 ## P. Media (viewers & editors)
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
