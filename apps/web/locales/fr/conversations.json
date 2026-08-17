@@ -758,6 +758,10 @@
         "yesterday": "Hier",
         "thisWeek": "Cette semaine",
         "older": "Plus ancien"
+      },
+      "a11y": {
+        "unreadOne": "{count} message non lu",
+        "unreadOther": "{count} messages non lus"
       }
     },
     "focal": {

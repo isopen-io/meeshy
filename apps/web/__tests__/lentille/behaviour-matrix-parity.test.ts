@@ -182,7 +182,21 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
   },
   L16: {
     covered: true,
-    reason: 'aria-label « {nom}, {heure}, {n} non lus, {pont ou préview} » (LentilleRow.tsx, LentilleRow.test.tsx).',
+    reason:
+      "aria-label « {nom}, {heure}, {n non lus}, {pont ou préview} », RÉELLEMENT produit et éprouvé — V4ter/B1 a corrigé trois mensonges du verdict " +
+      "REV-4bis, re-prouvés RED puis GREEN (LentilleRow.test.tsx). (1) Nombre nu émis même à 0 : désormais mention SEULEMENT si `unreadCount > 0`, " +
+      "localisée/pluralisée (`resolveUnreadAriaSegment`, `lentille.a11y.unreadOne/Other`, 4 locales) — précédent iOS " +
+      "`ThemedConversationRow.swift:290-291`. (2) `typeof previewNode === 'string'` portait sur le FRAGMENT JSX enveloppant (toujours faux, donc l'aria " +
+      "retombait TOUJOURS sur `conversation.lastMessage?.content`, l'original, jamais la traduction Prisme) : `formatLastMessage(...)` est désormais " +
+      "calculé UNE fois (`lastMessagePreview`) et sa forme texte réutilisée par l'aria (`lastMessagePreviewText`) — témoin de discrimination « traduction " +
+      "Prisme disponible ⇒ aria = traduction, JAMAIS l'original ». (3) Le pont n'était jamais annoncé (aria = `lastMessage.content` même sous " +
+      "`hasBridge`) : l'aria appelle désormais `resolveLentilleBridgeAriaText` (LentilleBridgeLine.tsx, EXPORTÉE par ce lot — MÊME fonction que le rendu " +
+      "visuel, jamais un second chemin) — témoin « pont présent ⇒ aria = libellé du pont, jamais la préview ». « Ignore la perspective décorative » : " +
+      "vrai par construction, `perspectiveRef`/`useLentillePerspective` n'écrivent que `opacity`/`transform` sur le WRAPPER interne, jamais sur la racine " +
+      "porteuse de `aria-label`. Écart VÉRIFIÉ et assumé, HORS `LentilleRow` : « lit les stickers comme des en-têtes de section » demande l'INVERSE de ce " +
+      "que porte `LentilleSticker.tsx` (l'en-tête de section sticky, PAS le rang) — `aria-hidden=\"true\"` explicite, contrat LWS-10 « pilule et stickers " +
+      "`aria-hidden` » (`LentilleSticker.tsx:9-12`, re-prouvé 2026-08-17). Sous-trou réel, documenté, pas caché — hors périmètre de ce lot (V4ter/B1 ne " +
+      "touche que `LentilleRow`) ; le format aria-label DU RANG (nom/heure/non-lus/pont-ou-préview) est lui intégralement réel et éprouvé.",
   },
   L17: {
     covered: true,

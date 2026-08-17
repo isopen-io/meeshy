@@ -84,9 +84,26 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
     ...overrides,
   }) as unknown as Conversation;
 
+/**
+ * V4ter/B1 — behaviour-matrix:L16. Étendu au-delà de `lentille.typing.one` :
+ * l'aria-label (`LentilleRow.tsx`) route désormais AUSSI par ce `t` pour le
+ * segment non-lus (`lentille.a11y.unreadOne/Other`) et pour le pont
+ * (`resolveLentilleBridgeAriaText`, qui appelle `formatBridge`/
+ * `lentille.bridge.*` avec CE MÊME `t`). En production, ce `t` ET le `t` que
+ * `LentilleBridgeLine` obtient via `useI18n('conversations')` (mocké
+ * séparément plus haut dans ce fichier, pour le rendu VISIBLE) sont la MÊME
+ * fonction réelle (`useI18n.ts` réexporte `use-i18n.ts`) — les deux doubles
+ * de test sont donc étendus en miroir pour rester fidèles à cette égalité.
+ */
 const t = (key: string, params?: Record<string, unknown> | string) => {
-  if (typeof params === 'object' && params && 'name' in params) {
-    return key === 'lentille.typing.one' ? `${(params as any).name} écrit…` : key;
+  if (typeof params === 'object' && params) {
+    if (key === 'lentille.typing.one') return `${(params as any).name} écrit…`;
+    if (key === 'lentille.bridge.authorsOne') return String((params as any).name ?? '');
+    if (key === 'lentille.bridge.messagesOne') return `${(params as any).count} message`;
+    if (key === 'lentille.bridge.messagesOther') return `${(params as any).count} messages`;
+    if (key === 'lentille.a11y.unreadOne') return `${(params as any).count} message non lu`;
+    if (key === 'lentille.a11y.unreadOther') return `${(params as any).count} messages non lus`;
+    return key;
   }
   return key;
 };
@@ -289,12 +306,105 @@ describe('LentilleRow — rang', () => {
     expect(row.textContent).toContain('800×600');
   });
 
-  it('behaviour-matrix:L16 — aria-label = "{nom}, {heure}, {n} non lus, {pont ou préview}"', () => {
+  /**
+   * V4ter/B1 — behaviour-matrix:L16, format COMPLET (plus de simples
+   * `toContain` épars) : « {nom}, {heure}, {n non lus}, {pont ou préview} »,
+   * les quatre segments joints par `, `, dans cet ordre exact.
+   */
+  it('behaviour-matrix:L16 — aria-label = format complet "{nom}, {heure}, {n non lus}, {préview}"', () => {
     render(
       <LentilleRow
         conversation={makeConversation({
           title: 'Équipe produit',
           unreadCount: 3,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Salut !', createdAt: new Date('2026-06-01T10:00:00.000Z'), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    const time = screen.getByTestId('lentille-row').querySelector('h3')?.nextSibling?.textContent ?? '';
+    expect(label).toBe(`Équipe produit, ${time}, 3 messages non lus, Salut !`);
+  });
+
+  /**
+   * V4ter/B1 — discrimination #1 (mensonge #2 du verdict REV-4bis) :
+   * traduction Prisme disponible ⇒ l'aria contient la TRADUCTION et ne
+   * contient JAMAIS l'original. Avant ce lot, `typeof previewNode ===
+   * 'string'` portait sur le fragment JSX enveloppant (toujours faux) et
+   * l'aria retombait TOUJOURS sur `conversation.lastMessage?.content`
+   * (l'original) — ce témoin rougissait sur le code d'avant ce lot.
+   */
+  it('behaviour-matrix:L16 — discrimination : traduction Prisme disponible ⇒ aria = traduction, JAMAIS l\'original', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 0,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Hello team', createdAt: new Date(), attachments: [] } as any,
+          lastMessageTranslations: { fr: 'Bonjour équipe' },
+          lastMessageOriginalLanguage: 'en',
+        })}
+        currentUser={makeUser({ systemLanguage: 'fr' })}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    expect(label).toContain('Bonjour équipe');
+    expect(label).not.toContain('Hello team');
+  });
+
+  /**
+   * V4ter/B1 — discrimination #2 (mensonge #3 du verdict REV-4bis) : le pont
+   * présent ⇒ l'aria contient le libellé du pont (`LentilleBridgeLine`, via
+   * `resolveLentilleBridgeAriaText`), jamais la préview du dernier message
+   * qu'il remplace visuellement. Avant ce lot, l'aria rendait TOUJOURS
+   * `lastMessage.content` même quand `hasBridge` — ce témoin rougissait sur
+   * le code d'avant ce lot.
+   */
+  it('behaviour-matrix:L16 — discrimination : pont présent ⇒ aria = libellé du pont, jamais la préview', () => {
+    const bridge: ConversationBridge = {
+      kind: 'fallback',
+      unreadCount: 2,
+      suggestedMode: 'focal',
+      data: { authors: ['Zoe'], extraAuthorCount: 0, messageCount: 2 },
+    };
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 2,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Preview jamais annoncée', createdAt: new Date(), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        bridge={bridge}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    expect(label).toContain('Zoe');
+    expect(label).toContain('2 messages');
+    expect(label).not.toContain('Preview jamais annoncée');
+  });
+
+  /**
+   * V4ter/B1 — mensonge #1 du verdict REV-4bis : le nombre nu, émis MÊME à
+   * 0 (iOS n'annonce les non-lus que si `> 0`). `unreadCount: 0` ⇒ AUCUNE
+   * mention (ni "0", ni la clé `lentille.a11y.unreadOne/Other`).
+   */
+  it('behaviour-matrix:L16 — unreadCount 0 ⇒ aucune mention de non-lus dans l\'aria', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 0,
           lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Salut !', createdAt: new Date(), attachments: [] } as any,
         })}
         currentUser={makeUser()}
@@ -304,9 +414,12 @@ describe('LentilleRow — rang', () => {
       />
     );
     const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
-    expect(label).toContain('Équipe produit');
-    expect(label).toContain('3');
-    expect(label).toContain('Salut !');
+    expect(label).not.toContain('non lu');
+    expect(label).not.toContain('lentille.a11y.unread');
+    // Format complet réduit à trois segments (nom, heure, préview) — pas
+    // quatre : le trou laissé par le segment non-lus absent n'apparaît pas
+    // comme une virgule vide.
+    expect(label.split(', ').filter((part) => part.trim() !== '')).toHaveLength(3);
   });
 });
 
