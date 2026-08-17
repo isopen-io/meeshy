@@ -148,3 +148,76 @@ describe('UserProfileModal — utilisateur introuvable', () => {
     expect(screen.getByTestId('user-profile-modal-full-link')).toHaveAttribute('href', '/u/ghost');
   });
 });
+
+/**
+ * Q-143 — Layout Shift 0, surface neuve du jour (directive produit
+ * 2026-08-17). Cette modale est montée UNE FOIS par
+ * `LentilleConversationListMount` (voir `.profile-modal.test.tsx`, où elle
+ * est mockée pour prouver le BRANCHEMENT) — ici, `UserProfileModal` est le
+ * VRAI composant, et la preuve porte sur la GÉOMÉTRIE, pas le câblage :
+ * s'ouvrir ne doit JAMAIS déplacer la liste sous elle.
+ *
+ * jsdom ne calcule aucun layout réel (`getBoundingClientRect` rend des zéros
+ * partout sans stub) — la preuve retenue est donc STRUCTURELLE, pas
+ * pixel-perfect : (1) le contenu vit dans un `Portal` Radix, hors du
+ * sous-arbre DOM de la liste — un nœud hors-arbre ne peut pas invalider son
+ * flux ; (2) sa classe pose `fixed` (jamais `static`/`relative`/`sticky`) —
+ * la seule famille de position qui ne participe PAS au flux normal des
+ * frères ; (3) le sous-arbre voisin (la « liste ») est BYTE-IDENTIQUE avant/
+ * après ouverture — aucun re-render de la liste n'est déclenché par
+ * l'ouverture de la modale.
+ */
+describe('UserProfileModal — Layout Shift 0 (Q-143, surface neuve du 2026-08-17)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetUserProfile.mockResolvedValue({ success: true, data: alice });
+    mockGetUserStats.mockResolvedValue({ success: true, data: {} });
+  });
+
+  it('le contenu de la modale n’est PAS un descendant de la liste — Portal Radix, hors du flux', async () => {
+    const { container } = render(
+      <div data-testid="fake-list-root">
+        <div data-testid="fake-row">rang 1</div>
+        <UserProfileModal open onOpenChange={() => {}} userId="alice" />
+      </div>
+    );
+    await screen.findByTestId('user-profile-modal');
+
+    const listRoot = container.querySelector('[data-testid="fake-list-root"]')!;
+    const modal = screen.getByTestId('user-profile-modal');
+
+    expect(listRoot.contains(modal)).toBe(false);
+  });
+
+  it('le contenu de la modale est positionné `fixed` — jamais dans le flux qui pourrait pousser un voisin', async () => {
+    render(<UserProfileModal open onOpenChange={() => {}} userId="alice" />);
+    const modal = await screen.findByTestId('user-profile-modal');
+
+    expect(modal.className).toMatch(/\bfixed\b/);
+    expect(modal.className).not.toMatch(/\b(static|relative|sticky)\b/);
+  });
+
+  it('la liste voisine est BYTE-IDENTIQUE avant/après ouverture — la modale ne re-rend jamais ses frères', async () => {
+    function Host({ open }: { open: boolean }) {
+      return (
+        <div>
+          <ul data-testid="fake-list">
+            <li>rang 1</li>
+            <li>rang 2</li>
+            <li>rang 3</li>
+          </ul>
+          <UserProfileModal open={open} onOpenChange={() => {}} userId="alice" />
+        </div>
+      );
+    }
+
+    const { rerender } = render(<Host open={false} />);
+    const before = screen.getByTestId('fake-list').outerHTML;
+
+    rerender(<Host open />);
+    await screen.findByTestId('user-profile-modal');
+    const after = screen.getByTestId('fake-list').outerHTML;
+
+    expect(after).toBe(before);
+  });
+});

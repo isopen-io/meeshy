@@ -172,35 +172,26 @@ describe('Audit axe — Lentille (liste, drapeau ON)', () => {
     );
 
     /**
-     * FINDING V4ter/axe (2026-08-17) — `nested-interactive` (best-practice,
-     * https://dequeuniversity.com/rules/axe/4.12/nested-interactive) tiré
-     * sur les cinq rangs : `LentilleRow` pose `role="button" tabIndex={0}`
-     * sur sa racine, et `LentillePeek` (monté à l'intérieur, WL-106) y rend
-     * un vrai `<button>` (le ⋮ hover-reveal, `data-testid=
-     * "lentille-peek-more-trigger"`) — RE-PROUVÉ par lecture de
-     * `LentillePeek.tsx` : le déclencheur est un enfant DOM direct du rang.
+     * FINDING V4ter/axe — `nested-interactive` : **SOLDÉ le 2026-08-17
+     * (Q-142, réserve REV-4ter R5-7, condition d'activation V6).**
      *
-     * PAS un attribut manquant — donc PAS trivial au sens du contrat de
-     * cette tâche : réparer proprement demanderait de restructurer le
-     * modèle d'interaction du rang (extraire le ⋮ hors de la zone
-     * cliquable, ou remplacer `role="button"` par une structure qui
-     * n'imbrique plus de contrôle focusable), ce qui touche `LentilleRow`
-     * ET `LentillePeek` — deux fichiers HORS PÉRIMÈTRE de cette tâche
-     * (« tu ne fais que les monter dans des tests »). Désactivée ICI
-     * SEULEMENT (pas globalement, pas dans jest.setup.js) — les onze autres
-     * catégories de règles d'axe restent actives sur ce rendu, et
-     * `nested-interactive` reste active pour tout le reste de la suite.
+     * CE QUI ÉTAIT DÉSACTIVÉ ICI, et pourquoi ça ne l'est plus. Le rang
+     * posait `role="button" tabIndex={0}` sur sa RACINE, et trois contrôles
+     * réels vivaient dedans (avatar L12, encoche WL-108, ⋮ WL-106). La règle
+     * tirait sur les cinq rangs de cette géométrie. La désactivation était
+     * datée et locale ; elle a été RETIRÉE AVANT le correctif — c'est ce
+     * retrait qui a produit le RED (5 violations, une par rang).
      *
-     * Le clavier n'est PAS impacté dans les faits : Tab atteint le rang PUIS
-     * le ⋮ (deux arrêts distincts, `LentilleRow.test.tsx` prouve déjà Enter/
-     * Espace sur le rang) — la violation est structurelle (imbrication
-     * WAI-ARIA), pas une régression de navigation constatée.
+     * Le remède (patron « card action ») vit dans `LentilleRow.tsx` : la
+     * racine est un conteneur muet, l'ouverture est un `<button>` FRÈRE qui
+     * couvre le rang (`lentille-row-open`). L'invariant structurel — aucun
+     * ancêtre interactif au-dessus des trois contrôles — et les quatre
+     * arrêts de tabulation distincts sont figés par
+     * `components/conversations/lentille/__tests__/LentilleRow.cover-action.test.tsx`.
      *
-     * Reporté à l'orchestrateur comme finding V4ter/axe — décision de
-     * restructuration (ou acceptation documentée) hors périmètre de ce
-     * commit.
+     * `axe(container)` NU : toutes les règles, aucune exception.
      */
-    const results = await axe(container, { rules: { 'nested-interactive': { enabled: false } } });
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 

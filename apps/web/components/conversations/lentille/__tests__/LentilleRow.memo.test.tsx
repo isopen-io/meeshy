@@ -211,9 +211,16 @@ describe('LentilleRow — le memo est EFFECTIF (R4-6)', () => {
   it('le clic reste branché sur la bonne conversation malgré le rappel partagé', () => {
     const { container } = render(<LentilleConversationListMount {...props} />);
 
+    // Q-142/R5-7 — le porteur du clic d'ouverture est la COUVERTURE
+    // (`lentille-row-open`), un `<button>` frère : la racine `lentille-row`
+    // est devenue un conteneur muet. La question posée par ce témoin est
+    // inchangée — le rang referme-t-il sur SA conversation malgré le rappel
+    // partagé ? — seul le point d'appui a bougé.
     const rows = container.querySelectorAll('[data-testid="lentille-row"]');
     expect(rows).toHaveLength(3);
-    (rows[1] as HTMLElement).click();
+    const covers = container.querySelectorAll('[data-testid="lentille-row-open"]');
+    expect(covers).toHaveLength(3);
+    (covers[1] as HTMLElement).click();
 
     expect(onSelectConversation).toHaveBeenCalledTimes(1);
     expect(onSelectConversation).toHaveBeenCalledWith(conversations[1]);

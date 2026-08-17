@@ -64,7 +64,13 @@ export interface LentilleFocusCardProps {
   readonly conversation: Conversation;
   /** Préférence mémorisée pour CETTE conversation — `auto` tant que rien n'est mémorisé. */
   readonly preference: ReadingModePreference;
-  /** Décision de `resolveOrchestratorDecision` sur les données de CETTE conversation. */
+  /**
+   * Décision de `resolveOrchestratorDecision` sur les données de CETTE
+   * conversation — repli LOCAL. R6-5 : `notchText` (`lentille-mode-labels.ts`)
+   * lui préfère `conversation.bridge?.suggestedMode` quand ce champ est
+   * présent ; cette prop ne reste la source affichée que pour les
+   * conversations sans pont.
+   */
   readonly decision: OrchestratorDecision;
   readonly t: LentilleRowTranslate;
   /** Tap sur l'encoche — le montage y branche l'ouverture du menu de mode. */
@@ -104,7 +110,11 @@ export function LentilleFocusCard({
 }: LentilleFocusCardProps) {
   const TypeIcon = TYPE_ICON[conversation.type] ?? Users;
   const showTypeChip = conversation.type !== 'direct';
-  const label = notchText(decision, preference, t);
+  // R6-5 — le SEUL branchement attendu : `conversation.bridge?.suggestedMode`
+  // (le champ précalculé par le serveur/le substitut, cf. `notchText`) prime
+  // sur `decision` (le recalcul local que `LentillePeek` continue de fournir
+  // en repli) — jamais un second calcul dans cette carte.
+  const label = notchText(decision, preference, t, conversation.bridge?.suggestedMode);
 
   return (
     <>
@@ -146,8 +156,10 @@ export function LentilleFocusCard({
         data-testid="lentille-focus-card-notch"
         aria-label={label}
         onClick={(event) => {
-          // Le rang entier est un `role="button"` qui navigue : sans cet
-          // arrêt, ouvrir le menu de mode ouvrirait AUSSI la conversation.
+          // Q-142/R5-7 — la racine du rang n'est PLUS un `role="button"` : ce
+          // `stopPropagation` ne protège donc plus d'un ancêtre interactif,
+          // mais du gestionnaire de geste de `LentillePeek` (clic droit /
+          // appui long) et de tout ancêtre futur. Il reste, et son témoin avec.
           event.stopPropagation();
           onNotchTap();
         }}
@@ -156,6 +168,9 @@ export function LentilleFocusCard({
           // `textTransform` (contrairement à `sticker`, qui l'a). La casse
           // est celle de la traduction — « AUTO · Focal », pas « AUTO · FOCAL ».
           'absolute rounded-full px-2 py-0.5',
+          // Q-142/R5-7 — AU-DESSUS de la couverture d'ouverture du rang
+          // (`LentilleRow`, `ROW_CONTROL_Z`) : l'encoche garde son geste.
+          'z-20',
           'bg-secondary hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary'
         )}
         style={{

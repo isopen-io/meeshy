@@ -9605,6 +9605,83 @@ toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`)
   de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
   construction (Vague 139).
 
+## Vague 142 — `call:end`'s group-hangup fast path leaked the participant FK into `PARTICIPANT_LEFT`, not the `CallParticipant` row id (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/use-webrtc-p2p.ts`/`useCallSignaling.ts`/`components/video-call*/**` + `stores/call-store.ts`,
+exclusion explicite des Vagues 1-141). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit
+Swift/Kotlin non testable.
+
+- **Root cause** : la branche « fast-path » de `call:end` (`willContinueAsGroupLeave` — un appel de
+  groupe qui continue pour les autres participants, calling-stack audit 2026-08-16) émettait
+  `participantId: endParticipantId` — la valeur renvoyée par `resolveActiveCallParticipantDetailed`,
+  c'est-à-dire `CallParticipant.participantId`, la FK vers `Participant.id`. Tous les AUTRES
+  émetteurs de `CALL_EVENTS.PARTICIPANT_LEFT` (`call:leave` : `participant.id` ;
+  `call:force-leave` : `participant.id` ; `CallService.broadcastParticipantLeft`) émettent
+  `CallParticipant.id` — la clé primaire de la ligne elle-même, l'espace d'identité que le
+  doc-comment de la classe déclare explicitement (« call:participant-left's participantId porte
+  authentiquement CallParticipant.id ») et sur lequel `call-store.ts`'s `removeParticipant` filtre
+  ses entrées de roster (`.id`, jamais `.participantId`). Un cinquième site du même bug de fond que
+  les Vagues 137-140 (mismatch d'espace d'identité), sur le SIXIÈME champ `participantId` de la
+  classe (le premier depuis la Vague 140).
+- **Scénario de défaillance concret** : appel de groupe A + B + C, mesh réel. B raccroche via le
+  bouton web (`apps/web/hooks/conversations/use-video-call.ts` n'émet QUE `call:end`, jamais
+  `call:leave`, pour le raccrochage — donc ce chemin buggé est le chemin de production, pas un cas
+  rare). Le gateway calcule `willContinueAsGroupLeave = true` (A et C restent actifs), diffuse
+  `PARTICIPANT_LEFT` à A et C avec `participantId` = FK de B. Côté A et C :
+  `VideoCallInterface`'s propre écouteur (keyed `userId || participantId`) coupe bien la connexion
+  WebRTC de B — sa tuile vidéo disparaît. Mais `CallManager.tsx`'s `removeParticipant(event.participantId)`
+  ne matche AUCUNE entrée du roster (toutes keyed `.id`) → la ligne de B dans `currentCall.participants`
+  n'est JAMAIS retirée. Le badge de comptage (`VideoCallInterface.tsx:980`,
+  `participants.filter(p => !p.leftAt).length + 1`) reste gonflé d'une unité pour le reste de
+  l'appel. Si B rejoint plus tard, `joinCall` crée une NOUVELLE ligne `CallParticipant` (nouvel
+  `.id`) ; `addParticipant` (dédupliqué sur `.id`) l'ajoute À CÔTÉ de l'ancienne jamais retirée — B
+  apparaît deux fois dans le roster.
+- **Preuve indépendante** : la suite `CallEventsHandler-end.test.ts`'s `describe('group hang-up: ...')`
+  portait déjà le fixture exact nécessaire (`{ id: 'call-participant-row-caller', participantId:
+  PARTICIPANT_ID, ... }`, `.id !== .participantId`) mais n'asserait QUE sur l'état
+  `bufferedOffers`, jamais sur le payload `PARTICIPANT_LEFT` diffusé — un grep sur tous les tests
+  gateway/web pour `willContinueAsGroupLeave` croisé avec une assertion de payload
+  `PARTICIPANT_LEFT` n'a rien trouvé avant cette vague.
+- **Fix** : `CallEventsHandler.ts` — `resolveActiveCallParticipantDetailed` gagne un champ
+  `id: activeParticipant.id` (zéro requête supplémentaire, `activeParticipant.id` est déjà lu pour
+  `hasOtherActiveParticipants`). La diffusion fast-path (branche `willContinueAsGroupLeave`) émet
+  désormais `participantId: endParticipantDetail!.id` au lieu de `endParticipantId`.
+  `endParticipantId` (la FK) reste INCHANGÉ partout ailleurs dans cette branche — c'est la valeur
+  correcte pour `endCall()`/`leaveCall()` et `clearBufferedOfferFor()`, qui attendent bien la FK, pas
+  l'id de ligne.
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 1 cas neuf dans `CallEventsHandler-end.test.ts`, describe « group hang-up » —
+  « broadcasts PARTICIPANT_LEFT with the CallParticipant row id, not the participantId FK ». RED
+  confirmé (payload reçu portait la FK `'participant-abc'` au lieu de l'id de ligne
+  `'call-participant-row-caller'`). **1/1 vert** après fix. Sweep gateway
+  `--testPathPatterns="[Cc]all"` : **56 suites / 1237 tests** verts (+1 net, 0 régression). Suite
+  gateway COMPLÈTE (`bun run test:coverage`) : **743 suites / 18024 tests**, 100% vert, seuils de
+  couverture globaux atteints. `npx tsc --noEmit` (services/gateway) : **0 erreur**.
+- **Effet de bord corrigé en route** : la suite complète a révélé un garde-fou gateway déjà rouge
+  sur `main` (`personal-history-hiding-surface-guard.test.ts`, sans rapport avec les appels) —
+  REV-5/B2 (fan-out socket, mergé juste avant le rebase de cette branche) avait ajouté une deuxième
+  lecture `prisma.message.findMany` à `ConversationBridgeService.ts`
+  (`buildBridgeDataForViewers`) sans mettre à jour la table déclarative du garde. Vérifié qu'il ne
+  s'agit PAS d'une fuite de confidentialité avant de toucher le garde : la nouvelle requête bâtit
+  UNE fenêtre partagée par plusieurs lecteurs (donc pas de clause `where` individuelle possible) et
+  resserre le masquage PAR LECTEUR en mémoire en aval (`hiddenMessageIds?.has(row.id)`,
+  `exclusiveFloorMsFor`) — même patron déjà déclaré pour `MessageReadStatusService.ts`. Mis à jour
+  `SERVICE_LAYER_SURFACES` (`reads: 1→2`) et `IN_MEMORY_HIDING_SURFACES` (nouvelle entrée) pour que
+  le garde couvre ce que le code fait réellement au lieu de se taire. Nécessaire pour que le gate
+  complet de cette branche (`bun run test:coverage`, prérequis de tout merge) passe au vert — sans
+  rapport avec le calling stack, corrigé ici parce qu'il bloquait le seul gate dont ce merge dépend.
+- **Non fait volontairement** : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
+  de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
+  construction (Vague 139).
+
 ## Vague 143 — per-peer adaptive bitrate/tier degradation (web, follow-up to W5 / PR #3182) (2026-08-17)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le

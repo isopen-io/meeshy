@@ -14,6 +14,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CallSignalEvent } from '@meeshy/shared/types/video-call';
 import { WebRTCService } from '@/services/webrtc-service';
 import { toast } from 'sonner';
 
@@ -1536,6 +1537,128 @@ describe('useWebRTCP2P', () => {
           signal: expect.objectContaining({ type: 'answer', negotiationId: 5 }),
         }),
         expect.any(Function)
+      );
+    });
+  });
+
+  // Security audit (2026-08-17) — `handleRenegotiationOffer`/`setRemoteAnswer`
+  // apply straight to the live RTCPeerConnection with no epoch check of their
+  // own; a captured older offer/answer replayed by a misbehaving participant
+  // (or delivered out of order) used to be applied unconditionally. Guarded
+  // by comparing against the per-peer negotiationId high-water mark BEFORE
+  // it's raised — see `isStaleNegotiation` in use-webrtc-p2p.ts.
+  describe('Stale/replayed renegotiation signals are dropped (replay protection)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: CallSignalEvent) => void;
+    };
+
+    it('drops a replayed offer whose negotiationId is not newer than the already-applied epoch', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp', negotiationId: 1 },
+        });
+      });
+
+      mockHandleRenegotiationOffer.mockClear();
+      // A captured epoch-1 offer resent after the connection is established
+      // at epoch 1 — not newer, must be dropped.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'replayed-offer-sdp', negotiationId: 1 },
+        });
+      });
+      expect(mockHandleRenegotiationOffer).not.toHaveBeenCalled();
+
+      // A genuinely newer re-offer must still go through.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'fresh-reoffer-sdp', negotiationId: 2 },
+        });
+      });
+      expect(mockHandleRenegotiationOffer).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'offer', sdp: 'fresh-reoffer-sdp' })
+      );
+    });
+
+    it('drops a replayed answer whose negotiationId is not newer than the already-applied epoch', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp', negotiationId: 1 },
+        });
+      });
+
+      // Web initiates a renegotiation offer, bumping its own epoch to 2.
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onLocalDescription({ type: 'offer', sdp: 'reoffer-sdp' });
+      });
+
+      mockSetRemoteAnswer.mockClear();
+      // A captured epoch-1 answer resent once epoch 2 is already in flight —
+      // stale, must be dropped.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'stale-answer-sdp', negotiationId: 1 },
+        });
+      });
+      expect(mockSetRemoteAnswer).not.toHaveBeenCalled();
+
+      // The genuine epoch-2 answer must still go through.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'fresh-answer-sdp', negotiationId: 2 },
+        });
+      });
+      expect(mockSetRemoteAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'answer', sdp: 'fresh-answer-sdp' })
+      );
+    });
+
+    it('does not treat a renegotiation signal with no negotiationId as stale (legacy/undefined stays fresh)', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp', negotiationId: 1 },
+        });
+      });
+
+      mockHandleRenegotiationOffer.mockClear();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'no-epoch-reoffer-sdp' },
+        });
+      });
+      expect(mockHandleRenegotiationOffer).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'offer', sdp: 'no-epoch-reoffer-sdp' })
       );
     });
   });

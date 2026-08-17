@@ -170,6 +170,58 @@ final class LentilleFocusCardTests: XCTestCase {
         )
     }
 
+    // MARK: - 2ter. R6-5 — suggestedMode du pont prime sur le recalcul local
+
+    /// Témoin discriminant (a) : `suggestedMode` PRÉSENT et CONTRAIRE à ce que
+    /// recalculerait `resolveOrchestratorDecision` localement (`.resume`
+    /// alors que le recalcul local, sur ces données, vaut `.focal`, branche
+    /// 5/défaut) ⇒ l'encoche affiche la valeur du SERVEUR, jamais le recalcul
+    /// local.
+    func test_notchText_whenSuggestedModePresent_winsOverTheLocallyRecomputedDecision() {
+        let conversation = makeConversation(unreadCount: 2, lastReadAt: Self.now)
+        let localDecision = decision(for: conversation)
+        XCTAssertEqual(localDecision.mode, .focal, "Prérequis : le recalcul local, seul, dirait Focal.")
+
+        let text = LentilleModeLabels.notchText(
+            decision: localDecision,
+            preference: .auto,
+            suggestedMode: .resume
+        )
+
+        XCTAssertEqual(
+            text, "AUTO · Résumé",
+            "`bridge.suggestedMode` (précalculé par le serveur/le substitut) DOIT primer sur " +
+            "`decision.mode` (recalcul local) — jamais l'inverse (R6-5)."
+        )
+    }
+
+    /// Témoin discriminant (b) : `suggestedMode` ABSENT (`nil`, pas de pont)
+    /// ⇒ le repli local reste EXACTEMENT ce qu'il était avant le branchement
+    /// (garde de non-régression) — jamais un vide, jamais une invention.
+    func test_notchText_whenSuggestedModeAbsent_fallsBackToTheLocalDecision_unchanged() {
+        let conversation = makeConversation(unreadCount: 2, lastReadAt: Self.now)
+        let localDecision = decision(for: conversation)
+
+        let text = LentilleModeLabels.notchText(decision: localDecision, preference: .auto)
+
+        XCTAssertEqual(text, "AUTO · Focal")
+    }
+
+    /// Le point d'appel réel (`LentilleFocusCard.notchText`) doit lire
+    /// `conversation.bridge?.suggestedMode` — jamais un recalcul propre à la
+    /// carte. Garde de SOURCE (comme `test_focusCard_delegatesNotchTextTo
+    /// LentilleModeLabels` ci-dessus), pour que le câblage lui-même reste
+    /// prouvé même sans toolchain pour exécuter la vue.
+    func test_focusCard_passesConversationBridgeSuggestedModeToNotchText() throws {
+        let source = try modeSources().first { $0.name == "LentilleFocusCard.swift" }
+        let code = try XCTUnwrap(source?.code, "LentilleFocusCard.swift introuvable dans Lentille/Mode/.")
+        XCTAssertTrue(
+            normalizedCode(code).contains("suggestedMode: conversation.bridge?.suggestedMode"),
+            "R6-5 — l'encoche doit passer `conversation.bridge?.suggestedMode` à " +
+            "`LentilleModeLabels.notchText` — c'est le SEUL branchement attendu au point d'appel."
+        )
+    }
+
     // MARK: - 2bis. Reduce motion ⇒ fond seul (ring)
 
     func test_ringOpacity_isZero_underReduceMotion_oneOtherwise() {

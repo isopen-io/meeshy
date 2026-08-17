@@ -32,6 +32,39 @@
  * `lastMessagePreviewText`/`resolveLentilleBridgeAriaText` ci-dessous. Les
  * non-lus ne sont mentionnés QUE si `> 0` (précédent iOS,
  * `ThemedConversationRow.swift:290-291`).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Q-142/R5-7 — LE RANG N'EST PLUS UN `role="button"` ENGLOBANT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Jusqu'au 2026-08-17, la RACINE du rang portait `role="button" tabIndex={0}`
+ * + `aria-label` + `onClick`/`onKeyDown`, et TROIS contrôles réels vivaient
+ * DEDANS : l'affordance d'avatar (`<a>`/`<button>`, L12), l'encoche de la
+ * focus card (`<button>`, WL-108) et le ⋮ de `LentillePeek` (`<button>`,
+ * WL-106). axe-core tirait `nested-interactive` sur chaque rang, et deux
+ * suites d'audit devaient le désactiver pour rester vertes (réserve REV-4ter
+ * R5-7, **condition d'activation V6**).
+ *
+ * REMÈDE — le patron « card action » (lien de couverture). La racine redevient
+ * un CONTENEUR muet (aucun rôle, aucun `tabIndex`, aucun `aria-label` — un
+ * `aria-label` sur un `div` sans rôle serait à son tour une violation,
+ * `aria-prohibited-attr`). L'ouverture de la conversation vit dans un vrai
+ * `<button>` FRÈRE, `position: absolute`, qui couvre exactement la boîte du
+ * rang (`lentille-row-open`) : il porte le label L16, l'`aria-current` de la
+ * sélection et l'anneau de focus. Les trois contrôles ne sont plus DANS un
+ * contrôle — ils sont ses frères, peints AU-DESSUS de lui (voir la note
+ * d'empilement sur `ROW_OPEN_COVER_*` plus bas).
+ *
+ * CE QUI NE CHANGE PAS, et qui est prouvé témoin par témoin
+ * (`LentilleRow.test.tsx`, `LentilleRow.cover-action.test.tsx`) :
+ *   - clic n'importe où sur le rang ⇒ `onSelect(conversation)` ;
+ *   - Entrée ET Espace ouvrent la conversation — désormais par le
+ *     comportement NATIF du `<button>`, plus par un `onKeyDown` réécrit ;
+ *   - quatre arrêts de tabulation DISTINCTS, dans le même ordre qu'avant :
+ *     couverture → avatar → encoche → ⋮ ;
+ *   - le `memo` (REV-4/R4-6) tient : la couverture ne referme sur rien de
+ *     neuf, elle réutilise le `handleClick` déjà mémoïsé ;
+ *   - le chemin drapeau ÉTEINT n'est pas concerné (ce composant n'y est pas
+ *     monté).
  */
 'use client';
 
@@ -201,7 +234,29 @@ const AVATAR_BOX_STYLE: React.CSSProperties = {
   height: 'var(--lentille-list-avatar-size)',
 };
 
-const AVATAR_BOX_CLASS = 'relative flex-shrink-0 block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary';
+/**
+ * Q-142/R5-7 — EMPILEMENT DU PATRON « CARD ACTION », en une seule note.
+ *
+ * Les quatre éléments hit-testables du rang vivent dans le MÊME contexte
+ * d'empilement : celui que `LentillePeek` crée par `isolation: isolate`
+ * (voir sa docstring). Deux crans suffisent, et ils sont ici :
+ *
+ *   `z-index: -1` → le fond de la focus card (`LentilleFocusCard`) ;
+ *   flux normal   → tout ce qui est INERTE (nom, ligne 2, point de non-lu,
+ *                   chip de type — ce dernier déjà `pointer-events: none`) ;
+ *   `ROW_OPEN_COVER_Z` (10) → la couverture d'ouverture ;
+ *   `ROW_CONTROL_Z` (20) → les TROIS contrôles propres (avatar, encoche, ⋮).
+ *
+ * La couverture est TRANSPARENTE : se peindre au-dessus du contenu inerte ne
+ * masque rien à l'œil, cela ne déplace que le HIT-TEST — un clic sur le nom
+ * ou la ligne 2 atteint la couverture, donc ouvre la conversation, exactement
+ * comme le `onClick` de racine le faisait. Les trois contrôles, eux, passent
+ * au-dessus d'elle et gardent leur geste.
+ */
+const ROW_OPEN_COVER_Z = 'z-10';
+const ROW_CONTROL_Z = 'z-20';
+
+const AVATAR_BOX_CLASS = `relative ${ROW_CONTROL_Z} flex-shrink-0 block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary`;
 
 function AvatarAffordance({
   target,
@@ -222,6 +277,9 @@ function AvatarAffordance({
   }, []);
 
   if (target === null) {
+    // Aucune cible ⇒ rien à ouvrir ⇒ AUCUN cran d'empilement propre : la
+    // boîte reste sous la couverture, et le clic dessus ouvre la
+    // conversation — « la rangée redevient une cible unique ».
     return (
       <div className="relative flex-shrink-0" style={AVATAR_BOX_STYLE}>
         {children}
@@ -314,16 +372,11 @@ export const LentilleRow = memo(function LentilleRow({
     () => (rowPreference?.tags ?? []).slice(0, LENTILLE_LIST_TAGS_MAX_COUNT),
     [rowPreference?.tags]
   );
+  // Q-142/R5-7 — l'UNIQUE rappel d'ouverture, porté par la couverture. Le
+  // `handleKeyDown` d'accompagnement a disparu avec le `role="button"` de la
+  // racine : un `<button>` natif traite Entrée et Espace lui-même, et une
+  // réécriture serait désormais un second chemin d'activation.
   const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        onSelect(conversation);
-      }
-    },
-    [onSelect, conversation]
-  );
   const showsFocusCard = isElected || isSelected;
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser),
@@ -463,17 +516,14 @@ export const LentilleRow = memo(function LentilleRow({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      aria-current={isSelected ? 'true' : undefined}
       data-testid="lentille-row"
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
       data-muted={isMuted ? 'true' : undefined}
       className={cn(
-        'group cursor-pointer outline-none',
-        'hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+        // Q-142/R5-7 — CONTENEUR MUET : plus de `role`, plus de `tabIndex`,
+        // plus d'`aria-label` (prohibé sur un `div` sans rôle), plus de
+        // `onClick`/`onKeyDown`. Tout cela vit maintenant sur la couverture.
+        'group cursor-pointer',
+        'hover:bg-accent/50',
         isSelected && 'bg-primary/10 hover:bg-primary/20',
         // behaviour-matrix:L07 — « la sourdine passe … visible (rang à
         // 0.55 … ) » : opacité du RANG ENTIER, jamais un littéral (garde
@@ -517,6 +567,37 @@ export const LentilleRow = memo(function LentilleRow({
           transformOrigin: 'var(--lentille-list-row-transform-origin-x) var(--lentille-list-row-transform-origin-y)',
         }}
       >
+        {/* Q-142/R5-7 — LA COUVERTURE D'OUVERTURE (patron « card action »).
+            PREMIER enfant : l'ordre du DOM est l'ordre de tabulation, et cet
+            arrêt-ci doit rester le premier du rang (il l'était quand la
+            racine portait `tabIndex={0}`). Un vrai `<button>` : Entrée et
+            Espace l'activent NATIVEMENT — le `onKeyDown` réécrit de l'ancienne
+            racine disparaît avec elle.
+
+            Les insets NÉGATIFS rendent la boîte du RANG ENTIER, padding
+            compris : ce wrapper vit à l'intérieur du padding de la racine, et
+            sans eux la zone cliquable aurait rétréci d'exactement ce padding.
+            Par les tokens, jamais un littéral (garde R15). */}
+        <button
+          type="button"
+          data-testid="lentille-row-open"
+          aria-label={ariaLabel}
+          aria-current={isSelected ? 'true' : undefined}
+          onClick={handleClick}
+          className={cn(
+            'absolute cursor-pointer outline-none',
+            ROW_OPEN_COVER_Z,
+            'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+          )}
+          style={{
+            top: 'calc(-1 * var(--lentille-list-row-padding-vertical))',
+            bottom: 'calc(-1 * var(--lentille-list-row-padding-vertical))',
+            left: 'calc(-1 * var(--lentille-list-row-padding-horizontal))',
+            right: 'calc(-1 * var(--lentille-list-row-padding-horizontal))',
+            borderRadius: 'var(--lentille-list-row-radius)',
+          }}
+        />
+
         {/* Avatar 44 + anneau accent — enveloppé dans SON PROPRE geste
             (behaviour-matrix:L12) quand une cible existe : profil pour un DM,
             infos de conversation sinon. `AvatarAffordance` ci-dessous porte

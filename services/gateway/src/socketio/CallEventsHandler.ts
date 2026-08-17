@@ -1308,6 +1308,7 @@ export class CallEventsHandler {
     userId: string,
     callId: string
   ): Promise<{
+    id: string;
     participantId: string;
     userId: string;
     mode: Awaited<ReturnType<CallService['getCallSession']>>['mode'];
@@ -1321,6 +1322,7 @@ export class CallEventsHandler {
       );
       if (!activeParticipant) return null;
       return {
+        id: activeParticipant.id,
         participantId: activeParticipant.participantId,
         userId: activeParticipant.participant?.userId ?? activeParticipant.participantId,
         mode: callSession.mode,
@@ -3726,9 +3728,21 @@ export class CallEventsHandler {
             // authoritative endCall()→leaveCall() delegation below performs
             // the actual DB/state cleanup; this is purely the instant,
             // in-memory notification for the room.
+            //
+            // Identity-space fix (Vague 142, 2026-08-17): `participantId`
+            // here MUST be `CallParticipant.id` (this row's own primary
+            // key) — the same identity space `call:leave`/`call:force-leave`
+            // use (see `participant.id` a few dozen lines above/below) and
+            // the one every client's `removeParticipant`/roster lookup is
+            // keyed on (doc comment above this class, "call:participant-left's
+            // participantId porte authentiquement CallParticipant.id").
+            // `endParticipantId` (used everywhere else in this branch, for
+            // `endCall()`/`clearBufferedOfferFor`) is deliberately the OTHER
+            // identity space — `CallParticipant.participantId`, the FK to
+            // `Participant.id` — and must not be reused here.
             socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.PARTICIPANT_LEFT, {
               callId: data.callId,
-              participantId: endParticipantId,
+              participantId: endParticipantDetail!.id,
               userId,
               mode: endParticipantDetail!.mode
             } as CallParticipantLeftEvent);
