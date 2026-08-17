@@ -179,16 +179,48 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // §4.3 — CORRECTION D'ANCRAGE (l'écart #2 du contrat)
     // =========================================================================
 
+    /// Distance qui rend EXACTEMENT `s = 0.8` sur la courbe du fil, redérivée
+    /// du miroir GELÉ à chaque exécution :
+    ///
+    ///     s = 1 − scaleDecay · min(1, d / maxDistance)
+    ///     0.8 = 1 − scaleDecay · d/maxDistance
+    ///     d   = maxDistance · (1 − 0.8) / scaleDecay
+    ///
+    /// Sous la loi AMENDÉE (`maxDistance = 520`, `scaleDecay = 0.38`, revue
+    /// REV-1, miroir de `FOCUS_CURVE_CONSTANTS.thread`) :
+    /// `d = 520 · 0.2 / 0.38 = 273.684210…`, et `f = d/520 = 0.526315…`,
+    /// `s = 1 − 0.38 · 0.526315… = 0.8` ✓.
+    ///
+    /// Sous la loi PRÉCÉDENTE (`380` / `0.40`), la même équation donnait
+    /// `d = 380 · 0.2 / 0.40 = 190` — le littéral que ce fichier portait, et
+    /// dont `0612c8ca` a fait tomber la pré-condition (à `d = 190`, la loi
+    /// amendée rend `f = 0.365384…` et `s = 0.861153…`, pas `0.8`).
+    ///
+    /// Écrite en formule plutôt qu'en nombre : garde R15, l'attendu se dérive
+    /// du miroir, jamais posé en dur — et un prochain amendement des
+    /// constantes n'aura pas à rouvrir ce fichier.
+    private static let distanceForScale080: CGFloat =
+        FocalFocusCurve.threadMaxDistance * (0.2 / FocalFocusCurve.threadScaleDecay)
+
     /// Cas coté du §4.3, verbatim : `h = 100`, `s = 0.8` ⇒ `ty = −10`, et le
     /// bord `bounds.y = 0` (bord BAS visuel, après inversion) reste en place.
-    /// La distance `190` est choisie pour que le miroir rende exactement
-    /// `s = 0.8` — l'attendu reste dérivé du miroir, jamais posé en dur.
+    /// La distance est choisie pour que le miroir rende exactement `s = 0.8`
+    /// — l'attendu reste dérivé du miroir, jamais posé en dur.
+    ///
+    /// **Recalibré — déplacé par `0612c8ca` (« transpose la cinématique de la
+    /// maquette de référence — constantes ET pivot »), l'invariant est
+    /// inchangé :** le bord BAS visuel reste invariant par le transform, et le
+    /// cas coté du contrat (`h = 100`, `s = 0.8`, `ty = −10`) est reproduit
+    /// VERBATIM. Seule la distance qui produit ce `s = 0.8` a bougé, parce que
+    /// la loi gelée a été amendée sous elle (`380/0.40` → `520/0.38`) ; elle
+    /// est désormais redérivée du miroir (`distanceForScale080`) au lieu
+    /// d'être figée.
     func test_transform_anchorCorrection_keepsTheBottomEdgeFixed() {
         let height: CGFloat = 100
-        let distance: CGFloat = 190
+        let distance = Self.distanceForScale080
         let scale = FocalFocusCurve.focusCurve(distance: distance, variant: .thread).scale
         XCTAssertEqual(scale, 0.8, accuracy: Self.epsilon,
-                       "pré-condition du cas coté §4.3 : d=190 doit rendre s=0.8 sur la courbe du fil")
+                       "pré-condition du cas coté §4.3 : la distance dérivée du miroir doit rendre s=0.8 sur la courbe du fil")
 
         let transform = geometry.transform(
             distance: distance,
@@ -255,21 +287,74 @@ final class FocalScrollPassGeometryTests: XCTestCase {
 
     /// Ancrage horizontal du bord d'attaque (colonne pastille/nom) : négatif en
     /// LTR, positif en RTL, nul en `.center`.
+    ///
+    /// **Recalibré — déplacé par `0612c8ca` (« transpose la cinématique de la
+    /// maquette de référence — constantes ET pivot »), l'invariant est
+    /// inchangé :** les SIGNES suivent toujours la direction de lecture, et
+    /// l'ancre `.center` ne translate toujours pas. Ce que ce commit a changé,
+    /// c'est le PIVOT de l'échelle : la maquette de référence
+    /// (`docs/design/2026-08-15-conversation-modes-verdict.html`) écrit
+    /// `transform-origin: "18% bottom"`, si bien que la compensation ne vaut
+    /// plus une demi-largeur mais `(0.5 − 0.18)` de largeur. L'attendu est
+    /// donc recalculé, jamais relâché — et la MAGNITUDE est asserted comme
+    /// avant, pas seulement le signe.
+    ///
+    /// **Le calcul, à la main, depuis la loi amendée.**
+    ///
+    /// 1. Distance : `d = distanceForScale080 = 520 · 0.2 / 0.38 = 273.684210…`
+    /// 2. Facteur  : `f = min(1, d/520) = 0.526315…`
+    /// 3. Échelle  : `s = 1 − 0.38 · f = 0.80`, donc `shrink = 1 − s = 0.20`
+    /// 4. Pivot    : `0.5 − threadHorizontalPivot = 0.5 − 0.18 = 0.32`
+    /// 5. `|tx| = w · 0.32 · shrink = 320 · 0.32 · 0.20 = `**`20.48`**
+    ///
+    /// À comparer à l'ancien attendu `32` = `(w/2) · shrink` = `160 · 0.20`,
+    /// qui pivotait autour du bord GAUCHE (0 %) : la rangée s'effondrait vers
+    /// l'extrême bord au lieu de se contracter vers sa colonne d'avatar.
+    /// L'écart `32 → 20.48` EST la transposition du pivot, pas une tolérance
+    /// élargie.
+    ///
+    /// **Pourquoi le nombre ET la formule.** `threadHorizontalPivot` est la
+    /// seule constante de `FocalFocusCurve` qui n'ait PAS de contrepartie dans
+    /// `packages/shared/utils/focus-curve.ts` : le pivot est une cote de
+    /// cinématique, pas de courbe, et son domicile normatif est la maquette
+    /// (`docs/design/2026-08-15-conversation-modes-verdict.html:492`,
+    /// `transformOrigin = "18% bottom"`). Les deux assertions n'ancrent donc
+    /// pas au même endroit — le `20.48` tient la production à la MAQUETTE, la
+    /// formule la tient au MIROIR — et il faut les deux : la formule seule
+    /// laisserait passer un miroir qu'on aurait éloigné de la référence, le
+    /// nombre seul laisserait passer une géométrie qui aurait cessé de lire le
+    /// miroir. Aucune n'est redondante.
     func test_transform_leadingAnchor_signsFollowLayoutDirection() {
         let size = CGSize(width: 320, height: 100)
-        let ltr = geometry.transform(distance: 190, cellSize: size, horizontalAnchor: .leading,
+        let distance = Self.distanceForScale080
+        let ltr = geometry.transform(distance: distance, cellSize: size, horizontalAnchor: .leading,
                                      isRightToLeft: false, alphaCeiling: FocalPassConstants.opaqueAlphaCeiling)
-        let rtl = geometry.transform(distance: 190, cellSize: size, horizontalAnchor: .leading,
+        let rtl = geometry.transform(distance: distance, cellSize: size, horizontalAnchor: .leading,
                                      isRightToLeft: true, alphaCeiling: FocalPassConstants.opaqueAlphaCeiling)
-        let centered = geometry.transform(distance: 190, cellSize: size, horizontalAnchor: .center,
+        let centered = geometry.transform(distance: distance, cellSize: size, horizontalAnchor: .center,
                                           isRightToLeft: false, alphaCeiling: FocalPassConstants.opaqueAlphaCeiling)
 
-        XCTAssertEqual(ltr.translation.width, -32, accuracy: Self.epsilon,
-                       "FocalPerspectiveGeometry.transform : tx = −(w/2)·(1−s) en LTR (§4.3)")
-        XCTAssertEqual(rtl.translation.width, 32, accuracy: Self.epsilon,
-                       "FocalPerspectiveGeometry.transform : tx = +(w/2)·(1−s) en RTL (§4.3)")
+        // 320 · (0.5 − 0.18) · 0.20 — cf. le calcul détaillé ci-dessus.
+        XCTAssertEqual(ltr.translation.width, -20.48, accuracy: Self.epsilon,
+                       "FocalPerspectiveGeometry.transform : tx = −w·(0.5 − pivot)·(1−s) en LTR (§4.3, pivot 18 % de la maquette)")
+        XCTAssertEqual(rtl.translation.width, 20.48, accuracy: Self.epsilon,
+                       "FocalPerspectiveGeometry.transform : tx = +w·(0.5 − pivot)·(1−s) en RTL (§4.3)")
         XCTAssertEqual(centered.translation.width, 0, accuracy: Self.epsilon,
                        "FocalPerspectiveGeometry.transform : tx = 0 pour l'ancre .center (§4.3)")
+
+        // Les DEUX directions sont exactement opposées — le pivot déplace la
+        // magnitude, jamais la symétrie (c'est cette symétrie, et non le
+        // nombre, qui fait de `.leading` un bord d'ATTAQUE).
+        XCTAssertEqual(ltr.translation.width, -rtl.translation.width, accuracy: Self.epsilon,
+                       "LTR et RTL doivent rester rigoureusement opposés — le pivot change la magnitude, jamais la symétrie de direction")
+
+        // Le pivot et l'échelle sont LUS dans le miroir, jamais recopiés : si
+        // `0612c8ca` est un jour amendé à son tour, c'est CETTE assertion qui
+        // dira que le `20.48` ci-dessus a cessé de décrire la loi.
+        let shrink = 1 - FocalFocusCurve.focusCurve(distance: distance, variant: .thread).scale
+        let expected = size.width * (0.5 - FocalFocusCurve.threadHorizontalPivot) * shrink
+        XCTAssertEqual(abs(ltr.translation.width), expected, accuracy: Self.epsilon,
+                       "la magnitude de tx doit rester `w · (0.5 − threadHorizontalPivot) · (1 − s)` — dérivée du miroir, jamais d'un littéral survivant à un amendement")
     }
 
     // =========================================================================
@@ -770,6 +855,66 @@ final class FocalScrollPassWriteTests: XCTestCase {
         )
         XCTAssertEqual(try cell(8).alpha, firstAlpha, accuracy: 0.0001,
                        "FocalScrollPass.apply doit être idempotent sur l'alpha aussi")
+    }
+
+    /// **La contrepartie BÉHAVIORALE de l'exception `cell.frame`.**
+    ///
+    /// `isFullyVisible` est le seul endroit du pass qui lise `cell.frame`, et
+    /// c'est délibéré (« on teste ce que l'œil voit, pas la boîte de layout »).
+    /// La garde source `test_pass_readsCenterAndBounds_neverFrame` a donc dû
+    /// nommer cette exception au lieu de l'interdire — et une interdiction qui
+    /// s'assouplit doit être remplacée, pas seulement documentée.
+    ///
+    /// Ce qu'elle protégeait, c'est l'IDEMPOTENCE : `frame` intègre le
+    /// transform déjà écrit, donc une lecture mal placée ferait dériver le
+    /// résultat d'une passe à l'autre (et il y a six sites d'appel). Ici on
+    /// l'éprouve directement, sur la vraie collection inversée : le verdict de
+    /// visibilité doit être STABLE en rejouant la passe. Il l'est parce que la
+    /// lecture suit l'écriture de la MÊME passe (première boucle : tous les
+    /// transforms ; seconde boucle : la décoration), et que le transform est
+    /// une fonction déterministe d'entrées elles-mêmes invariantes par lui
+    /// (`center`, `bounds`, `contentOffset`, `contentInset`).
+    ///
+    /// Une lecture de `frame` qui se glisserait dans l'ARITHMÉTIQUE ferait
+    /// tomber le témoin d'idempotence ci-dessus ; une lecture qui rendrait le
+    /// VERDICT instable fait tomber celui-ci. Les deux moitiés de l'invariant
+    /// §4.2 sont couvertes, quoi que dise le grep.
+    func test_isFullyVisible_verdictIsStableAcrossRepeatedPasses() throws {
+        let pass = makePass()
+        pass.apply(to: collectionView, describe: Self.describeAll)
+
+        var first: [Int: Bool] = [:]
+        for index in 0..<Self.itemCount {
+            guard let realized = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else { continue }
+            first[index] = pass.isFullyVisible(realized, in: collectionView)
+        }
+        XCTAssertFalse(first.isEmpty, "pré-condition : au moins une cellule réalisée par ce montage")
+
+        // 1. Rejeu pur — six sites d'appel, la passe tourne plusieurs fois par
+        //    frame sans que rien n'ait bougé entre-temps.
+        pass.apply(to: collectionView, describe: Self.describeAll)
+        pass.apply(to: collectionView, describe: Self.describeAll)
+
+        for (index, expected) in first {
+            guard let realized = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else { continue }
+            XCTAssertEqual(
+                pass.isFullyVisible(realized, in: collectionView), expected,
+                "§4.2 : le verdict d'`isFullyVisible` doit être IDENTIQUE après rejeu de la passe (cellule \(index)) — la décoration ne doit pas dépendre du nombre de passes déjà jouées"
+            )
+        }
+
+        // 2. Le cas RÉEL de la dérive : une re-mesure a remis la cellule à
+        //    l'identité, la passe la repose. Un pass qui nourrirait son calcul
+        //    de la sortie de la frame PRÉCÉDENTE verrait ici deux boîtes
+        //    différentes ; le verdict doit pourtant retomber sur le même.
+        let verdictBefore = try XCTUnwrap(first[8], "pré-condition : la cellule 8 doit être réalisée")
+        let erased = try cell(8)
+        erased.layer.transform = CATransform3DIdentity
+        pass.apply(to: collectionView, describe: Self.describeAll)
+        XCTAssertEqual(
+            pass.isFullyVisible(try cell(8), in: collectionView), verdictBefore,
+            "§4.2 : après effacement du transform par une re-mesure puis repose, le verdict d'`isFullyVisible` doit retomber EXACTEMENT sur le même — c'est la seule lecture de `cell.frame` du pass, et c'est ce qui borne l'exception nommée dans `test_pass_readsCenterAndBounds_neverFrame`"
+        )
     }
 
     // MARK: - Filtrage des cellules non éligibles (§4.8)

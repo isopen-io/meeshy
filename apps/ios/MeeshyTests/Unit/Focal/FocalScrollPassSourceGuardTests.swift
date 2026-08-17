@@ -153,17 +153,74 @@ final class FocalScrollPassSourceGuardTests: XCTestCase {
                        "FocalScrollPass.swift ne doit jamais écrire cell.transform — le CGAffineTransform de la cellule se battrait avec l'inversion parentale")
     }
 
-    /// Idempotence (§4.2) : le pass lit `cell.center`/`cell.bounds`, jamais
-    /// `cell.frame` — le getter de `frame` intègre le transform déjà posé, ce
-    /// qui ferait dériver le résultat à chaque nouvel appel (et il y en a six).
+    /// Idempotence (§4.2) : l'ARITHMÉTIQUE du pass lit `cell.center` /
+    /// `cell.bounds`, jamais `cell.frame` — le getter de `frame` intègre le
+    /// transform déjà posé, ce qui ferait dériver le résultat à chaque nouvel
+    /// appel (et il y en a six).
+    ///
+    /// **Recalibré — déplacé par `20c7b738` (« la base de la carte devient la
+    /// rangée d'action ») puis `38781d0e` (« la garde “entièrement visible”
+    /// comparait deux repères qui ne coïncidaient pas »), l'invariant est
+    /// inchangé : rien de ce qui NOURRIT le transform ne lit `frame`.**
+    ///
+    /// Ces commits ont introduit `isFullyVisible(_:in:)`, qui décide si la
+    /// rangée élue est assez dégagée pour porter sa carte, et qui lit `frame`
+    /// DÉLIBÉRÉMENT — sa doc le dit : « on teste ce que l'œil voit, pas la
+    /// boîte de layout ». Ce choix se tient, et il ne casse pas
+    /// l'idempotence :
+    ///
+    ///   - la lecture a lieu APRÈS l'écriture du transform de la MÊME passe
+    ///     (`apply` écrit toutes les cellules dans sa première boucle, et
+    ///     n'appelle `decoration.update` que dans la seconde), donc elle ne
+    ///     lit jamais la sortie de la frame PRÉCÉDENTE ;
+    ///   - le transform étant une fonction déterministe d'entrées elles-mêmes
+    ///     invariantes (`center`, `bounds`, `contentOffset`, `contentInset`),
+    ///     rejouer la passe rend le même `frame`, donc le même verdict ;
+    ///   - la correction d'ancrage du §4.3 (`ty = −(h/2)(1−s)`) laisse de
+    ///     surcroît `frame.minY` RIGOUREUSEMENT égal au bord de layout — seul
+    ///     `frame.maxY` diffère, de `(1−s)·h`, et c'est précisément le bord
+    ///     dont on veut la mesure RENDUE puisque la carte est dessinée à
+    ///     l'intérieur de la cellule mise à l'échelle.
+    ///
+    /// L'interdit reste donc ABSOLU partout où il protège l'arithmétique, et
+    /// l'exception est ÉPINGLÉE à sa seule fonction : le témoin découpe
+    /// `isFullyVisible` et exige zéro `cell.frame` dans tout le reste du
+    /// fichier. Un `cell.frame` qui reparaîtrait dans `apply`, `transform`,
+    /// `write` ou `reset` fait tomber ce test comme avant — ce qui a changé,
+    /// c'est qu'on sait maintenant NOMMER l'endroit où il est permis.
     func test_pass_readsCenterAndBounds_neverFrame() throws {
         let code = try strippedSource("FocalScrollPass.swift")
         XCTAssertTrue(code.contains("cell.center"),
                       "FocalScrollPass.swift doit lire cell.center (invariant par layer.transform) pour l'ordonnée de contenu")
         XCTAssertTrue(code.contains("cell.bounds"),
                       "FocalScrollPass.swift doit lire cell.bounds pour la taille (invariante par layer.transform)")
-        XCTAssertFalse(code.contains("cell.frame"),
-                       "FocalScrollPass.swift lit cell.frame — le getter intègre le transform déjà écrit et rendrait le pass NON idempotent (§4.2)")
+
+        // La SEULE exception admise, découpée puis retirée du fichier.
+        let marker = "func isFullyVisible(_ cell: UICollectionViewCell, in collectionView: UICollectionView) -> Bool {"
+        guard let start = code.range(of: marker) else {
+            XCTFail("`isFullyVisible` introuvable dans FocalScrollPass.swift — la garde du §4.6 a-t-elle été renommée ? L'exception `cell.frame` doit rester nommée pour rester bornée.")
+            return
+        }
+        guard let end = code.range(of: "\n    }\n", range: start.upperBound..<code.endIndex) else {
+            XCTFail("Fin du corps d'`isFullyVisible` introuvable.")
+            return
+        }
+        let isFullyVisibleBody = String(code[start.upperBound..<end.lowerBound])
+        let rest = String(code[code.startIndex..<start.lowerBound]) + String(code[end.upperBound...])
+
+        XCTAssertFalse(
+            rest.contains("cell.frame"),
+            "FocalScrollPass.swift lit `cell.frame` HORS d'`isFullyVisible` — le getter intègre le transform déjà écrit et rendrait le pass NON idempotent (§4.2). Seule la garde « entièrement visible » a le droit de mesurer la boîte de RENDU, et seulement parce qu'elle décide d'un dessin, jamais d'un calcul."
+        )
+
+        // L'exception est bornée aux DEUX bords, et à eux seuls : elle ne doit
+        // pas devenir un guichet ouvert dans lequel d'autres lectures se
+        // glissent au fil des passages.
+        let framesInGuard = isFullyVisibleBody.components(separatedBy: "cell.frame").count - 1
+        XCTAssertLessThanOrEqual(
+            framesInGuard, 2,
+            "`isFullyVisible` lit `cell.frame` \(framesInGuard) fois — deux au plus sont admises (les deux bords, `minY` et `maxY`). Toute lecture supplémentaire doit se justifier, ou passer par `center`/`bounds` comme le reste du pass."
+        )
     }
 
     // MARK: - §4.4 : un seul écrivain sur `cell.alpha`

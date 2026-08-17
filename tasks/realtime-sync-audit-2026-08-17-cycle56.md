@@ -1,215 +1,256 @@
-# Cycle 56 — la police d'un conteneur, posée à un conteneur qui n'a pas de hiérarchie
+# Cycle 56 — la question de la leçon 217, posée à la promesse du SERVEUR
 
-## 0. La voie, et pourquoi ce n'est toujours pas IOS_DETTE
+## 0. La voie
 
-`tasks/lane-cursor.md` est à `lane=ANDROID android_streak=2
-last_run=feed-pin-own-post`. Comme aux cycles 54-bis et 55, l'environnement
-d'exécution est un conteneur Linux sans Xcode ni toolchain Swift
-(`which xcodebuild swift` → rien) : les deux gates obligatoires du couloir iOS
-sont inexécutables, et livrer du Swift non compilé serait un diff non prouvé.
+`tasks/lane-cursor.md` est à `lane=ANDROID android_streak=1
+last_run=notification-cache-first-stream`. Comme aux cycles 54-bis et 55,
+l'environnement d'exécution est un conteneur Linux sans Xcode ni toolchain Swift
+(`which xcodebuild swift swiftc` → rien) : les deux gates obligatoires du couloir
+iOS sont inexécutables ici. Le curseur reste intact pour le prochain run
+disposant d'un Xcode.
 
-Voie retenue : le couloir temps réel côté gateway, entièrement gatable ici
-(jest + tsc sous bun). Le curseur reste intact pour le prochain run disposant
-d'un Xcode.
+Voie retenue : le couloir temps réel, sur une surface entièrement gatable ici
+(web jest + tsc, gateway jest + tsc).
 
 ## 1. D'où vient la piste
 
-Piste n°4 du cycle 55, listée en une ligne :
+La leçon 217 (cycle 55) laisse une question de suivi, et elle est mécanique :
 
-> **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
+> Avant de déclarer qu'un événement « est traité », suivre sa charge utile
+> jusqu'au composant MONTÉ qui la relit. Le suivi s'arrête à un `() => void`, à
+> une clé de cache sans observateur, ou à une action de store sans appelant —
+> trois formes de la même impasse, et aucune ne produit d'erreur.
 
-Instruite ici. Le renommage s'avère être le symptôme INOFFENSIF d'un défaut
-d'autorisation qui, lui, ne l'est pas — et c'est le renommage qui avait retenu
-l'attention, parce qu'il est le seul des huit champs du corps dont on voie
-l'effet à l'écran.
+Le cycle 55 l'a posée aux six écrivains de l'ORDRE de la liste. Ce cycle-ci la
+pose à l'ensemble du contrat : **pour chaque événement déclaré dans
+`ServerToClientEvents`, quel fichier web le lit VRAIMENT ?** Le dépouillement
+(94 constantes `SERVER_EVENTS`, croisées avec l'arbre `apps/web` hors tests)
+isole une classe d'événements dont l'unique référence vit dans la couche
+service — abonnés, jamais relus. `reaction:sync` en fait partie, et c'est celui
+dont le serveur dépend le plus.
 
 ## 2. Le constat
 
-### 2.1 La route ne filtre que sur le RÔLE
+### 2.1 Le serveur écrit sa promesse cinq fois
 
-`PUT /conversations/:id` (`routes/conversations/core.ts`) accepte huit champs et
-pose deux gardes, toutes deux sur l'identité de l'appelant :
+`services/gateway/src/socketio/handlers/ReactionHandler.ts` justifie chacun de
+ses chemins dégradés par la même phrase :
 
-| Garde | Ce qu'elle demande |
+| Ligne | Situation | Justification écrite |
+|---|---|---|
+| 149 | la diffusion échoue après écriture | « leave peers uninformed until the next reaction:sync » |
+| 195 | agrégation dégradée | « self-heals on the next sync » |
+| 210 | diffusion best-effort | « Peers reconcile on the next reaction:sync » |
+| 338 | idem, au retrait | « Peers reconcile on the next reaction:sync » |
+| 513 | retrait non annoncé | « reaction:sync reconciles » |
+
+**L'argument de cohérence des réactions repose entièrement sur un sync client
+ultérieur.** Le serveur ne se rattrape pas lui-même ; il délègue, et il le dit.
+
+### 2.2 Il n'y avait pas de sync ultérieur
+
+Le tableau du rendu, remonté depuis la bulle :
+
+| Fait | Valeur |
 |---|---|
-| appartenance | une ligne `Participant` active de rôle `creator`\|`admin`\|`moderator` |
-| conversation globale | `id !== 'meeshy'` |
-| modérateur | un `moderator` ne touche pas les 4 champs de permissions |
+| Source rendue | `useReactionsQuery` → `['reactions', messageId]` |
+| Fraîcheur | `staleTime: Infinity` |
+| Remplissage à froid | `reaction:request-sync` (ACK), **une seule fois**, au montage |
+| Mises à jour vivantes | `reaction:added` / `reaction:removed` |
+| Rattrapage à la reconnexion | **aucun** |
 
-**Aucune ne regarde le TYPE de la conversation.** La route ne charge même pas la
-ligne `Conversation` avant de l'écrire.
+Aucun `refetchOnReconnect` (désactivé de fait par `staleTime: Infinity`), aucun
+abonnement au cycle de vie du socket. Pour un fil resté ouvert, « le prochain
+sync » n'arrivait jamais. Tout ce que la coupure a manqué — les
+`reaction:added` / `reaction:removed` émis pendant l'absence, qui ne sont pas
+rejoués — restait absent de la bulle **indéfiniment**.
 
-### 2.2 Dans un tête-à-tête, les rôles ne nomment pas une autorité
+### 2.3 Et le remplissage à froid pouvait mémoriser un mensonge
 
-`POST /conversations` avec `type: 'direct'` crée deux lignes `Participant` de
-rôles DIFFÉRENTS : `creator` pour qui a ouvert le fil, `member` pour l'autre
-(même bloc `create` que pour un groupe). C'est un ORDRE D'ARRIVÉE, pas une
-hiérarchie — un tête-à-tête n'a pas d'administrateur.
+`fetchReactions` ouvrait sur :
 
-La garde d'appartenance, elle, lit cette asymétrie comme une autorité :
-l'initiateur passe, l'autre reçoit 403.
-
-### 2.3 Ce que l'initiateur peut donc écrire, et ce que ça produit
-
-`{ isAnnouncementChannel: true }` — ou un plancher `{ defaultWriteRole: 'admin' }`
-— sur le tête-à-tête. Et depuis le cycle 31, **cette police est CÂBLÉE** :
-`conversationWriteAdmission` est appelé dans `MessagingService.handleMessage`, le
-point où REST, socket texte et socket pièces jointes convergent avant l'écriture.
-
-```
-requiredWriteRank : isAnnouncementChannel ⇒ 'admin' (rang 3)
-rang du pair      : 'member'                        (rang 1)
-1 < 3  ⇒  REFUSED('write-role-insufficient')
+```ts
+if (!socket?.connected) {
+  resolve({ reactions: [], userReactions: [] });   // ← succès
+  return;
+}
 ```
 
-**Une partie d'un tête-à-tête peut faire taire l'autre, sur les trois transports
-d'envoi à la fois.** Et la victime n'a aucun retour en arrière : ce même
-`PUT /conversations/:id` lui répond 403, précisément parce qu'elle est `member`.
-L'échappatoire du staff plateforme ne couvre que `ADMIN`/`BIGBOSS`/`MODERATOR`,
-donc pas un compte ordinaire.
+Un **succès** vide, mémorisé sous `staleTime: Infinity`. Le montage d'un fil
+précède couramment la poignée de main du socket : la requête partait, se
+résolvait à vide sans qu'un seul `reaction:request-sync` soit émis, et plus rien
+ne la relisait pour la vie du composant. `isLoading: false`, `error: null` — un
+consommateur qui fait confiance au succès lit « ce message n'a aucune
+réaction ».
 
-### 2.4 Le symptôme qui avait été vu, et pourquoi il est le moins grave
+Les deux défauts sont le même vu deux fois : **la requête n'avait qu'une seule
+occasion d'être juste, et cette occasion courait contre la connexion.**
 
-Le renommage. Web l'ignore pour un tête-à-tête : `getConversationNameOnly` et
-`getConversationAvatarUrl` (`conversation-item/conversation-utils.tsx`) résolvent
-le nom et l'avatar du PAIR dès que `type === 'direct'`, sans jamais regarder
-`conversation.title`. Le gateway le sait aussi — il rend `title || null` pour un
-`direct` là où il fabrique un titre par défaut pour un groupe.
+### 2.4 Le seul écouteur qui portait le mot « réconciliation » était mal branché
 
-`title`, `description`, `avatar`, `banner` sont donc des écritures MORTES sur un
-tête-à-tête : du bruit, pas une usurpation. La piste nommait la moitié visible et
-inoffensive d'un corps de requête dont la moitié invisible était l'attaque.
+`apps/web/services/socketio/presence.service.ts` :
 
-### 2.5 Pourquoi cela avait survécu au câblage du cycle 31
+```ts
+// Reaction sync (full state reconciliation after reconnect)
+socket.on(SERVER_EVENTS.REACTION_SYNC as any, (data: any) => {
+  this.reactionAddedListeners.forEach(listener => listener(data));
+});
+```
 
-Le cycle 31 a répondu à « le canal d'annonces est-il APPLIQUÉ ? ». Il l'a
-correctement appliqué. La question qu'il n'a pas posée est celle d'à côté :
-**sur quels conteneurs ce réglage peut-il être POSÉ ?** Le module énumérait déjà
-les types sans hiérarchie d'écriture — `if (conversation.type === 'global')
-return 0` — donc il connaissait la catégorie « conteneur sans hiérarchie ». Il
-n'en connaissait qu'un membre, et le plus exotique des deux.
+Trois défauts empilés :
 
-En appliquant une règle jusque-là inerte, le cycle 31 a transformé un champ
-cosmétique en arme, sans que rien ne change au site qui l'écrit.
+1. **La charge est disjointe de celle du seau.** `ReactionSyncEventData` est un
+   INSTANTANÉ — `{ messageId, reactions[], totalCount, userReactions[] }` ;
+   `ReactionUpdateEventData` est un DELTA — `{ messageId, conversationId,
+   participantId, userId?, emoji, action, aggregation, timestamp }`. Aucun champ
+   commun hors `messageId`. Versé dans `handleReactionAdded`, l'instantané
+   produit `existing = old.reactions.find(r => r.emoji === undefined)` →
+   `undefined`, puis `newReactions = [...old.reactions, event.aggregation]` :
+   **`undefined` poussé dans la liste d'agrégations rendue.**
 
-### 2.6 Qui écrit ces champs — la question de la leçon 215, posée à l'écriture
+2. **Aucun serveur ne l'émet.** Le sync des réactions est une requête/réponse :
+   le client émet `reaction:request-sync`, `ReactionHandler.handleReactionSync`
+   répond dans l'ACK. `SERVER_EVENTS.REACTION_SYNC` n'a **zéro émetteur** dans
+   tout le dépôt ; le nom `reaction:sync` n'y subsiste que comme étiquette de
+   journal et préfixe de quota. Le défaut était donc latent — mais il était armé.
 
-| Écrivain | Peut-il viser un `direct` ? |
-|---|---|
-| `POST /conversations` (`isBroadcast`) | non — écrit sous `type: 'broadcast'` |
-| `PUT /conversations/:id` | **oui** (le défaut) |
-| `routes/links/messages.ts` (×2) | non — `select`, lectures seules |
-| `core.ts:571` | non — `select` de la liste |
+3. **Le double `as any`** — sur le nom de l'événement ET sur la donnée —
+   supprimait la seule vérification qui l'aurait refusé.
 
-La surface est donc de deux écrivains, dont un seul était en cause.
+Le commentaire annonçait la réconciliation. Le code la rendait impossible.
 
-## 3. Le correctif — deux gestes, deux questions distinctes
+### 2.5 Pourquoi cela avait survécu
 
-### 3.1 La règle — `WRITE_HIERARCHY_FREE_TYPES`
+Le témoin existant l'avait **épinglé comme une fonctionnalité** :
 
-`requiredWriteRank` rend `0` pour `global` **et** `direct`. La ligne unique
-devient un ensemble nommé, avec le raisonnement en tête : les rôles d'un
-tête-à-tête nomment un ordre d'arrivée, pas une autorité.
+```ts
+it('forwards reaction:sync events to reactionAdded listeners (full reconciliation)', …)
+```
 
-C'est le geste qui **guérit les conteneurs DÉJÀ empoisonnés** — ceux dont aucune
-route ne rendra jamais compte, puisque le drapeau est en base.
+Un test qui décrit le mis-routage avec le vocabulaire de l'intention. C'est la
+forme la plus solide de camouflage : la ligne est abonnée, elle fait quelque
+chose, et un témoin vert affirme que c'est la bonne chose.
 
-La dispense porte sur le RANG, jamais sur l'existence : l'état terminal est
-tranché avant qu'on arrive là, donc un tête-à-tête CLOS reste refusé. Un témoin
-le fige, jumeau de celui de la conversation globale.
+## 3. Le correctif
 
-### 3.2 L'autorité — la route refuse les trois champs de police
+Trois gestes, un par défaut constaté.
 
-`defaultWriteRole`, `isAnnouncementChannel`, `slowModeSeconds` sur un `direct` ⇒
-403. Trois champs, pas huit : `autoTranslateEnabled`, `title`, `description`,
-`avatar` et `banner` ne décrivent aucune hiérarchie et restent modifiables.
+1. **`fetchReactions` REJETTE quand le canal est absent**
+   (`ReactionSocketUnavailableError`). Une absence de canal se signale comme un
+   échec ; elle ne se raconte pas comme une absence de réaction. L'erreur ne se
+   réessaie pas — `retry` la reconnaît et rend `false` : tant que la connexion
+   n'est pas revenue, la n-ième tentative échouera comme la première. C'est le
+   RETOUR DE LA CONNEXION, pas un compteur, qui relance la demande.
 
-Le type arrive par la relation du `findFirst` d'appartenance **déjà émis** —
-`select: { role: true, conversation: { select: { type: true } } }`. Aucune
-requête de plus, et le `select` réduit au passage le sur-transfert d'une requête
-qui ramenait la ligne `Participant` entière pour ne lire que `role`.
+2. **Le retour de la connexion redemande l'instantané.** Le hook s'abonne à
+   `meeshySocketIOService.onStatusChange` et ne redemande qu'au franchissement
+   injoignable → joignable. C'est la réconciliation que le gateway annonce cinq
+   fois, mise en service pour la première fois côté web. Elle répare aussi, par
+   construction, le montage à froid du §2.3.
 
-### 3.3 Pourquoi les deux, et pourquoi aucun ne subsume l'autre
+3. **`reaction:sync` cesse d'être un canal serveur→client.** L'abonnement est
+   retiré de `presence.service.ts`, et l'entrée est retirée de
+   `ServerToClientEvents` **et** de `SERVER_EVENTS` : déclarer un canal sans
+   émetteur est ce qui a rendu le mis-routage crédible. `ReactionSyncEventData`
+   reste — il décrit l'ACK de `CLIENT_EVENTS.REACTION_REQUEST_SYNC`, sa seule
+   vraie place.
 
-- La route seule laisserait empoisonnés les tête-à-tête déjà marqués.
-- La règle seule laisserait la route ACCEPTER l'écriture, la persister, et
-  diffuser `conversation:updated` avec un drapeau que plus rien n'applique — un
-  événement qui MENT aux clients sur l'état du conteneur.
+### 3.1 Volume
 
-### 3.4 Le type inconnu reste permissif côté route
+Une demande par bulle montée au franchissement, sous la même limite
+`SOCKET_RATE_LIMITS.REACTION_SYNC` (120 req/60 s) que le gateway applique déjà.
+C'est exactement le volume, déjà admis, de l'ouverture d'un fil : `initialData`
+n'est fourni qu'aux messages porteurs d'un `reactionSummary`, donc le montage
+d'une liste émet déjà une demande par bulle sans résumé.
 
-Idiome documenté du module d'admission (« un réglage absent ou inconnu est
-PERMISSIF »). Ce n'est pas un trou : la garde qui protège réellement le pair est
-la règle §3.1, qui lit le type sur la ligne AUTORITAIRE de conversation, pas sur
-une relation de participant. La route, elle, ne fait qu'empêcher une écriture
-sans effet et un événement mensonger — permissive sur l'inconnu, elle
-n'affaiblit personne.
+### 3.2 Ce que le correctif ne fait pas
+
+Il ne recalcule rien côté client et n'invente aucune diffusion. L'instantané
+vient du serveur, par le chemin que le serveur a choisi (l'ACK). La borne est
+celle des cycles 54-bis et 55 : ne jamais rejouer dans le client une règle qui
+appartient au serveur.
 
 ## 4. Gates
 
-- Suite gateway COMPLÈTE sous bun (parité CI) : **740 suites, 17 937 témoins
-  verts, 0 échec**
-- 9 témoins neufs — 4 sur la règle (2 de dispense, 2 de borne), 5 sur la route
-  (3 champs refusés en `it.each`, 2 de borne)
-- `conversationWriteAdmission.ts` : **100 % lignes / branches / fonctions**
-- `tsc --noEmit -p services/gateway` : **0 erreur** sur tout le service
-- `prisma generate --generator client` + `packages/shared` reconstruits avant
-  la campagne (prérequis de parité CI documentés au CLAUDE.md racine)
+- **Suite web complète** : **581 suites / 12 464 témoins verts**, 21 ignorés,
+  0 échec (`bun x jest`, 101 s). Base cycle 55 : 12 459 → **+5 témoins**.
+- **Suite gateway complète** : **740 suites / 17 928 témoins verts**, 0 échec
+  (434 s) — le retrait de la constante partagée ne touche aucun chemin serveur.
+- **Preuve par mutation, dans les deux sens** — chaque mutation tue exactement
+  les témoins qui la visent :
 
-### Preuve par mutation, dans les deux sens
+  | Mutation | Témoins rouges |
+  |---|---|
+  | `fetchReactions` re-résout à vide au lieu de rejeter | **2** |
+  | refetch de reconnexion neutralisé | **2** |
+  | refetch sur TOUT changement d'état (sans franchissement) | **1** |
+  | garde `isPersisted` retirée de l'effet | **1** |
+  | écouteur `reaction:sync` réinjecté (constante retirée) | **1** |
+  | état d'AVANT complet réinjecté (constante + écouteur) | **1** |
 
-| Mutation | Effet attendu | Constaté |
-|---|---|---|
-| retirer `'direct'` de l'ensemble | les 2 dispenses tombent | 2 échecs |
-| ajouter `'group'` à l'ensemble | la borne du groupe tombe | 10 échecs |
-| neutraliser la garde de route | les 3 champs passent | 3 échecs |
-| garde de route sur TOUS les champs | la borne cosmétique tombe | 1 échec |
+- **`tsc --noEmit` web** : **1234 erreurs avant, 1234 après**. Listes triées et
+  normalisées sur les numéros de ligne : identiques à 4 messages près, dont
+  l'ORDRE des membres d'union varie d'un run à l'autre — même non-déterminisme
+  que celui documenté au cycle 55. **Zéro erreur nouvelle.**
+- **`tsc --noEmit` gateway** : **0 erreur**.
+- **Gardes de dépôt** : `check-law-literals.sh` et `check-swift-viewbuilder.sh`
+  verts.
+- **Parité locale** : `bun install --frozen-lockfile --ignore-scripts` (le
+  postinstall de `grpc-tools` télécharge un binaire précompilé inaccessible
+  depuis ce conteneur ; il ne concerne aucun chemin testé), `prisma generate`
+  (client 6.19.3, binaire épinglé du workspace) + `packages/shared` reconstruit
+  avant chaque campagne (`moduleNameMapper` pointe sur `dist/`).
 
-Les deux sur-dosages sont ce qui prouve que les témoins tiennent une BORNE et pas
-seulement une direction.
+## 5. Découvert en chemin, NON traité
 
-## 5. Écartés délibérément
+**Le `jest.mock('@meeshy/shared/types/socketio-events', …)` de
+`presence.service.test.ts` est inerte.** `moduleNameMapper` réécrit
+`^@meeshy/shared/(.*)$` vers `packages/shared/dist/$1` : la fabrique de mock,
+enregistrée sous le spécifieur non mappé, n'intercepte jamais le module
+réellement chargé. Le test tourne donc contre le vrai contrat compilé — ce qui
+se voit à ce que `SERVER_EVENTS.REACTION_SYNC` valait `undefined` sous mutation,
+et non `'reaction:sync'`. Sans conséquence sur la justesse (le vrai contrat est
+la meilleure référence possible), mais la table de 21 constantes recopiée en
+tête de fichier est du code mort qui se lit comme une source de vérité.
 
-**Interdire aussi `title`/`avatar` sur un tête-à-tête.** Écritures mortes (§2.4),
-donc de l'hygiène, pas une correction — et une hygiène qui a un coût : un
-`customName` par utilisateur existe déjà côté préférences, et trancher ce que
-`Conversation.title` signifie pour un `direct` dépasse un correctif
-d'autorisation.
+## 6. Écarté délibérément
 
-**`slowModeSeconds` n'est toujours appliqué par personne.** Le module le
-documente déjà (« un limiteur de débit, pas une admission »). Il est refusé ici
-par cohérence de FAMILLE — c'est un réglage de police de conteneur — mais son
-inapplication reste intacte, et ce cycle ne la corrige pas.
+**Consommer `reaction:sync` comme une diffusion, avec sa propre sortie typée.**
+C'est ce que la leçon 217 prescrit pour un événement qui porte une charge — mais
+seulement pour un événement qui EXISTE. Ici aucun serveur n'émet, et le sync a
+déjà son transport (l'ACK). Brancher un consommateur aurait ajouté du code
+spéculatif là où le geste juste est de retirer la déclaration.
 
-**`PUT` ne résout pas les identifiants alors que son schéma les annonce.**
-`DELETE /conversations/:id` passe par `resolveConversationId`, `PUT` non : un
-appel par identifiant échoue en 403 sur la garde d'appartenance. Constat réel,
-sans conséquence de sécurité, et qui touche le contrat de la route plus que son
-autorisation.
+**Étendre le retrait aux autres membres de la classe** — `attachment:reaction-*`
+(zéro consommateur web), `post:reaction-sync`, `comment:reaction-sync`,
+`location:live-*`, `message:consumed`. Ils appartiennent au même dépouillement
+(§1) mais chacun demande sa propre instruction : `attachment:reaction-*` est un
+émetteur serveur COMPLET (handler dédié, rejeu de file hors-ligne) sans UI web —
+une fonctionnalité non implémentée, pas un défaut de synchronisation. Piste n°1
+du cycle 57.
 
-## 6. Pistes pour le cycle 57 — repérées, NON livrées
+**Un garde de source « tout événement de `ServerToClientEvents` doit avoir un
+émetteur gateway ».** C'est la forme générale du §2.4-2 et elle serait
+mécanique. Écarté faute d'avoir pu la rendre sans faux positifs : plusieurs
+familles (appels, agent admin) émettent par indirection
+(`mapEventTypeToServerEvent`, relais Redis), qu'un grep ne suit pas. À instruire
+avant d'être livrée.
 
-1. **Le code mort des trois hooks de préférences React Query** (piste n°1 du
+## 7. Pistes pour le cycle 57 — repérées, NON livrées
+
+1. **`attachment:reaction-added` / `attachment:reaction-removed` : émetteur
+   serveur complet, zéro consommateur web** (§6). Décider s'il s'agit d'une
+   fonctionnalité à porter ou d'un contrat à réduire.
+2. **`message:consumed` (view-once) n'a aucun abonné possible sur web** :
+   `MessagingService.onMessageConsumed` existe, mais n'est exposé ni par
+   l'orchestrateur ni par la façade — le `Set` d'écouteurs ne peut pas être
+   peuplé. Impasse de la leçon 217, quatrième forme.
+3. **Le mock inerte de `presence.service.test.ts`** (§5) — et la question de
+   savoir combien d'autres suites recopient un contrat qu'elles n'utilisent pas.
+4. **Le code mort des trois hooks de préférences React Query** (piste n°1 du
    cycle 55) — intacte.
-2. **`handleMessageDeleted` renonce quand le cache messages est vide** — intacte,
-   à re-prouver avant d'y consacrer un cycle.
-3. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** — intacte, bloquée sur
-   l'absence de Xcode.
-4. **Le témoin de source ne couvre qu'un fichier** (cycle 54-bis n°4) — intacte.
-5. **`slowModeSeconds`, réglage de conteneur que personne n'applique** (§5) — la
-   dernière des trois colonnes « WRITE PERMISSIONS » à n'avoir aucun exécuteur.
-6. **`PUT /conversations/:id` n'accepte pas les identifiants que son schéma
-   annonce** (§5).
-7. **`tasks/lessons.md` porte DEUX « Leçon 215 »** — constat de l'intégration
-   manuelle de `main` de ce cycle. La routine *calling* (cycle 140) a numéroté sa
-   leçon en parallèle de la routine *messagerie* (cycle 54-bis) : deux couloirs
-   qui numérotent depuis leur propre lecture du fichier collisionnent dès qu'ils
-   livrent le même jour. Les deux textes sont conservés VERBATIM, chacun gardant
-   son numéro — renuméroter la leçon d'un autre couloir casserait les renvois de
-   son propre CHANGELOG. La dette est le compteur PARTAGÉ, pas l'une des deux
-   leçons ; à trancher pour lui-même.
-8. **La question que ce cycle généralise** : pour chaque réglage de CONTENEUR
-   appliqué par une garde, quels TYPES de conteneur peuvent légitimement le
-   porter ? Le tableau §2.6 l'a posée à l'écriture de trois champs ; les
-   préférences de communauté et les droits de lien de partage ne l'ont jamais
-   reçue.
+5. **`handleMessageDeleted` renonce quand le cache messages est vide** —
+   intacte, à re-prouver avant d'y consacrer un cycle.
+6. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
+   intacte, bloquée sur l'absence de Xcode.
+7. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.

@@ -47,7 +47,7 @@
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle56.md` — le tableau des quatre
+Voir `tasks/realtime-sync-audit-2026-08-17-cycle56-bis.md` — le tableau des quatre
 écrivains de ces champs, pourquoi le câblage juste du cycle 31 a armé un champ
 cosmétique sans que son écrivain change, et les sept pistes du cycle 57.
 
