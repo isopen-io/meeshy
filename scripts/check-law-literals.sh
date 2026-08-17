@@ -183,11 +183,37 @@ strip_comments() {
 # Recherche d'un littéral en JETON, commentaires exclus — pas en sous-chaîne.
 # La frontière ERE interdit chiffre/lettre/underscore/point autour du jeton :
 # '45' ne matche plus dans '0.45' ni dans 'I-045', '900' plus dans 'indigo900'.
+#
+# Collision Tailwind — REV-4bis (2026-08-17), V4ter/B3 : l'extension de
+# SKIN_DIRS à `reading/` et à `bubble-message/FocalRow.tsx` a exposé une
+# classe de faux positifs que la frontière ci-dessus ne couvre PAS. Tailwind
+# v3 fournit la teinte `900` dans CHAQUE rampe de couleur par défaut
+# (`gray-900`, `indigo-900`, …) : `dark:bg-gray-900/80` est une convention
+# de thème sombre ordinaire, répétée partout ailleurs dans le dossier
+# `bubble-message/` (`EditMessageView.tsx`, `DeleteConfirmationView.tsx`,
+# hors périmètre R15) — pas la durée gelée de 900 ms. Le correctif frontière
+# (V3, F-090) a fermé la forme SANS séparateur (`indigo900`) ; il n'a jamais
+# couvert la vraie syntaxe Tailwind, toujours à trait d'union
+# (`indigo-900`).
+#
+# Le filtre ci-dessous ne s'applique QU'au littéral "900" — c'est le seul
+# des HARD_LITERALS qui coïncide avec un palier Tailwind (la rampe est
+# 50/100/150…900/950 ; 520/380/160/140/45 n'en sont pas) — et ne retire QUE
+# les occurrences de la forme `<lettres>-900` (nom de couleur + trait
+# d'union), avec modificateur d'opacité optionnel (`/NN`) ou frontière de
+# mot ensuite. Une vraie violation exécutable (`= 900`, `> 900`, `, 900,`,
+# `900;`) n'est JAMAIS précédée de `<lettres>-` : elle reste détectée.
 scan_hard_literal() {
   local literal="$1" f="$2"
   local esc="${literal//./\\.}"
-  strip_comments "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" \
-    | sed "s@^@$f:@" || true
+  local hits
+  hits="$(strip_comments "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" || true)"
+  if [ "$literal" == "900" ] && [ -n "$hits" ]; then
+    hits="$(printf '%s\n' "$hits" \
+      | grep -vE '[A-Za-z]-900(/[0-9]{1,3})?([^0-9A-Za-z_.]|$)' || true)"
+  fi
+  [ -n "$hits" ] && printf '%s\n' "$hits" | sed "s@^@$f:@"
+  return 0
 }
 
 # Même passage par `strip_comments` pour la règle SOUPLE : une docstring qui
