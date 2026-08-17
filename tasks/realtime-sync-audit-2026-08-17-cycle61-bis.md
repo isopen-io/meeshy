@@ -1,4 +1,13 @@
-# Cycle 61 — la pastille de reconnexion existait, et le serveur la refusait à la moitié de sa population
+# Cycle 61 bis — la pastille de reconnexion existait, et le serveur la refusait à la moitié de sa population
+
+> **Note d'intégration.** Une AUTRE exécution de la routine a livré un cycle 61
+> pendant celui-ci (PR #3179, « les lois gelées franchissent enfin la frontière
+> `dist/` »). Les deux sont indépendants et ont fusionné **sans conflit** ; ce
+> journal est donc renuméroté *bis*, suivant la convention des cycles
+> 54/56/57/60. Aucun recouvrement de fichier : l'autre cycle porte sur la parité
+> `dist/` des lois partagées de lecture (`packages/shared`, `apps/web/__tests__/
+> lentille/`), celui-ci sur la résolution du lecteur au reconnect
+> (`services/gateway/src/socketio`, `apps/web/hooks/queries`).
 
 ## 1. D'où vient la piste
 
@@ -191,6 +200,16 @@ méthodes). Les 7 témoins de ce cycle y sont.
 
 Non traité : le repli complet du fichier. C'est un cycle à part — voir piste n°1.
 
+**Un flake NON identifié dans `packages/shared`, observé une fois.** Après le
+merge de `main`, le premier `bun run test` de `packages/shared` a rendu
+`1 failed | 82 passed (83)` / `2167 passed, 1 failed (2168)`. Les **quatre**
+exécutions suivantes, sans aucune modification entre-temps, ont rendu
+`83 passed (83)` / `2168 passed (2168)`. Le nom du test fautif n'a pas pu être
+capturé (la sortie du run fautif était déjà consommée). Signalé tel quel plutôt
+qu'écarté : un échec non reproduit reste un échec observé, et ce diff ne touche
+aucun fichier de `packages/shared`. À traiter comme piste si un run de CI le
+reproduit — voir piste n°2 bis.
+
 **Aucun jumeau du défaut lui-même.** Balayage mécanique : les trois autres
 `if (!isAnonymous)` du gateway sont légitimes (`routes/reactions.ts` traite
 explicitement les deux branches), et `socketio/utils/participant-resolver.ts` —
@@ -206,28 +225,34 @@ le résolveur partagé — résout correctement les deux identités. Les lookups
    FABRIQUE des défauts verts. Le critère est mécanique et grep-able : tout
    helper de test nommé `*Impl` qui recopie un corps de méthode de production.
    Vérifier s'il en existe d'autres dans le dépôt fait partie de la piste.
-2. **`conversation:unread-updated` sans `bridge` sur le chemin de reconnexion**
+2. **Identifier le flake de `packages/shared`** (§7). Observé une fois, non
+   reproduit en quatre exécutions. La piste utile n'est pas de le chercher à
+   l'aveugle mais de faire en sorte que le prochain le NOMME : lancer avec un
+   reporter qui persiste la sortie (`vitest run --reporter=json
+   --outputFile=…`) dès qu'un run de CI de `packages/shared` rougit sans cause
+   évidente.
+3. **Le garde « aucun `invalidateQueries` sur un PRÉFIXE d'une clé de query
+   infinite paginée par OFFSET »** (cycle 60 bis piste n°2) — intacte. Toujours
+   une seule exemption légitime (le `.catch` de `handleConversationNew`).
+4. **`conversation:unread-updated` sans `bridge` sur le chemin de reconnexion**
    (§6). Décision de contrat, pas correctif : les deux instantanés de reconnexion
    émettent la forme courte, alors que le fan-out d'envoi
    (`emitUnreadCountsToRecipients`) sait attacher le pont. Savoir si un lecteur en
    a besoin au reconnect est une question produit.
-3. **Le garde « aucun `invalidateQueries` sur un PRÉFIXE d'une clé de query
-   infinite paginée par OFFSET »** (cycle 60 bis piste n°2) — intacte. Toujours
-   une seule exemption légitime (le `.catch` de `handleConversationNew`).
-4. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte,
+5. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte,
    changement de contrat de route.
-5. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte, plusieurs cycles.
-6. **`attachment:reaction-*` et `message:consumed` sans lecteur web** (cycle 57
+6. **La file hors-ligne par APPAREIL** (cycle 58 §7) — intacte, plusieurs cycles.
+7. **`attachment:reaction-*` et `message:consumed` sans lecteur web** (cycle 57
    §8-3) — décision produit.
-7. **Le mock inerte de `presence.service.test.ts`** (cycle 56 §5) — intacte. À
+8. **Le mock inerte de `presence.service.test.ts`** (cycle 56 §5) — intacte. À
    rapprocher de la piste n°1 : même famille (un témoin qui ne peut rien prouver).
-8. **Le code mort des trois hooks de préférences React Query** (cycle 55) —
+9. **Le code mort des trois hooks de préférences React Query** (cycle 55) —
    intacte.
-9. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
-   intacte, bloquée sur l'absence de Xcode.
-10. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte,
+10. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
+    intacte, bloquée sur l'absence de Xcode.
+11. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte,
     cosmétique.
-11. **Les DEUX sockets web sont-elles la bonne architecture ?** (cycle 58 §8-8) —
+12. **Les DEUX sockets web sont-elles la bonne architecture ?** (cycle 58 §8-8) —
     intacte. Ce cycle ajoute une nuance à la classe générale : ici le défaut
     n'était pas « deux mécanismes pour un job », c'était **un mécanisme correct,
     débranché pour une moitié de sa population, et une compensation cliente
