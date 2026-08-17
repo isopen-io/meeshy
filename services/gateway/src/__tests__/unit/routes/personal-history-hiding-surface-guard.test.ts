@@ -166,7 +166,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * lecteur a effacé l'historique reviendrait le nommer dans la phrase du
    * rang : la fuite que le compteur, lui, ne fait plus depuis le cycle 109.
    */
-  'ConversationBridgeService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // DEUX lectures depuis REV-5/B2, et une seule application TEXTUELLE. La
+  // passe par conversations (`buildBridgeData`) appelle
+  // `applyPersonalHistoryHiding` sur chaque branche `OR` ; la passe par
+  // lecteurs (`buildBridgeDataForViewers`) ne le peut pas — sa fenêtre est
+  // COMMUNE à tous les lecteurs, alors que le masquage est personnel — et
+  // applique donc le masquage EN MÉMOIRE, lecteur par lecteur. Les marqueurs
+  // qui le prouvent sont déclarés dans `IN_MEMORY_HIDING_SURFACES`, faute de
+  // quoi ce fichier passerait pour un lecteur à moitié masqué.
+  'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   'ConversationMessageStatsService.ts': {
     kind: 'exempt',
@@ -198,6 +206,17 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
+  // La passe par LECTEURS de `buildBridgeDataForViewers` : une fenêtre commune
+  // à tous les destinataires, donc un masquage qui ne peut pas entrer dans la
+  // clause SQL. Il est appliqué en mémoire — plancher personnel
+  // (`exclusiveFloorMsFor`) et messages masqués un par un
+  // (`hiddenMessageIds`). Retirer l'un de ces trois marqueurs, c'est faire
+  // fuiter dans le pont ✦ d'un lecteur des messages qu'il a effacés pour lui.
+  'ConversationBridgeService.ts': [
+    'loadPersonalHistoryHidingByUser(',
+    'exclusiveFloorMsFor(',
+    'hiddenMessageIds',
+  ],
 };
 
 const walk = (dir: string): string[] =>

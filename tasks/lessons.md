@@ -9966,3 +9966,23 @@ démentie par le voisin**. Un commentaire, même impératif et même juste à c�
 garde rien. Seul un témoin qui mesure l'effet garde. Quand on trouve une règle
 énoncée en commentaire, **vérifier ses voisins immédiats** — c'est là qu'elle est
 le plus souvent violée, parce que la proximité a fait croire qu'elle était lue.
+
+### Un champ optionnel devient obligatoire le jour où un client le lit autoritairement
+
+`bridge` est OPTIONNEL sur `conversation:unread-updated`. Les deux clients le
+recopient inconditionnellement, `undefined`/`nil` compris — donc un émetteur qui
+l'omet n'est pas muet : il ORDONNE UN EFFACEMENT. Le cycle qui a rendu le champ
+autoritatif côté web n'a instruit qu'UN des quatre émetteurs serveur ; les trois
+autres se sont mis à effacer sans qu'une seule de leurs lignes ne change, et sans
+qu'un seul témoin ne rougisse — chaque émetteur a ses propres tests, et aucun ne
+connaît la règle de l'autre.
+
+Règle : **quand on rend un champ wire autoritatif côté client, on énumère TOUS les
+émetteurs serveur du même événement dans le MÊME lot**, et on statue explicitement
+sur chacun (attache / n'attache pas, et pourquoi). Un `grep` sur la constante
+d'événement suffit à produire la liste ; ne pas la produire, c'est livrer un
+défaut par émetteur non instruit.
+
+Corollaire sur les témoins : un `toHaveBeenCalledWith` sur le payload ENTIER gèle
+la forme courte comme un acquis. Quand la forme longue existe ailleurs pour le
+même événement, ce témoin ne protège plus — il garantit la divergence.
