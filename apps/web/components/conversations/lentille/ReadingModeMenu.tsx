@@ -104,24 +104,33 @@ const CATALOG_ENTRIES: readonly MenuEntry[] = [
 
 const RIVER_ENTRY: MenuEntry = { preference: 'riviere', mode: 'river' };
 
-/** Libellé de la raison Rivière grisée — trifurcation S1, jamais une formule unique. */
+/**
+ * Libellé de la raison Rivière grisée — trifurcation S1, jamais une formule
+ * unique. PUR par rapport à la SÉLECTIONNABILITÉ (miroir exact de
+ * `LentilleModeLabels.riverReason`, iOS) : ce formateur ne sait rien du
+ * drapeau `riviere_mode` ni de `capabilities.availableModes` — seule
+ * `riverEligibilityReason` (numérique) le pilote. C'est l'APPELANT (R-135)
+ * qui décide de l'AFFICHER ou non, selon que l'entrée reste effectivement
+ * désactivée — jamais ce formateur, qui décidait à tort seul (via un
+ * `case 'eligible': return null`) avant R-135 : une conversation
+ * numériquement éligible mais dont le drapeau est encore ÉTEINT restait
+ * grisée SANS aucune raison affichée, un item désactivé muet.
+ */
 function riverReasonLabel(capabilities: ReadingModeCapabilities, t: LentilleRowTranslate): string | null {
   const { riverEligibilityReason } = capabilities;
-  switch (riverEligibilityReason.riverReason) {
-    case 'neverEligible':
-      return t('lentille.modes.river.never');
-    case 'belowThreshold':
-      return riverEligibilityReason.current === null
-        ? t('lentille.modes.river.thresholdOnly', { threshold: riverEligibilityReason.threshold })
-        : t('lentille.modes.river.reason', {
-            threshold: riverEligibilityReason.threshold,
-            current: riverEligibilityReason.current,
-          });
-    case 'eligible':
-      return null;
-    default:
-      return null;
+  if (riverEligibilityReason.riverReason === 'neverEligible') {
+    return t('lentille.modes.river.never');
   }
+  // `belowThreshold` ET `eligible` partagent la MÊME branche numérique —
+  // `eligible` y arrive seulement quand l'appelant choisit quand même
+  // d'afficher une raison (entrée encore désactivée par le drapeau, pas par
+  // l'éligibilité) : le texte reste honnête, il cite les seuils réels.
+  return riverEligibilityReason.current === null
+    ? t('lentille.modes.river.thresholdOnly', { threshold: riverEligibilityReason.threshold })
+    : t('lentille.modes.river.reason', {
+        threshold: riverEligibilityReason.threshold,
+        current: riverEligibilityReason.current,
+      });
 }
 
 export function ReadingModeMenu({
@@ -137,7 +146,11 @@ export function ReadingModeMenu({
   actionsSection,
 }: ReadingModeMenuProps) {
   const isRiverSelectable = capabilities.availableModes.includes('river');
-  const riverReason = riverReasonLabel(capabilities, t);
+  // R-135 — la raison ne survit QUE tant que l'entrée reste désactivée. Une
+  // Rivière sélectionnable ne doit plus porter de texte « s'ouvrira à… » à
+  // côté de son propre nom (même garde que côté iOS, `LentilleModeMenu.swift`
+  // : `disabledReason: (isRiviere && isDisabled) ? … : nil`).
+  const riverReason = isRiverSelectable ? null : riverReasonLabel(capabilities, t);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>

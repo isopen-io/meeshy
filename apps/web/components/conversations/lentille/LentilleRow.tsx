@@ -24,10 +24,18 @@
  * chacun rend `null` hors ligne, donc le dot n'apparaît que « si quelqu'un
  * est actif », jamais un agrégat fabriqué. Le typing FORCE un dot vert
  * indépendant (l'écriture EST une preuve d'activité, contrat LWS-10).
+ *
+ * Aria-label (behaviour-matrix:L16, V4ter/B1) — « {nom}, {heure}, {n non
+ * lus}, {pont ou préview} », la dernière part construite à partir de la
+ * MÊME résolution que la ligne 2 VISIBLE (une seule fonction, deux
+ * consommateurs — jamais deux chemins parallèles) : voir `lastMessagePreview`/
+ * `lastMessagePreviewText`/`resolveLentilleBridgeAriaText` ci-dessous. Les
+ * non-lus ne sont mentionnés QUE si `> 0` (précédent iOS,
+ * `ThemedConversationRow.swift:290-291`).
  */
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
@@ -46,8 +54,10 @@ import { formatLastMessage } from '../conversation-item/message-formatting';
 import { formatConversationDate } from '@/utils/date-format';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { resolveLentillePresenceEntries, resolveOtherDirectParticipantUser } from './lentille-row-utils';
-import { LentilleBridgeLine } from './LentilleBridgeLine';
+import { LentilleBridgeLine, resolveLentilleBridgeAriaText } from './LentilleBridgeLine';
+import type { BridgeTranslate } from '@meeshy/shared/utils/conversation-bridge';
 import { LentillePeek } from './LentillePeek';
+import { useConversationPreference } from '@/stores/conversation-preferences-store';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
 import { useIsFocusedRow, type LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
 
@@ -61,7 +71,18 @@ export interface LentilleRowProps {
   readonly conversation: Conversation;
   readonly currentUser: User;
   readonly isSelected: boolean;
-  readonly onClick: () => void;
+  /**
+   * REV-4/R4-6 — rappel STABLE + donnée, jamais une fermeture littérale.
+   *
+   * Le parent passait `onClick={() => onSelectConversation(conversation)}` :
+   * une fonction neuve à chaque rendu, donc une prop toujours différente, donc
+   * un `memo` qui ne refusait jamais rien — vingt rangs re-rendus à chaque
+   * frappe typing d'un seul. Le rang reçoit désormais le MÊME rappel que tous
+   * ses voisins (mémoïsé une fois chez `ConversationList`) et referme lui-même
+   * sur SA conversation. C'est le patron déjà en place pour les autres rangées
+   * mémoïsées du dépôt (`ConversationGroup` : `onToggleSection` + `sectionId`).
+   */
+  readonly onSelect: (conversation: Conversation) => void;
   readonly typingUsers?: readonly LentilleTypingUser[];
   readonly draft?: LentilleRowDraft;
   readonly bridge?: ConversationBridge | null;
@@ -99,11 +120,30 @@ function pickDeterministicTypingUser(
   return [...typingUsers].sort((a, b) => a.displayName.localeCompare(b.displayName))[0];
 }
 
+/**
+ * V4ter/B1 — behaviour-matrix:L16, mensonge #1 du verdict REV-4bis.
+ *
+ * L'ancien aria-label émettait le nombre nu (`${unreadCount}`), MÊME à 0 —
+ * iOS (`ThemedConversationRow.swift:290-291`) n'annonce les non-lus que si
+ * `> 0`, via une clé localisée pluralisée (`accessibility.unread_count`).
+ * Même règle ici : `null` (aucune mention) à 0, sinon une clé `One`/`Other`
+ * — patron déjà en place pour `lentille.bridge.messagesOne/Other`
+ * (`conversation-bridge.ts`).
+ */
+const UNREAD_ARIA_ONE_KEY = 'lentille.a11y.unreadOne';
+const UNREAD_ARIA_OTHER_KEY = 'lentille.a11y.unreadOther';
+
+function resolveUnreadAriaSegment(unreadCount: number, t: LentilleRowTranslate): string | null {
+  if (unreadCount <= 0) return null;
+  const key = unreadCount === 1 ? UNREAD_ARIA_ONE_KEY : UNREAD_ARIA_OTHER_KEY;
+  return t(key, { count: unreadCount });
+}
+
 export const LentilleRow = memo(function LentilleRow({
   conversation,
   currentUser,
   isSelected,
-  onClick,
+  onSelect,
   typingUsers = [],
   draft,
   bridge,
@@ -116,6 +156,33 @@ export const LentilleRow = memo(function LentilleRow({
   // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
   // le défilement ET reste sur le rang ouvert. Deux sources, un seul style.
   const isElected = useIsFocusedRow(election, conversation.id);
+
+  /**
+   * V4bis/R4-1 — behaviour-matrix:L07 (part VISUELLE, trou REV-4/R4-1 comblé).
+   *
+   * REV-4 avait laissé la part actions du L07 couverte (B3, six actions du
+   * ⋮) mais sa part visuelle absente : « l'épingle ajoute un glyphe 📌 avant
+   * le nom … et la sourdine passe enfin visible (rang à 0.55 + 🔕) ».
+   * MÊME magasin que `LentillePeek`/`useConversationItemActions`
+   * (`useConversationPreference`, `conversation-preferences-store.ts`) —
+   * aucune seconde source de vérité pour pin/mute, pas de prop à faire
+   * traverser `LentilleConversationListMount` (celui-ci ne connaît déjà pas
+   * ces booléens, voir `LentillePeek.tsx:174` : même repli qu'ici, `false`
+   * quand le magasin n'a pas encore la ligne).
+   */
+  const rowPreference = useConversationPreference(conversation.id);
+  const isPinned = rowPreference?.isPinned ?? false;
+  const isMuted = rowPreference?.isMuted ?? false;
+  const handleClick = useCallback(() => onSelect(conversation), [onSelect, conversation]);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onSelect(conversation);
+      }
+    },
+    [onSelect, conversation]
+  );
   const showsFocusCard = isElected || isSelected;
   const preferredLanguages = useMemo(
     () => getUserLanguagePreferences(currentUser),
@@ -165,31 +232,71 @@ export const LentilleRow = memo(function LentilleRow({
     return getMessageSenderName(message) ?? null;
   };
 
-  const previewNode = conversation.lastMessage ? (
-    <>
-      {getSenderName(conversation.lastMessage) && (
-        <span className="font-medium">{getSenderName(conversation.lastMessage)}: </span>
-      )}
-      {formatLastMessage(conversation.lastMessage, {
+  /**
+   * V4ter/B1 — behaviour-matrix:L16, mensonge #2 du verdict REV-4bis.
+   *
+   * Calculée UNE fois (`formatLastMessage`, le MÊME appel — mêmes options
+   * Prisme — que la ligne 2 visible) puis RÉUTILISÉE par les deux
+   * consommateurs ci-dessous, plutôt que recalculée séparément derrière un
+   * `typeof previewNode === 'string'` qui portait sur le FRAGMENT JSX
+   * enveloppant (`<>{senderName}{lastMessagePreview}</>`) — toujours un
+   * objet React, donc toujours faux, donc l'aria retombait TOUJOURS sur
+   * `conversation.lastMessage?.content` (l'original, jamais la traduction
+   * Prisme). Précédent iOS : `ThemedConversationRow.conversationAccessibilityLabel`
+   * lit `resolvedLastMessagePreview`, la MÊME résolution que le visuel
+   * (`ThemedConversationRow.swift:260-267`).
+   */
+  const lastMessagePreview = conversation.lastMessage
+    ? formatLastMessage(conversation.lastMessage, {
         translations: conversation.lastMessageTranslations,
         originalLanguage: conversation.lastMessageOriginalLanguage,
         preferredLanguages,
-      })}
+      })
+    : null;
+
+  const senderNamePrefix = conversation.lastMessage ? getSenderName(conversation.lastMessage) : null;
+
+  const previewNode = conversation.lastMessage ? (
+    <>
+      {senderNamePrefix && <span className="font-medium">{senderNamePrefix}: </span>}
+      {lastMessagePreview}
     </>
   ) : null;
 
-  // Texte à plat pour l'aria-label — mêmes précédences que le rendu visuel.
+  // Forme TEXTE de la MÊME résolution ci-dessus. `formatLastMessage` ne
+  // rend du JSX QUE pour la branche pièce jointe sans texte
+  // (`message-formatting.tsx:198-232` — le Prisme ne s'y applique jamais,
+  // donc rien n'y est à traduire) ; dans la branche TEXTE (l'immense
+  // majorité), c'est déjà `resolveLastMessagePreview(...)` — une chaîne.
+  const lastMessagePreviewText =
+    (senderNamePrefix ? `${senderNamePrefix}: ` : '') + (typeof lastMessagePreview === 'string' ? lastMessagePreview : '');
+
+  // Texte à plat pour l'aria-label — MÊMES précédences ET MÊME résolution
+  // que le rendu visuel (typing → brouillon → pont → préview) :
+  //   - typing/brouillon : déjà du texte, un seul appel `t(...)` (aucun
+  //     second chemin possible).
+  //   - pont : `resolveLentilleBridgeAriaText` (`LentilleBridgeLine.tsx`,
+  //     EXPORTÉE par ce lot) — la MÊME fonction que le composant utilise
+  //     pour calculer sa phrase + son suffixe de partialité (mensonge #3 :
+  //     avant ce lot, l'aria rendait `lastMessage.content` alors que la
+  //     ligne 2 visible rendait `LentilleBridgeLine`).
+  //   - préview : `lastMessagePreviewText`, ci-dessus.
   const line2AriaText = isTyping
     ? t('lentille.typing.one', { name: typingUser!.displayName })
     : hasDraft
       ? `${t('lentille.draft')} ${draft!.content}`
-      : typeof previewNode === 'string'
-        ? previewNode
-        : (conversation.lastMessage?.content ?? '');
+      : hasBridge && bridge
+        ? resolveLentilleBridgeAriaText(bridge, t as BridgeTranslate, preferredLanguages)
+        : lastMessagePreviewText;
 
   const time = conversation.lastMessage ? formatConversationDate(conversation.lastMessage.createdAt, { t: t as (key: string) => string }) : '';
 
-  const ariaLabel = `${conversationName}, ${time}, ${unreadCount}, ${line2AriaText}`.trim();
+  // V4ter/B1 — mensonge #1 : le nombre nu, émis même à 0. Mention SEULEMENT
+  // si `unreadCount > 0`, localisée et pluralisée (`resolveUnreadAriaSegment`
+  // ci-dessus) — précédent iOS `ThemedConversationRow.swift:290-291`.
+  const ariaLabel = [conversationName, time, resolveUnreadAriaSegment(unreadCount, t), line2AriaText]
+    .filter((part): part is string => !!part && part.trim() !== '')
+    .join(', ');
 
   return (
     <div
@@ -198,17 +305,23 @@ export const LentilleRow = memo(function LentilleRow({
       aria-label={ariaLabel}
       aria-current={isSelected ? 'true' : undefined}
       data-testid="lentille-row"
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      data-muted={isMuted ? 'true' : undefined}
       className={cn(
         'group cursor-pointer outline-none',
         'hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-        isSelected && 'bg-primary/10 hover:bg-primary/20'
+        isSelected && 'bg-primary/10 hover:bg-primary/20',
+        // behaviour-matrix:L07 — « la sourdine passe … visible (rang à
+        // 0.55 … ) » : opacité du RANG ENTIER, jamais un littéral (garde
+        // R15) — classe Tailwind arbitraire portant la variable
+        // `--lentille-list-muted-opacity` (`list.muted.opacity`,
+        // `lentille-tokens.json`), déjà consommée côté iOS
+        // (`LentilleMetrics.Muted`, `lentille-tokens-consumption-gate`) et
+        // jusqu'ici morte côté web. Une classe (résolue en RÈGLE CSS à la
+        // compilation), pas un style inline : `opacity` en style inline
+        // n'accepte pas `var()` de façon fiable sous jsdom pour les tests.
+        isMuted && 'opacity-[var(--lentille-list-muted-opacity)]'
       )}
       style={{
         height: 'var(--lentille-list-row-height)',
@@ -289,7 +402,19 @@ export const LentilleRow = memo(function LentilleRow({
               className="truncate"
               style={{ fontSize: 'var(--lentille-list-name-size)', fontWeight: 'var(--lentille-list-name-weight)' }}
             >
+              {/* behaviour-matrix:L07 — « l'épingle ajoute un glyphe 📌 avant le nom ». */}
+              {isPinned && (
+                <span aria-hidden="true" data-testid="lentille-row-pin-glyph">
+                  📌{' '}
+                </span>
+              )}
               {conversationName}
+              {/* behaviour-matrix:L07 — « la sourdine passe … visible (… + 🔕) ». */}
+              {isMuted && (
+                <span aria-hidden="true" data-testid="lentille-row-mute-glyph" className="ml-1">
+                  🔕
+                </span>
+              )}
             </h3>
             {conversation.lastMessage && (
               <span
@@ -310,8 +435,16 @@ export const LentilleRow = memo(function LentilleRow({
                 {t('lentille.typing.one', { name: typingUser!.displayName })}
               </span>
             ) : hasDraft ? (
-              <span className="text-destructive" data-testid="lentille-row-draft-line">
-                {t('lentille.draft')} {draft!.content}
+              // V4ter/R4-3 — behaviour-matrix:L02. L'ancien span unique
+              // `text-destructive` couvrait le label ET `draft.content` ; la
+              // matrice veut le label seul en couleur d'erreur, le texte du
+              // brouillon en tertiaire (hérité de `text-muted-foreground` du
+              // conteneur ligne 2, ligne 362 — jamais `text-destructive`).
+              <span data-testid="lentille-row-draft-line">
+                <span className="text-destructive" data-testid="lentille-row-draft-label">
+                  {t('lentille.draft')}
+                </span>{' '}
+                <span data-testid="lentille-row-draft-content">{draft!.content}</span>
               </span>
             ) : hasBridge && bridge ? (
               <LentilleBridgeLine bridge={bridge} accentHex={accent} preferredLanguages={preferredLanguages} />

@@ -300,6 +300,9 @@ struct FocalRowActions {
     var onReactToAttachment: ((String, String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var onShowTranslationDetail: ((String) -> Void)?
+    /// « Lire plus » (spec Magnificence §3) : la rangée fournit son texte
+    /// effectif DÉJÀ résolu, la sheet scrollable vit côté ConversationView.
+    var onReadMore: ((FocalReadMorePayload) -> Void)?
     var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
     var onSetSecondaryLanguage: ((String, String?) -> Void)?
     var onPlayAudio: ((String) -> Void)?

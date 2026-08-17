@@ -17,6 +17,7 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
+import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { formatDayLabel, formatTime } from '@/utils/date-format';
 import { useI18n } from '@/hooks/useI18n';
@@ -241,11 +242,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   // ── Pilule « jour · heure » ────────────────────────────────────────────────
   // Volume 4 : elle n'existe QUE pendant le défilement et nomme le message en
-  // tête de viewport. Le compteur `scrollTick` sert de battement : chaque
-  // incrément réarme le minuteur d'effacement côté `ScrollTimePill`.
+  // tête de viewport. `useScrollActivity` (WL-104, loi partagée
+  // `scrollActivityLaw`) possède le linger — `ScrollTimePill` reste une peau
+  // PURE, même patron que `FocalTimePill`/`FocalThread` (garde R15 : un seul
+  // minuteur pour la loi, jamais un second réimplémenté ici).
   const locale = useCurrentInterfaceLanguage();
   const { t: tConversations } = useI18n('conversations');
-  const [scrollTick, setScrollTick] = useState(0);
+  const { visible: pillVisible, notifyScrolled } = useScrollActivity();
   const [topMessageId, setTopMessageId] = useState<string | null>(null);
 
   const pillLabel = useMemo(() => {
@@ -279,7 +282,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     };
 
     const onScroll = () => {
-      setScrollTick(tick => tick + 1);
+      notifyScrolled();
       if (frame === null) frame = requestAnimationFrame(measure);
     };
 
@@ -288,7 +291,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       container.removeEventListener('scroll', onScroll);
       if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [scrollAreaRef, conversationId]);
+  }, [scrollAreaRef, conversationId, notifyScrolled]);
 
   // Attacher handleScroll au conteneur externe si fourni
   // Uses handleScrollRef to avoid detach/reattach on hasMore/isLoadingMore changes (#16)
@@ -618,7 +621,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   return (
     <div className="flex-1 flex flex-col h-full relative">
-      <ScrollTimePill label={pillLabel} scrollTick={scrollTick} />
+      <ScrollTimePill label={pillLabel} visible={pillVisible} />
 
       {/* Si ref externe fourni, pas de conteneur scroll. Sinon, créer un conteneur scroll local */}
       {scrollContainerRef ? (

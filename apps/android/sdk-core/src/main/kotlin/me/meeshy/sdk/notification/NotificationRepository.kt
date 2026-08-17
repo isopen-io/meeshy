@@ -155,8 +155,25 @@ class NotificationRepository @Inject constructor(
         return result
     }
 
-    suspend fun delete(notificationId: String): NetworkResult<Unit> =
-        apiCall { notificationApi.delete(notificationId) }
+    /**
+     * Optimistic: removes the row from the shared cache before the network call, rolls back
+     * on failure. A deleted row that was unread also decrements [unreadCountStream] — mirrors
+     * [markAsRead]'s exact optimistic-mutation shape. Port of iOS `NotificationRowView`'s
+     * trailing swipe / `NotificationListViewModel.deleteNotification`.
+     */
+    suspend fun delete(notificationId: String): NetworkResult<Unit> {
+        val previous = _notificationsCache.value
+        val wasUnread = previous?.firstOrNull { it.id == notificationId }?.state?.isRead == false
+        _notificationsCache.value = previous?.filterNot { it.id == notificationId }
+        if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
+
+        val result = apiCall { notificationApi.delete(notificationId) }
+        if (result is NetworkResult.Failure) {
+            _notificationsCache.value = previous
+            if (wasUnread) _unreadCount.update { it + 1 }
+        }
+        return result
+    }
 
     suspend fun registerDeviceToken(token: String): NetworkResult<RegisterDeviceTokenResponse> =
         apiCall { notificationApi.registerDeviceToken(RegisterDeviceTokenRequest(token = token, platform = "android")) }

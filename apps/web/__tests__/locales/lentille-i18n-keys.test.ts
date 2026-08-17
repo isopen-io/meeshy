@@ -78,6 +78,13 @@ const LENTILLE_KEYS = [
   'lentille.sections.yesterday',
   'lentille.sections.thisWeek',
   'lentille.sections.older',
+  // V4ter/B1 — behaviour-matrix:L16 : le nombre de non-lus de l'aria-label
+  // n'est plus émis nu (mensonge #1, verdict REV-4bis) — mention localisée
+  // et pluralisée, patron `lentille.bridge.messagesOne/Other` déjà éprouvé
+  // par ce même fichier. Consommées par `LentilleRow.tsx`
+  // (`resolveUnreadAriaSegment`).
+  'lentille.a11y.unreadOne',
+  'lentille.a11y.unreadOther',
 ];
 
 describe('lentille namespace i18n keys — reachable via useI18n(\'conversations\') scoping (REV-1 réserve 12b)', () => {

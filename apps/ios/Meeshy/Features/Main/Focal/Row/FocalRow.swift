@@ -436,7 +436,9 @@ struct FocalRow: View {
                 linkTint: Color(hex: input.accentHex),
                 isDark: input.isDark,
                 trackedLinks: content.text?.trackedLinks ?? [:],
-                fontSize: textSize
+                fontSize: textSize,
+                expandLabel: String(localized: "focal.readmore", defaultValue: "Lire plus", bundle: .main),
+                onExpandOverride: { actions.onReadMore?(readMorePayload) }
             )
             .equatable()
             .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
@@ -444,6 +446,19 @@ struct FocalRow: View {
             translationChip
         }
         .padding(.leading, indent)
+    }
+
+    /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
+    /// rangée (Prisme déjà résolu), jamais une seconde résolution.
+    private var readMorePayload: FocalReadMorePayload {
+        FocalReadMorePayload(
+            messageId: content.messageId,
+            senderName: content.senderName ?? "",
+            timeString: content.meta.timeString,
+            text: content.translation?.preferredContent ?? content.text?.raw ?? "",
+            accentHex: input.accentHex,
+            isDark: input.isDark
+        )
     }
 
     /// « Apparition du chip 🌐 en méta » (F06) quand le texte affiché EST

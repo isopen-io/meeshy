@@ -754,6 +754,10 @@
         "yesterday": "Yesterday",
         "thisWeek": "This week",
         "older": "Older"
+      },
+      "a11y": {
+        "unreadOne": "{count} unread message",
+        "unreadOther": "{count} unread messages"
       }
     },
     "focal": {

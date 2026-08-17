@@ -195,6 +195,10 @@ export function formatLastMessage(
   prism?: LastMessagePrismOptions
 ): React.ReactNode {
   // Si le message a un attachement et pas de contenu texte, afficher les détails de l'attachement
+  // behaviour-matrix:L04 — branche pièces jointes sans texte, réutilisée
+  // VERBATIM par `LentilleRow` (`previewNode`) : « reste identique … le
+  // Prisme ne s'applique toujours pas à cette branche » (le prisme,
+  // ci-dessous, ne porte que sur `resolveLastMessagePreview(lastMessage.content, …)`).
   if (lastMessage.attachments && lastMessage.attachments.length > 0 && !lastMessage.content) {
     const attachment = lastMessage.attachments[0];
     const mimeType = attachment.mimeType || '';

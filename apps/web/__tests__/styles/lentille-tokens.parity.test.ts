@@ -111,7 +111,12 @@ function extractJSONTokens(jsonContent: string): Map<string, TokenValue> {
   function traverse(obj: any, section: string, path: string[] = []) {
     for (const key in obj) {
       if (!obj.hasOwnProperty(key)) continue;
-      if (key === '$source') continue;
+      // `$source` (en tête de section) et `$note` (par famille, introduites par
+      // R-131/`river`) sont de la PROSE documentaire, jamais un token — un
+      // `$note` qui contient accidentellement "em" (ex. « amendement R »)
+      // matchait sinon le filtre de valeur-CSS ci-dessous et polluait
+      // `jsonTokens` d'une entrée fantôme sans contrepartie CSS possible.
+      if (key.startsWith('$')) continue;
 
       const value = obj[key];
       const newPath = [...path, key];
@@ -171,12 +176,15 @@ function extractJSONTokens(jsonContent: string): Map<string, TokenValue> {
     }
   }
 
-  // Process both 'list' and 'thread' sections
+  // Process 'list', 'thread' and 'river' (R-131/R-134) sections
   if (json.list) {
     traverse(json.list, 'list');
   }
   if (json.thread) {
     traverse(json.thread, 'thread');
+  }
+  if (json.river) {
+    traverse(json.river, 'river');
   }
 
   return tokens;

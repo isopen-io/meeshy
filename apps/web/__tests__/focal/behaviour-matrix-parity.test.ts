@@ -30,8 +30,9 @@
  * au web par ce plan — ils restent à faire dans une vague ultérieure, pas
  * un oubli de celle-ci.
  */
-import { readdirSync, readFileSync } from 'fs';
-import { extname, join, relative } from 'path';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { indexBehaviourTokens as indexBehaviourTokensShared } from '../support/behaviour-matrix-scan';
 
 const MATRIX_PATH = join(
   __dirname,
@@ -41,75 +42,16 @@ const MATRIX_PATH = join(
 const WEB_ROOT = join(__dirname, '../..');
 
 /**
- * REV-4/B5 — l'INDEX des jetons, construit UNE fois, en process.
- *
- * Ce que faisait la version précédente : un `execSync('grep -rl … apps/web')`
- * PAR id couvert, soit cinq balayages récursifs complets, non bornés. Le coût
- * dépendait donc de ce que l'arbre de travail contenait AU MOMENT du run —
- * `.next/` d'un `next dev` ou `next build`, `coverage/`, un `node_modules/`
- * matérialisé plutôt que hissé à la racine : autant de répertoires que la
- * garde n'excluait pas et que le dépôt ne suit pas. D'où le symptôme rapporté
- * par REV-4 : ROUGE à froid (11 s, au-delà du `testTimeout` par défaut de 5 s),
- * VERT à chaud. Un témoin dont le verdict dépend de l'état du cache disque ne
- * prouve rien : il n'était pas plus « lent » que non déterministe.
- *
- * Le remède ne touche NI au seuil, NI à ce que la garde attrape :
- *
- *   - le balayage est BORNÉ aux sources (`EXCLUDED_DIRS` ci-dessous) — ce qui
- *     est plus STRICT que `grep -rl`, qui acceptait qu'un jeton trouvé dans
- *     une sortie de build ou une dépendance satisfasse la garde ;
- *   - `__tests__/` reste INCLUS : les cinq jetons réels y vivent tous, c'est
- *     le répertoire que la garde doit voir ;
- *   - une seule traversée sert les cinq ids (et tous les futurs), au lieu de
- *     cinq ;
- *   - plus de sous-processus : plus de dépendance au `grep` du système, à son
- *     dialecte d'expression régulière, ni à sa disponibilité.
- *
- * Le test « le mécanisme de balayage n'est pas aveugle » ci-dessous est son
- * témoin de discrimination : remplacer un scanner sans prouver qu'il voit
- * encore, c'est exactement la façon dont une garde meurt en silence.
+ * REV-4/B5 — l'INDEX des jetons, construit UNE fois, en process, BORNÉ aux
+ * sources. Mécanique complète (pourquoi un scan en-process borné remplace
+ * `execSync('grep -rl …')`) documentée UNE fois dans
+ * `apps/web/__tests__/support/behaviour-matrix-scan.ts`, réutilisée telle
+ * quelle par le pendant Lentille (`__tests__/lentille/behaviour-matrix-parity.test.ts`,
+ * V4bis/R4-1) — deux familles d'id (F.. et L..), un seul scanner, jamais deux
+ * mécaniques à faire diverger en silence.
  */
-const EXCLUDED_DIRS: ReadonlySet<string> = new Set([
-  'node_modules',
-  '.next',
-  '.turbo',
-  'dist',
-  'coverage',
-  'test-results',
-  'playwright-report',
-]);
-
-const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx']);
-
-const TOKEN_PATTERN = /behaviour-matrix:(F\d{2})\b/g;
-
-function walkSources(dir: string, files: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (EXCLUDED_DIRS.has(entry.name)) continue;
-      walkSources(join(dir, entry.name), files);
-      continue;
-    }
-    if (!SOURCE_EXTENSIONS.has(extname(entry.name))) continue;
-    files.push(join(dir, entry.name));
-  }
-  return files;
-}
-
-/** id de la matrice → fichiers (relatifs à `apps/web/`) qui posent son jeton. */
 function indexBehaviourTokens(): ReadonlyMap<string, readonly string[]> {
-  const index = new Map<string, string[]>();
-  for (const file of walkSources(WEB_ROOT)) {
-    const content = readFileSync(file, 'utf8');
-    for (const match of content.matchAll(TOKEN_PATTERN)) {
-      const id = match[1];
-      const bucket = index.get(id) ?? [];
-      const rel = relative(WEB_ROOT, file);
-      if (!bucket.includes(rel)) bucket.push(rel);
-      index.set(id, bucket);
-    }
-  }
-  return index;
+  return indexBehaviourTokensShared(WEB_ROOT, /^F\d{2}$/);
 }
 
 type MatrixEntry = { readonly id: string; readonly surface: string; readonly behaviour: string };

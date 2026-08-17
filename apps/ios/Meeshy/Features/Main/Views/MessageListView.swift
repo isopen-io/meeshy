@@ -471,6 +471,7 @@ struct MessageListView: UIViewControllerRepresentable {
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
+    var onReadMore: ((FocalReadMorePayload) -> Void)?
     /// Tap on a media attachment — typically pushes a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Consume a view-once message; the bubble flips to the consumed state.
@@ -535,6 +536,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
+        vc.onReadMore = onReadMore
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation
@@ -606,6 +608,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onRetry = onRetry
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
+        vc.onReadMore = onReadMore
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation

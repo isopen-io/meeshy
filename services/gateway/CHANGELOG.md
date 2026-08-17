@@ -1,5 +1,90 @@
 # @meeshy/gateway
 
+## 1.28.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - ScrollTimePill consomme la loi d'activité de défilement [V4ter/B3]
+  - la garde R15 voit la peau de lecture du tronc [V4ter/B3-RED]
+  - isDisabled manquant dans Entry(...) — régression introduite par R-135
+  - identité hors bulle, contour sérialisé sans découpe [R-136/§7ter-A5-A6]
+  - dégrise Rivière dans les menus quand éligible [R-135]
+  - swipe-to-delete and swipe-to-mark-read (#3178)
+  - ConversationFirstRenderWarmup — démontage synchrone, plus de course avec le premier rendu réel
+  - la Magnificence — loupe continue, fond accentue sans bord, Lire plus scrollable
+  - les clés Rivière entrent au catalogue — plus de français par défaut échappé [R-133 erratum]
+  - GatewayBridgeProvider — NSLock async-context lock/unlock interdits par Swift 6
+  - le memo de LentilleRow refuse enfin quelque chose [V4bis/R4-6]
+  - la passe de perspective et l'élection démarrent en prod [V4bis/B1]
+  - MeeshyAudioSignature stops swallowing real FileManager failures (#3175)
+  - peau Rivière — rendu SVG overlay, grille rang-majeur, mêmes lois, mêmes tokens [R-134]
+  - les 6 actions du ⋮ atteignables sous drapeau Lentille [V4bis/B3]
+  - pagination et branches vides rendues au chemin Lentille [V4bis/B2]
+  - la liste rejouait toutes ses pages sur trois déclencheurs socket [cycle 60]
+  - tokens `river` + peau iOS Canvas/Path — la Rivière devient visible [R-131+R-133]
+  - audio a plat fidele maquette — deux tenues decidees par l'election
+  - main ne compilait plus — ISO8601DateFormatter statiques non Sendable
+  - la garde de matrice devient déterministe à froid [V4bis/B5]
+  - débouché de lecture non écrivant adossé à l'observer, sans generator ni livraison [G-126]
+  - check-law-literals ne confond plus docstring et code — S-003 durci [V4bis/B4]
+  - RiverLaneResolver — miroir Swift de la loi Rivière, 53 vecteurs rejoués [R-132]
+  - rejoinActiveCall() gates on microphone permission like answerCall() (#3159)
+  - résumé de l'observer borné à une plage de messages, format une ligne [G-125]
+  - invite by SMS from the Discover tab (#3172)
+  - la ligne de liste reculait quand un message arrivait dans le désordre [cycle 60]
+  - le témoin d'index 0 de la carte ignorait le halo posé dessous
+  - replying to a reply now prefills @username in the composer (#3169)
+  - la liste de conversations rejouait toutes ses pages à chaque retour de réseau [cycle 59]
+  - paginate the notification list (#3162)
+  - le lien partagé ouvre la conversation dans la vue courante (#3157) [skip ci]
+  - le masquage personnel d'un message n'atteignait jamais les autres appareils [cycle 54] (#3113)
+  - show a live presence dot on direct conversation rows (#3161)
+  - la socket des notifications pouvait mourir définitivement, en silence [cycle 58]
+  - track mood status impressions and views (#3158)
+  - ESLint plantait avant de lire une ligne — trois causes empilées
+  - le rattrapage des réactions dépensait le budget dont il dépend [cycle 57] (#3154)
+  - MediaSaveCoordinator no longer swallows a real removeItem failure (#3155)
+  - record post views and show author-only reach stats (#3153)
+  - userId-change teardown left reconnect-signal refs stale, unlike cleanup() (#3152)
+  - le lien partagé ouvre la conversation dans la vue courante, la jonction passe en modale
+  - let viewers delete their own comments and replies (#3151)
+  - editing the last message left the Prism card translating the pre-edit text (#3101)
+  - main ne compilait plus — NSLock.lock/unlock sont noasync dans bridgeFor async
+  - le defilement suit enfin la courbe — compensation d'offset des corrections de layout sous la fenetre
+  - invite friends by email from Discover (#3149)
+  - le serveur promet cinq fois que « les pairs se réalignent au prochain sync » — il n'y en avait pas [cycle 56] (#3143)
+  - 14 échecs du flux Focal triés (0 régression code, 14 témoins recalibrés)
+  - la décoration de focus redevient éprouvable derrière son interrupteur
+  - GatewayBridgeProvider — injection au point de composition [G-124]
+  - décode et relaie le pont ✦ et la préférence de lecture serveur [G-124]
+  - call:media-toggled's remote mute/camera indicator never updated for a registered peer (#3123)
+  - answerCallReady() gates on microphone permission like answerCall() (#3128)
+  - câblage focus card — trois points d'entrée, une préférence [WL-108]
+  - focus card + encoche « AUTO · <décision> » [WL-108]
+  - élection de la focus card côté liste [WL-108]
+  - focal — citation, médias, capsule date, rangée pont [WF-112]
+  - perspective .thread, élection, pilule jour·heure [WF-111]
+  - FocalRow — rangée plate du fil, densité Script [WF-110]
+  - ReadingModeMenu + LentillePeek — 3 chemins, une préférence [LWS-11/WL-106]
+  - useLentillePerspective + useScrollActivity [LWS-10/WL-104]
+  - stickers, pilule, rail, squelette Lentille [LWS-10/WL-103]
+  - LentilleRow + LentilleBridgeLine — rang plat, pont ✦ [LWS-10/WL-102]
+  - mux Lentille sous drapeau — dynamic, boundary, typing [LWS-10/WL-101]
+  - resolveLentilleFlag — résolveur pur du drapeau, unique décideur [LWS-10/WL-100]
+  - étage agent du pont ✦ — intersection exacte, repli déterministe C2, paire E7 [G-127]
+  - le mode lent d'une conversation est enfin APPLIQUÉ (#3154)
+  - une partie d'un tête-à-tête pouvait faire TAIRE l'autre [cycle 56]
+  - retire `USER_STATUS` de CLIENT_EVENTS — déclaration parasite [cycle 60]
+  - la Rivière borne son axe, nomme la ligne qu'on lit, et porte le message en entier [R-130/R3]
+  - la Rivière navigue sur deux axes, ses branches naissent et meurent [R-130/R2]
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.12.0
+
 ## 1.27.0
 
 ### Minor Changes

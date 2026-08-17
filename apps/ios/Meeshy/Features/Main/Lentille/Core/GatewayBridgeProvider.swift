@@ -54,13 +54,13 @@ final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Senda
     /// exactement la donnée fabriquée que ce fichier proscrit partout
     /// ailleurs.
     func note(_ bridge: ConversationBridge?, for conversationId: String) {
-        lock.lock()
-        if let bridge {
-            bridges[conversationId] = bridge
-        } else {
-            bridges.removeValue(forKey: conversationId)
+        lock.withLock {
+            if let bridge {
+                bridges[conversationId] = bridge
+            } else {
+                bridges.removeValue(forKey: conversationId)
+            }
         }
-        lock.unlock()
     }
 
     /// Alimentation en lot depuis un instantané de liste — même donnée que

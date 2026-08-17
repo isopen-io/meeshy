@@ -157,6 +157,25 @@ describe('ReadingModeMenu — trois entrées de contrat, une préférence (WL-10
     expect(screen.queryByTestId('reading-mode-river-reason')).not.toBeInTheDocument();
   });
 
+  /**
+   * R-135 — discrimine « éligible » de « sélectionnable » (§7ter C, dernier
+   * paragraphe : le catalogue et l'éligibilité sont deux questions
+   * distinctes). Avant ce lot, `riverReasonLabel` renvoyait `null` pour
+   * `riverReason === 'eligible'` SANS regarder le drapeau : une conversation
+   * numériquement éligible mais dont `riviere_mode` reste éteint restait
+   * grisée SANS AUCUNE raison affichée — un item désactivé muet, contraire au
+   * contrat « la raison grisée reste pour les inéligibles » (le drapeau
+   * éteint EST une des causes d'inéligibilité pratique).
+   */
+  it('Rivière numériquement éligible mais drapeau ENCORE éteint ⇒ reste grisée, AVEC sa raison réelle (pas un item muet)', () => {
+    renderMenu({ conversationType: 'group', activeParticipantCount: 8, isRiverFlagEnabled: false });
+    const riverItem = screen.getByTestId('reading-mode-item-riviere');
+    expect(riverItem).toBeDisabled();
+    expect(screen.getByTestId('reading-mode-river-reason')).toHaveTextContent(
+      "s'ouvrira à 5 personnes actives — 8 aujourd'hui"
+    );
+  });
+
   it('masque Résumé pour un invité anonyme (catalogue borné, comme resolveOrchestratorDecision)', () => {
     renderMenu({ isAnonymous: true });
     expect(screen.queryByTestId('reading-mode-item-resume')).not.toBeInTheDocument();

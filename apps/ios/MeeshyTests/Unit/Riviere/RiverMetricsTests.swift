@@ -51,6 +51,20 @@ final class RiverMetricsTests: XCTestCase {
         return try XCTUnwrap((node as? NSNumber)?.doubleValue, "chemin absent ou non-numérique : \(path.joined(separator: "."))")
     }
 
+    /// Descend un chemin de clés et lit un POURCENTAGE textuel (`"44%"`),
+    /// rendu en FRACTION (`0.44`) — même helper que
+    /// `LentilleMetricsTests.tokenPercent` (`row.transformOriginX`), copié
+    /// ici plutôt que partagé : ces deux suites n'ont pas de domicile commun.
+    private func tokenPercent(_ path: String...) throws -> Double {
+        var node: Any? = Self.riverTokens
+        for key in path {
+            node = (node as? [String: Any])?[key]
+        }
+        let raw = try XCTUnwrap(node as? String, "chemin absent ou non-textuel : \(path.joined(separator: "."))")
+        let trimmed = try XCTUnwrap(raw.hasSuffix("%") ? String(raw.dropLast()) : nil, "pas un pourcentage : \(raw)")
+        return try XCTUnwrap(Double(trimmed)) / 100
+    }
+
     // MARK: - Trait de branche
 
     func test_line_width() throws {
@@ -75,6 +89,21 @@ final class RiverMetricsTests: XCTestCase {
 
     func test_bubble_baseGap() throws {
         XCTAssertEqual(Double(RiverMetrics.Bubble.baseGap), try tokenNumber("bubble", "baseGap"))
+    }
+
+    /// §7ter A.5 (2026-08-17) — fraction, même convention que
+    /// `LentilleMetrics.Row.transformOriginX` (JSON `"44%"` ⇒ Swift `0.44`).
+    func test_bubble_identityNameMaxWidth() throws {
+        XCTAssertEqual(
+            Double(RiverMetrics.Bubble.identityNameMaxWidth),
+            try tokenPercent("bubble", "identityNameMaxWidth"),
+            accuracy: 0.0001
+        )
+    }
+
+    /// §7ter A.6 (2026-08-17).
+    func test_bubble_flatBorderWidth() throws {
+        XCTAssertEqual(Double(RiverMetrics.Bubble.flatBorderWidth), try tokenNumber("bubble", "flatBorderWidth"))
     }
 
     // MARK: - Connecteur de réponse

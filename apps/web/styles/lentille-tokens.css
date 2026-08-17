@@ -2,7 +2,7 @@
  * Lentille Design Tokens — CSS Custom Properties
  *
  * Source: packages/shared/design/lentille-tokens.json
- * Generated from sections: 'list' and 'thread'
+ * Generated from sections: 'list', 'thread' and 'river' (R-131/R-134)
  *
  * NOTE: This file is NOT imported anywhere by default.
  * Wiring belongs to future work (WL-100+). Until then, this file is inert.
@@ -135,4 +135,37 @@
   /* thread.agent */
   --lentille-thread-agent-row-border-size: 1.5px;
   --lentille-thread-agent-row-radius: 14px;
+
+  /* ========== RIVER SECTION (R-131/R-134) ========== */
+  /* Cotes de PIXELS de la peau Rivière — jamais une constante de LOI
+     (RIVER_MAX_LANES/RIVER_MIN_VOICES/RIVER_HEADER_FADE_RANKS/
+     RIVER_LANE_SILENCE_WINDOW_MS restent dans
+     packages/shared/utils/river-lanes.ts). Premier consommateur web :
+     apps/web/components/conversations/riviere/** (R-134). */
+
+  /* river.line */
+  --lentille-river-line-width: 2.5px;
+
+  /* river.lane */
+  --lentille-river-lane-width-reference: 300px;
+  --lentille-river-lane-gutter: 28px;
+
+  /* river.bubble */
+  --lentille-river-bubble-detour-radius: 14px;
+  --lentille-river-bubble-base-gap: 8px;
+  /* §7ter A.5 (2026-08-17) — borne du nom en tête de groupe, % de la largeur
+     de bulle (garantit que la branche, à l'aplomb du centre du couloir,
+     croise du vide dans la rangée d'identité). */
+  --lentille-river-bubble-identity-name-max-width: 44%;
+  /* §7ter A.6 — contour NEUTRE de la vue sérialisée (bord gauche/bas restent
+     --lentille-river-line-width, couleur d'auteur). */
+  --lentille-river-bubble-flat-border-width: 1px;
+
+  /* river.connector */
+  --lentille-river-connector-stroke-width: 1.4px;
+  --lentille-river-connector-min-bow: 34px;
+  --lentille-river-connector-bow-ratio: 0.5px;
+
+  /* river.laneHeader */
+  --lentille-river-lane-header-height: 38px;
 }

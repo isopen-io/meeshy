@@ -320,6 +320,9 @@ struct ConversationView: View {
     /// F-086bis) — ouverte par `ReadingModeChip`, jamais par le bouton Aa
     /// (qui bascule Focal⇄Script directement, sans feuille).
     @State private var isReadingModeLensPresented = false
+    /// « Lire plus » Focal (spec Magnificence §3) — présentée par item :
+    /// l'identité du payload est le message.
+    @State private var focalReadMorePayload: FocalReadMorePayload?
     /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
@@ -842,6 +845,9 @@ struct ConversationView: View {
             // UNE SEULE FOIS dans `init` (aucune seconde résolution).
             // Sélection ET retour-auto passent PAR `readingModeController`
             // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
+            .sheet(item: $focalReadMorePayload) { payload in
+                FocalReadMoreSheet(payload: payload)
+            }
             .sheet(isPresented: $isReadingModeLensPresented) {
                 ReadingModeLensSheet(
                     rows: ReadingModeLensCatalog.rows(
@@ -1552,6 +1558,9 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
+                },
+                onReadMore: { payload in
+                    focalReadMorePayload = payload
                 },
                 onMediaTap: { attachment in
                     // User tapped a media — opportunistically warm the cache,

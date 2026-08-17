@@ -72,8 +72,43 @@ import {
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { LentilleFocusElection } from './lentille-focus-election';
 
+/**
+ * Cible de la passe — DEUX formes admises, une seule règle (REV-4/B1).
+ *
+ * 1. Un **élément** (`HTMLElement | null`), typiquement publié dans l'ÉTAT de
+ *    l'appelant par une ref PAR CALLBACK. C'est la forme SÛRE : quand la cible
+ *    apparaît, la valeur change, donc l'effet de ce hook se ré-arme. À
+ *    employer dès que le conteneur n'est pas un ancêtre déjà monté.
+ * 2. Un **`RefObject`**, admis UNIQUEMENT quand React lui-même le peuple —
+ *    `ref={…}` posé sur un ancêtre, attaché en phase de commit, donc peuplé
+ *    AVANT tout effet passif de ce sous-arbre (cas de `FocalThread`, dont
+ *    `ConversationView` possède le conteneur de défilement).
+ *
+ * Ce qui est INTERDIT, et qui est très exactement le blocker B1 de la porte
+ * V2 : passer un `RefObject` peuplé par un EFFET de l'appelant. L'ordre des
+ * effets React est celui des déclarations — le hook lisait alors `.current`
+ * (encore `null`) avant l'effet qui l'écrivait, ses dépendances ne
+ * mentionnaient pas le nœud, et la passe ne démarrait JAMAIS. La double passe
+ * d'effets de `StrictMode` (`next dev`) masquait le défaut ; les tests
+ * peuplaient la ref à la main. La production, elle, ne faisait rien. Même
+ * leçon, même remède que `useLoadMoreSentinel` (REV-4/B2).
+ */
+export type PerspectiveContainer =
+  | HTMLElement
+  | null
+  | React.RefObject<HTMLElement | null>;
+
+/** Déplie la forme 1 ou 2 ci-dessus vers l'élément réel (ou `null`). */
+export function resolvePerspectiveContainer(
+  container: PerspectiveContainer
+): HTMLElement | null {
+  if (container === null) return null;
+  return 'current' in container ? container.current : container;
+}
+
 export interface UseLentillePerspectiveOptions {
-  readonly containerRef: React.RefObject<HTMLElement | null>;
+  /** Conteneur de défilement — voir `PerspectiveContainer` (REV-4/B1). */
+  readonly container: PerspectiveContainer;
   /** Off si la peau parente n'a rien à animer (ex. liste vide). Défaut `true`. */
   readonly enabled?: boolean;
 }
@@ -114,7 +149,7 @@ function resetToIdentity(el: HTMLElement): void {
 }
 
 export function useLentillePerspective({
-  containerRef,
+  container: containerSource,
   enabled = true,
 }: UseLentillePerspectiveOptions): UseLentillePerspectiveResult {
   const rowsRef = useRef(new Map<string, HTMLElement>());
@@ -162,7 +197,7 @@ export function useLentillePerspective({
   }, [reducedMotion]);
 
   useEffect(() => {
-    const container = containerRef.current;
+    const container = resolvePerspectiveContainer(containerSource);
     if (!container || !enabled) return;
 
     let frameId: number;
@@ -218,7 +253,10 @@ export function useLentillePerspective({
     // l'ÉCRITURE opacity/transform est court-circuitée, via la ref, à chaque
     // frame. Relancer l'effet au basculement ne ferait que perdre la frame en
     // vol pour un comportement identique.
-  }, [containerRef, enabled, election]);
+    //
+    // `containerSource`, LUI, y entre (REV-4/B1) : c'est cette dépendance qui
+    // ré-arme la passe quand la cible apparaît après le premier effet.
+  }, [containerSource, enabled, election]);
 
   return { registerRow, election };
 }

@@ -40,7 +40,15 @@ export interface LentilleBridgeLineProps {
 /** Marqueur visuel du pont — reprend le glyphe du contrat (§3.2, §5.2). */
 const BRIDGE_GLYPH = '✦';
 
-function resolveBridgePhrase(
+/**
+ * V4ter/B1 — EXPORTÉE (elle ne l'était pas) : `LentilleRow` la réutilise
+ * TELLE QUELLE pour composer le libellé aria du pont (mensonge #3 du verdict
+ * REV-4bis — l'aria-label rendait `lastMessage.content` alors que la ligne 2
+ * visible rendait `LentilleBridgeLine`). Une seule résolution, deux
+ * consommateurs (le rendu ci-dessous, l'aria de `LentilleRow`) — jamais deux
+ * chemins parallèles.
+ */
+export function resolveBridgePhrase(
   bridge: ConversationBridge,
   t: BridgeTranslate,
   preferredLanguages: readonly string[]
@@ -63,6 +71,37 @@ function resolveBridgePhrase(
   return '';
 }
 
+/**
+ * V4ter/B1 — extraite de l'ancien calcul inline du composant (même règle :
+ * mention de partialité seulement si `isComplete === false`), EXPORTÉE pour
+ * que `LentilleRow` compose le MÊME suffixe dans son aria-label.
+ */
+export function resolveBridgePartialSuffix(bridge: ConversationBridge, t: BridgeTranslate): string | null {
+  if (bridge.isComplete !== false) return null;
+  const count = bridge.data?.messageCount ?? bridge.unreadCount;
+  return t('lentille.bridge.partial', { count });
+}
+
+/**
+ * V4ter/B1 — forme TEXTE complète de ce que `LentilleBridgeLine` affiche
+ * (phrase + suffixe de partialité), glyphe ✦ excepté : celui-ci est déjà
+ * `aria-hidden` dans le rendu visuel, donc absent de toute lecture d'écran —
+ * l'omettre ici n'est pas un raccourci, c'est la fidélité au VRAI rendu.
+ * Consommée par `LentilleRow` pour l'aria-label du rang (mensonge #3, verdict
+ * REV-4bis : « quand `hasBridge`, la ligne 2 rend `LentilleBridgeLine` mais
+ * l'aria-label rend `lastMessage.content` »).
+ */
+export function resolveLentilleBridgeAriaText(
+  bridge: ConversationBridge,
+  t: BridgeTranslate,
+  preferredLanguages: readonly string[]
+): string {
+  const phrase = resolveBridgePhrase(bridge, t, preferredLanguages);
+  if (!phrase) return '';
+  const partial = resolveBridgePartialSuffix(bridge, t);
+  return partial ? `${phrase} · ${partial}` : phrase;
+}
+
 export function LentilleBridgeLine({ bridge, accentHex, preferredLanguages }: LentilleBridgeLineProps) {
   const { t } = useI18n('conversations');
   const theme = useResolvedTheme();
@@ -74,11 +113,10 @@ export function LentilleBridgeLine({ bridge, accentHex, preferredLanguages }: Le
     [bridge, t, preferredLanguages]
   );
 
-  const partialSuffix = useMemo(() => {
-    if (bridge.isComplete !== false) return null;
-    const count = bridge.data?.messageCount ?? bridge.unreadCount;
-    return t('lentille.bridge.partial', { count });
-  }, [bridge.isComplete, bridge.data?.messageCount, bridge.unreadCount, t]);
+  const partialSuffix = useMemo(
+    () => resolveBridgePartialSuffix(bridge, t as BridgeTranslate),
+    [bridge, t]
+  );
 
   if (!phrase) return null;
 

@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=5 last_run=discover-sms-invite
+lane=ANDROID android_streak=1 last_run=notification-swipe-actions

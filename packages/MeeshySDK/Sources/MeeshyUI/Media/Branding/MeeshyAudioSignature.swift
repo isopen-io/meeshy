@@ -2,6 +2,7 @@ import AVFoundation
 import CoreMedia
 import Foundation
 import MeeshySDK
+import os
 
 /// Appose la signature sonore Meeshy (`MeeshyBrandJingle`) sur un fichier
 /// audio enregistré en local — l'équivalent sonore du filigrane apposé sur les
@@ -104,7 +105,9 @@ public enum MeeshyAudioSignature {
         case .leading: jingleURL = try MeeshyBrandJingle.renderToTemporaryFile()
         case .trailing: jingleURL = try MeeshyBrandJingle.renderOutroToTemporaryFile()
         }
-        defer { try? FileManager.default.removeItem(at: jingleURL) }
+        defer {
+            FileManager.default.removeItemLogging(at: jingleURL, context: "audio signature jingle cleanup", logger: .media)
+        }
 
         let asset = AVURLAsset(url: source)
         guard let sourceTrack = try await asset.loadTracks(withMediaType: .audio).first else {
@@ -168,7 +171,9 @@ public enum MeeshyAudioSignature {
 
         await session.export()
         guard session.status == .completed else {
-            try? FileManager.default.removeItem(at: directory)
+            FileManager.default.removeItemLogging(
+                at: directory, context: "audio signature export-failure cleanup", logger: .media,
+            )
             throw SignatureError.exportFailed(session.error?.localizedDescription ?? "unknown")
         }
         return output

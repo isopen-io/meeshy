@@ -11,16 +11,18 @@
  * - Cleanup on unmount
  */
 
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import {
   useSocketCacheSync,
 
 } from '@/hooks/queries/use-socket-cache-sync';
+import { useInfiniteConversationsQuery } from '@/hooks/queries/use-conversations-query';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
+import { useNotificationStore } from '@/stores/notification-store';
 
 // Store callbacks to trigger them in tests
 let newMessageCallback: ((message: Message) => void) | null = null;
@@ -64,10 +66,32 @@ jest.mock('@/stores/auth-store', () => ({
   },
 }));
 
+const mockApiGet = jest.fn();
+
 jest.mock('@/services/api.service', () => ({
   apiService: {
     post: jest.fn().mockResolvedValue({}),
+    get: (...args: unknown[]) => mockApiGet(...args),
   },
+}));
+
+// La liste infinie RÉELLE est montée par les témoins de rejeu de pages
+// ci-dessous : c'est le seul moyen d'observer le dommage en termes de requêtes
+// plutôt qu'en termes d'appels à `invalidateQueries`.
+const mockGetConversations = jest.fn();
+
+jest.mock('@/services/conversations.service', () => ({
+  conversationsService: {
+    getConversations: (...args: unknown[]) => mockGetConversations(...args),
+    getConversation: jest.fn(),
+  },
+}));
+
+// Le delta borné est le rattrapage de la liste, pas le sujet de ce fichier ; il
+// a ses propres témoins (`use-conversations-delta-sync.test.tsx`). Le neutraliser
+// ici garantit qu'une requête observée vient bien du handler socket testé.
+jest.mock('@/hooks/queries/use-conversations-delta-sync', () => ({
+  useConversationsDeltaSync: () => undefined,
 }));
 
 jest.mock('@/services/user-preferences.service', () => ({
@@ -316,6 +340,11 @@ function createWrapperWithClient() {
 describe('useSocketCacheSync', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockApiGet.mockResolvedValue({ data: null });
+    mockGetConversations.mockResolvedValue({
+      conversations: [mockConversation],
+      pagination: { limit: 20, offset: 0, total: 1, hasMore: false },
+    });
     newMessageCallback = null;
     messageEditedCallback = null;
     messageDeletedCallback = null;
@@ -1564,7 +1593,12 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['messages', 'list', 'conv-b', 'infinite'] })
       );
-      expect(invalidateSpy).toHaveBeenCalledWith(
+      // La liste n'est jamais invalidée en bloc : `['conversations']` est un
+      // PRÉFIXE de `['conversations','infinite']` et rejouerait toutes ses
+      // pages, écrasant les `message:new` que le gateway vient de rejouer juste
+      // avant cet événement. Seule la pastille manque, et elle se lit ligne par
+      // ligne — voir « pastille de non-lus » plus bas.
+      expect(invalidateSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['conversations'] })
       );
     });
@@ -1582,7 +1616,7 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] })
       );
-      expect(invalidateSpy).toHaveBeenCalledWith(
+      expect(invalidateSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['conversations'] })
       );
     });
@@ -1898,8 +1932,13 @@ describe('useSocketCacheSync — suite', () => {
           : false
       );
       expect(messageInvalidations).toHaveLength(2);
-      // L'aperçu de la liste peut redevenir le message qu'on avait masqué.
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['conversations'] });
+      // La LIGNE de liste n'est PAS demandée ici : le gateway l'a déjà poussée.
+      // `restoreMessageForUser` appelle `refreshPersonalConversationPreview`,
+      // qui émet un `conversation:updated` portant l'aperçu personnel recalculé
+      // — fusionné sans remplacer la page. L'invalidation qui se trouvait ici
+      // doublait cette diffusion en rejouant toutes les pages de la liste
+      // (`['conversations']` est un PRÉFIXE de `['conversations','infinite']`).
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['conversations'] });
     });
 
     it('does nothing when the payload names no message', () => {
@@ -1913,6 +1952,273 @@ describe('useSocketCacheSync — suite', () => {
       });
 
       expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── La liste ne rejoue JAMAIS ses pages ────────────────────────────────────
+  //
+  // `queryKeys.conversations.all` (`['conversations']`) est un PRÉFIXE de
+  // `queryKeys.conversations.infinite()` (`['conversations','infinite']`).
+  // `invalidateQueries` sur ce préfixe atteint donc la liste infinie, et sur une
+  // query infinie ACTIVE il rejoue TOUTES les pages chargées et REMPLACE le
+  // cache. Trois dommages, dont un est une faute de correction :
+  //
+  //   1. N pages de scroll = N requêtes sur une route lourde (participants,
+  //      dernier message avec traductions et pièce jointe, compteurs de non-lus
+  //      calculés par curseur) ;
+  //   2. tout ce que la socket écrit pendant la séquence est ÉCRASÉ ;
+  //   3. la route pagine par OFFSET sur un tri `lastMessageAt` décroissant : un
+  //      message arrivé entre la page k et la page k+1 promeut sa conversation
+  //      en tête et décale les suivantes d'un cran — une ligne DUPLIQUÉE à la
+  //      frontière, une autre PERDUE.
+  //
+  // Le cycle 59 a désarmé les deux déclencheurs GLOBAUX (`refetchOnWindowFocus`
+  // et `refetchOnReconnect`, tous deux `false` sur `useInfiniteConversationsQuery`).
+  // Ces dérogations ne protègent de RIEN contre un `invalidateQueries` explicite :
+  // les handlers socket ci-dessous rouvraient la même panne par une autre porte.
+  //
+  // Les témoins montent la liste RÉELLE et comptent les requêtes — pas les
+  // appels à `invalidateQueries`. C'est la seule forme discriminante : un témoin
+  // qui épingle `invalidateQueries` verrouille le geste destructeur au lieu de
+  // le mesurer (deux témoins de ce genre ont été retirés au cycle 59).
+  describe('la liste de conversations ne rejoue pas ses pages', () => {
+    function renderListWithSync() {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      const rendered = renderHook(
+        () => {
+          const list = useInfiniteConversationsQuery({ limit: 20 });
+          useSocketCacheSync({ conversationId: 'conv-1', enabled: true });
+          return list;
+        },
+        { wrapper }
+      );
+      return { ...rendered, queryClient };
+    }
+
+    /** Deux pages chargées : la frontière que le rejeu duplique existe alors. */
+    async function loadTwoPages() {
+      mockGetConversations.mockReset();
+      mockGetConversations
+        .mockResolvedValueOnce({
+          conversations: [mockConversation],
+          pagination: { limit: 20, offset: 0, total: 40, hasMore: true },
+        })
+        .mockResolvedValueOnce({
+          conversations: [{ ...mockConversation, id: 'conv-2' }],
+          pagination: { limit: 20, offset: 20, total: 40, hasMore: false },
+        });
+
+      const harness = renderListWithSync();
+      await waitFor(() => expect(harness.result.current.isSuccess).toBe(true));
+      await act(async () => {
+        await harness.result.current.fetchNextPage();
+      });
+      expect(mockGetConversations).toHaveBeenCalledTimes(2);
+      mockGetConversations.mockClear();
+      mockGetConversations.mockResolvedValue({
+        conversations: [mockConversation],
+        pagination: { limit: 20, offset: 0, total: 40, hasMore: true },
+      });
+      return harness;
+    }
+
+    /**
+     * La file HORS-LIGNE vidée au reconnect — le chemin le plus fréquenté de
+     * tous, plusieurs fois par trajet sur un usage mobile.
+     *
+     * Le gateway rejoue d'abord CHAQUE `message:new` en attente, puis annonce
+     * `message:pending-delivered`. Chaque rejeu a déjà été fusionné par
+     * `handleNewMessage`, qui écrit la ligne de liste sans la remplacer et dont
+     * le commentaire l'écrit en capitales : « DO NOT invalidate here ». Le
+     * handler d'à côté faisait exactement l'inverse, sur un préfixe PLUS LARGE,
+     * et effaçait donc les écritures que le précédent venait de poser.
+     */
+    it('ne rejoue pas ses pages quand la file hors-ligne est vidée', async () => {
+      const harness = await loadTwoPages();
+
+      await act(async () => {
+        pendingMessagesDeliveredCallback?.({ count: 2, conversationIds: ['conv-1'] });
+        await Promise.resolve();
+      });
+
+      const pageReads = mockGetConversations.mock.calls.filter(
+        (call) => (call[0] as { updatedSince?: string })?.updatedSince === undefined
+      );
+      expect(pageReads).toHaveLength(0);
+      harness.unmount();
+    });
+
+    /**
+     * Un message masqué pour moi revenu en vue depuis un autre de mes appareils.
+     *
+     * Ici l'invalidation était PUREMENT redondante : `restoreMessageForUser`
+     * (gateway) appelle déjà `refreshPersonalConversationPreview`, qui émet un
+     * `conversation:updated` portant l'aperçu PERSONNEL recalculé pour ce seul
+     * lecteur — et `handleConversationUpdated` le fusionne sans remplacer la
+     * page. Le serveur faisait le travail, mieux, et le client le refaisait en
+     * cassant la pagination.
+     */
+    it('ne rejoue pas ses pages quand un message masqué revient en vue', async () => {
+      const harness = await loadTwoPages();
+
+      await act(async () => {
+        messageRestoredForMeCallback?.({
+          messages: [{ messageId: 'm-1', conversationId: 'conv-1' }],
+        });
+        await Promise.resolve();
+      });
+
+      const pageReads = mockGetConversations.mock.calls.filter(
+        (call) => (call[0] as { updatedSince?: string })?.updatedSince === undefined
+      );
+      expect(pageReads).toHaveLength(0);
+      harness.unmount();
+    });
+  });
+
+  // ─── Le compteur de non-lus après une vidange de file ───────────────────────
+  //
+  // La SEULE chose que la file hors-ligne ne rejoue pas.
+  //
+  // `_drainedEventName` (`MeeshySocketIOManager.ts`) mappe chaque entrée de file
+  // vers UN événement de message — `message:new`, `edited`, `deleted`,
+  // `reaction-*`, `translation`, `pinned`... — et n'a AUCUN cas
+  // `conversation:unread-updated`. L'aperçu, le rang et la promotion en tête
+  // arrivent donc par socket ; la pastille, non. Elle demande une lecture
+  // serveur, et c'est la seule raison pour laquelle ce handler doit toucher au
+  // réseau.
+  //
+  // Lecture BORNÉE par les ids que l'événement porte déjà, jamais un rejeu de
+  // pages : c'est le motif que ce fichier applique déjà deux fois
+  // (`handleConversationNew`, et la branche « conversation inconnue » de
+  // `handleNewMessage`).
+  describe('Pending Messages Delivered — pastille de non-lus', () => {
+    it('relit chaque conversation nommée et applique son compteur, sans toucher à l’aperçu', async () => {
+      // Client propre : le harnais partagé tourne en `gcTime: 0`, qui collecte
+      // la liste semée avant que le handler ne puisse y écrire (aucun
+      // observateur ne la monte ici).
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      const cachedPreview = createMockMessage('msg-9', 'dernier message reçu', 'conv-a');
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [
+              { ...mockConversation, id: 'conv-a', unreadCount: 0, lastMessage: cachedPreview },
+              { ...mockConversation, id: 'conv-b', unreadCount: 0 },
+            ],
+            pagination: { limit: 20, offset: 0, total: 2, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+
+      mockApiGet.mockImplementation((path: string) => {
+        const id = path.split('/').pop();
+        return Promise.resolve({ data: { id, unreadCount: id === 'conv-a' ? 4 : 2 } });
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-a', enabled: true }), { wrapper });
+
+      await act(async () => {
+        pendingMessagesDeliveredCallback?.({ count: 6, conversationIds: ['conv-a', 'conv-b'] });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/conversations/conv-a');
+      expect(mockApiGet).toHaveBeenCalledWith('/conversations/conv-b');
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: Array<{ conversations: Conversation[] }>;
+      };
+      const rows = cached.pages.flatMap((page) => page.conversations);
+      expect(rows.find((c) => c.id === 'conv-a')?.unreadCount).toBe(4);
+      expect(rows.find((c) => c.id === 'conv-b')?.unreadCount).toBe(2);
+      // L'aperçu vient du `message:new` rejoué juste avant : la lecture de la
+      // pastille ne doit pas le remplacer par la projection d'une autre route.
+      expect(rows.find((c) => c.id === 'conv-a')?.lastMessage?.id).toBe('msg-9');
+    });
+
+    /**
+     * Troisième écrivain de ce compteur, donc troisième porteur de la garde.
+     *
+     * Le gateway calcule la pastille pour TOUS les destinataires, lecteur
+     * compris : la rapporter telle quelle rallume le badge de la conversation
+     * qu'on a sous les yeux, entre l'arrivée du message et l'aller-retour
+     * `mark-as-read`. Jumeaux : `handleUnreadUpdated` et
+     * `ConversationDeltaMergeOptions.openConversationId`.
+     *
+     * La conversation ouverte est lue à l'ÉCRITURE, pas avant la requête : le
+     * témoin ne l'ouvre qu'APRÈS l'émission de l'événement, donc il échouerait
+     * sur une lecture faite trop tôt.
+     */
+    it('force à zéro la pastille de la conversation OUVERTE au moment de l’écriture', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [{ ...mockConversation, id: 'conv-a', unreadCount: 0 }],
+            pagination: { limit: 20, offset: 0, total: 1, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+
+      let resolveGet: ((value: unknown) => void) | null = null;
+      mockApiGet.mockImplementation(
+        () => new Promise((resolve) => { resolveGet = resolve; })
+      );
+
+      useNotificationStore.getState().setActiveConversationId(null);
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      act(() => {
+        pendingMessagesDeliveredCallback?.({ count: 3, conversationIds: ['conv-a'] });
+      });
+
+      // La conversation s'ouvre PENDANT que la requête court.
+      await act(async () => {
+        useNotificationStore.getState().setActiveConversationId('conv-a');
+        resolveGet?.({ data: { id: 'conv-a', unreadCount: 3 } });
+        await Promise.resolve();
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: Array<{ conversations: Conversation[] }>;
+      };
+      const rows = cached.pages.flatMap((page) => page.conversations);
+      expect(rows.find((c) => c.id === 'conv-a')?.unreadCount).toBe(0);
+
+      useNotificationStore.getState().setActiveConversationId(null);
+    });
+
+    it('ne demande rien au réseau quand la conversation n’est pas en cache', async () => {
+      const { wrapper } = createWrapperWithClient();
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-a', enabled: true }), { wrapper });
+
+      await act(async () => {
+        pendingMessagesDeliveredCallback?.({ count: 1, conversationIds: ['conv-absent'] });
+        await Promise.resolve();
+      });
+
+      // Une conversation absente du cache n'a pas de ligne à corriger : le
+      // montage suivant lira le serveur en entier (`refetchOnMount: 'always'`).
+      expect(mockApiGet).not.toHaveBeenCalled();
     });
   });
 });
