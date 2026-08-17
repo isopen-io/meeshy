@@ -484,6 +484,30 @@ function triggerConnection(socket: ReturnType<typeof makeSocket>) {
   return socket._handlers;
 }
 
+/**
+ * Recense les rejets de promesse laissés SANS écouteur pendant `body`.
+ *
+ * Un `p.catch(...)` détaché ne peut pas se prouver par le retour de son
+ * appelant : la promesse est abandonnée, donc l'appelant résout `undefined`
+ * qu'elle soit gardée ou non. Le seul témoin qui distingue les deux est le
+ * verdict du runtime — d'où l'écoute de `unhandledRejection`, et le passage par
+ * la phase « check » (`setImmediate`) qui suit le drainage de la file de
+ * microtâches, moment où Node tranche.
+ */
+async function captureUnhandledRejections(body: () => Promise<void>): Promise<unknown[]> {
+  const captured: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { captured.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await body();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+  return captured;
+}
+
 function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
     id: 'msg-123456789012',
@@ -3173,6 +3197,20 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).not.toHaveBeenCalled();
     });
 
+    // Cas distinct du précédent : le lecteur A des conversations, mais le calcul
+    // par curseur n'a rien à en dire. Rien à émettre — pas une pastille à zéro,
+    // qui serait une AFFIRMATION sur un compteur que le serveur n'a pas rendu.
+    // (Témoin replié depuis `presenceSnapshot.test.ts`, cycle 62.)
+    it('stays silent when the cursor read returns no count for the reader conversations', async () => {
+      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-silent' }]);
+      unreadCounts({});
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-silent', false);
+
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
     // Best-effort : une pastille qui ne se calcule pas ne doit jamais faire
     // tomber le chemin de connexion, dont le drain destructif fait partie.
     it('swallows a failing read instead of surfacing it to the connect path', async () => {
@@ -3372,6 +3410,123 @@ describe('MeeshySocketIOManager', () => {
 
       expect(drainSpy).toHaveBeenCalledWith('user-drain-onerror', false);
       expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror', false);
+    });
+
+    // ---------------------------------------------------------------------
+    // Repli du cycle 62 : les témoins ci-dessous vivaient dans
+    // `src/__tests__/unit/socketio/MeeshySocketIOManager.presenceSnapshot.test.ts`,
+    // qui RÉ-IMPLÉMENTAIT le corps de cette méthode dans un helper `*Impl` puis
+    // testait la copie. Aucun ne pouvait tomber, et la copie avait déjà dérivé
+    // sur le point le plus cher du contrat : elle plaçait le drain et
+    // l'instantané de pastille DANS le `try`, soit l'exact inverse de la
+    // production (cf. le témoin `…-drain-onerror` juste au-dessus, dont la copie
+    // attestait le contraire). Les voici contre le vrai manager.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Les deux appels de queue de méthode (`_drainPendingMessages`,
+     * `_emitUnreadCountsSnapshot`) sont INCONDITIONNELS : ils suivent le
+     * `try/catch` et ne dépendent ni du cache, ni du nombre de participants, ni
+     * du succès de la construction de l'instantané. Le cache de présence a une
+     * TTL de 60 s, donc le chemin CHAUD est le cas dominant d'une reconnexion
+     * rapide (bascule réseau, retour au premier plan) — celui, précisément, où
+     * une file hors-ligne pleine attend son rejeu.
+     */
+    it('drains and snapshots unread counts on a WARM presence cache (the dominant fast-reconnect path)', async () => {
+      const socket = makeSocket('sock-ps-warm');
+      (manager as any).presenceSnapshotCache.set('user-warm', {
+        users: [{ userId: 'contact-1', username: 'alice', isOnline: false, lastActiveAt: null }],
+        cachedAt: Date.now(),
+      });
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-warm', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PRESENCE_SNAPSHOT,
+        expect.objectContaining({ users: expect.any(Array) })
+      );
+      expect(drainSpy).toHaveBeenCalledWith('user-warm', false);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-warm', false);
+    });
+
+    // Même chemin chaud, pour la population que le cycle 61 vient de rebrancher.
+    // La clé voyage avec sa nature : un `Participant.id` et `isAnonymous=true`,
+    // sans quoi la résolution en aval retombe sur la colonne `userId` et rend
+    // zéro ligne.
+    it('drains and snapshots unread counts on a warm cache for an anonymous reader too', async () => {
+      const socket = makeSocket('sock-ps-warm-anon');
+      (manager as any).presenceSnapshotCache.set('anon-part-warm', { users: [], cachedAt: Date.now() });
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'anon-part-warm', true);
+
+      expect(drainSpy).toHaveBeenCalledWith('anon-part-warm', true);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'anon-part-warm', true);
+    });
+
+    // Zéro conversation active n'éteint pas la queue de méthode : la file
+    // hors-ligne est indexée par LECTEUR, pas par appartenance courante, et
+    // `_dropEndedMemberships` écarte déjà en amont ce qui n'a plus lieu d'être
+    // rejoué. Un `return` posé dans la branche « pas de participant » couperait
+    // le rejeu d'un lecteur dont la lecture de participants a simplement échoué
+    // à rendre ses lignes.
+    it('drains and snapshots unread counts even when the reader has no active conversation', async () => {
+      const socket = makeSocket('sock-ps-noconv');
+      prisma.participant.findMany.mockResolvedValue([]);
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-noconv', false);
+
+      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.anything());
+      expect(drainSpy).toHaveBeenCalledWith('user-noconv', false);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-noconv', false);
+    });
+
+    /**
+     * Les deux promesses sont DÉTACHÉES (`p.catch(...)` sans `await`) : le
+     * `try/catch` de la méthode n'attrape que ses propres `throw` synchrones,
+     * jamais leur rejet. Sous le `--unhandled-rejections=throw` par défaut de
+     * Node 22, un rejet sans écouteur termine le PROCESS — toute la gateway
+     * tombée pour un canal best-effort, à chaque reconnexion pendant une panne
+     * Redis. Cf. `services/gateway/CLAUDE.md` § Critical Gotchas et
+     * `tasks/lessons.md` § Leçon 230.
+     *
+     * L'ancienne copie ne pouvait pas porter cette garde : elle plaçait les deux
+     * appels dans son `try`, donc son témoin « swallowed » attestait le
+     * `try/catch`, pas le `.catch` — la seule des deux gardes qui compte ici.
+     */
+    it('never lets a rejected drain become an unhandled rejection (detached promise needs its own .catch)', async () => {
+      const socket = makeSocket('sock-ps-drain-reject');
+      (manager as any).presenceSnapshotCache.set('user-drain-reject', { users: [], cachedAt: Date.now() });
+      jest.spyOn(manager as any, '_drainPendingMessages').mockRejectedValue(new Error('redis down'));
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      const unhandled = await captureUnhandledRejections(async () => {
+        await expect(
+          (manager as any)._emitPresenceSnapshot(socket, 'user-drain-reject', false)
+        ).resolves.toBeUndefined();
+      });
+
+      expect(unhandled).toEqual([]);
+    });
+
+    it('never lets a rejected unread snapshot become an unhandled rejection', async () => {
+      const socket = makeSocket('sock-ps-unread-reject');
+      (manager as any).presenceSnapshotCache.set('user-unread-reject', { users: [], cachedAt: Date.now() });
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockRejectedValue(new Error('db error'));
+
+      const unhandled = await captureUnhandledRejections(async () => {
+        await expect(
+          (manager as any)._emitPresenceSnapshot(socket, 'user-unread-reject', false)
+        ).resolves.toBeUndefined();
+      });
+
+      expect(unhandled).toEqual([]);
     });
   });
 
