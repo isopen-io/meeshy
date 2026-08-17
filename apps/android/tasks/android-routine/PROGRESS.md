@@ -2,6 +2,102 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Reply @-mention auto-prefill shipped** (slice `reply-mention-prefill`,
+> feature-parity's `Threaded comments` composite line, "still open" reply-composition sub-gap).
+> `gh pr list --state open --search "apps/android OR apps/ios"` showed two unrelated open PRs
+> (#3156, #3167 — web/gateway cycles, neither touching `apps/android`). `df -h /` showed 8.9 Gi
+> free, stable.
+>
+> **Found via the "read feature-parity.md directly for a `[~]` line with a named sub-gap" strategy**
+> (an Explore agent's fresh sweep), then independently re-proved before coding: read
+> `PostCommentsViewModel.beginReply(commentId)` directly — it only sets the "Replying to…" chip
+> (`composer.value = ReplyTarget(parentId, name)`), never touches the composer draft. Read the iOS
+> reference `FeedCommentsSheet.beginReply(to:)` (`apps/ios/.../FeedCommentsSheet.swift:1765`) in
+> full and grepped every `prefilledMention`/`replyingTo = nil` site in the file to confirm the exact
+> algorithm and its edges: the cancel-reply "X" chip button (line 1396) and the post-send reset
+> (line 1822) neither touch `prefilledMention` nor `composerText` — only `beginReply` itself
+> strips/injects. Confirmed this is genuinely the small half of the candidate (no oversized hidden
+> scope, unlike `PostRepository.requestTranslation`/the notification category-filter-bar deferred
+> in earlier runs this session).
+>
+> **New pure `ReplyMentionPrefill.apply(currentText, previousMention, replyToParentId,
+> authorUsername)`** (`:feature:feed`) — takes primitives, not SDK models, so it needs no fixture
+> construction in tests. Injects `@username ` only when `replyToParentId` is non-blank (the
+> *targeted* comment is itself a reply — flat 2-level threading reparents the new reply to the
+> root, so without the mention the addressed person is never notified, only the thread's root
+> author would be) and the author has a non-blank username; strips the exact previously-injected
+> prefix when retargeting to a different reply (idempotent re-tap — no double prefix on repeat
+> taps); an edited-away prefix (text no longer starts with it) is left alone, mirroring iOS's
+> `hasPrefix` guard exactly. `beginReply` gained `private var prefilledMention: String? = null` and
+> calls the helper right after positioning `composer.value`, folding the result into
+> `composerDraft`. `cancelReply` deliberately left untouched — matches iOS, which also never
+> touches `composerText`/`prefilledMention` on cancel.
+>
+> **+8 `ReplyMentionPrefillTest`** (pure: inject on reply-to-reply, no inject on top-level target,
+> no inject on blank parentId, no inject without a username, strip-old-inject-new on retarget,
+> strip-to-nothing when retargeting to top-level, idempotent re-tap, edited-away prefix left alone)
+> **+ 3 `PostCommentsViewModelTest`** (prefill on reply-to-reply, no prefill on top-level, retarget
+> replaces the previous prefill).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=4 last_run=reply-mention-prefill`.
+
+> On 2026-08-17 **Notification list pagination shipped** (slice `notifications-pagination`,
+> feature-parity §M). `gh pr list --state open --search "apps/android OR apps/ios"` showed one
+> unrelated open PR (#3156, wrong branch naming for this routine, untouched). `df -h /` showed
+> 10 Gi free, stable.
+>
+> **Re-proved the candidate's own scope before coding, not just its checklist wording**: the note
+> grouped "pagination/unread-only filter" as one item, but reading the real iOS reference
+> (`NotificationListViewModel.swift`) directly revealed the `unreadOnly` published property is
+> genuinely DEAD CODE on iOS itself — `refreshFromAPI`/`loadMore` both hardcode `unreadOnly: false`
+> in the actual request; the real "Non lues" experience is 100% client-side filtering
+> (`filteredNotifications`) as ONE of **11** category chips (all/unread/messages/reactions/
+> mentions/social/contacts/groups/calls/translations/system, each with its own icon/color/type-match
+> predicate). That's a materially bigger UI feature than "wire a server query param" — correctly
+> split off as a separate future item rather than force-fit into this run. Only pagination (the
+> genuinely small half) was ported.
+>
+> **Found the right primitive already built and unused**: `pagedApiCall` (`core/network/ApiCall.kt`)
+> — a `apiCall` variant that PRESERVES the envelope's `pagination.hasMore` instead of discarding it
+> — already existed, with zero callers in `NotificationRepository` (which used the plain `apiCall`
+> everywhere, silently dropping pagination metadata on every request). Also confirmed
+> `ApiResponse.pagination: Pagination?` already carries `hasMore`/`offset`/`limit`/`nextCursor` — no
+> new wire format needed.
+>
+> **`NotificationRepository.loadMore()`**: fetches the page after the current cache size, dedupes
+> by id (mirrors `prependLive`'s established precedent), refreshes a new `hasMoreStream:
+> StateFlow<Boolean>` from the server-authoritative `pagination.hasMore` (not a heuristic like
+> "page size == limit"). A no-op before the first page has loaded (nothing to paginate from) or once
+> the server has already said there's no more; a failure leaves the cache and `hasMoreStream`
+> untouched so the next scroll simply retries. `revalidateNotifications` (the existing first-load/
+> refresh path) switched from `apiCall`/`list()` to `pagedApiCall` directly, so `hasMoreStream` is
+> correctly seeded on every fresh load too.
+>
+> **`NotificationsViewModel.loadMore()`** mirrors the re-entrancy-guarded shape already established
+> twice this session (`StatusesViewModel.loadMoreIfNeeded`, `PostCommentsViewModel.loadMore`) —
+> guard on `isLoadingMore`/`hasMore`, delegate, silent failure (next scroll retries). UI:
+> `NotificationsScreen`'s `LazyColumn` switched from `items` to `itemsIndexed` to fire `loadMore()`
+> when the LAST row appears (mirror of iOS's trailing `ProgressView().onAppear`), with a spinner
+> shown while `isLoadingMore`.
+>
+> **+9 tests**: `NotificationRepositoryTest` (6 — page appended in order, dedup against the existing
+> cache, `hasMoreStream` flips false when the server says so, no-op before any page has loaded,
+> no-op once the server reported exhaustion, cache/`hasMoreStream` untouched on a failed page).
+> `NotificationsViewModelTest` (3 — delegates when a page is available, inert when exhausted, a
+> second concurrent call while one is in flight is a no-op, verified via a held-open
+> `CompletableDeferred`).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. Diff confirmed `apps/android`-only (5 files, `sdk-core` + `:feature:notifications`, no
+> resources touched — no new strings needed).
+>
+> **Still open**: the 11-category client-side filter bar (including "Non lues") — noted above as a
+> separate, larger UI feature, deliberately not attempted this run.
+
 > On 2026-08-17 **Live presence dot on conversation-list rows shipped** (slice
 > `conversation-list-presence-dot`, feature-parity §B). `gh pr list --state open --search
 > "apps/android OR apps/ios"` showed three unrelated open PRs (#3113, #3156, #3160 — all wrong

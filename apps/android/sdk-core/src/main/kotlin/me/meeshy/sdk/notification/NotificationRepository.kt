@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.UnregisterDeviceTokenRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,9 +34,13 @@ class NotificationRepository @Inject constructor(
     private val _notificationsCache = MutableStateFlow<List<ApiNotification>?>(null)
     private val _notificationsSyncedAt = MutableStateFlow<Long?>(null)
     private val _unreadCount = MutableStateFlow(0)
+    private val _hasMore = MutableStateFlow(false)
 
     /** The server's unread count, kept fresh alongside every [notificationsStream] revalidate. */
     val unreadCountStream: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    /** Whether the server reports another page beyond the currently cached notifications. */
+    val hasMoreStream: StateFlow<Boolean> = _hasMore.asStateFlow()
 
     /**
      * Cache-first notification stream (ARCHITECTURE.md §4, feature-parity §M). An in-memory L1
@@ -91,6 +96,29 @@ class NotificationRepository @Inject constructor(
     ): NetworkResult<List<ApiNotification>> =
         apiCall { notificationApi.list(offset, limit, if (unreadOnly) true else null) }
 
+    /**
+     * Fetches the page after the currently cached notifications, appending fresh rows
+     * (deduped by id) and refreshing [hasMoreStream] from the server-authoritative
+     * `pagination.hasMore` — port of iOS `NotificationListViewModel.loadMore`. A no-op before
+     * the first page has loaded (nothing to paginate from yet) or once the server has already
+     * said there is no further page; a failure leaves the cache and [hasMoreStream] untouched
+     * so the next scroll simply retries.
+     */
+    suspend fun loadMore(): NetworkResult<Unit> {
+        val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
+        if (!_hasMore.value) return NetworkResult.Success(Unit)
+        return when (val result = pagedApiCall { notificationApi.list(current.size, PAGE_SIZE, null) }) {
+            is NetworkResult.Success -> {
+                val known = current.mapTo(HashSet()) { it.id }
+                val fresh = result.data.data.filterNot { it.id in known }
+                _notificationsCache.value = current + fresh
+                _hasMore.value = result.data.pagination?.hasMore ?: false
+                NetworkResult.Success(Unit)
+            }
+            is NetworkResult.Failure -> result
+        }
+    }
+
     /** The gateway returns `{ success, count }` rather than the standard envelope. */
     suspend fun unreadCount(): NetworkResult<Int> =
         rawApiCall { notificationApi.unreadCount().count }
@@ -137,10 +165,11 @@ class NotificationRepository @Inject constructor(
         apiCall { notificationApi.unregisterDeviceToken(UnregisterDeviceTokenRequest(token = token)) }
 
     private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) {
-        when (val result = list()) {
+        when (val result = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }) {
             is NetworkResult.Success -> {
-                _notificationsCache.value = result.data
+                _notificationsCache.value = result.data.data
                 _notificationsSyncedAt.value = clock.nowMillis()
+                _hasMore.value = result.data.pagination?.hasMore ?: false
             }
             is NetworkResult.Failure -> {
                 onError(Exception(result.error.message))
@@ -151,5 +180,9 @@ class NotificationRepository @Inject constructor(
         if (countResult is NetworkResult.Success) {
             _unreadCount.value = countResult.data
         }
+    }
+
+    private companion object {
+        const val PAGE_SIZE = 20
     }
 }

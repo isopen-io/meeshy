@@ -9601,7 +9601,6 @@ livraison du cycle PRÉCÉDENT : elle est récente, son intention est écrite, e
 ses propres notes contiennent les chiffres qu'il faut confronter. Ce cycle n'a
 rien trouvé en balayant le contrat ; il a trouvé en relisant le §3.1 du cycle 56.
 
-
 ## Leçon 222 — une correction posée sur UNE socket n'est pas une correction du dépôt ; et un double de socket qui ne change pas d'identité fait passer les témoins de reconnexion à VIDE (2026-08-17, routine messagerie, cycle 58)
 
 **Le fait.** Le web a deux sockets Socket.IO. Les deux durcissements du couloir
@@ -9771,3 +9770,99 @@ diagnostic est presque toujours inférieur au coût de ce que le gate laissait
 passer pendant son sommeil. Et quand la conclusion est un pin de version, elle
 s'accompagne d'un `ignore` Dependabot MOTIVÉ — sinon le prochain bump automatique
 rendort le gate.
+
+## Leçon 224 — une note de conception qui déclare une règle « impossible » nomme un ÉTAT à chercher, pas un fait à croire (2026-08-17, routine messagerie, cycle 57 bis)
+
+**Le constat.** `conversationWriteAdmission` portait en tête, dans sa section « ce que ce module
+ne fait pas », la phrase qui a protégé une fonctionnalité morte pendant deux cycles :
+
+> `Conversation.slowModeSeconds` est de la même famille (un réglage de conteneur que personne
+> n'applique) mais demande un état « dernier envoi par personne » qui n'existe nulle part : c'est
+> un limiteur de débit, pas une admission.
+
+Les deux moitiés sont fausses, et différemment. L'état existe — c'est la table `Message`, dont
+l'index `[senderId, conversationId]` porte EXACTEMENT cette question. Et la seconde moitié oppose
+deux catégories qui n'en font qu'une : « cet envoi passe-t-il maintenant ? » est une admission dont
+la réponse dépend du temps, et le module en portait déjà une du même genre (l'état terminal dépend
+de `closedAt`).
+
+**Le tell.** La phrase cherchait un COMPTEUR — une colonne dénormalisée, avec son écrivain, son
+invalidation, sa dérive — et concluait « n'existe nulle part » en ne le trouvant pas. Le mot qui
+trahit est **« un état »** : il fait entendre une structure à CONSTRUIRE là où la question portait
+sur une information à LIRE. Un journal d'événements répond déjà à toutes les questions de la forme
+« quand, pour la dernière fois, X a-t-il fait Y ? », autoritairement et sans écrivain à tenir.
+
+**Pourquoi ça survit.** Une note de conception qui ferme une question ne se relit pas comme une
+hypothèse. Les cycles 31 et 56-bis ont tous deux LU cette phrase — 56-bis la cite même dans ses
+« écartés délibérément » — et l'ont reçue comme un constat d'inventaire. C'est la forme la plus
+discrète de dette : pas un oubli (qu'un recensement trouve), pas un TODO (qu'une recherche trouve),
+mais une affirmation soignée, dans un fichier soigné, écrite par quelqu'un qui venait de faire le
+travail juste à côté. Son autorité vient du voisinage.
+
+**La règle.** Une note qui déclare une règle hors de portée pour cause d'état manquant doit nommer
+la LECTURE qu'elle a essayée et qui n'a pas suffi, jamais seulement l'état qu'elle a cherché. « Il
+faudrait un compteur `lastSentAt` par participant, que personne n'écrit » est vérifiable et
+réfutable ; « demande un état qui n'existe nulle part » ne l'est pas, et c'est ce qui la fait
+traverser les cycles intacte. Réciproquement, en lisant une telle note : avant de la croire,
+demander **quelle table journalise déjà l'événement dont on veut la date ?** — la réponse est
+presque toujours celle des lignes qu'on écrit de toute façon.
+
+**Le corollaire de forme, découvert en chemin.** Quand la question de temps se pose à une REQUÊTE,
+borner la fenêtre dans le `where` (`createdAt > now - fenêtre`) plutôt qu'après le tri fait
+d'une pierre trois coups : l'ensemble trié devient minuscule (aucun index neuf), l'existence d'une
+ligne DEVIENT la décision, et l'arithmétique qui suit ne fait plus que chiffrer — donc un
+`if (restant > 0)` posé après coup est le même calcul une seconde fois, et une branche qu'aucun
+état de la base ne peut atteindre. C'est le trou de COUVERTURE qui a nommé cette redondance : une
+ligne non couverte sur un module à 100 % est plus souvent du code inatteignable qu'un témoin
+manquant. Cf. `tasks/realtime-sync-audit-2026-08-17-cycle57-bis.md` §3.1.
+
+**Le voisinage.** Miroir exact de la leçon 219 (« appliquer une règle jusque-là inerte change la
+question à poser au site qui l'ÉCRIT »), vue depuis l'autre bout : là, un cycle avait armé un champ
+sans regarder son écrivain ; ici, un cycle avait DÉSARMÉ une question en écrivant que son état
+n'existait pas. Et parent de la leçon 214 (« un correctif nommé dans un journal ne prouve que le
+site qu'il a touché ») : dans les deux cas, c'est une PROSE de dépôt — journal ou en-tête — qui a
+été prise pour une preuve.
+
+## Leçon 225 — deux réglages symétriques, une seule dérogation : chercher la JUMELLE avant de croire la règle appliquée (2026-08-17, routine messaging, cycle 59)
+
+`useInfiniteConversationsQuery` portait `refetchOnWindowFocus: false` avec un
+commentaire de huit lignes qui énumérait précisément les trois dommages d'un refetch
+d'infinite (N requêtes, écritures socket écrasées, ligne dupliquée à la frontière sous
+pagination par OFFSET). Il ne portait pas `refetchOnReconnect: false` — et le
+QueryClient global tourne en `'always'` sur les DEUX. Le dommage restait donc armé,
+sur un déclencheur plus fréquent que celui qui avait été fermé.
+
+Le fichier NOMMAIT `refetchOnReconnect` dix lignes plus haut, pour expliquer qu'il ne
+couvre pas les coupures de socket — sans que personne remarque qu'il était toujours
+actif à faire du mal. **Un réglage cité dans un commentaire pour son insuffisance
+n'est pas un réglage désactivé.** Quand un filet de sécurité existe en paire
+(focus/reconnect, mount/reconnect, add/remove), une dérogation posée sur un seul
+membre est le défaut, pas la correction.
+
+### Le corollaire qui compte : un témoin VERT au-dessus d'un défaut vivant
+
+Le même déclencheur utilisateur (`window.online`) portait un SECOND chemin
+destructeur, dans un autre fichier : un hook qui invalidait `['conversations']`,
+préfixe de `['conversations','infinite']`. Corriger l'un des deux ne changeait RIEN à
+la panne visible — et le témoin qui garde le premier passe au vert, parce qu'il ne
+monte pas le hook du second.
+
+**Règle : quand deux chemins pendent au même déclencheur, prouver les deux ROUGES
+séparément avant de toucher au code.** Ici, un témoin jetable isolant le second (le
+premier déjà neutralisé) a montré la page rejouée quand même. Sans cette mesure,
+j'aurais livré une dérogation, un témoin vert, et une panne intacte. C'est la
+troisième forme en trois cycles du même piège (cycle 58 §4.2, cycle 74 §1) : la
+question à se poser n'est jamais « mon témoin passe-t-il ? » mais « **que verrait le
+porteur si mon témoin passait et que le défaut restait ?** ».
+
+### Et : un défaut déjà écrit dans le dépôt, classé trop bas
+
+`docs/bandwidth-analysis/01-socketio.md` portait ce défaut en MOYENNE-15, bon fichier,
+bonnes lignes — classé « gaspillage de bande passante, 100 KB ». Le préfixe de clé n'y
+était pas relevé, donc ni le rejeu de TOUTES les pages, ni la ligne dupliquée. Sa
+correction recommandée était littéralement ce qu'un autre module implémentait déjà.
+**Un audit qui nomme un défaut dans le mauvais registre de gravité l'enterre plus
+sûrement qu'un audit qui l'oublie** : l'entrée existe, donc personne ne la rouvre.
+Devant une entrée d'audit ancienne, recalculer la sévérité depuis le code avant de la
+croire.
+

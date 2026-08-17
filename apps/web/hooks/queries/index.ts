@@ -35,7 +35,6 @@ export {
 // Socket cache sync
 export {
   useSocketCacheSync,
-  useInvalidateOnReconnect,
 } from './use-socket-cache-sync';
 
 // Conversation preferences

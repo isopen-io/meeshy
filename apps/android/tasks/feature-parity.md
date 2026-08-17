@@ -3844,7 +3844,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rows through `ReplyThread`'s existing reuse of that composable. +9 tests [`CommentProjectionTest` ×2:
       isOwn true/false by author id; `PostCommentsViewModelTest` ×6: top-level delete, reply delete +
       parent count decrement, rollback + error on failure, and the three inert guards — blank postId, blank
-      commentId, unknown comment id]) **done**;
+      commentId, unknown comment id]) **done** + **reply @-mention auto-prefill** (slice
+      `reply-mention-prefill`, 2026-08-17 — replying to a comment that is *itself* a reply now
+      prefills `@username ` into the composer, port of iOS `FeedCommentsSheet.beginReply(to:)`:
+      flat 2-level threading reparents the new reply to the root comment, so without the mention
+      the addressed person is never notified — only the thread's root author would be. New pure
+      `ReplyMentionPrefill.apply(currentText, previousMention, replyToParentId, authorUsername)`
+      [`:feature:feed`] — injects only when `replyToParentId` is non-blank [the target comment is
+      a reply, not top-level] and the author has a username; strips the exact previously-injected
+      prefix when retargeting to a different reply [idempotent re-tap, no double prefix; an
+      edited-away prefix is left alone, mirroring iOS's `hasPrefix` guard]. `beginReply` now tracks
+      `prefilledMention` and calls the helper right after positioning `composer.value`. Replying to
+      a top-level comment, or canceling a reply [`cancelReply`], never touches the draft — matches
+      iOS, which also leaves `composerText` untouched on cancel. +8 `ReplyMentionPrefillTest`
+      [pure] + 3 `PostCommentsViewModelTest` [prefill on reply-to-reply, no prefill on top-level,
+      retargeting replaces the previous prefill]) **done**;
       effects/blur still open
 - [~] Post / comment pin-unpin; repost / quote-repost / share; report — **post pin shipped
       2026-08-17** (slice `feed-pin-own-post`). Re-proof found `PostRepository.pinPost`/
@@ -5386,8 +5400,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`NotificationRepositoryTest`) + rewritten `NotificationsViewModelTest` (9 tests, now
       exercising the ViewModel's actual remaining job — projecting `CacheResult` variants and
       delegating writes — since dedup/rollback behaviour moved to and is tested at the repository
-      layer). **Still open: pagination/unread-only filter** (the stream serves the first page
-      only, matching `list()`'s existing default `limit=20`) — not attempted, a separate item.
+      layer). **Pagination shipped 2026-08-17** (slice `notifications-pagination`) — re-proved
+      against the real iOS reference (`NotificationListViewModel.swift`) rather than the checklist
+      wording, which surfaced that iOS's `unreadOnly` published property is genuinely DEAD CODE:
+      `refreshFromAPI`/`loadMore` both hardcode `unreadOnly: false` in the actual request, and the
+      real "Non lues" filter is 100% CLIENT-SIDE (`filteredNotifications` filters the already-fetched
+      list) as ONE of 11 category chips (all/unread/messages/reactions/mentions/social/contacts/
+      groups/calls/translations/system) — a materially bigger UI feature than "wire the server
+      param", correctly split off and left unattempted. **Only pagination was ported this run**:
+      `NotificationRepository.loadMore()` (new `pagedApiCall` — preserves `pagination.hasMore`,
+      unlike the plain `apiCall` `list()`/`revalidateNotifications` used before — dedupe by id,
+      no-op before the first page loads or once the server reports no further page, cache/`hasMore`
+      left untouched on failure so the next scroll retries) + `hasMoreStream: StateFlow<Boolean>`.
+      `NotificationsViewModel.loadMore()` mirrors the re-entrancy-guarded shape already established
+      by `StatusesViewModel.loadMoreIfNeeded`/`PostCommentsViewModel.loadMore`. UI: `NotificationsScreen`'s
+      `LazyColumn` fires `loadMore()` on the last row's appearance (mirror of iOS's trailing
+      `ProgressView().onAppear`), showing a spinner while `isLoadingMore`. +9 tests
+      (`NotificationRepositoryTest` ×6: append/dedupe/hasMore-false/no-op-before-first-page/
+      no-op-when-exhausted/failure-leaves-state-untouched; `NotificationsViewModelTest` ×3:
+      delegates-when-available/inert-when-exhausted/concurrent-call-guard). **Still open: the
+      11-category client-side filter bar** (including "Non lues") — a separate, larger UI feature,
+      not attempted this run.
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
 - [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice

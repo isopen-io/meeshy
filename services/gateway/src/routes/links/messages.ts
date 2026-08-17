@@ -16,7 +16,12 @@ import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
 import { notifyMessageRecipients } from '../../services/messaging/messageNotificationFanOut.js';
 import { resolveMessageMentions } from '../../services/messaging/messageMentions.js';
-import { admitConversationWriteFor, isConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
+import {
+  admitConversationWriteFor,
+  isConversationWriteRefused,
+  describeConversationWriteRefusal
+} from '../../services/messaging/conversationWriteAdmission.js';
+import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -43,13 +48,49 @@ const SHARE_LINK_CONVERSATION_SELECT = {
   title: true,
   type: true,
   // L'état TERMINAL du conteneur ET sa police d'écriture (canal d'annonces,
-  // `defaultWriteRole`). Ramenés par la relation déjà chargée : la garde ne
-  // coûte aucune lecture supplémentaire.
+  // `defaultWriteRole`, mode lent). Ramenés par la relation déjà chargée : la
+  // garde ne coûte aucune lecture supplémentaire.
+  //
+  // Chaque champ est LOAD-BEARING : celui qu'on retirerait ici rendrait sa règle
+  // inerte sur ces deux chemins SANS rougir un seul témoin de la règle elle-même.
   isActive: true,
   closedAt: true,
   isAnnouncementChannel: true,
-  defaultWriteRole: true
+  defaultWriteRole: true,
+  slowModeSeconds: true
 } as const;
+
+/**
+ * La réponse à un refus d'admission, pour les DEUX chemins de lien.
+ *
+ * Nommée plutôt que recopiée, et pour la raison exacte qui a motivé le `select`
+ * partagé ci-dessus : les deux sites portaient un `if/else` BINAIRE — état
+ * terminal, sinon « vous n'avez pas le droit ». Cette forme range tout refus
+ * futur dans la branche par défaut, et le troisième refus y est arrivé sans
+ * qu'un témoin rougisse : le mode lent est un « pas encore », qu'un 403 fait
+ * ranger au client comme un échec DÉFINITIF au lieu d'une reprise à programmer.
+ *
+ * Le code de statut porte la différence — 410 (parti pour de bon), 403 (jamais),
+ * 429 + `Retry-After` (pas maintenant) — parce que c'est ce que les files
+ * d'attente clientes savent lire sans connaître notre vocabulaire de refus.
+ */
+function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused): void {
+  const message = describeConversationWriteRefusal(refusal);
+
+  if (refusal.reason === 'conversation-closed') {
+    return sendError(reply, 410, message);
+  }
+
+  if (refusal.reason === 'slow-mode-active') {
+    // Le décompte est toujours porté par la règle ; le repli à 1 s évite
+    // d'annoncer « réessayez dans 0 s » sur un refus, ce qui inviterait à une
+    // boucle serrée.
+    reply.header('Retry-After', String(refusal.retryAfterSeconds ?? 1));
+    return sendError(reply, 429, message, { code: 'SLOW_MODE_ACTIVE' });
+  }
+
+  return sendForbidden(reply, message);
+}
 
 /**
  * Corps d'un message de lien de partage, construit UNE fois par envoi.
@@ -284,12 +325,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // canal d'annonces est précisément la contradiction que ce garde tranche.
       const anonymousAdmission = await admitConversationWriteFor(fastify.prisma, {
         conversation: participantShareLink.conversation,
+        conversationId: participantShareLink.conversationId,
         senderParticipantId: anonymousParticipant.id
       });
       if (isConversationWriteRefused(anonymousAdmission)) {
-        return anonymousAdmission.reason === 'conversation-closed'
-          ? sendError(reply, 410, 'Cette conversation est fermée')
-          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
+        return sendWriteRefusal(reply, anonymousAdmission);
       }
 
       if (!anonymousParticipant.permissions.canSendMessages) {
@@ -591,12 +631,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // toujours aucune lecture.
       const linkAdmission = await admitConversationWriteFor(fastify.prisma, {
         conversation: shareLink.conversation,
+        conversationId: shareLink.conversationId,
         senderParticipantId: participant.id
       });
       if (isConversationWriteRefused(linkAdmission)) {
-        return linkAdmission.reason === 'conversation-closed'
-          ? sendError(reply, 410, 'Cette conversation est fermée')
-          : sendForbidden(reply, 'Vous n\'avez pas le droit d\'écrire dans cette conversation');
+        return sendWriteRefusal(reply, linkAdmission);
       }
 
 

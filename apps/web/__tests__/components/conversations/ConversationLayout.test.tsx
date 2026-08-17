@@ -175,7 +175,6 @@ jest.mock('@/hooks/use-user-status-realtime', () => ({
 
 jest.mock('@/hooks/queries', () => ({
   useSocketCacheSync: jest.fn(),
-  useInvalidateOnReconnect: jest.fn(),
 }));
 
 // Mock individual conversation hooks (direct imports, not barrel)

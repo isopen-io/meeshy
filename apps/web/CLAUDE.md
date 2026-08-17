@@ -58,7 +58,7 @@ Key stores: `auth-store`, `conversation-store`, `app-store`, `language-store`, `
 ## Data Fetching (React Query)
 - `staleTime: Infinity` - Socket.IO is primary source of truth
 - `gcTime: 30 min` - Keep data in memory
-- `refetchOnWindowFocus: 'always'` - Safety net (DÉROGATION sur les deux listes infinies temps réel : `useInfiniteConversationsQuery` et `useConversationMessagesRQ` le passent à `false` — un refetch d'infinite rejoue toutes les pages chargées et remplace le cache. Le focus y tire un delta borné à la place)
+- `refetchOnWindowFocus: 'always'` **et** `refetchOnReconnect: 'always'` - Safety nets (DÉROGATION aux DEUX, sur les deux listes infinies temps réel : `useInfiniteConversationsQuery` et `useConversationMessagesRQ` les passent à `false` — un refetch d'infinite rejoue toutes les pages chargées et remplace le cache. Focus ET reconnexion y tirent un delta borné à la place. Les deux dérogations vont par paire : n'en poser qu'une laisse le refetch destructeur armé sur l'autre déclencheur, et `navigator.onLine` ne prouve de surcroît aucune reconnexion de SOCKET — un redémarrage gateway la tue sans le bouger)
 - Query keys: `queryKeys.conversations.detail(id)`, `queryKeys.messages.list(id)`
 - Socket.IO updates cache directly (no polling)
 
