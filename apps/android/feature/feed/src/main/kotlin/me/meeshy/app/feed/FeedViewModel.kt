@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
@@ -79,6 +80,23 @@ class FeedViewModel @Inject constructor(
 
     /** The cache-projected posts alone (excludes the realtime head), kept across re-emits. */
     private var latestCachePosts: List<ApiPost> = emptyList()
+
+    /**
+     * Groups impressions before sending them (feature-parity §F). Owns its own scope rather
+     * than [viewModelScope] — see [ImpressionBatcher]'s own doc for why [onCleared]'s flush
+     * would otherwise race the ViewModel's own teardown.
+     */
+    private val impressionBatcher = ImpressionBatcher(source = "feed", postRepository = postRepository)
+
+    /** [postId] just appeared on screen — call once per composition entry. */
+    fun trackImpression(postId: String) {
+        impressionBatcher.record(postId)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        impressionBatcher.flushNowAsync()
+    }
 
     init {
         viewModelScope.launch {

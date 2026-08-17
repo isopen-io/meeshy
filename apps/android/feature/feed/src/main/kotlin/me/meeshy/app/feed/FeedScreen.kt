@@ -228,6 +228,9 @@ fun FeedScreen(
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
                         }
+                        LaunchedEffect(post.id) {
+                            viewModel.trackImpression(post.id)
+                        }
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
