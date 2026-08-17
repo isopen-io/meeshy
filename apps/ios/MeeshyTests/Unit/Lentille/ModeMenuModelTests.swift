@@ -26,6 +26,10 @@ final class ModeMenuModelTests: XCTestCase {
     private func capabilities(
         isAnonymous: Bool = false,
         isFlagEnabled: Bool = true,
+        /// R-135 — défaut `false` : la plupart des témoins existants
+        /// vérifient le comportement drapeau `riviere_mode` ÉTEINT (état
+        /// réel de production tant que R-133/R-135 restent OFF par défaut).
+        isRiverFlagEnabled: Bool = false,
         conversationType: ReadingModeOrchestrator.ConversationType = .group,
         /// `nil` = compte d'actifs INCONNU (amendement S1, REV-3/B3) — la
         /// valeur que `LentilleReadingModeContext.activeParticipantCount` rend
@@ -36,6 +40,7 @@ final class ModeMenuModelTests: XCTestCase {
             ReadingModeOrchestrator.ResolveCapabilitiesInput(
                 identity: ReadingModeOrchestrator.ReadingModeIdentity(isAnonymous: isAnonymous),
                 isFlagEnabled: isFlagEnabled,
+                isRiverFlagEnabled: isRiverFlagEnabled,
                 conversationType: conversationType,
                 activeParticipantCount: activeParticipantCount
             )
@@ -60,27 +65,83 @@ final class ModeMenuModelTests: XCTestCase {
         )
     }
 
-    // MARK: - 2. Rivière — TOUJOURS présente, TOUJOURS grisée (V3)
+    // MARK: - 2. Rivière — TOUJOURS présente, grisée avec raison réelle SAUF quand éligible (R-135)
 
-    /// Critère d'acceptation LWS-8 : « Rivière : entrée toujours présente,
-    /// toujours grisée, avec la valeur courante réelle composée dans la
-    /// raison ».
-    func test_riviere_isAlwaysPresent_andAlwaysDisabled_evenWhenNumericallyEligible() throws {
-        // Entrée numériquement ÉLIGIBLE (≥5 actifs, jamais direct) — et
-        // pourtant grisée quand même : V3 n'a pas encore le drapeau
-        // `riviere_mode` (amendement R, R-133 hors périmètre LWS-8).
-        let eligibleCaps = capabilities(conversationType: .group, activeParticipantCount: 12)
-        XCTAssertTrue(eligibleCaps.riverEligible, "Prérequis : ces capacités DOIVENT être éligibles.")
+    /// Discrimine la cause du grisage : numériquement éligible mais le
+    /// drapeau `riviere_mode` reste ÉTEINT (état réel de production
+    /// aujourd'hui, R-133/R-135 tous deux défaut OFF) ⇒ toujours grisée.
+    /// Remplace l'ancien `..._evenWhenNumericallyEligible` (R-133/V3) : ce
+    /// n'est plus « toujours », c'est « tant que le drapeau est éteint » —
+    /// voir `test_riviere_isEnabled_whenFlagOnAndEligible` ci-dessous pour
+    /// l'AUTRE position, tout aussi verrouillée.
+    func test_riviere_staysDisabled_whenFlagOff_evenIfNumericallyEligible() throws {
+        let eligibleCapsFlagOff = capabilities(
+            isRiverFlagEnabled: false, conversationType: .group, activeParticipantCount: 12
+        )
+        XCTAssertTrue(eligibleCapsFlagOff.riverEligible, "Prérequis : ces capacités DOIVENT être éligibles.")
 
-        let model = LentilleModeMenuModel.build(capabilities: eligibleCaps, currentPreference: .auto)
+        let model = LentilleModeMenuModel.build(capabilities: eligibleCapsFlagOff, currentPreference: .auto)
         let riviere = try entry(.riviere, in: model)
 
         XCTAssertTrue(
             riviere.isDisabled,
-            "Rivière doit rester grisée en V3 MÊME quand `resolveCapabilities` la juge " +
-            "numériquement éligible — le drapeau `riviere_mode` qui la débloquerait " +
-            "n'existe pas encore côté iOS."
+            "Rivière doit rester grisée quand `riviere_mode` est éteint, MÊME si " +
+            "`resolveCapabilities` la juge numériquement éligible — le drapeau, distinct de " +
+            "l'éligibilité, reste la seconde porte (amendement R, §7)."
         )
+        XCTAssertNotNil(riviere.disabledReason, "Grisée ⇒ une raison réelle doit accompagner l'entrée.")
+    }
+
+    /// R-135 — l'AUTRE position : drapeau ON **et** numériquement éligible ⇒
+    /// dégrisée, exactement comme Focal/Script/Résumé suivent
+    /// `capabilities.availableModes`. Aucune raison affichée (elle n'a plus
+    /// lieu d'être : l'entrée est sélectionnable).
+    func test_riviere_isEnabled_whenFlagOnAndEligible() throws {
+        let eligibleCapsFlagOn = capabilities(
+            isRiverFlagEnabled: true, conversationType: .group, activeParticipantCount: 12
+        )
+        XCTAssertTrue(eligibleCapsFlagOn.availableModes.contains(.river), "Prérequis : `.river` doit entrer au catalogue.")
+
+        let model = LentilleModeMenuModel.build(capabilities: eligibleCapsFlagOn, currentPreference: .auto)
+        let riviere = try entry(.riviere, in: model)
+
+        XCTAssertFalse(
+            riviere.isDisabled,
+            "Drapeau `riviere_mode` ON + ≥5 actifs, jamais `direct` ⇒ Rivière doit devenir " +
+            "sélectionnable, comme n'importe quelle autre entrée dérivée de " +
+            "`capabilities.availableModes`."
+        )
+        XCTAssertNil(
+            riviere.disabledReason,
+            "Une entrée dégrisée ne doit plus porter de raison « s'ouvrira à… » à côté de " +
+            "son propre nom sélectionnable."
+        )
+    }
+
+    /// Drapeau ON mais SOUS le seuil ⇒ reste grisée, avec sa raison réelle —
+    /// le drapeau seul ne suffit pas, l'éligibilité reste l'autre moitié de
+    /// la porte (§7ter, « Ce n'est PAS l'éligibilité » vaut aussi à l'envers :
+    /// le drapeau n'est pas non plus l'éligibilité).
+    func test_riviere_staysDisabled_whenFlagOnButBelowThreshold() throws {
+        let belowThreshold = capabilities(isRiverFlagEnabled: true, conversationType: .group, activeParticipantCount: 3)
+        XCTAssertFalse(belowThreshold.riverEligible)
+
+        let model = LentilleModeMenuModel.build(capabilities: belowThreshold, currentPreference: .auto)
+        let riviere = try entry(.riviere, in: model)
+        XCTAssertTrue(riviere.isDisabled)
+        XCTAssertNotNil(riviere.disabledReason)
+    }
+
+    /// Drapeau ON mais conversation `direct` ⇒ `neverEligible`, reste
+    /// grisée — jamais dégrisée, quel que soit le drapeau (structurel).
+    func test_riviere_staysDisabled_whenFlagOnButDirect() throws {
+        let direct = capabilities(isRiverFlagEnabled: true, conversationType: .direct, activeParticipantCount: 12)
+        XCTAssertEqual(direct.riverEligibilityReason.riverReason, .neverEligible)
+
+        let model = LentilleModeMenuModel.build(capabilities: direct, currentPreference: .auto)
+        let riviere = try entry(.riviere, in: model)
+        XCTAssertTrue(riviere.isDisabled)
+        XCTAssertNotNil(riviere.disabledReason)
     }
 
     /// Discrimination (leçon 266) : sur une conversation INÉLIGIBLE (directe),

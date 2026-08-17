@@ -74,16 +74,14 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         let entries = order.map { preference -> Entry in
             let isRiviere = preference == .riviere
             let isDisabled: Bool
-            if isRiviere {
-                // Rivière : TOUJOURS grisée en V3 — le drapeau `riviere_mode`
-                // n'existe pas encore (amendement R, R-133 hors périmètre).
-                // Ne PAS dériver ce booléen de `capabilities.availableModes` :
-                // même si ce catalogue venait un jour à contenir `.river`
-                // (LWS-8 seul ne le pose jamais, `isRiverFlagEnabled` valant
-                // toujours `false` dans `LentilleReadingModeContext`), cette
-                // entrée reste grisée par contrat jusqu'à R-133.
-                isDisabled = true
-            } else if let mode = renderedMode(for: preference) {
+            if let mode = renderedMode(for: preference) {
+                // R-135 — Rivière suit désormais EXACTEMENT le même chemin que
+                // Focal/Script/Résumé : la borne réelle est
+                // `capabilities.availableModes`, publiée par
+                // `ReadingModeOrchestrator.resolveCapabilities` (miroir GELÉ).
+                // Elle ne contient `.river` que si `isRiverFlagEnabled &&
+                // riverEligible` (§7 amendement R) — aucune seconde loi
+                // d'éligibilité écrite ici, comme pour les trois autres modes.
                 isDisabled = !capabilities.availableModes.contains(mode)
             } else {
                 // `.auto` : toujours sélectionnable — l'orchestrateur a
@@ -96,8 +94,14 @@ nonisolated struct LentilleModeMenuModel: Equatable {
                 title: LentilleModeLabels.menuTitle(for: preference),
                 icon: icon(for: preference),
                 isSelected: currentPreference == preference,
-                isDisabled: isDisabled,
-                disabledReason: isRiviere ? LentilleModeLabels.riverReason(capabilities.riverEligibilityReason) : nil
+                // La raison grisée ne survit QUE tant que l'entrée reste
+                // désactivée — une Rivière dégrisée (éligible + drapeau ON)
+                // ne doit plus porter un texte « s'ouvrira à… » à côté de son
+                // propre nom sélectionnable (bug qu'aurait laissé passer un
+                // `isRiviere ? … : nil` inconditionnel).
+                disabledReason: (isRiviere && isDisabled)
+                    ? LentilleModeLabels.riverReason(capabilities.riverEligibilityReason)
+                    : nil
             )
         }
         return LentilleModeMenuModel(entries: entries)

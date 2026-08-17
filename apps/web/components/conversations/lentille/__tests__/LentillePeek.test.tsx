@@ -124,6 +124,7 @@ jest.mock('@/components/ui/dropdown-menu', () => {
   };
 });
 
+import { RIVER_ELIGIBILITY_THRESHOLD } from '@meeshy/shared/utils/reading-modes';
 import { LentillePeek } from '../LentillePeek';
 
 const t = (key: string) => key;
@@ -354,5 +355,64 @@ describe('LentillePeek — focus card et encoche (WL-108)', () => {
     expect(screen.getByTestId('lentille-focus-card-notch')).toHaveTextContent(
       'lentille.modes.autoBadge'
     );
+  });
+});
+
+/**
+ * R-135 — dégrisage Rivière. Les TROIS chemins (⋮, aperçu, encoche) partagent
+ * UNE instance de `ReadingModeMenu` (WL-108) : un seul jeu de témoins suffit
+ * pour les trois, ouverts ici via le clic droit (le plus direct).
+ */
+describe('LentillePeek — dégrisage Rivière (R-135)', () => {
+  function openPeekAndGetRiviereItem(peekProps: Partial<React.ComponentProps<typeof LentillePeek>> = {}) {
+    renderInsideRow(jest.fn(), peekProps);
+    fireEvent.contextMenu(screen.getByTestId('peek-wrapper'), { clientX: 5, clientY: 5 });
+    return screen.getByTestId('reading-mode-item-riviere');
+  }
+
+  it('drapeau NON fourni (résolu par `useRiverModeFlag`, OFF par défaut — aucun searchParam/cookie/env dans jsdom) ⇒ Rivière reste grisée, snapshot OFF identique à avant R-135', () => {
+    const riviere = openPeekAndGetRiviereItem({ activeParticipantCount: RIVER_ELIGIBILITY_THRESHOLD });
+    expect(riviere).toBeDisabled();
+    expect(screen.getByTestId('reading-mode-river-reason')).toBeInTheDocument();
+  });
+
+  it('drapeau ON (prop explicite) + ≥5 actifs + conversation de groupe ⇒ Rivière devient sélectionnable, sans raison affichée', () => {
+    const riviere = openPeekAndGetRiviereItem({
+      isRiverFlagEnabled: true,
+      activeParticipantCount: RIVER_ELIGIBILITY_THRESHOLD,
+    });
+    expect(riviere).not.toBeDisabled();
+    expect(screen.queryByTestId('reading-mode-river-reason')).not.toBeInTheDocument();
+  });
+
+  it('drapeau ON mais SOUS le seuil ⇒ reste grisée avec sa raison réelle (seuil + compte)', () => {
+    const riviere = openPeekAndGetRiviereItem({
+      isRiverFlagEnabled: true,
+      activeParticipantCount: RIVER_ELIGIBILITY_THRESHOLD - 2,
+    });
+    expect(riviere).toBeDisabled();
+    // `t` de ce fichier rend la clé brute (pas d'interpolation) — la preuve
+    // portée ici est la clé COMPOSÉE (formule à deux nombres, pas le seuil
+    // seul) : `ReadingModeMenu.test.tsx` verrouille déjà les VALEURS
+    // interpolées avec un `t` qui les formate.
+    expect(screen.getByTestId('reading-mode-river-reason')).toHaveTextContent('lentille.modes.river.reason');
+  });
+
+  it('drapeau ON mais conversation `direct` ⇒ reste grisée ("jamais", structurel — jamais dégrisable)', () => {
+    render(
+      <div role="button" tabIndex={0} data-testid="row-root">
+        <LentillePeek
+          conversation={{ id: 'conv-direct', type: 'direct', title: 'Duo', createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-06-01') } as unknown as Conversation}
+          t={t}
+          data-testid="peek-wrapper"
+          isRiverFlagEnabled
+          activeParticipantCount={99}
+        >
+          <span>contenu du rang</span>
+        </LentillePeek>
+      </div>
+    );
+    fireEvent.contextMenu(screen.getByTestId('peek-wrapper'), { clientX: 5, clientY: 5 });
+    expect(screen.getByTestId('reading-mode-item-riviere')).toBeDisabled();
   });
 });

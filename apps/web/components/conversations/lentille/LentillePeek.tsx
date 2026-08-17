@@ -73,6 +73,7 @@ import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import { resolveCapabilities, resolveOrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import { isCurrentUserAnonymous } from '@/utils/auth';
 import { useReducedMotion } from '@/hooks/use-accessibility';
+import { useRiverModeFlag } from '@/hooks/lentille/use-river-mode-flag';
 import { useReadingModePreference, useReadingModePreferenceActions } from '@/stores/reading-mode-preference-store';
 import { ConversationActionMenuItems } from '../conversation-item/ConversationItemActions';
 import { useConversationItemActions } from '../conversation-item/use-conversation-item-actions';
@@ -100,7 +101,16 @@ export interface LentillePeekProps {
    * `0` fabriqué (amendement S1). Overridable pour les tests / un futur appelant.
    */
   readonly activeParticipantCount?: number | null;
-  /** Drapeau `riviere_mode` — aucun résolveur web n'existe encore ; `false` documenté par défaut. */
+  /**
+   * R-135 — Drapeau `riviere_mode`. Omis (`undefined`) ⇒ résolu ICI par
+   * `useRiverModeFlag()` (résolveur R-134, `?riviere_mode=`/cookie/env,
+   * défaut OFF) : le SEUL appelant de ce hook, pour que les TROIS chemins
+   * d'entrée du menu (⋮, aperçu, encoche — une seule instance de
+   * `ReadingModeMenu`) lisent le VRAI drapeau plutôt que le `false` figé que
+   * R-134 posait le temps que ce lot arrive. Override explicite conservé
+   * pour les tests (et pour un futur appelant qui connaîtrait déjà la
+   * résolution — même patron que `activeParticipantCount`).
+   */
   readonly isRiverFlagEnabled?: boolean;
   /**
    * Ce rang porte-t-il la focus card ? (WL-108) — vrai pour l'ÉLU de
@@ -150,7 +160,7 @@ export function LentillePeek({
   style,
   'data-testid': dataTestId,
   activeParticipantCount = null,
-  isRiverFlagEnabled = false,
+  isRiverFlagEnabled,
   isFocused = false,
   onShowDetails,
 }: LentillePeekProps) {
@@ -163,6 +173,11 @@ export function LentillePeek({
   const currentPreference = useReadingModePreference(conversation.id);
   const { setReadingMode } = useReadingModePreferenceActions();
   const reducedMotion = useReducedMotion();
+
+  // R-135 — résolution RÉELLE du drapeau `riviere_mode`, prop non fournie
+  // par défaut (voir la docstring de `isRiverFlagEnabled` ci-dessus).
+  const riverModeFlag = useRiverModeFlag();
+  const resolvedIsRiverFlagEnabled = isRiverFlagEnabled ?? riverModeFlag.active;
 
   /**
    * REV-4/B3 — les SIX actions historiques du rang (behaviour-matrix L07),
@@ -193,9 +208,9 @@ export function LentillePeek({
         isFlagEnabled: true,
         conversationType: conversation.type,
         activeParticipantCount,
-        isRiverFlagEnabled,
+        isRiverFlagEnabled: resolvedIsRiverFlagEnabled,
       }),
-    [conversation.type, activeParticipantCount, isRiverFlagEnabled]
+    [conversation.type, activeParticipantCount, resolvedIsRiverFlagEnabled]
   );
 
   /**

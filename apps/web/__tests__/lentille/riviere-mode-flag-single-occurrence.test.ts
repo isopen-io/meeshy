@@ -1,28 +1,33 @@
 /**
- * Garde de contrat R-134 (MÊME esprit que `lentille-flag-single-occurrence
+ * Garde de contrat R-134/R-135 (MÊME esprit que `lentille-flag-single-occurrence
  * .test.ts` (WL-101) et `reading-modes-flag-single-occurrence.test.ts`
  * (WF-110) : « le nom du drapeau ne fuit pas hors de son point de
  * résolution »).
  *
- * PLUS STRICT ENCORE que les deux gardes sœurs sur le CODE : ce lot (R-134)
- * livre la peau Rivière et son drapeau, mais AUCUN site de mux — le dégrisage
- * du menu est R-135. Le compte de CODE attendu hors résolveur/hook/tests est
- * donc ZÉRO partout, y compris au mux du fil (`ConversationMessages.tsx`
- * appelle `useReadingModesFlag()`, jamais `useRiverModeFlag()` — pas encore).
+ * Ce garde compte les occurrences du nom LITTÉRAL du drapeau
+ * (`RIVER_MODE_FLAG_NAME`, la chaîne `'riviere_mode'`), PAS les appels au hook
+ * `useRiverModeFlag(` — un appelant qui se contente d'IMPORTER et d'INVOQUER
+ * le hook n'a besoin d'écrire ce littéral nulle part (il vit UNIQUEMENT dans
+ * `resolve-river-mode-flag.ts`, le nom du paramètre de requête/cookie).
  *
- * RE-PREUVE (§0) : `LentillePeek.tsx` et `ReadingModeMenu.tsx` (chantier B2/B3
- * concurrent, NE PAS TOUCHER) portent chacun déjà un COMMENTAIRE en prose
- * citant `riviere_mode` en prévision de son dégrisage — de la documentation
- * DATÉE, jamais du câblage. Les commentaires sont donc retirés avant comptage
+ * R-135 branche le PREMIER appelant réel : `LentillePeek.tsx` (défaut de sa
+ * prop `isRiverFlagEnabled`, résolu par `useRiverModeFlag()`) — les TROIS
+ * chemins d'entrée du menu de mode (⋮, aperçu, encoche) en héritent. Le
+ * compte attendu reste ZÉRO malgré ce câblage réel : la CIBLE de ce garde
+ * (fuite du NOM du drapeau) n'a pas bougé, seul son CONSOMMATEUR a changé.
+ * `ConversationMessages.tsx` (mux du fil ouvert → `RiverThread`) reste lui
+ * NON câblé — hors périmètre de R-135, voir le rapport de tâche.
+ *
+ * RE-PREUVE (§0) : `LentillePeek.tsx` et `ReadingModeMenu.tsx` portent chacun
+ * un COMMENTAIRE en prose citant `riviere_mode` — retiré avant comptage
  * (même mécanique que `riviere-source-guard-r15.test.ts`) : documenter la loi
- * à venir n'est pas la brancher.
+ * n'est pas la brancher, et documenter le VRAI nom d'un littéral qu'on
+ * n'écrit pas en code n'en crée pas une occurrence.
  *
- * Ce témoin verrouille l'état RÉEL (zéro câblage) : si un futur lot (R-135)
- * branche effectivement `useRiverModeFlag()` quelque part, il doit AUSSI
- * mettre à jour ce garde (resserrer le seuil à 1, dans LE MÊME commit,
- * exactement comme WL-101 l'a documenté pour `lentille-flag-single-
- * occurrence.test.ts`) — jamais le laisser rougir en silence en croyant à une
- * régression.
+ * Ce témoin verrouille l'état RÉEL : si un futur lot fait fuiter le nom
+ * LITTÉRAL `'riviere_mode'` hors du résolveur/hook (une clé de config
+ * recopiée en dur, par exemple), il doit AUSSI mettre à jour ce garde —
+ * jamais le laisser rougir en silence en croyant à une régression.
  */
 import * as fs from 'fs';
 import * as path from 'path';
