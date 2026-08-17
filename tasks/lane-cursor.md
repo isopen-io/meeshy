@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=4 last_run=reply-mention-prefill
+lane=ANDROID android_streak=5 last_run=discover-sms-invite
