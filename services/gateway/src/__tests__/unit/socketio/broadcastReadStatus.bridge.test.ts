@@ -1,28 +1,26 @@
 /**
- * `broadcastReadStatus` et le pont ✦ — ce que la resynchro du LECTEUR dit, et
- * ce qu'elle refuse de dire (cycle 63).
+ * `broadcastReadStatus` — ce que l'émetteur dit quand il n'a RIEN calculé
+ * (cycle 63 bis).
  *
- * Quand quelqu'un lit une conversation, ses AUTRES appareils reçoivent le
- * compteur recalculé sur `conversation:unread-updated`. Ce chemin ne calcule
- * PAS le pont : ce serait 5 requêtes de plus à chaque accusé de lecture, sur
- * l'un des chemins les plus chauds du service, et l'arbitrage de coût est
- * consigné depuis le cycle 62.
+ * Complément de `socketio/__tests__/broadcastReadStatus.test.ts`, qui garde le
+ * chemin NOMINAL : depuis le cycle 63, cette resynchro CALCULE le pont ✦ quand
+ * la lecture est partielle, pour quatre requêtes payées seulement dans ce cas.
  *
- * Le défaut n'était donc pas l'absence de calcul — c'était que l'absence de
- * calcul et l'absence de pont s'écrivaient de la même façon sur le fil. Les
- * deux clients recopient `bridge` INCONDITIONNELLEMENT
+ * Restent deux replis où rien n'est calculé — un appelant qui ne fournit aucun
+ * constructeur de pont (le cas de ce fichier), et une passe qui tombe. Les deux
+ * clients recopiant `bridge` INCONDITIONNELLEMENT
  * (`ConversationSyncEngine.handleUnreadUpdated` côté iOS,
- * `setConversationUnreadInCache` côté web) : la forme courte ORDONNAIT
- * l'effacement. Après une lecture PARTIELLE — le curseur n'avance que sur le
- * préfixe contigu déjà lu — le compteur des autres appareils reste > 0 et ils
- * perdaient précisément le pont qui leur disait où reprendre.
+ * `setConversationUnreadInCache` côté web), ces replis ORDONNAIENT l'effacement
+ * du pont en cache alors qu'ils n'avaient rien à en dire.
  *
- * Ce que ces témoins gardent, c'est la frontière entre les deux phrases :
+ * Ce que ces témoins gardent, c'est la frontière entre les deux phrases, sur un
+ * appelant SANS constructeur :
  *   - compteur > 0  ⇒ clé ABSENTE  (« je n'ai pas calculé ») ⇒ le client garde ;
  *   - compteur == 0 ⇒ `bridge: null` (« il n'y en a plus », §3.2) ⇒ il efface.
  *
- * La seconde est gratuite : elle ne coûte aucune requête de plus, et c'est elle
- * qui nettoie les autres appareils quand on finit de lire sur celui-ci.
+ * La seconde est gratuite, et vraie même sans constructeur : elle ne coûte
+ * aucune requête, et c'est elle qui nettoie les autres appareils quand on finit
+ * de lire sur celui-ci.
  */
 
 import { jest } from '@jest/globals';
@@ -73,7 +71,7 @@ const unreadPayloads = (io: ReturnType<typeof makeChainableIO>): EmittedPayload[
   io._sendsFor('conversation:unread-updated').map((send) => send.payload as EmittedPayload);
 
 describe('broadcastReadStatus — « je n\'ai pas calculé le pont » n\'est pas « il n\'y a pas de pont »', () => {
-  it('ne dit RIEN du pont quand la lecture était partielle — le compteur reste au-dessus de zéro', async () => {
+  it('ne dit RIEN du pont sans constructeur, quand la lecture était partielle', async () => {
     const { io, prisma, readStatusService, privacyPreferencesService } = harness({
       unreadCount: 3,
     });

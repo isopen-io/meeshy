@@ -488,7 +488,7 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     // post-mark remaining unread (sourced from getUnreadCount), not a hardcoded 0.
     expect(emitMock).toHaveBeenCalledWith(
       'conversation:unread-updated',
-      { conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) }
+      expect.objectContaining({ conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) })
     );
     // read-status:updated (peer disclosure) must NOT fire
     expect(emitMock).not.toHaveBeenCalledWith('read-status:updated', expect.anything());

@@ -257,10 +257,10 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
 
     expect(response.statusCode).toBe(200);
     expect(mockTo2).toHaveBeenCalledWith('user:user-1');
-    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: CONVERSATION_ID,
-      unreadCount: expect.any(Number),
-    });
+    expect(mockEmit2).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) })
+    );
   });
 
   it('mark-as-read emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
@@ -276,10 +276,10 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     // The count is sourced from the real post-mark getUnreadCount (mirrors the
     // showReadReceipts=true sibling test above), not a hardcoded value.
     expect(mockTo2).toHaveBeenCalledWith('user:user-1');
-    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: CONVERSATION_ID,
-      unreadCount: expect.any(Number),
-    });
+    expect(mockEmit2).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) })
+    );
     // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
     // neither the legacy name nor the dual-emitted message:read-status-updated.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
@@ -305,9 +305,9 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
 
     expect(response.statusCode).toBe(200);
     expect(mockTo2).toHaveBeenCalledWith('user:user-1');
-    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: CONVERSATION_ID,
-      unreadCount: 3,
-    });
+    expect(mockEmit2).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: CONVERSATION_ID, unreadCount: 3 })
+    );
   });
 });

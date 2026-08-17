@@ -3801,10 +3801,10 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     await getMarkReadHandler()(makeRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
-    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
-      conversationId: 'resolved-conv-id',
-      unreadCount: 1,
-    });
+    expect(fastify._mockEmit).toHaveBeenCalledWith(
+      'conversation:unread-updated',
+      expect.objectContaining({ conversationId: 'resolved-conv-id', unreadCount: 1 })
+    );
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {

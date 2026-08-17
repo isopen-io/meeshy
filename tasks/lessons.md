@@ -10036,7 +10036,55 @@ fait tomber aucun des 53 témoins). Un contrat recopié dérive ; recopié dans 
 dispositif inerte, il dérive ET fait autorité.
 
 
-## Leçon 232 — un contrat doit porter autant d'états que l'émetteur a de choses à dire (2026-08-17, routine messagerie, cycle 63)
+## Leçon 232 — un prix consigné sans témoin qui le compte est une hypothèse, pas une donnée (2026-08-17, routine messagerie, cycle 63)
+
+Le cycle 62 a fermé trois des quatre émetteurs de `conversation:unread-updated`
+et rangé le quatrième — `broadcastReadStatus` — en **arbitrage de coût** :
+« le corriger coûterait les 5 requêtes de la passe à CHAQUE accusé de lecture,
+sur l'un des chemins les plus chauds du service ». Consigné comme un fait,
+formulé comme un fait, et il a tenu un cycle entier.
+
+Mesuré au cycle suivant, il était faux **deux fois**, et les deux erreurs sont
+génériques :
+
+1. **« à chaque appel » ignorait les gardes du site d'appel.** Le gate à zéro
+   non-lu — que les deux émetteurs frères portaient déjà — range le cas
+   DOMINANT du côté gratuit : lire une conversation la vide, la passe n'est pas
+   appelée, et l'effacement y est correct. Seul le cas RARE paie.
+2. **« 5 requêtes » était le coût NOMINAL de la passe, pas le coût de son appel
+   ICI.** L'appelant lisait déjà le curseur pour calculer le compteur qu'il
+   émet — exactement celui que la passe irait relire. Passé en paramètre, il
+   fait tomber le prix à 4, et donne au passage une garantie qu'aucune des deux
+   lectures séparées n'offrait : pont et compteur du même événement calculés sur
+   le MÊME instantané de curseur.
+
+La règle :
+
+> **Le coût nominal d'une opération n'est pas le coût de son appel sur un chemin
+> donné.** Les gardes du site d'appel et ce que l'appelant tient DÉJÀ en main en
+> font partie. Un prix estimé hors de son site d'appel surcompte
+> systématiquement — et il surcompte dans le sens qui fait NE PAS livrer.
+
+Corollaire opérationnel, et c'est lui qui coûte le moins cher à appliquer :
+**quand un carnet de pistes porte un chiffre qui a servi à ne pas livrer, le
+cycle qui reprend la piste commence par écrire le témoin qui compte.** Un témoin
+de compteurs Prisma coûte une heure ; il a ici renversé un arbitrage vieux d'un
+cycle, et il reste ensuite comme garde de non-régression — la mesure ne se perd
+pas, contrairement à l'estimation.
+
+Deux notes de méthode, tirées du même lot :
+
+- **Vérifier qu'un témoin de coût garde bien ce qu'il semble garder.** Celui du
+  cas gratuit ne tombe PAS quand on retire le gate du site d'appel : la
+  gratuité tient par deux gardes indépendantes (le site d'appel, et le premier
+  étage de la passe). Le témoin reste juste — le prix EST nul — mais c'est le
+  témoin de COMPORTEMENT qui garde l'intention. Mesuré sous mutation, consigné
+  dans le fichier, plutôt que laissé à découvrir.
+- **Une économie de requête peut valoir surtout par sa cohérence.** Ne pas
+  relire une donnée qu'on tient supprime aussi la fenêtre pendant laquelle une
+  écriture concurrente ferait diverger les deux lectures. L'argument de
+  justesse survit à l'argument de performance ; le citer d'abord.
+## Leçon 233 — un contrat doit porter autant d'états que l'émetteur a de choses à dire (2026-08-17, routine messagerie, cycle 63 bis)
 
 **Le fait.** `conversation:unread-updated` portait DEUX formes sur le fil — champ
 `bridge` présent, ou absent — pour exprimer TROIS choses qu'un émetteur peut avoir
