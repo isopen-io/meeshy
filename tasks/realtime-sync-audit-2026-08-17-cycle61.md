@@ -165,8 +165,16 @@ le soit** — c'est la condition de merge, pas une formalité.
   plan de portage** (`apps/android/tasks/audit/part-17.md`), comme le cycle 60
   le demandait explicitement : « le jour où ce relais existera, il naîtra avec
   le défaut ». La note y ajoute la fusion de ce cycle, pour la même raison.
-- **iOS / web** — non touchés. Le défaut est propre à la stratégie « relecture
-  serveur » qu'Android est seul à suivre.
+- **iOS / web** — non touchés, et **vérifié plutôt que supposé**. La leçon 226
+  du cycle 60 impose de chercher le client qui décode sans lire ; ici la
+  question jumelle est « quel client répond à ces trois trames, et comment ? ».
+  Dépouillé : `ConversationSyncEngine.handleUnreadUpdated` (iOS) **mute le cache
+  en place** — `await cache.conversations.update(for: "list") { … }` — et aucun
+  `fetchConversations` ne pend à un abonnement socket. iOS suit donc la
+  stratégie « mutation locale » que le plan `part-17` prévoit de porter sur
+  Android : il n'a jamais eu l'amplification, et c'est la raison pour laquelle
+  il a besoin, LUI, de la garde monotone du cycle 60. Les deux clients tiennent
+  les deux moitiés complémentaires de la même règle.
 
 ## 7. Pistes pour le cycle 62
 
