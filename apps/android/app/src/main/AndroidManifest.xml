@@ -104,9 +104,9 @@
             </intent-filter>
         </activity>
 
-        <!-- "Share to Meeshy" target (feature-parity §O, lot 1 — text/URL, mirrors the
-             iOS MeeshyShareExtension's own phased scope). android:excludeFromRecents keeps it
-             out of the task switcher — it is a single-purpose relay, not a real screen. -->
+        <!-- "Share to Meeshy" target (feature-parity §O — text/URL lot 1, image/video lot 2,
+             mirrors the iOS MeeshyShareExtension's own phased scope). android:excludeFromRecents
+             keeps it out of the task switcher — it is a single-purpose relay, not a real screen. -->
         <activity
             android:name=".ShareTargetActivity"
             android:exported="true"
@@ -117,6 +117,16 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
 
