@@ -10,6 +10,7 @@
 import {
   createDegradationState,
   reduceDegradation,
+  deriveVideoTier,
   SUSPEND_AFTER_POOR_MS,
   RESUME_AFTER_GOOD_MS,
   type DegradationState,
@@ -39,6 +40,15 @@ function poorEvery(step: number, count: number, start = 0): Array<[Level, number
 function goodEvery(step: number, count: number, start = 0): Array<[Level, number]> {
   return Array.from({ length: count }, (_, i) => ['good', start + i * step] as [Level, number]);
 }
+
+describe('deriveVideoTier', () => {
+  it('maps every quality level to its immediate tier, no hysteresis', () => {
+    expect(deriveVideoTier('excellent')).toBe('high');
+    expect(deriveVideoTier('good')).toBe('high');
+    expect(deriveVideoTier('fair')).toBe('medium');
+    expect(deriveVideoTier('poor')).toBe('low');
+  });
+});
 
 describe('reduceDegradation (time-based)', () => {
   it('maps quality to a video tier and dedups unchanged tiers', () => {
