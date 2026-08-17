@@ -79,9 +79,15 @@ nonisolated enum FocalPassConstants {
     static let magnificationPeak: CGFloat = 1.18
 
     /// Rayon de la loupe, en multiples de `FocalFocusCurve.focusBandHalfHeight`
-    /// (jamais un littéral rival du miroir gelé) : au-delà, la courbe gelée
-    /// règne seule.
-    static let magnificationRadiusFactor: CGFloat = 2
+    /// (jamais un littéral rival du miroir gelé). RÈGLE STRICTE (user 17/08
+    /// soir) : la ZONE DE MAGNIFICENCE est la bande de focus EXACTE — en
+    /// dehors, échelle strictement 1, zéro résidu de loupe.
+    static let magnificationRadiusFactor: CGFloat = 1
+
+    /// LIMITE DE TAILLE MAXIMUM (règle stricte) : croissance d'une rangée
+    /// plafonnée en POINTS absolus — `m = min(pic, 1 + maxGrowth/h)`. Une
+    /// grande rangée ne devient jamais énorme, quel que soit le pic.
+    static let magnificationMaxGrowth: CGFloat = 48
 
     /// Étendue de l'élévation `zPosition` portée par la loupe : la rangée
     /// magnifiée doit RECOUVRIR ses voisines en grandissant.

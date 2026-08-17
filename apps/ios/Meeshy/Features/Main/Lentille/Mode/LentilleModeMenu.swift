@@ -50,6 +50,10 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         case .script: return .script
         case .resume: return .summary
         case .riviere: return .river
+        // AMENDEMENT S1 (REV-4bis/B2) — `.bulles` n'apparaît PAS dans `order`
+        // ci-dessous : iOS n'offre pas ce choix. Le cas est traité pour que le
+        // `switch` reste exhaustif, avec l'image que la loi lui donne.
+        case .bulles: return .bubbles
         }
     }
 
@@ -60,6 +64,10 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         case .script: return .system("text.alignleft")
         case .resume: return .system("sparkles")
         case .riviere: return .system("water.waves")
+        // Jamais rendue (hors `order`) — même icône que la vue à bulles
+        // historique, pour qu'un futur appelant qui l'afficherait ne tombe pas
+        // sur un symbole choisi au hasard.
+        case .bulles: return .system("bubble.left.and.bubble.right")
         }
     }
 
