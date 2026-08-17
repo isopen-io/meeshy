@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Feed impression batching shipped** (slice `feed-impression-batching`,
+> feature-parity §F). `gh pr list --state open --search "apps/android OR apps/ios"` showed two
+> concurrent PRs (#3096, #3108), neither touching `apps/android`. `df -h /` showed ~10 Gi free,
+> stable.
+>
+> **Picked after a targeted scan for a narrower candidate** — the previous two runs' toast
+> orchestrator sub-slice needs a "which conversation/post is on screen" signal Android doesn't
+> have yet (its own separate slice). Re-proof here found the network HALF of this checklist line
+> already fully built and dormant: `PostApi.recordImpressions`/`PostRepository
+> .recordImpressions(postIds, source)` existed end-to-end, tested, with zero call sites — a
+> ready-made backend for a client that never used it.
+>
+> **`ImpressionBatcher` is a faithful port of iOS's real `ImpressionBatcher.swift`**, not a
+> reinterpretation: impressions are counted per APPEARANCE (deliberately never deduplicated —
+> `record` just appends, matching the gateway's own batch-`updateMany` semantics), a 3s debounce
+> window that resets on every `record` (so continuous scrolling never flushes until it settles),
+> `flushNow`/`flushNowAsync` for the "leaving the screen" case, and a failed send reinserts the
+> batch at the FRONT so a retry sends the oldest occurrences first.
+>
+> **A real correctness bug caught before it shipped, not after**: the first draft passed
+> `viewModelScope` into the batcher so `onCleared()` could call a suspend `flushNow()`. That
+> races Android's own teardown order — `viewModelScope` is cancelled right after `onCleared()`
+> returns, so a coroutine launched from inside `onCleared()` on that same scope has no
+> guaranteed window to complete. Fixed by giving `ImpressionBatcher` its OWN default scope
+> (`SupervisorJob() + Dispatchers.IO`, matching the exact pattern `SdkModule.kt`'s preference
+> stores already use for their own independent scopes) plus a `flushNowAsync()` fire-and-forget
+> entry point for the non-suspend `onCleared()` call site.
+>
+> **A build hiccup, not a design one**: `StandardTestDispatcher(...)` used as a TYPE annotation
+> (`dispatcher: StandardTestDispatcher`) failed to resolve — it's a top-level FACTORY FUNCTION
+> returning `TestDispatcher`, not a class; the constructor-call USAGE elsewhere in the same file
+> compiled fine, only the type position broke. Fixed by typing the parameter `TestDispatcher`.
+>
+> **Wired into the existing composition-lifecycle hook already used for pagination**:
+> `FeedScreen`'s `items(state.posts, key = { it.id })` block already had a
+> `LaunchedEffect(post.id, state.posts.size) { viewModel.loadMoreIfNeeded(post.id) }` sibling —
+> added `LaunchedEffect(post.id) { viewModel.trackImpression(post.id) }` right next to it rather
+> than inventing a new visibility-detection mechanism.
+>
+> **+9 tests** (`ImpressionBatcherTest`): debounced flush fires after the delay / not before;
+> records within the window group into one batch; repeat appearances aren't deduped; a blank id
+> is a no-op; `flushNow` sends immediately and cancels the pending timer; `flushNow` on an empty
+> batch is inert; `flushNowAsync` sends without being awaited; a failed flush keeps the batch
+> pending for the next retry (verified end-to-end: fail once, then a second `record` + flush
+> sends BOTH the retried and the new post together).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules) green. No `FeedViewModel`-level test added for the one-line `trackImpression`
+> delegation — the real behaviour is already fully covered by `ImpressionBatcherTest`; adding a
+> duplicate assertion at the ViewModel layer would just re-test the same logic through an extra
+> layer of mocking.
+>
+> **Deliberately narrower than iOS's own three safety nets**: app-backgrounding flush and
+> kill-survival persistence (UserDefaults replay on relaunch) are NOT ported — no equivalent
+> Android wiring point exists yet for either. **Dwell-time tracking is untouched and separately
+> scoped**: iOS's `EngagementTracker` is a materially bigger system (durable SQLite outbox,
+> session pause/resume, qualification thresholds, its own `/posts/engagement/batch` endpoint) —
+> a future slice, not attempted here.
+
 > On 2026-08-17 **Notification toast decision core shipped** (slice
 > `notification-toast-policy`, feature-parity §M), the second of the 3 sub-slices identified
 > for "In-app real-time notification toast" (the real-time data feed, sub-slice 1, landed
