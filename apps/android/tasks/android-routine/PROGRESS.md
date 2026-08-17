@@ -2,6 +2,60 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Invite by email shipped** (slice `discover-email-invite`, feature-parity §J).
+> `gh pr list --state open --search "apps/android OR apps/ios"` showed zero open PRs. `df -h /`
+> showed 9.2 Gi free, stable.
+>
+> **Picked up the strongest candidate the previous slice's Explore agent had surfaced but
+> deliberately deferred**: `FriendRepository.sendEmailInvitation(email) → NetworkResult<
+> EmailInvitationResponse>`, fully implemented and tested at repository level, zero call sites
+> anywhere in `apps/android`. Fourth slice this session found via the "ready backend, never
+> wired to UI" heuristic (after `PostApi.recordImpressions`, `CachePolicy.Notifications`,
+> `PostRepository.pinPost`).
+>
+> **Corrected a stale conclusion from an earlier session**: a prior search for an iOS reference
+> had only checked `InviteFriendsSheet.swift` (a conversation-scoped share-link sheet) and
+> concluded no clear iOS counterpart existed. The real reference is
+> `Features/Contacts/DiscoverViewModel.swift`'s `sendEmailInvitation()` +
+> `DiscoverTab.swift`'s `emailInviteCard` — a dedicated email-invite card at the top of the
+> Discover tab, entirely separate from `InviteFriendsSheet`.
+>
+> **Ported the exact iOS state shape**: `DiscoverUiState` gained `emailText`/`isSendingInvite`/
+> `inviteErrorMessage` (mirrors `@Published var emailText`/`isSendingInvite`); `sendEmailInvitation()`
+> trims, guards non-empty, guards against a second call while one is in flight, clears the field
+> on success, and keeps the address for retry on failure — same as iOS's
+> `try await friendService.sendEmailInvitation(email:)` do/catch.
+>
+> **Deliberately narrower than iOS**: iOS shows a toast (`FeedbackToastManager.shared.showSuccess/
+> showError`) on both outcomes. Android's Discover module has **zero** toast/snackbar
+> infrastructure — confirmed via an exhaustive grep across `apps/android/feature` for
+> `successMessage`/`SnackbarHost`/`showSuccess`/`Toast.`/`MeeshySnackbar`/`SnackbarHostState`
+> (zero matches). Rather than inventing new toast infra for this slice (scope discipline),
+> success feedback is implicit (field clears + Send button disables) and failure surfaces as an
+> inline `Text` beside the card via the new `inviteErrorMessage` field. This is deliberately NOT
+> the existing `errorMessage` field on `DiscoverUiState` — that one drives a full-screen
+> `ErrorState` composable that would wrongly hijack the whole Discover tab for a transient invite
+> failure.
+>
+> **New `EmailInviteCard` composable** in `DiscoverTab.kt`: icon + title row, `OutlinedTextField`
+> (email keyboard, no autocorrect/autocapitalize) + `Button` (disabled when
+> `emailText.isEmpty() || isSendingInvite`, with an accessibility label), inline error `Text`
+> below when `inviteErrorMessage != null`. Sits above the search field, matching iOS's
+> `inviteSection` position at the top of the Discover scroll.
+>
+> **+4 tests** (`DiscoverViewModelTest`): trimmed address sent + field cleared on success; blank
+> address never hits the network; error surfaces + address kept for retry; a second call while
+> one is in flight is a no-op (verified via a `CompletableDeferred` held open across both calls).
+>
+> **Verified**: RED confirmed for the right reason (compile errors — the 4 new tests referenced
+> members that didn't exist yet), GREEN after implementation, then `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, all modules) green. EN/FR/ES/PT strings added (5
+> keys: title, placeholder, send, send accessibility label, error).
+>
+> **Still open, left for a future slice**: SMS invite and phone-contacts import — no Android
+> SMS-compose or contacts-permission surface exists yet; the checklist line covers all three but
+> only email was in scope here.
+
 > On 2026-08-17 **Post pin (own posts) shipped** (slice `feed-pin-own-post`, feature-parity §F).
 > `gh pr list --state open --search "apps/android OR apps/ios"` showed three concurrent PRs
 > (#3123, #3096, #3108), none touching `apps/android`. `df -h /` showed 10 Gi free, stable.

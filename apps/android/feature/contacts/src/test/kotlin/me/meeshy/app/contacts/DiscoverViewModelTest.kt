@@ -21,6 +21,7 @@ import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.friend.SuggestionsRepository
+import me.meeshy.sdk.model.EmailInvitationResponse
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.model.friend.ConnectAction
@@ -477,5 +478,59 @@ class DiscoverViewModelTest {
         assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("carol")
         assertThat(vm.state.value.errorMessage).isNull()
         verify(exactly = 2) { suggestionsRepository.suggestionsStream(any()) }
+    }
+
+    // Port of iOS DiscoverViewModel.sendEmailInvitation — email invite card (feature-parity §J).
+    @Test
+    fun `sendEmailInvitation sends the trimmed address and clears the field on success`() = runTest {
+        coEvery { friendRepository.sendEmailInvitation("friend@example.com") } returns
+            NetworkResult.Success(mockk(relaxed = true))
+        val vm = viewModel()
+        vm.onEmailTextChanged("  friend@example.com  ")
+
+        vm.sendEmailInvitation()
+
+        coVerify(exactly = 1) { friendRepository.sendEmailInvitation("friend@example.com") }
+        assertThat(vm.state.value.emailText).isEmpty()
+        assertThat(vm.state.value.isSendingInvite).isFalse()
+        assertThat(vm.state.value.inviteErrorMessage).isNull()
+    }
+
+    @Test
+    fun `sendEmailInvitation with a blank address never hits the network`() = runTest {
+        val vm = viewModel()
+        vm.onEmailTextChanged("   ")
+
+        vm.sendEmailInvitation()
+
+        coVerify(exactly = 0) { friendRepository.sendEmailInvitation(any()) }
+    }
+
+    @Test
+    fun `sendEmailInvitation surfaces the error and keeps the address for retry`() = runTest {
+        coEvery { friendRepository.sendEmailInvitation("friend@example.com") } returns
+            NetworkResult.Failure(ApiError("offline"))
+        val vm = viewModel()
+        vm.onEmailTextChanged("friend@example.com")
+
+        vm.sendEmailInvitation()
+
+        assertThat(vm.state.value.inviteErrorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.isSendingInvite).isFalse()
+        assertThat(vm.state.value.emailText).isEqualTo("friend@example.com")
+    }
+
+    @Test
+    fun `a second sendEmailInvitation while one is in flight is a no-op`() = runTest {
+        val pending = kotlinx.coroutines.CompletableDeferred<NetworkResult<EmailInvitationResponse>>()
+        coEvery { friendRepository.sendEmailInvitation(any()) } coAnswers { pending.await() }
+        val vm = viewModel()
+        vm.onEmailTextChanged("friend@example.com")
+
+        vm.sendEmailInvitation()
+        vm.sendEmailInvitation()
+
+        coVerify(exactly = 1) { friendRepository.sendEmailInvitation(any()) }
+        pending.complete(NetworkResult.Success(mockk(relaxed = true)))
     }
 }
