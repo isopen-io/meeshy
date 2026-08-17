@@ -120,7 +120,7 @@ export function registerBanRoutes(
           io,
           conversationId: id,
           participants: audience,
-          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED],
+          event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED,
           payload: {
             conversationId: id,
             userId: targetUserId,
@@ -255,7 +255,7 @@ export function registerBanRoutes(
           io,
           conversationId: id,
           participants: remaining,
-          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED],
+          event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED,
           payload: {
             conversationId: id,
             userId: targetUserId,

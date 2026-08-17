@@ -759,7 +759,7 @@ export class MeeshySocketIOManager {
           io: this.io,
           conversationId,
           participants: convParticipants.get(conversationId) ?? [],
-          events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+          event: SERVER_EVENTS.READ_STATUS_UPDATED,
           payload: drainPayload,
         });
         logger.debug('drain delivery receipt emitted', { readerKey, isAnonymous, conversationId, latestMessageId, rooms });

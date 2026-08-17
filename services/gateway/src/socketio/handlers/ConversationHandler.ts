@@ -321,10 +321,7 @@ export class ConversationHandler {
         summary,
       };
 
-      // Les DEUX noms : l'historique et le canonique voyagent en parallèle
-      // partout ailleurs, et un client migré n'écoute plus que le second.
       socket.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-      socket.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
     } catch (err) {
       logger.warn('read-status resync failed on join (non-blocking)', { conversationId, error: err });
     }

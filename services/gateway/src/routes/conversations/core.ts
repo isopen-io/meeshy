@@ -1780,7 +1780,7 @@ export function registerCoreRoutes(
           io,
           conversationId: id,
           participants: updatedConversation.participants.filter(p => p.isActive),
-          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+          event: SERVER_EVENTS.CONVERSATION_UPDATED,
           payload: {
             conversationId: id,
             ...changedFields,
@@ -1885,7 +1885,7 @@ export function registerCoreRoutes(
           io,
           conversationId,
           participants: closedConversation.participants.filter(p => p.isActive),
-          events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+          event: SERVER_EVENTS.CONVERSATION_CLOSED,
           payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
         })
       }

@@ -108,7 +108,7 @@ export function registerLeaveRoutes(
           io,
           conversationId: id,
           participants: audience,
-          events: [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT],
+          event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
           payload: {
             conversationId: id,
             userId,

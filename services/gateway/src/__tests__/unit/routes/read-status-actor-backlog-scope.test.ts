@@ -49,7 +49,12 @@ const ANONYMOUS_PARTICIPANT_ID = '507f1f77bcf86cd799439088';
 const UNREAD_COUNT = 7;
 const LAST_READ_AT = new Date('2026-08-15T10:00:00.000Z');
 
-const READ_STATUS_EVENTS = ['read-status:updated', 'message:read-status-updated'] as const;
+/**
+ * Le SEUL nom d'accusé de lecture sur le fil. L'alias
+ * `message:read-status-updated`, dual-émis du 2026-07-05 au cycle 64, n'a jamais
+ * eu de client — voir tasks/socketio-events-cleanup.md § 3.
+ */
+const READ_STATUS_EVENTS = ['read-status:updated'] as const;
 
 // --- module mocks (le préfixe `mock` est requis par le hoisting de jest) ---
 
@@ -201,7 +206,8 @@ describe('read-status — la portée de l\'arriéré de l\'acteur', () => {
     expect(response.statusCode).toBe(200);
 
     const sends = fanOutSends();
-    expect(sends).toHaveLength(READ_STATUS_EVENTS.length - 1);
+    // Un éventail, une émission.
+    expect(sends).toHaveLength(1);
     for (const send of sends) {
       expect(send.payload).not.toHaveProperty('lastReadAt');
       expect(send.payload).not.toHaveProperty('unreadCount');
@@ -299,7 +305,6 @@ describe('read-status — la portée de l\'arriéré de l\'acteur', () => {
     // Ni éventail ni émission ciblée : la préférence coupe l'événement entier,
     // et la remise à zéro du badge passe par `conversation:unread-updated`.
     expect(io._sendsFor('read-status:updated')).toHaveLength(0);
-    expect(io._sendsFor('message:read-status-updated')).toHaveLength(0);
     expect(io._roomsFor('conversation:unread-updated')).toContain(`user:${ACTOR_USER_ID}`);
   });
 
