@@ -25,6 +25,15 @@
  * flex-shrink-0">`, sans lien, sans bouton, sans `stopPropagation` — un clic
  * dessus remontait au `role="button"` racine et ouvrait le fil.
  *
+ * MISE À JOUR Q-142/R5-7 (2026-08-17) : ce `role="button"` racine n'existe
+ * plus — l'ouverture de la conversation est passée dans une COUVERTURE
+ * (`lentille-row-open`), un `<button>` FRÈRE de l'avatar et non plus son
+ * ancêtre (patron « card action », solde de la réserve REV-4ter R5-7 :
+ * `nested-interactive`). L'affordance d'avatar est INCHANGÉE — mêmes routes,
+ * mêmes noms accessibles, même exclusion d'appui long ; seul le porteur de
+ * « ouvrir la conversation » a changé de place, et les témoins ci-dessous le
+ * visent désormais là où il est.
+ *
  * MISE À JOUR — DIRECTIVE PRODUIT DU 2026-08-17 (« le profil s'ouvre en
  * modale ») : `UserProfileModal` existe désormais
  * (`components/profile/UserProfileModal.tsx`). L'affordance de CE fichier
@@ -162,7 +171,10 @@ describe("LentilleRow — l'avatar ouvre le profil, jamais la conversation (beha
 
     // Contre-épreuve : le rang, lui, s'ouvre toujours au clic — l'exclusion
     // est LOCALE à l'avatar, elle ne neutralise pas la rangée.
-    fireEvent.click(screen.getByTestId('lentille-row'));
+    // Q-142/R5-7 : la cible d'ouverture est désormais la COUVERTURE
+    // (`lentille-row-open`), plus la racine `role="button"` — le geste de
+    // l'utilisateur est le même (« cliquer le rang »), le porteur a changé.
+    fireEvent.click(screen.getByTestId('lentille-row-open'));
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
@@ -182,8 +194,12 @@ describe("LentilleRow — l'avatar ouvre le profil, jamais la conversation (beha
     affordance.focus();
     expect(affordance).toHaveFocus();
 
-    // Sans arrêt de propagation, le `onKeyDown` du rang (`role="button"`,
-    // Enter/Espace) ouvrirait la conversation EN PLUS du profil.
+    // Q-142/R5-7 — DEUX filets, désormais, et il faut le dire : la racine du
+    // rang n'a PLUS de `onKeyDown` (l'ouverture vit dans un `<button>` FRÈRE,
+    // que rien ne place sur le chemin de remontée d'un Entrée sur l'avatar),
+    // donc ce témoin ne peut plus rougir par ce défaut-là. L'arrêt de
+    // propagation reste en place et reste utile : `LentillePeek`, lui, est
+    // toujours un ANCÊTRE de l'avatar et écoute encore les gestes du rang.
     fireEvent.keyDown(affordance, { key: 'Enter' });
     fireEvent.keyDown(affordance, { key: ' ' });
     expect(onSelect).not.toHaveBeenCalled();

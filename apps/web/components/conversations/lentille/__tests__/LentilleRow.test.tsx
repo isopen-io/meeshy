@@ -113,7 +113,15 @@ describe('LentilleRow — rang', () => {
   // (rappel STABLE + donnée, pour que le `memo` du rang serve à quelque chose).
   // Le témoin y gagne : il vérifie désormais AUSSI que le rang referme sur SA
   // conversation, ce que l'ancienne fermeture littérale rendait invérifiable.
-  it('rend role=button avec tabIndex, et déclenche onSelect(conversation) au clic', () => {
+  /**
+   * Q-142/R5-7 — la RACINE n'est plus le contrôle : elle est un conteneur
+   * muet, et l'ouverture vit dans la couverture (`lentille-row-open`, patron
+   * « card action »). Ce témoin figure les DEUX faces du changement : ce qui
+   * a DISPARU de la racine (le rôle, l'arrêt de tabulation, le label — sans
+   * quoi `nested-interactive` reviendrait le jour où on les remettrait), et
+   * ce qui est APPARU sur la couverture, à l'identique.
+   */
+  it('Q-142/R5-7 — la racine est un conteneur MUET, la couverture est le vrai bouton', () => {
     const onSelect = jest.fn();
     const conversation = makeConversation();
     render(
@@ -127,14 +135,52 @@ describe('LentilleRow — rang', () => {
     );
 
     const row = screen.getByTestId('lentille-row');
-    expect(row).toHaveAttribute('role', 'button');
-    expect(row).toHaveAttribute('tabindex', '0');
-    row.click();
+    expect(row).not.toHaveAttribute('role');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(row).not.toHaveAttribute('aria-label');
+
+    const cover = screen.getByTestId('lentille-row-open');
+    expect(cover.tagName).toBe('BUTTON');
+    expect(cover).toHaveAttribute('type', 'button');
+    expect(cover.getAttribute('aria-label') ?? '').toContain('Équipe produit');
+    cover.click();
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(conversation);
   });
 
-  it('Enter et Espace déclenchent onSelect(conversation) (a11y clavier)', () => {
+  /**
+   * Q-142/R5-7 — la couverture rend la boîte du RANG ENTIER, padding compris.
+   * jsdom ne fait pas de mise en page : ce qui est vérifiable ici, c'est la
+   * PRESCRIPTION (insets négatifs par les tokens du padding, rayon du rang) —
+   * sans elle la zone cliquable rétrécirait silencieusement du padding.
+   */
+  it('Q-142/R5-7 — la couverture couvre la boîte du rang, padding compris (insets négatifs par les tokens)', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+
+    const cover = screen.getByTestId('lentille-row-open');
+    expect(cover.className).toContain('absolute');
+    const style = cover.getAttribute('style') ?? '';
+    expect(style).toContain('calc(-1 * var(--lentille-list-row-padding-vertical))');
+    expect(style).toContain('calc(-1 * var(--lentille-list-row-padding-horizontal))');
+    expect(style).toContain('var(--lentille-list-row-radius)');
+  });
+
+  /**
+   * Q-142/R5-7 — Entrée et Espace restent opérants, désormais par le
+   * comportement NATIF du `<button>` : le navigateur les convertit en un
+   * `click` sur l'élément, ce que jsdom reproduit par `HTMLElement.click()`.
+   * Le `onKeyDown` réécrit de l'ancienne racine a disparu AVEC elle — le
+   * témoin ci-dessus prouve qu'il n'en reste aucun fantôme.
+   */
+  it('Entrée et Espace déclenchent onSelect(conversation) (a11y clavier, bouton NATIF)', () => {
     const onSelect = jest.fn();
     const conversation = makeConversation();
     render(
@@ -146,10 +192,11 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const row = screen.getByTestId('lentille-row');
-    row.focus();
-    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    const cover = screen.getByTestId('lentille-row-open');
+    cover.focus();
+    expect(document.activeElement).toBe(cover);
+    cover.click();
+    cover.click();
     expect(onSelect).toHaveBeenCalledTimes(2);
     expect(onSelect).toHaveBeenLastCalledWith(conversation);
   });
@@ -350,7 +397,7 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
     // L'heure est lue par SON marqueur, non par sa position : `h3.nextSibling`
     // valait tant que la ligne 1 était « nom | heure » ; la grammaire
     // « Nom · heure » de la maquette (§3) y intercale le point médian.
@@ -382,7 +429,7 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
     expect(label).toContain('Bonjour équipe');
     expect(label).not.toContain('Hello team');
   });
@@ -416,7 +463,7 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
     expect(label).toContain('Zoe');
     expect(label).toContain('2 messages');
     expect(label).not.toContain('Preview jamais annoncée');
@@ -441,7 +488,7 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
     expect(label).not.toContain('non lu');
     expect(label).not.toContain('lentille.a11y.unread');
     // Format complet réduit à trois segments (nom, heure, préview) — pas
