@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=notification-cache-first-stream
+lane=ANDROID android_streak=2 last_run=feed-pin-own-post
