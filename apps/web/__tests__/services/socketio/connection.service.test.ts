@@ -675,14 +675,21 @@ describe('ConnectionService', () => {
       expect(result).toBe(mockSocket);
     });
 
-    it('creates socket with session token when no JWT', () => {
+    // La passerelle lit DEUX champs distincts dans le handshake :
+    // `auth.token` est vérifié comme un JWT, `auth.sessionToken` est résolu en
+    // participant anonyme (`extractJWTToken` / `extractSessionToken`,
+    // socketio/utils/socket-helpers.ts). Annoncer un jeton `anon_…` sous
+    // `token` l'envoie au vérificateur JWT : `jwt malformed`, la passerelle
+    // répond « Authentication failed » et coupe la socket. Un participant
+    // anonyme n'avait donc AUCUN temps réel.
+    it('names the anonymous credential sessionToken, never token', () => {
       mockAuthManager.getAuthToken.mockReturnValue(null);
-      mockAuthManager.getAnonymousSession.mockReturnValue({ token: 'anon-token' });
+      mockAuthManager.getAnonymousSession.mockReturnValue({ token: 'anon_1755_abc' });
 
       const svc = new ConnectionService();
       const result = svc.initializeConnection();
 
-      expect(resolveHandshakeAuth()).toEqual({ token: 'anon-token' });
+      expect(resolveHandshakeAuth()).toEqual({ sessionToken: 'anon_1755_abc' });
       expect(result).toBe(mockSocket);
     });
 
@@ -708,7 +715,7 @@ describe('ConnectionService', () => {
       mockAuthManager.getAuthToken.mockReturnValue(null);
       mockAuthManager.getAnonymousSession.mockReturnValue({ token: 'rotated-anon-token' });
 
-      expect(resolveHandshakeAuth()).toEqual({ token: 'rotated-anon-token' });
+      expect(resolveHandshakeAuth()).toEqual({ sessionToken: 'rotated-anon-token' });
     });
 
     it('stores socket in state after creation', () => {

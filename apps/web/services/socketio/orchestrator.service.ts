@@ -126,7 +126,7 @@ export class SocketIOOrchestrator {
   /**
    * A refreshed token just landed. Open the socket only if there is none —
    * a socket that already exists re-reads the credentials by itself at its
-   * next handshake (ConnectionService.resolveHandshakeToken), so tearing a
+   * next handshake (ConnectionService.resolveHandshakeCredentials), so tearing a
    * live one down would drop its rooms for nothing.
    */
   private onTokensUpdated(): void {
