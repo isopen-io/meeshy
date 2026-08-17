@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -147,6 +148,42 @@ class ConversationListViewModel @Inject constructor(
      */
     private var categoryCatalog: UserCategoryCatalog = UserCategoryCatalog.EMPTY
 
+    /**
+     * Demandes de revalidation de la liste, FUSIONNEES.
+     *
+     * Un seul message entrant vaut TROIS trames serveur — `message:new`,
+     * `conversation:updated` et `conversation:unread-updated` sortent toutes du
+     * meme `MessageHandler.broadcastNewMessage` pour le meme message. Repondre a
+     * chacune par son propre [refreshSilently] payait donc TROIS fois, par
+     * message recu, le prix fort : un `GET /conversations` complet, plus une
+     * transaction Room `upsertAll` + `deleteNotIn`, plus la re-emission de toute
+     * la liste vers l'UI. Dans un groupe actif, l'ecran de liste ouvert, cela
+     * fait des dizaines de relectures completes par minute — reseau, batterie et
+     * base, pour un resultat que la premiere relecture portait deja.
+     *
+     * [Channel.CONFLATED] ne retient que la DERNIERE demande en attente : une
+     * rafale de trames arrivees pendant une relecture en vol se fond en une
+     * seule relecture de queue. Bornes du contrat, dans les deux sens :
+     *
+     *  - **Rien n'est retarde.** Le canal est vide au repos, donc une trame
+     *    isolee est servie immediatement — pas de `debounce`, pas de fenetre
+     *    d'attente (principe Instant App : cache-first, network-second).
+     *  - **Rien n'est perdu.** Toute trame arrivee pendant une relecture laisse
+     *    une demande en attente, donc une relecture SUIVANTE la couvrira — la
+     *    reponse en vol avait pu etre construite par le serveur avant elle.
+     *
+     * [trySend] ne suspend jamais : les collecteurs rendent la main aussitot, et
+     * la dispatch des trames socket ne peut plus etre freinee par une requete
+     * reseau en cours (les `SharedFlow` de [MessageSocketManager] sont bornes a
+     * 64 et suspendent leur emetteur au-dela).
+     */
+    private val refreshRequests = Channel<Unit>(Channel.CONFLATED)
+
+    /** Demande une revalidation silencieuse ; fusionnee par [refreshRequests]. */
+    private fun requestRefresh() {
+        refreshRequests.trySend(Unit)
+    }
+
     init {
         viewModelScope.launch {
             repository.conversationsStream(
@@ -210,20 +247,23 @@ class ConversationListViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            // La pompe : une relecture a la fois, la suivante ne partant qu'une
+            // fois la precedente rendue. C'est ce qui donne la fusion — toute
+            // trame arrivee entre-temps s'est deja fondue dans l'unique demande
+            // que [refreshRequests] retient.
             launch {
-                messageSocketManager.unreadUpdated.collect {
+                for (coalescedRequest in refreshRequests) {
                     refreshSilently()
                 }
             }
             launch {
-                messageSocketManager.messageReceived.collect {
-                    refreshSilently()
-                }
+                messageSocketManager.unreadUpdated.collect { requestRefresh() }
             }
             launch {
-                messageSocketManager.conversationUpdated.collect {
-                    refreshSilently()
-                }
+                messageSocketManager.messageReceived.collect { requestRefresh() }
+            }
+            launch {
+                messageSocketManager.conversationUpdated.collect { requestRefresh() }
             }
             launch {
                 messageSocketManager.conversationDeleted.collect { event ->
@@ -531,6 +571,12 @@ class ConversationListViewModel @Inject constructor(
      * magic link —, reseau coupe) laisse la liste en cache intacte ; avant cette
      * garde, un `conversation:updated` recu pendant un logout faisait remonter
      * ConversationSyncException jusqu'au main thread et TUAIT le process.
+     *
+     * Appelee par la seule pompe de [refreshRequests], jamais directement depuis
+     * un collecteur : c'est cette serialisation qui fusionne les rafales. Sa
+     * garde `catch` en devient d'autant plus critique — la pompe est desormais
+     * UNIQUE, donc une exception qui s'en echapperait ne priverait pas une
+     * famille de trames de sa relecture, mais TOUTES.
      */
     private suspend fun refreshSilently() {
         try {

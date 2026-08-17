@@ -4,6 +4,7 @@ import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import kotlinx.coroutines.CompletableDeferred
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -37,6 +38,8 @@ import me.meeshy.sdk.model.ConversationClosedSocketEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
+import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.ParticipantLeftEvent
@@ -79,11 +82,14 @@ class ConversationListViewModelTest {
         participantLeft: MutableSharedFlow<ParticipantLeftEvent> = MutableSharedFlow(),
         userStatus: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
         presenceSnapshot: MutableSharedFlow<PresenceSnapshotEvent> = MutableSharedFlow(),
+        unreadUpdated: MutableSharedFlow<UnreadUpdateEvent> = MutableSharedFlow(),
+        messageReceived: MutableSharedFlow<ApiMessage> = MutableSharedFlow(),
+        conversationUpdated: MutableSharedFlow<ConversationUpdatedSocketEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
-            every { unreadUpdated } returns MutableSharedFlow()
-            every { messageReceived } returns MutableSharedFlow()
-            every { conversationUpdated } returns MutableSharedFlow()
+            every { this@mockk.unreadUpdated } returns unreadUpdated
+            every { this@mockk.messageReceived } returns messageReceived
+            every { this@mockk.conversationUpdated } returns conversationUpdated
             every { this@mockk.conversationDeleted } returns conversationDeleted
             every { this@mockk.conversationClosed } returns conversationClosed
             every { this@mockk.participantLeft } returns participantLeft
@@ -146,6 +152,102 @@ class ConversationListViewModelTest {
             ApiParticipant(id = "p-other", userId = otherId, displayName = "Contact"),
         ),
     )
+
+    /**
+     * Un message entrant vaut TROIS trames serveur — `message:new`,
+     * `conversation:updated` et `conversation:unread-updated`, toutes emises par
+     * le meme `MessageHandler.broadcastNewMessage` pour le meme message. Repondre
+     * a chacune par un `repository.refresh()` (une requete de liste COMPLETE plus
+     * une transaction Room `upsertAll` + `deleteNotIn`) triplait le cout reseau,
+     * batterie et base de chaque message recu.
+     */
+    @Test
+    fun the_three_socket_frames_of_one_incoming_message_collapse_into_a_single_trailing_refresh() =
+        runTest(dispatcher) {
+            val messageReceived = MutableSharedFlow<ApiMessage>()
+            val conversationUpdated = MutableSharedFlow<ConversationUpdatedSocketEvent>()
+            val unreadUpdated = MutableSharedFlow<UnreadUpdateEvent>()
+            val firstRefreshHeld = CompletableDeferred<Unit>()
+            var refreshCount = 0
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            coEvery { repo.refresh() } coAnswers {
+                refreshCount++
+                if (refreshCount == 1) firstRefreshHeld.await()
+            }
+            viewModel(
+                repo,
+                socket = socketManager(
+                    messageReceived = messageReceived,
+                    conversationUpdated = conversationUpdated,
+                    unreadUpdated = unreadUpdated,
+                ),
+            )
+            advanceUntilIdle()
+
+            messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
+            advanceUntilIdle()
+            assertThat(refreshCount).isEqualTo(1)
+
+            conversationUpdated.emit(ConversationUpdatedSocketEvent(conversationId = "c1"))
+            unreadUpdated.emit(UnreadUpdateEvent(conversationId = "c1", unreadCount = 1))
+            advanceUntilIdle()
+
+            // Les deux trames jumelles arrivent pendant la relecture en vol : elles
+            // se fondent en UNE seule demande en attente, elles n'en empilent pas deux.
+            assertThat(refreshCount).isEqualTo(1)
+
+            firstRefreshHeld.complete(Unit)
+            advanceUntilIdle()
+
+            // Une relecture de queue — jamais zero (rien n'est perdu), jamais trois.
+            assertThat(refreshCount).isEqualTo(2)
+        }
+
+    /**
+     * La contrepartie de la fusion : elle ne doit RIEN retarder. Une trame isolee
+     * declenche sa relecture immediatement — pas de `debounce`, pas de fenetre
+     * d'attente (Instant App, cache-first/network-second).
+     */
+    @Test
+    fun an_isolated_socket_frame_still_refreshes_the_list_without_any_delay() =
+        runTest(dispatcher) {
+            val messageReceived = MutableSharedFlow<ApiMessage>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            viewModel(repo, socket = socketManager(messageReceived = messageReceived))
+            advanceUntilIdle()
+
+            messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { repo.refresh() }
+        }
+
+    /**
+     * Une relecture qui echoue (session en teardown, reseau coupe) ne doit pas
+     * emporter la pompe avec elle : la trame SUIVANTE doit encore etre servie.
+     * Avant la fusion, chaque collecteur portait son propre `try/catch` ; la
+     * pompe unique en fait un point de defaillance unique s'il manque.
+     */
+    @Test
+    fun a_failed_refresh_does_not_stop_the_next_socket_frame_from_refreshing() =
+        runTest(dispatcher) {
+            val messageReceived = MutableSharedFlow<ApiMessage>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            var refreshCount = 0
+            coEvery { repo.refresh() } coAnswers {
+                refreshCount++
+                if (refreshCount == 1) throw IllegalStateException("session teardown")
+            }
+            viewModel(repo, socket = socketManager(messageReceived = messageReceived))
+            advanceUntilIdle()
+
+            messageReceived.emit(ApiMessage(id = "m1", conversationId = "c1"))
+            advanceUntilIdle()
+            messageReceived.emit(ApiMessage(id = "m2", conversationId = "c1"))
+            advanceUntilIdle()
+
+            assertThat(refreshCount).isEqualTo(2)
+        }
 
     @Test
     fun a_live_user_status_event_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
