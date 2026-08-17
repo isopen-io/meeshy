@@ -95,12 +95,71 @@ describe('vectors: river-lanes — couverture du cycle de vie des branches', () 
     });
   });
 
-  it('tient l’invariant de colonne : les colonnes sont 0..laneCount-1, sans trou ni doublon', () => {
+  it('tient l’invariant de colonne : 0..laneCount-1, sans trou, jamais plus large que la borne', () => {
     geometries.forEach((geometry) => {
-      expect(geometry.lanes.map((lane) => lane.laneIndex)).toEqual(
-        geometry.lanes.map((_, index) => index),
+      const columns = [...new Set(geometry.lanes.map((lane) => lane.laneIndex))].sort(
+        (a, b) => a - b,
       );
-      expect(geometry.laneCount).toBe(geometry.lanes.length);
+
+      expect(columns).toEqual(columns.map((_unused, index) => index));
+      expect(geometry.laneCount).toBe(columns.length);
+      expect(geometry.laneCount).toBeLessThanOrEqual(geometry.maxLanes);
     });
+  });
+
+  it('tient l’invariant du partage : deux voix d’une même colonne ne parlent JAMAIS en même temps', () => {
+    geometries
+      .filter((geometry) => geometry.layout === 'lanes')
+      .forEach((geometry) => {
+        geometry.lanes.forEach((lane) => {
+          const roommates = geometry.lanes.filter(
+            (other) => other.laneIndex === lane.laneIndex && other.laneId !== lane.laneId,
+          );
+          roommates.forEach((other) => {
+            lane.spans.forEach((span) => {
+              other.spans.forEach((otherSpan) => {
+                expect(span.startRank <= otherSpan.endRank && otherSpan.startRank <= span.endRank).toBe(
+                  false,
+                );
+              });
+            });
+          });
+        });
+      });
+  });
+
+  it('exerce le partage de colonne : plus de voix que de couloirs, chacune à son tour', () => {
+    const shared = geometries.filter(
+      (geometry) => geometry.layout === 'lanes' && geometry.lanes.length > geometry.laneCount,
+    );
+
+    expect(shared.length).toBeGreaterThan(0);
+  });
+
+  it('exerce les deux verdicts de forme, et les DEUX causes de sérialisation', () => {
+    const reasons = new Set(geometries.map((geometry) => geometry.serializationReason));
+
+    expect(reasons).toEqual(new Set([null, 'belowMinimum', 'aboveMaximum']));
+    expect(geometries.some((geometry) => geometry.laneCount === geometry.maxLanes)).toBe(true);
+  });
+
+  it('tient l’invariant de sérialisation : une seule colonne, pour tout le monde', () => {
+    geometries
+      .filter((geometry) => geometry.layout === 'serialized')
+      .forEach((geometry) => {
+        expect(geometry.lanes.every((lane) => lane.laneIndex === 0)).toBe(true);
+        expect(geometry.bubbles.every((bubble) => bubble.laneIndex === 0)).toBe(true);
+        expect(
+          geometry.connectors.every(
+            (connector) => connector.fromLaneIndex === 0 && connector.toLaneIndex === 0,
+          ),
+        ).toBe(true);
+      });
+  });
+
+  it('exerce les deux natures de rangée : la tête de groupe qui porte l’identité, et la suite', () => {
+    const heads = new Set(geometries.flatMap((g) => g.bubbles).map((bubble) => bubble.isFirstInGroup));
+
+    expect(heads).toEqual(new Set([true, false]));
   });
 });

@@ -17,6 +17,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   RIVER_LANE_SILENCE_WINDOW_MS,
+  RIVER_MAX_LANES,
+  RIVER_MIN_VOICES,
+  resolveRiverLaneAt,
+  resolveRiverLaneHeaders,
   resolveRiverLanes,
   resolveRiverLivingLanes,
   resolveRiverStep,
@@ -26,6 +30,7 @@ import {
 } from '../utils/river-lanes.js';
 
 const MINUTE = 60 * 1000;
+const DAY = 24 * 60 * MINUTE;
 const T0 = Date.parse('2026-08-17T09:00:00.000Z');
 const SILENCE_MINUTES = RIVER_LANE_SILENCE_WINDOW_MS / MINUTE;
 
@@ -98,10 +103,12 @@ describe('resolveRiverLanes — l’axe vertical est le temps, jamais l’ordre 
 
 describe('resolveRiverLanes — l’axe horizontal n’existe que par les interactions', () => {
   it('ne donne aucune branche à un participant qui n’a rien fait dans la fenêtre', () => {
-    const geometry = resolveRiverLanes(input([message('a', 'me', 0), message('b', 'mia', 1)]));
+    const geometry = resolveRiverLanes(
+      input([message('a', 'me', 0), message('b', 'mia', 1), message('c', 'sarah', 2)]),
+    );
 
-    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['me', 'mia']);
-    expect(geometry.laneCount).toBe(2);
+    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['me', 'mia', 'sarah']);
+    expect(geometry.laneCount).toBe(3);
   });
 
   it('installe le lecteur en colonne 0 — la rive depuis laquelle il regarde — même s’il parle en dernier', () => {
@@ -116,21 +123,31 @@ describe('resolveRiverLanes — l’axe horizontal n’existe que par les intera
   });
 
   it('n’invente pas de rive quand le lecteur n’a pas interagi', () => {
-    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1), message('c', 'tom', 2)]),
+    );
 
-    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['mia', 'sarah']);
+    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['mia', 'sarah', 'tom']);
     expect(geometry.lanes.every((lane) => lane.isViewer === false)).toBe(true);
   });
 
   it('réserve la colonne : une branche née plus tard ne déplace jamais les branches déjà tracées', () => {
-    const early = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
-    const late = resolveRiverLanes(
+    const early = resolveRiverLanes(
       input([message('a', 'mia', 0), message('b', 'sarah', 1), message('c', 'tom', 2)]),
+    );
+    const late = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'sarah', 1),
+        message('c', 'tom', 2),
+        message('d', 'lena', 3),
+      ]),
     );
 
     expect(laneOf(late, 'mia').laneIndex).toBe(laneOf(early, 'mia').laneIndex);
     expect(laneOf(late, 'sarah').laneIndex).toBe(laneOf(early, 'sarah').laneIndex);
-    expect(laneOf(late, 'tom').laneIndex).toBe(2);
+    expect(laneOf(late, 'tom').laneIndex).toBe(laneOf(early, 'tom').laneIndex);
+    expect(laneOf(late, 'lena').laneIndex).toBe(3);
   });
 
   it('prend l’identifiant pour graine de couleur quand le participant a quitté le groupe', () => {
@@ -171,14 +188,15 @@ describe('resolveRiverLanes — la branche naît, court, meurt, renaît, et gard
       input([
         message('a', 'mia', 0),
         message('b', 'sarah', 1),
-        message('c', 'mia', SILENCE_MINUTES + 10),
+        message('c', 'tom', 2),
+        message('d', 'mia', SILENCE_MINUTES + 10),
       ]),
     );
 
     const mia = laneOf(geometry, 'mia');
     expect(mia.spans).toHaveLength(2);
-    expect(mia.spans[0]).toMatchObject({ startRank: 0, endRank: 1, isOpen: false });
-    expect(mia.spans[1]).toMatchObject({ startRank: 2, endRank: 2, isOpen: true });
+    expect(mia.spans[0]).toMatchObject({ startRank: 0, endRank: 2, isOpen: false });
+    expect(mia.spans[1]).toMatchObject({ startRank: 3, endRank: 3, isOpen: true });
     // Renaître ne coûte pas sa colonne : Mia reste devant Sarah, née après elle.
     expect(mia.laneIndex).toBe(0);
     expect(laneOf(geometry, 'sarah').laneIndex).toBe(1);
@@ -239,7 +257,9 @@ describe('resolveRiverLanes — la branche naît, court, meurt, renaît, et gard
 
 describe('resolveRiverLanes — les connecteurs de réponse ne pendent jamais dans le vide', () => {
   it('relie la réponse au message répondu, d’un couloir à l’autre', () => {
-    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'me', 1, 'a')]));
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'me', 1, 'a'), message('c', 'sarah', 2)]),
+    );
 
     expect(geometry.connectors).toEqual([
       {
@@ -262,7 +282,14 @@ describe('resolveRiverLanes — les connecteurs de réponse ne pendent jamais da
   });
 
   it('garde le connecteur d’une réponse à soi-même, dans son propre couloir', () => {
-    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'mia', 1, 'a')]));
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'mia', 1, 'a'),
+        message('c', 'sarah', 2),
+        message('d', 'tom', 3),
+      ]),
+    );
 
     expect(geometry.connectors).toHaveLength(1);
     expect(geometry.connectors[0]).toMatchObject({ fromLaneIndex: 0, toLaneIndex: 0 });
@@ -438,5 +465,325 @@ describe('resolveRiverStep — l’axe vertical suit la personne, à travers ses
     });
 
     expect(step).toEqual({ cursor: { laneIndex: 42, rank: 0 }, reason: 'empty' });
+  });
+});
+
+/**
+ * Bornes de l'axe horizontal — directive produit du 2026-08-17 : « on limite à
+ * 7 utilisateurs en horizontal et 3 minimum, sinon on sérialise en vertical ».
+ */
+const crowd = (count: number, minutes: (index: number) => number): ResolveRiverLanesInput => ({
+  messages: Array.from({ length: count }, (_unused, index) =>
+    message(`m${index}`, `p${index}`, minutes(index)),
+  ),
+  participants: Array.from({ length: count }, (_unused, index) => ({
+    id: `p${index}`,
+    displayName: `P${index}`,
+  })),
+  viewerId: 'absent',
+});
+
+describe('resolveRiverLanes — la rivière a une largeur, et un seuil en dessous duquel elle n’en est plus une', () => {
+  it('tient ses deux axes dès trois voix', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1), message('c', 'tom', 2)]),
+    );
+
+    expect(geometry.layout).toBe('lanes');
+    expect(geometry.serializationReason).toBeNull();
+    expect(geometry.voiceCount).toBe(3);
+  });
+
+  it('sérialise à deux voix : l’alternance dit déjà tout ce que des couloirs diraient', () => {
+    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
+
+    expect(geometry.layout).toBe('serialized');
+    expect(geometry.serializationReason).toBe('belowMinimum');
+    expect(geometry.laneCount).toBe(1);
+    expect(geometry.lanes.every((lane) => lane.laneIndex === 0)).toBe(true);
+    expect(geometry.bubbles.every((bubble) => bubble.laneIndex === 0)).toBe(true);
+  });
+
+  it('ne compte pas comme une voix celui qu’on interpelle sans qu’il parle', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1, 'a'), message('c', 'mia', 2)]),
+    );
+
+    expect(geometry.voiceCount).toBe(2);
+    expect(geometry.serializationReason).toBe('belowMinimum');
+  });
+
+  it('tient sept couloirs — et sérialise au huitième dans le même instant', () => {
+    const seven = resolveRiverLanes(crowd(7, () => 0));
+    const eight = resolveRiverLanes(crowd(8, () => 0));
+
+    expect(seven.layout).toBe('lanes');
+    expect(seven.laneCount).toBe(7);
+    expect(eight.layout).toBe('serialized');
+    expect(eight.serializationReason).toBe('aboveMaximum');
+  });
+
+  it('accepte plus de voix que de couloirs quand elles ne parlent pas en même temps : les colonnes se PARTAGENT', () => {
+    // Dix voix, chacune un instant à elle — jamais deux vivantes ensemble.
+    const geometry = resolveRiverLanes(crowd(10, (index) => index * (SILENCE_MINUTES + 5)));
+
+    expect(geometry.layout).toBe('lanes');
+    expect(geometry.lanes).toHaveLength(10);
+    expect(geometry.laneCount).toBe(1);
+    expect(geometry.lanes.every((lane) => lane.laneIndex === 0)).toBe(true);
+  });
+
+  it('ne partage JAMAIS une colonne tant que la rivière tient dans sa largeur', () => {
+    // Mêmes silences, mais sept voix seulement : chacune garde sa colonne, même
+    // morte. Le partage est un recours, pas une optimisation.
+    const geometry = resolveRiverLanes(crowd(7, (index) => index * (SILENCE_MINUTES + 5)));
+
+    expect(geometry.laneCount).toBe(7);
+    expect(geometry.lanes.map((lane) => lane.laneIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it('garde la rive au lecteur seul, sans jamais l’asseoir sur une autre voix', () => {
+    const geometry = resolveRiverLanes({
+      ...crowd(9, (index) => index * (SILENCE_MINUTES + 5)),
+      messages: [
+        message('mine', 'me', 0),
+        ...Array.from({ length: 9 }, (_unused, index) =>
+          message(`m${index}`, `p${index}`, (index + 1) * (SILENCE_MINUTES + 5)),
+        ),
+      ],
+      viewerId: 'me',
+    });
+
+    expect(geometry.layout).toBe('lanes');
+    expect(laneOf(geometry, 'me').laneIndex).toBe(0);
+    expect(geometry.lanes.filter((lane) => lane.laneIndex === 0)).toHaveLength(1);
+  });
+
+  it('sert ses bornes dans la géométrie, pour qu’aucune peau ne les réécrive en dur', () => {
+    const geometry = resolveRiverLanes(input([message('a', 'mia', 0)]));
+
+    expect(geometry.maxLanes).toBe(RIVER_MAX_LANES);
+    expect(geometry.minVoices).toBe(RIVER_MIN_VOICES);
+  });
+
+  it('accepte des bornes fournies par l’appelant, sans réécrire la loi', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1)], { minVoices: 2 }),
+    );
+
+    expect(geometry.layout).toBe('lanes');
+    expect(resolveRiverLanes({ ...crowd(4, () => 0), maxLanes: 3 }).serializationReason).toBe(
+      'aboveMaximum',
+    );
+  });
+});
+
+describe('resolveRiverLanes — la tête de groupe porte l’identité, à l’identique du Fil', () => {
+  it('ouvre un groupe au premier rang', () => {
+    const geometry = resolveRiverLanes(input([message('a', 'mia', 0)]));
+
+    expect(geometry.bubbles[0].isFirstInGroup).toBe(true);
+  });
+
+  it('ne répète pas l’en-tête sur deux messages consécutifs de la même personne', () => {
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'mia', 1),
+        message('c', 'sarah', 2),
+        message('d', 'tom', 3),
+      ]),
+    );
+
+    expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([
+      true,
+      false,
+      true,
+      true,
+    ]);
+  });
+
+  it('rouvre un groupe au changement de jour, même sans changer d’expéditeur', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'mia', 20 * 60)], { silenceWindowMs: DAY }),
+    );
+
+    // 09:00 UTC puis 05:00 UTC le lendemain : deux jours en UTC.
+    expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([true, true]);
+  });
+
+  it('lit la frontière du jour dans le calendrier du lecteur, pas dans celui du serveur', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'mia', 20 * 60)], {
+        silenceWindowMs: DAY,
+        // Fuseau à −8 h : les deux messages retombent dans la même journée locale.
+        dayBoundaryOffsetMinutes: -8 * 60,
+      }),
+    );
+
+    expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([true, false]);
+  });
+});
+
+describe('resolveRiverLaneAt — une colonne partagée dit QUI l’occupe à cette hauteur', () => {
+  const shared = resolveRiverLanes(crowd(10, (index) => index * (SILENCE_MINUTES + 5)));
+
+  it('rend l’occupant vivant du moment, jamais le premier venu de la colonne', () => {
+    expect(resolveRiverLaneAt(shared, 0, 0)?.laneId).toBe('p0');
+    expect(resolveRiverLaneAt(shared, 0, 4)?.laneId).toBe('p4');
+    expect(resolveRiverLaneAt(shared, 0, 9)?.laneId).toBe('p9');
+  });
+
+  it('ne rend personne sur une colonne éteinte à cette hauteur', () => {
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'sarah', 1),
+        message('c', 'tom', SILENCE_MINUTES + 5),
+      ]),
+    );
+
+    expect(resolveRiverLaneAt(geometry, laneOf(geometry, 'mia').laneIndex, 2)).toBeNull();
+    expect(resolveRiverLaneAt(geometry, 42, 0)).toBeNull();
+  });
+
+  it('sérialisée, la colonne unique appartient à l’auteur du rang', () => {
+    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
+
+    expect(resolveRiverLaneAt(geometry, 0, 0)?.laneId).toBe('mia');
+    expect(resolveRiverLaneAt(geometry, 0, 1)?.laneId).toBe('sarah');
+    expect(resolveRiverLaneAt(geometry, 1, 0)).toBeNull();
+  });
+});
+
+describe('resolveRiverLaneHeaders — le nom en tête suit la ligne qu’on lit', () => {
+  const braid = resolveRiverLanes(
+    input([
+      message('a', 'mia', 0),
+      message('b', 'sarah', 1),
+      message('c', 'tom', 2),
+      message('d', 'sarah', 3),
+    ]),
+  );
+
+  const headerOf = (focusRank: number, laneId: string): number | undefined =>
+    resolveRiverLaneHeaders({ geometry: braid, focusRank }).find(
+      (header) => header.laneId === laneId,
+    )?.alpha;
+
+  it('nomme chaque colonne vivante à la hauteur lue, en ordre de colonne', () => {
+    const headers = resolveRiverLaneHeaders({ geometry: braid, focusRank: 3 });
+
+    expect(headers.map((header) => header.laneId)).toEqual(['mia', 'sarah', 'tom']);
+    expect(headers.map((header) => header.laneIndex)).toEqual([0, 1, 2]);
+  });
+
+  it('allume le nom sur ses premiers rangs plutôt que de le faire surgir opaque', () => {
+    expect(headerOf(2, 'tom')).toBeCloseTo(0.5, 5);
+    expect(headerOf(3, 'tom')).toBeCloseTo(1, 5);
+  });
+
+  it('ne rend AUCUN nom pour une branche qui n’est pas née', () => {
+    expect(headerOf(0, 'tom')).toBeUndefined();
+    expect(headerOf(1, 'tom')).toBeUndefined();
+  });
+
+  it('interpole sur un rang fractionnaire — le fondu suit le défilement, pas les rangs', () => {
+    const alpha = headerOf(2.5, 'tom');
+
+    expect(alpha).toBeGreaterThan(headerOf(2, 'tom') ?? 0);
+    expect(alpha).toBeLessThan(1);
+  });
+
+  it('n’éteint jamais le nom d’une branche encore vivante au bas de la fenêtre', () => {
+    const headers = resolveRiverLaneHeaders({ geometry: braid, focusRank: 3 });
+
+    expect(headers.find((header) => header.laneId === 'sarah')?.alpha).toBe(1);
+  });
+
+  it('passe le relais en fondu croisé quand deux voix se succèdent d’un rang à l’autre', () => {
+    const shared = resolveRiverLanes(crowd(10, (index) => index * (SILENCE_MINUTES + 5)));
+    const relay = resolveRiverLaneHeaders({ geometry: shared, focusRank: 3.5 });
+
+    expect(shared.laneCount).toBe(1);
+    expect(relay.map((header) => header.laneId)).toEqual(['p3', 'p4']);
+    // Un relais, pas deux présences : aucun des deux noms ne s’impose.
+    expect(relay.every((header) => header.alpha < 1)).toBe(true);
+  });
+
+  it('ne nomme AUCUNE voix sur les rangs où la colonne est éteinte', () => {
+    // Mia parle, meurt (silence franchi), Sarah et Tom occupent l’intervalle,
+    // Mia renaît. Sur les rangs 1 et 2, sa colonne existe mais n’a personne.
+    const reborn = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'sarah', SILENCE_MINUTES + 10),
+        message('c', 'tom', SILENCE_MINUTES + 11),
+        message('d', 'mia', 4 * SILENCE_MINUTES),
+      ]),
+    );
+    const miaLane = laneOf(reborn, 'mia').laneIndex;
+    const nameAt = (focusRank: number): readonly string[] =>
+      resolveRiverLaneHeaders({ geometry: reborn, focusRank })
+        .filter((header) => header.laneIndex === miaLane)
+        .map((header) => header.laneId);
+
+    expect(nameAt(0)).toEqual(['mia']);
+    expect(nameAt(1)).toEqual([]);
+    expect(nameAt(1.5)).toEqual([]);
+    expect(nameAt(3)).toEqual(['mia']);
+  });
+
+  it('sérialisée, le nom traverse en fondu croisé : les groupes se touchent', () => {
+    const geometry = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
+    const crossing = resolveRiverLaneHeaders({ geometry, focusRank: 0.5 });
+
+    expect(geometry.layout).toBe('serialized');
+    expect([...crossing.map((header) => header.laneId)].sort()).toEqual(['mia', 'sarah']);
+    expect(crossing.every((header) => header.alpha < 1)).toBe(true);
+  });
+
+  it('accepte une fenêtre de fondu fournie par l’appelant, sans réécrire la loi', () => {
+    const instant = resolveRiverLaneHeaders({ geometry: braid, focusRank: 2, fadeRanks: 0 });
+
+    expect(instant.find((header) => header.laneId === 'tom')?.alpha).toBe(1);
+  });
+
+  it('éteint tous les noms au-delà du dernier rang — hors fenêtre, il n’y a rien à nommer', () => {
+    expect(resolveRiverLaneHeaders({ geometry: braid, focusRank: 99 })).toEqual([]);
+    // Et jusqu’au dernier rang, une branche ouverte reste pleinement nommée.
+    expect(
+      resolveRiverLaneHeaders({ geometry: braid, focusRank: braid.rankCount - 1 }).every(
+        (header) => header.alpha === 1,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('resolveRiverStep — sérialisée, la rivière EST le fil', () => {
+  const thread = resolveRiverLanes(input([message('a', 'mia', 0), message('b', 'sarah', 1)]));
+
+  it('n’a plus d’axe horizontal à parcourir', () => {
+    expect(
+      resolveRiverStep({ geometry: thread, cursor: { laneIndex: 0, rank: 0 }, direction: 'right' }),
+    ).toEqual({ cursor: { laneIndex: 0, rank: 0 }, reason: 'edge' });
+  });
+
+  it('descend au message suivant, quel qu’en soit l’auteur', () => {
+    expect(
+      resolveRiverStep({ geometry: thread, cursor: { laneIndex: 0, rank: 0 }, direction: 'down' }),
+    ).toEqual({ cursor: { laneIndex: 0, rank: 1 }, reason: 'moved' });
+  });
+
+  it('s’arrête au bout du fil', () => {
+    expect(
+      resolveRiverStep({ geometry: thread, cursor: { laneIndex: 0, rank: 1 }, direction: 'down' }),
+    ).toEqual({ cursor: { laneIndex: 0, rank: 1 }, reason: 'edge' });
+  });
+
+  it('ne connaît qu’un couloir vivant, sur tout rang de la fenêtre', () => {
+    expect(resolveRiverLivingLanes(thread, 0)).toEqual([0]);
+    expect(resolveRiverLivingLanes(thread, 1)).toEqual([0]);
+    expect(resolveRiverLivingLanes(thread, 2)).toEqual([]);
   });
 });
