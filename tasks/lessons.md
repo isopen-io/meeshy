@@ -9459,7 +9459,13 @@ abonnement muet que rien ne déclenche et qu'aucun type ne refuse. Le témoin de
 (`expect(subscribed).not.toContain(undefined)`), ce qui attrape le mis-routage
 sous ses DEUX formes : par la constante si elle existe, par `undefined` si elle
 a été retirée.
-## Leçon 213 — un canal que le serveur diffuse n'a pas d'écouteur par construction, et le chercher « par son nom » rend un tableau faux (2026-08-16, routine temps réel, cycle 54)
+## Leçon 219 — un canal que le serveur diffuse n'a pas d'écouteur par construction, et le chercher « par son nom » rend un tableau faux (2026-08-16, routine temps réel, cycle 54)
+
+*(Numérotée 213 à l'écriture ; renumérotée 219 à la fusion — une leçon 213 de la
+routine calling, cycle 138, avait atterri sur `main` entre-temps. La collision
+est la conséquence normale de routines parallèles qui ajoutent à la fin du même
+fichier : c'est la DERNIÈRE arrivée qui cède, jamais celle déjà référencée par
+d'autres journaux.)*
 
 ### 1. Le fait
 

@@ -1,18 +1,9 @@
 # Cycle 54-bis — la carte du Prisme suit le message que la ligne décrit (web)
-# Cycle 54 — le canal que le serveur diffusait pour un client qui n'écoutait pas
 
 ## La piste
 
 - [x] La leçon 212 (cycle 53) laisse une question mécanique : *quels sont TOUS
       les écrivains de ce que la ligne AFFICHE ?* — posée ici au reste du fichier
-- [x] Les quatre pistes du cycle 53 ré-instruites — trois RÉTROGRADÉES : les
-      handlers de suppression web convergent dans les deux ordres d'arrivée, et
-      la garde monotone du web n'a rien à protéger tant qu'aucun recul non
-      autoritatif n'existe
-- [x] Piste retenue ailleurs : un **diff de couverture d'événements** entre les
-      deux clients, sur les 180+ entrées de `SERVER_EVENTS`
-- [x] Le premier passage rend un tableau FAUX — le web s'abonne par la
-      CONSTANTE, iOS par le LITTÉRAL ; les deux formes se cherchent séparément
 
 ## Le constat
 
@@ -68,6 +59,24 @@
 Voir `tasks/realtime-sync-audit-2026-08-17-cycle54-bis.md` — le tableau des six
 écrivains, pourquoi le chemin des liens partagés était le seul sans filet, et
 les quatre pistes du cycle 55.
+
+---
+
+# Cycle 54 — le canal que le serveur diffusait pour un client qui n'écoutait pas
+
+## Piste
+
+- [x] Les quatre pistes du cycle 53 ré-instruites — trois RÉTROGRADÉES : les
+      handlers de suppression web convergent dans les deux ordres d'arrivée, et
+      la garde monotone du web n'a rien à protéger tant qu'aucun recul non
+      autoritatif n'existe
+- [x] Piste retenue ailleurs : un **diff de couverture d'événements** entre les
+      deux clients, sur les 180+ entrées de `SERVER_EVENTS`
+- [x] Le premier passage rend un tableau FAUX — le web s'abonne par la
+      CONSTANTE, iOS par le LITTÉRAL ; les deux formes se cherchent séparément
+
+## Constat
+
 - [x] `message:hidden-for-me` : web abonné, **iOS aucun abonné**
 - [x] `message:restored-for-me` : web abonné, **iOS aucun abonné**
 - [x] `personalMessageVisibilitySync.ts` a été écrit pour fermer exactement ça —
@@ -130,7 +139,7 @@ les quatre pistes du cycle 55.
 - [x] Compilation et exécution Swift déléguées à la CI (`iOS` macos-15,
       `SDK Tests`) — aucun toolchain Swift sur l'hôte de cette routine
 - [x] CHANGELOG racine + ADR `packages/MeeshySDK/decisions.md` + journal cycle 54
-      + leçon 213
+      + leçon 219
 
 ## Revue
 

@@ -40,10 +40,17 @@ final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Senda
 
     init() {}
 
+    // `withLock` et non la paire `lock()` / `defer unlock()` : cette méthode-ci
+    // est `async`, et sous Swift 6 les deux primitives d'`NSLock` y sont
+    // `@available(*, noasync)` — une suspension entre la prise et le rendu du
+    // verrou peut reprendre sur un autre thread, ce que `NSLock` ne tolère pas.
+    // La forme à fermeture n'a pas ce défaut (le corps est synchrone et ne peut
+    // pas suspendre), et c'est déjà l'idiome du dépôt (`CallManager`,
+    // `CrashDiagnosticsManager`). Les autres verrous de ce fichier restent en
+    // paire : leurs fonctions ne sont pas `async`, donc la garde ne s'y applique
+    // pas.
     func bridgeFor(conversationId: String, viewerId: String, unreadCount: Int) async -> ConversationBridge? {
-        lock.lock()
-        defer { lock.unlock() }
-        return bridges[conversationId]
+        lock.withLock { bridges[conversationId] }
     }
 
     /// Enregistre (`bridge` non nil) ou efface (`nil`) le pont connu pour une
