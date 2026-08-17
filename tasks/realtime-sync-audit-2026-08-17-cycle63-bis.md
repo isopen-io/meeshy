@@ -190,7 +190,7 @@ pas payé : la ligne qui compte les requêtes est inchangée (5).
 
 | Gate | Résultat |
 |------|----------|
-| `jest` gateway | **746 suites / 18 057 tests** verts, après fusion |
+| `jest` gateway | **745 suites / 18 053 tests** verts, après fusion |
 | `tsc --noEmit` gateway | ✅ 0 erreur |
 | `tsc --noEmit` shared | ✅ 0 erreur |
 | `jest` web | **691 suites / 13 437 tests** verts |

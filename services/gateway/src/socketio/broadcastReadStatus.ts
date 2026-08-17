@@ -248,7 +248,10 @@ export async function broadcastReadStatus(
    */
   const announceActorBridge = async (): Promise<BridgeAnnouncement> => {
     if (!actorRead) return {};
-    // Ce qu'un compteur seul prouve, gratuitement (§3.2).
+    // Ce qu'un compteur seul prouve, gratuitement (§3.2). Le littéral `0` plutôt
+    // que la valeur : la garde vient d'établir qu'il ne reste RIEN à lire, et
+    // c'est cet établissement-là qu'on passe à la règle, pas un chiffre dont on
+    // saurait seulement qu'il n'est pas positif.
     if (actorRead.sync.unreadCount <= 0) return bridgeKnowledgeFromCount(0);
     if (!bridgeService) return {};
     try {
