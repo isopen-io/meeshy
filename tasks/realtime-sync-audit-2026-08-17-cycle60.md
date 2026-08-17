@@ -309,7 +309,20 @@ correctes et restent le comportement voulu.
 | `tsc --noEmit` gateway | sortie 0, **aucune erreur** — c'est le gate qui prouve que le retrait de `CLIENT_EVENTS.USER_STATUS` ne casse aucun appelant |
 | `packages/shared` build | `tsc --project tsconfig.json`, sortie 0 |
 | ESLint (2 fichiers touchés) | **empreinte IDENTIQUE** `main` vs branche : 28 erreurs préexistantes (`no-explicit-any`), 0 avertissement, toutes sur des lignes non touchées. Comparaison par empreinte triée-dédupliquée, pas par total |
-| suite gateway | voir corps du PR |
+| suite gateway | CI (`Test gateway`) — autoritaire |
+
+**Après intégration de `origin/main`** (168 commits, **zéro conflit**, et zéro
+chevauchement sur les 9 fichiers touchés — vérifié par
+`git diff HEAD...origin/main` sur chacun avant de fusionner) :
+
+| gate | relevé post-merge |
+|---|---|
+| suite web COMPLÈTE | **639 suites / 12 886 témoins verts**, 21 ignorés, 2 snapshots, sortie 0 |
+| `tsc --noEmit` gateway | sortie 0, aucune erreur |
+| `packages/shared` build | sortie 0 |
+
+L'écart 592→639 suites et 12 534→12 886 témoins vient de `main`, pas de ce
+cycle : la branche n'ajoute que ses 5 témoins.
 
 Le compte de témoins est la vérification la plus utile de la liste : **+4 pour
 4 témoins livrés** prouve que les 3 témoins réécrits l'ont été *en place* (leur
