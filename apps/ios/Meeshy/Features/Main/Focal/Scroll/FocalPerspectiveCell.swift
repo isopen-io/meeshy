@@ -111,6 +111,7 @@ final class FocalPerspectiveCell: UICollectionViewCell {
         matrix.m41 = focalTransform.translation.width
         matrix.m42 = focalTransform.translation.height
         layer.transform = matrix
+        layer.zPosition = focalTransform.zPosition
         alpha = focalTransform.alpha
         CATransaction.commit()
     }

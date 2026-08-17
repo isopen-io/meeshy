@@ -71,6 +71,22 @@ nonisolated enum FocalPassConstants {
     /// token, comme les cinq autres valeurs de ce fichier.
     static let neighbourAlphaFloor: CGFloat = 0.58
 
+    // MARK: - Loupe (spec Magnificence 2026-08-17)
+
+    /// Pic de la loupe positionnelle — l'échelle rendue PILE sur la ligne
+    /// de focus (la courbe gelée y rend 1). Choix user : « forte ».
+    /// TODO CONTRACTUEL : `thread.magnification.peak` absent du token.
+    static let magnificationPeak: CGFloat = 1.18
+
+    /// Rayon de la loupe, en multiples de `FocalFocusCurve.focusBandHalfHeight`
+    /// (jamais un littéral rival du miroir gelé) : au-delà, la courbe gelée
+    /// règne seule.
+    static let magnificationRadiusFactor: CGFloat = 2
+
+    /// Étendue de l'élévation `zPosition` portée par la loupe : la rangée
+    /// magnifiée doit RECOUVRIR ses voisines en grandissant.
+    static let magnificationElevationSpan: CGFloat = 1000
+
     // MARK: - Bande de focus (§4.3)
 
     /// Marge minimale entre la ligne de focus et le haut du composeur, dans

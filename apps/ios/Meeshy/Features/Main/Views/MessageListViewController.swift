@@ -222,6 +222,7 @@ final class MessageListViewController: UIViewController {
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
+    var onReadMore: ((FocalReadMorePayload) -> Void)?
     /// Tap on a media attachment — typically presents a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Consume a view-once message.
@@ -896,7 +897,7 @@ final class MessageListViewController: UIViewController {
         // absorbées par `contentOffset` dans la même transaction de layout —
         // sans quoi la scène visible saute (et l'échelle Focal avec elle,
         // `visualMidY` étant fonction de `center.y − offset`).
-        let layout = MessageListLayout { [weak self] _, _ in
+        let layout = MessageListLayout { [weak self] _, environment in
             let estimate = (self?.readingMode.usesFlatRow ?? false)
                 ? Self.estimatedFlatRowLayoutHeight
                 : Self.estimatedBubbleRowLayoutHeight
@@ -912,8 +913,19 @@ final class MessageListViewController: UIViewController {
             let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
             let section = NSCollectionLayoutSection(group: group)
             section.interGroupSpacing = 0
-            // 12pt horizontal breathing room so bubbles don't kiss the screen edge.
-            section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
+            // 12pt horizontal breathing room so bubbles don't kiss the screen
+            // edge. En perspective, le trailing RÉSERVE la place de la loupe
+            // pleine (spec Magnificence) : une rangée pleine largeur magnifiée
+            // au pic ne clippe jamais ses timestamps au bord droit.
+            section.contentInsets = NSDirectionalEdgeInsets(
+                top: 8,
+                leading: 12,
+                bottom: 8,
+                trailing: Self.sectionTrailingInset(
+                    usesPerspective: self?.readingMode.usesPerspective ?? false,
+                    viewportWidth: environment.container.effectiveContentSize.width
+                )
+            )
             return section
         }
         // Même règle « près du bas » que `isCurrentlyNearBottom` : sous ce
@@ -941,6 +953,17 @@ final class MessageListViewController: UIViewController {
         collectionView.scrollsToTop = false
         collectionView.delegate = self
         view.addSubview(collectionView)
+    }
+
+    /// Inset trailing de section : l'historique 12 hors perspective —
+    /// bit-à-bit inchangé — et la réserve de loupe (formule, jamais un
+    /// littéral) en perspective. Pur, testable.
+    static func sectionTrailingInset(usesPerspective: Bool, viewportWidth: CGFloat) -> CGFloat {
+        guard usesPerspective else { return 12 }
+        return FocalPerspectiveGeometry.standard.magnifiedTrailingReserve(
+            viewportWidth: viewportWidth,
+            leadingInset: 12
+        )
     }
 
     // MARK: - DataSource
@@ -1171,6 +1194,7 @@ final class MessageListViewController: UIViewController {
             let retryHandler = self.onRetry
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
+            let readMoreHandler = self.onReadMore
             let callBackHandler = self.onCallBack
             let callDetailHandler = self.onCallDetailRequest
             let mediaTapHandler = self.onMediaTap
@@ -1397,6 +1421,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onReactToAttachment = { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) }
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
+                focalActions.onReadMore = readMoreHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)
                 }

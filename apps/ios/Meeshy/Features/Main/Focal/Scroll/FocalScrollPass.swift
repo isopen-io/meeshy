@@ -324,8 +324,7 @@ final class FocalScrollPass {
                 cell: entry.cell,
                 isFocused: entry.allowsFocusCard
                     && entry.localId != nil
-                    && entry.localId == focusedLocalId
-                    && isFullyVisible(entry.cell, in: collectionView),
+                    && entry.localId == focusedLocalId,
                 accentHex: accentHex,
                 isDark: isDark
             )
@@ -428,8 +427,7 @@ final class FocalScrollPass {
             cell: cell,
             isFocused: descriptor.allowsFocusCard
                 && descriptor.localId != nil
-                && descriptor.localId == focusedLocalId
-                && isFullyVisible(cell, in: collectionView),
+                && descriptor.localId == focusedLocalId,
             accentHex: accentHex,
             isDark: isDark
         )
@@ -540,7 +538,7 @@ final class FocalScrollPass {
             return geometry.flatTransform(alphaCeiling: alphaCeiling)
         }
         return geometry.transform(
-            distance: geometry.distance(visualMidY: visualMidY, focusY: focusY),
+            signedDistance: geometry.signedDistance(visualMidY: visualMidY, focusY: focusY),
             cellSize: cellSize,
             horizontalAnchor: horizontalAnchor,
             isRightToLeft: isRightToLeft,
@@ -573,6 +571,7 @@ final class FocalScrollPass {
         matrix.m41 = transform.translation.width
         matrix.m42 = transform.translation.height
         cell.layer.transform = matrix
+        cell.layer.zPosition = transform.zPosition
         cell.alpha = transform.alpha
     }
 }

@@ -2,6 +2,60 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Notification swipe actions shipped** (slice `notification-swipe-actions`,
+> feature-parity's "Mark read" composite line). First ANDROID run after this session's first
+> IOS_DETTE bascule (`android_streak` reset to 0). `gh pr list --state open --search
+> "apps/android OR apps/ios"` showed two unrelated open PRs (#3176, #3177 — web cycles, neither
+> touching `apps/android`). `df -h /` showed 5.2 Gi free — lower than earlier checks but the
+> shared build caches (`apps/ios/Build` 2.2G, `packages/Build` 1.3G, Android module builds ~400M)
+> are all normal sizes, not the private-DerivedData bloat pattern from earlier incidents; left
+> untouched.
+>
+> **Re-confirmed a candidate an earlier Explore agent had already ranked #2 of 3** (behind the
+> already-shipped `discover-sms-invite`): `NotificationsScreen.kt` had zero `SwipeToDismissBox`,
+> and `NotificationRepository.delete(id)` (`DELETE /notifications/{id}`) existed network-side but
+> with zero cache mutation and zero callers anywhere in `NotificationsViewModel` — the "ready
+> backend, never wired" pattern this routine keeps finding, this time on a method that ALREADY
+> existed rather than needing new plumbing. Also caught the composite feature-parity line itself
+> was stale on a second count: "mark-all pending" — `markAllRead` was actually already fully
+> wired and tested, just never checked off.
+>
+> **Read iOS `NotificationRowView.swift` directly for the exact shape**: trailing (end-to-start)
+> swipe → destructive delete, always offered; leading (start-to-end) swipe → mark-read, offered
+> ONLY `if !notification.isRead`. `NotificationListViewModel.deleteNotification`/`markRead` call
+> straight through to the shared toast-manager singleton (iOS's cache ownership model); Android's
+> `NotificationRepository` owns its own `StateFlow` cache directly, so the equivalent mirror is
+> making `delete` optimistic the same way `markAsRead` already is, not reaching for an iOS-specific
+> singleton pattern that doesn't exist on this platform.
+>
+> **`NotificationRepository.delete(id)`** — snapshot the cache, remove the row immediately,
+> decrement `unreadCountStream` only when the removed row was unread, roll both back on failure.
+> **`NotificationsViewModel.deleteNotification(id)`** — thin delegator, no new state needed (the
+> repository cache is already the single source of truth the screen projects).
+>
+> **UI reused the ONLY existing `SwipeToDismissBox` precedent in the codebase**
+> (`ConversationListScreen.kt`'s pin/archive swipe) rather than inventing a new destructive-dismiss
+> pattern: `confirmValueChange` always returns `false`, so the swipe box itself never physically
+> removes the row — the actual disappearance/re-style comes from the cache mutation flowing back
+> through `state.notifications`, exactly like every other repository-driven list in this codebase.
+> New `NotificationSwipeBackground` composable (trash icon + error tint for delete, mark-email-read
+> icon + indigo tint for mark-read, transparent background when settled or when the leading
+> direction has nothing to offer on an already-read row) mirrors `ConversationListScreen`'s
+> `SwipeActionBackground` structure. First use of `Icons.Filled.MarkEmailRead` and
+> `SwipeToDismissBox`/`rememberSwipeToDismissBoxState` in `:feature:notifications` — confirmed
+> compiling via the targeted test run before the full check.
+>
+> **+3 `NotificationRepositoryTest`** (delete removes optimistically + decrements unread count for
+> an unread row, delete on an already-read row leaves the count untouched, rollback on failure)
+> **+ 1 `NotificationsViewModelTest`** (delegates to the repository). Strings ×2
+> (`notifications_action_delete`/`notifications_action_mark_read`) across EN/FR/ES/PT.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=1 last_run=notification-swipe-actions`.
+
 > On 2026-08-17 **Discover SMS invite shipped** (slice `discover-sms-invite`, feature-parity §J
 > "Invite by email; invite by SMS; import phone contacts" composite line). `gh pr list --state
 > open --search "apps/android OR apps/ios"` showed zero open PRs for this routine. `df -h /`

@@ -28,6 +28,16 @@ import MeeshySDK
 /// compilation — le crash n'a jamais été observé sur un build Release ou
 /// TestFlight (1258 validé par Apple). Le binaire App Store ne contient pas
 /// ce code.
+///
+/// **Démontage synchrone, jamais différé d'un tick (2026-08-17).** La
+/// version précédente repoussait le démontage de la fenêtre à un second
+/// `DispatchQueue.main.async` : ce délai laissait la fenêtre jetable — son
+/// `UIHostingController`, son `ConversationView`, son `ConversationListViewModel`
+/// jetable — vivante pendant que le VRAI premier rendu de `ConversationListView`
+/// pouvait s'exécuter, deux graphes SwiftUI actifs simultanément dont un en
+/// cours de démontage. Corrompait le tas au point de faire sauter l'exécution
+/// dans une page non signée (`SIGKILL`/`CODESIGNING`) pendant
+/// `AG::Graph::UpdateStack::update()`, reproduit à 100 % au lancement.
 @MainActor
 enum ConversationFirstRenderWarmup {
     private static var done = false
@@ -80,14 +90,23 @@ enum ConversationFirstRenderWarmup {
         warmupWindow = window
         host.view.layoutIfNeeded()
 
-        // Teardown au prochain tour de runloop : le rendu (et ses résolutions
-        // de métadonnées) a eu lieu ; la window et les VMs jetables meurent.
-        DispatchQueue.main.async {
-            warmupWindow?.isHidden = true
-            warmupWindow?.rootViewController = nil
-            warmupWindow = nil
-            NSLog("[ConversationFirstRenderWarmup] window torn down")
-        }
+        // Démontage SYNCHRONE, dans le MÊME tick que le rendu — jamais un
+        // second `DispatchQueue.main.async` (constaté crashogène 2026-08-17,
+        // `Meeshy-2026-08-17-161136.ips` : SIGKILL/CODESIGNING, saut dans une
+        // page de tas non signée pendant `AG::Graph::UpdateStack::update()`,
+        // à l'intérieur de `ConversationListView.mainContentZStack.getter`).
+        // Le report d'un tour de runloop laissait cette fenêtre + son
+        // `UIHostingController` + son `ConversationListViewModel` JETABLE
+        // vivants pendant que le VRAI premier rendu de `ConversationListView`
+        // (sa propre `ConversationListViewModel`) pouvait s'exécuter — deux
+        // graphes SwiftUI actifs en même temps, dont un en cours de
+        // démontage. `layoutIfNeeded()` a déjà forcé et terminé l'évaluation
+        // du body ; rien ne justifie d'attendre un tick de plus pour libérer
+        // la fenêtre.
+        warmupWindow?.isHidden = true
+        warmupWindow?.rootViewController = nil
+        warmupWindow = nil
+        NSLog("[ConversationFirstRenderWarmup] window torn down")
         NSLog("[ConversationFirstRenderWarmup] done in %.0f ms", (CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 

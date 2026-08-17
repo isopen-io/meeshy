@@ -165,6 +165,16 @@ class NotificationsViewModelTest {
     }
 
     @Test
+    fun `deleteNotification delegates to the repository`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, socketManager())
+
+        vm.deleteNotification("n1")
+
+        coVerify(exactly = 1) { repo.delete("n1") }
+    }
+
+    @Test
     fun `a real-time notification is forwarded to the repository's shared cache`() = runTest {
         val events = MutableSharedFlow<ApiNotification>()
         val repo = repository()

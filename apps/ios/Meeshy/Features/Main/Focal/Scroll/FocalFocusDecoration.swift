@@ -34,13 +34,14 @@ import MeeshyUI
 @MainActor
 final class FocalFocusDecoration {
 
-    /// **L'interrupteur du cadre de focus.** `false` ⇒ aucune décoration
-    /// dessinée autour de la rangée élue (essai visuel en cours). Repasser à
-    /// `true` rétablit anneau + halo + teinte tels quels.
+    /// **L'interrupteur de la décoration de focus.** L'essai « sans rien »
+    /// est clos (spec Magnificence 2026-08-17) : la décoration revient sous
+    /// sa nouvelle forme — un FOND accentué translucide, JAMAIS un bord
+    /// (choix user : « un fond accentué plutôt qu'un bord »).
     ///
     /// Ne touche PAS le flash d'atterrissage de recherche (§4.7), qui est un
     /// signal transitoire d'une autre nature et reste actif.
-    static let drawsFocusCard = false
+    static let drawsFocusCard = true
 
     /// Valeur EFFECTIVE pour cette décoration-ci. Aucun site de production ne
     /// passe l'argument : la valeur reste `Self.drawsFocusCard`, et l'essai
@@ -71,14 +72,12 @@ final class FocalFocusDecoration {
     }
 
     private static let cardLayerName = "focal.focus.card"
-    private static let haloLayerName = "focal.focus.halo"
     private static let flashLayerName = "focal.focus.flash"
     private static let flashAnimationKey = "focal.focus.flash.opacity"
 
     /// Clés FAIBLES : une cellule relâchée par la collection ne doit pas être
     /// retenue par la décoration (et son layer part avec elle).
     private let cards = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
-    private let halos = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
     private let flashes = NSMapTable<UICollectionViewCell, CALayer>.weakToStrongObjects()
 
     // MARK: - Mémoïsation des couleurs (discipline 1)
@@ -105,10 +104,7 @@ final class FocalFocusDecoration {
     func update(cell: UICollectionViewCell, isFocused: Bool, accentHex: String?, isDark: Bool) {
         guard isFocused else {
             if let existing = cards.object(forKey: cell) {
-                withoutImplicitAnimations { existing.opacity = 0 }
-            }
-            if let existing = halos.object(forKey: cell) {
-                withoutImplicitAnimations { existing.opacity = 0 }
+                fade(existing, to: 0)
             }
             return
         }
@@ -128,56 +124,43 @@ final class FocalFocusDecoration {
             if let existing = cards.object(forKey: cell) {
                 withoutImplicitAnimations { existing.opacity = 0 }
             }
-            if let existing = halos.object(forKey: cell) {
-                withoutImplicitAnimations { existing.opacity = 0 }
-            }
             return
         }
 
+        // FOND accentué, jamais un bord (spec Magnificence 2026-08-17) : la
+        // teinte accent translucide (`surfaceColor`, token
+        // `thread.focusCard.surface*Alpha`) colore toute la rangée élue —
+        // anneau et halo du design précédent SUPPRIMÉS, `borderWidth` reste 0.
         let layer = cardLayer(for: cell)
-        let halo = haloLayer(for: cell)
-        let accent = accentColor(accentHex)
         let surface = surfaceColor(accentHex, isDark: isDark)
         let frame = decorationFrame(for: cell)
 
         withoutImplicitAnimations {
-            // Halo — le « magnifié » du cadre : un second anneau accent très
-            // dilué, posé LÉGÈREMENT EN DEHORS de la carte. Il donne au bord
-            // sa présence sans épaissir l'anneau normatif (`ringSize` est une
-            // cote GELÉE du token `thread.focusCard`, jamais retouchée ici).
-            //
-            // Un `shadow` aurait produit le même halo en une ligne — refusé :
-            // sans `shadowPath`, CoreAnimation le dérive du canal alpha en
-            // passe HORS ÉCRAN, à chaque frame d'un pass qui tourne à 120 Hz ;
-            // avec `shadowPath`, il faudrait allouer un `CGPath` neuf par
-            // frame (la carte est re-cadrée à chaque passe, self-sizing).
-            // Les deux violent « le pass n'alloue pas et ne déclenche aucun
-            // relayout ». Un second `CALayer` réutilisé ne coûte qu'une
-            // écriture de `frame`.
-            halo.frame = frame.insetBy(dx: -Self.haloOutset, dy: -Self.haloOutset)
-            halo.cornerRadius = FocalMetrics.FocusCard.radius + Self.haloOutset
-            halo.cornerCurve = .continuous
-            halo.borderWidth = Self.haloWidth
-            halo.borderColor = accent
-            halo.opacity = Self.haloOpacity
-
             layer.frame = frame
             layer.cornerRadius = FocalMetrics.FocusCard.radius
             layer.cornerCurve = .continuous
-            layer.borderWidth = FocalMetrics.FocusCard.ringSize
-            layer.borderColor = accent
+            layer.borderWidth = 0
             layer.backgroundColor = surface
-            layer.opacity = 1
         }
+        fade(layer, to: 1)
     }
 
-    /// Débord du halo hors de la carte, sa largeur, son opacité. Aucune de ces
-    /// trois cotes n'existe dans `thread.focusCard` (le token ne décrit qu'UN
-    /// anneau) — nommées ici plutôt que laissées en littéraux orphelins
-    /// (garde R15), sans revendiquer de miroir `thread.*`.
-    private static let haloOutset: CGFloat = 3
-    private static let haloWidth: CGFloat = 3
-    private static let haloOpacity: Float = 0.22
+    /// Fondu doux d'entrée/sortie du fond (spec Magnificence). L'écriture du
+    /// MODÈLE reste sans action implicite (discipline 2) ; l'animation est
+    /// EXPLICITE, posée uniquement quand la cible change — jamais par frame.
+    private static let fadeDuration: TimeInterval = 0.18
+    private static let fadeAnimationKey = "focal.focus.fade"
+
+    private func fade(_ layer: CALayer, to target: Float) {
+        guard layer.opacity != target else { return }
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = layer.presentation()?.opacity ?? layer.opacity
+        animation.toValue = target
+        animation.duration = Self.fadeDuration
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        withoutImplicitAnimations { layer.opacity = target }
+        layer.add(animation, forKey: Self.fadeAnimationKey)
+    }
 
     /// Retire toute décoration de `cell` — appelée par
     /// `FocalScrollPass.reset(_:)`, donc en première ligne de chaque
@@ -188,10 +171,6 @@ final class FocalFocusDecoration {
         if let card = cards.object(forKey: cell) {
             card.removeFromSuperlayer()
             cards.removeObject(forKey: cell)
-        }
-        if let halo = halos.object(forKey: cell) {
-            halo.removeFromSuperlayer()
-            halos.removeObject(forKey: cell)
         }
         if let flash = flashes.object(forKey: cell) {
             flash.removeAllAnimations()
@@ -298,23 +277,6 @@ final class FocalFocusDecoration {
         // transparent) — la carte encadre la rangée, elle ne la recouvre pas.
         cell.contentView.layer.insertSublayer(layer, at: 0)
         cards.setObject(layer, forKey: cell)
-        return layer
-    }
-
-    /// Le halo vit SOUS la carte (index 0) : la carte, son anneau net et son
-    /// fond le recouvrent, seul le débord reste visible.
-    private func haloLayer(for cell: UICollectionViewCell) -> CALayer {
-        if let existing = halos.object(forKey: cell) {
-            if existing.superlayer !== cell.contentView.layer {
-                cell.contentView.layer.insertSublayer(existing, at: 0)
-            }
-            return existing
-        }
-        let layer = CALayer()
-        layer.name = Self.haloLayerName
-        layer.opacity = 0
-        cell.contentView.layer.insertSublayer(layer, at: 0)
-        halos.setObject(layer, forKey: cell)
         return layer
     }
 

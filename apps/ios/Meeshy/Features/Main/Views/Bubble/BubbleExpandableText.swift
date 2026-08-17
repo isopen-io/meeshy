@@ -52,6 +52,13 @@ struct BubbleExpandableText: View, Equatable {
     var fontSize: CGFloat = 15
 
     var onLongPress: (() -> Void)? = nil
+    /// Libellé du bouton d'expansion — `nil` = « Voir plus » historique
+    /// (aucun site d'appel existant ne change). Focal passe « Lire plus ».
+    var expandLabel: String? = nil
+    /// Détournement d'expansion : quand posé, le tap N'ÉTEND PAS inline —
+    /// il route vers l'appelant (Focal ouvre sa sheet scrollable, spec
+    /// Magnificence §3 : un message de 3 écrans casserait la loupe).
+    var onExpandOverride: (() -> Void)? = nil
 
     @SwiftUI.State private var isExpanded: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -66,7 +73,8 @@ struct BubbleExpandableText: View, Equatable {
         lhs.linkTint == rhs.linkTint &&
         lhs.isDark == rhs.isDark &&
         lhs.trackedLinks == rhs.trackedLinks &&
-        lhs.fontSize == rhs.fontSize
+        lhs.fontSize == rhs.fontSize &&
+        lhs.expandLabel == rhs.expandLabel
     }
 
     var body: some View {
@@ -98,7 +106,7 @@ struct BubbleExpandableText: View, Equatable {
                 //    sélection de texte (`.textSelection(.enabled)`).
                 // 3. `.textSelection(.disabled)` explicite sur le bouton pour
                 //    qu'un tap imprécis ne déclenche pas le mode sélection.
-                Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                Text(expandLabel ?? String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(textColor.opacity(0.6))
                     // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
@@ -143,6 +151,10 @@ struct BubbleExpandableText: View, Equatable {
     /// Respecte Reduce Motion : pas d'animation quand l'utilisateur l'a désactivée.
     private func expand() {
         HapticFeedback.light()
+        if let onExpandOverride {
+            onExpandOverride()
+            return
+        }
         if reduceMotion {
             isExpanded = true
         } else {

@@ -145,4 +145,9 @@ class NotificationsViewModel @Inject constructor(
     fun markAllRead() {
         viewModelScope.launch { notificationRepository.markAllAsRead() }
     }
+
+    /** Swipe-to-delete — port of iOS `NotificationListViewModel.deleteNotification`. */
+    fun deleteNotification(notificationId: String) {
+        viewModelScope.launch { notificationRepository.delete(notificationId) }
+    }
 }
