@@ -117,10 +117,22 @@ export class PresenceService {
       this.conversationLeftListeners.forEach(listener => listener(data));
     });
 
-    // Reaction sync (full state reconciliation after reconnect)
-    socket.on(SERVER_EVENTS.REACTION_SYNC as any, (data: any) => {
-      this.reactionAddedListeners.forEach(listener => listener(data));
-    });
+    // Pas d'abonnement `reaction:sync` ici, et c'est délibéré. La
+    // réconciliation des réactions est une requête/réponse — le client émet
+    // `reaction:request-sync` et lit l'instantané dans l'ACK
+    // (`ReactionHandler.handleReactionSync`) — pas une diffusion : aucun
+    // émetteur de `reaction:sync` n'existe côté serveur.
+    //
+    // L'abonnement qui vivait ici versait cet instantané
+    // (`ReactionSyncEventData`: `{ messageId, reactions[], totalCount,
+    // userReactions[] }`) dans le seau de `reaction:added`, dont les
+    // consommateurs lisent une mise à jour INCRÉMENTALE
+    // (`ReactionUpdateEventData`: `{ emoji, action, aggregation, … }`). Les
+    // deux charges sont disjointes : `useReactionsQuery.handleReactionAdded`
+    // aurait poussé `event.aggregation`, c'est-à-dire `undefined`, dans la
+    // liste d'agrégations. Le `as any` sur l'événement ET sur la donnée
+    // masquait exactement cela. Cf. leçon 217 — un événement qui porte une
+    // charge doit avoir sa propre sortie, typée par cette charge.
 
     // Read status
     socket.on(SERVER_EVENTS.READ_STATUS_UPDATED, (data: {

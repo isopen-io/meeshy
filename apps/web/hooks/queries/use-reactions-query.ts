@@ -45,13 +45,36 @@ interface ReactionState {
   userReactions: string[];
 }
 
+/**
+ * Un socket absent n'est PAS une réponse. Distinguée des autres échecs parce
+ * qu'elle ne se réessaie pas : tant que la connexion n'est pas revenue, la
+ * n-ième tentative échouera exactement comme la première. C'est le retour de la
+ * connexion — pas un compteur — qui relance la demande (cf. l'effet de
+ * réconciliation dans `useReactionsQuery`).
+ */
+class ReactionSocketUnavailableError extends Error {
+  constructor() {
+    super('Socket not connected');
+    this.name = 'ReactionSocketUnavailableError';
+  }
+}
+
+const isSocketReachable = (): boolean => Boolean(meeshySocketIOService.getSocket()?.connected);
+
 // Fonction pour récupérer les réactions via Socket.IO
 async function fetchReactions(messageId: string): Promise<ReactionState> {
   return new Promise((resolve, reject) => {
     const socket = meeshySocketIOService.getSocket();
     if (!socket?.connected) {
-      // Retourner un état vide si pas connecté
-      resolve({ reactions: [], userReactions: [] });
+      // Surtout PAS `resolve({ reactions: [], userReactions: [] })`. Cette
+      // requête tourne en `staleTime: Infinity` : un état vide résolu est
+      // mémorisé comme une vérité fraîche et plus rien ne le relit. Le montage
+      // d'un fil précède couramment la poignée de main du socket — la bulle
+      // restait alors sans réaction pour toute la vie du composant, sans qu'un
+      // seul `reaction:request-sync` soit jamais parti. Une absence de canal se
+      // signale comme un échec ; elle ne se raconte pas comme une absence de
+      // réaction.
+      reject(new ReactionSocketUnavailableError());
       return;
     }
 
@@ -196,12 +219,43 @@ export function useReactionsQuery({
     queryFn: () => fetchReactions(messageId),
     enabled: enabled && !!messageId && isPersisted,
     staleTime: Infinity, // Socket.IO gère les mises à jour
-    retry: 1,
+    retry: (failureCount, error) =>
+      error instanceof ReactionSocketUnavailableError ? false : failureCount < 1,
     initialData, // Utiliser reactionSummary pour affichage instantané
   });
 
   const reactions = data?.reactions ?? [];
   const userReactions = data?.userReactions ?? [];
+
+  // La réconciliation que le gateway ANNONCE, et que personne ne faisait.
+  //
+  // `ReactionHandler` documente cinq fois son rattrapage par la même phrase —
+  // « peers reconcile on the next reaction:sync » : diffusion best-effort qui
+  // échoue, agrégation dégradée, retrait non annoncé. L'argument de cohérence
+  // du serveur repose donc entièrement sur un sync CLIENT ultérieur.
+  //
+  // Il n'y en avait aucun. `reaction:request-sync` ne partait qu'au montage de
+  // la requête, qui tourne en `staleTime: Infinity` : pour un fil resté ouvert,
+  // « le prochain sync » n'arrivait jamais. Tout ce que la coupure a manqué —
+  // les `reaction:added`/`reaction:removed` émis pendant l'absence, qui ne sont
+  // pas rejoués — restait absent de la bulle indéfiniment.
+  //
+  // On s'abonne donc au retour de la connexion, et à lui seul : un changement
+  // d'état qui ne franchit pas la frontière injoignable → joignable ne
+  // redemande rien. Le volume est celui, déjà admis, du montage du fil — une
+  // demande par bulle montée, sous la même limite `REACTION_SYNC` du gateway.
+  useEffect(() => {
+    if (!enabled || !messageId || !isPersisted) return;
+
+    let wasReachable = isSocketReachable();
+
+    return meeshySocketIOService.onStatusChange(() => {
+      const reachable = isSocketReachable();
+      if (reachable === wasReachable) return;
+      wasReachable = reachable;
+      if (reachable) refetch();
+    });
+  }, [enabled, messageId, isPersisted, refetch]);
 
   // Mutation pour ajouter une réaction
   const addMutation = useMutation({
