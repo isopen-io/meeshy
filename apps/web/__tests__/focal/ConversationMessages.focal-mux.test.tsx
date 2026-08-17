@@ -13,7 +13,7 @@
  *      jamais pour BubbleStream (`reverseOrder=false`) même drapeau ON.
  */
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Message, SocketIOUser as User } from '@meeshy/shared/types';
 
@@ -86,6 +86,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 }));
 
 import { ConversationMessages } from '@/components/conversations/ConversationMessages';
+import { useReadingModePreferenceStore } from '@/stores/reading-mode-preference-store';
 
 function createMockUser(): User {
   return { id: 'user-1', username: 'testuser', displayName: 'Test User' } as User;
@@ -138,10 +139,28 @@ const defaultProps = {
   tCommon: (key: string) => key,
 };
 
+/**
+ * DÉCISION PRODUIT PROVISOIRE — 2026-08-17 : sans choix explicite du lecteur,
+ * le fil rend « Bulles » même drapeau ON. Les preuves 2 et 3 ci-dessous
+ * portent sur ce qui se passe QUAND `FocalThread` est monté ; elles doivent
+ * donc désormais poser un choix explicite, sinon elles observeraient le
+ * défaut et deviendraient VIDES (la preuve 3 en particulier : sans
+ * `FocalThread` monté, rien ne lève, et le repli n'est jamais exercé).
+ * Le défaut lui-même a sa propre suite :
+ * `__tests__/lentille/reading-mode-default-bubbles.test.tsx`.
+ */
+const chooseFocalExplicitly = async () => {
+  await act(async () => {
+    await useReadingModePreferenceStore.getState().setReadingMode('conv-1', 'focal');
+  });
+};
+
 describe('ConversationMessages — mux Focal', () => {
   beforeEach(() => {
     mockFocalActive = false;
     mockFocalShouldThrow = false;
+    window.localStorage.clear();
+    useReadingModePreferenceStore.getState().reset();
   });
 
   it('drapeau OFF (défaut) ⇒ rendu historique SEUL — FocalThread jamais monté', async () => {
@@ -160,8 +179,14 @@ describe('ConversationMessages — mux Focal', () => {
     expect(graftPoint).toMatchSnapshot();
   });
 
-  it('drapeau ON + reverseOrder=true ⇒ FocalThread monté à la place du rendu historique', async () => {
+  // MIS À JOUR EXPRÈS (2026-08-17) : ce témoin exigeait `FocalThread` du seul
+  // fait du drapeau. Depuis la décision produit provisoire « Bulles par
+  // défaut », le drapeau ne suffit plus — il faut un CHOIX. Ce que le témoin
+  // prouve reste le même (drapeau ON + choix plat ⇒ le fil plat REMPLACE le
+  // rendu historique) ; sa précondition, elle, est devenue explicite.
+  it('drapeau ON + reverseOrder=true + « Focal » CHOISI ⇒ FocalThread monté à la place du rendu historique', async () => {
     mockFocalActive = true;
+    await chooseFocalExplicitly();
     render(<ConversationMessages {...defaultProps} reverseOrder />);
     expect(await screen.findByTestId('focal-thread-mount')).toBeInTheDocument();
     expect(screen.queryByTestId('messages-display')).not.toBeInTheDocument();
@@ -174,9 +199,14 @@ describe('ConversationMessages — mux Focal', () => {
     expect(screen.queryByTestId('focal-thread-mount')).not.toBeInTheDocument();
   });
 
-  it('drapeau ON, FocalThread lève ⇒ FeatureErrorBoundary retombe sur le rendu historique (jamais une page morte)', async () => {
+  // MIS À JOUR EXPRÈS (2026-08-17) : sans choix explicite, `FocalThread` n'est
+  // plus monté du tout — l'exception injectée ne se produirait jamais et ce
+  // témoin passerait pour de mauvaises raisons. Le choix rétablit exactement
+  // la situation qu'il décrit.
+  it('drapeau ON, « Focal » CHOISI, FocalThread lève ⇒ FeatureErrorBoundary retombe sur le rendu historique (jamais une page morte)', async () => {
     mockFocalActive = true;
     mockFocalShouldThrow = true;
+    await chooseFocalExplicitly();
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     render(<ConversationMessages {...defaultProps} reverseOrder />);

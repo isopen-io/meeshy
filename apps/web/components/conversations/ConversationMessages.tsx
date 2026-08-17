@@ -17,7 +17,7 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
-import { useThreadReadingDensity } from '@/hooks/lentille/use-thread-reading-mode';
+import { useThreadReadingRender } from '@/hooks/lentille/use-thread-reading-mode';
 import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { formatDayLabel, formatTime } from '@/utils/date-format';
@@ -121,12 +121,14 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // le mux ne s'active donc QUE quand `reverseOrder` est vrai.
   const focalActive = useReadingModesFlag().active && reverseOrder;
 
-  // REV-4bis/B2 — le fil OBÉIT au magasin autoritatif. La densité rendue est
+  // REV-4bis/B2 — le fil OBÉIT au magasin autoritatif. Ce qui est rendu est
   // la résolution de la préférence mémorisée par la loi partagée, bornée au
-  // catalogue que CET écran sait monter (voir `use-thread-reading-mode.ts`).
+  // catalogue que CET écran sait monter (voir `use-thread-reading-mode.ts`)
+  // — et, sans choix explicite, la DÉCISION PRODUIT PROVISOIRE du 2026-08-17
+  // (« Bulles par défaut », datée et retirable dans ce hook-là, pas ici).
   // Appelé inconditionnellement — c'est un hook —, mais lu par la SEULE
   // branche drapeau-on ci-dessous : le chemin OFF reste bit-à-bit intact.
-  const threadDensity = useThreadReadingDensity(conversationId);
+  const threadRender = useThreadReadingRender(conversationId);
 
   const translatedMessagesRef = useRef(translatedMessages);
   translatedMessagesRef.current = translatedMessages;
@@ -557,11 +559,23 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           et la densité de la branche WF-110 ci-dessous sont désormais deux
           LECTURES de la même préférence. Le repli continue de recevoir
           `readingMode` verbatim (chemin OFF, bit-à-bit) ; la branche ON, elle,
-          passe par la loi partagée (`useThreadReadingDensity`), qui borne la
-          préférence au catalogue que cet écran sait monter.
+          passe par la loi partagée (`useThreadReadingRender`), qui borne la
+          préférence au catalogue que cet écran sait monter — et qui porte,
+          depuis le 2026-08-17, la DÉCISION PRODUIT PROVISOIRE « Bulles par
+          défaut » : sans choix explicite du lecteur, c'est le rendu historique
+          qui est monté, drapeau ON compris.
         */}
         {(() => {
-          const historicalMessagesDisplay = (
+          /*
+            La vue historique, PARAMÉTRÉE par sa lentille. Le chemin OFF
+            ci-dessous l'appelle avec `readingMode` VERBATIM — mêmes props,
+            même sortie, snapshot bit-à-bit inchangé. La branche ON « Bulles »
+            l'appelle avec `'bubble'` EXPLICITE : sans choix du lecteur, la
+            prop porte encore `focal` (la façade traduit `auto → focal`), ce
+            qui monterait la rangée plate du tronc au lieu des bulles — la
+            décision de défaut doit donc nommer sa lentille, pas la déduire.
+          */
+          const renderHistorical = (mode: ReadingMode) => (
             <MessagesDisplay
               messages={messages}
               translatedMessages={translatedMessages}
@@ -591,18 +605,26 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
               onLoadMore={onLoadMore}
-              readingMode={readingMode}
+              readingMode={mode}
             />
           );
 
+          const historicalMessagesDisplay = renderHistorical(readingMode);
+
           if (!focalActive) return historicalMessagesDisplay;
+
+          // DÉCISION PRODUIT PROVISOIRE — 2026-08-17. Sans choix explicite du
+          // lecteur, le fil rend « Bulles » même drapeau ON. Le POINT DE
+          // DÉCISION est `use-thread-reading-mode.ts` ; ce mux ne fait
+          // qu'obéir au verdict, comme il obéit déjà aux deux densités.
+          if (threadRender === 'bubbles') return renderHistorical('bubble');
 
           return (
             <FeatureErrorBoundary featureName="Focal" fallback={historicalMessagesDisplay}>
               <FocalThread
                 messages={messages}
                 currentUser={currentUser}
-                density={threadDensity}
+                density={threadRender}
                 scrollContainerRef={scrollAreaRef}
                 onNavigateToMessage={onNavigateToMessage}
                 conversationId={conversationId}
