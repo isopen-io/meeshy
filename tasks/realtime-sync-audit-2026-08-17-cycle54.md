@@ -1,177 +1,305 @@
-# Cycle 54 — la question de la leçon 212, posée aux écrivains LOCAUX
+# Cycle 54 — l'épingle, perdue deux fois sur le même trajet
 
 ## 1. D'où vient la piste
 
-Le cycle 53 a fermé le mélange de la ligne de liste web sur le chemin du fan-out
-SERVEUR. Sa leçon 212 ne se contente pas de décrire le défaut : elle laisse une
-question de suivi, et elle est mécanique.
+Le cycle 53 la lègue en n°3, et il la lègue avec sa preuve déjà faite :
 
-> La question de suivi tient en une ligne, et elle est mécanique : *quels sont
-> TOUS les écrivains de ce que la ligne AFFICHE ?* Pas les écrivains du champ,
-> pas les écrivains de l'objet : les écrivains de l'affichage.
+> **Les deux ÉVÉNEMENTS avant les deux FUSIONS** — piste intacte des cycles 51
+> et 52 : `ConversationUpdatedEvent` (app iOS) et `ConversationUpdatedStoreEvent`
+> (SDK) portent des champs différents, reliés par un mapping manuel de quinze
+> lignes. **C'est ce mapping qui a laissé tomber `location` au cycle 50.**
 
-Le cycle 53 y a répondu pour le chemin qu'il corrigeait. Ce cycle-ci pose la
-question au reste du fichier.
+Une piste qui nomme un mapping ET le champ qu'il a déjà perdu une fois n'est pas
+une piste, c'est une adresse. La question de ce cycle n'a donc pas été « où
+chercher » mais **« ce mapping a-t-il été réparé, ou seulement contourné ? »**.
+
+Réponse : contourné. Le cycle 50 a corrigé le chemin de l'APP
+(`ConversationListViewModel`), pas le mapping. Le SDK n'a jamais reçu l'épingle.
 
 ## 2. Le constat
 
-### 2.1 Ce que la ligne affiche
+### 2.1 Ce que porte l'événement, ce que le pont en transmet
 
-`ConversationItem` compose son texte d'aperçu ainsi :
+`ConversationUpdatedEvent` déclare 19 champs. `mapConversationUpdated` en
+recopie 15. Les quatre qui restent au bord :
 
-```tsx
-{formatLastMessage(conversation.lastMessage, {
-  translations: conversation.lastMessageTranslations,
-  originalLanguage: conversation.lastMessageOriginalLanguage,
-  preferredLanguages
-})}
+| Champ | Sort |
+|---|---|
+| `updatedBy` | le store ne s'en sert pas — légitime |
+| `updatedAt` | idem |
+| `senderId` | voir §7, écarté et pourquoi |
+| **`location`** | **décodé, jamais transmis** |
+
+`ConversationUpdatedStoreEvent` ne déclarait même pas le champ. Un champ décodé
+et non mappé est **aussi inerte qu'un champ absent du fil** — et c'est
+exactement le défaut que le témoin du drapeau `previewRecalculated`, posé deux
+lignes plus haut dans la même suite, existe pour interdire :
+
+> `mapConversationUpdated` ne recopie qu'un SOUS-ENSEMBLE des champs décodés, et
+> un drapeau décodé mais jamais transmis serait exactement aussi inerte qu'un
+> drapeau absent. C'est la moitié du chemin qu'un test de `merging` seul ne peut
+> pas voir.
+
+Le témoin était là, la phrase était écrite, et le champ d'à côté tombait quand
+même. Un témoin ne protège que le champ qu'il nomme.
+
+### 2.2 Pourquoi la perte est ACTIVE et non passive
+
+`merging` ne se contente pas d'ignorer l'épingle : il l'**efface**.
+
+```swift
+if case .replaced(.some(let id)) = event.lastMessage { conv.adoptLastMessage(id: id); … }
 ```
 
-Deux moitiés, **et elles ne vivent pas au même endroit** : le message est un
-OBJET (`conversation.lastMessage`), la carte du Prisme est une paire de scalaires
-posés au niveau CONVERSATION — le gateway l'y met parce que sa forme compacte
-`{ langue: aperçu }` n'est pas celle de `Message.translations`.
+`adoptLastMessage` remet à neutre tout ce qui DÉCRIT le message — dont
+`lastMessageLocation = nil`. C'est son contrat, et il est bon : nommer un autre
+message, c'est cesser de décrire le précédent. Mais sa documentation énonce la
+contrepartie, mot pour mot :
 
-Et `resolveLastMessagePreview` **PRÉFÈRE la carte** au contenu brut. C'est donc
-elle qui gagne à l'écran chaque fois qu'elle porte une langue du lecteur.
+> Ce geste remet donc à neutre TOUT ce qui décrit le message, **à charge pour
+> l'appelant de reposer aussitôt ce que le payload porte vraiment.**
 
-### 2.2 Les cinq écrivains
+Le payload portait la position. L'appelant ne la reposait pas. Le neutralisant
+tournait donc à vide sur le seul champ pour lequel il avait une valeur de
+rechange.
 
-| # | Écrivain | Événement | Écrit `lastMessage` | Écrit la carte |
-|---|---|---|---|---|
-| 1 | `handleNewMessage` (liste) | `message:new` | oui | **non** |
-| 2 | `handleNewMessage` (branche `fetched`) | `message:new` | oui | **non** |
-| 3 | `handleMessageEdited` | `message:edited` | oui | **non** |
-| 4 | `advanceConversationPreviewOnDelete` | `message:deleted` | oui | **non** |
-| 5 | `handleLinkMessageNew` | `link:message:new` | oui | **non** |
-| — | `mergeConversationUpdate` | `conversation:updated` | oui | oui |
+### 2.3 Ce que la ligne rendait
 
-**Cinq écrivains de ce que la ligne affiche, un seul écrivain de la carte.**
-Chacun des cinq réécrivait l'objet en laissant la carte décrire le message
-PRÉCÉDENT : la ligne rendait l'auteur et l'horodatage du nouveau message avec le
-TEXTE de l'ancien.
+Un message géolocalisé sans légende a un `content` VIDE — les trois émetteurs le
+disent, et aucun ne fabrique de texte de repli côté serveur :
 
-C'est le défaut du cycle 53, à l'identique, sur les chemins d'à côté — et le
-corollaire de la leçon 212 le prédit mot pour mot : *le mélange se cache à la
-jointure de deux modèles, un objet d'un côté, des scalaires frères de l'autre.*
+> Un message position-seule a un `content` vide : hisser `metadata.location`
+> pour que la ligne d'aperçu du client compose son libellé — aucun texte de
+> repli côté serveur.
 
-### 2.3 Pourquoi le cycle 52 avait conclu l'inverse
+Donc `lastMessagePreview` est vide par construction, et `location` est la
+**seule** chose dont la ligne dispose. `ThemedConversationRow` s'y rabat
+précisément quand l'aperçu est vide, et sa branche VoiceOver fait de même :
 
-Il avait écrit :
+```swift
+} else if let place = conversation.lastMessageLocation {
+    parts.append(place.name ?? "Position")
+}
+```
 
-> Le remplacer s'écrit `{ ...conv, lastMessage: replacement }` — il n'y a rien à
-> oublier, l'atomicité vient du modèle.
+Sans l'épingle : aperçu vide, épingle nulle, **la ligne n'affiche plus rien**.
+VoiceOver n'annonce que l'horodatage. Ce n'est pas une ligne dégradée, c'est une
+ligne blanche.
 
-L'atomicité vient du modèle pour **l'objet**. La carte n'est pas dans l'objet.
-Le raisonnement est le même que celui que la leçon 212 a déjà démonté une fois ;
-il avait simplement survécu sur les chemins que le cycle 53 ne touchait pas.
+### 2.4 Ce qui rend le défaut DURABLE
 
-### 2.4 Le chemin que rien ne rattrape
+`merging` est `nonisolated static` pour une raison écrite au-dessus d'elle :
 
-Quatre des cinq écrivains ont un jumeau serveur : le gateway émet un
-`conversation:updated` juste derrière, avec la carte du bon message, et
-`mergeConversationUpdate` la repose. Le mélange n'y dure que le temps d'une
-trame — réel, visible, mais transitoire.
+> Lifted out of the actor so the disk-cache writer (`ConversationSyncEngine`)
+> applies the SAME rule instead of re-deriving it — the RAM store and the
+> persisted list must never disagree.
 
-**`link:message:new` n'en a pas, et c'est délibéré.** `broadcastLinkMessage.ts`
-le documente :
+La ligne blanche est donc **écrite sur le disque**. Elle survit au redémarrage :
+au prochain départ à froid, la liste servie depuis le cache (principe
+Cache-First) montre une ligne vide jusqu'à ce qu'un `GET /conversations`
+la répare — car le REST, lui, porte l'épingle (`APIConversation.toConversation`
+pose `lastMessageLocation: lastMessage?.location`).
 
-> THREE audiences, not the four `broadcastMessageMutation` fans out to: the
-> conversation-list preview needs no separate channel on this path. […] the web
-> `link:message:new` handler bumps the conversation's preview and ordering from
-> this very event. Emitting `conversation:updated` too would cost a DB read per
-> link message for an update the clients already applied.
+## 3. La deuxième perte, en amont — le gateway
 
-« The clients already applied it » : vrai de l'objet, faux de la carte. Sur une
-conversation de lien partagé, la ligne restait donc **durablement** fausse — rien
-ne repassait jamais. Prisme `['fr']`, avant-dernier message anglais traduit
-« Bonsoir », message de lien tout neuf : la ligne rendait *l'invité, à l'instant,
-disant « Bonsoir »*.
+En traçant les émetteurs pour établir *quand* le payload porte l'épingle, un
+troisième site est tombé : **le gateway ne la hisse que sur deux de ses trois
+chemins.**
 
-C'est la même forme de raisonnement que « le web est indemne par structure », et
-elle est fausse pour la même raison : elle nomme un CLIENT et une DONNÉE, pas un
-CHEMIN et un AFFICHAGE.
+| Émetteur | Hisse `location` ? |
+|---|---|
+| `MessageHandler.ts` (WS `message:send`) | ✔ avec son commentaire |
+| `emitConversationPreviewUpdate.ts` (édition / suppression / traduction) | ✔ avec son commentaire |
+| `MeeshySocketIOManager._broadcastNewMessage` (REST / ZMQ) | ✘ |
 
-## 3. Le correctif
+Le chemin manquant est **celui par lequel passe justement l'envoi d'un lieu** :
+le picker poste le message par REST. Et le fichier portait déjà l'avertissement,
+sur la fonction voisine, qui nomme `location` comme le bug de référence :
 
-`withPreviewMessage({ conversation, message, textChanged? })` — un geste unique,
-exporté et pur, par lequel passent les cinq écrivains.
+> …doit être répliqué à la main dans `_buildMessagePayload` — bug de parité
+> (cf. `location` ci-dessous).
 
-**L'identité décide, jamais le contenu.** Quand le message installé est celui que
-la ligne décrit déjà, la carte reste vraie et on la garde ; sinon elle est périmée
-en entier, et `lastMessageOriginalLanguage` est réaligné sur le message installé.
+L'avertissement gardait le payload `message:new`. Le payload
+`conversation:updated`, quarante lignes plus bas dans la même méthode, n'était
+gardé par rien.
 
-`textChanged` est la seule exception, et elle est **déclarée par l'écrivain** :
-une édition garde le même id tout en remettant `Message.translations` à `null`
-côté serveur — l'identité ne peut pas le révéler, seul le handler d'édition le
-sait.
+Les deux défauts sont donc les deux moitiés du même trajet : le serveur ne pose
+pas l'épingle sur le fil (chemin REST), et le client la jette quand elle y est
+(tous chemins).
 
-### 3.1 La borne fait le correctif
+## 4. Le correctif
 
-Sans le no-op « même id », le `conversation:updated` jumeau qui suit chaque
-`message:new` dépouillerait la ligne du Prisme que le fan-out vient d'installer —
-sur le chemin le plus fréquenté du service. Le gateway garantit d'ailleurs que
-les deux événements portent **la même carte, résolue depuis le même message**
-(`MeeshySocketIOManager`, commentaire : *« les deux événements portent donc
-toujours la même carte, et le `conversation:updated` jumeau ne peut pas arriver
-derrière pour effacer ce que `message:new` vient d'installer »*). Le no-op est ce
-qui rend le correctif indifférent à l'ORDRE d'arrivée des deux trames.
+### 4.1 Gateway — hisser, avec la clé ABSENTE et non nulle
 
-### 3.2 Pourquoi périmer plutôt que recomposer
+Même expression que les deux jumeaux, au même endroit du payload :
 
-On aurait pu dériver la carte de `replacement.translations` — le message porte
-son propre tableau de traductions. Écarté : cela demanderait de rejouer côté
-client les quatre exclusions de `buildLastMessagePreviewTranslations` (hors
-prisme, langue d'origine, traduction chiffrée, texte inexploitable) **et** le
-plafond de 300 points de code. Une règle serveur dupliquée dans le client est
-exactement ce que le Prisme interdit.
+```ts
+...((): Record<string, unknown> => {
+  const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+  return place ? { location: place } : {};
+})(),
+```
 
-Périmer rend la ligne dans la LANGUE D'ORIGINE le temps que le serveur reparle —
-ce qui EST la règle #1 du Prisme (« si aucune traduction ne matche la langue
-préférée, afficher le contenu original »), pas un repli dégradé.
+`{}` et non `{ location: null }`, et c'est la borne de tout le correctif : les
+clients écrivent l'épingle **avec l'identité du message**, donc une clé nulle
+posée sur le chemin le plus fréquenté du service effacerait une épingle correcte
+à chaque message texte. La contre-épreuve la fige.
 
-## 4. Gates
+### 4.2 SDK — transmettre, puis reposer avec l'identité
 
-- **Suite web complète** : voir §6.
-- **Preuve par mutation, dans les deux sens** :
-  - `stillDescribed = true` (le correctif ne fait plus rien) ⇒ **10 témoins
-    rouges**, dont les 4 d'intégration, un par handler.
-  - `stillDescribed = false` (le correctif sur-dose) ⇒ **2 témoins rouges**,
-    ceux de la borne.
-- **`tsc --noEmit`** : aucune erreur sur les 2 fichiers touchés. Le dépôt en
-  porte 1234 par ailleurs, préexistantes — comparaison fichier par fichier, pas
-  sur le code de sortie (même méthode que le cycle 53).
-- **Parité locale** : `prisma generate` + `packages/shared` reconstruit avant la
-  campagne (`moduleNameMapper` pointe sur `dist/`).
+Trois gestes, un par étage :
 
-## 5. Écarté délibérément
+1. `ConversationUpdatedStoreEvent` déclare `location: SharedPlace?` — membre du
+   groupe d'aperçu au même titre que le texte et le Prisme.
+2. `mapConversationUpdated` la transmet.
+3. `merging` la repose **dans la branche d'identité**, immédiatement après
+   `adoptLastMessage` :
 
-**Émettre `conversation:updated` sur le chemin `link:message:new`.** Ce serait
-refermer le trou par le serveur, au prix exact que `broadcastLinkMessage`
-refuse : une lecture DB par message de lien. Le client peut tenir la cohérence
-sans cette lecture — il lui suffit de ne pas afficher une carte qui ne décrit
-plus rien. Le commentaire du gateway reste juste sur le fond ; c'est sa
-justification qui était trop large d'un cran.
+```swift
+if case .replaced(.some(let id)) = event.lastMessage {
+    conv.adoptLastMessage(id: id)
+    conv.lastMessageLocation = event.location
+    changed = true
+}
+```
 
-**Une garde monotone web sur le groupe d'aperçu** (piste n°2 du cycle 53) — reste
-entière, et distincte de ce correctif.
+Ce n'est pas un champ de plus appliqué au hasard : c'est **le geste que
+`adoptLastMessage` demande explicitement à son appelant**, enfin fait pour le
+seul champ dont le payload dispose.
 
-**Toucher `lastMessageAt` / `updatedAt` dans le geste commun.** Les cinq
-appelants n'en font pas le même usage : l'édition n'en pose aucun,
-`link:message:new` dérive le sien d'un payload non typé. Les poser dans le
-helper les écraserait — un témoin dédié l'interdit.
+### 4.3 Pourquoi DANS la branche d'identité, et pas à côté
 
-## 6. Pistes pour le cycle 55 — repérées, NON livrées
+Hors de cette branche, l'écriture atteindrait le chemin des métadonnées
+(renommage, avatar, mode lent), qui ne porte jamais `location` — et retirerait
+donc son épingle au dernier message **à chaque renommage**. Ce serait la même
+classe de défaut que celle qu'on ferme, par la porte opposée. Un témoin dédié
+l'interdit.
 
-1. **`handleMessageDeleted` renonce toujours quand le cache messages est vide**
-   (piste n°1 du cycle 53, intacte). Ce cycle n'y touche pas : il corrige ce que
-   la ligne affiche QUAND elle est réécrite, pas le cas où elle ne l'est pas.
-2. **Les deux ÉVÉNEMENTS avant les deux FUSIONS** côté iOS (piste des cycles
-   51/52/53) — intacte.
-3. **`PUT /conversations/:id` accepte toujours de renommer un DM** — intacte.
-4. **Nouveau : la carte du Prisme n'a qu'UN écrivain, et cinq lecteurs
-   potentiels.** Le correctif la périme correctement, mais rien n'empêche un
-   sixième écrivain de `lastMessage` d'apparaître demain sans passer par
-   `withPreviewMessage`. Une garde structurelle (rendre `lastMessage` inatteignable
-   autrement que par le helper) fermerait la classe entière plutôt que ses
-   instances.
+Dans la branche, l'écriture couvre les deux formes de la clé pleine :
+
+| Forme | Effet | Juste parce que |
+|---|---|---|
+| identité neuve + `location` | l'épingle du nouveau message | le payload la hisse depuis SON `metadata` |
+| identité neuve, pas de `location` | épingle effacée | le remplaçant n'a pas de position |
+| identité ÉGALE (édition, traduction) | épingle réécrite à l'identique | l'émetteur la recalcule depuis le MÊME message |
+| clé `lastMessageId` absente | rien touché | l'événement ne parle pas du dernier message |
+
+La troisième ligne est la seule qui demandait une vérification et pas un
+raisonnement : `emitConversationPreviewUpdate` recompose `place` depuis le
+message qu'il nomme à chaque émission, y compris à l'édition. L'écriture y est
+donc idempotente, jamais destructrice.
+
+### 4.4 `SharedPlace` gagne `Hashable`
+
+`ConversationUpdatedStoreEvent` est `Hashable` ; `SharedPlace` n'était
+qu'`Equatable`, ce qui rendait la synthèse impossible dès que le type valeur
+porte l'épingle. Conformance ajoutée par synthèse — ses cinq champs stockés sont
+tous `Hashable`.
+
+À ne pas confondre avec le hash **manuel** de `MeeshyConversation`, qui ne
+combine que `lastMessageLocation != nil` et `.name` : celui-là est un hash de
+DIFFING SwiftUI, délibérément partiel. Il n'était pas la preuve que `SharedPlace`
+ne pouvait pas être `Hashable` — seulement qu'à cet endroit-là on ne le voulait
+pas complet.
+
+## 5. Les témoins
+
+**6 neufs.**
+
+| Témoin | Ce qu'il fige | Où |
+|---|---|---|
+| `hisse metadata.location dans CONVERSATION_UPDATED` | **le défaut serveur** | gateway |
+| `sans position, ne porte AUCUNE clé location` | la clé absente ≠ clé nulle — la borne | gateway |
+| `replacementIsAPositionMessage_carriesItsPin` | **le défaut client** | SDK / fusion |
+| `renameDoesNotTouchThePin` | la borne : hors branche d'identité, on n'écrit pas | SDK / fusion |
+| `positionMessage_pinCrossesTheBridge` | la moitié du chemin qu'un test de `merging` ne voit pas | SDK / pont |
+| `positionMessage_persistsItsPin` | la durabilité — le cache disque | SDK / sync |
+
+Le témoin existant
+`test_applyConversationUpdated_replacingTheLastMessage_stopsDescribingThePreviousOne`
+devient la contre-épreuve gratuite du nouvel écrit : il sème une épingle, envoie
+un remplaçant TEXTE sans `location`, et exige `XCTAssertNil`. Il passait avant ;
+il passe après, et il exerce désormais vraiment la ligne neuve.
+
+## 6. Les gates
+
+- **Gateway : suite COMPLÈTE — 740 suites, 17 928 témoins verts, 0 échec.**
+  Dont les 2 neufs et les 358 de `MeeshySocketIOManager.test.ts`.
+- **`tsc --noEmit`** : aucune erreur sur le fichier gateway touché. (Le dépôt en
+  porte une préexistante et sans rapport — `src/utils/sanitize.ts` sur
+  `@meeshy/shared` — levée après reconstruction de `packages/shared`.)
+- **Prérequis de parité locale** appliqués avant campagne :
+  `prisma generate --generator client` + `bun run build` dans `packages/shared`.
+- **Swift : NON COMPILÉ ici.** Aucun toolchain Swift dans ce conteneur Linux
+  (`swift: command not found`), et le dépôt ne porte pas de workflow CI visible
+  pour le SDK. Les quatre témoins SDK et les quatre fichiers Swift touchés sont
+  donc livrés **non exécutés**, à la charge de la CI iOS / `meeshy.sh test`.
+  Ce qui a été fait à la place, faute de compilateur :
+  - le risque de compilation le PLUS probable a été cherché et trouvé avant
+    d'écrire (`Hashable` synthétisé impossible sur `SharedPlace` seulement
+    `Equatable`) — c'est ce qui a motivé §4.4 ;
+  - ordre des paramètres re-vérifié à chaque site d'appel (Swift autorise
+    l'omission d'un paramètre défauté, pas le désordre) ;
+  - mutabilité re-vérifiée (`MeeshyConversation.type` est un `let` — le premier
+    jet du témoin de renommage ne compilait pas, il passe par `makeGroupConv`) ;
+  - aucune conformance `SharedPlace` préexistante en extension (double
+    conformance = erreur de compilation).
+
+## 7. Écarté délibérément — et tracé, pas supposé
+
+**`senderId`, quatrième champ non mappé.** Il n'est PAS le même cas, et la
+frontière est nette : `adoptLastMessage` demande à l'appelant de reposer *ce que
+le payload porte vraiment*. Le payload porte `location` — un lieu, prêt à poser.
+Il ne porte pas `lastMessageSenderName` : il porte `senderId`, et en faire un
+nom demande une RÉSOLUTION (l'app la fait, pour les DM seulement, en lisant
+`participantUsername` déjà en RAM sur la ligne). Le nom absent tombe donc dans
+le compromis assumé de `adoptLastMessage` — incomplet et corrigible, plutôt que
+faux et durable. Porter cette résolution dans le SDK serait un ajout de
+comportement, pas la réparation d'une fuite. Piste n°1 du §8.
+
+**`updatedBy` / `updatedAt`.** Le store ne les lit pas. Vérifié, pas supposé.
+
+**Composer un libellé de repli côté serveur.** Les trois émetteurs s'y refusent
+explicitement et à l'unisson (« aucun texte de repli côté serveur ; le client
+décide comment rendre `""` + location »). Le correctif respecte ce partage.
+
+**Le web.** Vérifié plutôt qu'hérité du cycle 53 : sa ligne ne rend aucune
+épingle, et `PREVIEW_GROUP_KEYS` consomme déjà `location` — le champ neuf sur le
+chemin REST n'y crée donc aucun champ fantôme.
+
+**Android.** Vérifié dans le code, non hérité : `conversation:updated` y
+déclenche `refreshSilently()` → `repository.refresh()`, un GET REST complet. Il
+ne peut pas perdre un champ qu'il n'applique pas.
+
+## 8. Pistes pour le cycle 55 — repérées, NON livrées
+
+1. **`senderId` reste non mappé côté SDK** (§7). L'app résout le nom pour les DM
+   depuis la RAM ; le SDK ne le fait pas, donc la ligne persistée perd son auteur
+   à chaque changement d'identité et ne le retrouve qu'au prochain
+   `GET /conversations`. Ajout de comportement assumé — à instruire pour
+   lui-même, avec la question « pourquoi le SDK n'a-t-il pas la règle DM que
+   l'app a ? ».
+2. **Le mapping manuel est toujours manuel.** Ce cycle a réparé le champ, pas la
+   classe : rien n'empêche le prochain champ ajouté à `ConversationUpdatedEvent`
+   de tomber au même endroit. Deux sorties possibles — un témoin d'exhaustivité
+   sur le mapping (qui échoue quand l'événement gagne un champ que le store
+   pourrait vouloir), ou la fusion des deux types. La deuxième est la piste n°3
+   du cycle 53, toujours ouverte.
+3. **`handleMessageDeleted` (web) renonce encore quand le cache messages est
+   vide** — piste n°1 du cycle 53, intacte.
+4. **Le web n'a aucune garde monotone sur le groupe d'aperçu** — piste n°2 du
+   cycle 53, intacte. Le contrat parle « des clients » au pluriel pour une règle
+   qu'un seul tient.
+5. **`PUT /conversations/:id` accepte toujours de renommer un DM** — cycle 51,
+   piste n°3, intacte.
+
+## 9. Ce que ce cycle apprend
+
+La leçon 213 disait : une classification « correct par construction » héritée
+d'une vague antérieure est une hypothèse, pas un fait. Ce cycle en montre le
+symétrique, et il est plus vicieux — **une piste léguée avec sa preuve déjà
+faite peut être laissée intacte parce qu'elle a l'air résolue.** Le cycle 50
+avait « corrigé `location` ». Il avait corrigé UN des deux consommateurs, et le
+cycle 53 le savait puisqu'il écrit noir sur blanc que c'est ce mapping qui l'a
+laissé tomber. Trois cycles ont lu cette phrase sans aller voir si le mapping
+avait changé. Détail : voir leçon 214.

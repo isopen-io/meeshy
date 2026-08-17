@@ -235,6 +235,12 @@ public final class ConversationStoreSocketBridge {
             lastMessagePreview: event.lastMessagePreview,
             lastMessageTranslations: event.lastMessageTranslations,
             lastMessageOriginalLanguage: event.lastMessageOriginalLanguage,
+            // Décodée par `ConversationUpdatedEvent` depuis le cycle 50, mais
+            // jamais transmise : ce mapping manuel est le point exact où
+            // l'épingle se perdait. Un champ décodé et non mappé est aussi
+            // inerte qu'un champ absent du fil — cf. le témoin du drapeau
+            // `previewRecalculated` juste au-dessus, posé pour cette raison.
+            location: event.location,
             previewRecalculated: event.previewRecalculated,
             title: event.title,
             avatar: event.avatar,

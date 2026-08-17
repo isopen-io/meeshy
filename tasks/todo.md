@@ -1,4 +1,4 @@
-# Cycle 54 — la carte du Prisme suit le message que la ligne décrit (web)
+# Cycle 54-bis — la carte du Prisme suit le message que la ligne décrit (web)
 
 ## La piste
 
@@ -49,10 +49,10 @@
       porte 1234 par ailleurs, préexistantes, comparées fichier par fichier)
 - [x] `prisma generate` + `packages/shared` reconstruit avant la campagne
 - [x] `main` refusionné à la main avant push
-- [x] CHANGELOG racine + journal cycle 54 + leçon 214
+- [x] CHANGELOG racine + journal cycle 54 + leçon 215
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle54.md` — le tableau des cinq
+Voir `tasks/realtime-sync-audit-2026-08-17-cycle54-bis.md` — le tableau des cinq
 écrivains, pourquoi le chemin des liens partagés était le seul sans filet, et
 les quatre pistes du cycle 55.

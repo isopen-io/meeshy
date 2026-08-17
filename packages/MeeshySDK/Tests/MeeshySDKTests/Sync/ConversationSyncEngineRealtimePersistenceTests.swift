@@ -127,6 +127,34 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertNil(merged, "un lastMessageAt périmé ne doit rien écrire — ni horodatage, ni aperçu")
     }
 
+    /// Ce qui rend le défaut DURABLE : `applyingConversationUpdate` délègue sa
+    /// règle par ligne à `ConversationStore.merging` précisément pour que la
+    /// liste PERSISTÉE et le store RAM ne puissent jamais diverger. L'épingle
+    /// perdue au passage du pont était donc écrite — sans épingle — dans le
+    /// cache disque, où elle survivait au redémarrage : au prochain départ à
+    /// froid, la ligne d'un message position-seule est servie vide (aperçu vide
+    /// par construction, épingle effacée) jusqu'à ce qu'un
+    /// `GET /conversations` la répare.
+    func test_applyingConversationUpdate_positionMessage_persistsItsPin() {
+        var current = TestFactories.makeConversation(id: "c1", lastMessageAt: Date(timeIntervalSince1970: 100))
+        current.lastMessageId = "m-texte"
+        current.lastMessagePreview = "salut"
+
+        let merged = ConversationSyncEngine.applyingConversationUpdate(
+            ConversationUpdatedStoreEvent(
+                conversationId: "c1",
+                lastMessageAt: Date(timeIntervalSince1970: 300),
+                lastMessage: .replaced("m-position"),
+                lastMessagePreview: "",
+                location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+            ),
+            to: [current]
+        )
+
+        XCTAssertEqual(merged?.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "la liste persistée doit porter l'épingle, sinon le départ à froid sert une ligne vide")
+    }
+
     // MARK: - conversation:updated relayed to disk
 
     func test_conversationUpdatedRelay_persistsRenameIntoTheCachedList() async throws {
